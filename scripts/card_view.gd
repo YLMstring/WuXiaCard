@@ -1,0 +1,232 @@
+class_name CardView
+extends PanelContainer
+
+signal drag_started(card: CardView, pointer_position: Vector2)
+signal drag_moved(card: CardView, pointer_position: Vector2)
+signal drag_ended(card: CardView, pointer_position: Vector2)
+
+@export var touch_drag_offset: float = 48.0
+
+var card_data: Dictionary = {}
+var owner_id: int = 0
+var playable: bool = false
+
+var _dragging: bool = false
+var _pointer_id: int = -2
+var _pointer_offset: Vector2 = Vector2.ZERO
+var _home_parent: Node = null
+var _home_index: int = -1
+
+@onready var art_placeholder: Label = $Overlay/ArtPlaceholder
+@onready var top_power: Label = $Overlay/TopPower
+@onready var right_power: Label = $Overlay/RightPower
+@onready var bottom_power: Label = $Overlay/BottomPower
+@onready var left_power: Label = $Overlay/LeftPower
+
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	focus_mode = Control.FOCUS_NONE
+	resized.connect(_on_resized)
+	_on_resized()
+	_apply_owner_style()
+
+
+func configure(new_card_data: Dictionary, new_owner_id: int, is_playable: bool) -> void:
+	card_data = new_card_data.duplicate(true)
+	owner_id = new_owner_id
+	playable = is_playable
+	var powers: Array = card_data.get("powers", [0, 0, 0, 0])
+	top_power.text = str(powers[DuelRules.TOP])
+	right_power.text = str(powers[DuelRules.RIGHT])
+	bottom_power.text = str(powers[DuelRules.BOTTOM])
+	left_power.text = str(powers[DuelRules.LEFT])
+	art_placeholder.text = str(card_data.get("glyph", "?"))
+	tooltip_text = "%s  ↑%s →%s ↓%s ←%s" % [
+		str(card_data.get("name", "Card")),
+		top_power.text,
+		right_power.text,
+		bottom_power.text,
+		left_power.text,
+	]
+	_apply_owner_style()
+	_update_cursor()
+
+
+func set_playable(value: bool) -> void:
+	playable = value
+	_update_cursor()
+
+
+func set_card_owner(new_owner_id: int) -> void:
+	owner_id = new_owner_id
+	_apply_owner_style()
+
+
+func get_home_parent() -> Node:
+	return _home_parent
+
+
+func get_home_index() -> int:
+	return _home_index
+
+
+func is_being_dragged() -> bool:
+	return _dragging
+
+
+func finish_drag_state() -> void:
+	_dragging = false
+	_pointer_id = -2
+	scale = Vector2.ONE
+	rotation = 0.0
+	z_index = 0
+	_apply_owner_style()
+	_update_cursor()
+
+
+func play_capture_flip(new_owner_id: int, duration: float) -> void:
+	pivot_offset = size * 0.5
+	var half_duration: float = maxf(0.01, duration * 0.5)
+	var shrink_tween: Tween = create_tween()
+	shrink_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	shrink_tween.tween_property(self, "scale:x", 0.05, half_duration)
+	await shrink_tween.finished
+	set_card_owner(new_owner_id)
+	var grow_tween: Tween = create_tween()
+	grow_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	grow_tween.tween_property(self, "scale:x", 1.0, half_duration)
+	await grow_tween.finished
+
+
+func play_invalid_shake(duration: float) -> void:
+	pivot_offset = size * 0.5
+	var shake_tween: Tween = create_tween()
+	shake_tween.tween_property(self, "rotation", 0.06, duration * 0.25)
+	shake_tween.tween_property(self, "rotation", -0.06, duration * 0.5)
+	shake_tween.tween_property(self, "rotation", 0.0, duration * 0.25)
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mouse_event.pressed:
+			_try_begin_drag(mouse_event.global_position, -1)
+		else:
+			_try_end_drag(mouse_event.global_position, -1)
+		accept_event()
+	elif event is InputEventScreenTouch:
+		var touch_event := event as InputEventScreenTouch
+		if touch_event.pressed:
+			_try_begin_drag(touch_event.position, touch_event.index)
+		else:
+			_try_end_drag(touch_event.position, touch_event.index)
+		accept_event()
+
+
+func _input(event: InputEvent) -> void:
+	if not _dragging:
+		return
+	if event is InputEventMouseMotion and _pointer_id == -1:
+		_move_drag((event as InputEventMouseMotion).position)
+	elif event is InputEventMouseButton and _pointer_id == -1:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and not mouse_event.pressed:
+			_try_end_drag(mouse_event.position, -1)
+	elif event is InputEventScreenDrag:
+		var drag_event := event as InputEventScreenDrag
+		if drag_event.index == _pointer_id:
+			_move_drag(drag_event.position)
+	elif event is InputEventScreenTouch:
+		var touch_event := event as InputEventScreenTouch
+		if touch_event.index == _pointer_id and not touch_event.pressed:
+			_try_end_drag(touch_event.position, touch_event.index)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _dragging:
+		call_deferred("_try_end_drag", get_viewport().get_mouse_position(), _pointer_id)
+
+
+func _try_begin_drag(pointer_position: Vector2, pointer_id: int) -> void:
+	if not playable or _dragging:
+		return
+	_dragging = true
+	_pointer_id = pointer_id
+	_home_parent = get_parent()
+	_home_index = get_index()
+	_pointer_offset = global_position - pointer_position
+	if pointer_id >= 0:
+		_pointer_offset.y -= touch_drag_offset
+	pivot_offset = size * 0.5
+	scale = Vector2(1.05, 1.05)
+	z_index = 100
+	_apply_drag_style()
+	drag_started.emit(self, pointer_position)
+
+
+func _move_drag(pointer_position: Vector2) -> void:
+	global_position = pointer_position + _pointer_offset
+	drag_moved.emit(self, pointer_position)
+
+
+func _try_end_drag(pointer_position: Vector2, pointer_id: int) -> void:
+	if not _dragging or pointer_id != _pointer_id:
+		return
+	drag_ended.emit(self, pointer_position)
+
+
+func _on_resized() -> void:
+	pivot_offset = size * 0.5
+	var short_side: float = minf(size.x, size.y)
+	var power_size: int = maxi(14, int(short_side * 0.2))
+	var art_size: int = maxi(18, int(short_side * 0.3))
+	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
+		power_label.add_theme_font_size_override("font_size", power_size)
+	art_placeholder.add_theme_font_size_override("font_size", art_size)
+
+
+func _update_cursor() -> void:
+	mouse_default_cursor_shape = Control.CURSOR_DRAG if playable else Control.CURSOR_ARROW
+
+
+func _apply_owner_style() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = _get_owner_background()
+	style.border_color = _get_owner_border()
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.shadow_color = Color(0.08, 0.06, 0.05, 0.35)
+	style.shadow_size = 4
+	style.shadow_offset = Vector2(0, 3)
+	add_theme_stylebox_override("panel", style)
+
+
+func _apply_drag_style() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = _get_owner_background().lightened(0.08)
+	style.border_color = Color("d2a63f")
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(8)
+	style.shadow_color = Color(0.04, 0.03, 0.02, 0.55)
+	style.shadow_size = 9
+	style.shadow_offset = Vector2(0, 7)
+	add_theme_stylebox_override("panel", style)
+
+
+func _get_owner_background() -> Color:
+	if owner_id == DuelRules.PLAYER_OWNER:
+		return Color("79abc4")
+	if owner_id == DuelRules.OPPONENT_OWNER:
+		return Color("df7a70")
+	return Color("e9e0cb")
+
+
+func _get_owner_border() -> Color:
+	if owner_id == DuelRules.PLAYER_OWNER:
+		return Color("3f7d9e")
+	if owner_id == DuelRules.OPPONENT_OWNER:
+		return Color("b61522")
+	return Color("8f826d")

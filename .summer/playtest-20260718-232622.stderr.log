@@ -1,0 +1,23 @@
+ERROR: Parent node is busy adding/removing children, `remove_child()` can't be called at this time. Consider using `remove_child.call_deferred(child)` instead.
+   at: Node::remove_child (scene\main\node.cpp:1738)
+   GDScript backtrace (most recent call first):
+       [0] _return_card_to_hand (res://scripts/duel_controller.gd:168)
+       [1] _on_card_drag_ended (res://scripts/duel_controller.gd:160)
+       [2] _try_end_drag (res://scripts/card_view.gd:178)
+       [3] _notification (res://scripts/card_view.gd:150)
+ERROR: Can't add child '@PanelContainer@7' to 'PlayerHand', already has a parent 'DragLayer'.
+   at: Node::add_child (scene\main\node.cpp:1705)
+   GDScript backtrace (most recent call first):
+       [0] _return_card_to_hand (res://scripts/duel_controller.gd:168)
+       [1] _on_card_drag_ended (res://scripts/duel_controller.gd:160)
+       [2] _try_end_drag (res://scripts/card_view.gd:178)
+       [3] _notification (res://scripts/card_view.gd:150)
+ERROR: Child is not a child of this node.
+   at: Node::move_child (scene\main\node.cpp:500)
+   GDScript backtrace (most recent call first):
+       [0] _return_card_to_hand (res://scripts/duel_controller.gd:170)
+       [1] _on_card_drag_ended (res://scripts/duel_controller.gd:160)
+       [2] _try_end_drag (res://scripts/card_view.gd:178)
+       [3] _notification (res://scripts/card_view.gd:150)
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: ObjectDB::cleanup (core\object\object.cpp:2641)

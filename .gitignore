@@ -1,0 +1,12 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Summer Engine local-only state
+.summer/local/
+
+# Local visual brainstorming sessions
+.superpowers/
+
+# Local visual brainstorming sessions
+.superpowers/
