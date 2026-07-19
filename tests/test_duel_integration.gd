@@ -23,6 +23,7 @@ func _run() -> void:
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
 	await _check_focus_loss_return()
+	await _check_dragged_card_commits_through_simulator()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
 
 	var player_turns: int = 0
@@ -41,6 +42,9 @@ func _run() -> void:
 	_check(duel.debug_get_board_occupancy() == 9, "Completed match occupies all nine board cells")
 	_check(scores.x + scores.y == 9, "Final ownership scores total nine board cards")
 	_check(player_turns == 5, "Player takes five turns when moving first")
+	_check(duel.has_method("debug_get_simulation_turn_count"), "Production duel exposes simulator turn-count diagnostics")
+	if duel.has_method("debug_get_simulation_turn_count"):
+		_check(int(duel.call("debug_get_simulation_turn_count")) == 9, "Production match commits all nine placements through DuelSimulator")
 	_check(_count_cards(duel.get_node("PlayerHand")) == 0, "Player hand is empty after five placements")
 	_check(_count_cards(duel.get_node("OpponentHand")) == 1, "Opponent retains one card after four placements")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
@@ -110,6 +114,22 @@ func _check_focus_loss_return() -> void:
 	await process_frame
 	_check(card.get_parent() == home_parent, "A focus-loss drag cancellation safely returns the card to its slot")
 	focus_duel.queue_free()
+	await process_frame
+
+
+func _check_dragged_card_commits_through_simulator() -> void:
+	var drag_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(drag_duel)
+	await process_frame
+	await process_frame
+	drag_duel.debug_set_fast_mode(true)
+	var card: Control = _first_card(drag_duel.get_node("PlayerHand"))
+	drag_duel._on_card_drag_started(card, card.get_global_rect().get_center())
+	_check(card.get_parent() == drag_duel.get_node("DragLayer"), "Real drag path reparents the card before commit")
+	await drag_duel._commit_card(card, 0, 1)
+	_check(drag_duel.debug_get_board_occupancy() == 2, "Dragged player card and opponent reply both commit through production")
+	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
+	drag_duel.queue_free()
 	await process_frame
 
 

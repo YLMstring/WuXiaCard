@@ -9,6 +9,10 @@ enum TurnState {
 }
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
+const StateData = preload("res://scripts/duel_state.gd")
+const MoveData = preload("res://scripts/duel_move.gd")
+const Simulator = preload("res://scripts/duel_simulator.gd")
+const SIMULATOR_HAND_INDEX_META: StringName = &"simulator_hand_index"
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -21,6 +25,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 
 var turn_state: TurnState = TurnState.PLAYER
 var board: Array = DuelRules.empty_board()
+var duel_state: StateData = null
 var board_cells: Array[PanelContainer] = []
 var board_cards: Array = []
 var _hovered_cell: int = -1
@@ -47,6 +52,13 @@ func _ready() -> void:
 	board_cards.fill(null)
 	_create_board_cells()
 	_create_hands()
+	duel_state = StateData.new(
+		board,
+		_get_hand_card_data(player_hand),
+		_get_hand_card_data(opponent_hand),
+		DuelRules.PLAYER_OWNER
+	)
+	board = duel_state.board
 	_create_placeholder_audio()
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
@@ -69,7 +81,13 @@ func debug_set_fast_mode(enabled: bool) -> void:
 
 
 func debug_place_player_card(hand_index: int, cell_index: int) -> bool:
-	if turn_state != TurnState.PLAYER or not DuelRules.can_place(board, cell_index):
+	var move := MoveData.new(hand_index, cell_index)
+	if (
+		turn_state != TurnState.PLAYER
+		or duel_state == null
+		or duel_state.active_player != DuelRules.PLAYER_OWNER
+		or not Simulator.is_move_legal(duel_state, move)
+	):
 		return false
 	var cards: Array[CardView] = _get_cards_in_hand(player_hand)
 	if hand_index < 0 or hand_index >= cards.size():
@@ -99,6 +117,10 @@ func debug_get_scores() -> Vector2i:
 
 func debug_is_complete() -> bool:
 	return turn_state == TurnState.COMPLETE
+
+
+func debug_get_simulation_turn_count() -> int:
+	return duel_state.turn_count if duel_state != null else 0
 
 
 func _create_board_cells() -> void:
@@ -149,6 +171,7 @@ func _on_card_drag_started(card: CardView, _pointer_position: Vector2) -> void:
 	if turn_state != TurnState.PLAYER:
 		card.finish_drag_state()
 		return
+	card.set_meta(SIMULATOR_HAND_INDEX_META, _get_cards_in_hand(player_hand).find(card))
 	card.reparent(drag_layer, true)
 	_highlight_legal_cells()
 
@@ -181,12 +204,29 @@ func _return_card_to_hand(card: CardView) -> void:
 	card.reparent(home_parent, false)
 	var target_index: int = clampi(card.get_home_index(), 0, home_parent.get_child_count() - 1)
 	home_parent.move_child(card, target_index)
+	card.remove_meta(SIMULATOR_HAND_INDEX_META)
 	card.finish_drag_state()
 
 
 func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
-	if not DuelRules.can_place(board, cell_index):
+	if duel_state == null or duel_state.active_player != owner_id:
 		return
+	var source_hand: HBoxContainer = player_hand if owner_id == DuelRules.PLAYER_OWNER else opponent_hand
+	var source_cards: Array[CardView] = _get_cards_in_hand(source_hand)
+	var hand_index: int = source_cards.find(card)
+	if hand_index < 0 and card.has_meta(SIMULATOR_HAND_INDEX_META):
+		hand_index = int(card.get_meta(SIMULATOR_HAND_INDEX_META))
+	var move := MoveData.new(hand_index, cell_index)
+	if not Simulator.is_move_legal(duel_state, move):
+		return
+	var transition: Dictionary = Simulator.apply_move(duel_state, move)
+	if not bool(transition.get("valid", false)):
+		return
+	duel_state = transition["state"] as StateData
+	board = duel_state.board
+	var captured: Array[int] = transition.get("captures", [])
+	card.remove_meta(SIMULATOR_HAND_INDEX_META)
+
 	turn_state = TurnState.RESOLVING
 	_set_hand_playable(false)
 	_update_turn_status()
@@ -197,7 +237,6 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 	card.scale = Vector2(0.9, 0.9)
 	card.rotation = 0.0
 	board_cards[cell_index] = card
-	var captured: Array[int] = DuelRules.place_card(board, cell_index, card.card_data, owner_id)
 
 	_play_placement_feedback()
 	if snap_duration > 0.0:
@@ -220,7 +259,7 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 		_vibrate(multi_capture_haptic_ms)
 	_update_score()
 
-	if DuelRules.is_board_full(board):
+	if Simulator.is_terminal(duel_state):
 		_finish_match()
 		return
 
@@ -238,14 +277,19 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 
 func _perform_opponent_turn() -> void:
 	var opponent_cards: Array[CardView] = _get_cards_in_hand(opponent_hand)
-	var card_data: Array = []
-	for card: CardView in opponent_cards:
-		card_data.append(card.card_data)
-	var choice: Vector2i = DuelRules.choose_ai_move(board, card_data, DuelRules.OPPONENT_OWNER)
-	if choice.x < 0 or choice.y < 0:
+	var choice: MoveData = Simulator.choose_greedy_move(duel_state)
+	if (
+		choice.hand_index < 0
+		or choice.hand_index >= opponent_cards.size()
+		or choice.cell_index < 0
+	):
 		_finish_match()
 		return
-	await _commit_card(opponent_cards[choice.x], choice.y, DuelRules.OPPONENT_OWNER)
+	await _commit_card(
+		opponent_cards[choice.hand_index],
+		choice.cell_index,
+		DuelRules.OPPONENT_OWNER
+	)
 
 
 func _finish_match() -> void:
@@ -272,6 +316,13 @@ func _get_cards_in_hand(container: HBoxContainer) -> Array[CardView]:
 		for child: Node in slot.get_children():
 			if child is CardView:
 				result.append(child as CardView)
+	return result
+
+
+func _get_hand_card_data(container: HBoxContainer) -> Array:
+	var result: Array = []
+	for card: CardView in _get_cards_in_hand(container):
+		result.append(card.card_data.duplicate(true))
 	return result
 
 
