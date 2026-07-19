@@ -12,6 +12,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_four_direction_capture()
+	_test_would_flip_query_is_pure()
 	_test_equal_power_does_not_capture()
 	_test_illegal_placement_is_rejected()
 	_test_score_and_full_board()
@@ -22,6 +23,24 @@ func _run() -> void:
 	else:
 		push_error("DUEL_RULE_TESTS_FAILED failures=%d checks=%d" % [_failures, _checks])
 	quit(_failures)
+
+
+func _test_would_flip_query_is_pure() -> void:
+	var board: Array = Rules.empty_board()
+	var attacker: Dictionary = Rules.make_card("Center", "中", [5, 5, 5, 5])
+	var weak_defender: Dictionary = Rules.make_card("Weak", "弱", [4, 4, 4, 4])
+	var equal_defender: Dictionary = Rules.make_card("Equal", "平", [5, 5, 5, 5])
+	board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
+	board[1] = {"card": weak_defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	board[5] = {"card": weak_defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	board[7] = {"card": equal_defender, "owner": Rules.OPPONENT_OWNER}
+	board[3] = {"card": weak_defender.duplicate(true), "owner": Rules.PLAYER_OWNER}
+	var before: Array = board.duplicate(true)
+
+	var would_flip: Array[int] = Rules.get_would_flip_indices(board, 4)
+	_check(would_flip == [1, 5], "Would-flip query returns valid targets in top-right-bottom-left order")
+	_check(board == before, "Would-flip query does not mutate board ownership")
+	_check(Rules.get_would_flip_indices(board, -1).is_empty(), "Would-flip query safely rejects an invalid source index")
 
 
 func _test_four_direction_capture() -> void:

@@ -22,8 +22,11 @@ func _run() -> void:
 	_check_card_edge_labels(duel)
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
+	_check_catalog_hands(duel)
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
+	await _check_player_gate_exile()
+	await _check_opponent_tiger_exile()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
 
 	var player_turns: int = 0
@@ -38,15 +41,16 @@ func _run() -> void:
 			_check_remaining_card_sizes(duel.get_node("PlayerHand"), initial_player_card_sizes)
 
 	var scores: Vector2i = duel.debug_get_scores()
-	_check(duel.debug_is_complete(), "Nine-card scripted match reaches the complete state")
-	_check(duel.debug_get_board_occupancy() == 9, "Completed match occupies all nine board cells")
-	_check(scores.x + scores.y == 9, "Final ownership scores total nine board cards")
+	var occupancy: int = duel.debug_get_board_occupancy()
+	var simulation_turns: int = duel.debug_get_simulation_turn_count()
+	var remaining_cards: int = _count_cards(duel.get_node("PlayerHand")) + _count_cards(duel.get_node("OpponentHand"))
+	_check(duel.debug_is_complete(), "Scripted match reaches the complete state")
+	_check(scores.x + scores.y == occupancy, "Final scores count exactly the cards remaining on board")
 	_check(player_turns == 5, "Player takes five turns when moving first")
 	_check(duel.has_method("debug_get_simulation_turn_count"), "Production duel exposes simulator turn-count diagnostics")
 	if duel.has_method("debug_get_simulation_turn_count"):
-		_check(int(duel.call("debug_get_simulation_turn_count")) == 9, "Production match commits all nine placements through DuelSimulator")
+		_check(simulation_turns + remaining_cards == 10, "Every starting card is either placed or remains in hand")
 	_check(_count_cards(duel.get_node("PlayerHand")) == 0, "Player hand is empty after five placements")
-	_check(_count_cards(duel.get_node("OpponentHand")) == 1, "Opponent retains one card after four placements")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
 	_check((duel.get_node("TopBar/OpponentName") as Label).text == "Shen Lian", "Opponent name appears in the upper-left top bar")
 	_check((duel.get_node("TopBar/ExitButton") as Button).text == "Exit", "Exit button appears in the upper-right top bar")
@@ -98,6 +102,28 @@ func _check_hand_slots(container: Node) -> void:
 	_check(has_five_slots, "%s keeps five persistent card slots" % container.name)
 
 
+func _check_catalog_hands(duel: Node) -> void:
+	var player_cards: Array[Control] = _cards_below(duel.get_node("PlayerHand"))
+	var opponent_cards: Array[Control] = _cards_below(duel.get_node("OpponentHand"))
+	var player_ids: Array[StringName] = []
+	var opponent_ids: Array[StringName] = []
+	for card: Control in player_cards:
+		var player_card_data: Dictionary = card.get("card_data")
+		player_ids.append(StringName(player_card_data.get("card_id", &"")))
+	for card: Control in opponent_cards:
+		var opponent_card_data: Dictionary = card.get("card_data")
+		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
+	_check(player_ids == [&"xu_shu", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player hand resolves in catalog deck order")
+	_check(opponent_ids == [&"zhang_ren", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
+	var gate_card_data: Dictionary = player_cards[1].get("card_data")
+	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
+	var gate_effects: Array = gate_card_data.get("active_effects", [])
+	var tiger_effects: Array = tiger_card_data.get("active_effects", [])
+	_check(gate_effects.size() == 1 and bool((gate_effects[0] as Dictionary).get("retained_on_flip", false)), "Gate General view receives its retained catalog effect")
+	_check(tiger_effects.size() == 1 and bool((tiger_effects[0] as Dictionary).get("retained_on_flip", false)), "Tiger General view receives its retained catalog effect")
+	_check(not duel.has_method("_get_player_cards") and not duel.has_method("_get_opponent_cards"), "Controller no longer owns hard-coded card definitions")
+
+
 func _check_focus_loss_return() -> void:
 	var focus_duel: Node = DUEL_SCENE.instantiate()
 	root.add_child(focus_duel)
@@ -130,6 +156,52 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	_check(drag_duel.debug_get_board_occupancy() == 2, "Dragged player card and opponent reply both commit through production")
 	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
 	drag_duel.queue_free()
+	await process_frame
+
+
+func _check_player_gate_exile() -> void:
+	var exile_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(exile_duel)
+	await process_frame
+	await process_frame
+	exile_duel.debug_set_fast_mode(true)
+	_check(exile_duel.has_node("RemovalAudio"), "Duel scene contains dedicated removal audio")
+	var gate_view: Control = _cards_below(exile_duel.get_node("PlayerHand"))[1]
+	_check(gate_view.has_node("Overlay/InkSlash"), "Card view contains the exile ink overlay")
+	_check(gate_view.has_method("play_effect_pulse") and gate_view.has_method("play_exile"), "Card view exposes exile presentation methods")
+
+	var first_placed: bool = await exile_duel.debug_commit_move(1, 0, 0, false)
+	var target_placed: bool = await exile_duel.debug_commit_move(2, 1, 5, false)
+	var gate_placed: bool = await exile_duel.debug_commit_move(1, 0, 4, false)
+	_check(first_placed and target_placed and gate_placed, "Scripted Gate General exile uses production move commits")
+	await process_frame
+	_check(exile_duel.debug_get_board_occupancy() == 2, "Gate General removes Fire Envoy instead of flipping it")
+	_check(exile_duel.has_method("debug_has_board_card_view") and not bool(exile_duel.call("debug_has_board_card_view", 5)), "Gate General exile clears the target card view")
+	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 2)) == 1, "Fire Envoy enters the opponent's removed zone")
+	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 5)), "Gate General's cleared cell is reusable")
+	var gate_scores: Vector2i = exile_duel.debug_get_scores()
+	_check(gate_scores == Vector2i(2, 0), "Gate General exile awards no point for the removed target")
+	exile_duel.queue_free()
+	await process_frame
+
+
+func _check_opponent_tiger_exile() -> void:
+	var exile_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(exile_duel)
+	await process_frame
+	await process_frame
+	exile_duel.debug_set_fast_mode(true)
+	var target_placed: bool = await exile_duel.debug_commit_move(1, 0, 4, false)
+	var tiger_placed: bool = await exile_duel.debug_commit_move(2, 2, 5, false)
+	_check(target_placed and tiger_placed, "Scripted Tiger General exile uses production move commits")
+	await process_frame
+	_check(exile_duel.debug_get_board_occupancy() == 1, "Tiger General removes Xu Shu instead of flipping it")
+	_check(exile_duel.has_method("debug_has_board_card_view") and not bool(exile_duel.call("debug_has_board_card_view", 4)), "Tiger General exile clears the target card view")
+	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 1)) == 1, "Xu Shu enters the player's removed zone")
+	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 4)), "Tiger General's cleared cell is reusable")
+	var tiger_scores: Vector2i = exile_duel.debug_get_scores()
+	_check(tiger_scores == Vector2i(0, 1), "Tiger General exile awards no point for the removed target")
+	exile_duel.queue_free()
 	await process_frame
 
 

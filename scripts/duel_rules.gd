@@ -18,12 +18,26 @@ const DIRECTIONS: Array[Vector2i] = [
 const OPPOSITE: Array[int] = [BOTTOM, LEFT, TOP, RIGHT]
 
 
-static func make_card(card_name: String, glyph: String, powers: Array[int]) -> Dictionary:
+static func make_card(
+	card_name: String,
+	glyph: String,
+	powers: Array[int],
+	active_effects: Array = [],
+	original_owner: int = 0,
+	card_id: StringName = &""
+) -> Dictionary:
 	assert(powers.size() == 4, "Cards require top, right, bottom, and left powers.")
+	var resolved_card_id: StringName = card_id
+	if resolved_card_id == &"":
+		resolved_card_id = StringName(card_name.to_snake_case())
 	return {
+		"instance_id": &"",
+		"card_id": resolved_card_id,
 		"name": card_name,
 		"glyph": glyph,
 		"powers": powers.duplicate(),
+		"original_owner": original_owner,
+		"active_effects": active_effects.duplicate(true),
 	}
 
 
@@ -49,33 +63,39 @@ static func place_card(board: Array, cell_index: int, card: Dictionary, owner_id
 
 
 static func resolve_captures(board: Array, placed_index: int) -> Array[int]:
-	var captured: Array[int] = []
-	if placed_index < 0 or placed_index >= board.size() or board[placed_index] == null:
+	var captured: Array[int] = get_would_flip_indices(board, placed_index)
+	if captured.is_empty():
 		return captured
+	var placed_owner: int = int((board[placed_index] as Dictionary)["owner"])
+	for captured_index: int in captured:
+		(board[captured_index] as Dictionary)["owner"] = placed_owner
+	return captured
 
-	var placed_slot: Dictionary = board[placed_index]
-	var placed_card: Dictionary = placed_slot["card"]
-	var placed_powers: Array = placed_card["powers"]
-	var placed_owner: int = int(placed_slot["owner"])
+
+static func get_would_flip_indices(board: Array, source_index: int) -> Array[int]:
+	var targets: Array[int] = []
+	if source_index < 0 or source_index >= board.size() or board[source_index] == null:
+		return targets
+
+	var source_slot: Dictionary = board[source_index]
+	var source_card: Dictionary = source_slot["card"]
+	var source_powers: Array = source_card["powers"]
+	var source_owner: int = int(source_slot["owner"])
 
 	for direction: int in range(4):
-		var neighbor_index: int = get_neighbor_index(placed_index, direction)
+		var neighbor_index: int = get_neighbor_index(source_index, direction)
 		if neighbor_index < 0 or board[neighbor_index] == null:
 			continue
-
 		var neighbor_slot: Dictionary = board[neighbor_index]
-		if int(neighbor_slot["owner"]) == placed_owner:
+		if int(neighbor_slot["owner"]) == source_owner:
 			continue
-
 		var neighbor_card: Dictionary = neighbor_slot["card"]
 		var neighbor_powers: Array = neighbor_card["powers"]
-		var attack_power: int = int(placed_powers[direction])
+		var attack_power: int = int(source_powers[direction])
 		var defense_power: int = int(neighbor_powers[OPPOSITE[direction]])
 		if attack_power > defense_power:
-			neighbor_slot["owner"] = placed_owner
-			captured.append(neighbor_index)
-
-	return captured
+			targets.append(neighbor_index)
+	return targets
 
 
 static func get_neighbor_index(cell_index: int, direction: int) -> int:
@@ -127,7 +147,7 @@ static func choose_ai_move(board: Array, hand: Array, owner_id: int = OPPONENT_O
 			var simulated_board: Array = board.duplicate(true)
 			var captures: Array[int] = place_card(simulated_board, cell_index, card, owner_id)
 			var capture_count: int = captures.size()
-			var boundary_power: int = _get_boundary_power(card, cell_index)
+			var boundary_power: int = get_boundary_power(card, cell_index)
 
 			var is_better: bool = capture_count > best_capture_count
 			if capture_count == best_capture_count:
@@ -150,7 +170,7 @@ static func choose_ai_move(board: Array, hand: Array, owner_id: int = OPPONENT_O
 	return Vector2i(best_card_index, best_cell_index)
 
 
-static func _get_boundary_power(card: Dictionary, cell_index: int) -> int:
+static func get_boundary_power(card: Dictionary, cell_index: int) -> int:
 	var powers: Array = card["powers"]
 	var total: int = 0
 	for direction: int in range(4):

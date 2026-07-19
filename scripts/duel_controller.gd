@@ -9,6 +9,8 @@ enum TurnState {
 }
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
+const Catalog = preload("res://scripts/card_catalog.gd")
+const Decks = preload("res://scripts/duel_decks.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const MoveData = preload("res://scripts/duel_move.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
@@ -18,6 +20,11 @@ const SIMULATOR_HAND_INDEX_META: StringName = &"simulator_hand_index"
 @export var drag_touch_offset: float = 48.0
 @export var snap_duration: float = 0.12
 @export var capture_step_delay: float = 0.18
+@export var exile_pulse_duration: float = 0.14
+@export var exile_duration: float = 0.22
+@export var exile_step_delay: float = 0.10
+@export var exile_ink_color: Color = Color("6f1118")
+@export var removal_audio_volume_db: float = -4.0
 @export var opponent_think_delay: float = 0.55
 @export var invalid_shake_duration: float = 0.18
 @export var placement_haptic_ms: int = 20
@@ -45,20 +52,25 @@ var _hovered_cell: int = -1
 @onready var drag_layer: Control = $DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
+@onready var removal_audio: AudioStreamPlayer = $RemovalAudio
 
 
 func _ready() -> void:
 	board_cards.resize(9)
 	board_cards.fill(null)
 	_create_board_cells()
-	_create_hands()
+	var catalog_errors: Array[String] = Catalog.validate_catalog()
+	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
+	var player_cards: Array = _create_card_instances(Decks.get_player_card_ids(), DuelRules.PLAYER_OWNER)
+	var opponent_cards: Array = _create_card_instances(Decks.get_opponent_card_ids(), DuelRules.OPPONENT_OWNER)
 	duel_state = StateData.new(
 		board,
-		_get_hand_card_data(player_hand),
-		_get_hand_card_data(opponent_hand),
+		player_cards,
+		opponent_cards,
 		DuelRules.PLAYER_OWNER
 	)
 	board = duel_state.board
+	_create_hands()
 	_create_placeholder_audio()
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
@@ -76,6 +88,9 @@ func debug_set_fast_mode(enabled: bool) -> void:
 	if enabled:
 		snap_duration = 0.0
 		capture_step_delay = 0.0
+		exile_pulse_duration = 0.0
+		exile_duration = 0.0
+		exile_step_delay = 0.0
 		opponent_think_delay = 0.0
 		invalid_shake_duration = 0.0
 
@@ -123,6 +138,44 @@ func debug_get_simulation_turn_count() -> int:
 	return duel_state.turn_count if duel_state != null else 0
 
 
+func debug_has_board_card_view(cell_index: int) -> bool:
+	return (
+		cell_index >= 0
+		and cell_index < board_cards.size()
+		and board_cards[cell_index] != null
+		and is_instance_valid(board_cards[cell_index])
+	)
+
+
+func debug_get_removed_count(owner_id: int) -> int:
+	if duel_state == null:
+		return 0
+	return (duel_state.removed_cards.get(owner_id, []) as Array).size()
+
+
+func debug_can_place_at(cell_index: int) -> bool:
+	return DuelRules.can_place(board, cell_index)
+
+
+func debug_commit_move(
+	owner_id: int,
+	hand_index: int,
+	cell_index: int,
+	continue_automatically: bool = false
+) -> bool:
+	if duel_state == null or duel_state.active_player != owner_id:
+		return false
+	var source_hand: HBoxContainer = player_hand if owner_id == DuelRules.PLAYER_OWNER else opponent_hand
+	var cards: Array[CardView] = _get_cards_in_hand(source_hand)
+	if hand_index < 0 or hand_index >= cards.size():
+		return false
+	var move := MoveData.new(hand_index, cell_index)
+	if not Simulator.is_move_legal(duel_state, move):
+		return false
+	await _commit_card(cards[hand_index], cell_index, owner_id, continue_automatically)
+	return true
+
+
 func _create_board_cells() -> void:
 	for cell_index: int in range(9):
 		var cell := PanelContainer.new()
@@ -136,10 +189,18 @@ func _create_board_cells() -> void:
 
 
 func _create_hands() -> void:
-	for card_data: Dictionary in _get_opponent_cards():
+	for card_data: Dictionary in duel_state.get_hand(DuelRules.OPPONENT_OWNER):
 		_spawn_card(opponent_hand, card_data, DuelRules.OPPONENT_OWNER, false)
-	for card_data: Dictionary in _get_player_cards():
+	for card_data: Dictionary in duel_state.get_hand(DuelRules.PLAYER_OWNER):
 		_spawn_card(player_hand, card_data, DuelRules.PLAYER_OWNER, true)
+
+
+func _create_card_instances(card_ids: Array[StringName], owner_id: int) -> Array:
+	var instances: Array = []
+	for card_index: int in range(card_ids.size()):
+		var instance_id := StringName("card_%d_%d" % [owner_id, card_index])
+		instances.append(Catalog.create_instance(card_ids[card_index], owner_id, instance_id))
+	return instances
 
 
 func _spawn_card(container: HBoxContainer, card_data: Dictionary, owner_id: int, is_playable: bool) -> CardView:
@@ -208,7 +269,12 @@ func _return_card_to_hand(card: CardView) -> void:
 	card.finish_drag_state()
 
 
-func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
+func _commit_card(
+	card: CardView,
+	cell_index: int,
+	owner_id: int,
+	continue_automatically: bool = true
+) -> void:
 	if duel_state == null or duel_state.active_player != owner_id:
 		return
 	var source_hand: HBoxContainer = player_hand if owner_id == DuelRules.PLAYER_OWNER else opponent_hand
@@ -224,7 +290,7 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 		return
 	duel_state = transition["state"] as StateData
 	board = duel_state.board
-	var captured: Array[int] = transition.get("captures", [])
+	var events: Array = transition.get("events", [])
 	card.remove_meta(SIMULATOR_HAND_INDEX_META)
 
 	turn_state = TurnState.RESOLVING
@@ -247,15 +313,8 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 	else:
 		card.scale = Vector2.ONE
 
-	for captured_index: int in captured:
-		if capture_step_delay > 0.0:
-			await get_tree().create_timer(capture_step_delay).timeout
-		var captured_card := board_cards[captured_index] as CardView
-		if captured_card != null:
-			_play_capture_feedback()
-			await captured_card.play_capture_flip(owner_id, maxf(capture_step_delay, 0.02))
-
-	if captured.size() > 1:
+	var resolved_targets: int = await _present_transition_events(events, owner_id)
+	if resolved_targets > 1:
 		_vibrate(multi_capture_haptic_ms)
 	_update_score()
 
@@ -263,16 +322,62 @@ func _commit_card(card: CardView, cell_index: int, owner_id: int) -> void:
 		_finish_match()
 		return
 
-	if owner_id == DuelRules.PLAYER_OWNER:
-		turn_state = TurnState.OPPONENT
-		_update_turn_status()
-		if opponent_think_delay > 0.0:
-			await get_tree().create_timer(opponent_think_delay).timeout
-		await _perform_opponent_turn()
-	else:
+	if duel_state.active_player == DuelRules.PLAYER_OWNER:
 		turn_state = TurnState.PLAYER
 		_set_hand_playable(true)
 		_update_turn_status()
+		return
+
+	turn_state = TurnState.OPPONENT
+	_update_turn_status()
+	if not continue_automatically:
+		return
+	if opponent_think_delay > 0.0:
+		await get_tree().create_timer(opponent_think_delay).timeout
+	await _perform_opponent_turn()
+
+
+func _present_transition_events(events: Array, fallback_owner: int) -> int:
+	var resolved_targets: int = 0
+	var source_pulsed: bool = false
+	for event_value: Variant in events:
+		var event: Dictionary = event_value
+		var event_type := StringName(event.get("type", &""))
+		var target_cell: int = int(event.get("target_cell", -1))
+		if event_type == &"card_flipped":
+			if capture_step_delay > 0.0:
+				await get_tree().create_timer(capture_step_delay).timeout
+			var flipped_card := board_cards[target_cell] as CardView
+			if flipped_card != null:
+				_play_capture_feedback()
+				var new_owner: int = int(event.get("owner_id", fallback_owner))
+				await flipped_card.play_capture_flip(new_owner, maxf(capture_step_delay, 0.02))
+			resolved_targets += 1
+		elif event_type == &"ability_lost":
+			var changed_card := board_cards[target_cell] as CardView
+			if changed_card != null:
+				await changed_card.play_ability_lost(
+					StringName(event.get("effect_id", &"")),
+					capture_step_delay * 0.5
+				)
+		elif event_type == &"card_exiled":
+			if not source_pulsed:
+				var source_cell: int = int(event.get("source_cell", -1))
+				var source_card := board_cards[source_cell] as CardView if source_cell >= 0 and source_cell < board_cards.size() else null
+				if source_card != null:
+					_play_removal_feedback()
+					await source_card.play_effect_pulse(exile_pulse_duration)
+				source_pulsed = true
+			if exile_step_delay > 0.0:
+				await get_tree().create_timer(exile_step_delay).timeout
+			var exiled_card := board_cards[target_cell] as CardView
+			board_cards[target_cell] = null
+			if exiled_card != null:
+				_play_removal_feedback()
+				await exiled_card.play_exile(exile_duration, exile_ink_color)
+				exiled_card.queue_free()
+			resolved_targets += 1
+	return resolved_targets
 
 
 func _perform_opponent_turn() -> void:
@@ -316,13 +421,6 @@ func _get_cards_in_hand(container: HBoxContainer) -> Array[CardView]:
 		for child: Node in slot.get_children():
 			if child is CardView:
 				result.append(child as CardView)
-	return result
-
-
-func _get_hand_card_data(container: HBoxContainer) -> Array:
-	var result: Array = []
-	for card: CardView in _get_cards_in_hand(container):
-		result.append(card.card_data.duplicate(true))
 	return result
 
 
@@ -440,6 +538,8 @@ func _style_static_ui() -> void:
 func _create_placeholder_audio() -> void:
 	placement_audio.stream = _make_tone(190.0, 0.07)
 	capture_audio.stream = _make_tone(470.0, 0.09)
+	removal_audio.stream = _make_removal_tone(0.14)
+	removal_audio.volume_db = removal_audio_volume_db
 
 
 func _make_tone(frequency: float, duration: float) -> AudioStreamWAV:
@@ -460,6 +560,27 @@ func _make_tone(frequency: float, duration: float) -> AudioStreamWAV:
 	return stream
 
 
+func _make_removal_tone(duration: float) -> AudioStreamWAV:
+	var sample_rate: int = 22050
+	var sample_count: int = int(sample_rate * duration)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)
+	for sample_index: int in range(sample_count):
+		var time: float = float(sample_index) / float(sample_rate)
+		var progress: float = float(sample_index) / float(sample_count)
+		var envelope: float = (1.0 - progress) * (1.0 - progress)
+		var low_brush: float = sin(TAU * (118.0 - progress * 42.0) * time) * 0.13
+		var paper_texture: float = sin(TAU * 1511.0 * time) * sin(TAU * 887.0 * time) * 0.055
+		var wave: float = (low_brush + paper_texture) * envelope
+		bytes.encode_s16(sample_index * 2, int(clampf(wave, -1.0, 1.0) * 32767.0))
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_rate
+	stream.stereo = false
+	stream.data = bytes
+	return stream
+
+
 func _play_placement_feedback() -> void:
 	if not OS.has_feature("headless"):
 		placement_audio.play()
@@ -471,6 +592,11 @@ func _play_capture_feedback() -> void:
 		capture_audio.play()
 
 
+func _play_removal_feedback() -> void:
+	if not OS.has_feature("headless"):
+		removal_audio.play()
+
+
 func _vibrate(duration_ms: int) -> void:
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(duration_ms)
@@ -478,23 +604,3 @@ func _vibrate(duration_ms: int) -> void:
 
 func _on_exit_pressed() -> void:
 	get_tree().quit()
-
-
-func _get_player_cards() -> Array[Dictionary]:
-	return [
-		DuelRules.make_card("Xu Shu", "徐", [3, 2, 3, 2]),
-		DuelRules.make_card("Gate General", "关", [7, 7, 7, 7]),
-		DuelRules.make_card("Meng Huo", "孟", [8, 7, 2, 3]),
-		DuelRules.make_card("Jiang Wei", "姜", [6, 6, 6, 6]),
-		DuelRules.make_card("Fa Zheng", "法", [5, 4, 4, 3]),
-	]
-
-
-func _get_opponent_cards() -> Array[Dictionary]:
-	return [
-		DuelRules.make_card("Zhang Ren", "张", [4, 7, 7, 4]),
-		DuelRules.make_card("Fire Envoy", "火", [5, 5, 4, 4]),
-		DuelRules.make_card("Tiger General", "虎", [3, 4, 8, 8]),
-		DuelRules.make_card("Strategist", "策", [4, 4, 4, 4]),
-		DuelRules.make_card("Sun Zan", "孙", [3, 5, 8, 8]),
-	]

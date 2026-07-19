@@ -18,6 +18,7 @@ var _home_parent: Node = null
 var _home_index: int = -1
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
+@onready var ink_slash: ColorRect = $Overlay/InkSlash
 @onready var top_power: Label = $Overlay/TopPower
 @onready var right_power: Label = $Overlay/RightPower
 @onready var bottom_power: Label = $Overlay/BottomPower
@@ -63,6 +64,20 @@ func set_card_owner(new_owner_id: int) -> void:
 	_apply_owner_style()
 
 
+func remove_active_effect(effect_id: StringName) -> bool:
+	var active_effects: Array = card_data.get("active_effects", [])
+	var retained_effects: Array = []
+	var removed: bool = false
+	for effect_value: Variant in active_effects:
+		var effect: Dictionary = effect_value
+		if not removed and StringName(effect.get("id", &"")) == effect_id:
+			removed = true
+			continue
+		retained_effects.append(effect.duplicate(true))
+	card_data["active_effects"] = retained_effects
+	return removed
+
+
 func get_home_parent() -> Node:
 	return _home_parent
 
@@ -97,6 +112,46 @@ func play_capture_flip(new_owner_id: int, duration: float) -> void:
 	grow_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	grow_tween.tween_property(self, "scale:x", 1.0, half_duration)
 	await grow_tween.finished
+
+
+func play_effect_pulse(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	pivot_offset = size * 0.5
+	var pulse_tween: Tween = create_tween()
+	pulse_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	pulse_tween.tween_property(self, "scale", Vector2(1.08, 1.08), duration * 0.45)
+	pulse_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pulse_tween.tween_property(self, "scale", Vector2.ONE, duration * 0.55)
+	await pulse_tween.finished
+
+
+func play_exile(duration: float, ink_color: Color) -> void:
+	pivot_offset = size * 0.5
+	ink_slash.color = ink_color
+	ink_slash.modulate = Color.WHITE
+	ink_slash.visible = true
+	if duration <= 0.0:
+		scale = Vector2(0.05, 0.05)
+		modulate = Color(1.0, 1.0, 1.0, 0.0)
+		return
+	var exile_tween: Tween = create_tween()
+	exile_tween.set_parallel(true)
+	exile_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	exile_tween.tween_property(self, "scale", Vector2(0.05, 0.05), duration)
+	exile_tween.tween_property(self, "modulate", Color(0.35, 0.08, 0.08, 0.0), duration)
+	exile_tween.tween_property(ink_slash, "modulate", Color(1.0, 1.0, 1.0, 0.0), duration)
+	await exile_tween.finished
+
+
+func play_ability_lost(effect_id: StringName, duration: float) -> void:
+	remove_active_effect(effect_id)
+	if duration <= 0.0:
+		return
+	var loss_tween: Tween = create_tween()
+	loss_tween.tween_property(self, "modulate", Color(0.48, 0.48, 0.48, 1.0), duration * 0.5)
+	loss_tween.tween_property(self, "modulate", Color.WHITE, duration * 0.5)
+	await loss_tween.finished
 
 
 func play_invalid_shake(duration: float) -> void:
