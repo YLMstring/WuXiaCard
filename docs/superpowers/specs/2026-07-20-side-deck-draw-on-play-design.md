@@ -113,11 +113,11 @@ When a `card_drawn` event is presented:
 
 Draw events are presented sequentially, never simultaneously. Each card receives a default `0.12` second ink-bloom phase followed by a `0.28` second rise-and-settle phase. A second drawn card starts only after the first has settled. These durations are exported presentation tunables rather than simulator rules.
 
-A dedicated draw sound accompanies each Ink Summon. The sound combines a short brush-stroke texture at bloom onset with a low plucked note near card settlement. It uses its own audio player and is audibly distinct from placement, flip, and exile sounds. The prototype may synthesize this as one timed WAV stream so the two sound components cannot drift apart.
+Ink Summon is intentionally silent. Drawing creates no dedicated sound, synthesized stream, or audio-player node; its feedback comes from the sequential ink-bloom and card-rise animation.
 
-After the final `card_drawn` event, the presenter waits a default `0.20` seconds before the first flip or exile event. This presentation-only gap prevents the draw confirmation from clashing with capture audio. It does not delay or alter the already-computed simulator transition.
+After the final `card_drawn` event, the presenter waits a default `0.20` seconds before the first flip or exile event. This presentation-only gap keeps the summon and board-resolution beats visually distinct. It does not delay or alter the already-computed simulator transition.
 
-Integration fast mode sets the Ink Summon durations and the post-draw gap to zero and suppresses draw audio.
+Integration fast mode sets the Ink Summon durations and the post-draw gap to zero.
 
 Physical slot order can differ from logical hand order after a card fills an interior empty slot. Therefore controller selection and AI presentation must stop treating visual traversal order as simulator hand order. Drag commits and AI-selected cards map through stable instance IDs:
 
@@ -170,12 +170,12 @@ Integration tests will verify:
 - playing Strategist creates a concealed opponent view in normal mode;
 - testing mode reveals both owners’ drawn cards;
 - multiple drawn cards are presented sequentially in simulator event order;
-- fast mode suppresses Ink Summon delays and draw audio while preserving the resulting hand views;
+- fast mode suppresses Ink Summon delays while preserving the resulting hand views;
 - the post-draw presentation gap occurs before flip or exile presentation, not inside simulator state resolution;
 - interior empty slots are filled while instance-ID mapping still commits the intended card;
 - AI replies, focus-loss recovery, exile presentation, and fixed five-slot layout still pass.
 
-A manual portrait playtest will cover player draw, opponent concealed draw, testing-mode opponent draw, sequential two-card Ink Summons, distinct brush/pluck audio, separation from the following flip sound, invalid drops after drawing, and repeated play of a drawn on-play card.
+A manual portrait playtest will cover player draw, opponent concealed draw, testing-mode opponent draw, silent sequential two-card Ink Summons, visual separation from the following flip, invalid drops after drawing, and repeated play of a drawn on-play card.
 
 ## Out of Scope
 
