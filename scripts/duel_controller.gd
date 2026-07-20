@@ -11,6 +11,7 @@ enum TurnState {
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const MoveData = preload("res://scripts/duel_move.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
@@ -31,6 +32,7 @@ const SIMULATOR_HAND_INDEX_META: StringName = &"simulator_hand_index"
 @export var multi_capture_haptic_ms: int = 45
 
 var turn_state: TurnState = TurnState.PLAYER
+var testing_mode: bool = Settings.TESTING_MODE
 var board: Array = DuelRules.empty_board()
 var duel_state: StateData = null
 var board_cells: Array[PanelContainer] = []
@@ -78,7 +80,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout_duel)
 	opponent_name.text = "Shen Lian"
 	turn_state = TurnState.PLAYER
-	_set_hand_playable(true)
+	_sync_hand_playability()
 	_update_score()
 	_update_turn_status()
 	_layout_duel.call_deferred()
@@ -190,9 +192,10 @@ func _create_board_cells() -> void:
 
 func _create_hands() -> void:
 	for card_data: Dictionary in duel_state.get_hand(DuelRules.OPPONENT_OWNER):
-		_spawn_card(opponent_hand, card_data, DuelRules.OPPONENT_OWNER, false)
+		var opponent_card: CardView = _spawn_card(opponent_hand, card_data, DuelRules.OPPONENT_OWNER, false)
+		opponent_card.set_face_down(not testing_mode)
 	for card_data: Dictionary in duel_state.get_hand(DuelRules.PLAYER_OWNER):
-		_spawn_card(player_hand, card_data, DuelRules.PLAYER_OWNER, true)
+		_spawn_card(player_hand, card_data, DuelRules.PLAYER_OWNER, false)
 
 
 func _create_card_instances(card_ids: Array[StringName], owner_id: int) -> Array:
@@ -221,18 +224,18 @@ func _spawn_card(container: HBoxContainer, card_data: Dictionary, owner_id: int,
 	slot.add_child(card)
 	card.touch_drag_offset = drag_touch_offset
 	card.configure(card_data, owner_id, is_playable)
-	if owner_id == DuelRules.PLAYER_OWNER:
-		card.drag_started.connect(_on_card_drag_started)
-		card.drag_moved.connect(_on_card_drag_moved)
-		card.drag_ended.connect(_on_card_drag_ended)
+	card.drag_started.connect(_on_card_drag_started)
+	card.drag_moved.connect(_on_card_drag_moved)
+	card.drag_ended.connect(_on_card_drag_ended)
 	return card
 
 
 func _on_card_drag_started(card: CardView, _pointer_position: Vector2) -> void:
-	if turn_state != TurnState.PLAYER:
+	if not _can_manually_drag(card):
 		card.finish_drag_state()
 		return
-	card.set_meta(SIMULATOR_HAND_INDEX_META, _get_cards_in_hand(player_hand).find(card))
+	var source_hand: HBoxContainer = _get_hand_for_owner(card.owner_id)
+	card.set_meta(SIMULATOR_HAND_INDEX_META, _get_cards_in_hand(source_hand).find(card))
 	card.reparent(drag_layer, true)
 	_highlight_legal_cells()
 
@@ -250,9 +253,9 @@ func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
 func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	var target_cell: int = _get_cell_at_position(pointer_position)
 	_clear_cell_highlights()
-	if turn_state == TurnState.PLAYER and DuelRules.can_place(board, target_cell):
+	if _can_manually_drag(card) and DuelRules.can_place(board, target_cell):
 		card.finish_drag_state()
-		await _commit_card(card, target_cell, DuelRules.PLAYER_OWNER)
+		await _commit_card(card, target_cell, card.owner_id)
 		return
 	_return_card_to_hand(card)
 	card.play_invalid_shake(invalid_shake_duration)
@@ -261,7 +264,7 @@ func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 func _return_card_to_hand(card: CardView) -> void:
 	var home_parent: Node = card.get_home_parent()
 	if home_parent == null or not is_instance_valid(home_parent):
-		home_parent = player_hand
+		home_parent = _get_hand_for_owner(card.owner_id)
 	card.reparent(home_parent, false)
 	var target_index: int = clampi(card.get_home_index(), 0, home_parent.get_child_count() - 1)
 	home_parent.move_child(card, target_index)
@@ -294,10 +297,11 @@ func _commit_card(
 	card.remove_meta(SIMULATOR_HAND_INDEX_META)
 
 	turn_state = TurnState.RESOLVING
-	_set_hand_playable(false)
+	_sync_hand_playability()
 	_update_turn_status()
 
 	var target_cell: PanelContainer = board_cells[cell_index]
+	card.set_face_down(false)
 	card.reparent(target_cell, false)
 	card.set_playable(false)
 	card.scale = Vector2(0.9, 0.9)
@@ -324,13 +328,14 @@ func _commit_card(
 
 	if duel_state.active_player == DuelRules.PLAYER_OWNER:
 		turn_state = TurnState.PLAYER
-		_set_hand_playable(true)
+		_sync_hand_playability()
 		_update_turn_status()
 		return
 
 	turn_state = TurnState.OPPONENT
+	_sync_hand_playability()
 	_update_turn_status()
-	if not continue_automatically:
+	if testing_mode or not continue_automatically:
 		return
 	if opponent_think_delay > 0.0:
 		await get_tree().create_timer(opponent_think_delay).timeout
@@ -399,7 +404,7 @@ func _perform_opponent_turn() -> void:
 
 func _finish_match() -> void:
 	turn_state = TurnState.COMPLETE
-	_set_hand_playable(false)
+	_sync_hand_playability()
 	var player_total: int = DuelRules.count_owned(board, DuelRules.PLAYER_OWNER)
 	var opponent_total: int = DuelRules.count_owned(board, DuelRules.OPPONENT_OWNER)
 	if player_total > opponent_total:
@@ -410,9 +415,34 @@ func _finish_match() -> void:
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
 
 
-func _set_hand_playable(value: bool) -> void:
+func _sync_hand_playability() -> void:
 	for card: CardView in _get_cards_in_hand(player_hand):
-		card.set_playable(value and turn_state == TurnState.PLAYER)
+		card.set_playable(
+			turn_state == TurnState.PLAYER
+			and duel_state != null
+			and duel_state.active_player == DuelRules.PLAYER_OWNER
+		)
+	for card: CardView in _get_cards_in_hand(opponent_hand):
+		card.set_playable(
+			testing_mode
+			and turn_state == TurnState.OPPONENT
+			and duel_state != null
+			and duel_state.active_player == DuelRules.OPPONENT_OWNER
+		)
+
+
+func _can_manually_drag(card: CardView) -> bool:
+	if duel_state == null or duel_state.active_player != card.owner_id:
+		return false
+	if card.owner_id == DuelRules.PLAYER_OWNER:
+		return turn_state == TurnState.PLAYER
+	if card.owner_id == DuelRules.OPPONENT_OWNER:
+		return testing_mode and turn_state == TurnState.OPPONENT
+	return false
+
+
+func _get_hand_for_owner(owner_id: int) -> HBoxContainer:
+	return player_hand if owner_id == DuelRules.PLAYER_OWNER else opponent_hand
 
 
 func _get_cards_in_hand(container: HBoxContainer) -> Array[CardView]:
@@ -470,11 +500,11 @@ func _update_score() -> void:
 func _update_turn_status() -> void:
 	match turn_state:
 		TurnState.PLAYER:
-			turn_status.text = "Your turn · drag a card"
+			turn_status.text = "Testing · Player side · drag a card" if testing_mode else "Your turn · drag a card"
 		TurnState.RESOLVING:
 			turn_status.text = "Resolving…"
 		TurnState.OPPONENT:
-			turn_status.text = "Shen Lian considers…"
+			turn_status.text = "Testing · Opponent side · drag a card" if testing_mode else "Shen Lian considers…"
 		TurnState.COMPLETE:
 			pass
 

@@ -7,9 +7,12 @@ signal drag_ended(card: CardView, pointer_position: Vector2)
 
 @export var touch_drag_offset: float = 48.0
 
+const CARD_BACK_GLYPH: String = "◆"
+
 var card_data: Dictionary = {}
 var owner_id: int = 0
 var playable: bool = false
+var face_down: bool = false
 
 var _dragging: bool = false
 var _pointer_id: int = -2
@@ -37,21 +40,41 @@ func configure(new_card_data: Dictionary, new_owner_id: int, is_playable: bool) 
 	card_data = new_card_data.duplicate(true)
 	owner_id = new_owner_id
 	playable = is_playable
+	_refresh_face_content()
+	_apply_owner_style()
+	_update_cursor()
+
+
+func set_face_down(value: bool) -> void:
+	face_down = value
+	_refresh_face_content()
+	_apply_owner_style()
+	_update_cursor()
+
+
+func is_face_down() -> bool:
+	return face_down
+
+
+func _refresh_face_content() -> void:
 	var powers: Array = card_data.get("powers", [0, 0, 0, 0])
 	top_power.text = str(powers[DuelRules.TOP])
 	right_power.text = str(powers[DuelRules.RIGHT])
 	bottom_power.text = str(powers[DuelRules.BOTTOM])
 	left_power.text = str(powers[DuelRules.LEFT])
-	art_placeholder.text = str(card_data.get("glyph", "?"))
-	tooltip_text = "%s  ↑%s →%s ↓%s ←%s" % [
-		str(card_data.get("name", "Card")),
-		top_power.text,
-		right_power.text,
-		bottom_power.text,
-		left_power.text,
-	]
-	_apply_owner_style()
-	_update_cursor()
+	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
+		power_label.visible = not face_down
+	art_placeholder.text = CARD_BACK_GLYPH if face_down else str(card_data.get("glyph", "?"))
+	if face_down:
+		tooltip_text = ""
+	else:
+		tooltip_text = "%s  ↑%s →%s ↓%s ←%s" % [
+			str(card_data.get("name", "Card")),
+			top_power.text,
+			right_power.text,
+			bottom_power.text,
+			left_power.text,
+		]
 
 
 func set_playable(value: bool) -> void:
@@ -249,8 +272,8 @@ func _update_cursor() -> void:
 
 func _apply_owner_style() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = _get_owner_background()
-	style.border_color = _get_owner_border()
+	style.bg_color = _get_display_background()
+	style.border_color = _get_display_border()
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(8)
 	style.shadow_color = Color(0.08, 0.06, 0.05, 0.35)
@@ -261,7 +284,7 @@ func _apply_owner_style() -> void:
 
 func _apply_drag_style() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = _get_owner_background().lightened(0.08)
+	style.bg_color = _get_display_background().lightened(0.08)
 	style.border_color = Color("d2a63f")
 	style.set_border_width_all(4)
 	style.set_corner_radius_all(8)
@@ -269,6 +292,18 @@ func _apply_drag_style() -> void:
 	style.shadow_size = 9
 	style.shadow_offset = Vector2(0, 7)
 	add_theme_stylebox_override("panel", style)
+
+
+func _get_display_background() -> Color:
+	if face_down:
+		return Color("8c403a")
+	return _get_owner_background()
+
+
+func _get_display_border() -> Color:
+	if face_down:
+		return Color("d2a63f")
+	return _get_owner_border()
 
 
 func _get_owner_background() -> Color:

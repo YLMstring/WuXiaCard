@@ -23,8 +23,10 @@ func _run() -> void:
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
 	_check_catalog_hands(duel)
+	_check_normal_opponent_concealment(duel)
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
+	await _check_testing_mode_manual_turns()
 	await _check_player_gate_exile()
 	await _check_opponent_tiger_exile()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
@@ -124,6 +126,43 @@ func _check_catalog_hands(duel: Node) -> void:
 	_check(not duel.has_method("_get_player_cards") and not duel.has_method("_get_opponent_cards"), "Controller no longer owns hard-coded card definitions")
 
 
+func _check_normal_opponent_concealment(duel: Node) -> void:
+	var opponent_cards: Array[Control] = _cards_below(duel.get_node("OpponentHand"))
+	var all_concealed: bool = not opponent_cards.is_empty()
+	var all_private_data_retained: bool = true
+	for card: Control in opponent_cards:
+		var card_data: Dictionary = card.get("card_data")
+		all_private_data_retained = all_private_data_retained and not String(card_data.get("name", "")).is_empty() and (card_data.get("powers", []) as Array).size() == 4
+		all_concealed = (
+			all_concealed
+			and card.has_method("is_face_down")
+			and bool(card.call("is_face_down"))
+			and not (card.get_node("Overlay/TopPower") as Label).visible
+			and not (card.get_node("Overlay/RightPower") as Label).visible
+			and not (card.get_node("Overlay/BottomPower") as Label).visible
+			and not (card.get_node("Overlay/LeftPower") as Label).visible
+			and card.tooltip_text.is_empty()
+		)
+	_check(all_concealed, "Normal mode presents every remaining opponent card face-down without power or tooltip leaks")
+	_check(all_private_data_retained, "Face-down opponent views retain complete private card data")
+
+	var first_card: Control = opponent_cards[0]
+	var first_data: Dictionary = first_card.get("card_data")
+	var supports_visibility: bool = first_card.has_method("set_face_down") and first_card.has_method("is_face_down")
+	_check(supports_visibility, "Card view exposes reusable face-down presentation controls")
+	if supports_visibility:
+		first_card.call("set_face_down", false)
+		first_card.call("set_face_down", false)
+		var powers: Array = first_data.get("powers", [])
+		_check(not bool(first_card.call("is_face_down")), "Repeated reveal calls leave the card face-up")
+		_check((first_card.get_node("Overlay/ArtPlaceholder") as Label).text == str(first_data.get("glyph", "?")), "Revealing restores the opponent card glyph from retained data")
+		_check((first_card.get_node("Overlay/TopPower") as Label).visible and (first_card.get_node("Overlay/TopPower") as Label).text == str(powers[0]), "Revealing restores visible power labels from retained data")
+		_check(not first_card.tooltip_text.is_empty(), "Revealing restores the opponent card tooltip")
+		first_card.call("set_face_down", true)
+		first_card.call("set_face_down", true)
+		_check(bool(first_card.call("is_face_down")) and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent")
+
+
 func _check_focus_loss_return() -> void:
 	var focus_duel: Node = DUEL_SCENE.instantiate()
 	root.add_child(focus_duel)
@@ -155,7 +194,64 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	await drag_duel._commit_card(card, 0, 1)
 	_check(drag_duel.debug_get_board_occupancy() == 2, "Dragged player card and opponent reply both commit through production")
 	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
+	var opponent_board_card: Control = null
+	for board_card_value: Variant in drag_duel.get("board_cards"):
+		if board_card_value is Control and int((board_card_value as Control).get("owner_id")) == 2:
+			opponent_board_card = board_card_value as Control
+			break
+	_check(opponent_board_card != null, "Normal AI places an opponent card view on the board")
+	if opponent_board_card != null:
+		_check(opponent_board_card.has_method("is_face_down") and not bool(opponent_board_card.call("is_face_down")), "An AI-played opponent card reveals when it reaches the board")
 	drag_duel.queue_free()
+	await process_frame
+
+
+func _check_testing_mode_manual_turns() -> void:
+	var test_duel: Node = DUEL_SCENE.instantiate()
+	test_duel.set("testing_mode", true)
+	root.add_child(test_duel)
+	await process_frame
+	await process_frame
+	test_duel.debug_set_fast_mode(true)
+
+	var player_cards: Array[Control] = _cards_below(test_duel.get_node("PlayerHand"))
+	var opponent_cards: Array[Control] = _cards_below(test_duel.get_node("OpponentHand"))
+	var all_face_up: bool = true
+	for card: Control in player_cards + opponent_cards:
+		all_face_up = all_face_up and card.has_method("is_face_down") and not bool(card.call("is_face_down"))
+	_check(all_face_up, "Testing mode starts with both hands face-up")
+	_check(_count_playable(player_cards) == player_cards.size() and _count_playable(opponent_cards) == 0, "Testing mode initially enables only the player hand")
+	_check("Testing" in (test_duel.get_node("TurnStatus") as Label).text and "Player" in (test_duel.get_node("TurnStatus") as Label).text, "Testing status identifies the opening player side")
+
+	var player_card: Control = player_cards[0]
+	test_duel._on_card_drag_started(player_card, player_card.get_global_rect().get_center())
+	_check(player_card.get_parent() == test_duel.get_node("DragLayer"), "Testing player drag uses the production drag layer")
+	await test_duel._commit_card(player_card, 0, 1)
+	_check(test_duel.debug_get_board_occupancy() == 1 and test_duel.debug_get_simulation_turn_count() == 1, "Testing mode suppresses the automatic AI reply")
+	opponent_cards = _cards_below(test_duel.get_node("OpponentHand"))
+	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == 0 and _count_playable(opponent_cards) == opponent_cards.size(), "Testing mode enables only the opponent hand on the opponent turn")
+	_check("Testing" in (test_duel.get_node("TurnStatus") as Label).text and "Opponent" in (test_duel.get_node("TurnStatus") as Label).text, "Testing status identifies the opponent side")
+
+	var opponent_card: Control = opponent_cards[0]
+	var opponent_home: Node = opponent_card.get_parent()
+	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
+	_check(opponent_card.get_parent() == test_duel.get_node("DragLayer"), "Testing opponent drag uses the production drag layer")
+	opponent_card.call("_try_end_drag", Vector2(-100.0, -100.0), -1)
+	await process_frame
+	_check(opponent_card.get_parent() == opponent_home, "Invalid testing opponent drop returns to its original top-hand slot")
+
+	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
+	opponent_card.notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	await process_frame
+	await process_frame
+	_check(opponent_card.get_parent() == opponent_home, "Focus loss returns a testing opponent card to its original top-hand slot")
+
+	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
+	_check(opponent_card.get_parent() == test_duel.get_node("DragLayer"), "Testing opponent card can begin a second valid drag")
+	await test_duel._commit_card(opponent_card, 1, 2)
+	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 2, "Manual opponent placement advances the production simulator path exactly once")
+	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == _count_cards(test_duel.get_node("PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
+	test_duel.queue_free()
 	await process_frame
 
 
@@ -241,6 +337,14 @@ func _cards_below(container: Node) -> Array[Control]:
 
 func _count_cards(container: Node) -> int:
 	return _cards_below(container).size()
+
+
+func _count_playable(cards: Array[Control]) -> int:
+	var count: int = 0
+	for card: Control in cards:
+		if bool(card.get("playable")):
+			count += 1
+	return count
 
 
 func _check(condition: bool, message: String) -> void:
