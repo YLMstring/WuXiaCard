@@ -109,9 +109,11 @@ When a `card_drawn` event is presented:
 2. Spawn its `CardView` into the first empty physical hand slot.
 3. Show it face-up for the player and in testing mode.
 4. Show it face-down for the normal-mode opponent.
-5. Present the approved **Ink Summon** arrival: an ink bloom opens over the slot, then the card rises out of it and settles into place.
+5. Present the approved **Ink Summon** arrival: an abstract spreading ink blot opens over the slot, then the card rises out of it and settles into place.
 
 Draw events are presented sequentially, never simultaneously. Each card receives a default `0.12` second ink-bloom phase followed by a `0.28` second rise-and-settle phase. A second drawn card starts only after the first has settled. These durations are exported presentation tunables rather than simulator rules.
+
+The blot contains no writing or icon. It is composed of several overlapping, asymmetrical dark pools with softly varied edges plus a small number of detached droplets. The pools rapidly spread from the card slot's center, overshoot slightly, and fade while the card rises through them. The effect is implemented as a reusable Godot `Control` drawing primitive geometry, so it needs no imported texture and scales cleanly with the portrait interface.
 
 Ink Summon is intentionally silent. Drawing creates no dedicated sound, synthesized stream, or audio-player node; its feedback comes from the sequential ink-bloom and card-rise animation.
 
@@ -170,6 +172,8 @@ Integration tests will verify:
 - playing Strategist creates a concealed opponent view in normal mode;
 - testing mode reveals both owners’ drawn cards;
 - multiple drawn cards are presented sequentially in simulator event order;
+- Ink Summon uses an abstract spreading blot and droplets with no text glyph;
+- no draw audio node, generated audio stream, or draw playback path remains;
 - fast mode suppresses Ink Summon delays while preserving the resulting hand views;
 - the post-draw presentation gap occurs before flip or exile presentation, not inside simulator state resolution;
 - interior empty slots are filled while instance-ID mapping still commits the intended card;
