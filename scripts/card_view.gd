@@ -22,7 +22,7 @@ var _home_index: int = -1
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
 @onready var ink_slash: ColorRect = $Overlay/InkSlash
-@onready var ink_bloom: Label = $Overlay/InkBloom
+@onready var ink_bloom: InkBloom = $Overlay/InkBloom
 @onready var top_power: Label = $Overlay/TopPower
 @onready var right_power: Label = $Overlay/RightPower
 @onready var bottom_power: Label = $Overlay/BottomPower
@@ -157,7 +157,7 @@ func play_draw_summon(
 ) -> void:
 	pivot_offset = size * 0.5
 	var resting_position: Vector2 = position
-	ink_bloom.add_theme_color_override("font_color", ink_color)
+	ink_bloom.set_ink_color(ink_color)
 	ink_bloom.pivot_offset = ink_bloom.size * 0.5
 	ink_bloom.scale = Vector2(0.18, 0.18)
 	ink_bloom.modulate = Color(1.0, 1.0, 1.0, 0.0)

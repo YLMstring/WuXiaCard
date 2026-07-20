@@ -155,9 +155,15 @@ func _check_player_draw_and_instance_mapping() -> void:
 	await process_frame
 	await process_frame
 	draw_duel.debug_set_fast_mode(true)
-	_check(draw_duel.has_node("DrawAudio"), "Duel scene contains dedicated draw audio")
+	_check(not draw_duel.has_node("DrawAudio"), "Ink Summon has no dedicated draw audio")
 	var initial_card: Control = _first_card(draw_duel.get_node("PlayerHand"))
 	_check(initial_card.has_node("Overlay/InkBloom") and initial_card.has_method("play_draw_summon"), "Card view exposes the reusable Ink Summon presentation")
+	var ink_bloom: Control = initial_card.get_node("Overlay/InkBloom") as Control
+	var ink_script: Script = ink_bloom.get_script()
+	_check(not ink_bloom is Label and ink_script != null and ink_script.resource_path == "res://scripts/ink_bloom.gd", "Ink Summon uses a custom drawing control instead of a text glyph")
+	_check(ink_bloom.has_method("set_ink_color") and ink_bloom.has_method("get_pool_count") and ink_bloom.has_method("get_droplet_count"), "Ink bloom exposes reusable color and geometry controls")
+	if ink_bloom.has_method("get_pool_count") and ink_bloom.has_method("get_droplet_count"):
+		_check(int(ink_bloom.call("get_pool_count")) >= 3 and int(ink_bloom.call("get_droplet_count")) >= 3, "Ink bloom contains overlapping pools and detached droplets")
 
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false), "Draw fixture places the first player card")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Draw fixture places the first opponent card")
@@ -203,7 +209,7 @@ func _check_opponent_draw_visibility() -> void:
 	_check(opponent_views.size() == 4, "Strategist draws two cards into the opponent hand")
 	_check(_count_face_down(opponent_views) == opponent_views.size(), "Normal-mode opponent draws remain fully concealed")
 	_check(trace.size() >= 2 and trace.slice(trace.size() - 2) == [&"card_drawn", &"card_drawn"], "Opponent Ink Summons also resolve sequentially")
-	_check(not (draw_duel.get_node("DrawAudio") as AudioStreamPlayer).playing, "Fast mode suppresses draw audio")
+	_check(not draw_duel.has_node("DrawAudio"), "Opponent Ink Summon remains silent in fast and normal presentation")
 	_check_hand_slots(draw_duel.get_node("OpponentHand"))
 	draw_duel.queue_free()
 	await process_frame

@@ -29,7 +29,6 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
 @export var draw_ink_color: Color = Color("211824")
-@export var draw_audio_volume_db: float = -3.0
 @export var side_deck_shuffle_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var invalid_shake_duration: float = 0.18
@@ -62,7 +61,6 @@ var _presentation_trace: Array[StringName] = []
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
 @onready var removal_audio: AudioStreamPlayer = $RemovalAudio
-@onready var draw_audio: AudioStreamPlayer = $DrawAudio
 
 
 func _ready() -> void:
@@ -505,7 +503,6 @@ func _present_draw_event(event: Dictionary) -> void:
 		return
 	var card: CardView = _spawn_card_in_slot(target_slot, card_data, owner_id, false)
 	card.set_face_down(owner_id == DuelRules.OPPONENT_OWNER and not testing_mode)
-	_play_draw_feedback()
 	_presentation_trace.append(&"card_drawn")
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
 
@@ -763,8 +760,6 @@ func _create_placeholder_audio() -> void:
 	capture_audio.stream = _make_tone(470.0, 0.09)
 	removal_audio.stream = _make_removal_tone(0.14)
 	removal_audio.volume_db = removal_audio_volume_db
-	draw_audio.stream = _make_draw_tone(0.40)
-	draw_audio.volume_db = draw_audio_volume_db
 
 
 func _make_tone(frequency: float, duration: float) -> AudioStreamWAV:
@@ -806,36 +801,6 @@ func _make_removal_tone(duration: float) -> AudioStreamWAV:
 	return stream
 
 
-func _make_draw_tone(duration: float) -> AudioStreamWAV:
-	var sample_rate: int = 22050
-	var sample_count: int = int(sample_rate * duration)
-	var bytes := PackedByteArray()
-	bytes.resize(sample_count * 2)
-	for sample_index: int in range(sample_count):
-		var time: float = float(sample_index) / float(sample_rate)
-		var brush_progress: float = clampf(time / 0.12, 0.0, 1.0)
-		var brush_envelope: float = (1.0 - brush_progress) * (1.0 - brush_progress)
-		var paper_texture: float = (
-			sin(TAU * 1379.0 * time) * sin(TAU * 823.0 * time) * 0.10
-			+ sin(TAU * 241.0 * time) * 0.045
-		) * brush_envelope
-		var pluck_time: float = maxf(time - 0.19, 0.0)
-		var pluck: float = 0.0
-		if time >= 0.19:
-			pluck = (
-				sin(TAU * 196.0 * pluck_time)
-				+ sin(TAU * 294.0 * pluck_time) * 0.32
-			) * exp(-9.0 * pluck_time) * 0.16
-		var wave: float = paper_texture + pluck
-		bytes.encode_s16(sample_index * 2, int(clampf(wave, -1.0, 1.0) * 32767.0))
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = sample_rate
-	stream.stereo = false
-	stream.data = bytes
-	return stream
-
-
 func _play_placement_feedback() -> void:
 	if not OS.has_feature("headless"):
 		placement_audio.play()
@@ -850,11 +815,6 @@ func _play_capture_feedback() -> void:
 func _play_removal_feedback() -> void:
 	if not OS.has_feature("headless"):
 		removal_audio.play()
-
-
-func _play_draw_feedback() -> void:
-	if not _fast_mode and not OS.has_feature("headless"):
-		draw_audio.play()
 
 
 func _vibrate(duration_ms: int) -> void:

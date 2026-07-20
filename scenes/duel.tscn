@@ -141,5 +141,3 @@ mouse_filter = 2
 [node name="CaptureAudio" type="AudioStreamPlayer" parent="."]
 
 [node name="RemovalAudio" type="AudioStreamPlayer" parent="."]
-
-[node name="DrawAudio" type="AudioStreamPlayer" parent="."]
