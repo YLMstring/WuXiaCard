@@ -5,6 +5,33 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
+const MAX_HAND_SIZE: int = 5
+
+
+static func resolve_on_play_effects(
+	state: StateData,
+	source_cell: int,
+	owner_id: int
+) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	if state == null or source_cell < 0 or source_cell >= state.board.size():
+		return events
+	var source_slot: Variant = state.board[source_cell]
+	if source_slot == null or int((source_slot as Dictionary).get("owner", 0)) != owner_id:
+		return events
+	var source_card: Dictionary = (source_slot as Dictionary).get("card", {})
+	var active_effects: Array = source_card.get("active_effects", [])
+	for effect_value: Variant in active_effects:
+		var effect: Dictionary = effect_value
+		if StringName(effect.get("id", &"")) == Catalog.EFFECT_DRAW_CARDS_ON_PLAY:
+			events.append_array(_resolve_draw_cards(
+				state,
+				source_cell,
+				owner_id,
+				int(effect.get("draw_count", 0))
+			))
+	return events
+
 
 static func resolve_flip_attempt(
 	state: StateData,
@@ -24,6 +51,32 @@ static func resolve_flip_attempt(
 	if _has_active_effect(source_card, Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP):
 		return _resolve_exile(state, source_cell, target_cell, new_owner)
 	return _resolve_normal_flip(state, source_cell, target_cell, new_owner)
+
+
+static func _resolve_draw_cards(
+	state: StateData,
+	source_cell: int,
+	owner_id: int,
+	requested_count: int
+) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	if requested_count <= 0:
+		return events
+	var hand: Array = state.get_hand(owner_id)
+	var deck: Array = state.decks.get(owner_id, [])
+	var actual_count: int = mini(requested_count, mini(MAX_HAND_SIZE - hand.size(), deck.size()))
+	for _draw_index: int in range(maxi(actual_count, 0)):
+		var drawn_card: Dictionary = deck.pop_front()
+		hand.append(drawn_card)
+		events.append({
+			"type": &"card_drawn",
+			"source_cell": source_cell,
+			"owner_id": owner_id,
+			"card_id": StringName(drawn_card.get("card_id", &"")),
+			"instance_id": StringName(drawn_card.get("instance_id", &"")),
+			"logical_hand_index": hand.size() - 1,
+		})
+	return events
 
 
 static func _resolve_exile(

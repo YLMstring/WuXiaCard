@@ -22,6 +22,7 @@ var _home_index: int = -1
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
 @onready var ink_slash: ColorRect = $Overlay/InkSlash
+@onready var ink_bloom: Label = $Overlay/InkBloom
 @onready var top_power: Label = $Overlay/TopPower
 @onready var right_power: Label = $Overlay/RightPower
 @onready var bottom_power: Label = $Overlay/BottomPower
@@ -147,6 +148,45 @@ func play_effect_pulse(duration: float) -> void:
 	pulse_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	pulse_tween.tween_property(self, "scale", Vector2.ONE, duration * 0.55)
 	await pulse_tween.finished
+
+
+func play_draw_summon(
+	bloom_duration: float,
+	rise_duration: float,
+	ink_color: Color
+) -> void:
+	pivot_offset = size * 0.5
+	var resting_position: Vector2 = position
+	ink_bloom.add_theme_color_override("font_color", ink_color)
+	ink_bloom.pivot_offset = ink_bloom.size * 0.5
+	ink_bloom.scale = Vector2(0.18, 0.18)
+	ink_bloom.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	ink_bloom.visible = true
+	scale = Vector2(0.76, 0.76)
+	position = resting_position + Vector2(0.0, minf(26.0, size.y * 0.20))
+	if bloom_duration > 0.0:
+		var bloom_tween: Tween = create_tween()
+		bloom_tween.set_parallel(true)
+		bloom_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		bloom_tween.tween_property(ink_bloom, "scale", Vector2(1.15, 1.15), bloom_duration)
+		bloom_tween.tween_property(ink_bloom, "modulate", Color.WHITE, bloom_duration * 0.55)
+		await bloom_tween.finished
+	if rise_duration > 0.0:
+		var rise_tween: Tween = create_tween()
+		rise_tween.set_parallel(true)
+		rise_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		rise_tween.tween_property(self, "scale", Vector2.ONE, rise_duration)
+		rise_tween.tween_property(self, "position", resting_position, rise_duration)
+		rise_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		rise_tween.tween_property(ink_bloom, "modulate", Color(1.0, 1.0, 1.0, 0.0), rise_duration)
+		await rise_tween.finished
+	scale = Vector2.ONE
+	position = resting_position
+	rotation = 0.0
+	modulate = Color.WHITE
+	ink_bloom.visible = false
+	ink_bloom.scale = Vector2.ONE
+	ink_bloom.modulate = Color.WHITE
 
 
 func play_exile(duration: float, ink_color: Color) -> void:

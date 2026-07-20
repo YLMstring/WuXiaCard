@@ -67,6 +67,11 @@ static func apply_move(state: StateData, move: MoveData) -> Dictionary:
 	]
 	var captures: Array[int] = []
 	var exiles: Array[int] = []
+	events.append_array(Effects.resolve_on_play_effects(
+		next_state,
+		move.cell_index,
+		moving_owner
+	))
 	var would_flip: Array[int] = Rules.get_would_flip_indices(next_state.board, move.cell_index)
 	for target_cell: int in would_flip:
 		var resolution_events: Array[Dictionary] = Effects.resolve_flip_attempt(

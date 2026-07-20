@@ -23,7 +23,9 @@ func _init(
 	player_hand: Array = [],
 	opponent_hand: Array = [],
 	new_active_player: int = Rules.PLAYER_OWNER,
-	new_turn_count: int = 0
+	new_turn_count: int = 0,
+	player_deck: Array = [],
+	opponent_deck: Array = []
 ) -> void:
 	board = new_board.duplicate(true)
 	hands = {
@@ -31,8 +33,8 @@ func _init(
 		Rules.OPPONENT_OWNER: opponent_hand.duplicate(true),
 	}
 	decks = {
-		Rules.PLAYER_OWNER: [],
-		Rules.OPPONENT_OWNER: [],
+		Rules.PLAYER_OWNER: player_deck.duplicate(true),
+		Rules.OPPONENT_OWNER: opponent_deck.duplicate(true),
 	}
 	discard_piles = {
 		Rules.PLAYER_OWNER: [],
@@ -56,9 +58,10 @@ func duplicate_state():
 		get_hand(Rules.PLAYER_OWNER),
 		get_hand(Rules.OPPONENT_OWNER),
 		active_player,
-		turn_count
+		turn_count,
+		decks.get(Rules.PLAYER_OWNER, []),
+		decks.get(Rules.OPPONENT_OWNER, [])
 	)
-	copied.decks = decks.duplicate(true)
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)
 	copied.max_turns = max_turns

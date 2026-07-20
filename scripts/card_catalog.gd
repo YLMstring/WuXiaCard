@@ -2,7 +2,11 @@ class_name CardCatalog
 extends RefCounted
 
 const EFFECT_EXILE_INSTEAD_OF_FLIP: StringName = &"exile_instead_of_flip"
-const KNOWN_EFFECT_IDS: Array[StringName] = [EFFECT_EXILE_INSTEAD_OF_FLIP]
+const EFFECT_DRAW_CARDS_ON_PLAY: StringName = &"draw_cards_on_play"
+const KNOWN_EFFECT_IDS: Array[StringName] = [
+	EFFECT_EXILE_INSTEAD_OF_FLIP,
+	EFFECT_DRAW_CARDS_ON_PLAY,
+]
 
 const ALL_CARD_IDS: Array[StringName] = [
 	&"xu_shu",
@@ -56,7 +60,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"name": "Fa Zheng",
 		"glyph": "法",
 		"powers": [5, 4, 4, 3],
-		"effects": [],
+		"effects": [
+			{
+				"id": EFFECT_DRAW_CARDS_ON_PLAY,
+				"draw_count": 2,
+			},
+		],
 	},
 	&"zhang_ren": {
 		"id": &"zhang_ren",
@@ -89,7 +98,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"name": "Strategist",
 		"glyph": "策",
 		"powers": [4, 4, 4, 4],
-		"effects": [],
+		"effects": [
+			{
+				"id": EFFECT_DRAW_CARDS_ON_PLAY,
+				"draw_count": 2,
+			},
+		],
 	},
 	&"sun_zan": {
 		"id": &"sun_zan",
@@ -128,8 +142,14 @@ static func create_instance(
 		"glyph": String(definition["glyph"]),
 		"powers": (definition["powers"] as Array).duplicate(),
 		"original_owner": original_owner,
-		"active_effects": (definition["effects"] as Array).duplicate(true),
+		"active_effects": _normalize_effects(definition["effects"] as Array),
 	}
+
+
+static func validate_effect(effect: Dictionary, card_id: StringName = &"fixture") -> Array[String]:
+	var errors: Array[String] = []
+	_validate_effect(card_id, effect, errors)
+	return errors
 
 
 static func validate_catalog() -> Array[String]:
@@ -176,8 +196,31 @@ static func _validate_definition(
 			errors.append("Card %s has a non-dictionary effect" % card_id)
 			continue
 		var effect: Dictionary = effect_value
-		var effect_id := StringName(effect.get("id", &""))
-		if effect_id not in KNOWN_EFFECT_IDS:
-			errors.append("Card %s uses unknown effect %s" % [card_id, effect_id])
-		if not effect.has("retained_on_flip") or typeof(effect["retained_on_flip"]) != TYPE_BOOL:
-			errors.append("Card %s effect %s must declare retained_on_flip" % [card_id, effect_id])
+		_validate_effect(card_id, effect, errors)
+
+
+static func _normalize_effects(raw_effects: Array) -> Array:
+	var normalized_effects: Array = []
+	for effect_value: Variant in raw_effects:
+		var effect: Dictionary = (effect_value as Dictionary).duplicate(true)
+		if not effect.has("retained_on_flip"):
+			effect["retained_on_flip"] = false
+		normalized_effects.append(effect)
+	return normalized_effects
+
+
+static func _validate_effect(
+	card_id: StringName,
+	effect: Dictionary,
+	errors: Array[String]
+) -> void:
+	var effect_id := StringName(effect.get("id", &""))
+	if effect_id not in KNOWN_EFFECT_IDS:
+		errors.append("Card %s uses unknown effect %s" % [card_id, effect_id])
+	if effect.has("retained_on_flip") and typeof(effect["retained_on_flip"]) != TYPE_BOOL:
+		errors.append("Card %s effect %s has non-Boolean retained_on_flip" % [card_id, effect_id])
+	if effect_id == EFFECT_DRAW_CARDS_ON_PLAY:
+		if not effect.has("draw_count") or typeof(effect["draw_count"]) != TYPE_INT:
+			errors.append("Card %s draw effect requires an integer draw_count" % card_id)
+		elif int(effect["draw_count"]) <= 0:
+			errors.append("Card %s draw effect requires a positive draw_count" % card_id)

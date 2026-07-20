@@ -2,6 +2,8 @@ extends SceneTree
 
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
+const Rules = preload("res://scripts/duel_rules.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -23,16 +25,19 @@ func _run() -> void:
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
 	_check_catalog_hands(duel)
+	_check_side_deck_setup(duel)
 	_check_normal_opponent_concealment(duel)
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
 	await _check_testing_mode_manual_turns()
 	await _check_player_gate_exile()
 	await _check_opponent_tiger_exile()
+	await _check_player_draw_and_instance_mapping()
+	await _check_opponent_draw_visibility()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
 
 	var player_turns: int = 0
-	while not duel.debug_is_complete() and player_turns < 5:
+	while not duel.debug_is_complete() and player_turns < 20:
 		var target_cell: int = duel.debug_first_empty_cell()
 		var placed: bool = await duel.debug_place_player_card(0, target_cell)
 		_check(placed, "Player turn %d commits through the production move path" % (player_turns + 1))
@@ -48,11 +53,13 @@ func _run() -> void:
 	var remaining_cards: int = _count_cards(duel.get_node("PlayerHand")) + _count_cards(duel.get_node("OpponentHand"))
 	_check(duel.debug_is_complete(), "Scripted match reaches the complete state")
 	_check(scores.x + scores.y == occupancy, "Final scores count exactly the cards remaining on board")
-	_check(player_turns == 5, "Player takes five turns when moving first")
+	_check(player_turns <= 20, "Scripted match remains within the safety turn bound")
 	_check(duel.has_method("debug_get_simulation_turn_count"), "Production duel exposes simulator turn-count diagnostics")
 	if duel.has_method("debug_get_simulation_turn_count"):
-		_check(simulation_turns + remaining_cards == 10, "Every starting card is either placed or remains in hand")
-	_check(_count_cards(duel.get_node("PlayerHand")) == 0, "Player hand is empty after five placements")
+		var removed_cards: int = duel.debug_get_removed_count(Rules.PLAYER_OWNER) + duel.debug_get_removed_count(Rules.OPPONENT_OWNER)
+		_check(simulation_turns == occupancy + removed_cards, "Every played card remains on board or in a removed zone")
+	_check(duel.debug_get_total_card_count() == 30, "All ten main-deck and twenty side-deck instances remain accounted for")
+	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
 	_check((duel.get_node("TopBar/OpponentName") as Label).text == "Shen Lian", "Opponent name appears in the upper-left top bar")
 	_check((duel.get_node("TopBar/ExitButton") as Button).text == "Exit", "Exit button appears in the upper-right top bar")
@@ -124,6 +131,82 @@ func _check_catalog_hands(duel: Node) -> void:
 	_check(gate_effects.size() == 1 and bool((gate_effects[0] as Dictionary).get("retained_on_flip", false)), "Gate General view receives its retained catalog effect")
 	_check(tiger_effects.size() == 1 and bool((tiger_effects[0] as Dictionary).get("retained_on_flip", false)), "Tiger General view receives its retained catalog effect")
 	_check(not duel.has_method("_get_player_cards") and not duel.has_method("_get_opponent_cards"), "Controller no longer owns hard-coded card definitions")
+
+
+func _check_side_deck_setup(duel: Node) -> void:
+	var expected_ids: Array[StringName] = Catalog.get_all_card_ids()
+	expected_ids.sort()
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var observed_ids: Array[StringName] = duel.debug_get_side_deck_card_ids(owner_id)
+		observed_ids.sort()
+		_check(observed_ids == expected_ids, "Owner %d side deck contains every catalog card once" % owner_id)
+	var all_instance_ids: Array[StringName] = duel.debug_get_all_instance_ids()
+	var unique_instance_ids: Dictionary = {}
+	for instance_id: StringName in all_instance_ids:
+		unique_instance_ids[instance_id] = true
+	_check(all_instance_ids.size() == 30 and unique_instance_ids.size() == 30, "Main and side decks use thirty unique runtime instance IDs")
+
+
+func _check_player_draw_and_instance_mapping() -> void:
+	var draw_duel: Node = DUEL_SCENE.instantiate()
+	draw_duel.set("testing_mode", true)
+	draw_duel.set("side_deck_shuffle_seed", 4102)
+	root.add_child(draw_duel)
+	await process_frame
+	await process_frame
+	draw_duel.debug_set_fast_mode(true)
+	_check(draw_duel.has_node("DrawAudio"), "Duel scene contains dedicated draw audio")
+	var initial_card: Control = _first_card(draw_duel.get_node("PlayerHand"))
+	_check(initial_card.has_node("Overlay/InkBloom") and initial_card.has_method("play_draw_summon"), "Card view exposes the reusable Ink Summon presentation")
+
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false), "Draw fixture places the first player card")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Draw fixture places the first opponent card")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 6, false), "Draw fixture places the second player card")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 1, false), "Draw fixture places a future flip target")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 2, 4, false), "Playing Fa Zheng from a three-card hand commits")
+
+	var logical_ids: Array[StringName] = draw_duel.debug_get_hand_instance_ids(Rules.PLAYER_OWNER)
+	var visual_ids: Array[StringName] = draw_duel.debug_get_hand_view_instance_ids(Rules.PLAYER_OWNER)
+	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
+	_check(logical_ids.size() == 4 and visual_ids.size() == 4, "Fa Zheng draws two cards without exceeding five")
+	_check(logical_ids != visual_ids, "Drawn cards fill earlier empty slots without repacking logical hand order")
+	_check(trace.size() >= 4 and trace.slice(trace.size() - 4) == [&"card_drawn", &"card_drawn", &"post_draw_gap", &"card_flipped"], "Sequential Ink Summons and their gap finish before flip presentation")
+	_check(_count_face_down(_cards_below(draw_duel.get_node("PlayerHand"))) == 0, "Testing-mode player draws remain face-up")
+	_check_hand_slots(draw_duel.get_node("PlayerHand"))
+
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 3, false), "Draw fixture advances through the opponent turn")
+	logical_ids = draw_duel.debug_get_hand_instance_ids(Rules.PLAYER_OWNER)
+	var intended_instance_id: StringName = logical_ids[2]
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 2, 2, false), "A drawn card commits by logical hand index")
+	_check(draw_duel.debug_get_board_card_instance_id(2) == intended_instance_id, "Instance-ID mapping places the intended drawn card despite visual-order divergence")
+	draw_duel.queue_free()
+	await process_frame
+
+
+func _check_opponent_draw_visibility() -> void:
+	var draw_duel: Node = DUEL_SCENE.instantiate()
+	draw_duel.set("side_deck_shuffle_seed", 991)
+	root.add_child(draw_duel)
+	await process_frame
+	await process_frame
+	draw_duel.debug_set_fast_mode(true)
+
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false), "Opponent-draw fixture places player card one")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Opponent-draw fixture places opponent card one")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 2, false), "Opponent-draw fixture places player card two")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 6, false), "Opponent-draw fixture places opponent card two")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 1, false), "Opponent-draw fixture advances to Strategist")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 7, false), "Playing Strategist from a three-card hand commits")
+
+	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("OpponentHand"))
+	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
+	_check(opponent_views.size() == 4, "Strategist draws two cards into the opponent hand")
+	_check(_count_face_down(opponent_views) == opponent_views.size(), "Normal-mode opponent draws remain fully concealed")
+	_check(trace.size() >= 2 and trace.slice(trace.size() - 2) == [&"card_drawn", &"card_drawn"], "Opponent Ink Summons also resolve sequentially")
+	_check(not (draw_duel.get_node("DrawAudio") as AudioStreamPlayer).playing, "Fast mode suppresses draw audio")
+	_check_hand_slots(draw_duel.get_node("OpponentHand"))
+	draw_duel.queue_free()
+	await process_frame
 
 
 func _check_normal_opponent_concealment(duel: Node) -> void:
@@ -343,6 +426,14 @@ func _count_playable(cards: Array[Control]) -> int:
 	var count: int = 0
 	for card: Control in cards:
 		if bool(card.get("playable")):
+			count += 1
+	return count
+
+
+func _count_face_down(cards: Array[Control]) -> int:
+	var count: int = 0
+	for card: Control in cards:
+		if card.has_method("is_face_down") and bool(card.call("is_face_down")):
 			count += 1
 	return count
 

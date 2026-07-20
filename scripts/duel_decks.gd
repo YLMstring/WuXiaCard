@@ -1,6 +1,8 @@
 class_name DuelDecks
 extends RefCounted
 
+const Catalog = preload("res://scripts/card_catalog.gd")
+
 const PLAYER_CARD_IDS: Array[StringName] = [
 	&"xu_shu",
 	&"gate_general",
@@ -24,3 +26,7 @@ static func get_player_card_ids() -> Array[StringName]:
 
 static func get_opponent_card_ids() -> Array[StringName]:
 	return OPPONENT_CARD_IDS.duplicate()
+
+
+static func get_side_deck_card_ids() -> Array[StringName]:
+	return Catalog.get_all_card_ids()

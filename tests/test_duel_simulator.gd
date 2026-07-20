@@ -24,6 +24,9 @@ func _run() -> void:
 	_test_exile_uses_original_owner_and_is_copy_isolated()
 	_test_retained_effect_survives_flip_and_future_attempt()
 	_test_nonretained_effect_is_permanently_lost()
+	_test_draw_on_play_respects_hand_cap_and_event_order()
+	_test_draw_on_play_uses_top_deck_order_and_available_cards()
+	_test_draw_on_play_handles_empty_deck()
 	_test_turn_passes_to_owner_with_a_legal_move()
 	_test_reopened_cell_keeps_match_alive()
 	_test_terminal_requires_both_players_to_be_stuck()
@@ -129,6 +132,80 @@ func _test_nonretained_effect_is_permanently_lost() -> void:
 	_check(_count_events(second_transition.get("events", []), &"ability_lost") == 0, "Already-lost effect does not emit another loss event")
 
 
+func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
+	var board: Array = Rules.empty_board()
+	board[5] = {
+		"card": Rules.make_card("Guard", "守", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var player_hand: Array = [Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"main_1_fa")]
+	for index: int in range(4):
+		player_hand.append(Rules.make_card("Filler %d" % index, "填", [1, 1, 1, 1]))
+	var player_deck: Array = [
+		Catalog.create_instance(&"xu_shu", Rules.PLAYER_OWNER, &"side_1_top"),
+		Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_next"),
+	]
+	var state := State.new(board, player_hand, [], Rules.PLAYER_OWNER, 0, player_deck, [])
+
+	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var next_state: State = transition["state"] as State
+	var event_types: Array[StringName] = []
+	for event_value: Variant in transition.get("events", []):
+		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
+	_check(event_types == [&"card_placed", &"card_drawn", &"card_flipped"], "Draw resolves after placement and before flip events")
+	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 5, "Playing from a full hand draws only enough to return to five")
+	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Hand cap leaves the second side-deck card undrawn")
+	var draw_event: Dictionary = (transition.get("events", []) as Array)[1]
+	_check(StringName(draw_event.get("card_id", &"")) == &"xu_shu", "Draw event identifies the top side-deck card")
+	_check(StringName(draw_event.get("instance_id", &"")) == &"side_1_top", "Draw event carries stable instance identity")
+	_check(int(draw_event.get("logical_hand_index", -1)) == 4, "Draw event reports its resulting logical hand index")
+	_check((state.decks[Rules.PLAYER_OWNER] as Array).size() == 2, "Draw transition leaves its source deck untouched")
+
+
+func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
+	var player_hand: Array = [
+		Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"main_1_fa"),
+		Rules.make_card("First", "一", [1, 1, 1, 1]),
+		Rules.make_card("Second", "二", [1, 1, 1, 1]),
+	]
+	var first_draw: Dictionary = Catalog.create_instance(&"gate_general", Rules.PLAYER_OWNER, &"side_1_gate")
+	var second_draw: Dictionary = Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_strategist")
+	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER, 0, [first_draw, second_draw], [])
+
+	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 0))
+	var next_state: State = transition["state"] as State
+	var next_hand: Array = next_state.get_hand(Rules.PLAYER_OWNER)
+	_check(next_hand.size() == 4, "Playing from three cards can draw the full requested two")
+	_check(StringName((next_hand[2] as Dictionary).get("instance_id", &"")) == &"side_1_gate", "First draw removes side-deck index zero first")
+	_check(StringName((next_hand[3] as Dictionary).get("instance_id", &"")) == &"side_1_strategist", "Second draw preserves side-deck order")
+	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).is_empty(), "Drawing two removes both available side-deck cards")
+	_check(_count_events(transition.get("events", []), &"card_drawn") == 2, "One event is emitted for each actual draw")
+
+	var partial_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"partial_fa")],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[Catalog.create_instance(&"tiger_general", Rules.PLAYER_OWNER, &"partial_tiger")],
+		[]
+	)
+	var partial_transition: Dictionary = Simulator.apply_move(partial_state, Move.new(0, 0))
+	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 1, "A depleted side deck draws only the one remaining card")
+
+
+func _test_draw_on_play_handles_empty_deck() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"empty_fa")],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 0))
+	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "An empty side deck emits no draw event")
+	_check((transition["state"] as State).get_hand(Rules.PLAYER_OWNER).is_empty(), "An empty side deck leaves the post-play hand empty")
+
+
 func _test_turn_passes_to_owner_with_a_legal_move() -> void:
 	var player_hand: Array = [
 		Rules.make_card("First", "一", [1, 1, 1, 1]),
@@ -173,8 +250,17 @@ func _test_terminal_requires_both_players_to_be_stuck() -> void:
 	_check(not Simulator.is_terminal(opponent_only), "Empty active hand is not terminal while the opponent can move")
 	_check(Simulator.get_legal_moves_for_owner(opponent_only, Rules.OPPONENT_OWNER).size() == 9, "Owner-specific move query finds the opponent's placements")
 
-	var no_hands := State.new(Rules.empty_board(), [], [], Rules.PLAYER_OWNER)
+	var no_hands := State.new(
+		Rules.empty_board(),
+		[],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"unused_side_card")],
+		[]
+	)
 	_check(Simulator.is_terminal(no_hands), "Match is terminal when neither player can move")
+	_check((no_hands.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Unused side-deck cards do not prevent terminal state")
 	no_hands.effect_queue.append({"type": &"pending_test"})
 	_check(not Simulator.is_terminal(no_hands), "Pending effect queue delays terminal state")
 	no_hands.turn_count = no_hands.max_turns
@@ -207,17 +293,32 @@ func _count_events(events: Array, event_type: StringName) -> int:
 
 
 func _test_state_copy_is_isolated() -> void:
+	var player_deck: Array = [Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"side_1_0")]
+	var opponent_deck: Array = [Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"side_2_0")]
 	var original := State.new(
 		Rules.empty_board(),
 		[Rules.make_card("Player", "我", [1, 2, 3, 4])],
 		[Rules.make_card("Opponent", "敌", [4, 3, 2, 1])],
-		Rules.PLAYER_OWNER
+		Rules.PLAYER_OWNER,
+		0,
+		player_deck,
+		opponent_deck
 	)
+	(player_deck[0] as Dictionary)["name"] = "Mutated source"
+	(opponent_deck[0] as Dictionary)["name"] = "Mutated source"
+	_check(String(((original.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary)["name"]) == "Fa Zheng", "State constructor deep-copies the player side deck")
+	_check(String(((original.decks[Rules.OPPONENT_OWNER] as Array)[0] as Dictionary)["name"]) == "Strategist", "State constructor deep-copies the opponent side deck")
 	var copied = original.duplicate_state()
 	copied.board[0] = {"card": Rules.make_card("Copy", "副", [5, 5, 5, 5]), "owner": Rules.PLAYER_OWNER}
 	copied.get_hand(Rules.PLAYER_OWNER).clear()
+	var copied_player_deck: Array = copied.decks[Rules.PLAYER_OWNER]
+	((copied_player_deck[0] as Dictionary)["powers"] as Array)[0] = 99
+	(((copied_player_deck[0] as Dictionary)["active_effects"] as Array)[0] as Dictionary)["draw_count"] = 9
 	_check(original.board[0] == null, "Duplicating state isolates board mutation")
 	_check(original.get_hand(Rules.PLAYER_OWNER).size() == 1, "Duplicating state isolates hand mutation")
+	var original_top: Dictionary = (original.decks[Rules.PLAYER_OWNER] as Array)[0]
+	_check(int((original_top["powers"] as Array)[0]) == 5, "Duplicating state isolates nested side-deck powers")
+	_check(int((((original_top["active_effects"] as Array)[0] as Dictionary)["draw_count"])) == 2, "Duplicating state isolates nested side-deck effects")
 
 
 func _test_legal_move_generation() -> void:
