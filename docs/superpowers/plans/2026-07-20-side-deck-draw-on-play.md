@@ -10,7 +10,7 @@
 - Resolve drawing in copied simulator state before flip/exile attempts so all AI paths see it.
 - Keep shuffle randomness at duel construction only; never randomize inside `apply_move` or search branches.
 - Keep logical hand order independent from fixed physical slot order and map exclusively by `instance_id`.
-- Keep all animation, audio, and delays in controller presentation; simulator transitions remain immediate.
+- Keep all animation and delays in controller presentation; simulator transitions remain immediate.
 - Write failing focused tests before each production checkpoint.
 
 ## Checkpoint 0: Confirm the Baseline
@@ -224,7 +224,7 @@ Track whether draw events were presented. Before the first later `card_flipped` 
 
 Run `test_duel_integration.gd`. Confirm fixed slots, concealment, and event ordering.
 
-## Checkpoint 7: Add Sequential Ink Summon Visuals and Audio
+## Checkpoint 7: Add Sequential, Silent Ink Summon Visuals
 
 **Modify:**
 
@@ -239,21 +239,22 @@ Run `test_duel_integration.gd`. Confirm fixed slots, concealment, and event orde
 Require:
 
 - a reusable ink-bloom overlay on every card view;
-- a dedicated `DrawAudio` player in the duel scene;
+- the overlay to contain abstract pools and droplets with no text glyph;
+- no dedicated draw-audio player or synthesized draw stream;
 - `play_draw_summon(bloom_duration, rise_duration, ink_color)` to end with the card fully visible, settled, unrotated, and at unit scale;
-- fast mode to zero bloom/rise/post-draw durations and suppress draw audio while preserving the same final views;
+- fast mode to zero bloom/rise/post-draw durations while preserving the same final views;
 - the presentation trace to place the post-draw gap before the first flip/exile feedback.
 
 ### Green
 
-Add an Ink Summon overlay that scales/fades like an expanding ink blot while the card rises a short distance and settles with restrained easing. Default exports:
+Add a reusable `Control`-based Ink Summon overlay that draws several overlapping, asymmetrical pools and detached droplets. Animate the primitive geometry as an expanding blot while the card rises a short distance and settles with restrained easing. It must contain no label, character, or imported texture. Default exports:
 
 - bloom: `0.12` seconds;
 - rise/settle: `0.28` seconds;
 - post-draw board-effect gap: `0.20` seconds;
 - dark ink color compatible with both owner palettes.
 
-Synthesize one dedicated draw WAV containing a brief textured brush onset and a low plucked confirmation timed near settlement. Play it once per drawn card through `DrawAudio`, separate from placement/capture/removal players. Track fast mode explicitly so draw audio is muted even though headless tests already suppress playback.
+Remove `DrawAudio`, the synthesized draw-WAV builder, its volume export, playback helper, and every call site. Ink Summon remains intentionally silent; existing placement, capture, and removal sounds are unchanged.
 
 ### Verify
 
@@ -267,7 +268,7 @@ Manually play in the portrait window and cover:
 
 1. Normal player draw from a full starting hand: only one card returns, face-up, at fixed size.
 2. A scripted or naturally reached two-card draw: Ink Summons occur one after another.
-3. A draw followed by a flip: brush/pluck audio finishes clearly before capture audio begins.
+3. A draw followed by a flip: the silent blot and rise finish before capture audio begins.
 4. Normal opponent draw: the summoned card lands face-down with no information leak.
 5. Testing mode opponent draw: the same card lands face-up and remains manually draggable.
 6. A newly drawn card in an earlier physical slot commits as the correct logical instance.
@@ -275,3 +276,53 @@ Manually play in the portrait window and cover:
 8. Empty and depleted side decks resolve without errors or extra feedback.
 
 Restore `TESTING_MODE = false` and any temporary deterministic seed before final verification. Keep generated `.superpowers/` mockups ignored and out of commits.
+
+## Approved Refinement Pass: Replace the Placeholder Glyph and Remove Draw Audio
+
+The original implementation used a `Label` containing `墨` as the temporary bloom and synthesized a dedicated draw sound. Replace those provisional pieces without changing simulator rules or event timing.
+
+### Files
+
+**Create:**
+
+- `scripts/ink_bloom.gd`
+
+**Modify:**
+
+- `scenes/card_view.tscn`
+- `scripts/card_view.gd`
+- `scenes/duel.tscn`
+- `scripts/duel_controller.gd`
+- `tests/test_duel_integration.gd`
+
+### Test First
+
+Update integration assertions to require:
+
+- `Overlay/InkBloom` to be a custom drawing `Control`, not a `Label`;
+- the bloom scene and script to contain no `墨` text or other displayed glyph;
+- the custom control to expose deterministic pools and droplets and redraw correctly after its ink color changes;
+- the card summon animation to preserve its current final transform and sequential trace;
+- `DrawAudio` to be absent from the duel scene;
+- draw-audio exports, WAV synthesis, feedback helpers, and playback calls to be absent from the controller;
+- normal and fast presentation paths to reach the same final hand state.
+
+Run the integration suite and confirm these new assertions fail against the placeholder implementation for the intended reasons.
+
+### Implement
+
+Create `ink_bloom.gd` as a small reusable `Control` with mouse filtering disabled. Draw a deterministic set of overlapping ellipses/polygons for the central pools and several detached circles for droplets. Keep coordinates normalized to the control's dimensions and tint all geometry from one configurable ink color. Use asymmetry and small alpha variations to avoid a clean geometric emblem.
+
+Replace the label node in `card_view.tscn` with this scripted control at the same overlay location. Update `CardView`'s typed reference and `play_draw_summon` setup to configure/redraw it, while retaining the approved `0.12` bloom and `0.28` rise behavior. Continue animating the bloom's scale and modulation so the pools spread, slightly overshoot, and fade behind the rising card.
+
+Delete the `DrawAudio` scene node. Remove `draw_audio_volume_db`, the controller's `DrawAudio` reference, placeholder-audio creation, draw-tone generation, `_play_draw_feedback`, and its presentation call. Do not alter placement, flip, exile, or other sound paths.
+
+### Verify
+
+1. Run the focused integration suite and require all pass markers.
+2. Run the catalog, rules, simulator, and integration suites twice to catch order or state leakage.
+3. Start a normal portrait duel and inspect diagnostics for parser/runtime errors.
+4. Trigger a player draw and confirm the blot is organic, text-free, silent, and behind the card.
+5. Trigger two draws and confirm they remain sequential.
+6. Trigger a draw followed by flip/exile feedback and confirm the `0.20` visual gap remains while only the later board effect makes its existing sound.
+7. Confirm concealed opponent draws and testing-mode opponent draws still use the correct card face.
