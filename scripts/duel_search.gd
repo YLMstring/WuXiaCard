@@ -3,42 +3,42 @@ extends RefCounted
 
 const WIN_SCORE: int = 1_000_000
 const INFINITY: int = 1_000_000_000
-const StateData = preload("res://scripts/duel_state.gd")
-const MoveData = preload("res://scripts/duel_move.gd")
+const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
+const StateData = preload("res://scripts/duel_state.gd")
 
 
-static func find_best_move(
+static func find_best_action(
 	state: StateData,
 	max_depth: int,
 	root_owner: int = -1
-) -> MoveData:
-	var legal_moves: Array[MoveData] = Simulator.get_legal_moves(state)
-	if legal_moves.is_empty():
-		return MoveData.new()
+) -> ActionData:
+	var legal_actions: Array[ActionData] = Simulator.get_legal_actions(state)
+	if legal_actions.is_empty():
+		return ActionData.new()
 	if root_owner < 0:
 		root_owner = state.active_player
 
 	var maximizing: bool = state.active_player == root_owner
 	var best_score: int = -INFINITY if maximizing else INFINITY
-	var best_move: MoveData = legal_moves[0]
+	var best_action: ActionData = legal_actions[0]
 	var alpha: int = -INFINITY
 	var beta: int = INFINITY
-	for move: MoveData in legal_moves:
-		var transition: Dictionary = Simulator.apply_move(state, move)
+	for action: ActionData in legal_actions:
+		var transition: Dictionary = Simulator.apply_action(state, action)
 		var next_state: StateData = transition["state"] as StateData
 		var score: int = _search(next_state, maxi(max_depth - 1, 0), alpha, beta, root_owner)
 		if maximizing:
 			if score > best_score:
 				best_score = score
-				best_move = move
+				best_action = action
 			alpha = maxi(alpha, best_score)
 		else:
 			if score < best_score:
 				best_score = score
-				best_move = move
+				best_action = action
 			beta = mini(beta, best_score)
-	return best_move.duplicate_move()
+	return best_action.duplicate_action()
 
 
 static func _search(
@@ -51,16 +51,16 @@ static func _search(
 	if depth_remaining <= 0 or Simulator.is_terminal(state):
 		return _evaluate(state, root_owner)
 
-	var legal_moves: Array[MoveData] = Simulator.get_legal_moves(state)
-	if legal_moves.is_empty():
+	var legal_actions: Array[ActionData] = Simulator.get_legal_actions(state)
+	if legal_actions.is_empty():
 		return _evaluate(state, root_owner)
 
 	var alpha: int = alpha_value
 	var beta: int = beta_value
 	if state.active_player == root_owner:
 		var maximum: int = -INFINITY
-		for move: MoveData in legal_moves:
-			var transition: Dictionary = Simulator.apply_move(state, move)
+		for action: ActionData in legal_actions:
+			var transition: Dictionary = Simulator.apply_action(state, action)
 			var next_state: StateData = transition["state"] as StateData
 			maximum = maxi(maximum, _search(next_state, depth_remaining - 1, alpha, beta, root_owner))
 			alpha = maxi(alpha, maximum)
@@ -69,8 +69,8 @@ static func _search(
 		return maximum
 
 	var minimum: int = INFINITY
-	for move: MoveData in legal_moves:
-		var transition: Dictionary = Simulator.apply_move(state, move)
+	for action: ActionData in legal_actions:
+		var transition: Dictionary = Simulator.apply_action(state, action)
 		var next_state: StateData = transition["state"] as StateData
 		minimum = mini(minimum, _search(next_state, depth_remaining - 1, alpha, beta, root_owner))
 		beta = mini(beta, minimum)

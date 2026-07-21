@@ -34,6 +34,7 @@ func _run() -> void:
 	await _check_opponent_tiger_exile()
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
+	await _check_manual_activate_move()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
 
 	var player_turns: int = 0
@@ -57,7 +58,7 @@ func _run() -> void:
 	_check(duel.has_method("debug_get_simulation_turn_count"), "Production duel exposes simulator turn-count diagnostics")
 	if duel.has_method("debug_get_simulation_turn_count"):
 		var removed_cards: int = duel.debug_get_removed_count(Rules.PLAYER_OWNER) + duel.debug_get_removed_count(Rules.OPPONENT_OWNER)
-		_check(simulation_turns == occupancy + removed_cards, "Every played card remains on board or in a removed zone")
+		_check(simulation_turns >= occupancy + removed_cards, "Action turns account for every card that entered the board")
 	_check(duel.debug_get_total_card_count() == 30, "All ten main-deck and twenty side-deck instances remain accounted for")
 	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
@@ -341,6 +342,32 @@ func _check_testing_mode_manual_turns() -> void:
 	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 2, "Manual opponent placement advances the production simulator path exactly once")
 	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == _count_cards(test_duel.get_node("PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
 	test_duel.queue_free()
+	await process_frame
+
+
+func _check_manual_activate_move() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var placed_jiang: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 3, 4, false)
+	_check(placed_jiang, "Jiang Wei can enter the board through the production action path")
+	var jiang_instance: StringName = duel.debug_get_board_card_instance_id(4)
+	var opponent_played: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false)
+	_check(opponent_played, "Opponent action returns priority for activate testing")
+	var activated: bool = await duel.debug_commit_activate(Rules.PLAYER_OWNER, 4, 5, false)
+	_check(activated, "Production controller accepts a legal board activation")
+	_check(not duel.debug_has_board_card_view(4) and duel.debug_has_board_card_view(5), "Controller moves the board view to the target cell")
+	_check(duel.debug_get_board_card_instance_id(5) == jiang_instance, "Controller preserves the moving card view identity")
+	var moved_card: CardView = (duel.get("board_cards") as Array)[5] as CardView
+	var ki_badge := moved_card.get_node("Overlay/KiBadge") as PanelContainer
+	var ki_value := moved_card.get_node("Overlay/KiBadge/Value") as Label
+	_check(int(moved_card.card_data.get("ki", -1)) == 0, "Controller synchronizes spent ki into the card view")
+	_check(ki_badge.visible and ki_value.text == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
+	var trace: Array[StringName] = duel.debug_get_presentation_trace()
+	_check(trace.has(&"ability_activated") and trace.has(&"ki_changed") and trace.has(&"card_moved"), "Controller presents the canonical activation events")
+	duel.queue_free()
 	await process_frame
 
 

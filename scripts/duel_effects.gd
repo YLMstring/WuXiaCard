@@ -53,6 +53,31 @@ static func resolve_flip_attempt(
 	return _resolve_normal_flip(state, source_cell, target_cell, new_owner)
 
 
+static func is_activate_effect(effect: Dictionary) -> bool:
+	return StringName(effect.get("activation", &"")) != &""
+
+
+static func get_activate_effect(card: Dictionary) -> Dictionary:
+	var active_effects: Array = card.get("active_effects", [])
+	for effect_value: Variant in active_effects:
+		var effect: Dictionary = effect_value
+		if is_activate_effect(effect):
+			return effect
+	return {}
+
+
+static func replace_activate_effect(card: Dictionary, new_effect: Dictionary) -> void:
+	var retained_effects: Array = []
+	var active_effects: Array = card.get("active_effects", [])
+	for effect_value: Variant in active_effects:
+		var effect: Dictionary = effect_value
+		if not is_activate_effect(effect):
+			retained_effects.append(effect.duplicate(true))
+	if not new_effect.is_empty():
+		retained_effects.append(new_effect.duplicate(true))
+	card["active_effects"] = retained_effects
+
+
 static func _resolve_draw_cards(
 	state: StateData,
 	source_cell: int,

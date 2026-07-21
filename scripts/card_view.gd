@@ -8,6 +8,7 @@ signal drag_ended(card: CardView, pointer_position: Vector2)
 @export var touch_drag_offset: float = 48.0
 
 const CARD_BACK_GLYPH: String = "◆"
+const Effects = preload("res://scripts/duel_effects.gd")
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -27,6 +28,8 @@ var _home_index: int = -1
 @onready var right_power: Label = $Overlay/RightPower
 @onready var bottom_power: Label = $Overlay/BottomPower
 @onready var left_power: Label = $Overlay/LeftPower
+@onready var ki_badge: PanelContainer = $Overlay/KiBadge
+@onready var ki_value: Label = $Overlay/KiBadge/Value
 
 
 func _ready() -> void:
@@ -34,6 +37,7 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
 	resized.connect(_on_resized)
 	_on_resized()
+	_style_ki_badge()
 	_apply_owner_style()
 
 
@@ -41,6 +45,14 @@ func configure(new_card_data: Dictionary, new_owner_id: int, is_playable: bool) 
 	card_data = new_card_data.duplicate(true)
 	owner_id = new_owner_id
 	playable = is_playable
+	_refresh_face_content()
+	_apply_owner_style()
+	_update_cursor()
+
+
+func sync_runtime_data(new_card_data: Dictionary, new_owner_id: int) -> void:
+	card_data = new_card_data.duplicate(true)
+	owner_id = new_owner_id
 	_refresh_face_content()
 	_apply_owner_style()
 	_update_cursor()
@@ -65,6 +77,11 @@ func _refresh_face_content() -> void:
 	left_power.text = str(powers[DuelRules.LEFT])
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.visible = not face_down
+	var ki: int = int(card_data.get("ki", 0))
+	var has_activate: bool = not Effects.get_activate_effect(card_data).is_empty()
+	ki_value.text = str(ki)
+	ki_badge.visible = not face_down and (ki > 0 or has_activate)
+	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else str(card_data.get("glyph", "?"))
 	if face_down:
 		tooltip_text = ""
@@ -99,6 +116,7 @@ func remove_active_effect(effect_id: StringName) -> bool:
 			continue
 		retained_effects.append(effect.duplicate(true))
 	card_data["active_effects"] = retained_effects
+	_refresh_face_content()
 	return removed
 
 
@@ -308,6 +326,18 @@ func _on_resized() -> void:
 
 func _update_cursor() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_DRAG if playable else Control.CURSOR_ARROW
+
+
+func _style_ki_badge() -> void:
+	var bead_style := StyleBoxFlat.new()
+	bead_style.bg_color = Color("2f7664")
+	bead_style.border_color = Color("b8dfc9")
+	bead_style.set_border_width_all(2)
+	bead_style.set_corner_radius_all(13)
+	bead_style.shadow_color = Color(0.03, 0.12, 0.09, 0.45)
+	bead_style.shadow_size = 2
+	bead_style.shadow_offset = Vector2(0.0, 1.0)
+	ki_badge.add_theme_stylebox_override("panel", bead_style)
 
 
 func _apply_owner_style() -> void:

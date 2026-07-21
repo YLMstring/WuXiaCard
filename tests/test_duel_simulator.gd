@@ -2,7 +2,7 @@ extends SceneTree
 
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Move = preload("res://scripts/duel_move.gd")
+const Action = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -33,6 +33,11 @@ func _run() -> void:
 	_test_greedy_choice_matches_prototype()
 	_test_greedy_ai_values_flip_over_equal_exile()
 	_test_deeper_search_avoids_greedy_trap()
+	_test_activate_action_generation_and_resolution()
+	_test_activate_runs_standard_attack_without_on_play_effects()
+	_test_flipped_activate_ability_is_lost_but_ki_remains()
+	_test_greedy_tie_prefers_play_over_spending_ki()
+	_test_search_can_choose_activate_action()
 
 	if _failures == 0:
 		print("DUEL_SIMULATOR_TESTS_PASSED checks=%d" % _checks)
@@ -50,7 +55,7 @@ func _test_exile_effect_removes_every_target() -> void:
 	var attacker: Dictionary = Rules.make_card("Exiler", "逐", [5, 5, 5, 5], exile_effect, Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	var exile_targets: Array[int] = []
@@ -78,7 +83,7 @@ func _test_exile_uses_original_owner_and_is_copy_isolated() -> void:
 	var source: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], source_effects, Rules.PLAYER_OWNER)
 	var state := State.new(board, [source], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var player_removed: Array = next_state.removed_cards[Rules.PLAYER_OWNER]
 	_check(player_removed.size() == 1, "Exile records a previously flipped target under its original owner")
@@ -98,7 +103,7 @@ func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 5, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped_tiger: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Tiger General changes ownership through a normal flip")
@@ -119,13 +124,13 @@ func _test_nonretained_effect_is_permanently_lost() -> void:
 	var second_attacker: Dictionary = Rules.make_card("Second", "二", [1, 1, 5, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [first_attacker], [second_attacker], Rules.PLAYER_OWNER)
 
-	var first_transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var first_state: State = first_transition["state"] as State
 	var first_events: Array = first_transition.get("events", [])
 	_check(_count_events(first_events, &"ability_lost") == 1, "A non-retained effect emits one ability-lost event")
 	_check((((first_state.board[5] as Dictionary)["card"] as Dictionary)["active_effects"] as Array).is_empty(), "Non-retained effect is removed after the first flip")
 
-	var second_transition: Dictionary = Simulator.apply_move(first_state, Move.new(0, 2))
+	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 2))
 	var second_state: State = second_transition["state"] as State
 	_check(int((second_state.board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Target can flip back to its original owner")
 	_check((((second_state.board[5] as Dictionary)["card"] as Dictionary)["active_effects"] as Array).is_empty(), "Lost effect does not return after flipping back")
@@ -147,7 +152,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	]
 	var state := State.new(board, player_hand, [], Rules.PLAYER_OWNER, 0, player_deck, [])
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
@@ -172,7 +177,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 	var second_draw: Dictionary = Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_strategist")
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER, 0, [first_draw, second_draw], [])
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 0))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
 	var next_hand: Array = next_state.get_hand(Rules.PLAYER_OWNER)
 	_check(next_hand.size() == 4, "Playing from three cards can draw the full requested two")
@@ -190,7 +195,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		[Catalog.create_instance(&"tiger_general", Rules.PLAYER_OWNER, &"partial_tiger")],
 		[]
 	)
-	var partial_transition: Dictionary = Simulator.apply_move(partial_state, Move.new(0, 0))
+	var partial_transition: Dictionary = Simulator.apply_action(partial_state, Action.make_play(0, 0))
 	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 1, "A depleted side deck draws only the one remaining card")
 
 
@@ -201,7 +206,7 @@ func _test_draw_on_play_handles_empty_deck() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 0))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "An empty side deck emits no draw event")
 	_check((transition["state"] as State).get_hand(Rules.PLAYER_OWNER).is_empty(), "An empty side deck leaves the post-play hand empty")
 
@@ -212,7 +217,7 @@ func _test_turn_passes_to_owner_with_a_legal_move() -> void:
 		Rules.make_card("Second", "二", [1, 1, 1, 1]),
 	]
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 0))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state = transition["state"]
 	_check(next_state.active_player == Rules.PLAYER_OWNER, "Opponent with no move passes back to the player")
 	_check(not Simulator.is_terminal(next_state), "Match continues when the player can still place a card")
@@ -231,13 +236,13 @@ func _test_reopened_cell_keeps_match_alive() -> void:
 	var opponent_reply: Dictionary = Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [exiler], [opponent_reply], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state = transition["state"]
 	_check(next_state.board[5] == null, "Exile reopens a cell on an otherwise full board")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Opponent receives the turn when it can use the reopened cell")
 	_check(not Simulator.is_terminal(next_state), "Reopened cell prevents premature terminal state")
-	var reply_moves: Array = Simulator.get_legal_moves(next_state)
-	_check(reply_moves.size() == 1 and (reply_moves[0] as Object).cell_index == 5, "Reopened cell is the opponent's legal reply")
+	var reply_moves: Array = Simulator.get_legal_actions(next_state)
+	_check(reply_moves.size() == 1 and (reply_moves[0] as Object).target_index == 5, "Reopened cell is the opponent's legal reply")
 
 
 func _test_terminal_requires_both_players_to_be_stuck() -> void:
@@ -248,7 +253,7 @@ func _test_terminal_requires_both_players_to_be_stuck() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_check(not Simulator.is_terminal(opponent_only), "Empty active hand is not terminal while the opponent can move")
-	_check(Simulator.get_legal_moves_for_owner(opponent_only, Rules.OPPONENT_OWNER).size() == 9, "Owner-specific move query finds the opponent's placements")
+	_check(Simulator.get_legal_actions_for_owner(opponent_only, Rules.OPPONENT_OWNER).size() == 9, "Owner-specific action query finds the opponent's placements")
 
 	var no_hands := State.new(
 		Rules.empty_board(),
@@ -280,8 +285,125 @@ func _test_greedy_ai_values_flip_over_equal_exile() -> void:
 	var flip_card: Dictionary = Rules.make_card("Flipper", "翻", [1, 5, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [], [exile_card, flip_card], Rules.OPPONENT_OWNER)
 
-	var choice = Simulator.choose_greedy_move(state)
+	var choice = Simulator.choose_greedy_action(state)
 	_check(choice.as_vector2i() == Vector2i(1, 4), "Greedy AI values gaining a flipped card over an otherwise equal exile")
+
+
+func _test_activate_action_generation_and_resolution() -> void:
+	var board: Array = Rules.empty_board()
+	var jiang_wei: Dictionary = Catalog.create_instance(&"jiang_wei", Rules.PLAYER_OWNER, &"board_jiang")
+	board[4] = {"card": jiang_wei, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var actions: Array = Simulator.get_legal_actions(state)
+	_check(actions.size() == 4, "Center move-and-attack card generates four orthogonal activate targets")
+	var target_order: Array[int] = []
+	for action: Action in actions:
+		_check(action.action_type == Action.TYPE_ACTIVATE, "Board action is marked activate")
+		target_order.append(action.target_index)
+	_check(target_order == [1, 5, 7, 3], "Activate targets use deterministic top-right-bottom-left order")
+
+	var transition: Dictionary = Simulator.apply_action(state, actions[1])
+	var next_state: State = transition["state"] as State
+	_check(bool(transition.get("valid", false)), "Legal activate action is accepted")
+	_check(next_state.board[4] == null and next_state.board[5] != null, "Activate moves the existing card to its target")
+	var moved_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
+	_check(StringName(moved_card.get("instance_id", &"")) == &"board_jiang", "Movement preserves stable card identity")
+	_check(int(moved_card.get("ki", -1)) == 0, "Successful activation spends one ki")
+	var event_types: Array[StringName] = []
+	for event_value: Variant in transition.get("events", []):
+		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
+	_check(event_types == [&"ability_activated", &"ki_changed", &"card_moved"], "Movement events use the canonical activation order")
+	_check(int(((state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1)) == 1, "Activate transition leaves source-state ki untouched")
+
+
+func _test_activate_runs_standard_attack_without_on_play_effects() -> void:
+	var board: Array = Rules.empty_board()
+	var effects: Array = [
+		{
+			"id": Catalog.EFFECT_MOVE_AND_ATTACK,
+			"activation": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			"retained_on_flip": false,
+		},
+		{
+			"id": Catalog.EFFECT_DRAW_CARDS_ON_PLAY,
+			"draw_count": 2,
+			"retained_on_flip": false,
+		},
+	]
+	var mover: Dictionary = Rules.make_card("Mover", "移", [7, 7, 7, 7], effects, Rules.PLAYER_OWNER)
+	mover["instance_id"] = &"mover"
+	mover["ki"] = 1
+	board[4] = {"card": mover, "owner": Rules.PLAYER_OWNER}
+	board[2] = {
+		"card": Rules.make_card("Guard", "守", [2, 2, 2, 2], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var deck: Array = [Catalog.create_instance(&"xu_shu", Rules.PLAYER_OWNER, &"would_draw")]
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, deck, [])
+	var action: Action = Action.make_activate(4, &"mover", Catalog.EFFECT_MOVE_AND_ATTACK, Action.TARGET_BOARD_CELL, 5)
+	var transition: Dictionary = Simulator.apply_action(state, action)
+	var next_state: State = transition["state"] as State
+	_check(int((next_state.board[2] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Moved card performs its standard four-side attack")
+	_check(_count_events(transition.get("events", []), &"card_flipped") == 1, "Activation emits the ordinary flip event")
+	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "Movement does not retrigger on-play draw effects")
+	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Movement leaves the side deck untouched")
+
+
+func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
+	var board: Array = Rules.empty_board()
+	var jiang_wei: Dictionary = Catalog.create_instance(&"jiang_wei", Rules.OPPONENT_OWNER, &"flip_jiang")
+	board[5] = {"card": jiang_wei, "owner": Rules.OPPONENT_OWNER}
+	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
+	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var next_state: State = transition["state"] as State
+	var flipped_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
+	_check(int(flipped_card.get("ki", -1)) == 1, "Ownership flip preserves ki")
+	_check(Effects.get_activate_effect(flipped_card).is_empty(), "Ownership flip permanently removes non-retained activate ability")
+	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "Lost activate ability emits the normal loss event")
+	var player_actions: Array = Simulator.get_legal_actions_for_owner(next_state, Rules.PLAYER_OWNER)
+	var can_activate_flipped_card: bool = false
+	for action: Action in player_actions:
+		can_activate_flipped_card = can_activate_flipped_card or (
+			action.action_type == Action.TYPE_ACTIVATE and action.source_index == 5
+		)
+	_check(not can_activate_flipped_card, "Retained ki alone cannot activate a lost ability")
+
+
+func _test_greedy_tie_prefers_play_over_spending_ki() -> void:
+	var board: Array = Rules.empty_board()
+	var effects: Array = [
+		{
+			"id": Catalog.EFFECT_MOVE_AND_ATTACK,
+			"activation": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			"retained_on_flip": false,
+		},
+		{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true},
+	]
+	var mover: Dictionary = Rules.make_card("Mover", "移", [1, 9, 1, 1], effects, Rules.PLAYER_OWNER)
+	mover["instance_id"] = &"tie_mover"
+	mover["ki"] = 1
+	board[0] = {"card": mover, "owner": Rules.PLAYER_OWNER}
+	board[2] = {
+		"card": Rules.make_card("Target", "标", [9, 9, 9, 1], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var weak_play: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)
+	var state := State.new(board, [weak_play], [], Rules.PLAYER_OWNER)
+	var choice: Action = Simulator.choose_greedy_action(state)
+	_check(choice.action_type == Action.TYPE_PLAY, "Greedy AI preserves ki when play and activate have equal immediate score")
+
+
+func _test_search_can_choose_activate_action() -> void:
+	var board: Array = Rules.empty_board()
+	var sun_zan: Dictionary = Catalog.create_instance(&"sun_zan", Rules.OPPONENT_OWNER, &"search_sun")
+	board[4] = {"card": sun_zan, "owner": Rules.OPPONENT_OWNER}
+	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
+	var choice: Action = Search.find_best_action(state, 2, Rules.OPPONENT_OWNER)
+	_check(choice.action_type == Action.TYPE_ACTIVATE, "Deep search considers board activate actions")
+	_check(choice.source_index == 4 and choice.target_index == 1, "Search action ordering is deterministic when activate outcomes tie")
 
 
 func _count_events(events: Array, event_type: StringName) -> int:
@@ -331,10 +453,10 @@ func _test_legal_move_generation() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var moves: Array = Simulator.get_legal_moves(state)
+	var moves: Array = Simulator.get_legal_actions(state)
 	_check(moves.size() == 18, "Two cards on an empty board generate eighteen legal moves")
-	_check((moves[0] as Object).hand_index == 0 and (moves[0] as Object).cell_index == 0, "Legal moves use deterministic card-then-cell ordering")
-	_check((moves[17] as Object).hand_index == 1 and (moves[17] as Object).cell_index == 8, "Legal move ordering reaches the second card's final cell")
+	_check((moves[0] as Object).source_index == 0 and (moves[0] as Object).target_index == 0, "Legal actions use deterministic card-then-cell ordering")
+	_check((moves[17] as Object).source_index == 1 and (moves[17] as Object).target_index == 8, "Legal action ordering reaches the second card's final cell")
 
 
 func _test_move_application_and_capture_parity() -> void:
@@ -343,7 +465,7 @@ func _test_move_application_and_capture_parity() -> void:
 	board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Blade", "刀", [1, 5, 1, 1])
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_move(state, Move.new(0, 4))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state = transition.get("state")
 	_check(bool(transition.get("valid", false)), "A legal simulator move is accepted")
 	_check((transition.get("captures", []) as Array) == [5], "Simulator reports the same direct capture as DuelRules")
@@ -361,7 +483,7 @@ func _test_greedy_choice_matches_prototype() -> void:
 	]
 	var state := State.new(board, [], opponent_hand, Rules.OPPONENT_OWNER)
 	var prototype_choice: Vector2i = Rules.choose_ai_move(board, opponent_hand, Rules.OPPONENT_OWNER)
-	var simulator_choice = Simulator.choose_greedy_move(state)
+	var simulator_choice = Simulator.choose_greedy_action(state)
 	_check(simulator_choice.as_vector2i() == prototype_choice, "Simulator greedy adapter preserves the prototype AI choice")
 
 
@@ -381,8 +503,8 @@ func _test_deeper_search_avoids_greedy_trap() -> void:
 		Rules.make_card("O1", "丁", [4, 9, 6, 6]),
 	]
 	var state := State.new(board, player_hand, opponent_hand, Rules.OPPONENT_OWNER)
-	var greedy_move = Simulator.choose_greedy_move(state)
-	var searched_move = Search.find_best_move(state, 4, Rules.OPPONENT_OWNER)
+	var greedy_move = Simulator.choose_greedy_action(state)
+	var searched_move = Search.find_best_action(state, 4, Rules.OPPONENT_OWNER)
 	_check(greedy_move.as_vector2i() == Vector2i(1, 4), "Fixture preserves the tempting two-capture greedy move")
 	_check(searched_move.as_vector2i() == Vector2i(0, 3), "Four-ply search chooses the stronger long-term move")
 

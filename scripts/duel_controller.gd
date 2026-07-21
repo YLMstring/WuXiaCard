@@ -13,7 +13,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
-const MoveData = preload("res://scripts/duel_move.gd")
+const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 
 @export var board_aspect_ratio: float = 0.78
@@ -25,6 +25,8 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 @export var exile_step_delay: float = 0.10
 @export var exile_ink_color: Color = Color("6f1118")
 @export var removal_audio_volume_db: float = -4.0
+@export var movement_audio_volume_db: float = -9.0
+@export var movement_trail_duration: float = 0.18
 @export var draw_bloom_duration: float = 0.12
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
@@ -42,6 +44,9 @@ var duel_state: StateData = null
 var board_cells: Array[PanelContainer] = []
 var board_cards: Array = []
 var _hovered_cell: int = -1
+var _drag_source_zone: StringName = &""
+var _drag_source_index: int = -1
+var _drag_valid_targets: Array[int] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
 
@@ -61,6 +66,7 @@ var _presentation_trace: Array[StringName] = []
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
 @onready var removal_audio: AudioStreamPlayer = $RemovalAudio
+@onready var movement_audio: AudioStreamPlayer = $MovementAudio
 
 
 func _ready() -> void:
@@ -109,17 +115,18 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_bloom_duration = 0.0
 		draw_rise_duration = 0.0
 		draw_post_effect_gap = 0.0
+		movement_trail_duration = 0.0
 		opponent_think_delay = 0.0
 		invalid_shake_duration = 0.0
 
 
 func debug_place_player_card(hand_index: int, cell_index: int) -> bool:
-	var move := MoveData.new(hand_index, cell_index)
+	var action: ActionData = ActionData.make_play(hand_index, cell_index)
 	if (
 		turn_state != TurnState.PLAYER
 		or duel_state == null
 		or duel_state.active_player != DuelRules.PLAYER_OWNER
-		or not Simulator.is_move_legal(duel_state, move)
+		or not Simulator.is_action_legal(duel_state, action)
 	):
 		return false
 	var card: CardView = _get_card_view_for_logical_index(DuelRules.PLAYER_OWNER, hand_index)
@@ -245,10 +252,35 @@ func debug_commit_move(
 	var card: CardView = _get_card_view_for_logical_index(owner_id, hand_index)
 	if card == null:
 		return false
-	var move := MoveData.new(hand_index, cell_index)
-	if not Simulator.is_move_legal(duel_state, move):
+	var action: ActionData = ActionData.make_play(hand_index, cell_index, _get_card_instance_id(card))
+	if not Simulator.is_action_legal(duel_state, action):
 		return false
-	await _commit_card(card, cell_index, owner_id, continue_automatically)
+	await _commit_action(card, action, owner_id, continue_automatically)
+	return true
+
+
+func debug_commit_activate(
+	owner_id: int,
+	source_cell: int,
+	target_cell: int,
+	continue_automatically: bool = false
+) -> bool:
+	if duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
+		return false
+	var card := board_cards[source_cell] as CardView
+	var effect: Dictionary = DuelEffects.get_activate_effect(card.card_data)
+	if effect.is_empty():
+		return false
+	var action: ActionData = ActionData.make_activate(
+		source_cell,
+		_get_card_instance_id(card),
+		StringName(effect.get("id", &"")),
+		ActionData.TARGET_BOARD_CELL,
+		target_cell
+	)
+	if not Simulator.is_action_legal(duel_state, action):
+		return false
+	await _commit_action(card, action, owner_id, continue_automatically)
 	return true
 
 
@@ -338,6 +370,9 @@ func _on_card_drag_started(card: CardView, _pointer_position: Vector2) -> void:
 	if not _can_manually_drag(card):
 		card.finish_drag_state()
 		return
+	_drag_source_index = _get_board_cell_for_card(card)
+	_drag_source_zone = ActionData.SOURCE_BOARD if _drag_source_index >= 0 else ActionData.SOURCE_HAND
+	_drag_valid_targets = _get_drag_targets(card)
 	card.reparent(drag_layer, true)
 	_highlight_legal_cells()
 
@@ -348,29 +383,37 @@ func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
 		return
 	_hovered_cell = target_cell
 	_highlight_legal_cells()
-	if target_cell >= 0 and DuelRules.can_place(board, target_cell):
+	if target_cell in _drag_valid_targets:
 		_set_cell_style(target_cell, "hover")
 
 
 func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	var target_cell: int = _get_cell_at_position(pointer_position)
 	_clear_cell_highlights()
-	if _can_manually_drag(card) and DuelRules.can_place(board, target_cell):
+	var action: ActionData = _make_drag_action(card, target_cell)
+	if _can_manually_drag(card) and action != null and Simulator.is_action_legal(duel_state, action):
 		card.finish_drag_state()
-		await _commit_card(card, target_cell, card.owner_id)
+		await _commit_action(card, action, card.owner_id)
+		_clear_drag_context()
 		return
-	_return_card_to_hand(card)
+	_return_card_home(card)
 	card.play_invalid_shake(invalid_shake_duration)
+	_clear_drag_context()
 
 
-func _return_card_to_hand(card: CardView) -> void:
+func _return_card_home(card: CardView) -> void:
 	var home_parent: Node = card.get_home_parent()
 	if home_parent == null or not is_instance_valid(home_parent):
-		home_parent = _get_hand_for_owner(card.owner_id)
+		if _drag_source_zone == ActionData.SOURCE_BOARD and _drag_source_index >= 0:
+			home_parent = board_cells[_drag_source_index]
+		else:
+			home_parent = _get_hand_for_owner(card.owner_id)
 	card.reparent(home_parent, false)
 	var target_index: int = clampi(card.get_home_index(), 0, home_parent.get_child_count() - 1)
 	home_parent.move_child(card, target_index)
 	card.finish_drag_state()
+	if _drag_source_zone == ActionData.SOURCE_BOARD:
+		card.z_index = 1
 
 
 func _commit_card(
@@ -383,10 +426,24 @@ func _commit_card(
 		return
 	var instance_id: StringName = _get_card_instance_id(card)
 	var hand_index: int = _get_logical_hand_index(owner_id, instance_id)
-	var move := MoveData.new(hand_index, cell_index)
-	if not Simulator.is_move_legal(duel_state, move):
+	var action: ActionData = ActionData.make_play(hand_index, cell_index, instance_id)
+	await _commit_action(card, action, owner_id, continue_automatically)
+
+
+func _commit_action(
+	card: CardView,
+	action: ActionData,
+	owner_id: int,
+	continue_automatically: bool = true
+) -> void:
+	if duel_state == null or duel_state.active_player != owner_id:
 		return
-	var transition: Dictionary = Simulator.apply_move(duel_state, move)
+	if not Simulator.is_action_legal(duel_state, action):
+		return
+	var movement_start: Vector2 = Vector2.ZERO
+	if action.action_type == ActionData.TYPE_ACTIVATE:
+		movement_start = board_cells[action.source_index].get_global_rect().get_center()
+	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
 	duel_state = transition["state"] as StateData
@@ -396,22 +453,34 @@ func _commit_card(
 	_sync_hand_playability()
 	_update_turn_status()
 
-	var target_cell: PanelContainer = board_cells[cell_index]
+	var target_cell: PanelContainer = board_cells[action.target_index]
 	card.set_face_down(false)
 	card.reparent(target_cell, false)
 	card.set_playable(false)
-	card.scale = Vector2(0.9, 0.9)
+	card.z_index = 1
+	card.scale = Vector2(0.9, 0.9) if action.action_type == ActionData.TYPE_PLAY else Vector2.ONE
 	card.rotation = 0.0
-	board_cards[cell_index] = card
+	if action.action_type == ActionData.TYPE_ACTIVATE:
+		board_cards[action.source_index] = null
+	board_cards[action.target_index] = card
+	var logical_slot: Dictionary = duel_state.board[action.target_index]
+	card.sync_runtime_data(logical_slot.get("card", {}), int(logical_slot.get("owner", owner_id)))
 
-	_play_placement_feedback()
-	if snap_duration > 0.0:
+	if action.action_type == ActionData.TYPE_PLAY:
+		_play_placement_feedback()
+	if action.action_type == ActionData.TYPE_PLAY and snap_duration > 0.0:
 		var snap_tween: Tween = create_tween()
 		snap_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		snap_tween.tween_property(card, "scale", Vector2.ONE, snap_duration)
 		await snap_tween.finished
 	else:
 		card.scale = Vector2.ONE
+	if action.action_type == ActionData.TYPE_ACTIVATE:
+		_play_movement_feedback()
+		await _play_movement_trail(
+			movement_start,
+			board_cells[action.target_index].get_global_rect().get_center()
+		)
 
 	var resolved_targets: int = await _present_transition_events(events, owner_id)
 	if resolved_targets > 1:
@@ -447,7 +516,9 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 		var event: Dictionary = event_value
 		var event_type := StringName(event.get("type", &""))
 		var target_cell: int = int(event.get("target_cell", -1))
-		if event_type == &"card_drawn":
+		if event_type in [&"ability_activated", &"ki_changed", &"card_moved"]:
+			_presentation_trace.append(event_type)
+		elif event_type == &"card_drawn":
 			await _present_draw_event(event)
 			drew_card = true
 		elif event_type == &"card_flipped":
@@ -514,22 +585,16 @@ func _wait_after_draw_before_board_effect() -> void:
 
 
 func _perform_opponent_turn() -> void:
-	var choice: MoveData = Simulator.choose_greedy_move(duel_state)
-	var opponent_card: CardView = _get_card_view_for_logical_index(
-		DuelRules.OPPONENT_OWNER,
-		choice.hand_index
-	)
-	if (
-		opponent_card == null
-		or choice.cell_index < 0
-	):
+	var choice: ActionData = Simulator.choose_greedy_action(duel_state)
+	var opponent_card: CardView = null
+	if choice.action_type == ActionData.TYPE_PLAY:
+		opponent_card = _get_card_view_for_logical_index(DuelRules.OPPONENT_OWNER, choice.source_index)
+	elif choice.action_type == ActionData.TYPE_ACTIVATE and debug_has_board_card_view(choice.source_index):
+		opponent_card = board_cards[choice.source_index] as CardView
+	if opponent_card == null or choice.target_index < 0:
 		_finish_match()
 		return
-	await _commit_card(
-		opponent_card,
-		choice.cell_index,
-		DuelRules.OPPONENT_OWNER
-	)
+	await _commit_action(opponent_card, choice, DuelRules.OPPONENT_OWNER)
 
 
 func _finish_match() -> void:
@@ -559,6 +624,15 @@ func _sync_hand_playability() -> void:
 			and duel_state != null
 			and duel_state.active_player == DuelRules.OPPONENT_OWNER
 		)
+	for cell_index: int in range(board_cards.size()):
+		var board_card := board_cards[cell_index] as CardView
+		if board_card == null:
+			continue
+		var can_control_owner: bool = (
+			(board_card.owner_id == DuelRules.PLAYER_OWNER and turn_state == TurnState.PLAYER)
+			or (board_card.owner_id == DuelRules.OPPONENT_OWNER and testing_mode and turn_state == TurnState.OPPONENT)
+		)
+		board_card.set_playable(can_control_owner and _has_legal_activate_from(cell_index))
 
 
 func _can_manually_drag(card: CardView) -> bool:
@@ -651,9 +725,76 @@ func _get_cell_at_position(pointer_position: Vector2) -> int:
 	return -1
 
 
+func _get_board_cell_for_card(card: CardView) -> int:
+	for cell_index: int in range(board_cards.size()):
+		if board_cards[cell_index] == card:
+			return cell_index
+	return -1
+
+
+func _get_drag_targets(card: CardView) -> Array[int]:
+	var targets: Array[int] = []
+	if duel_state == null:
+		return targets
+	var source_cell: int = _get_board_cell_for_card(card)
+	if source_cell < 0:
+		for cell_index: int in range(board.size()):
+			if DuelRules.can_place(board, cell_index):
+				targets.append(cell_index)
+		return targets
+	for action: ActionData in Simulator.get_legal_actions(duel_state):
+		if (
+			action.action_type == ActionData.TYPE_ACTIVATE
+			and action.source_index == source_cell
+			and action.source_instance_id == _get_card_instance_id(card)
+			and action.target_kind == ActionData.TARGET_BOARD_CELL
+		):
+			targets.append(action.target_index)
+	return targets
+
+
+func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
+	if target_cell not in _drag_valid_targets:
+		return null
+	var instance_id: StringName = _get_card_instance_id(card)
+	if _drag_source_zone == ActionData.SOURCE_HAND:
+		return ActionData.make_play(
+			_get_logical_hand_index(card.owner_id, instance_id),
+			target_cell,
+			instance_id
+		)
+	if _drag_source_zone == ActionData.SOURCE_BOARD:
+		var effect: Dictionary = DuelEffects.get_activate_effect(card.card_data)
+		if effect.is_empty():
+			return null
+		return ActionData.make_activate(
+			_drag_source_index,
+			instance_id,
+			StringName(effect.get("id", &"")),
+			ActionData.TARGET_BOARD_CELL,
+			target_cell
+		)
+	return null
+
+
+func _clear_drag_context() -> void:
+	_drag_source_zone = &""
+	_drag_source_index = -1
+	_drag_valid_targets.clear()
+
+
+func _has_legal_activate_from(source_cell: int) -> bool:
+	if duel_state == null:
+		return false
+	for action: ActionData in Simulator.get_legal_actions(duel_state):
+		if action.action_type == ActionData.TYPE_ACTIVATE and action.source_index == source_cell:
+			return true
+	return false
+
+
 func _highlight_legal_cells() -> void:
 	for cell_index: int in range(board_cells.size()):
-		if DuelRules.can_place(board, cell_index):
+		if cell_index in _drag_valid_targets:
 			_set_cell_style(cell_index, "legal")
 		else:
 			_set_cell_style(cell_index, "normal")
@@ -672,12 +813,12 @@ func _set_cell_style(cell_index: int, mode: String) -> void:
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(5)
 	if mode == "legal":
-		style.bg_color = Color(0.93, 0.84, 0.55, 0.34)
-		style.border_color = Color("d2a63f")
+		style.bg_color = Color(0.18, 0.72, 0.68, 0.28)
+		style.border_color = Color("45b9ad")
 		style.set_border_width_all(3)
 	elif mode == "hover":
-		style.bg_color = Color(1.0, 0.89, 0.45, 0.62)
-		style.border_color = Color("f0c95b")
+		style.bg_color = Color(0.25, 0.86, 0.78, 0.52)
+		style.border_color = Color("75e0d2")
 		style.set_border_width_all(4)
 	board_cells[cell_index].add_theme_stylebox_override("panel", style)
 
@@ -690,11 +831,11 @@ func _update_score() -> void:
 func _update_turn_status() -> void:
 	match turn_state:
 		TurnState.PLAYER:
-			turn_status.text = "Testing · Player side · drag a card" if testing_mode else "Your turn · drag a card"
+			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "Your turn · play a card or activate"
 		TurnState.RESOLVING:
 			turn_status.text = "Resolving…"
 		TurnState.OPPONENT:
-			turn_status.text = "Testing · Opponent side · drag a card" if testing_mode else "Shen Lian considers…"
+			turn_status.text = "Testing · Opponent side · play or activate" if testing_mode else "Shen Lian considers…"
 		TurnState.COMPLETE:
 			pass
 
@@ -760,6 +901,8 @@ func _create_placeholder_audio() -> void:
 	capture_audio.stream = _make_tone(470.0, 0.09)
 	removal_audio.stream = _make_removal_tone(0.14)
 	removal_audio.volume_db = removal_audio_volume_db
+	movement_audio.stream = _make_movement_whoosh(0.16)
+	movement_audio.volume_db = movement_audio_volume_db
 
 
 func _make_tone(frequency: float, duration: float) -> AudioStreamWAV:
@@ -801,6 +944,51 @@ func _make_removal_tone(duration: float) -> AudioStreamWAV:
 	return stream
 
 
+func _make_movement_whoosh(duration: float) -> AudioStreamWAV:
+	var sample_rate: int = 22050
+	var sample_count: int = int(sample_rate * duration)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)
+	for sample_index: int in range(sample_count):
+		var time: float = float(sample_index) / float(sample_rate)
+		var progress: float = float(sample_index) / float(sample_count)
+		var envelope: float = sin(PI * progress) * 0.10
+		var brush_noise: float = sin(TAU * 941.0 * time) * sin(TAU * 377.0 * time)
+		var low_air: float = sin(TAU * (150.0 + progress * 90.0) * time) * 0.35
+		var wave: float = (brush_noise * 0.65 + low_air) * envelope
+		bytes.encode_s16(sample_index * 2, int(clampf(wave, -1.0, 1.0) * 32767.0))
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_rate
+	stream.stereo = false
+	stream.data = bytes
+	return stream
+
+
+func _play_movement_trail(start_global: Vector2, end_global: Vector2) -> void:
+	var trail := Line2D.new()
+	trail.name = "MovementBrushTrail"
+	trail.width = 10.0
+	trail.default_color = Color(0.12, 0.42, 0.38, 0.72)
+	trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	trail.end_cap_mode = Line2D.LINE_CAP_ROUND
+	var inverse_canvas_transform: Transform2D = drag_layer.get_global_transform_with_canvas().affine_inverse()
+	trail.points = PackedVector2Array([
+		inverse_canvas_transform * start_global,
+		inverse_canvas_transform * end_global,
+	])
+	drag_layer.add_child(trail)
+	if movement_trail_duration <= 0.0:
+		trail.queue_free()
+		return
+	var trail_tween: Tween = create_tween()
+	trail_tween.set_parallel(true)
+	trail_tween.tween_property(trail, "width", 2.0, movement_trail_duration)
+	trail_tween.tween_property(trail, "modulate:a", 0.0, movement_trail_duration)
+	await trail_tween.finished
+	trail.queue_free()
+
+
 func _play_placement_feedback() -> void:
 	if not OS.has_feature("headless"):
 		placement_audio.play()
@@ -815,6 +1003,11 @@ func _play_capture_feedback() -> void:
 func _play_removal_feedback() -> void:
 	if not OS.has_feature("headless"):
 		removal_audio.play()
+
+
+func _play_movement_feedback() -> void:
+	if not OS.has_feature("headless"):
+		movement_audio.play()
 
 
 func _vibrate(duration_ms: int) -> void:

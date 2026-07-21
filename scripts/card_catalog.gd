@@ -3,9 +3,13 @@ extends RefCounted
 
 const EFFECT_EXILE_INSTEAD_OF_FLIP: StringName = &"exile_instead_of_flip"
 const EFFECT_DRAW_CARDS_ON_PLAY: StringName = &"draw_cards_on_play"
+const EFFECT_MOVE_AND_ATTACK: StringName = &"move_and_attack"
+const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
+const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const KNOWN_EFFECT_IDS: Array[StringName] = [
 	EFFECT_EXILE_INSTEAD_OF_FLIP,
 	EFFECT_DRAW_CARDS_ON_PLAY,
+	EFFECT_MOVE_AND_ATTACK,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -53,7 +57,14 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"name": "Jiang Wei",
 		"glyph": "姜",
 		"powers": [6, 6, 6, 6],
-		"effects": [],
+		"starting_ki": 1,
+		"effects": [
+			{
+				"id": EFFECT_MOVE_AND_ATTACK,
+				"activation": ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+			},
+		],
 	},
 	&"fa_zheng": {
 		"id": &"fa_zheng",
@@ -110,7 +121,14 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"name": "Sun Zan",
 		"glyph": "孙",
 		"powers": [3, 5, 8, 8],
-		"effects": [],
+		"starting_ki": 1,
+		"effects": [
+			{
+				"id": EFFECT_MOVE_AND_ATTACK,
+				"activation": ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+			},
+		],
 	},
 }
 
@@ -142,6 +160,7 @@ static func create_instance(
 		"glyph": String(definition["glyph"]),
 		"powers": (definition["powers"] as Array).duplicate(),
 		"original_owner": original_owner,
+		"ki": int(definition.get("starting_ki", 0)),
 		"active_effects": _normalize_effects(definition["effects"] as Array),
 	}
 
@@ -191,12 +210,20 @@ static func _validate_definition(
 		if typeof(power) != TYPE_INT:
 			errors.append("Card %s has a non-integer power" % card_id)
 	var effects: Array = definition.get("effects", [])
+	var starting_ki: Variant = definition.get("starting_ki", 0)
+	if typeof(starting_ki) != TYPE_INT or int(starting_ki) < 0:
+		errors.append("Card %s requires a non-negative integer starting_ki" % card_id)
+	var activate_effect_count: int = 0
 	for effect_value: Variant in effects:
 		if not effect_value is Dictionary:
 			errors.append("Card %s has a non-dictionary effect" % card_id)
 			continue
 		var effect: Dictionary = effect_value
+		if effect.has("activation"):
+			activate_effect_count += 1
 		_validate_effect(card_id, effect, errors)
+	if activate_effect_count > 1:
+		errors.append("Card %s declares more than one activate effect" % card_id)
 
 
 static func _normalize_effects(raw_effects: Array) -> Array:
@@ -224,3 +251,8 @@ static func _validate_effect(
 			errors.append("Card %s draw effect requires an integer draw_count" % card_id)
 		elif int(effect["draw_count"]) <= 0:
 			errors.append("Card %s draw effect requires a positive draw_count" % card_id)
+	if effect_id == EFFECT_MOVE_AND_ATTACK:
+		if StringName(effect.get("activation", &"")) != ACTIVATION_DRAG_TO_TARGET:
+			errors.append("Card %s move effect requires drag_to_target activation" % card_id)
+		if StringName(effect.get("target_rule", &"")) != TARGET_ADJACENT_EMPTY_BOARD:
+			errors.append("Card %s move effect requires adjacent_empty_board targeting" % card_id)

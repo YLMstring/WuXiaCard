@@ -2,6 +2,7 @@ extends SceneTree
 
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const DuelEffects = preload("res://scripts/duel_effects.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -19,6 +20,8 @@ func _run() -> void:
 	_test_encounter_decks()
 	_test_side_deck_pool()
 	_test_draw_effect_validation()
+	_test_activate_effect_declarations()
+	_test_activate_effect_replacement()
 
 	if _failures == 0:
 		print("CARD_CATALOG_TESTS_PASSED checks=%d" % _checks)
@@ -117,6 +120,48 @@ func _test_draw_effect_validation() -> void:
 		"draw_count": 2,
 		"retained_on_flip": "no",
 	}).is_empty(), "Non-Boolean optional retention fails validation")
+
+
+func _test_activate_effect_declarations() -> void:
+	for card_id: StringName in [&"jiang_wei", &"sun_zan"]:
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		_check(int(definition.get("starting_ki", 0)) == 1, "%s starts with one ki" % card_id)
+		var effects: Array = definition.get("effects", [])
+		_check(effects.size() == 1, "%s declares one effect" % card_id)
+		if effects.is_empty():
+			continue
+		var effect: Dictionary = effects[0]
+		_check(StringName(effect.get("id", &"")) == Catalog.EFFECT_MOVE_AND_ATTACK, "%s declares move and attack" % card_id)
+		_check(StringName(effect.get("activation", &"")) == Catalog.ACTIVATION_DRAG_TO_TARGET, "%s activates by dragging" % card_id)
+		_check(StringName(effect.get("target_rule", &"")) == Catalog.TARGET_ADJACENT_EMPTY_BOARD, "%s targets an adjacent empty board cell" % card_id)
+		_check(not effect.has("retained_on_flip"), "%s relies on default non-retention" % card_id)
+		var instance: Dictionary = Catalog.create_instance(card_id, 1, StringName("test_%s" % card_id))
+		_check(int(instance.get("ki", 0)) == 1, "%s instances receive one ki" % card_id)
+		var active_effect: Dictionary = (instance.get("active_effects", []) as Array)[0]
+		_check(active_effect.has("retained_on_flip") and not bool(active_effect["retained_on_flip"]), "%s activate effect is lost on flip" % card_id)
+	var invalid_activation: Dictionary = {
+		"id": Catalog.EFFECT_MOVE_AND_ATTACK,
+		"activation": &"click",
+		"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+	}
+	_check(not Catalog.validate_effect(invalid_activation).is_empty(), "Unsupported activation input fails validation")
+
+
+func _test_activate_effect_replacement() -> void:
+	var card: Dictionary = Catalog.create_instance(&"fa_zheng", 1, &"replacement_fixture")
+	var first_activate: Dictionary = Catalog.get_definition(&"jiang_wei")["effects"][0]
+	DuelEffects.replace_activate_effect(card, first_activate)
+	_check((card.get("active_effects", []) as Array).size() == 2, "Adding activate effect preserves unrelated on-play effect")
+	var replacement: Dictionary = first_activate.duplicate(true)
+	replacement["id"] = &"replacement_activate_fixture"
+	DuelEffects.replace_activate_effect(card, replacement)
+	var active_effects: Array = card.get("active_effects", [])
+	var activate_count: int = 0
+	for effect_value: Variant in active_effects:
+		if DuelEffects.is_activate_effect(effect_value as Dictionary):
+			activate_count += 1
+	_check(active_effects.size() == 2 and activate_count == 1, "New activate effect replaces the old activate slot")
+	_check(StringName(DuelEffects.get_activate_effect(card).get("id", &"")) == &"replacement_activate_fixture", "Replacement activate effect becomes active")
 
 
 func _check(condition: bool, message: String) -> void:
