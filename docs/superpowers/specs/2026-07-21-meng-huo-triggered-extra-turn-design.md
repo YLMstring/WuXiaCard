@@ -11,6 +11,7 @@ This feature also establishes a small generic trigger, condition, and action fra
 - Meng Huo gains exactly 1 ki for each target that actually changes ownership through a flip caused by that Meng Huo.
 - Failed comparisons, prevented flips, exile, removal, and any other replacement that does not change ownership grant no ki.
 - Multiple successful flips grant ki separately in canonical top, right, bottom, left resolution order.
+- Board-cell iteration is row-major: `0, 1, 2` across the top row from left to right, then `3, 4, 5` across the middle row, then `6, 7, 8` across the bottom row.
 - Future combo or effect resolution also grants ki when it identifies Meng Huo as the source of an actual ownership-changing flip.
 - Meng Huo does not need to start with ki. His catalog definition continues to default to `starting_ki = 0`.
 - At the end of the acting owner's turn, every owned face-up board card with the end-turn trigger, its ability still active, and `ki >= 1` is eligible.
@@ -77,7 +78,7 @@ Matched-rule groups and their commands contain pure values:
 
 Stable instance IDs prevent stale source cells from applying commands to a replacement card. Unsupported, missing, removed, wrong-owner, ability-lost, or no-longer-condition-matching groups are ignored without mutation. This group-level rule is important at end of turn: `ki_at_least` is checked before `spend_all_ki`, and the following `request_extra_turn` command remains part of the same valid group even though the spend has reduced ki to zero.
 
-For `after_successful_flip_by_self`, discovery examines only the identified source card. For `end_owner_turn`, discovery scans board cells in ascending index order and considers only cards currently owned by the acting owner.
+For `after_successful_flip_by_self`, discovery examines only the identified source card. For `end_owner_turn`, discovery scans board cells in row-major order—left to right across the top row, then the middle row, then the bottom row—and considers only cards currently owned by the acting owner. This is the existing ascending index order `0` through `8`.
 
 ## Successful Flip Resolution
 
