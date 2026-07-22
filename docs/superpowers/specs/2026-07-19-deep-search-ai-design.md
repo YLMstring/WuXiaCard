@@ -9,9 +9,13 @@ Replace the prototype's one-ply greedy opponent with a scalable, near-optimal se
 - The AI may use perfect information, including both hands and the complete known deck order.
 - Easier opponents search for 5 seconds per move.
 - Harder opponents search for 10 seconds per move.
+- Shen Lian uses the hard profile, so his search budget is 10 seconds.
 - Difficulty changes only the search time budget. Every opponent uses the same evaluator and selects the best move found within its budget.
+- The budget is a maximum rather than an artificial delay. A completely solved position returns immediately.
 - Search is deterministic for the same state, profile, and completed search depth.
 - The initial search algorithm is iterative-deepening minimax with alpha-beta pruning. The simulator boundary must permit a future MCTS or hybrid search implementation without changing gameplay rules.
+- If depth 1 does not complete, search fails safely, or the returned action is invalid, the opponent uses the existing deterministic greedy choice.
+- Testing mode remains a script setting read when a duel is created. It cannot be toggled in-game, and no AI search starts for a testing-mode duel.
 
 ## Architecture
 
@@ -31,21 +35,21 @@ A pure-data snapshot containing every fact needed to continue a match:
 
 The state contains no scene nodes, UI references, tweens, audio, or other presentation data.
 
-### `DuelMove`
+### `DuelAction`
 
-A value describing one complete legal decision. The initial form identifies a hand card and board cell. It must be extensible to effect targets, optional choices, passes, and any future decision introduced by a card effect.
+A value describing one complete legal decision. It currently supports playing a hand card or activating a board card, together with a typed target. It remains extensible to optional choices, passes, hand-slot targets, and future decisions introduced by card effects.
 
 ### `DuelSimulator`
 
 The single deterministic rules authority for search and live gameplay. It:
 
-- Generates every legal `DuelMove` for a state
+- Generates every legal `DuelAction` for a state
 - Applies a move to copied state data
 - Resolves captures, draws, removals, extra turns, and chained effects in a defined order
 - Reports terminal results
 - Detects repetition and maximum-turn draws
 
-The live duel controller must eventually consume the same resolved transitions as the AI. Card effects belong here rather than in the search engine, preventing new cards from requiring AI-specific rule code.
+The live duel controller already consumes the same resolved transitions as the AI. Card effects belong here rather than in the search engine, preventing new cards from requiring AI-specific rule code.
 
 ### `DuelEvaluator`
 
@@ -57,8 +61,13 @@ Scores non-terminal states from the searching player's perspective. Initial eval
 - Exposed edges and immediate recapture risk
 - Extra-turn and pending-effect advantage
 - Known upcoming draws
+- Stored ki and active generic ability value
 
 Terminal wins and losses use scores outside the range of every heuristic score so an actual result always outweighs temporary material advantage.
+
+The heuristic is used only at a non-terminal search horizon. Every deeper completed iteration replaces shallower estimates with better-informed values. If the reachable tree is completely solved, all relevant leaves have exact terminal outcomes and the heuristic no longer affects the chosen move.
+
+The evaluator remains card-agnostic. It reads resolved state, legal actions, card powers, ki, and generic effect metadata rather than checking named cards such as Meng Huo. A separate inexpensive tactical estimate may order promising moves first, but move ordering cannot change the result of a completed depth.
 
 ### `DuelSearch`
 
@@ -70,7 +79,24 @@ Runs time-bounded iterative deepening:
 4. Stop at the 5- or 10-second deadline.
 5. Return the best move from the deepest fully completed iteration.
 
+A partially searched depth never replaces the last fully completed result. Move ordering considers the previous iteration's best move first, followed by terminal results, ownership-changing captures or removals, extra-turn creation, activate actions, and stable canonical action order.
+
 Search follows `DuelState.active_player`; it does not assume turns strictly alternate. The transposition key includes all state that can affect future play: board, zones, deck positions, active player, pending choices, active effects, and queued resolutions.
+
+Transposition entries record search depth, score, and exact/lower/upper-bound type. The state key covers board card identity, power, ownership, ki, and active effects; ordered hands and decks; discard and removed zones; active player; turn count; queued effects; pending choices; and repetition state.
+
+### `DuelSearchSession`
+
+`DuelSearchSession` owns one worker thread and is the only bridge between the pure search engine and the live controller. It stores:
+
+- An isolated duplicated starting state
+- The deterministic greedy fallback computed before deep search begins
+- The selected profile deadline and cancellation flag
+- A mutex-protected progress snapshot
+- The last fully completed search result
+- The final action and completion reason
+
+The progress snapshot contains elapsed time, completed depth, visited nodes, alpha-beta cutoffs, transposition hits, and whether the reachable tree was solved. The worker checks cancellation and deadline throughout recursion, never accesses scene nodes, and never mutates the live duel state.
 
 ### `AIProfile`
 
@@ -81,16 +107,21 @@ Provides the time budget and future search tuning. The first profiles are:
 
 Both profiles use identical evaluation weights and move-selection policy.
 
+Shen Lian currently selects Hard. The controller exposes the budget as script configuration so future encounters can select another profile without changing search code.
+
 ## Runtime Flow
 
-1. At the opponent's turn, the controller creates a complete `DuelState` snapshot.
-2. Search operates on copied pure data away from the main UI thread.
-3. The UI remains responsive and displays the opponent's thinking status.
-4. Search periodically checks its deadline and cancellation token.
-5. On completion, the controller rejects the result if the scene ended, the match restarted, or the state version changed.
-6. The controller verifies that the returned move remains legal and commits it through the normal production move path.
+1. At the opponent's turn, the controller creates a complete `DuelState` snapshot and records its state version.
+2. The controller computes and retains the current greedy action as a fallback.
+3. A `DuelSearchSession` runs iterative deepening on copied pure data away from the main UI thread.
+4. The UI remains responsive and displays `Shen Lian considers… <elapsed>s · depth <completed>`.
+5. Search checks its deadline and cancellation token throughout recursion. It returns immediately if the complete reachable tree is solved.
+6. The controller polls copied progress data and logs final elapsed time, depth, nodes, cutoffs, cache hits, completion reason, and chosen action.
+7. On completion, the controller rejects the result if the scene ended, the match restarted, the match completed, or the state version changed.
+8. The controller verifies that the returned move remains legal. An incomplete depth-1 search, worker failure, or invalid result uses the stored greedy fallback.
+9. The selected action commits through the normal production action path.
 
-If the search cannot finish depth 1 before cancellation, it returns a deterministic legal fallback move. Scene exit and match restart cancel outstanding work without applying stale results.
+Scene exit, match restart, and match completion cancel and join outstanding work without applying stale results. Testing mode is fixed before scene creation and never creates a search session, so there is no in-game testing-mode cancellation path.
 
 ## Variable-Length Match Safety
 
@@ -128,6 +159,11 @@ Because search depends only on the simulator interface, MCTS or a hybrid strateg
 - Extra-turn states maximize for the player who actually retains the turn.
 - Repetition and maximum-turn positions resolve consistently.
 - Identical inputs produce identical moves at identical completed depths.
+- Interrupted depth 1 returns the deterministic greedy fallback.
+- A partially completed deeper iteration does not replace the last completed result.
+- A completely solved position returns before its time budget expires.
+- Transposition exact/lower/upper bounds match uncached alpha-beta results.
+- State-key fixtures change when any future-relevant field changes.
 
 ### Runtime safety
 
@@ -135,22 +171,25 @@ Because search depends only on the simulator interface, MCTS or a hybrid strateg
 - Results from outdated state versions are rejected.
 - The UI remains responsive throughout 5- and 10-second searches.
 - No scene nodes or mutable live game objects are accessed by the worker search.
+- Testing-mode duels never start a worker.
+- Worker failure and invalid results commit the retained greedy action rather than ending the match.
 
 ### Performance
 
-Record completed depth, visited nodes, alpha-beta cutoffs, transposition hits, evaluation score, and elapsed time. Benchmark both profiles on representative mobile-class hardware and maintain deterministic benchmark positions as rules expand.
+Record completed depth, visited nodes, alpha-beta cutoffs, transposition hits, evaluation score, completion reason, and elapsed time. Display elapsed time and completed depth in the turn-status line during the first implementation so search behavior can be observed directly. Benchmark both profiles on representative mobile-class hardware and maintain deterministic benchmark positions as rules expand.
 
 ## Migration Strategy
 
-1. Extract the existing board and hand data into the first `DuelState` representation without changing behavior.
-2. Make live placement and current greedy AI use `DuelSimulator`.
-3. Prove simulator parity with the existing 15 rule checks and integration suite.
-4. Add depth-limited minimax and tactical fixtures.
-5. Add alpha-beta pruning, move ordering, and the transposition table.
-6. Add iterative deepening, time budgets, cancellation, and worker execution.
-7. Replace `DuelRules.choose_ai_move()` only after the search path passes gameplay verification.
+The project has completed the safe foundation: `DuelState`, `DuelAction`, `DuelSimulator`, production controller parity, fixed-depth alpha-beta search, and tactical fixtures. The current implementation increment is:
 
-This migration keeps the currently working opponent available until the new engine is independently proven.
+1. Separate evaluation and canonical state-key responsibilities from search recursion.
+2. Add deterministic move ordering and bound-aware transposition entries.
+3. Add iterative deepening, deadline checks, statistics, and solved-tree detection.
+4. Add `DuelSearchSession` worker execution, progress polling, cancellation, and greedy fallback.
+5. Integrate Shen Lian's 10-second hard profile and visible telemetry into the live controller.
+6. Replace `DuelSimulator.choose_greedy_action()` in normal opponent turns only after the search path passes unit, integration, cancellation, responsiveness, and production gameplay verification.
+
+The existing greedy opponent remains the fallback throughout migration and at runtime.
 
 ## Scope Boundaries
 
