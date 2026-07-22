@@ -18,6 +18,7 @@ func _run() -> void:
 	root.add_child(duel)
 	await process_frame
 	await process_frame
+	_check(is_equal_approx(float(duel.debug_get_search_budget_seconds()), 10.0), "Shen Lian defaults to the hard 10-second search profile")
 	duel.debug_set_fast_mode(true)
 
 	_check_layout(duel)
@@ -50,6 +51,9 @@ func _run() -> void:
 			_check_remaining_card_sizes(duel.get_node("PlayerHand"), initial_player_card_sizes)
 
 	var scores: Vector2i = duel.debug_get_scores()
+	var search_report: Dictionary = duel.debug_get_last_search_report()
+	_check(int(search_report.get("completed_depth", 0)) >= 1, "Normal opponent turns publish completed smart-search telemetry")
+	_check(not bool(search_report.get("used_fallback", true)), "Fast deterministic integration search completes without fallback")
 	var occupancy: int = duel.debug_get_board_occupancy()
 	var simulation_turns: int = duel.debug_get_simulation_turn_count()
 	var remaining_cards: int = _count_cards(duel.get_node("PlayerHand")) + _count_cards(duel.get_node("OpponentHand"))
@@ -342,6 +346,7 @@ func _check_testing_mode_manual_turns() -> void:
 	await test_duel._commit_card(opponent_card, 1, 2)
 	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 2, "Manual opponent placement advances the production simulator path exactly once")
 	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == _count_cards(test_duel.get_node("PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
+	_check(not test_duel.debug_is_search_running() and test_duel.debug_get_last_search_report().is_empty(), "Testing mode never starts an opponent search session")
 	test_duel.queue_free()
 	await process_frame
 

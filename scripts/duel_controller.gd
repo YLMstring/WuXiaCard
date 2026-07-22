@@ -15,6 +15,7 @@ const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
+const SearchSession = preload("res://scripts/duel_search_session.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -35,6 +36,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 @export var draw_ink_color: Color = Color("211824")
 @export var side_deck_shuffle_seed: int = 0
 @export var opponent_think_delay: float = 0.55
+@export var opponent_search_budget_seconds: float = 10.0
 @export var invalid_shake_duration: float = 0.18
 @export var placement_haptic_ms: int = 20
 @export var multi_capture_haptic_ms: int = 45
@@ -52,6 +54,10 @@ var _drag_valid_targets: Array[int] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
+var _opponent_search_session: SearchSession = null
+var _opponent_search_started_usec: int = 0
+var _opponent_search_test_limits: Dictionary = {}
+var _last_search_report: Dictionary = {}
 
 @onready var board_grid: GridContainer = $BoardCenter/BoardGrid
 @onready var top_bar: HBoxContainer = $TopBar
@@ -107,6 +113,10 @@ func _ready() -> void:
 	_layout_duel.call_deferred()
 
 
+func _exit_tree() -> void:
+	_cancel_opponent_search()
+
+
 func debug_set_fast_mode(enabled: bool) -> void:
 	_fast_mode = enabled
 	if enabled:
@@ -122,6 +132,8 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		ki_gain_pulse_duration = 0.0
 		extra_turn_status_duration = 0.0
 		opponent_think_delay = 0.0
+		opponent_search_budget_seconds = 0.0
+		_opponent_search_test_limits = {"max_depth": 1}
 		invalid_shake_duration = 0.0
 
 
@@ -199,6 +211,23 @@ func debug_get_ki_presentation_trace() -> Array[int]:
 
 func debug_get_active_owner() -> int:
 	return duel_state.active_player if duel_state != null else 0
+
+
+func debug_get_search_budget_seconds() -> float:
+	return opponent_search_budget_seconds
+
+
+func debug_get_last_search_report() -> Dictionary:
+	return _last_search_report.duplicate(true)
+
+
+func debug_is_search_running() -> bool:
+	return _opponent_search_session != null and _opponent_search_session.is_running()
+
+
+func debug_set_search_limits(budget_seconds: float, test_limits: Dictionary = {}) -> void:
+	opponent_search_budget_seconds = maxf(budget_seconds, 0.0)
+	_opponent_search_test_limits = test_limits.duplicate(true)
 
 
 func debug_get_hand_instance_ids(owner_id: int) -> Array[StringName]:
@@ -625,7 +654,61 @@ func _wait_after_draw_before_board_effect() -> void:
 
 
 func _perform_opponent_turn() -> void:
-	var choice: ActionData = Simulator.choose_greedy_action(duel_state)
+	if duel_state == null or testing_mode or turn_state != TurnState.OPPONENT:
+		return
+	var starting_version: int = duel_state.state_version
+	var greedy_fallback: ActionData = Simulator.choose_greedy_action(duel_state)
+	if greedy_fallback.action_type == &"":
+		_finish_match()
+		return
+	var session: SearchSession = SearchSession.new()
+	_opponent_search_session = session
+	_opponent_search_started_usec = Time.get_ticks_usec()
+	var started: bool = session.start(
+		duel_state,
+		DuelRules.OPPONENT_OWNER,
+		opponent_search_budget_seconds,
+		greedy_fallback,
+		_opponent_search_test_limits
+	)
+	if started:
+		while is_inside_tree() and not session.is_complete():
+			var progress: Dictionary = session.get_progress()
+			var elapsed: float = float(Time.get_ticks_usec() - _opponent_search_started_usec) / 1_000_000.0
+			turn_status.text = "Shen Lian considers… %.1fs · depth %d" % [
+				elapsed,
+				int(progress.get("completed_depth", 0)),
+			]
+			await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	var search_result: Dictionary = session.finish_and_get_result()
+	if _opponent_search_session == session:
+		_opponent_search_session = null
+	if (
+		duel_state == null
+		or turn_state != TurnState.OPPONENT
+		or duel_state.state_version != starting_version
+		or Simulator.is_terminal(duel_state)
+	):
+		search_result["completion_reason"] = &"stale_result"
+		_last_search_report = search_result.duplicate(true)
+		_print_search_report(search_result)
+		return
+	var choice: ActionData = search_result.get("action", null) as ActionData
+	if choice == null or not Simulator.is_action_legal(duel_state, choice):
+		choice = greedy_fallback.duplicate_action()
+		search_result["used_fallback"] = true
+	if not Simulator.is_action_legal(duel_state, choice):
+		search_result["completion_reason"] = &"no_legal_action"
+		search_result["action"] = choice.duplicate_action()
+		_last_search_report = search_result.duplicate(true)
+		_print_search_report(search_result)
+		_finish_match()
+		return
+	search_result["action"] = choice.duplicate_action()
+	_last_search_report = search_result.duplicate(true)
+	_print_search_report(search_result)
 	var opponent_card: CardView = null
 	if choice.action_type == ActionData.TYPE_PLAY:
 		opponent_card = _get_card_view_for_logical_index(DuelRules.OPPONENT_OWNER, choice.source_index)
@@ -637,7 +720,32 @@ func _perform_opponent_turn() -> void:
 	await _commit_action(opponent_card, choice, DuelRules.OPPONENT_OWNER)
 
 
+func _print_search_report(result: Dictionary) -> void:
+	var action: ActionData = result.get("action", null) as ActionData
+	var action_key: String = action.canonical_key() if action != null else "none"
+	print(
+		"AI_SEARCH elapsed=%.3f depth=%d nodes=%d cutoffs=%d cache_hits=%d reason=%s fallback=%s action=%s" % [
+			float(result.get("elapsed_seconds", 0.0)),
+			int(result.get("completed_depth", 0)),
+			int(result.get("nodes", 0)),
+			int(result.get("cutoffs", 0)),
+			int(result.get("transposition_hits", 0)),
+			String(result.get("completion_reason", &"unknown")),
+			str(bool(result.get("used_fallback", false))),
+			action_key,
+		]
+	)
+
+
+func _cancel_opponent_search() -> void:
+	if _opponent_search_session == null:
+		return
+	_opponent_search_session.cancel_and_join()
+	_opponent_search_session = null
+
+
 func _finish_match() -> void:
+	_cancel_opponent_search()
 	turn_state = TurnState.COMPLETE
 	_sync_hand_playability()
 	var player_total: int = DuelRules.count_owned(board, DuelRules.PLAYER_OWNER)
@@ -1066,4 +1174,5 @@ func _vibrate(duration_ms: int) -> void:
 
 
 func _on_exit_pressed() -> void:
+	_cancel_opponent_search()
 	get_tree().quit()

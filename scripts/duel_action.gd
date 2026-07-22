@@ -98,3 +98,15 @@ func is_same_as(other) -> bool:
 		and target_kind == other.target_kind
 		and target_index == other.target_index
 	)
+
+
+func canonical_key() -> String:
+	return "%s|%s|%010d|%s|%s|%s|%010d" % [
+		String(action_type),
+		String(source_zone),
+		source_index,
+		String(source_instance_id),
+		String(ability_id),
+		String(target_kind),
+		target_index,
+	]
