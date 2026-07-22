@@ -83,16 +83,7 @@ func _refresh_face_content() -> void:
 	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else str(card_data.get("glyph", "?"))
-	if face_down:
-		tooltip_text = ""
-	else:
-		tooltip_text = "%s  ↑%s →%s ↓%s ←%s" % [
-			str(card_data.get("name", "Card")),
-			top_power.text,
-			right_power.text,
-			bottom_power.text,
-			left_power.text,
-		]
+	tooltip_text = ""
 
 
 func set_playable(value: bool) -> void:
