@@ -8,6 +8,8 @@ signal drag_ended(card: CardView, pointer_position: Vector2)
 @export var touch_drag_offset: float = 48.0
 
 const CARD_BACK_GLYPH: String = "◆"
+const MAX_TITLE_ROWS: int = 4
+const FULL_WIDTH_SPACE: String = "　"
 const Effects = preload("res://scripts/duel_effects.gd")
 
 var card_data: Dictionary = {}
@@ -69,6 +71,29 @@ func is_face_down() -> bool:
 	return face_down
 
 
+static func format_vertical_title(raw_title: String) -> String:
+	var character_count: int = raw_title.length()
+	if character_count <= 0:
+		return "?"
+	if character_count <= MAX_TITLE_ROWS:
+		var single_column: Array[String] = []
+		for index: int in character_count:
+			single_column.append(raw_title.substr(index, 1))
+		return "\n".join(single_column)
+
+	var left_column_count: int = ceili(character_count / 2.0)
+	var right_column_count: int = character_count - left_column_count
+	var rows: Array[String] = []
+	for row: int in left_column_count:
+		var row_text: String = raw_title.substr(row, 1) + FULL_WIDTH_SPACE
+		if row < right_column_count:
+			row_text += raw_title.substr(left_column_count + row, 1)
+		else:
+			row_text += FULL_WIDTH_SPACE
+		rows.append(row_text)
+	return "\n".join(rows)
+
+
 func _refresh_face_content() -> void:
 	var powers: Array = card_data.get("powers", [0, 0, 0, 0])
 	top_power.text = str(powers[DuelRules.TOP])
@@ -82,7 +107,8 @@ func _refresh_face_content() -> void:
 	ki_value.text = str(ki)
 	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
-	art_placeholder.text = CARD_BACK_GLYPH if face_down else str(card_data.get("glyph", "?"))
+	art_placeholder.text = CARD_BACK_GLYPH if face_down else format_vertical_title(str(card_data.get("glyph", "?")))
+	_update_title_font_size()
 	tooltip_text = ""
 
 
@@ -335,10 +361,24 @@ func _on_resized() -> void:
 	pivot_offset = size * 0.5
 	var short_side: float = minf(size.x, size.y)
 	var power_size: int = maxi(14, int(short_side * 0.2))
-	var art_size: int = maxi(18, int(short_side * 0.3))
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.add_theme_font_size_override("font_size", power_size)
-	art_placeholder.add_theme_font_size_override("font_size", art_size)
+	_update_title_font_size()
+
+
+func _update_title_font_size() -> void:
+	if not is_instance_valid(art_placeholder):
+		return
+	var title_length: int = 1 if face_down else maxi(1, str(card_data.get("glyph", "?")).length())
+	var column_count: int = 1 if title_length <= MAX_TITLE_ROWS else 2
+	var row_count: int = title_length if column_count == 1 else ceili(title_length / 2.0)
+	var short_side: float = maxf(1.0, minf(size.x, size.y))
+	var base_size: float = short_side * 0.3
+	var width_units: float = 1.0 if column_count == 1 else 3.0
+	var width_limited_size: float = maxf(1.0, size.x * 0.72) / width_units
+	var height_limited_size: float = maxf(1.0, size.y * 0.72) / (float(row_count) * 1.05)
+	var title_size: int = maxi(10, int(floor(minf(base_size, minf(width_limited_size, height_limited_size)))))
+	art_placeholder.add_theme_font_size_override("font_size", title_size)
 
 
 func _update_cursor() -> void:

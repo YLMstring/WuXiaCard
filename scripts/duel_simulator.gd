@@ -305,7 +305,7 @@ static func _normalize_runtime_card(
 	hand_index: int
 ) -> void:
 	if not card.has("card_id"):
-		card["card_id"] = StringName(String(card.get("name", "card")).to_snake_case())
+		card["card_id"] = StringName(String(card.get("glyph", "card")).to_snake_case())
 	if not card.has("instance_id") or StringName(card.get("instance_id", &"")) == &"":
 		card["instance_id"] = StringName("fixture_%d_%d_%d" % [owner_id, turn_count, hand_index])
 	if int(card.get("original_owner", 0)) == 0:

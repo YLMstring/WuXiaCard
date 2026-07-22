@@ -45,15 +45,23 @@ const ALL_CARD_IDS: Array[StringName] = [
 const _CARD_DEFINITIONS: Dictionary = {
 	&"xu_shu": {
 		"id": &"xu_shu",
-		"name": "Xu Shu",
 		"glyph": "徐",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [3, 2, 3, 2],
 		"effects": [],
 	},
 	&"gate_general": {
 		"id": &"gate_general",
-		"name": "Gate General",
 		"glyph": "关",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [7, 7, 7, 7],
 		"effects": [
 			{
@@ -64,8 +72,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"meng_huo": {
 		"id": &"meng_huo",
-		"name": "Meng Huo",
 		"glyph": "孟",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [8, 7, 2, 3],
 		"effects": [
 			{
@@ -91,8 +103,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"jiang_wei": {
 		"id": &"jiang_wei",
-		"name": "Jiang Wei",
 		"glyph": "姜",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [6, 6, 6, 6],
 		"starting_ki": 1,
 		"effects": [
@@ -105,8 +121,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"fa_zheng": {
 		"id": &"fa_zheng",
-		"name": "Fa Zheng",
 		"glyph": "法",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [5, 4, 4, 3],
 		"effects": [
 			{
@@ -117,22 +137,34 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"zhang_ren": {
 		"id": &"zhang_ren",
-		"name": "Zhang Ren",
 		"glyph": "张",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [4, 7, 7, 4],
 		"effects": [],
 	},
 	&"fire_envoy": {
 		"id": &"fire_envoy",
-		"name": "Fire Envoy",
 		"glyph": "火",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [5, 5, 4, 4],
 		"effects": [],
 	},
 	&"tiger_general": {
 		"id": &"tiger_general",
-		"name": "Tiger General",
 		"glyph": "虎",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [3, 4, 8, 8],
 		"effects": [
 			{
@@ -143,8 +175,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"strategist": {
 		"id": &"strategist",
-		"name": "Strategist",
 		"glyph": "策",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [4, 4, 4, 4],
 		"effects": [
 			{
@@ -155,8 +191,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"sun_zan": {
 		"id": &"sun_zan",
-		"name": "Sun Zan",
 		"glyph": "孙",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
 		"powers": [3, 5, 8, 8],
 		"starting_ki": 1,
 		"effects": [
@@ -193,8 +233,12 @@ static func create_instance(
 	return {
 		"instance_id": instance_id,
 		"card_id": card_id,
-		"name": String(definition["name"]),
 		"glyph": String(definition["glyph"]),
+		"sect": String(definition["sect"]),
+		"tier": int(definition["tier"]),
+		"weapon": String(definition["weapon"]),
+		"description": String(definition["description"]),
+		"flavor": String(definition["flavor"]),
 		"powers": (definition["powers"] as Array).duplicate(),
 		"original_owner": original_owner,
 		"ki": int(definition.get("starting_ki", 0)),
@@ -205,6 +249,15 @@ static func create_instance(
 static func validate_effect(effect: Dictionary, card_id: StringName = &"fixture") -> Array[String]:
 	var errors: Array[String] = []
 	_validate_effect(card_id, effect, errors)
+	return errors
+
+
+static func validate_definition(
+	definition: Dictionary,
+	card_id: StringName = &"fixture"
+) -> Array[String]:
+	var errors: Array[String] = []
+	_validate_definition(card_id, definition, errors)
 	return errors
 
 
@@ -236,10 +289,21 @@ static func _validate_definition(
 		errors.append("Card ID cannot be empty")
 	if StringName(definition.get("id", &"")) != card_id:
 		errors.append("Definition ID does not match key: %s" % card_id)
-	if String(definition.get("name", "")).is_empty():
-		errors.append("Card %s has no name" % card_id)
-	if String(definition.get("glyph", "")).is_empty():
-		errors.append("Card %s has no glyph" % card_id)
+	if definition.has("name"):
+		errors.append("Card %s still declares retired name metadata" % card_id)
+	var glyph_value: Variant = definition.get("glyph", null)
+	if typeof(glyph_value) != TYPE_STRING:
+		errors.append("Card %s requires a String glyph" % card_id)
+	else:
+		var glyph_length: int = (glyph_value as String).length()
+		if glyph_length < 1 or glyph_length > 7:
+			errors.append("Card %s glyph must contain 1 to 7 characters" % card_id)
+	for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
+		if not definition.has(metadata_key) or typeof(definition[metadata_key]) != TYPE_STRING:
+			errors.append("Card %s requires String metadata %s" % [card_id, metadata_key])
+	var tier_value: Variant = definition.get("tier", null)
+	if typeof(tier_value) != TYPE_INT or int(tier_value) < 1:
+		errors.append("Card %s requires an integer tier of at least 1" % card_id)
 	var powers: Array = definition.get("powers", [])
 	if powers.size() != 4:
 		errors.append("Card %s requires four powers" % card_id)

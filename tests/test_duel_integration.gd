@@ -1,6 +1,7 @@
 extends SceneTree
 
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
+const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -23,6 +24,7 @@ func _run() -> void:
 
 	_check_layout(duel)
 	_check_card_edge_labels(duel)
+	_check_vertical_card_titles()
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
 	_check_catalog_hands(duel)
@@ -108,6 +110,29 @@ func _check_card_edge_labels(duel: Node) -> void:
 	_check(absf(bottom_label.get_global_rect().get_center().x - card_center.x) < 1.0 and bottom_label.get_global_rect().get_center().y > card_center.y, "Bottom power has its own rectangle centered on the bottom edge")
 	_check(left_label.get_global_rect().get_center().x < card_center.x and absf(left_label.get_global_rect().get_center().y - card_center.y) < 1.0, "Left power has its own rectangle centered on the left edge")
 	_check(not top_label.text.is_empty() and not right_label.text.is_empty() and not bottom_label.text.is_empty() and not left_label.text.is_empty(), "All four edge powers contain display text")
+
+
+func _check_vertical_card_titles() -> void:
+	_check(CARD_SCRIPT.format_vertical_title("甲") == "甲", "One-character titles remain centered as one glyph")
+	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁") == "甲\n乙\n丙\n丁", "Four-character titles fill one column from top to bottom")
+	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁戊") == "甲　丁\n乙　戊\n丙　　", "Five-character titles continue into the right column after filling the left")
+	var seven_character_title: String = "甲　戊\n乙　己\n丙　庚\n丁　　"
+	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁戊己庚") == seven_character_title, "Seven-character titles fill balanced columns top-to-bottom then left-to-right")
+
+	var card: Control = CARD_SCENE.instantiate()
+	root.add_child(card)
+	card.size = Vector2(96.0, 128.0)
+	card.call("configure", {
+		"glyph": "甲乙丙丁戊己庚",
+		"powers": [1, 2, 3, 4],
+		"ki": 0,
+		"active_effects": [],
+	}, Rules.PLAYER_OWNER, false)
+	var title_label: Label = card.get_node("Overlay/ArtPlaceholder") as Label
+	_check(title_label.text == seven_character_title, "CardView applies the vertical formatter to a seven-character title")
+	_check(title_label.horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER and title_label.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "Multi-character titles remain centered on the card")
+	_check(title_label.get_theme_font_size("font_size") >= 10, "Multi-character titles receive a legible responsive font size")
+	card.queue_free()
 
 
 func _check_hand_slots(container: Node) -> void:
@@ -227,7 +252,13 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 	var all_private_data_retained: bool = true
 	for card: Control in opponent_cards:
 		var card_data: Dictionary = card.get("card_data")
-		all_private_data_retained = all_private_data_retained and not String(card_data.get("name", "")).is_empty() and (card_data.get("powers", []) as Array).size() == 4
+		all_private_data_retained = (
+			all_private_data_retained
+			and not card_data.has("name")
+			and not String(card_data.get("glyph", "")).is_empty()
+			and typeof(card_data.get("description", null)) == TYPE_STRING
+			and (card_data.get("powers", []) as Array).size() == 4
+		)
 		all_concealed = (
 			all_concealed
 			and card.has_method("is_face_down")
@@ -250,9 +281,9 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 		first_card.call("set_face_down", false)
 		var powers: Array = first_data.get("powers", [])
 		_check(not bool(first_card.call("is_face_down")), "Repeated reveal calls leave the card face-up")
-		_check((first_card.get_node("Overlay/ArtPlaceholder") as Label).text == str(first_data.get("glyph", "?")), "Revealing restores the opponent card glyph from retained data")
+		_check((first_card.get_node("Overlay/ArtPlaceholder") as Label).text == CARD_SCRIPT.format_vertical_title(str(first_data.get("glyph", "?"))), "Revealing restores the formatted opponent card title from retained data")
 		_check((first_card.get_node("Overlay/TopPower") as Label).visible and (first_card.get_node("Overlay/TopPower") as Label).text == str(powers[0]), "Revealing restores visible power labels from retained data")
-		_check(not first_card.tooltip_text.is_empty(), "Revealing restores the opponent card tooltip")
+		_check(first_card.tooltip_text.is_empty(), "Revealing keeps the disabled card tooltip empty")
 		first_card.call("set_face_down", true)
 		first_card.call("set_face_down", true)
 		_check(bool(first_card.call("is_face_down")) and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent")

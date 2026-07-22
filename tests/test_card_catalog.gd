@@ -15,6 +15,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_catalog_validation()
 	_test_catalog_definitions()
+	_test_definition_schema_validation()
 	_test_definition_copy_isolation()
 	_test_effect_declarations()
 	_test_encounter_decks()
@@ -43,8 +44,12 @@ func _test_catalog_definitions() -> void:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		_check(not definition.is_empty(), "Card %s resolves to a definition" % card_id)
 		_check(StringName(definition.get("id", &"")) == card_id, "Card %s stores its stable ID" % card_id)
-		_check(not String(definition.get("name", "")).is_empty(), "Card %s has a display name" % card_id)
-		_check(not String(definition.get("glyph", "")).is_empty(), "Card %s has a glyph" % card_id)
+		_check(not definition.has("name"), "Card %s omits the retired name field" % card_id)
+		var glyph: Variant = definition.get("glyph", null)
+		_check(typeof(glyph) == TYPE_STRING and (glyph as String).length() >= 1 and (glyph as String).length() <= 7, "Card %s has a 1-7 character glyph title" % card_id)
+		for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
+			_check(definition.has(metadata_key) and typeof(definition[metadata_key]) == TYPE_STRING, "Card %s has String metadata %s" % [card_id, metadata_key])
+		_check(typeof(definition.get("tier", null)) == TYPE_INT and int(definition["tier"]) >= 1, "Card %s has a positive integer tier" % card_id)
 		var powers: Array = definition.get("powers", [])
 		_check(powers.size() == 4, "Card %s has four edge powers" % card_id)
 		var powers_are_integers: bool = true
@@ -53,6 +58,38 @@ func _test_catalog_definitions() -> void:
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
 	_check(observed_ids.size() == 10, "Catalog IDs are unique")
+
+
+func _test_definition_schema_validation() -> void:
+	var valid_fixture: Dictionary = Catalog.get_definition(&"xu_shu")
+	valid_fixture["id"] = &"fixture"
+	for glyph: String in ["甲", "甲乙丙丁戊己庚"]:
+		valid_fixture["glyph"] = glyph
+		_check(Catalog.validate_definition(valid_fixture).is_empty(), "Glyph length %d passes definition validation" % glyph.length())
+	for invalid_glyph: Variant in ["", "甲乙丙丁戊己庚辛", &"甲"]:
+		valid_fixture["glyph"] = invalid_glyph
+		_check(not Catalog.validate_definition(valid_fixture).is_empty(), "Invalid glyph %s fails definition validation" % str(invalid_glyph))
+	valid_fixture["glyph"] = "甲"
+	for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
+		var invalid_metadata: Dictionary = valid_fixture.duplicate(true)
+		invalid_metadata[metadata_key] = 1
+		_check(not Catalog.validate_definition(invalid_metadata).is_empty(), "Non-String %s metadata fails validation" % metadata_key)
+	var missing_metadata: Dictionary = valid_fixture.duplicate(true)
+	missing_metadata.erase("sect")
+	_check(not Catalog.validate_definition(missing_metadata).is_empty(), "Missing required metadata fails validation")
+	for invalid_tier: Variant in [0, -1, 1.5, "1"]:
+		var invalid_tier_definition: Dictionary = valid_fixture.duplicate(true)
+		invalid_tier_definition["tier"] = invalid_tier
+		_check(not Catalog.validate_definition(invalid_tier_definition).is_empty(), "Invalid tier %s fails validation" % str(invalid_tier))
+	var retired_name: Dictionary = valid_fixture.duplicate(true)
+	retired_name["name"] = "Legacy"
+	_check(not Catalog.validate_definition(retired_name).is_empty(), "Retired name metadata fails validation")
+
+	var instance: Dictionary = Catalog.create_instance(&"xu_shu", 1, &"metadata_fixture")
+	_check(not instance.has("name"), "Production runtime instances omit retired name metadata")
+	for metadata_key: StringName in [&"glyph", &"sect", &"weapon", &"description", &"flavor"]:
+		_check(instance.has(metadata_key) and typeof(instance[metadata_key]) == TYPE_STRING, "Runtime instance copies String metadata %s" % metadata_key)
+	_check(int(instance.get("tier", 0)) == 1, "Runtime instance copies tier metadata")
 
 
 func _test_definition_copy_isolation() -> void:

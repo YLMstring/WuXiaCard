@@ -639,10 +639,10 @@ func _test_state_copy_is_isolated() -> void:
 		player_deck,
 		opponent_deck
 	)
-	(player_deck[0] as Dictionary)["name"] = "Mutated source"
-	(opponent_deck[0] as Dictionary)["name"] = "Mutated source"
-	_check(String(((original.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary)["name"]) == "Fa Zheng", "State constructor deep-copies the player side deck")
-	_check(String(((original.decks[Rules.OPPONENT_OWNER] as Array)[0] as Dictionary)["name"]) == "Strategist", "State constructor deep-copies the opponent side deck")
+	(player_deck[0] as Dictionary)["glyph"] = "异"
+	(opponent_deck[0] as Dictionary)["glyph"] = "异"
+	_check(String(((original.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary)["glyph"]) == "法", "State constructor deep-copies the player side deck")
+	_check(String(((original.decks[Rules.OPPONENT_OWNER] as Array)[0] as Dictionary)["glyph"]) == "策", "State constructor deep-copies the opponent side deck")
 	var copied = original.duplicate_state()
 	copied.board[0] = {"card": Rules.make_card("Copy", "副", [5, 5, 5, 5]), "owner": Rules.PLAYER_OWNER}
 	copied.get_hand(Rules.PLAYER_OWNER).clear()
