@@ -27,6 +27,8 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 @export var removal_audio_volume_db: float = -4.0
 @export var movement_audio_volume_db: float = -9.0
 @export var movement_trail_duration: float = 0.18
+@export var ki_gain_pulse_duration: float = 0.18
+@export var extra_turn_status_duration: float = 0.35
 @export var draw_bloom_duration: float = 0.12
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
@@ -49,6 +51,7 @@ var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
+var _ki_presentation_trace: Array[int] = []
 
 @onready var board_grid: GridContainer = $BoardCenter/BoardGrid
 @onready var top_bar: HBoxContainer = $TopBar
@@ -116,6 +119,8 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_rise_duration = 0.0
 		draw_post_effect_gap = 0.0
 		movement_trail_duration = 0.0
+		ki_gain_pulse_duration = 0.0
+		extra_turn_status_duration = 0.0
 		opponent_think_delay = 0.0
 		invalid_shake_duration = 0.0
 
@@ -186,6 +191,14 @@ func debug_get_all_instance_ids() -> Array[StringName]:
 
 func debug_get_presentation_trace() -> Array[StringName]:
 	return _presentation_trace.duplicate()
+
+
+func debug_get_ki_presentation_trace() -> Array[int]:
+	return _ki_presentation_trace.duplicate()
+
+
+func debug_get_active_owner() -> int:
+	return duel_state.active_player if duel_state != null else 0
 
 
 func debug_get_hand_instance_ids(owner_id: int) -> Array[StringName]:
@@ -516,8 +529,12 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 		var event: Dictionary = event_value
 		var event_type := StringName(event.get("type", &""))
 		var target_cell: int = int(event.get("target_cell", -1))
-		if event_type in [&"ability_activated", &"ki_changed", &"card_moved"]:
+		if event_type in [&"ability_activated", &"card_moved"]:
 			_presentation_trace.append(event_type)
+		elif event_type == &"ki_changed":
+			await _present_ki_changed_event(event)
+		elif event_type == &"extra_turn_granted":
+			await _present_extra_turn_event(event)
 		elif event_type == &"card_drawn":
 			await _present_draw_event(event)
 			drew_card = true
@@ -563,6 +580,29 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				exiled_card.queue_free()
 			resolved_targets += 1
 	return resolved_targets
+
+
+func _present_ki_changed_event(event: Dictionary) -> void:
+	_presentation_trace.append(&"ki_changed")
+	var instance_id := StringName(event.get("instance_id", &""))
+	var card: CardView = _get_board_card_view_by_instance(instance_id)
+	if card == null:
+		return
+	var previous_ki: int = int(event.get("previous_ki", card.card_data.get("ki", 0)))
+	var resulting_ki: int = int(event.get("ki", previous_ki))
+	_ki_presentation_trace.append(resulting_ki)
+	card.set_runtime_ki(resulting_ki)
+	if resulting_ki > previous_ki:
+		await card.play_ki_gain_pulse(ki_gain_pulse_duration)
+
+
+func _present_extra_turn_event(_event: Dictionary) -> void:
+	_presentation_trace.append(&"extra_turn_granted")
+	turn_status.text = "Extra turn"
+	turn_status.modulate = Color("2f7664")
+	if extra_turn_status_duration > 0.0:
+		await get_tree().create_timer(extra_turn_status_duration).timeout
+	turn_status.modulate = Color.WHITE
 
 
 func _present_draw_event(event: Dictionary) -> void:
@@ -689,6 +729,16 @@ func _get_logical_hand_card_by_instance(owner_id: int, instance_id: StringName) 
 func _get_hand_card_view_by_instance(container: HBoxContainer, instance_id: StringName) -> CardView:
 	for card: CardView in _get_cards_in_hand(container):
 		if _get_card_instance_id(card) == instance_id:
+			return card
+	return null
+
+
+func _get_board_card_view_by_instance(instance_id: StringName) -> CardView:
+	if instance_id == &"":
+		return null
+	for card_value: Variant in board_cards:
+		var card := card_value as CardView
+		if card != null and is_instance_valid(card) and _get_card_instance_id(card) == instance_id:
 			return card
 	return null
 

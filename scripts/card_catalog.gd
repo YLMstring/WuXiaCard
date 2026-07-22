@@ -4,12 +4,29 @@ extends RefCounted
 const EFFECT_EXILE_INSTEAD_OF_FLIP: StringName = &"exile_instead_of_flip"
 const EFFECT_DRAW_CARDS_ON_PLAY: StringName = &"draw_cards_on_play"
 const EFFECT_MOVE_AND_ATTACK: StringName = &"move_and_attack"
+const EFFECT_BATTLE_MOMENTUM: StringName = &"battle_momentum"
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
+const TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF: StringName = &"after_successful_flip_by_self"
+const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
+const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
+const TRIGGER_ACTION_GAIN_KI: StringName = &"gain_ki"
+const TRIGGER_ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
+const TRIGGER_ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
 const KNOWN_EFFECT_IDS: Array[StringName] = [
 	EFFECT_EXILE_INSTEAD_OF_FLIP,
 	EFFECT_DRAW_CARDS_ON_PLAY,
 	EFFECT_MOVE_AND_ATTACK,
+	EFFECT_BATTLE_MOMENTUM,
+]
+const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
+	TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
+	TRIGGER_END_OWNER_TURN,
+]
+const KNOWN_TRIGGER_ACTIONS: Array[StringName] = [
+	TRIGGER_ACTION_GAIN_KI,
+	TRIGGER_ACTION_SPEND_ALL_KI,
+	TRIGGER_ACTION_REQUEST_EXTRA_TURN,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -50,7 +67,27 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"name": "Meng Huo",
 		"glyph": "孟",
 		"powers": [8, 7, 2, 3],
-		"effects": [],
+		"effects": [
+			{
+				"id": EFFECT_BATTLE_MOMENTUM,
+				"triggers": [
+					{
+						"event": TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
+						"actions": [
+							{"type": TRIGGER_ACTION_GAIN_KI, "amount": 1},
+						],
+					},
+					{
+						"event": TRIGGER_END_OWNER_TURN,
+						"condition": {CONDITION_KI_AT_LEAST: 1},
+						"actions": [
+							{"type": TRIGGER_ACTION_SPEND_ALL_KI},
+							{"type": TRIGGER_ACTION_REQUEST_EXTRA_TURN},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"jiang_wei": {
 		"id": &"jiang_wei",
@@ -256,3 +293,79 @@ static func _validate_effect(
 			errors.append("Card %s move effect requires drag_to_target activation" % card_id)
 		if StringName(effect.get("target_rule", &"")) != TARGET_ADJACENT_EMPTY_BOARD:
 			errors.append("Card %s move effect requires adjacent_empty_board targeting" % card_id)
+	if effect_id == EFFECT_BATTLE_MOMENTUM:
+		_validate_triggers(card_id, effect.get("triggers", null), errors)
+
+
+static func _validate_triggers(card_id: StringName, trigger_value: Variant, errors: Array[String]) -> void:
+	if not trigger_value is Array:
+		errors.append("Card %s trigger ability requires a trigger array" % card_id)
+		return
+	var triggers: Array = trigger_value
+	if triggers.is_empty():
+		errors.append("Card %s trigger ability requires at least one trigger" % card_id)
+		return
+	for trigger_value_item: Variant in triggers:
+		if not trigger_value_item is Dictionary:
+			errors.append("Card %s has a non-dictionary trigger" % card_id)
+			continue
+		_validate_trigger(card_id, trigger_value_item as Dictionary, errors)
+
+
+static func _validate_trigger(card_id: StringName, trigger: Dictionary, errors: Array[String]) -> void:
+	var event_id := StringName(trigger.get("event", &""))
+	if event_id not in KNOWN_TRIGGER_EVENTS:
+		errors.append("Card %s uses unknown trigger event %s" % [card_id, event_id])
+	for key: Variant in trigger.keys():
+		if StringName(key) not in [&"event", &"condition", &"actions"]:
+			errors.append("Card %s trigger %s has unsupported field %s" % [card_id, event_id, key])
+	if trigger.has("condition"):
+		_validate_trigger_condition(card_id, event_id, trigger["condition"], errors)
+	var actions_value: Variant = trigger.get("actions", null)
+	if not actions_value is Array or (actions_value as Array).is_empty():
+		errors.append("Card %s trigger %s requires a non-empty action array" % [card_id, event_id])
+		return
+	for action_value: Variant in actions_value as Array:
+		if not action_value is Dictionary:
+			errors.append("Card %s trigger %s has a non-dictionary action" % [card_id, event_id])
+			continue
+		_validate_trigger_action(card_id, event_id, action_value as Dictionary, errors)
+
+
+static func _validate_trigger_condition(
+	card_id: StringName,
+	event_id: StringName,
+	condition_value: Variant,
+	errors: Array[String]
+) -> void:
+	if not condition_value is Dictionary:
+		errors.append("Card %s trigger %s requires a condition dictionary" % [card_id, event_id])
+		return
+	var condition: Dictionary = condition_value
+	if condition.size() != 1 or not condition.has(CONDITION_KI_AT_LEAST):
+		errors.append("Card %s trigger %s uses an unknown condition" % [card_id, event_id])
+		return
+	var threshold: Variant = condition[CONDITION_KI_AT_LEAST]
+	if typeof(threshold) != TYPE_INT or int(threshold) < 0:
+		errors.append("Card %s trigger %s requires a non-negative integer ki_at_least" % [card_id, event_id])
+
+
+static func _validate_trigger_action(
+	card_id: StringName,
+	event_id: StringName,
+	action: Dictionary,
+	errors: Array[String]
+) -> void:
+	var action_type := StringName(action.get("type", &""))
+	if action_type not in KNOWN_TRIGGER_ACTIONS:
+		errors.append("Card %s trigger %s uses unknown action %s" % [card_id, event_id, action_type])
+		return
+	var allowed_keys: Array[StringName] = [&"type"]
+	if action_type == TRIGGER_ACTION_GAIN_KI:
+		allowed_keys.append(&"amount")
+		var amount: Variant = action.get("amount", null)
+		if typeof(amount) != TYPE_INT or int(amount) <= 0:
+			errors.append("Card %s trigger %s gain_ki requires a positive integer amount" % [card_id, event_id])
+	for key: Variant in action.keys():
+		if StringName(key) not in allowed_keys:
+			errors.append("Card %s trigger %s action %s has unsupported field %s" % [card_id, event_id, action_type, key])

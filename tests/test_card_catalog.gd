@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_draw_effect_validation()
 	_test_activate_effect_declarations()
 	_test_activate_effect_replacement()
+	_test_trigger_ability_schema()
 
 	if _failures == 0:
 		print("CARD_CATALOG_TESTS_PASSED checks=%d" % _checks)
@@ -162,6 +163,37 @@ func _test_activate_effect_replacement() -> void:
 			activate_count += 1
 	_check(active_effects.size() == 2 and activate_count == 1, "New activate effect replaces the old activate slot")
 	_check(StringName(DuelEffects.get_activate_effect(card).get("id", &"")) == &"replacement_activate_fixture", "Replacement activate effect becomes active")
+
+
+func _test_trigger_ability_schema() -> void:
+	var definition: Dictionary = Catalog.get_definition(&"meng_huo")
+	var effects: Array = definition.get("effects", [])
+	_check(effects.size() == 1, "Meng Huo declares one ability")
+	var effect: Dictionary = effects[0]
+	_check(StringName(effect.get("id", &"")) == Catalog.EFFECT_BATTLE_MOMENTUM, "Meng Huo declares battle momentum")
+	_check(not effect.has("retained_on_flip"), "Battle momentum uses default non-retention")
+	var triggers: Array = effect.get("triggers", [])
+	_check(triggers.size() == 2, "Battle momentum declares two trigger rules")
+	_check(StringName((triggers[0] as Dictionary).get("event", &"")) == Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "First rule reacts to successful flips")
+	_check(StringName((triggers[1] as Dictionary).get("event", &"")) == Catalog.TRIGGER_END_OWNER_TURN, "Second rule reacts at end of turn")
+	var instance: Dictionary = Catalog.create_instance(&"meng_huo", 1, &"trigger_meng")
+	_check(int(instance.get("ki", -1)) == 0, "Meng Huo starts with zero ki")
+	var runtime_effect: Dictionary = (instance.get("active_effects", []) as Array)[0]
+	_check(runtime_effect.has("retained_on_flip") and not bool(runtime_effect["retained_on_flip"]), "Battle momentum normalizes to non-retained")
+	_check(Catalog.validate_effect(effect, &"meng_huo_fixture").is_empty(), "Approved trigger schema passes validation")
+
+	var invalid_effects: Array[Dictionary] = [
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": []},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": &"unknown", "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "actions": []}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "condition": {"unknown": 1}, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "condition": {Catalog.CONDITION_KI_AT_LEAST: -1}, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "actions": [{"type": Catalog.TRIGGER_ACTION_GAIN_KI, "amount": 0}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "actions": [{"type": &"unknown"}]}]},
+	]
+	for invalid_effect: Dictionary in invalid_effects:
+		_check(not Catalog.validate_effect(invalid_effect).is_empty(), "Malformed trigger effect fails validation: %s" % str(invalid_effect))
 
 
 func _check(condition: bool, message: String) -> void:

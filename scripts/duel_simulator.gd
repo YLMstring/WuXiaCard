@@ -9,6 +9,7 @@ const Effects = preload("res://scripts/duel_effects.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Targeting = preload("res://scripts/duel_targeting.gd")
+const Triggers = preload("res://scripts/duel_triggers.gd")
 
 
 static func get_legal_actions(state: StateData) -> Array[ActionData]:
@@ -169,7 +170,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	events.append_array(Effects.resolve_on_play_effects(next_state, action.target_index, moving_owner))
 	var attack_result: Dictionary = _resolve_attacks(next_state, action.target_index, moving_owner)
 	events.append_array(attack_result["events"] as Array)
-	_finish_turn(next_state, moving_owner)
+	events.append_array(_finish_turn(next_state, moving_owner))
 	return {
 		"valid": true,
 		"state": next_state,
@@ -217,7 +218,7 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	]
 	var attack_result: Dictionary = _resolve_attacks(next_state, action.target_index, moving_owner)
 	events.append_array(attack_result["events"] as Array)
-	_finish_turn(next_state, moving_owner)
+	events.append_array(_finish_turn(next_state, moving_owner))
 	return {
 		"valid": true,
 		"state": next_state,
@@ -239,20 +240,62 @@ static func _resolve_attacks(state: StateData, source_cell: int, owner_id: int) 
 			target_cell,
 			owner_id
 		)
+		var did_flip: bool = false
 		for event: Dictionary in resolution_events:
 			var event_type := StringName(event.get("type", &""))
 			if event_type == &"card_flipped":
 				captures.append(target_cell)
+				did_flip = true
 			elif event_type == &"card_exiled":
 				exiles.append(target_cell)
 		events.append_array(resolution_events)
+		if did_flip:
+			var source_slot: Dictionary = state.board[source_cell]
+			var source_card: Dictionary = source_slot.get("card", {})
+			var trigger_groups: Array[Dictionary] = Triggers.discover(
+				state,
+				Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
+				{
+					"owner_id": owner_id,
+					"source_cell": source_cell,
+					"source_instance_id": StringName(source_card.get("instance_id", &"")),
+					"target_cell": target_cell,
+				}
+			)
+			var trigger_result: Dictionary = Triggers.resolve(state, trigger_groups)
+			events.append_array(trigger_result.get("events", []) as Array)
 	return {"captures": captures, "exiles": exiles, "events": events}
 
 
-static func _finish_turn(state: StateData, moving_owner: int) -> void:
+static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	var trigger_groups: Array[Dictionary] = Triggers.discover(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"owner_id": moving_owner}
+	)
+	var trigger_result: Dictionary = Triggers.resolve(state, trigger_groups)
+	events.append_array(trigger_result.get("events", []) as Array)
+	var extra_turn_requests: Array = trigger_result.get("extra_turn_requests", [])
+	var extra_turn_granted: bool = not extra_turn_requests.is_empty()
+	if extra_turn_granted:
+		var source_instance_ids: Array[StringName] = []
+		for request_value: Variant in extra_turn_requests:
+			var request: Dictionary = request_value
+			source_instance_ids.append(StringName(request.get("source_instance_id", &"")))
+		events.append({
+			"type": &"extra_turn_granted",
+			"owner_id": moving_owner,
+			"request_count": extra_turn_requests.size(),
+			"source_instance_ids": source_instance_ids,
+		})
 	state.turn_count += 1
 	state.state_version += 1
-	state.active_player = _get_next_active_owner(state, moving_owner)
+	if extra_turn_granted and not get_legal_actions_for_owner(state, moving_owner).is_empty():
+		state.active_player = moving_owner
+	else:
+		state.active_player = _get_next_active_owner(state, moving_owner)
+	return events
 
 
 static func _normalize_runtime_card(

@@ -35,6 +35,7 @@ func _run() -> void:
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
 	await _check_manual_activate_move()
+	await _check_meng_huo_extra_turn_presentation()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
 
 	var player_turns: int = 0
@@ -367,6 +368,34 @@ func _check_manual_activate_move() -> void:
 	_check(ki_badge.visible and ki_value.text == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(trace.has(&"ability_activated") and trace.has(&"ki_changed") and trace.has(&"card_moved"), "Controller presents the canonical activation events")
+	duel.queue_free()
+	await process_frame
+
+
+func _check_meng_huo_extra_turn_presentation() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var player_opened: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 8, false)
+	var opponent_targeted: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 5, false)
+	var meng_played: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 4, false)
+	_check(player_opened and opponent_targeted and meng_played, "Meng Huo presentation fixture uses three production actions")
+	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Meng Huo's extra turn returns control to the same player")
+	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-turn grant does not add a simulation turn by itself")
+	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
+	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
+	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
+	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Label
+	_check(int(meng_view.card_data.get("ki", -1)) == 0 and ki_badge.visible and ki_value.text == "0", "End-turn spend leaves Meng Huo's active zero bead visible")
+	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
+	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
+	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
+	_check(presentation_trace.has(&"card_flipped") and presentation_trace.has(&"extra_turn_granted"), "Capture and extra-turn feedback both use the ordered event presenter")
+	_check("Your turn" in (duel.get_node("TurnStatus") as Label).text, "Normal player status returns after extra-turn feedback")
+	_check(_count_playable(_cards_below(duel.get_node("PlayerHand"))) == _count_cards(duel.get_node("PlayerHand")), "Player hand is enabled for the granted extra turn")
+	_check(_count_playable(_cards_below(duel.get_node("OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")
 	duel.queue_free()
 	await process_frame
 

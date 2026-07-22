@@ -7,6 +7,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Effects = preload("res://scripts/duel_effects.gd")
+const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -38,6 +39,14 @@ func _run() -> void:
 	_test_flipped_activate_ability_is_lost_but_ki_remains()
 	_test_greedy_tie_prefers_play_over_spending_ki()
 	_test_search_can_choose_activate_action()
+	_test_trigger_groups_resolve_atomically()
+	_test_meng_huo_flip_gain_and_extra_turn()
+	_test_meng_huo_multiple_flips_gain_in_order()
+	_test_meng_huo_exile_grants_no_ki()
+	_test_multiple_meng_huos_drain_for_one_extra_turn()
+	_test_meng_huo_extra_turn_can_chain()
+	_test_flipped_meng_huo_loses_ability_but_keeps_ki()
+	_test_unusable_extra_turn_expires()
 
 	if _failures == 0:
 		print("DUEL_SIMULATOR_TESTS_PASSED checks=%d" % _checks)
@@ -404,6 +413,210 @@ func _test_search_can_choose_activate_action() -> void:
 	var choice: Action = Search.find_best_action(state, 2, Rules.OPPONENT_OWNER)
 	_check(choice.action_type == Action.TYPE_ACTIVATE, "Deep search considers board activate actions")
 	_check(choice.source_index == 4 and choice.target_index == 1, "Search action ordering is deterministic when activate outcomes tie")
+
+
+func _test_trigger_groups_resolve_atomically() -> void:
+	var board: Array = Rules.empty_board()
+	var first: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"trigger_first")
+	var second: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"trigger_second")
+	first["ki"] = 2
+	second["ki"] = 3
+	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var groups: Array[Dictionary] = Triggers.discover(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(groups.size() == 2, "End-turn discovery finds both eligible Meng Huos")
+	_check(int(groups[0].get("source_cell", -1)) == 0 and int(groups[1].get("source_cell", -1)) == 8, "End-turn discovery uses row-major board order")
+	var copied: State = state.duplicate_state()
+	var result: Dictionary = Triggers.resolve(copied, groups)
+	var events: Array = result.get("events", [])
+	var requests: Array = result.get("extra_turn_requests", [])
+	_check(events.size() == 2 and requests.size() == 2, "Each valid rule drains ki and preserves its request after the spend")
+	_check(int((events[0] as Dictionary).get("source_cell", -1)) == 0 and int((events[1] as Dictionary).get("source_cell", -1)) == 8, "Ki drains preserve row-major group order")
+	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "First matched rule spends all ki")
+	_check(int((((copied.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Second matched rule spends all ki")
+	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "Trigger resolution leaves its source state untouched")
+
+	var stale_state: State = state.duplicate_state()
+	var replacement: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"replacement")
+	replacement["ki"] = 5
+	stale_state.board[0] = {"card": replacement, "owner": Rules.PLAYER_OWNER}
+	var stale_result: Dictionary = Triggers.resolve(stale_state, groups)
+	_check((stale_result.get("events", []) as Array).size() == 1, "Stale instance group is ignored while other groups still resolve")
+	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot spend replacement-card ki")
+
+
+func _test_meng_huo_flip_gain_and_extra_turn() -> void:
+	var board: Array = Rules.empty_board()
+	board[5] = {
+		"card": Rules.make_card("Guard", "守", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var hand: Array = [
+		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"momentum_meng"),
+		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+	]
+	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var next_state: State = transition["state"] as State
+	var events: Array = transition.get("events", [])
+	var event_types: Array[StringName] = _event_types(events)
+	_check(event_types == [&"card_placed", &"card_flipped", &"ki_changed", &"ki_changed", &"extra_turn_granted"], "Single flip gains ki, drains it, then grants an extra turn")
+	var gain_event: Dictionary = events[2]
+	var spend_event: Dictionary = events[3]
+	_check(int(gain_event.get("previous_ki", -1)) == 0 and int(gain_event.get("ki", -1)) == 1, "Successful flip gains exactly one ki")
+	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
+	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_GAIN_KI, "Gain event identifies its generic trigger action")
+	_check(StringName(spend_event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_SPEND_ALL_KI, "Spend event identifies its generic trigger action")
+	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra turn retains the acting owner without adding a turn count")
+	_check(int((((next_state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Final simulator state stores the drained ki")
+
+
+func _test_meng_huo_multiple_flips_gain_in_order() -> void:
+	var board: Array = Rules.empty_board()
+	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
+	for target_cell: int in [1, 5, 7, 3]:
+		board[target_cell] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	var state := State.new(
+		board,
+		[
+			Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"multi_meng"),
+			Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var events: Array = transition.get("events", [])
+	var flip_targets: Array[int] = []
+	var gained_values: Array[int] = []
+	for event_value: Variant in events:
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) == &"card_flipped":
+			flip_targets.append(int(event.get("target_cell", -1)))
+		elif StringName(event.get("type", &"")) == &"ki_changed" and StringName(event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_GAIN_KI:
+			gained_values.append(int(event.get("ki", -1)))
+	_check(flip_targets == [1, 5, 7, 3], "Multi-flip attacks retain top-right-bottom-left order")
+	_check(gained_values == [1, 2, 3, 4], "Meng Huo gains one ki immediately after each actual flip")
+	_check(_count_events(events, &"extra_turn_granted") == 1, "Any amount of gained ki grants one extra turn")
+
+
+func _test_meng_huo_exile_grants_no_ki() -> void:
+	var board: Array = Rules.empty_board()
+	board[5] = {
+		"card": Rules.make_card("Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var meng: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"exile_meng")
+	(meng.get("active_effects", []) as Array).append({
+		"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP,
+		"retained_on_flip": true,
+	})
+	var state := State.new(board, [meng], [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var events: Array = transition.get("events", [])
+	_check(_count_events(events, &"card_exiled") == 1, "Fixture replaces Meng Huo's flip with exile")
+	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_turn_granted") == 0, "Exile grants no ki or extra turn")
+
+
+func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
+	var board: Array = Rules.empty_board()
+	var first: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"row_first")
+	var second: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"row_second")
+	first["ki"] = 2
+	second["ki"] = 4
+	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
+	var hand: Array = [
+		Rules.make_card("Action", "行", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+	]
+	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var events: Array = transition.get("events", [])
+	var drain_cells: Array[int] = []
+	for event_value: Variant in events:
+		var event: Dictionary = event_value
+		if StringName(event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_SPEND_ALL_KI:
+			drain_cells.append(int(event.get("source_cell", -1)))
+	_check(drain_cells == [0, 8], "Multiple Meng Huos drain in row-major order")
+	_check(_count_events(events, &"extra_turn_granted") == 1, "Multiple request tokens coalesce into one extra turn")
+	var extra_event: Dictionary = _first_event(events, &"extra_turn_granted")
+	_check(int(extra_event.get("request_count", 0)) == 2, "Coalesced event records both valid requests")
+	_check((transition["state"] as State).active_player == Rules.PLAYER_OWNER, "Coalesced extra turn retains the acting owner once")
+
+
+func _test_meng_huo_extra_turn_can_chain() -> void:
+	var board: Array = Rules.empty_board()
+	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
+	board[1] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	board[4] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	var hand: Array = [
+		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"chain_first"),
+		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"chain_second"),
+		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+	]
+	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var first_state: State = first_transition["state"] as State
+	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_turn_granted") == 1, "First Meng Huo grants the first extra turn")
+	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 3))
+	var second_state: State = second_transition["state"] as State
+	_check(second_state.active_player == Rules.PLAYER_OWNER and _count_events(second_transition.get("events", []), &"extra_turn_granted") == 1, "New ki gained during an extra turn grants another extra turn")
+	_check(second_state.turn_count == 2, "Chained extra-turn actions each increment turn count once")
+
+
+func _test_flipped_meng_huo_loses_ability_but_keeps_ki() -> void:
+	var board: Array = Rules.empty_board()
+	var meng: Dictionary = Catalog.create_instance(&"meng_huo", Rules.OPPONENT_OWNER, &"flipped_meng")
+	meng["ki"] = 3
+	board[5] = {"card": meng, "owner": Rules.OPPONENT_OWNER}
+	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
+	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var next_state: State = transition["state"] as State
+	var flipped: Dictionary = (next_state.board[5] as Dictionary)["card"]
+	_check(int(flipped.get("ki", -1)) == 3, "Flipped Meng Huo keeps accumulated ki")
+	_check(Effects.find_active_effect(flipped, Catalog.EFFECT_BATTLE_MOMENTUM).is_empty(), "Flipped Meng Huo loses battle momentum")
+	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "Battle momentum loss emits the standard loss event")
+
+
+func _test_unusable_extra_turn_expires() -> void:
+	var board: Array = Rules.empty_board()
+	board[1] = {
+		"card": Rules.make_card("Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var opponent_hand: Array = [Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)]
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"last_meng")],
+		opponent_hand,
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var next_state: State = transition["state"] as State
+	_check(_count_events(transition.get("events", []), &"extra_turn_granted") == 1, "Successful flip still grants the extra-turn event")
+	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra turn expires when its owner has no legal action")
+
+
+func _event_types(events: Array) -> Array[StringName]:
+	var types: Array[StringName] = []
+	for event_value: Variant in events:
+		types.append(StringName((event_value as Dictionary).get("type", &"")))
+	return types
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) == event_type:
+			return event
+	return {}
 
 
 func _count_events(events: Array, event_type: StringName) -> int:

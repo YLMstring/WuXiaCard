@@ -78,9 +78,9 @@ func _refresh_face_content() -> void:
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.visible = not face_down
 	var ki: int = int(card_data.get("ki", 0))
-	var has_activate: bool = not Effects.get_activate_effect(card_data).is_empty()
+	var has_ki_ability: bool = Effects.card_uses_ki(card_data)
 	ki_value.text = str(ki)
-	ki_badge.visible = not face_down and (ki > 0 or has_activate)
+	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else str(card_data.get("glyph", "?"))
 	if face_down:
@@ -98,6 +98,32 @@ func _refresh_face_content() -> void:
 func set_playable(value: bool) -> void:
 	playable = value
 	_update_cursor()
+
+
+func set_runtime_ki(value: int) -> void:
+	card_data["ki"] = maxi(value, 0)
+	_refresh_face_content()
+
+
+func play_ki_gain_pulse(duration: float) -> void:
+	if not ki_badge.visible or duration <= 0.0:
+		return
+	ki_badge.pivot_offset = ki_badge.size * 0.5
+	var resting_modulate: Color = ki_badge.modulate
+	var pulse_tween: Tween = create_tween()
+	pulse_tween.set_parallel(true)
+	pulse_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pulse_tween.tween_property(ki_badge, "scale", Vector2(1.22, 1.22), duration * 0.45)
+	pulse_tween.tween_property(ki_badge, "modulate", Color(0.65, 1.0, 0.72, 1.0), duration * 0.45)
+	await pulse_tween.finished
+	var settle_tween: Tween = create_tween()
+	settle_tween.set_parallel(true)
+	settle_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	settle_tween.tween_property(ki_badge, "scale", Vector2.ONE, duration * 0.55)
+	settle_tween.tween_property(ki_badge, "modulate", resting_modulate, duration * 0.55)
+	await settle_tween.finished
+	ki_badge.scale = Vector2.ONE
+	ki_badge.modulate = resting_modulate
 
 
 func set_card_owner(new_owner_id: int) -> void:
