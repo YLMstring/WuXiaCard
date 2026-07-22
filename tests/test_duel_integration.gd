@@ -383,6 +383,17 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
+	var extra_turn_vfx: Control = duel.get_node_or_null("ExtraTurnVfx") as Control
+	_check(extra_turn_vfx != null, "Duel scene contains the reusable extra-turn VFX overlay")
+	if extra_turn_vfx != null:
+		_check(extra_turn_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Extra-turn VFX never intercepts input")
+		_check(
+			extra_turn_vfx.has_method("play_convergence")
+			and extra_turn_vfx.has_method("debug_get_last_bead_count")
+			and extra_turn_vfx.has_method("debug_get_pulse_count")
+			and extra_turn_vfx.has_method("debug_is_clean"),
+			"Extra-turn overlay exposes reusable playback and cleanup diagnostics"
+		)
 	var player_opened: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 8, false)
 	var opponent_targeted: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 5, false)
 	var meng_played: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 4, false)
@@ -398,6 +409,41 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
 	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(presentation_trace.has(&"card_flipped") and presentation_trace.has(&"extra_turn_granted"), "Capture and extra-turn feedback both use the ordered event presenter")
+	if extra_turn_vfx != null and extra_turn_vfx.has_method("debug_get_last_bead_count"):
+		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 1, "One granting Meng Huo produces one convergence bead")
+		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 1, "One granted extra turn produces one board pulse")
+		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Fast-mode extra-turn playback leaves no temporary visuals")
+		var board_cards: Array = duel.get("board_cards") as Array
+		var second_source: CardView = board_cards[8] as CardView
+		await extra_turn_vfx.call(
+			"play_convergence",
+			[meng_view, meng_view],
+			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			0.0,
+			0.0,
+			Color("e3b84f")
+		)
+		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 1, "Duplicate granting sources are deduplicated")
+		await extra_turn_vfx.call(
+			"play_convergence",
+			[meng_view, second_source],
+			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			0.0,
+			0.0,
+			Color("e3b84f")
+		)
+		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 2, "Multiple valid sources produce concurrent convergence beads")
+		var pulses_before_missing: int = int(extra_turn_vfx.call("debug_get_pulse_count"))
+		await extra_turn_vfx.call(
+			"play_convergence",
+			[],
+			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			0.0,
+			0.0,
+			Color("e3b84f")
+		)
+		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == pulses_before_missing + 1, "Missing source views still produce the board pulse")
+		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Repeated and source-less playback cleans up completely")
 	_check("Your turn" in (duel.get_node("TurnStatus") as Label).text, "Normal player status returns after extra-turn feedback")
 	_check(_count_playable(_cards_below(duel.get_node("PlayerHand"))) == _count_cards(duel.get_node("PlayerHand")), "Player hand is enabled for the granted extra turn")
 	_check(_count_playable(_cards_below(duel.get_node("OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")

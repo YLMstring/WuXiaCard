@@ -16,6 +16,7 @@ const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
+const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -29,7 +30,9 @@ const SearchSession = preload("res://scripts/duel_search_session.gd")
 @export var movement_audio_volume_db: float = -9.0
 @export var movement_trail_duration: float = 0.18
 @export var ki_gain_pulse_duration: float = 0.18
+@export var extra_turn_convergence_duration: float = 0.30
 @export var extra_turn_status_duration: float = 0.35
+@export var extra_turn_effect_color: Color = Color("e3b84f")
 @export var draw_bloom_duration: float = 0.12
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
@@ -71,6 +74,7 @@ var _last_search_report: Dictionary = {}
 @onready var opponent_score: Label = $ScoreOverlay/OpponentScorePanel/OpponentScore
 @onready var player_score: Label = $ScoreOverlay/PlayerScorePanel/PlayerScore
 @onready var turn_status: Label = $TurnStatus
+@onready var extra_turn_vfx: ExtraTurnVfxData = $ExtraTurnVfx
 @onready var drag_layer: Control = $DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
@@ -130,6 +134,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_post_effect_gap = 0.0
 		movement_trail_duration = 0.0
 		ki_gain_pulse_duration = 0.0
+		extra_turn_convergence_duration = 0.0
 		extra_turn_status_duration = 0.0
 		opponent_think_delay = 0.0
 		opponent_search_budget_seconds = 0.0
@@ -625,12 +630,22 @@ func _present_ki_changed_event(event: Dictionary) -> void:
 		await card.play_ki_gain_pulse(ki_gain_pulse_duration)
 
 
-func _present_extra_turn_event(_event: Dictionary) -> void:
+func _present_extra_turn_event(event: Dictionary) -> void:
 	_presentation_trace.append(&"extra_turn_granted")
 	turn_status.text = "Extra turn"
-	turn_status.modulate = Color("2f7664")
-	if extra_turn_status_duration > 0.0:
-		await get_tree().create_timer(extra_turn_status_duration).timeout
+	turn_status.modulate = extra_turn_effect_color
+	var source_controls: Array[Control] = []
+	for source_value: Variant in event.get("source_instance_ids", []):
+		var source_card: CardView = _get_board_card_view_by_instance(StringName(source_value))
+		if source_card != null:
+			source_controls.append(source_card)
+	await extra_turn_vfx.play_convergence(
+		source_controls,
+		board_grid.get_global_rect(),
+		extra_turn_convergence_duration,
+		extra_turn_status_duration,
+		extra_turn_effect_color
+	)
 	turn_status.modulate = Color.WHITE
 
 
