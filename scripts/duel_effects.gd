@@ -76,21 +76,7 @@ static func find_active_effect(card: Dictionary, effect_id: StringName) -> Dicti
 
 
 static func card_uses_ki(card: Dictionary) -> bool:
-	if not get_activate_effect(card).is_empty():
-		return true
-	var active_effects: Array = card.get("active_effects", [])
-	for effect_value: Variant in active_effects:
-		var effect: Dictionary = effect_value
-		var triggers: Array = effect.get("triggers", [])
-		for trigger_value: Variant in triggers:
-			var trigger: Dictionary = trigger_value
-			var actions: Array = trigger.get("actions", [])
-			for action_value: Variant in actions:
-				var action: Dictionary = action_value
-				var action_type := StringName(action.get("type", &""))
-				if action_type in [Catalog.TRIGGER_ACTION_GAIN_KI, Catalog.TRIGGER_ACTION_SPEND_ALL_KI]:
-					return true
-	return false
+	return not get_activate_effect(card).is_empty()
 
 
 static func replace_activate_effect(card: Dictionary, new_effect: Dictionary) -> void:

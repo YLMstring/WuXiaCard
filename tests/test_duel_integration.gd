@@ -388,7 +388,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Label
-	_check(int(meng_view.card_data.get("ki", -1)) == 0 and ki_badge.visible and ki_value.text == "0", "End-turn spend leaves Meng Huo's active zero bead visible")
+	_check(int(meng_view.card_data.get("ki", -1)) == 0 and not ki_badge.visible and ki_value.text == "0", "End-turn spend hides Meng Huo's zero-ki bead because he has no activate ability")
 	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
 	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
 	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
