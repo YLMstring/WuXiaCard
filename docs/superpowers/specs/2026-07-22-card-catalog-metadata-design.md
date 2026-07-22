@@ -22,7 +22,7 @@ Every definition in `CardCatalog` must contain these flat fields:
 }
 ```
 
-The old `name` field is removed from both definitions and production runtime instances. `glyph` is the only card display name from this point forward; it may contain one or more characters despite the historical field name.
+The old `name` field is removed from both definitions and production runtime instances. `glyph` is the only card display name from this point forward; it contains between one and seven characters despite the historical field name.
 
 `sect`, `weapon`, `description`, and `flavor` are ordinary `String` values. They are required but may be empty during this migration. `tier` is a required integer of at least `1`. All existing cards initially use empty text metadata and tier `1`; no faction, equipment, rules text, or lore is invented in this change.
 
@@ -38,7 +38,7 @@ Production code must not read or synthesize `name`. The simulator's missing-`car
 
 Catalog validation requires:
 
-- a non-empty `glyph` string;
+- a `glyph` string containing between one and seven characters;
 - present `sect`, `weapon`, `description`, and `flavor` fields whose values are strings;
 - a present integer `tier` of at least `1`;
 - the existing ID, powers, starting-ki, effect, trigger, and activation rules;
@@ -48,15 +48,19 @@ Empty metadata strings are valid for now. Validation becomes stricter later only
 
 ## Consumers and Compatibility
 
-`CardView` continues to display `glyph`. The user's disabled-tooltip behavior remains unchanged. Tests that previously used production `name` to confirm hidden-card data or state-copy isolation switch to `glyph` and the new metadata fields.
+`CardView` displays `glyph` as a centered vertical title. Titles of one through four characters use one column. Titles of five through seven characters use two balanced columns: the left column receives the first `ceil(character_count / 2)` characters from top to bottom, then the remaining characters fill the right column from top to bottom. The rendered title uses responsive font sizing, but the raw `glyph` stored in card data is never modified.
 
-No visual layout, duel rules, AI evaluation, deck composition, or effect behavior changes in this migration.
+The user's disabled-tooltip behavior remains unchanged. Tests that previously used production `name` to confirm hidden-card data or state-copy isolation switch to `glyph` and the new metadata fields.
+
+Apart from the responsive vertical card title, no visual layout, duel rules, AI evaluation, deck composition, or effect behavior changes in this migration.
 
 ## Testing
 
 Automated tests verify that:
 
 - every catalog definition has the new required fields and no `name`;
+- glyph validation accepts lengths one through seven and rejects empty or overlong titles;
+- card titles render in the specified top-to-bottom, then left-to-right order for both one- and two-column cases;
 - invalid metadata types and tiers fail validation;
 - production instances copy all metadata and omit `name`;
 - returned definitions and runtime instances remain deep-copy isolated;
