@@ -126,7 +126,7 @@ func _prepare_geometry(source_controls: Array, board_global_rect: Rect2) -> void
 		seen_sources[source_id] = true
 		var source_rect: Rect2 = source.get_global_rect()
 		_beads.append({
-			"start": _global_to_local(source_rect.position + source_rect.size * Vector2(0.82, 0.18)),
+			"start": _global_to_local(source_rect.position + source_rect.size * Vector2(0.82, 0.82)),
 			"end": _global_to_local(source_rect.get_center()),
 		})
 	_last_bead_count = _beads.size()
