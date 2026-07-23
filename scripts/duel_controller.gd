@@ -1046,7 +1046,7 @@ func _layout_duel() -> void:
 
 	var score_width: float = minf(46.0, size.x * 0.085)
 	var score_x: float = minf(size.x - horizontal_margin - score_width, board_position.x + board_width + 8.0)
-	score_overlay.position = Vector2(score_x, board_position.y + board_height * 0.5 - 60.0)
+	score_overlay.position = Vector2(score_x, board_position.y + board_height * 0.5 - 51.5)
 	score_overlay.size = Vector2(score_width, 120.0)
 	var desired_status_y: float = player_hand.position.y + player_hand.size.y + status_gap
 	var maximum_status_y: float = size.y - bottom_safe_margin - status_height
