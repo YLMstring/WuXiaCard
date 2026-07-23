@@ -24,7 +24,7 @@ func _run() -> void:
 
 	_check_layout(duel)
 	_check_card_edge_labels(duel)
-	_check_vertical_card_titles()
+	await _check_card_picture_layout()
 	_check_hand_slots(duel.get_node("PlayerHand"))
 	_check_hand_slots(duel.get_node("OpponentHand"))
 	_check_catalog_hands(duel)
@@ -112,27 +112,50 @@ func _check_card_edge_labels(duel: Node) -> void:
 	_check(not top_label.text.is_empty() and not right_label.text.is_empty() and not bottom_label.text.is_empty() and not left_label.text.is_empty(), "All four edge powers contain display text")
 
 
-func _check_vertical_card_titles() -> void:
-	_check(CARD_SCRIPT.format_vertical_title("甲") == "甲", "One-character titles remain centered as one glyph")
-	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁") == "甲\n乙\n丙\n丁", "Four-character titles fill one column from top to bottom")
-	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁戊") == "甲　丁\n乙　戊\n丙　　", "Five-character titles continue into the right column after filling the left")
-	var seven_character_title: String = "甲　戊\n乙　己\n丙　庚\n丁　　"
-	_check(CARD_SCRIPT.format_vertical_title("甲乙丙丁戊己庚") == seven_character_title, "Seven-character titles fill balanced columns top-to-bottom then left-to-right")
-
+func _check_card_picture_layout() -> void:
 	var card: Control = CARD_SCENE.instantiate()
 	root.add_child(card)
 	card.size = Vector2(96.0, 128.0)
 	card.call("configure", {
-		"glyph": "甲乙丙丁戊己庚",
+		"picture": "res://pics/LKT010_001.png",
 		"powers": [1, 2, 3, 4],
 		"ki": 0,
 		"active_effects": [],
 	}, Rules.PLAYER_OWNER, false)
-	var title_label: Label = card.get_node("Overlay/ArtPlaceholder") as Label
-	_check(title_label.text == seven_character_title, "CardView applies the vertical formatter to a seven-character title")
-	_check(title_label.horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER and title_label.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "Multi-character titles remain centered on the card")
-	_check(title_label.get_theme_font_size("font_size") >= 10, "Multi-character titles receive a legible responsive font size")
+	await process_frame
+	var picture: TextureRect = card.get_node("Overlay/CardPicture") as TextureRect
+	_check(picture.visible and picture.texture != null, "A face-up catalog picture loads into the card view")
+	_check(picture.size.is_equal_approx(Vector2(76.8, 76.8)), "A 96x128 card gives its picture 80% of the shorter side")
+	_check(picture.position.is_equal_approx(Vector2(9.6, 25.6)), "The square picture is centered on both card axes")
+	_check(picture.expand_mode == TextureRect.EXPAND_IGNORE_SIZE, "Picture dimensions never enlarge the card")
+	_check(picture.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED, "Picture keeps its source aspect ratio without cropping")
+	for power_name: String in ["TopPower", "RightPower", "BottomPower", "LeftPower"]:
+		var power_label: Label = card.get_node("Overlay/%s" % power_name) as Label
+		_check(power_label.z_index > picture.z_index, "%s renders above the card picture" % power_name)
+
+	card.size = Vector2(80.0, 120.0)
+	await process_frame
+	_check(picture.size.is_equal_approx(Vector2(64.0, 64.0)), "Picture recomputes its 80% square after a card resize")
+	_check(picture.position.is_equal_approx(Vector2(8.0, 28.0)), "Resized picture remains exactly centered")
+	card.call("set_face_down", true)
+	_check(not picture.visible and (card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆", "Face-down cards hide pictures and retain the existing card back")
+	card.call("set_face_down", false)
+	_check(picture.visible and picture.texture != null, "Revealing restores the same face picture")
 	card.queue_free()
+	await process_frame
+
+	var blank_fixture: Control = CARD_SCENE.instantiate()
+	root.add_child(blank_fixture)
+	blank_fixture.call("configure", {
+		"powers": [1, 1, 1, 1],
+		"ki": 0,
+		"active_effects": [],
+	}, Rules.PLAYER_OWNER, false)
+	await process_frame
+	var blank_picture: TextureRect = blank_fixture.get_node("Overlay/CardPicture") as TextureRect
+	_check(not blank_picture.visible and blank_picture.texture == null, "Picture-less test fixtures remain valid blank-faced cards")
+	blank_fixture.queue_free()
+	await process_frame
 
 
 func _check_hand_slots(container: Node) -> void:
@@ -256,6 +279,7 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 			all_private_data_retained
 			and not card_data.has("name")
 			and not String(card_data.get("glyph", "")).is_empty()
+			and not String(card_data.get("picture", "")).is_empty()
 			and typeof(card_data.get("description", null)) == TYPE_STRING
 			and (card_data.get("powers", []) as Array).size() == 4
 		)
@@ -267,6 +291,7 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 			and not (card.get_node("Overlay/RightPower") as Label).visible
 			and not (card.get_node("Overlay/BottomPower") as Label).visible
 			and not (card.get_node("Overlay/LeftPower") as Label).visible
+			and not (card.get_node("Overlay/CardPicture") as TextureRect).visible
 			and card.tooltip_text.is_empty()
 		)
 	_check(all_concealed, "Normal mode presents every remaining opponent card face-down without power or tooltip leaks")
@@ -281,12 +306,14 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 		first_card.call("set_face_down", false)
 		var powers: Array = first_data.get("powers", [])
 		_check(not bool(first_card.call("is_face_down")), "Repeated reveal calls leave the card face-up")
-		_check((first_card.get_node("Overlay/ArtPlaceholder") as Label).text == CARD_SCRIPT.format_vertical_title(str(first_data.get("glyph", "?"))), "Revealing restores the formatted opponent card title from retained data")
+		var revealed_picture: TextureRect = first_card.get_node("Overlay/CardPicture") as TextureRect
+		_check(revealed_picture.visible and revealed_picture.texture != null and revealed_picture.texture.resource_path == String(first_data.get("picture", "")), "Revealing restores the opponent picture from retained data")
+		_check((first_card.get_node("Overlay/ArtPlaceholder") as Label).text.is_empty(), "Face-up cards keep the disabled glyph display empty")
 		_check((first_card.get_node("Overlay/TopPower") as Label).visible and (first_card.get_node("Overlay/TopPower") as Label).text == str(powers[0]), "Revealing restores visible power labels from retained data")
 		_check(first_card.tooltip_text.is_empty(), "Revealing keeps the disabled card tooltip empty")
 		first_card.call("set_face_down", true)
 		first_card.call("set_face_down", true)
-		_check(bool(first_card.call("is_face_down")) and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent")
+		_check(bool(first_card.call("is_face_down")) and not revealed_picture.visible and (first_card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆" and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent and restore the card back")
 
 
 func _check_focus_loss_return() -> void:

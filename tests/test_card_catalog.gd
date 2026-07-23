@@ -40,6 +40,18 @@ func _test_catalog_validation() -> void:
 
 func _test_catalog_definitions() -> void:
 	var observed_ids: Dictionary = {}
+	var expected_pictures: Dictionary = {
+		&"xu_shu": "res://pics/LKT010_001.png",
+		&"gate_general": "res://pics/LKT010_002.png",
+		&"meng_huo": "res://pics/LKT010_003.png",
+		&"jiang_wei": "res://pics/LKT010_004.png",
+		&"fa_zheng": "res://pics/LKT010_005.png",
+		&"zhang_ren": "res://pics/LKT010_006.png",
+		&"fire_envoy": "res://pics/LKT010_007.png",
+		&"tiger_general": "res://pics/LKT010_008.png",
+		&"strategist": "res://pics/LKT010_009.png",
+		&"sun_zan": "res://pics/LKT010_010.png",
+	}
 	for card_id: StringName in Catalog.get_all_card_ids():
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		_check(not definition.is_empty(), "Card %s resolves to a definition" % card_id)
@@ -47,6 +59,9 @@ func _test_catalog_definitions() -> void:
 		_check(not definition.has("name"), "Card %s omits the retired name field" % card_id)
 		var glyph: Variant = definition.get("glyph", null)
 		_check(typeof(glyph) == TYPE_STRING and (glyph as String).length() >= 1 and (glyph as String).length() <= 7, "Card %s has a 1-7 character glyph title" % card_id)
+		var picture: Variant = definition.get("picture", null)
+		_check(typeof(picture) == TYPE_STRING and picture == expected_pictures[card_id], "Card %s maps to its approved picture" % card_id)
+		_check(typeof(picture) == TYPE_STRING and ResourceLoader.exists(String(picture)), "Card %s picture resource exists" % card_id)
 		for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
 			_check(definition.has(metadata_key) and typeof(definition[metadata_key]) == TYPE_STRING, "Card %s has String metadata %s" % [card_id, metadata_key])
 		_check(typeof(definition.get("tier", null)) == TYPE_INT and int(definition["tier"]) >= 1, "Card %s has a positive integer tier" % card_id)
@@ -70,6 +85,10 @@ func _test_definition_schema_validation() -> void:
 		valid_fixture["glyph"] = invalid_glyph
 		_check(not Catalog.validate_definition(valid_fixture).is_empty(), "Invalid glyph %s fails definition validation" % str(invalid_glyph))
 	valid_fixture["glyph"] = "甲"
+	for invalid_picture: Variant in ["", 1, "res://pics/does_not_exist.png"]:
+		var invalid_picture_definition: Dictionary = valid_fixture.duplicate(true)
+		invalid_picture_definition["picture"] = invalid_picture
+		_check(not Catalog.validate_definition(invalid_picture_definition).is_empty(), "Invalid picture %s fails validation" % str(invalid_picture))
 	for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
 		var invalid_metadata: Dictionary = valid_fixture.duplicate(true)
 		invalid_metadata[metadata_key] = 1
@@ -87,7 +106,7 @@ func _test_definition_schema_validation() -> void:
 
 	var instance: Dictionary = Catalog.create_instance(&"xu_shu", 1, &"metadata_fixture")
 	_check(not instance.has("name"), "Production runtime instances omit retired name metadata")
-	for metadata_key: StringName in [&"glyph", &"sect", &"weapon", &"description", &"flavor"]:
+	for metadata_key: StringName in [&"glyph", &"picture", &"sect", &"weapon", &"description", &"flavor"]:
 		_check(instance.has(metadata_key) and typeof(instance[metadata_key]) == TYPE_STRING, "Runtime instance copies String metadata %s" % metadata_key)
 	_check(int(instance.get("tier", 0)) == 1, "Runtime instance copies tier metadata")
 

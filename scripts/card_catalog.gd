@@ -46,6 +46,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"xu_shu": {
 		"id": &"xu_shu",
 		"glyph": "徐",
+		"picture": "res://pics/LKT010_001.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -57,6 +58,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"gate_general": {
 		"id": &"gate_general",
 		"glyph": "关",
+		"picture": "res://pics/LKT010_002.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -73,6 +75,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"meng_huo": {
 		"id": &"meng_huo",
 		"glyph": "孟",
+		"picture": "res://pics/LKT010_003.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -104,6 +107,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"jiang_wei": {
 		"id": &"jiang_wei",
 		"glyph": "姜",
+		"picture": "res://pics/LKT010_004.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -122,6 +126,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"fa_zheng": {
 		"id": &"fa_zheng",
 		"glyph": "法",
+		"picture": "res://pics/LKT010_005.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -138,6 +143,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"zhang_ren": {
 		"id": &"zhang_ren",
 		"glyph": "张",
+		"picture": "res://pics/LKT010_006.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -149,6 +155,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"fire_envoy": {
 		"id": &"fire_envoy",
 		"glyph": "火",
+		"picture": "res://pics/LKT010_007.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -160,6 +167,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"tiger_general": {
 		"id": &"tiger_general",
 		"glyph": "虎",
+		"picture": "res://pics/LKT010_008.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -176,6 +184,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"strategist": {
 		"id": &"strategist",
 		"glyph": "策",
+		"picture": "res://pics/LKT010_009.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -192,6 +201,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"sun_zan": {
 		"id": &"sun_zan",
 		"glyph": "孙",
+		"picture": "res://pics/LKT010_010.png",
 		"sect": "",
 		"tier": 1,
 		"weapon": "",
@@ -234,6 +244,7 @@ static func create_instance(
 		"instance_id": instance_id,
 		"card_id": card_id,
 		"glyph": String(definition["glyph"]),
+		"picture": String(definition["picture"]),
 		"sect": String(definition["sect"]),
 		"tier": int(definition["tier"]),
 		"weapon": String(definition["weapon"]),
@@ -298,6 +309,11 @@ static func _validate_definition(
 		var glyph_length: int = (glyph_value as String).length()
 		if glyph_length < 1 or glyph_length > 7:
 			errors.append("Card %s glyph must contain 1 to 7 characters" % card_id)
+	var picture_value: Variant = definition.get("picture", null)
+	if typeof(picture_value) != TYPE_STRING or String(picture_value).is_empty():
+		errors.append("Card %s requires a non-empty String picture" % card_id)
+	elif not ResourceLoader.exists(String(picture_value)):
+		errors.append("Card %s picture resource does not exist: %s" % [card_id, picture_value])
 	for metadata_key: StringName in [&"sect", &"weapon", &"description", &"flavor"]:
 		if not definition.has(metadata_key) or typeof(definition[metadata_key]) != TYPE_STRING:
 			errors.append("Card %s requires String metadata %s" % [card_id, metadata_key])

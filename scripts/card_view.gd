@@ -8,6 +8,7 @@ signal drag_ended(card: CardView, pointer_position: Vector2)
 @export var touch_drag_offset: float = 48.0
 
 const CARD_BACK_GLYPH: String = "◆"
+const CARD_PICTURE_SCALE: float = 0.8
 const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Effects = preload("res://scripts/duel_effects.gd")
@@ -24,6 +25,7 @@ var _home_parent: Node = null
 var _home_index: int = -1
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
+@onready var card_picture: TextureRect = $Overlay/CardPicture
 @onready var ink_slash: ColorRect = $Overlay/InkSlash
 @onready var ink_bloom: InkBloom = $Overlay/InkBloom
 @onready var top_power: Label = $Overlay/TopPower
@@ -85,8 +87,23 @@ func _refresh_face_content() -> void:
 	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else ""
+	_refresh_picture()
 	_update_title_font_size()
 	tooltip_text = ""
+
+
+func _refresh_picture() -> void:
+	if face_down:
+		card_picture.visible = false
+		return
+	var picture_path: String = String(card_data.get("picture", ""))
+	if picture_path.is_empty() or not ResourceLoader.exists(picture_path):
+		card_picture.texture = null
+		card_picture.visible = false
+		return
+	if card_picture.texture == null or card_picture.texture.resource_path != picture_path:
+		card_picture.texture = load(picture_path) as Texture2D
+	card_picture.visible = card_picture.texture != null
 
 
 func set_playable(value: bool) -> void:
@@ -337,6 +354,9 @@ func _try_end_drag(pointer_position: Vector2, pointer_id: int) -> void:
 func _on_resized() -> void:
 	pivot_offset = size * 0.5
 	var short_side: float = minf(size.x, size.y)
+	var picture_side: float = short_side * CARD_PICTURE_SCALE
+	card_picture.size = Vector2.ONE * picture_side
+	card_picture.position = (size - card_picture.size) * 0.5
 	var power_size: int = maxi(14, int(short_side * 0.2))
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.add_theme_font_size_override("font_size", power_size)
