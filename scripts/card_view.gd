@@ -71,29 +71,6 @@ func is_face_down() -> bool:
 	return face_down
 
 
-static func format_vertical_title(raw_title: String) -> String:
-	var character_count: int = raw_title.length()
-	if character_count <= 0:
-		return "?"
-	if character_count <= MAX_TITLE_ROWS:
-		var single_column: Array[String] = []
-		for index: int in character_count:
-			single_column.append(raw_title.substr(index, 1))
-		return "\n".join(single_column)
-
-	var left_column_count: int = ceili(character_count / 2.0)
-	var right_column_count: int = character_count - left_column_count
-	var rows: Array[String] = []
-	for row: int in left_column_count:
-		var row_text: String = raw_title.substr(row, 1) + FULL_WIDTH_SPACE
-		if row < right_column_count:
-			row_text += raw_title.substr(left_column_count + row, 1)
-		else:
-			row_text += FULL_WIDTH_SPACE
-		rows.append(row_text)
-	return "\n".join(rows)
-
-
 func _refresh_face_content() -> void:
 	var powers: Array = card_data.get("powers", [0, 0, 0, 0])
 	top_power.text = str(powers[DuelRules.TOP])
@@ -107,7 +84,7 @@ func _refresh_face_content() -> void:
 	ki_value.text = str(ki)
 	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
-	art_placeholder.text = CARD_BACK_GLYPH if face_down else format_vertical_title(str(card_data.get("glyph", "?")))
+	art_placeholder.text = CARD_BACK_GLYPH if face_down else ""
 	_update_title_font_size()
 	tooltip_text = ""
 
