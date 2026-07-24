@@ -140,7 +140,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 15
 text = "特效"
 
 [node name="Description" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
@@ -161,7 +161,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 15
 text = "背景"
 
 [node name="Flavor" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
@@ -169,7 +169,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 15
 text = "华山剑法的绝招。"
 autowrap_mode = 3
 
