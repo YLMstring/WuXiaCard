@@ -16,6 +16,7 @@ const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
+const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 
 @export var board_aspect_ratio: float = 0.78
@@ -61,6 +62,10 @@ var _opponent_search_session: SearchSession = null
 var _opponent_search_started_usec: int = 0
 var _opponent_search_test_limits: Dictionary = {}
 var _last_search_report: Dictionary = {}
+var _inspection_open: bool = false
+var _board_visible_before_inspection: bool = true
+var _scores_visible_before_inspection: bool = true
+var _status_before_inspection: String = ""
 
 @onready var board_grid: GridContainer = $BoardCenter/BoardGrid
 @onready var top_bar: HBoxContainer = $TopBar
@@ -74,6 +79,7 @@ var _last_search_report: Dictionary = {}
 @onready var opponent_score: Label = $ScoreOverlay/OpponentScorePanel/OpponentScore
 @onready var player_score: Label = $ScoreOverlay/PlayerScorePanel/PlayerScore
 @onready var turn_status: Label = $TurnStatus
+@onready var card_inspector: CardInspectorData = $CardInspector
 @onready var extra_turn_vfx: ExtraTurnVfxData = $ExtraTurnVfx
 @onready var drag_layer: Control = $DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
@@ -107,6 +113,7 @@ func _ready() -> void:
 	_create_placeholder_audio()
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
+	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
 	opponent_name.text = "Shen Lian"
@@ -145,6 +152,8 @@ func debug_set_fast_mode(enabled: bool) -> void:
 func debug_place_player_card(hand_index: int, cell_index: int) -> bool:
 	var action: ActionData = ActionData.make_play(hand_index, cell_index)
 	if (
+		_inspection_open
+		or
 		turn_state != TurnState.PLAYER
 		or duel_state == null
 		or duel_state.active_player != DuelRules.PLAYER_OWNER
@@ -230,6 +239,19 @@ func debug_is_search_running() -> bool:
 	return _opponent_search_session != null and _opponent_search_session.is_running()
 
 
+func debug_is_inspection_open() -> bool:
+	return _inspection_open and card_inspector.is_open()
+
+
+func debug_open_inspection(card_data: Dictionary) -> bool:
+	_on_card_inspection_requested(card_data)
+	return debug_is_inspection_open()
+
+
+func debug_close_inspection() -> void:
+	card_inspector.close()
+
+
 func debug_set_search_limits(budget_seconds: float, test_limits: Dictionary = {}) -> void:
 	opponent_search_budget_seconds = maxf(budget_seconds, 0.0)
 	_opponent_search_test_limits = test_limits.duplicate(true)
@@ -294,7 +316,7 @@ func debug_commit_move(
 	cell_index: int,
 	continue_automatically: bool = false
 ) -> bool:
-	if duel_state == null or duel_state.active_player != owner_id:
+	if _inspection_open or duel_state == null or duel_state.active_player != owner_id:
 		return false
 	var card: CardView = _get_card_view_for_logical_index(owner_id, hand_index)
 	if card == null:
@@ -312,7 +334,7 @@ func debug_commit_activate(
 	target_cell: int,
 	continue_automatically: bool = false
 ) -> bool:
-	if duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
+	if _inspection_open or duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
 		return false
 	var card := board_cards[source_cell] as CardView
 	var effect: Dictionary = DuelEffects.get_activate_effect(card.card_data)
@@ -410,6 +432,7 @@ func _spawn_card_in_slot(slot: PanelContainer, card_data: Dictionary, owner_id: 
 	card.drag_started.connect(_on_card_drag_started)
 	card.drag_moved.connect(_on_card_drag_moved)
 	card.drag_ended.connect(_on_card_drag_ended)
+	card.inspection_requested.connect(_on_card_inspection_requested)
 	return card
 
 
@@ -448,6 +471,31 @@ func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	_clear_drag_context()
 
 
+func _on_card_inspection_requested(card_data: Dictionary) -> void:
+	if _inspection_open or turn_state == TurnState.RESOLVING:
+		return
+	_inspection_open = true
+	_board_visible_before_inspection = board_grid.visible
+	_scores_visible_before_inspection = score_overlay.visible
+	_status_before_inspection = turn_status.text
+	board_grid.visible = false
+	score_overlay.visible = false
+	_sync_hand_playability()
+	turn_status.text = "Inspecting · tap anywhere to return"
+	card_inspector.present(card_data, _get_board_rect())
+
+
+func _on_card_inspection_closed() -> void:
+	if not _inspection_open:
+		return
+	_inspection_open = false
+	board_grid.visible = _board_visible_before_inspection
+	score_overlay.visible = _scores_visible_before_inspection
+	turn_status.text = _status_before_inspection
+	_sync_hand_playability()
+	_update_turn_status()
+
+
 func _return_card_home(card: CardView) -> void:
 	var home_parent: Node = card.get_home_parent()
 	if home_parent == null or not is_instance_valid(home_parent):
@@ -469,7 +517,7 @@ func _commit_card(
 	owner_id: int,
 	continue_automatically: bool = true
 ) -> void:
-	if duel_state == null or duel_state.active_player != owner_id:
+	if _inspection_open or duel_state == null or duel_state.active_player != owner_id:
 		return
 	var instance_id: StringName = _get_card_instance_id(card)
 	var hand_index: int = _get_logical_hand_index(owner_id, instance_id)
@@ -690,11 +738,14 @@ func _perform_opponent_turn() -> void:
 		while is_inside_tree() and not session.is_complete():
 			var progress: Dictionary = session.get_progress()
 			var elapsed: float = float(Time.get_ticks_usec() - _opponent_search_started_usec) / 1_000_000.0
-			turn_status.text = "Shen Lian considers… %.1fs · depth %d" % [
-				elapsed,
-				int(progress.get("completed_depth", 0)),
-			]
+			if not _inspection_open:
+				turn_status.text = "Shen Lian considers… %.1fs · depth %d" % [
+					elapsed,
+					int(progress.get("completed_depth", 0)),
+				]
 			await get_tree().process_frame
+	while is_inside_tree() and _inspection_open:
+		await get_tree().process_frame
 	if not is_inside_tree():
 		return
 	var search_result: Dictionary = session.finish_and_get_result()
@@ -776,13 +827,15 @@ func _finish_match() -> void:
 func _sync_hand_playability() -> void:
 	for card: CardView in _get_cards_in_hand(player_hand):
 		card.set_playable(
-			turn_state == TurnState.PLAYER
+			not _inspection_open
+			and turn_state == TurnState.PLAYER
 			and duel_state != null
 			and duel_state.active_player == DuelRules.PLAYER_OWNER
 		)
 	for card: CardView in _get_cards_in_hand(opponent_hand):
 		card.set_playable(
-			testing_mode
+			not _inspection_open
+			and testing_mode
 			and turn_state == TurnState.OPPONENT
 			and duel_state != null
 			and duel_state.active_player == DuelRules.OPPONENT_OWNER
@@ -795,11 +848,15 @@ func _sync_hand_playability() -> void:
 			(board_card.owner_id == DuelRules.PLAYER_OWNER and turn_state == TurnState.PLAYER)
 			or (board_card.owner_id == DuelRules.OPPONENT_OWNER and testing_mode and turn_state == TurnState.OPPONENT)
 		)
-		board_card.set_playable(can_control_owner and _has_legal_activate_from(cell_index))
+		board_card.set_playable(
+			not _inspection_open
+			and can_control_owner
+			and _has_legal_activate_from(cell_index)
+		)
 
 
 func _can_manually_drag(card: CardView) -> bool:
-	if duel_state == null or duel_state.active_player != card.owner_id:
+	if _inspection_open or duel_state == null or duel_state.active_player != card.owner_id:
 		return false
 	if card.owner_id == DuelRules.PLAYER_OWNER:
 		return turn_state == TurnState.PLAYER
@@ -1002,6 +1059,9 @@ func _update_score() -> void:
 
 
 func _update_turn_status() -> void:
+	if _inspection_open:
+		turn_status.text = "Inspecting · tap anywhere to return"
+		return
 	match turn_state:
 		TurnState.PLAYER:
 			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "Your turn · play a card or activate"
@@ -1043,6 +1103,8 @@ func _layout_duel() -> void:
 	player_hand.size = Vector2(available_hand_width, hand_height)
 	board_grid.position = board_position
 	board_grid.size = Vector2(board_width, board_height)
+	if _inspection_open:
+		card_inspector.set_board_rect(_get_board_rect())
 
 	var score_width: float = minf(46.0, size.x * 0.085)
 	var score_x: float = minf(size.x - horizontal_margin - score_width, board_position.x + board_width + 8.0)
@@ -1052,6 +1114,13 @@ func _layout_duel() -> void:
 	var maximum_status_y: float = size.y - bottom_safe_margin - status_height
 	turn_status.position = Vector2(player_hand.position.x, minf(desired_status_y, maximum_status_y))
 	turn_status.size = Vector2(player_hand.size.x, status_height)
+
+
+func _get_board_rect() -> Rect2:
+	return Rect2(
+		board_grid.global_position - global_position,
+		board_grid.size
+	)
 
 
 func _style_static_ui() -> void:

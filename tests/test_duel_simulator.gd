@@ -156,7 +156,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	for index: int in range(4):
 		player_hand.append(Rules.make_card("Filler %d" % index, "填", [1, 1, 1, 1]))
 	var player_deck: Array = [
-		Catalog.create_instance(&"xu_shu", Rules.PLAYER_OWNER, &"side_1_top"),
+		Catalog.create_instance(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"side_1_top"),
 		Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_next"),
 	]
 	var state := State.new(board, player_hand, [], Rules.PLAYER_OWNER, 0, player_deck, [])
@@ -170,7 +170,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 5, "Playing from a full hand draws only enough to return to five")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Hand cap leaves the second side-deck card undrawn")
 	var draw_event: Dictionary = (transition.get("events", []) as Array)[1]
-	_check(StringName(draw_event.get("card_id", &"")) == &"xu_shu", "Draw event identifies the top side-deck card")
+	_check(StringName(draw_event.get("card_id", &"")) == &"CangSongYingKe1", "Draw event identifies the top side-deck card")
 	_check(StringName(draw_event.get("instance_id", &"")) == &"side_1_top", "Draw event carries stable instance identity")
 	_check(int(draw_event.get("logical_hand_index", -1)) == 4, "Draw event reports its resulting logical hand index")
 	_check((state.decks[Rules.PLAYER_OWNER] as Array).size() == 2, "Draw transition leaves its source deck untouched")
@@ -348,7 +348,7 @@ func _test_activate_runs_standard_attack_without_on_play_effects() -> void:
 		"card": Rules.make_card("Guard", "守", [2, 2, 2, 2], [], Rules.OPPONENT_OWNER),
 		"owner": Rules.OPPONENT_OWNER,
 	}
-	var deck: Array = [Catalog.create_instance(&"xu_shu", Rules.PLAYER_OWNER, &"would_draw")]
+	var deck: Array = [Catalog.create_instance(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"would_draw")]
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, deck, [])
 	var action: Action = Action.make_activate(4, &"mover", Catalog.EFFECT_MOVE_AND_ATTACK, Action.TARGET_BOARD_CELL, 5)
 	var transition: Dictionary = Simulator.apply_action(state, action)

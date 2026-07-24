@@ -1,0 +1,191 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_inspector.gd" id="1_inspector"]
+
+[node name="CardInspector" type="Control"]
+visible = false
+z_index = 12
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_inspector")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.08, 0.055, 0.035, 0.025)
+
+[node name="Parchment" type="Control" parent="."]
+offset_right = 300.0
+offset_bottom = 390.0
+mouse_filter = 2
+
+[node name="Shadow" type="Panel" parent="Parchment"]
+layout_mode = 1
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 7.0
+offset_top = 8.0
+offset_right = 7.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Body" type="PanelContainer" parent="Parchment"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 7.0
+offset_right = -4.0
+offset_bottom = -7.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Parchment/Body"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="Scroll" type="ScrollContainer" parent="Parchment/Body/Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 1
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="Content" type="VBoxContainer" parent="Parchment/Body/Margin/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.18, 0.13, 0.09, 1)
+theme_override_font_sizes/font_size = 26
+text = "苍松迎客"
+autowrap_mode = 2
+
+[node name="TitleDivider" type="HSeparator" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Tags" type="HBoxContainer" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="SectTag" type="PanelContainer" parent="Parchment/Body/Margin/Scroll/Content/Tags"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/SectTag"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
+theme_override_font_sizes/font_size = 12
+text = "华山派"
+horizontal_alignment = 1
+
+[node name="TierTag" type="PanelContainer" parent="Parchment/Body/Margin/Scroll/Content/Tags"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/TierTag"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
+theme_override_font_sizes/font_size = 12
+text = "2阶"
+horizontal_alignment = 1
+
+[node name="WeaponTag" type="PanelContainer" parent="Parchment/Body/Margin/Scroll/Content/Tags"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
+theme_override_font_sizes/font_size = 12
+text = "剑法"
+horizontal_alignment = 1
+
+[node name="DescriptionHeading" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
+theme_override_font_sizes/font_size = 11
+text = "招式"
+
+[node name="Description" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.2, 0.15, 0.1, 1)
+theme_override_font_sizes/font_size = 15
+text = "对手招式进场时，若我可以，对其发起攻击。"
+autowrap_mode = 2
+
+[node name="FlavorHeading" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
+theme_override_font_sizes/font_size = 11
+text = "风味"
+
+[node name="Flavor" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
+theme_override_font_sizes/font_size = 13
+text = "华山剑法的绝招。"
+autowrap_mode = 2
+
+[node name="CloseHint" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.5, 0.42, 0.33, 1)
+theme_override_font_sizes/font_size = 10
+text = "轻触任意位置返回"
+horizontal_alignment = 1
+
+[node name="TopRod" type="Panel" parent="Parchment"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 10.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BottomRod" type="Panel" parent="Parchment"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2

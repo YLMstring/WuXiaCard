@@ -30,6 +30,8 @@ func _run() -> void:
 	_check_catalog_hands(duel)
 	_check_side_deck_setup(duel)
 	_check_normal_opponent_concealment(duel)
+	await _check_card_inspector_modal()
+	await _check_inspector_holds_completed_ai_move()
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
 	await _check_testing_mode_manual_turns()
@@ -176,8 +178,8 @@ func _check_catalog_hands(duel: Node) -> void:
 	for card: Control in opponent_cards:
 		var opponent_card_data: Dictionary = card.get("card_data")
 		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
-	_check(player_ids == [&"xu_shu", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player hand resolves in catalog deck order")
-	_check(opponent_ids == [&"zhang_ren", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
+	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player hand resolves in catalog deck order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
 	var gate_effects: Array = gate_card_data.get("active_effects", [])
@@ -314,6 +316,143 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 		first_card.call("set_face_down", true)
 		first_card.call("set_face_down", true)
 		_check(bool(first_card.call("is_face_down")) and not revealed_picture.visible and (first_card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆" and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent and restore the card back")
+
+
+func _check_card_inspector_modal() -> void:
+	var inspect_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(inspect_duel)
+	await process_frame
+	await process_frame
+	inspect_duel.debug_set_fast_mode(true)
+	var inspector: Control = inspect_duel.get_node("CardInspector") as Control
+	var board_grid: GridContainer = inspect_duel.get_node("BoardCenter/BoardGrid") as GridContainer
+	var score_overlay: VBoxContainer = inspect_duel.get_node("ScoreOverlay") as VBoxContainer
+	var player_card: Control = _first_card(inspect_duel.get_node("PlayerHand"))
+	var opponent_card: Control = _first_card(inspect_duel.get_node("OpponentHand"))
+	var occupancy_before: int = inspect_duel.debug_get_board_occupancy()
+	var turn_count_before: int = inspect_duel.debug_get_simulation_turn_count()
+
+	_submit_card_tap(player_card)
+	await process_frame
+	_check(inspect_duel.debug_is_inspection_open() and inspector.visible, "Tapping a revealed hand card opens the production inspector")
+	_check(not board_grid.visible and not score_overlay.visible, "Inspector replaces the board and score presentation")
+	_check(
+		(inspector.get_node("Parchment/Body/Margin/Scroll/Content/Title") as Label).text == "苍松迎客",
+		"Inspector uses glyph as the visible card name"
+	)
+	var tags: HBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content/Tags") as HBoxContainer
+	_check(
+		(tags.get_node("SectTag/Value") as Label).text == "华山派"
+		and (tags.get_node("TierTag/Value") as Label).text == "2阶"
+		and (tags.get_node("WeaponTag/Value") as Label).text == "剑法",
+		"Production inspector displays sect, tier, and weapon in order"
+	)
+	var blocked_move: bool = await inspect_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false)
+	_check(
+		not blocked_move
+		and inspect_duel.debug_get_board_occupancy() == occupancy_before
+		and inspect_duel.debug_get_simulation_turn_count() == turn_count_before,
+		"Inspector blocks duel actions without changing logical state"
+	)
+	var parchment: Control = inspector.get_node("Parchment") as Control
+	_check(
+		parchment.position.is_equal_approx(board_grid.position)
+		and parchment.size.is_equal_approx(board_grid.size),
+		"Inspector parchment exactly tracks the responsive board rectangle"
+	)
+	inspect_duel.debug_close_inspection()
+	await process_frame
+	_check(not inspect_duel.debug_is_inspection_open() and board_grid.visible and score_overlay.visible, "Closing restores board and score presentation")
+	_check(_count_playable(_cards_below(inspect_duel.get_node("PlayerHand"))) == _count_cards(inspect_duel.get_node("PlayerHand")), "Closing restores player hand interaction")
+
+	_submit_card_tap(opponent_card)
+	await process_frame
+	_check(not inspect_duel.debug_is_inspection_open(), "Tapping a face-down opponent card reveals nothing")
+
+	var placeholder_opened: bool = inspect_duel.debug_open_inspection({
+		"glyph": "",
+		"sect": "",
+		"tier": null,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
+	})
+	_check(placeholder_opened, "Controller accepts an explicit revealed-card inspection fixture")
+	var content: VBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content") as VBoxContainer
+	_check(
+		(content.get_node("Title") as Label).text == "—"
+		and (content.get_node("Description") as Label).text == "—"
+		and (content.get_node("Flavor") as Label).text == "—",
+		"Production inspector keeps placeholders for incomplete card information"
+	)
+	inspect_duel.debug_close_inspection()
+	inspect_duel.debug_close_inspection()
+	await process_frame
+	_check(not inspect_duel.debug_is_inspection_open() and board_grid.visible, "Repeated production close requests remain idempotent")
+
+	inspect_duel.set("turn_state", 1)
+	var resolving_opened: bool = inspect_duel.debug_open_inspection(player_card.get("card_data"))
+	_check(not resolving_opened, "Inspection requests are rejected during resolution")
+	inspect_duel.set("turn_state", 0)
+	inspect_duel.queue_free()
+	await process_frame
+
+
+func _submit_card_tap(card: Control) -> void:
+	var center: Vector2 = card.get_global_rect().get_center()
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = center
+	press.global_position = center
+	card.call("_gui_input", press)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = center
+	release.global_position = center
+	card.call("_gui_input", release)
+
+
+func _check_inspector_holds_completed_ai_move() -> void:
+	var ai_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(ai_duel)
+	await process_frame
+	await process_frame
+	ai_duel.debug_set_fast_mode(true)
+	ai_duel.debug_set_search_limits(0.75, {"max_depth": 99})
+	ai_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, true)
+	var search_started: bool = ai_duel.debug_is_search_running()
+	var inspect_card: Control = _first_card(ai_duel.get_node("PlayerHand"))
+	var inspector_opened: bool = (
+		inspect_card != null
+		and ai_duel.debug_open_inspection(inspect_card.get("card_data"))
+	)
+	_check(search_started and inspector_opened, "Inspector can open while the opponent search is running")
+
+	var frames_waited: int = 0
+	while ai_duel.debug_is_search_running() and frames_waited < 600:
+		await process_frame
+		frames_waited += 1
+	_check(not ai_duel.debug_is_search_running(), "Opponent search continues and finishes behind the inspector")
+	_check(
+		ai_duel.debug_is_inspection_open()
+		and ai_duel.debug_get_board_occupancy() == 1,
+		"Completed opponent result remains unapplied while inspection is open"
+	)
+
+	ai_duel.debug_close_inspection()
+	frames_waited = 0
+	while ai_duel.debug_get_board_occupancy() < 2 and frames_waited < 300:
+		await process_frame
+		frames_waited += 1
+	_check(ai_duel.debug_get_board_occupancy() >= 2, "Opponent result applies after inspection closes")
+	_check(ai_duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Opponent result returns control to the player")
+	for _settle_frame: int in range(10):
+		await process_frame
+	ai_duel.queue_free()
+	for _free_frame: int in range(3):
+		await process_frame
 
 
 func _check_focus_loss_return() -> void:

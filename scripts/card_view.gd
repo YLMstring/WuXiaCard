@@ -4,8 +4,10 @@ extends PanelContainer
 signal drag_started(card: CardView, pointer_position: Vector2)
 signal drag_moved(card: CardView, pointer_position: Vector2)
 signal drag_ended(card: CardView, pointer_position: Vector2)
+signal inspection_requested(card_data: Dictionary)
 
 @export var touch_drag_offset: float = 48.0
+@export var drag_start_threshold: float = 12.0
 
 const CARD_BACK_GLYPH: String = "◆"
 const CARD_PICTURE_SCALE: float = 0.8
@@ -23,6 +25,9 @@ var _pointer_id: int = -2
 var _pointer_offset: Vector2 = Vector2.ZERO
 var _home_parent: Node = null
 var _home_index: int = -1
+var _pointer_pending: bool = false
+var _pending_pointer_id: int = -2
+var _pending_pointer_start: Vector2 = Vector2.ZERO
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
 @onready var card_picture: TextureRect = $Overlay/CardPicture
@@ -64,6 +69,8 @@ func sync_runtime_data(new_card_data: Dictionary, new_owner_id: int) -> void:
 
 func set_face_down(value: bool) -> void:
 	face_down = value
+	if face_down:
+		_reset_pending_pointer()
 	_refresh_face_content()
 	_apply_owner_style()
 	_update_cursor()
@@ -172,6 +179,7 @@ func is_being_dragged() -> bool:
 func finish_drag_state() -> void:
 	_dragging = false
 	_pointer_id = -2
+	_reset_pending_pointer()
 	scale = Vector2.ONE
 	rotation = 0.0
 	z_index = 0
@@ -286,20 +294,35 @@ func _gui_input(event: InputEvent) -> void:
 		if mouse_event.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if mouse_event.pressed:
-			_try_begin_drag(mouse_event.global_position, -1)
+			_begin_pointer_gesture(mouse_event.global_position, -1)
 		else:
-			_try_end_drag(mouse_event.global_position, -1)
+			_end_pointer_gesture(mouse_event.global_position, -1)
 		accept_event()
 	elif event is InputEventScreenTouch:
 		var touch_event := event as InputEventScreenTouch
 		if touch_event.pressed:
-			_try_begin_drag(touch_event.position, touch_event.index)
+			_begin_pointer_gesture(touch_event.position, touch_event.index)
 		else:
-			_try_end_drag(touch_event.position, touch_event.index)
+			_end_pointer_gesture(touch_event.position, touch_event.index)
 		accept_event()
 
 
 func _input(event: InputEvent) -> void:
+	if _pointer_pending:
+		if event is InputEventMouseMotion and _pending_pointer_id == -1:
+			_update_pointer_gesture((event as InputEventMouseMotion).position)
+		elif event is InputEventMouseButton and _pending_pointer_id == -1:
+			var pending_mouse_event := event as InputEventMouseButton
+			if pending_mouse_event.button_index == MOUSE_BUTTON_LEFT and not pending_mouse_event.pressed:
+				_end_pointer_gesture(pending_mouse_event.position, -1)
+		elif event is InputEventScreenDrag:
+			var pending_drag_event := event as InputEventScreenDrag
+			if pending_drag_event.index == _pending_pointer_id:
+				_update_pointer_gesture(pending_drag_event.position)
+		elif event is InputEventScreenTouch:
+			var pending_touch_event := event as InputEventScreenTouch
+			if pending_touch_event.index == _pending_pointer_id and not pending_touch_event.pressed:
+				_end_pointer_gesture(pending_touch_event.position, pending_touch_event.index)
 	if not _dragging:
 		return
 	if event is InputEventMouseMotion and _pointer_id == -1:
@@ -319,8 +342,51 @@ func _input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _pointer_pending:
+		_reset_pending_pointer()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _dragging:
 		call_deferred("_try_end_drag", get_viewport().get_mouse_position(), _pointer_id)
+
+
+func _begin_pointer_gesture(pointer_position: Vector2, pointer_id: int) -> void:
+	if _pointer_pending or _dragging or face_down:
+		return
+	_pointer_pending = true
+	_pending_pointer_id = pointer_id
+	_pending_pointer_start = pointer_position
+
+
+func _update_pointer_gesture(pointer_position: Vector2) -> void:
+	if not _pointer_pending:
+		return
+	if pointer_position.distance_to(_pending_pointer_start) <= drag_start_threshold:
+		return
+	var pointer_id: int = _pending_pointer_id
+	var pointer_start: Vector2 = _pending_pointer_start
+	_reset_pending_pointer()
+	if not playable:
+		return
+	_try_begin_drag(pointer_start, pointer_id)
+	if _dragging:
+		_move_drag(pointer_position)
+
+
+func _end_pointer_gesture(pointer_position: Vector2, pointer_id: int) -> void:
+	if _dragging:
+		_try_end_drag(pointer_position, pointer_id)
+		return
+	if not _pointer_pending or pointer_id != _pending_pointer_id:
+		return
+	var is_tap: bool = pointer_position.distance_to(_pending_pointer_start) <= drag_start_threshold
+	_reset_pending_pointer()
+	if is_tap and not face_down:
+		inspection_requested.emit(card_data.duplicate(true))
+
+
+func _reset_pending_pointer() -> void:
+	_pointer_pending = false
+	_pending_pointer_id = -2
+	_pending_pointer_start = Vector2.ZERO
 
 
 func _try_begin_drag(pointer_position: Vector2, pointer_id: int) -> void:

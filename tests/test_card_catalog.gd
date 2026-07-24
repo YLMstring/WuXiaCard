@@ -41,12 +41,12 @@ func _test_catalog_validation() -> void:
 func _test_catalog_definitions() -> void:
 	var observed_ids: Dictionary = {}
 	var expected_pictures: Dictionary = {
-		&"xu_shu": "res://pics/LKT010_001.png",
+		&"CangSongYingKe1": "res://pics/LKT010_568.png",
+		&"CangSongYingKe2": "res://pics/LKT010_568.png",
 		&"gate_general": "res://pics/LKT010_002.png",
 		&"meng_huo": "res://pics/LKT010_003.png",
 		&"jiang_wei": "res://pics/LKT010_004.png",
 		&"fa_zheng": "res://pics/LKT010_005.png",
-		&"zhang_ren": "res://pics/LKT010_006.png",
 		&"fire_envoy": "res://pics/LKT010_007.png",
 		&"tiger_general": "res://pics/LKT010_008.png",
 		&"strategist": "res://pics/LKT010_009.png",
@@ -76,7 +76,7 @@ func _test_catalog_definitions() -> void:
 
 
 func _test_definition_schema_validation() -> void:
-	var valid_fixture: Dictionary = Catalog.get_definition(&"xu_shu")
+	var valid_fixture: Dictionary = Catalog.get_definition(&"CangSongYingKe1")
 	valid_fixture["id"] = &"fixture"
 	for glyph: String in ["甲", "甲乙丙丁戊己庚"]:
 		valid_fixture["glyph"] = glyph
@@ -104,7 +104,7 @@ func _test_definition_schema_validation() -> void:
 	retired_name["name"] = "Legacy"
 	_check(not Catalog.validate_definition(retired_name).is_empty(), "Retired name metadata fails validation")
 
-	var instance: Dictionary = Catalog.create_instance(&"xu_shu", 1, &"metadata_fixture")
+	var instance: Dictionary = Catalog.create_instance(&"CangSongYingKe1", 1, &"metadata_fixture")
 	_check(not instance.has("name"), "Production runtime instances omit retired name metadata")
 	for metadata_key: StringName in [&"glyph", &"picture", &"sect", &"weapon", &"description", &"flavor"]:
 		_check(instance.has(metadata_key) and typeof(instance[metadata_key]) == TYPE_STRING, "Runtime instance copies String metadata %s" % metadata_key)
@@ -148,8 +148,8 @@ func _test_effect_declarations() -> void:
 func _test_encounter_decks() -> void:
 	var player_ids: Array[StringName] = Decks.get_player_card_ids()
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
-	_check(player_ids == [&"xu_shu", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player deck preserves current hand order")
-	_check(opponent_ids == [&"zhang_ren", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent deck preserves current hand order")
+	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player deck preserves current hand order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
 
