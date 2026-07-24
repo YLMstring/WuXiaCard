@@ -103,6 +103,10 @@ func _check_layout(duel: Node) -> void:
 
 
 func _check_duel_header(duel: Node) -> void:
+	_check(
+		ProjectSettings.get_setting("display/window/stretch/aspect", "keep") == "expand",
+		"Project expands its logical viewport instead of letterboxing tall phones"
+	)
 	var top_wash: Control = duel.get_node("TopWash") as Control
 	var center_tint: TextureRect = duel.get_node_or_null("TopWash/CenterTint") as TextureRect
 	var bottom_edge: ColorRect = duel.get_node_or_null("TopWash/BottomEdge") as ColorRect
@@ -151,7 +155,7 @@ func _check_duel_header(duel: Node) -> void:
 		)
 
 	var original_window_size: Vector2i = root.size
-	for target_size: Vector2i in [Vector2i(540, 960), Vector2i(405, 720)]:
+	for target_size: Vector2i in [Vector2i(540, 960), Vector2i(405, 720), Vector2i(405, 900)]:
 		root.size = target_size
 		await process_frame
 		duel.call("_layout_duel")
