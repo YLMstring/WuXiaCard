@@ -30,12 +30,12 @@ const KNOWN_TRIGGER_ACTIONS: Array[StringName] = [
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
-	&"xu_shu",
+	&"CangSongYingKe",
+	&"CangSongYingKe2",
 	&"gate_general",
 	&"meng_huo",
 	&"jiang_wei",
-	&"CangSongYingKe2",
-	&"CangSongYingKe",
+	&"fa_zheng",
 	&"fire_envoy",
 	&"tiger_general",
 	&"strategist",
