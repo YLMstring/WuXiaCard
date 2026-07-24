@@ -1,0 +1,124 @@
+[CmdletBinding()]
+param(
+    [string]$EnginePath = "",
+    [string]$ProjectRoot = "",
+    [switch]$ShowFullOutput
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = Split-Path -Parent $PSScriptRoot
+}
+
+$resolvedProject = [System.IO.Path]::GetFullPath($ProjectRoot)
+$projectFile = Join-Path $resolvedProject "project.godot"
+if (-not (Test-Path -LiteralPath $projectFile -PathType Leaf)) {
+    throw "Godot project not found: $projectFile"
+}
+
+function Resolve-EnginePath {
+    param([string]$RequestedPath)
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $candidates.Add($RequestedPath)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:SUMMER_ENGINE_EXE)) {
+        $candidates.Add($env:SUMMER_ENGINE_EXE)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidates.Add((Join-Path $env:LOCALAPPDATA "SummerEngine\current\Summer.exe"))
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    foreach ($commandName in @("Summer.exe", "godot.exe", "godot")) {
+        $command = Get-Command $commandName -ErrorAction SilentlyContinue
+        if ($null -ne $command) {
+            return $command.Source
+        }
+    }
+
+    throw "No compatible engine found. Pass -EnginePath or set SUMMER_ENGINE_EXE."
+}
+
+$resolvedEngine = Resolve-EnginePath -RequestedPath $EnginePath
+$testScripts = @(
+    "test_card_catalog.gd",
+    "test_card_inspector.gd",
+    "test_duel_rules.gd",
+    "test_duel_simulator.gd",
+    "test_duel_search.gd",
+    "test_duel_integration.gd"
+)
+
+$failedSuites = [System.Collections.Generic.List[string]]::new()
+$totalStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+Write-Host "Engine:  $resolvedEngine"
+Write-Host "Project: $resolvedProject"
+
+foreach ($testScript in $testScripts) {
+    $resourcePath = "res://tests/$testScript"
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    $suiteStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    try {
+        $arguments = @(
+            "--headless",
+            "--path",
+            ('"{0}"' -f $resolvedProject),
+            "--script",
+            $resourcePath
+        )
+        $process = Start-Process `
+            -FilePath $resolvedEngine `
+            -ArgumentList $arguments `
+            -Wait `
+            -PassThru `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $suiteStopwatch.Stop()
+        $stdout = Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue
+        $stderr = Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue
+        $combined = "$stdout`n$stderr"
+        $hasPassMarker = $combined -match "(?m)^[A-Z0-9_]+_PASSED\b"
+        $hasFailureText = $combined -match "(?im)_FAILED\b|CHECK_FAILED\b|SCRIPT ERROR:|^ERROR:"
+        $passed = $process.ExitCode -eq 0 -and $hasPassMarker -and -not $hasFailureText
+
+        if ($passed) {
+            $marker = [regex]::Match($combined, "(?m)^[A-Z0-9_]+_PASSED[^\r\n]*").Value.Trim()
+            Write-Host ("PASS {0} ({1:N2}s) {2}" -f $testScript, $suiteStopwatch.Elapsed.TotalSeconds, $marker)
+            if ($ShowFullOutput) {
+                Write-Host $combined.Trim()
+            }
+        }
+        else {
+            $failedSuites.Add($testScript)
+            Write-Host ("FAIL {0} ({1:N2}s, exit {2})" -f $testScript, $suiteStopwatch.Elapsed.TotalSeconds, $process.ExitCode)
+            Write-Host $combined.Trim()
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$totalStopwatch.Stop()
+if ($failedSuites.Count -gt 0) {
+    Write-Host ("FAILED: {0} suite(s): {1}" -f $failedSuites.Count, ($failedSuites -join ", "))
+    exit 1
+}
+
+Write-Host ("ALL_TEST_SUITES_PASSED: {0} suite(s) in {1:N2}s" -f $testScripts.Count, $totalStopwatch.Elapsed.TotalSeconds)
+exit 0

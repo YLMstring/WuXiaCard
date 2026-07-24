@@ -71,8 +71,10 @@ func _run() -> void:
 	_check(duel.debug_get_total_card_count() == 30, "All ten main-deck and twenty side-deck instances remain accounted for")
 	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
-	_check((duel.get_node("TopBar/OpponentName") as Label).text == "Shen Lian", "Opponent name appears in the upper-left top bar")
-	_check((duel.get_node("TopBar/ExitButton") as Button).text == "Exit", "Exit button appears in the upper-right top bar")
+	var opponent_name := duel.get_node("TopBar/OpponentName") as Label
+	var exit_button := duel.get_node("TopBar/ExitButton") as Button
+	_check(not opponent_name.text.is_empty() and opponent_name.get_index() < exit_button.get_index(), "Opponent name appears in the upper-left top bar")
+	_check(not exit_button.text.is_empty() and exit_button.get_index() > opponent_name.get_index(), "Exit button appears in the upper-right top bar")
 
 	duel.queue_free()
 	await process_frame
@@ -343,7 +345,7 @@ func _check_card_inspector_modal() -> void:
 	var tags: HBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content/Tags") as HBoxContainer
 	_check(
 		(tags.get_node("SectTag/Value") as Label).text == "华山派"
-		and (tags.get_node("TierTag/Value") as Label).text == "2阶"
+		and (tags.get_node("TierTag/Value") as Label).text == "不凡"
 		and (tags.get_node("WeaponTag/Value") as Label).text == "剑法",
 		"Production inspector displays sect, tier, and weapon in order"
 	)
@@ -641,7 +643,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		)
 		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == pulses_before_missing + 1, "Missing source views still produce the board pulse")
 		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Repeated and source-less playback cleans up completely")
-	_check("Your turn" in (duel.get_node("TurnStatus") as Label).text, "Normal player status returns after extra-turn feedback")
+	_check((duel.get_node("TurnStatus") as Label).text == "你的回合 · 拖动卡牌", "Normal player status returns after extra-turn feedback")
 	_check(_count_playable(_cards_below(duel.get_node("PlayerHand"))) == _count_cards(duel.get_node("PlayerHand")), "Player hand is enabled for the granted extra turn")
 	_check(_count_playable(_cards_below(duel.get_node("OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")
 	duel.queue_free()

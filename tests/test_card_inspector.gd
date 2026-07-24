@@ -50,7 +50,7 @@ func _run() -> void:
 	_check(bool(inspector.call("is_open")), "Present opens the inspector")
 	_check(parchment.position.is_equal_approx(board_rect.position) and parchment.size.is_equal_approx(board_rect.size), "Parchment exactly occupies the supplied board rectangle")
 	_check(title.text == "苍松迎客", "Glyph is displayed as the card name")
-	_check(sect_value.text == "华山派" and tier_value.text == "2阶" and weapon_value.text == "剑法", "Sect, tier, and weapon values are populated")
+	_check(sect_value.text == "华山派" and tier_value.text == "不凡" and weapon_value.text == "剑法", "Sect, tier, and weapon values are populated")
 	_check(
 		tags.get_node("SectTag").get_index()
 		< tags.get_node("TierTag").get_index()
