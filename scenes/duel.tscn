@@ -30,7 +30,44 @@ anchor_right = 1.0
 offset_bottom = 75.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0.72, 0.25, 0.25, 0.72)
+color = Color(0.188, 0.137, 0.129, 1)
+
+[node name="CenterTint" type="TextureRect" parent="TopWash" unique_id=544548291]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BottomEdge" type="ColorRect" parent="TopWash" unique_id=1551872338]
+z_index = 2
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -1.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.761, 0.6, 0.412, 1)
+
+[node name="Shadow" type="ColorRect" parent="TopWash" unique_id=1300154638]
+z_index = 1
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.08, 0.05, 0.04, 0.22)
 
 [node name="BoardCenter" type="Control" parent="." unique_id=1251176396]
 layout_mode = 1
@@ -56,7 +93,7 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = 524.0
 offset_bottom = 64.0
-theme_override_constants/separation = 12
+theme_override_constants/separation = 10
 
 [node name="OpponentName" type="Label" parent="TopBar" unique_id=762303091]
 layout_mode = 2
@@ -67,11 +104,22 @@ text = "对手名字"
 vertical_alignment = 1
 
 [node name="ExitButton" type="Button" parent="TopBar" unique_id=1498069092]
-custom_minimum_size = Vector2(82, 44)
+custom_minimum_size = Vector2(78, 44)
 layout_mode = 2
-focus_mode = 0
 theme_override_font_sizes/font_size = 20
 text = "返回"
+
+[node name="EnemySeal" type="PanelContainer" parent="TopBar" unique_id=782021601]
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+
+[node name="Value" type="Label" parent="TopBar/EnemySeal" unique_id=403112583]
+layout_mode = 2
+text = "敌"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="OpponentHand" type="HBoxContainer" parent="." unique_id=2076592828]
 layout_mode = 0

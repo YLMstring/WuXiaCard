@@ -23,6 +23,7 @@ func _run() -> void:
 	duel.debug_set_fast_mode(true)
 
 	_check_layout(duel)
+	await _check_duel_header(duel)
 	_check_card_edge_labels(duel)
 	await _check_card_picture_layout()
 	_check_hand_slots(duel.get_node("PlayerHand"))
@@ -99,6 +100,82 @@ func _check_layout(duel: Node) -> void:
 	_check(turn_status.position.y >= player_hand.position.y + player_hand.size.y, "Turn status appears below the player hand")
 	_check(absf(turn_status.position.x - player_hand.position.x) < 1.0 and absf(turn_status.size.x - player_hand.size.x) < 1.0, "Turn status matches the player hand's horizontal bounds")
 	_check(turn_status.position.y + turn_status.size.y <= duel.size.y - 8.0, "Turn status remains inside the bottom safe area")
+
+
+func _check_duel_header(duel: Node) -> void:
+	var top_wash: Control = duel.get_node("TopWash") as Control
+	var center_tint: TextureRect = duel.get_node_or_null("TopWash/CenterTint") as TextureRect
+	var bottom_edge: ColorRect = duel.get_node_or_null("TopWash/BottomEdge") as ColorRect
+	var header_shadow: ColorRect = duel.get_node_or_null("TopWash/Shadow") as ColorRect
+	var top_bar: HBoxContainer = duel.get_node("TopBar") as HBoxContainer
+	var enemy_seal: PanelContainer = duel.get_node_or_null("TopBar/EnemySeal") as PanelContainer
+	var opponent_name: Label = duel.get_node("TopBar/OpponentName") as Label
+	var exit_button: Button = duel.get_node("TopBar/ExitButton") as Button
+
+	_check(
+		top_wash is ColorRect
+		and center_tint != null
+		and bottom_edge != null
+		and header_shadow != null,
+		"Duel header uses layered ink tint, lower edge, and shadow presentation"
+	)
+	_check(enemy_seal != null, "Duel header contains the approved enemy seal")
+	if enemy_seal != null:
+		_check(
+			enemy_seal.get_index() < opponent_name.get_index()
+			and opponent_name.get_index() < exit_button.get_index(),
+			"Enemy seal, opponent name, and exit button remain ordered left to right"
+		)
+		_check(
+			is_equal_approx(enemy_seal.size.x, enemy_seal.size.y)
+			and enemy_seal.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+			"Enemy seal stays square and cannot intercept input"
+		)
+	_check(
+		(opponent_name.size_flags_horizontal & Control.SIZE_EXPAND) != 0
+		and opponent_name.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
+		"Opponent name expands and trims long names with an ellipsis"
+	)
+	_check(
+		exit_button.focus_mode != Control.FOCUS_NONE
+		and exit_button.size.y >= 44.0,
+		"Exit button remains focusable with at least a 44-pixel touch target"
+	)
+	if top_wash is ColorRect:
+		var header_color: Color = (top_wash as ColorRect).color
+		_check(
+			header_color.get_luminance() < Color("8c403a").get_luminance()
+			and bottom_edge != null
+			and bottom_edge.color.is_equal_approx(Color("c29969")),
+			"Header is darker than enemy card backs and keeps its antique-gold lower border"
+		)
+
+	var original_window_size: Vector2i = root.size
+	for target_size: Vector2i in [Vector2i(540, 960), Vector2i(405, 720)]:
+		root.size = target_size
+		await process_frame
+		duel.call("_layout_duel")
+		await process_frame
+		var opponent_hand: HBoxContainer = duel.get_node("OpponentHand") as HBoxContainer
+		var header_gap: float = opponent_hand.position.y - (top_wash.position.y + top_wash.size.y)
+		_check(
+			header_gap >= 12.0 and header_gap <= 18.0,
+			"Header keeps a 12–18 pixel breathing gap at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			is_equal_approx(top_wash.position.x, 0.0)
+			and is_equal_approx(top_wash.size.x, duel.size.x),
+			"Header spans the viewport width at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			is_equal_approx(top_bar.position.x, opponent_hand.position.x)
+			and is_equal_approx(top_bar.size.x, opponent_hand.size.x),
+			"Header content aligns with hand margins at %dx%d" % [target_size.x, target_size.y]
+		)
+	root.size = original_window_size
+	await process_frame
+	duel.call("_layout_duel")
+	await process_frame
 
 
 func _check_card_edge_labels(duel: Node) -> void:

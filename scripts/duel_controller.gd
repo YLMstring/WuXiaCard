@@ -68,7 +68,13 @@ var _scores_visible_before_inspection: bool = true
 var _status_before_inspection: String = ""
 
 @onready var board_grid: GridContainer = $BoardCenter/BoardGrid
+@onready var top_wash: ColorRect = $TopWash
+@onready var top_wash_tint: TextureRect = $TopWash/CenterTint
+@onready var top_wash_edge: ColorRect = $TopWash/BottomEdge
+@onready var top_wash_shadow: ColorRect = $TopWash/Shadow
 @onready var top_bar: HBoxContainer = $TopBar
+@onready var enemy_seal: PanelContainer = $TopBar/EnemySeal
+@onready var enemy_seal_label: Label = $TopBar/EnemySeal/Value
 @onready var opponent_name: Label = $TopBar/OpponentName
 @onready var exit_button: Button = $TopBar/ExitButton
 @onready var opponent_hand: HBoxContainer = $OpponentHand
@@ -111,6 +117,7 @@ func _ready() -> void:
 	board = duel_state.board
 	_create_hands()
 	_create_placeholder_audio()
+	top_bar.move_child(enemy_seal, 0)
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
@@ -1080,7 +1087,10 @@ func _layout_duel() -> void:
 	var available_hand_width: float = size.x - horizontal_margin * 2.0
 	var card_width: float = (available_hand_width - 16.0) / 5.0
 	var hand_height: float = minf(size.y * 0.14, card_width / 0.75)
-	var opponent_top: float = maxf(size.y * 0.085, 72.0)
+	var header_height: float = clampf(size.y * 0.0625, 56.0, 62.0)
+	var header_gap: float = clampf(size.y * 0.0146, 12.0, 18.0)
+	var top_bar_height: float = 44.0
+	var opponent_top: float = header_height + header_gap
 	var opponent_bottom: float = opponent_top + hand_height
 	var status_gap: float = 8.0
 	var status_height: float = 26.0
@@ -1095,8 +1105,10 @@ func _layout_duel() -> void:
 	var equal_gap: float = (interval_height - board_height) * 0.5
 	var board_position := Vector2((size.x - board_width) * 0.5, opponent_bottom + equal_gap)
 
-	top_bar.position = Vector2(horizontal_margin, maxf(12.0, size.y * 0.016))
-	top_bar.size = Vector2(available_hand_width, maxf(44.0, size.y * 0.05))
+	top_wash.position = Vector2.ZERO
+	top_wash.size = Vector2(size.x, header_height)
+	top_bar.position = Vector2(horizontal_margin, (header_height - top_bar_height) * 0.5)
+	top_bar.size = Vector2(available_hand_width, top_bar_height)
 	opponent_hand.position = Vector2(horizontal_margin, opponent_top)
 	opponent_hand.size = Vector2(available_hand_width, hand_height)
 	player_hand.position = Vector2(horizontal_margin, player_top)
@@ -1124,6 +1136,7 @@ func _get_board_rect() -> Rect2:
 
 
 func _style_static_ui() -> void:
+	_style_duel_header()
 	var opponent_style := StyleBoxFlat.new()
 	opponent_style.bg_color = Color("d9695f")
 	opponent_style.border_color = Color("8c403a")
@@ -1136,6 +1149,76 @@ func _style_static_ui() -> void:
 	player_style.set_border_width_all(2)
 	player_style.set_corner_radius_all(5)
 	player_score_panel.add_theme_stylebox_override("panel", player_style)
+
+
+func _style_duel_header() -> void:
+	top_wash.color = Color("302321")
+	top_wash_edge.color = Color("c29969")
+	top_wash_shadow.color = Color(0.08, 0.05, 0.04, 0.22)
+	top_wash_shadow.offset_bottom = 3.0
+
+	var header_gradient := Gradient.new()
+	header_gradient.offsets = PackedFloat32Array([0.0, 0.52, 1.0])
+	header_gradient.colors = PackedColorArray([
+		Color(0.0, 0.0, 0.0, 0.0),
+		Color(0.42, 0.25, 0.22, 0.66),
+		Color(0.0, 0.0, 0.0, 0.0),
+	])
+	var header_texture := GradientTexture2D.new()
+	header_texture.gradient = header_gradient
+	header_texture.width = 540
+	header_texture.height = 1
+	header_texture.fill_from = Vector2(0.0, 0.5)
+	header_texture.fill_to = Vector2(1.0, 0.5)
+	top_wash_tint.texture = header_texture
+
+	var seal_style := StyleBoxFlat.new()
+	seal_style.bg_color = Color("9e332f")
+	seal_style.border_color = Color("c99261")
+	seal_style.set_border_width_all(1)
+	seal_style.set_corner_radius_all(2)
+	seal_style.shadow_color = Color(0.08, 0.03, 0.02, 0.42)
+	seal_style.shadow_size = 2
+	seal_style.shadow_offset = Vector2(0.0, 1.0)
+	enemy_seal.add_theme_stylebox_override("panel", seal_style)
+	enemy_seal_label.add_theme_color_override("font_color", Color("f1d8b1"))
+	enemy_seal_label.add_theme_font_size_override("font_size", 14)
+
+	opponent_name.add_theme_color_override("font_color", Color("f2e4c7"))
+	opponent_name.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.03, 0.55))
+	opponent_name.add_theme_constant_override("outline_size", 1)
+	opponent_name.add_theme_font_size_override("font_size", 22)
+	opponent_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	opponent_name.clip_text = true
+
+	var exit_normal := StyleBoxFlat.new()
+	exit_normal.bg_color = Color(0.15, 0.105, 0.098, 0.88)
+	exit_normal.border_color = Color("a9875b")
+	exit_normal.set_border_width_all(1)
+	exit_normal.set_corner_radius_all(4)
+	exit_normal.content_margin_left = 12.0
+	exit_normal.content_margin_right = 12.0
+
+	var exit_hover := exit_normal.duplicate() as StyleBoxFlat
+	exit_hover.bg_color = Color("3a2925")
+	exit_hover.border_color = Color("c7a36d")
+
+	var exit_pressed := exit_normal.duplicate() as StyleBoxFlat
+	exit_pressed.bg_color = Color("1b1312")
+	exit_pressed.border_color = Color("8c6f4c")
+
+	var exit_focus := exit_hover.duplicate() as StyleBoxFlat
+	exit_focus.set_border_width_all(2)
+
+	exit_button.add_theme_stylebox_override("normal", exit_normal)
+	exit_button.add_theme_stylebox_override("hover", exit_hover)
+	exit_button.add_theme_stylebox_override("pressed", exit_pressed)
+	exit_button.add_theme_stylebox_override("focus", exit_focus)
+	exit_button.add_theme_color_override("font_color", Color("e2c89c"))
+	exit_button.add_theme_color_override("font_hover_color", Color("f4ddb2"))
+	exit_button.add_theme_color_override("font_pressed_color", Color("cdb387"))
+	exit_button.add_theme_color_override("font_focus_color", Color("f4ddb2"))
+	exit_button.add_theme_font_size_override("font_size", 16)
 
 
 func _create_placeholder_audio() -> void:
