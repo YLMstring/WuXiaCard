@@ -63,7 +63,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.15, 0.08, 0.07, 1)
 theme_override_font_sizes/font_size = 26
-text = "Shen Lian"
+text = "对手名字"
 vertical_alignment = 1
 
 [node name="ExitButton" type="Button" parent="TopBar" unique_id=1498069092]
@@ -71,7 +71,7 @@ custom_minimum_size = Vector2(82, 44)
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 20
-text = "Exit"
+text = "返回"
 
 [node name="OpponentHand" type="HBoxContainer" parent="." unique_id=2076592828]
 layout_mode = 0

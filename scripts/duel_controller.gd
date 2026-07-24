@@ -116,7 +116,7 @@ func _ready() -> void:
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
-	opponent_name.text = "Shen Lian"
+	opponent_name.text = "对手名字"
 	turn_state = TurnState.PLAYER
 	_sync_hand_playability()
 	_update_score()
