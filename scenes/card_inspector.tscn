@@ -136,7 +136,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
 theme_override_font_sizes/font_size = 11
-text = "招式"
+text = "特效"
 
 [node name="Description" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2
@@ -152,7 +152,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
 theme_override_font_sizes/font_size = 11
-text = "风味"
+text = "背景"
 
 [node name="Flavor" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2
@@ -168,7 +168,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.42, 0.33, 1)
 theme_override_font_sizes/font_size = 10
-text = "轻触任意位置返回"
+text = ""
 horizontal_alignment = 1
 
 [node name="TopRod" type="Panel" parent="Parchment"]
