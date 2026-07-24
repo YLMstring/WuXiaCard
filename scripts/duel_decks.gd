@@ -4,7 +4,7 @@ extends RefCounted
 const Catalog = preload("res://scripts/card_catalog.gd")
 
 const PLAYER_CARD_IDS: Array[StringName] = [
-	&"xu_shu",
+	&"CangSongYingKe2",
 	&"gate_general",
 	&"meng_huo",
 	&"jiang_wei",
@@ -12,7 +12,7 @@ const PLAYER_CARD_IDS: Array[StringName] = [
 ]
 
 const OPPONENT_CARD_IDS: Array[StringName] = [
-	&"zhang_ren",
+	&"CangSongYingKe1",
 	&"fire_envoy",
 	&"tiger_general",
 	&"strategist",
