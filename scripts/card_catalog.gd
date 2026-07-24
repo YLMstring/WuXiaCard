@@ -60,7 +60,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"glyph": "苍松迎客",
 		"picture": "res://pics/LKT010_568.png",
 		"sect": "华山派",
-		"tier": 1,
+		"tier": 2,
 		"weapon": "剑法",
 		"description": "对手招式进场时，若我可以，对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
