@@ -97,7 +97,9 @@ The control must look interactive without competing with the opponent name or ca
 
 At the 540×960 reference viewport, the header is compact—approximately 56–62 logical pixels high. The top bar retains responsive horizontal margins consistent with the hands.
 
-`DuelController._layout_duel()` must derive the opponent hand's top position from the actual header bottom plus a small gap. It must not rely on an unrelated hard-coded minimum such as `72.0`.
+`DuelController._layout_duel()` must derive the opponent hand's top position from the actual header bottom plus a deliberate breathing gap. It must not rely on an unrelated hard-coded minimum such as `72.0`.
+
+The gap is visible background space, not transparent padding inside the header or hand. At 540×960 it targets 14 logical pixels. Across the supported portrait layouts it may scale modestly, but it must remain between 12 and 18 logical pixels. This keeps the dark header and red card backs related without allowing them to merge into one dense block.
 
 Required layout behavior:
 
@@ -107,7 +109,7 @@ Required layout behavior:
 - seal stays square;
 - name consumes flexible space and ellipsizes if necessary;
 - opponent hand never overlaps the header;
-- the hand/header gap remains visually compact;
+- the hand/header gap remains visibly open, within the 12–18 logical-pixel range;
 - existing equal spacing between board and both hands remains intact;
 - 540×960 and 405×720 layouts both remain valid.
 
@@ -141,7 +143,7 @@ Extend `tests/test_duel_integration.gd` to verify:
 - the exit label is nonempty and its touch height is at least 44 logical pixels;
 - the header uses the approved dark presentation rather than the old red wash;
 - top-bar content remains inside responsive horizontal bounds;
-- the opponent hand begins below the header with a positive gap;
+- the opponent hand begins below the header with a 12–18 logical-pixel visible gap;
 - existing board/hand equal-spacing invariants still pass;
 - the 405×720 and 540×960 layouts do not overlap.
 
@@ -161,7 +163,7 @@ Because automated headless assertions do not prove visual quality, manually play
 - The selected A1 dark continuous header is recognizable in the running duel.
 - Enemy seal, opponent name, and exit control form one coherent composition.
 - Existing card backs remain unchanged and visually stronger than the header.
-- Opponent hand and header never overlap at supported portrait sizes.
+- Opponent hand and header never overlap and retain a visible 12–18 logical-pixel breathing gap at supported portrait sizes.
 - Exit behavior is unchanged.
 - All automated suites pass.
 - Manual portrait review matches the approved visual direction.
