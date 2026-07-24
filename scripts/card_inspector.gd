@@ -155,7 +155,17 @@ func _display_string(value: Variant) -> String:
 func _display_tier(value: Variant) -> String:
 	if typeof(value) != TYPE_INT or int(value) < 1:
 		return PLACEHOLDER
-	return "%d阶" % int(value)
+	if int(value) == 1:
+		return "入门"
+	if int(value) == 2:
+		return "不凡"
+	if int(value) == 3:
+		return "上乘"
+	if int(value) == 4:
+		return "一流"
+	if int(value) == 5:
+		return "绝世"
+	return "秘传"
 
 
 func _style_inspector() -> void:

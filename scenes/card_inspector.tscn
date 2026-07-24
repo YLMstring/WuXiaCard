@@ -102,8 +102,8 @@ mouse_filter = 2
 [node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/SectTag"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
+theme_override_font_sizes/font_size = 13
 text = "华山派"
 horizontal_alignment = 1
 
@@ -114,8 +114,8 @@ mouse_filter = 2
 [node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/TierTag"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
+theme_override_font_sizes/font_size = 13
 text = "2阶"
 horizontal_alignment = 1
 
@@ -126,10 +126,15 @@ mouse_filter = 2
 [node name="Value" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.25, 0.19, 0.13, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
+theme_override_font_sizes/font_size = 13
 text = "剑法"
 horizontal_alignment = 1
+
+[node name="TagGap" type="Control" parent="Parchment/Body/Margin/Scroll/Content"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
 
 [node name="DescriptionHeading" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2
@@ -146,6 +151,11 @@ theme_override_colors/font_color = Color(0.2, 0.15, 0.1, 1)
 theme_override_font_sizes/font_size = 15
 text = "对手招式进场时，若我可以，对其发起攻击。"
 autowrap_mode = 2
+
+[node name="DescriptionGap" type="Control" parent="Parchment/Body/Margin/Scroll/Content"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
 
 [node name="FlavorHeading" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2
