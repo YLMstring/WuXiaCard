@@ -481,7 +481,7 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 	board_grid.visible = false
 	score_overlay.visible = false
 	_sync_hand_playability()
-	turn_status.text = "Inspecting · tap anywhere to return"
+	turn_status.text = "查看卡牌详情 · 轻触返回"
 	card_inspector.present(card_data, _get_board_rect())
 
 
@@ -680,7 +680,7 @@ func _present_ki_changed_event(event: Dictionary) -> void:
 
 func _present_extra_turn_event(event: Dictionary) -> void:
 	_presentation_trace.append(&"extra_turn_granted")
-	turn_status.text = "Extra turn"
+	turn_status.text = "额外回合"
 	turn_status.modulate = extra_turn_effect_color
 	var source_controls: Array[Control] = []
 	for source_value: Variant in event.get("source_instance_ids", []):
@@ -739,7 +739,7 @@ func _perform_opponent_turn() -> void:
 			var progress: Dictionary = session.get_progress()
 			var elapsed: float = float(Time.get_ticks_usec() - _opponent_search_started_usec) / 1_000_000.0
 			if not _inspection_open:
-				turn_status.text = "Shen Lian considers… %.1fs · depth %d" % [
+				turn_status.text = "对手正在思考… %.1fs · 深度 %d" % [
 					elapsed,
 					int(progress.get("completed_depth", 0)),
 				]
@@ -817,9 +817,9 @@ func _finish_match() -> void:
 	var player_total: int = DuelRules.count_owned(board, DuelRules.PLAYER_OWNER)
 	var opponent_total: int = DuelRules.count_owned(board, DuelRules.OPPONENT_OWNER)
 	if player_total > opponent_total:
-		turn_status.text = "Victory · %d–%d" % [player_total, opponent_total]
+		turn_status.text = "获胜 · %d–%d" % [player_total, opponent_total]
 	else:
-		turn_status.text = "Defeat · %d–%d" % [player_total, opponent_total]
+		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	turn_status.modulate = Color("3b211d")
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
 
@@ -1060,15 +1060,15 @@ func _update_score() -> void:
 
 func _update_turn_status() -> void:
 	if _inspection_open:
-		turn_status.text = "Inspecting · tap anywhere to return"
+		turn_status.text = "查看卡牌详情 · 轻触返回"
 		return
 	match turn_state:
 		TurnState.PLAYER:
-			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "Your turn · play a card or activate"
+			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "你的回合 · 拖动卡牌"
 		TurnState.RESOLVING:
-			turn_status.text = "Resolving…"
+			turn_status.text = "结算中…"
 		TurnState.OPPONENT:
-			turn_status.text = "Testing · Opponent side · play or activate" if testing_mode else "Shen Lian considers…"
+			turn_status.text = "Testing · Opponent side · play or activate" if testing_mode else "对手正在思考…"
 		TurnState.COMPLETE:
 			pass
 

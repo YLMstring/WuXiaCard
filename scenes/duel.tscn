@@ -129,7 +129,7 @@ offset_right = 524.0
 offset_bottom = 946.0
 theme_override_colors/font_color = Color(0.29, 0.14, 0.12, 1)
 theme_override_font_sizes/font_size = 18
-text = "Your turn · drag a card"
+text = "你的回合 · 拖动卡牌"
 horizontal_alignment = 1
 vertical_alignment = 1
 
