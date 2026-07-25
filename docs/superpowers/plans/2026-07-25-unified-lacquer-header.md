@@ -37,14 +37,35 @@
 5. Make `_style_duel_header()` use `DuelBackdrop.LACQUER_COLOR` as the runtime source of truth.
 6. Change the scene's initial `TopWash.color` to `#452824` so editor previews also match.
 
-## Task 3: Verify the result
+## Task 3: Share the visible lacquer tint
+
+**Files:**
+
+- Modify: `tests/test_duel_backdrop.gd`
+- Modify: `tests/test_duel_integration.gd`
+- Modify: `scripts/duel_backdrop.gd`
+- Modify: `scripts/duel_controller.gd`
+
+**Steps:**
+
+1. Add failing assertions for a shared lacquer-tint texture factory:
+   - Gradient offsets are `0.0`, `0.52`, and `1.0`.
+   - Both edge colors are transparent.
+   - The center color is `Color(0.42, 0.25, 0.22, 0.66)`.
+   - The requested texture width is retained.
+2. Add an integration assertion that `TopWash/CenterTint` uses the shared gradient definition.
+3. Implement the typed texture factory in `DuelBackdrop`.
+4. Draw that texture across the lacquer extension before drawing the gold rules and ornaments.
+5. Use the same factory for `TopWash/CenterTint` in `_style_duel_header()`.
+
+## Task 4: Verify the result
 
 **Steps:**
 
 1. Check `scripts/duel_backdrop.gd` for parse and compile errors.
 2. Run the full seven-suite test runner.
 3. Run the game and inspect a tall runtime frame:
-   - No color discontinuity between extension and header.
+   - No visible tint discontinuity between extension and header at the left, center, or right.
    - Lower gold line remains visible at the seam.
    - Ornament row is centered between both gold lines.
 4. Check runtime diagnostics for new errors.
