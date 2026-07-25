@@ -6,7 +6,7 @@ const ASPECT_EPSILON: float = 0.0001
 
 const PARCHMENT_COLOR: Color = Color("d6d0b6")
 const PARCHMENT_SAGE: Color = Color("9da596")
-const LACQUER_COLOR: Color = Color("452824")
+const LACQUER_COLOR: Color = Color("4a2d00")
 const ANTIQUE_GOLD: Color = Color("bd9765")
 const RIDGE_BACK_COLOR: Color = Color(0.325, 0.365, 0.341, 0.22)
 const RIDGE_FRONT_COLOR: Color = Color(0.212, 0.278, 0.247, 0.15)
