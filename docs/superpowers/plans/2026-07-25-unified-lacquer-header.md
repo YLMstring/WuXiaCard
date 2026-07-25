@@ -70,3 +70,25 @@
    - Ornament row is centered between both gold lines.
 4. Check runtime diagnostics for new errors.
 5. Audit the diff and commit only the implementation files.
+
+## Task 5: Match the tint rendering and replace the return chrome
+
+**Files:**
+
+- Add: `pics/back_arrow.svg`
+- Modify: `scenes/duel.tscn`
+- Modify: `scripts/duel_controller.gd`
+- Modify: `tests/test_duel_integration.gd`
+
+**Steps:**
+
+1. Add failing integration assertions that:
+   - `TopWash/CenterTint` uses `TextureRect.STRETCH_SCALE`.
+   - The return control has empty text, a local icon, tooltip “返回,” and at least a 44×44 interaction area.
+   - Its normal, hover, pressed, and focus styleboxes are visually empty.
+   - Its existing pressed signal remains connected.
+2. Add a 24×24 white SVG back arrow that can be tinted by the button theme.
+3. Set `CenterTint` to full scaling so its gradient matches the procedural decoration across the width.
+4. Make `ExitButton` a 44×44 icon-only control with no visible stylebox chrome.
+5. Preserve the existing gold normal/hover/pressed/focus color progression on the icon.
+6. Run the full suite and inspect tall and wide runtime frames.
