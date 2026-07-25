@@ -18,6 +18,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
+const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -67,27 +68,29 @@ var _board_visible_before_inspection: bool = true
 var _scores_visible_before_inspection: bool = true
 var _status_before_inspection: String = ""
 
-@onready var board_grid: GridContainer = $BoardCenter/BoardGrid
-@onready var top_wash: ColorRect = $TopWash
-@onready var top_wash_tint: TextureRect = $TopWash/CenterTint
-@onready var top_wash_edge: ColorRect = $TopWash/BottomEdge
-@onready var top_wash_shadow: ColorRect = $TopWash/Shadow
-@onready var top_bar: HBoxContainer = $TopBar
-@onready var enemy_seal: PanelContainer = $TopBar/EnemySeal
-@onready var enemy_seal_label: Label = $TopBar/EnemySeal/Value
-@onready var opponent_name: Label = $TopBar/OpponentName
-@onready var exit_button: Button = $TopBar/ExitButton
-@onready var opponent_hand: HBoxContainer = $OpponentHand
-@onready var player_hand: HBoxContainer = $PlayerHand
-@onready var score_overlay: VBoxContainer = $ScoreOverlay
-@onready var opponent_score_panel: PanelContainer = $ScoreOverlay/OpponentScorePanel
-@onready var player_score_panel: PanelContainer = $ScoreOverlay/PlayerScorePanel
-@onready var opponent_score: Label = $ScoreOverlay/OpponentScorePanel/OpponentScore
-@onready var player_score: Label = $ScoreOverlay/PlayerScorePanel/PlayerScore
-@onready var turn_status: Label = $TurnStatus
-@onready var card_inspector: CardInspectorData = $CardInspector
-@onready var extra_turn_vfx: ExtraTurnVfxData = $ExtraTurnVfx
-@onready var drag_layer: Control = $DragLayer
+@onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
+@onready var duel_canvas: Control = $DuelCanvas
+@onready var board_grid: GridContainer = $DuelCanvas/BoardCenter/BoardGrid
+@onready var top_wash: ColorRect = $DuelCanvas/TopWash
+@onready var top_wash_tint: TextureRect = $DuelCanvas/TopWash/CenterTint
+@onready var top_wash_edge: ColorRect = $DuelCanvas/TopWash/BottomEdge
+@onready var top_wash_shadow: ColorRect = $DuelCanvas/TopWash/Shadow
+@onready var top_bar: HBoxContainer = $DuelCanvas/TopBar
+@onready var enemy_seal: PanelContainer = $DuelCanvas/TopBar/EnemySeal
+@onready var enemy_seal_label: Label = $DuelCanvas/TopBar/EnemySeal/Value
+@onready var opponent_name: Label = $DuelCanvas/TopBar/OpponentName
+@onready var exit_button: Button = $DuelCanvas/TopBar/ExitButton
+@onready var opponent_hand: HBoxContainer = $DuelCanvas/OpponentHand
+@onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
+@onready var score_overlay: VBoxContainer = $DuelCanvas/ScoreOverlay
+@onready var opponent_score_panel: PanelContainer = $DuelCanvas/ScoreOverlay/OpponentScorePanel
+@onready var player_score_panel: PanelContainer = $DuelCanvas/ScoreOverlay/PlayerScorePanel
+@onready var opponent_score: Label = $DuelCanvas/ScoreOverlay/OpponentScorePanel/OpponentScore
+@onready var player_score: Label = $DuelCanvas/ScoreOverlay/PlayerScorePanel/PlayerScore
+@onready var turn_status: Label = $DuelCanvas/TurnStatus
+@onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
+@onready var extra_turn_vfx: ExtraTurnVfxData = $DuelCanvas/ExtraTurnVfx
+@onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
 @onready var removal_audio: AudioStreamPlayer = $RemovalAudio
@@ -1083,30 +1086,35 @@ func _update_turn_status() -> void:
 func _layout_duel() -> void:
 	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
 		return
-	var horizontal_margin: float = maxf(12.0, size.x * 0.03)
-	var available_hand_width: float = size.x - horizontal_margin * 2.0
+	var fitted_duel_rect: Rect2 = DuelBackdropData.fit_duel_rect(size)
+	duel_canvas.position = fitted_duel_rect.position
+	duel_canvas.size = fitted_duel_rect.size
+	decor_backdrop.configure(fitted_duel_rect)
+	var canvas_size: Vector2 = duel_canvas.size
+	var horizontal_margin: float = maxf(12.0, canvas_size.x * 0.03)
+	var available_hand_width: float = canvas_size.x - horizontal_margin * 2.0
 	var card_width: float = (available_hand_width - 16.0) / 5.0
-	var hand_height: float = minf(size.y * 0.14, card_width / 0.75)
-	var header_height: float = clampf(size.y * 0.0625, 56.0, 62.0)
-	var header_gap: float = clampf(size.y * 0.0146, 12.0, 18.0)
+	var hand_height: float = minf(canvas_size.y * 0.14, card_width / 0.75)
+	var header_height: float = clampf(canvas_size.y * 0.0625, 56.0, 62.0)
+	var header_gap: float = clampf(canvas_size.y * 0.0146, 12.0, 18.0)
 	var top_bar_height: float = 44.0
 	var opponent_top: float = header_height + header_gap
 	var opponent_bottom: float = opponent_top + hand_height
 	var status_gap: float = 8.0
 	var status_height: float = 26.0
 	var bottom_safe_margin: float = 8.0
-	var player_bottom_margin: float = maxf(size.y * 0.05, status_gap + status_height + bottom_safe_margin)
-	var player_top: float = size.y - player_bottom_margin - hand_height
+	var player_bottom_margin: float = maxf(canvas_size.y * 0.05, status_gap + status_height + bottom_safe_margin)
+	var player_top: float = canvas_size.y - player_bottom_margin - hand_height
 	var interval_height: float = maxf(180.0, player_top - opponent_bottom)
-	var minimum_gap: float = maxf(18.0, size.y * 0.032)
-	var desired_board_width: float = size.x * 0.72
+	var minimum_gap: float = maxf(18.0, canvas_size.y * 0.032)
+	var desired_board_width: float = canvas_size.x * 0.72
 	var board_height: float = minf(desired_board_width / board_aspect_ratio, interval_height - minimum_gap * 2.0)
 	var board_width: float = board_height * board_aspect_ratio
 	var equal_gap: float = (interval_height - board_height) * 0.5
-	var board_position := Vector2((size.x - board_width) * 0.5, opponent_bottom + equal_gap)
+	var board_position := Vector2((canvas_size.x - board_width) * 0.5, opponent_bottom + equal_gap)
 
 	top_wash.position = Vector2.ZERO
-	top_wash.size = Vector2(size.x, header_height)
+	top_wash.size = Vector2(canvas_size.x, header_height)
 	top_bar.position = Vector2(horizontal_margin, (header_height - top_bar_height) * 0.5)
 	top_bar.size = Vector2(available_hand_width, top_bar_height)
 	opponent_hand.position = Vector2(horizontal_margin, opponent_top)
@@ -1118,19 +1126,19 @@ func _layout_duel() -> void:
 	if _inspection_open:
 		card_inspector.set_board_rect(_get_board_rect())
 
-	var score_width: float = minf(46.0, size.x * 0.085)
-	var score_x: float = minf(size.x - horizontal_margin - score_width, board_position.x + board_width + 8.0)
+	var score_width: float = minf(46.0, canvas_size.x * 0.085)
+	var score_x: float = minf(canvas_size.x - horizontal_margin - score_width, board_position.x + board_width + 8.0)
 	score_overlay.position = Vector2(score_x, board_position.y + board_height * 0.5 - 51.5)
 	score_overlay.size = Vector2(score_width, 120.0)
 	var desired_status_y: float = player_hand.position.y + player_hand.size.y + status_gap
-	var maximum_status_y: float = size.y - bottom_safe_margin - status_height
+	var maximum_status_y: float = canvas_size.y - bottom_safe_margin - status_height
 	turn_status.position = Vector2(player_hand.position.x, minf(desired_status_y, maximum_status_y))
 	turn_status.size = Vector2(player_hand.size.x, status_height)
 
 
 func _get_board_rect() -> Rect2:
 	return Rect2(
-		board_grid.global_position - global_position,
+		board_grid.global_position - duel_canvas.global_position,
 		board_grid.size
 	)
 

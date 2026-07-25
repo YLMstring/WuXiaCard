@@ -5,6 +5,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Backdrop = preload("res://scripts/duel_backdrop.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -23,11 +24,13 @@ func _run() -> void:
 	duel.debug_set_fast_mode(true)
 
 	_check_layout(duel)
+	_check_duel_canvas_structure(duel)
+	await _check_fixed_duel_canvas_geometry(duel)
 	await _check_duel_header(duel)
 	_check_card_edge_labels(duel)
 	await _check_card_picture_layout()
-	_check_hand_slots(duel.get_node("PlayerHand"))
-	_check_hand_slots(duel.get_node("OpponentHand"))
+	_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
+	_check_hand_slots(duel.get_node("DuelCanvas/OpponentHand"))
 	_check_catalog_hands(duel)
 	_check_side_deck_setup(duel)
 	_check_normal_opponent_concealment(duel)
@@ -35,6 +38,7 @@ func _run() -> void:
 	await _check_inspector_holds_completed_ai_move()
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
+	await _check_aspect_ratio_input_paths()
 	await _check_testing_mode_manual_turns()
 	await _check_player_gate_exile()
 	await _check_opponent_tiger_exile()
@@ -42,7 +46,7 @@ func _run() -> void:
 	await _check_opponent_draw_visibility()
 	await _check_manual_activate_move()
 	await _check_meng_huo_extra_turn_presentation()
-	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("PlayerHand"))
+	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("DuelCanvas/PlayerHand"))
 
 	var player_turns: int = 0
 	while not duel.debug_is_complete() and player_turns < 20:
@@ -52,8 +56,8 @@ func _run() -> void:
 		player_turns += 1
 		if player_turns == 1:
 			await process_frame
-			_check_hand_slots(duel.get_node("PlayerHand"))
-			_check_remaining_card_sizes(duel.get_node("PlayerHand"), initial_player_card_sizes)
+			_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
+			_check_remaining_card_sizes(duel.get_node("DuelCanvas/PlayerHand"), initial_player_card_sizes)
 
 	var scores: Vector2i = duel.debug_get_scores()
 	var search_report: Dictionary = duel.debug_get_last_search_report()
@@ -61,7 +65,7 @@ func _run() -> void:
 	_check(not bool(search_report.get("used_fallback", true)), "Fast deterministic integration search completes without fallback")
 	var occupancy: int = duel.debug_get_board_occupancy()
 	var simulation_turns: int = duel.debug_get_simulation_turn_count()
-	var remaining_cards: int = _count_cards(duel.get_node("PlayerHand")) + _count_cards(duel.get_node("OpponentHand"))
+	var remaining_cards: int = _count_cards(duel.get_node("DuelCanvas/PlayerHand")) + _count_cards(duel.get_node("DuelCanvas/OpponentHand"))
 	_check(duel.debug_is_complete(), "Scripted match reaches the complete state")
 	_check(scores.x + scores.y == occupancy, "Final scores count exactly the cards remaining on board")
 	_check(player_turns <= 20, "Scripted match remains within the safety turn bound")
@@ -72,8 +76,8 @@ func _run() -> void:
 	_check(duel.debug_get_total_card_count() == 30, "All ten main-deck and twenty side-deck instances remain accounted for")
 	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
-	var opponent_name := duel.get_node("TopBar/OpponentName") as Label
-	var exit_button := duel.get_node("TopBar/ExitButton") as Button
+	var opponent_name := duel.get_node("DuelCanvas/TopBar/OpponentName") as Label
+	var exit_button := duel.get_node("DuelCanvas/TopBar/ExitButton") as Button
 	_check(not opponent_name.text.is_empty() and opponent_name.get_index() < exit_button.get_index(), "Opponent name appears in the upper-left top bar")
 	_check(not exit_button.text.is_empty() and exit_button.get_index() > opponent_name.get_index(), "Exit button appears in the upper-right top bar")
 
@@ -87,19 +91,130 @@ func _run() -> void:
 
 
 func _check_layout(duel: Node) -> void:
-	var opponent_hand := duel.get_node("OpponentHand") as HBoxContainer
-	var player_hand := duel.get_node("PlayerHand") as HBoxContainer
-	var board_grid := duel.get_node("BoardCenter/BoardGrid") as GridContainer
-	var turn_status := duel.get_node("TurnStatus") as Label
+	var canvas := duel.get_node("DuelCanvas") as Control
+	var opponent_hand := duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+	var player_hand := duel.get_node("DuelCanvas/PlayerHand") as HBoxContainer
+	var board_grid := duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
+	var turn_status := duel.get_node("DuelCanvas/TurnStatus") as Label
 	var top_gap: float = board_grid.position.y - (opponent_hand.position.y + opponent_hand.size.y)
 	var bottom_gap: float = player_hand.position.y - (board_grid.position.y + board_grid.size.y)
 	var board_center_x: float = board_grid.position.x + board_grid.size.x * 0.5
 	_check(absf(top_gap - bottom_gap) < 1.0, "Board has equal spacing to opponent and player hands")
-	_check(absf(board_center_x - duel.size.x * 0.5) < 1.0, "Board remains horizontally centered")
+	_check(absf(board_center_x - canvas.size.x * 0.5) < 1.0, "Board remains horizontally centered")
 	_check(absf(board_grid.size.x / board_grid.size.y - duel.board_aspect_ratio) < 0.01, "Board preserves the approved portrait-cell aspect ratio")
 	_check(turn_status.position.y >= player_hand.position.y + player_hand.size.y, "Turn status appears below the player hand")
 	_check(absf(turn_status.position.x - player_hand.position.x) < 1.0 and absf(turn_status.size.x - player_hand.size.x) < 1.0, "Turn status matches the player hand's horizontal bounds")
-	_check(turn_status.position.y + turn_status.size.y <= duel.size.y - 8.0, "Turn status remains inside the bottom safe area")
+	_check(turn_status.position.y + turn_status.size.y <= canvas.size.y - 8.0, "Turn status remains inside the bottom safe area")
+
+
+func _check_duel_canvas_structure(duel: Node) -> void:
+	var backdrop: Control = duel.get_node_or_null("DecorBackdrop") as Control
+	var canvas: Control = duel.get_node_or_null("DuelCanvas") as Control
+	_check(
+		backdrop != null
+		and backdrop.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Decorative backdrop exists and cannot intercept input"
+	)
+	_check(canvas != null, "Fixed duel canvas exists")
+	if backdrop == null or canvas == null:
+		return
+	_check(
+		backdrop.get_index() < canvas.get_index(),
+		"Decorative backdrop renders behind the duel canvas"
+	)
+	for node_path: String in [
+		"TopWash",
+		"BoardCenter",
+		"TopBar",
+		"OpponentHand",
+		"PlayerHand",
+		"ScoreOverlay",
+		"TurnStatus",
+		"ExtraTurnVfx",
+		"DragLayer",
+		"CardInspector",
+	]:
+		_check(
+			canvas.has_node(node_path),
+			"%s is contained by the fixed duel canvas" % node_path
+		)
+	for audio_path: String in [
+		"PlacementAudio",
+		"CaptureAudio",
+		"RemovalAudio",
+		"MovementAudio",
+	]:
+		_check(
+			duel.has_node(audio_path)
+			and duel.get_node(audio_path).get_parent() == duel,
+			"%s remains a non-visual root child" % audio_path
+		)
+
+
+func _check_fixed_duel_canvas_geometry(duel: Node) -> void:
+	var original_window_size: Vector2i = root.size
+	var target_sizes: Array[Vector2i] = [
+		Vector2i(540, 960),
+		Vector2i(405, 900),
+		Vector2i(1280, 839),
+	]
+	var expected_modes: Array[int] = [
+		Backdrop.LayoutMode.MODE_EXACT,
+		Backdrop.LayoutMode.MODE_TALL,
+		Backdrop.LayoutMode.MODE_WIDE,
+	]
+	for target_index: int in range(target_sizes.size()):
+		var target_size: Vector2i = target_sizes[target_index]
+		root.size = target_size
+		await process_frame
+		duel.call("_layout_duel")
+		await process_frame
+		var backdrop: Control = duel.get_node("DecorBackdrop") as Control
+		var canvas: Control = duel.get_node("DuelCanvas") as Control
+		_check(
+			absf(canvas.size.x / canvas.size.y - 9.0 / 16.0) < 0.001,
+			"Duel canvas remains 9:16 at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			(canvas.position + canvas.size * 0.5).is_equal_approx(duel.size * 0.5),
+			"Duel canvas remains centered at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			backdrop.position.is_equal_approx(Vector2.ZERO)
+			and backdrop.size.is_equal_approx(duel.size),
+			"Decorative backdrop fills the viewport at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			int(backdrop.call("debug_get_layout_mode")) == expected_modes[target_index],
+			"Backdrop selects the expected mode at %dx%d" % [target_size.x, target_size.y]
+		)
+		if target_index == 0:
+			_check(
+				canvas.position.is_equal_approx(Vector2.ZERO)
+				and canvas.size.is_equal_approx(duel.size),
+				"Exact 9:16 viewport exposes no extension"
+			)
+		elif target_index == 1:
+			_check(
+				is_equal_approx(canvas.position.x, 0.0)
+				and is_equal_approx(canvas.size.x, duel.size.x)
+				and canvas.position.y > 0.0
+				and canvas.position.y + canvas.size.y < duel.size.y,
+				"Tall viewport exposes only top and bottom extensions"
+			)
+		else:
+			_check(
+				is_equal_approx(canvas.position.y, 0.0)
+				and is_equal_approx(canvas.size.y, duel.size.y)
+				and canvas.position.x > 0.0
+				and canvas.position.x + canvas.size.x < duel.size.x,
+				"Wide viewport exposes only left and right extensions"
+			)
+		_check_layout(duel)
+	root.size = original_window_size
+	await process_frame
+	duel.call("_layout_duel")
+	await process_frame
 
 
 func _check_duel_header(duel: Node) -> void:
@@ -107,14 +222,14 @@ func _check_duel_header(duel: Node) -> void:
 		ProjectSettings.get_setting("display/window/stretch/aspect", "keep") == "expand",
 		"Project expands its logical viewport instead of letterboxing tall phones"
 	)
-	var top_wash: Control = duel.get_node("TopWash") as Control
-	var center_tint: TextureRect = duel.get_node_or_null("TopWash/CenterTint") as TextureRect
-	var bottom_edge: ColorRect = duel.get_node_or_null("TopWash/BottomEdge") as ColorRect
-	var header_shadow: ColorRect = duel.get_node_or_null("TopWash/Shadow") as ColorRect
-	var top_bar: HBoxContainer = duel.get_node("TopBar") as HBoxContainer
-	var enemy_seal: PanelContainer = duel.get_node_or_null("TopBar/EnemySeal") as PanelContainer
-	var opponent_name: Label = duel.get_node("TopBar/OpponentName") as Label
-	var exit_button: Button = duel.get_node("TopBar/ExitButton") as Button
+	var top_wash: Control = duel.get_node("DuelCanvas/TopWash") as Control
+	var center_tint: TextureRect = duel.get_node_or_null("DuelCanvas/TopWash/CenterTint") as TextureRect
+	var bottom_edge: ColorRect = duel.get_node_or_null("DuelCanvas/TopWash/BottomEdge") as ColorRect
+	var header_shadow: ColorRect = duel.get_node_or_null("DuelCanvas/TopWash/Shadow") as ColorRect
+	var top_bar: HBoxContainer = duel.get_node("DuelCanvas/TopBar") as HBoxContainer
+	var enemy_seal: PanelContainer = duel.get_node_or_null("DuelCanvas/TopBar/EnemySeal") as PanelContainer
+	var opponent_name: Label = duel.get_node("DuelCanvas/TopBar/OpponentName") as Label
+	var exit_button: Button = duel.get_node("DuelCanvas/TopBar/ExitButton") as Button
 
 	_check(
 		top_wash is ColorRect
@@ -155,12 +270,13 @@ func _check_duel_header(duel: Node) -> void:
 		)
 
 	var original_window_size: Vector2i = root.size
-	for target_size: Vector2i in [Vector2i(540, 960), Vector2i(405, 720), Vector2i(405, 900)]:
+	for target_size: Vector2i in [Vector2i(540, 960), Vector2i(405, 720), Vector2i(405, 900), Vector2i(1280, 839)]:
 		root.size = target_size
 		await process_frame
 		duel.call("_layout_duel")
 		await process_frame
-		var opponent_hand: HBoxContainer = duel.get_node("OpponentHand") as HBoxContainer
+		var opponent_hand: HBoxContainer = duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+		var canvas: Control = duel.get_node("DuelCanvas") as Control
 		var header_gap: float = opponent_hand.position.y - (top_wash.position.y + top_wash.size.y)
 		_check(
 			header_gap >= 12.0 and header_gap <= 18.0,
@@ -168,8 +284,8 @@ func _check_duel_header(duel: Node) -> void:
 		)
 		_check(
 			is_equal_approx(top_wash.position.x, 0.0)
-			and is_equal_approx(top_wash.size.x, duel.size.x),
-			"Header spans the viewport width at %dx%d" % [target_size.x, target_size.y]
+			and is_equal_approx(top_wash.size.x, canvas.size.x),
+			"Header spans the duel canvas width at %dx%d" % [target_size.x, target_size.y]
 		)
 		_check(
 			is_equal_approx(top_bar.position.x, opponent_hand.position.x)
@@ -183,7 +299,7 @@ func _check_duel_header(duel: Node) -> void:
 
 
 func _check_card_edge_labels(duel: Node) -> void:
-	var first_card := _first_card(duel.get_node("PlayerHand"))
+	var first_card := _first_card(duel.get_node("DuelCanvas/PlayerHand"))
 	var top_label := first_card.find_child("TopPower", true, false) as Label
 	var right_label := first_card.find_child("RightPower", true, false) as Label
 	var bottom_label := first_card.find_child("BottomPower", true, false) as Label
@@ -251,8 +367,8 @@ func _check_hand_slots(container: Node) -> void:
 
 
 func _check_catalog_hands(duel: Node) -> void:
-	var player_cards: Array[Control] = _cards_below(duel.get_node("PlayerHand"))
-	var opponent_cards: Array[Control] = _cards_below(duel.get_node("OpponentHand"))
+	var player_cards: Array[Control] = _cards_below(duel.get_node("DuelCanvas/PlayerHand"))
+	var opponent_cards: Array[Control] = _cards_below(duel.get_node("DuelCanvas/OpponentHand"))
 	var player_ids: Array[StringName] = []
 	var opponent_ids: Array[StringName] = []
 	for card: Control in player_cards:
@@ -295,7 +411,7 @@ func _check_player_draw_and_instance_mapping() -> void:
 	await process_frame
 	draw_duel.debug_set_fast_mode(true)
 	_check(not draw_duel.has_node("DrawAudio"), "Ink Summon has no dedicated draw audio")
-	var initial_card: Control = _first_card(draw_duel.get_node("PlayerHand"))
+	var initial_card: Control = _first_card(draw_duel.get_node("DuelCanvas/PlayerHand"))
 	_check(initial_card.has_node("Overlay/InkBloom") and initial_card.has_method("play_draw_summon"), "Card view exposes the reusable Ink Summon presentation")
 	var ink_bloom: Control = initial_card.get_node("Overlay/InkBloom") as Control
 	var ink_script: Script = ink_bloom.get_script()
@@ -316,8 +432,8 @@ func _check_player_draw_and_instance_mapping() -> void:
 	_check(logical_ids.size() == 4 and visual_ids.size() == 4, "Fa Zheng draws two cards without exceeding five")
 	_check(logical_ids != visual_ids, "Drawn cards fill earlier empty slots without repacking logical hand order")
 	_check(trace.size() >= 4 and trace.slice(trace.size() - 4) == [&"card_drawn", &"card_drawn", &"post_draw_gap", &"card_flipped"], "Sequential Ink Summons and their gap finish before flip presentation")
-	_check(_count_face_down(_cards_below(draw_duel.get_node("PlayerHand"))) == 0, "Testing-mode player draws remain face-up")
-	_check_hand_slots(draw_duel.get_node("PlayerHand"))
+	_check(_count_face_down(_cards_below(draw_duel.get_node("DuelCanvas/PlayerHand"))) == 0, "Testing-mode player draws remain face-up")
+	_check_hand_slots(draw_duel.get_node("DuelCanvas/PlayerHand"))
 
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 3, false), "Draw fixture advances through the opponent turn")
 	logical_ids = draw_duel.debug_get_hand_instance_ids(Rules.PLAYER_OWNER)
@@ -343,19 +459,19 @@ func _check_opponent_draw_visibility() -> void:
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 1, false), "Opponent-draw fixture advances to Strategist")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 7, false), "Playing Strategist from a three-card hand commits")
 
-	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("OpponentHand"))
+	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
 	_check(opponent_views.size() == 4, "Strategist draws two cards into the opponent hand")
 	_check(_count_face_down(opponent_views) == opponent_views.size(), "Normal-mode opponent draws remain fully concealed")
 	_check(trace.size() >= 2 and trace.slice(trace.size() - 2) == [&"card_drawn", &"card_drawn"], "Opponent Ink Summons also resolve sequentially")
 	_check(not draw_duel.has_node("DrawAudio"), "Opponent Ink Summon remains silent in fast and normal presentation")
-	_check_hand_slots(draw_duel.get_node("OpponentHand"))
+	_check_hand_slots(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	draw_duel.queue_free()
 	await process_frame
 
 
 func _check_normal_opponent_concealment(duel: Node) -> void:
-	var opponent_cards: Array[Control] = _cards_below(duel.get_node("OpponentHand"))
+	var opponent_cards: Array[Control] = _cards_below(duel.get_node("DuelCanvas/OpponentHand"))
 	var all_concealed: bool = not opponent_cards.is_empty()
 	var all_private_data_retained: bool = true
 	for card: Control in opponent_cards:
@@ -407,11 +523,11 @@ func _check_card_inspector_modal() -> void:
 	await process_frame
 	await process_frame
 	inspect_duel.debug_set_fast_mode(true)
-	var inspector: Control = inspect_duel.get_node("CardInspector") as Control
-	var board_grid: GridContainer = inspect_duel.get_node("BoardCenter/BoardGrid") as GridContainer
-	var score_overlay: VBoxContainer = inspect_duel.get_node("ScoreOverlay") as VBoxContainer
-	var player_card: Control = _first_card(inspect_duel.get_node("PlayerHand"))
-	var opponent_card: Control = _first_card(inspect_duel.get_node("OpponentHand"))
+	var inspector: Control = inspect_duel.get_node("DuelCanvas/CardInspector") as Control
+	var board_grid: GridContainer = inspect_duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
+	var score_overlay: VBoxContainer = inspect_duel.get_node("DuelCanvas/ScoreOverlay") as VBoxContainer
+	var player_card: Control = _first_card(inspect_duel.get_node("DuelCanvas/PlayerHand"))
+	var opponent_card: Control = _first_card(inspect_duel.get_node("DuelCanvas/OpponentHand"))
 	var occupancy_before: int = inspect_duel.debug_get_board_occupancy()
 	var turn_count_before: int = inspect_duel.debug_get_simulation_turn_count()
 
@@ -446,7 +562,7 @@ func _check_card_inspector_modal() -> void:
 	inspect_duel.debug_close_inspection()
 	await process_frame
 	_check(not inspect_duel.debug_is_inspection_open() and board_grid.visible and score_overlay.visible, "Closing restores board and score presentation")
-	_check(_count_playable(_cards_below(inspect_duel.get_node("PlayerHand"))) == _count_cards(inspect_duel.get_node("PlayerHand")), "Closing restores player hand interaction")
+	_check(_count_playable(_cards_below(inspect_duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(inspect_duel.get_node("DuelCanvas/PlayerHand")), "Closing restores player hand interaction")
 
 	_submit_card_tap(opponent_card)
 	await process_frame
@@ -506,7 +622,7 @@ func _check_inspector_holds_completed_ai_move() -> void:
 	ai_duel.debug_set_search_limits(0.75, {"max_depth": 99})
 	ai_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, true)
 	var search_started: bool = ai_duel.debug_is_search_running()
-	var inspect_card: Control = _first_card(ai_duel.get_node("PlayerHand"))
+	var inspect_card: Control = _first_card(ai_duel.get_node("DuelCanvas/PlayerHand"))
 	var inspector_opened: bool = (
 		inspect_card != null
 		and ai_duel.debug_open_inspection(inspect_card.get("card_data"))
@@ -544,12 +660,12 @@ func _check_focus_loss_return() -> void:
 	await process_frame
 	await process_frame
 	focus_duel.debug_set_fast_mode(true)
-	var card: Control = _first_card(focus_duel.get_node("PlayerHand"))
+	var card: Control = _first_card(focus_duel.get_node("DuelCanvas/PlayerHand"))
 	var home_parent: Node = card.get_parent()
 	card.call("_try_begin_drag", card.get_global_rect().get_center(), -1)
-	_check(card.get_parent() == focus_duel.get_node("DragLayer"), "A playable card enters the drag layer when dragging starts")
+	_check(card.get_parent() == focus_duel.get_node("DuelCanvas/DragLayer"), "A playable card enters the drag layer when dragging starts")
 	card.notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
-	_check(card.get_parent() == focus_duel.get_node("DragLayer"), "Focus-loss handling defers scene-tree mutation until notification processing ends")
+	_check(card.get_parent() == focus_duel.get_node("DuelCanvas/DragLayer"), "Focus-loss handling defers scene-tree mutation until notification processing ends")
 	await process_frame
 	await process_frame
 	_check(card.get_parent() == home_parent, "A focus-loss drag cancellation safely returns the card to its slot")
@@ -563,9 +679,9 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	await process_frame
 	await process_frame
 	drag_duel.debug_set_fast_mode(true)
-	var card: Control = _first_card(drag_duel.get_node("PlayerHand"))
+	var card: Control = _first_card(drag_duel.get_node("DuelCanvas/PlayerHand"))
 	drag_duel._on_card_drag_started(card, card.get_global_rect().get_center())
-	_check(card.get_parent() == drag_duel.get_node("DragLayer"), "Real drag path reparents the card before commit")
+	_check(card.get_parent() == drag_duel.get_node("DuelCanvas/DragLayer"), "Real drag path reparents the card before commit")
 	await drag_duel._commit_card(card, 0, 1)
 	_check(drag_duel.debug_get_board_occupancy() == 2, "Dragged player card and opponent reply both commit through production")
 	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
@@ -581,6 +697,76 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	await process_frame
 
 
+func _check_aspect_ratio_input_paths() -> void:
+	var original_window_size: Vector2i = root.size
+	for target_size: Vector2i in [Vector2i(405, 900), Vector2i(1280, 839)]:
+		root.size = target_size
+		await process_frame
+		var aspect_duel: Node = DUEL_SCENE.instantiate()
+		aspect_duel.set("testing_mode", true)
+		root.add_child(aspect_duel)
+		await process_frame
+		await process_frame
+		aspect_duel.debug_set_fast_mode(true)
+		aspect_duel.call("_layout_duel")
+		await process_frame
+
+		var canvas: Control = aspect_duel.get_node("DuelCanvas") as Control
+		var board_grid: GridContainer = aspect_duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
+		var card: Control = _first_card(aspect_duel.get_node("DuelCanvas/PlayerHand"))
+		var target_cell: Control = board_grid.get_child(0) as Control
+		var target_position: Vector2 = target_cell.get_global_rect().get_center()
+		var card_center: Vector2 = card.get_global_rect().get_center()
+		card.call("_try_begin_drag", card_center, -1)
+		card.call("_move_drag", target_position)
+		card.call("_try_end_drag", target_position, -1)
+
+		var frames_waited: int = 0
+		while aspect_duel.debug_get_board_occupancy() < 1 and frames_waited < 60:
+			await process_frame
+			frames_waited += 1
+		_check(
+			aspect_duel.debug_get_board_occupancy() == 1,
+			"Global drag commits to the intended board on %dx%d" % [target_size.x, target_size.y]
+		)
+
+		var extension_point: Vector2
+		if target_size.y > int(round(float(target_size.x) / (9.0 / 16.0))):
+			extension_point = Vector2(canvas.get_global_rect().get_center().x, canvas.global_position.y * 0.5)
+		else:
+			extension_point = Vector2(canvas.global_position.x * 0.5, canvas.get_global_rect().get_center().y)
+		_check(
+			int(aspect_duel.call("_get_cell_at_position", extension_point)) == -1,
+			"Decorative extension is never a board target on %dx%d" % [target_size.x, target_size.y]
+		)
+
+		if target_size == Vector2i(405, 900):
+			var inspect_card: Control = _first_card(aspect_duel.get_node("DuelCanvas/PlayerHand"))
+			var opened: bool = aspect_duel.debug_open_inspection(inspect_card.get("card_data"))
+			var inspector: Control = aspect_duel.get_node("DuelCanvas/CardInspector") as Control
+			_check(opened, "Tall-screen fixture opens the inspector")
+			var press := InputEventMouseButton.new()
+			press.button_index = MOUSE_BUTTON_LEFT
+			press.pressed = true
+			press.position = extension_point
+			inspector.call("_input", press)
+			var release := InputEventMouseButton.new()
+			release.button_index = MOUSE_BUTTON_LEFT
+			release.pressed = false
+			release.position = extension_point
+			inspector.call("_input", release)
+			await process_frame
+			_check(
+				not aspect_duel.debug_is_inspection_open(),
+				"Tap-to-close inspection still accepts a decorative-extension tap"
+			)
+
+		aspect_duel.queue_free()
+		await process_frame
+	root.size = original_window_size
+	await process_frame
+
+
 func _check_testing_mode_manual_turns() -> void:
 	var test_duel: Node = DUEL_SCENE.instantiate()
 	test_duel.set("testing_mode", true)
@@ -589,28 +775,28 @@ func _check_testing_mode_manual_turns() -> void:
 	await process_frame
 	test_duel.debug_set_fast_mode(true)
 
-	var player_cards: Array[Control] = _cards_below(test_duel.get_node("PlayerHand"))
-	var opponent_cards: Array[Control] = _cards_below(test_duel.get_node("OpponentHand"))
+	var player_cards: Array[Control] = _cards_below(test_duel.get_node("DuelCanvas/PlayerHand"))
+	var opponent_cards: Array[Control] = _cards_below(test_duel.get_node("DuelCanvas/OpponentHand"))
 	var all_face_up: bool = true
 	for card: Control in player_cards + opponent_cards:
 		all_face_up = all_face_up and card.has_method("is_face_down") and not bool(card.call("is_face_down"))
 	_check(all_face_up, "Testing mode starts with both hands face-up")
 	_check(_count_playable(player_cards) == player_cards.size() and _count_playable(opponent_cards) == 0, "Testing mode initially enables only the player hand")
-	_check("Testing" in (test_duel.get_node("TurnStatus") as Label).text and "Player" in (test_duel.get_node("TurnStatus") as Label).text, "Testing status identifies the opening player side")
+	_check("Testing" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text and "Player" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text, "Testing status identifies the opening player side")
 
 	var player_card: Control = player_cards[0]
 	test_duel._on_card_drag_started(player_card, player_card.get_global_rect().get_center())
-	_check(player_card.get_parent() == test_duel.get_node("DragLayer"), "Testing player drag uses the production drag layer")
+	_check(player_card.get_parent() == test_duel.get_node("DuelCanvas/DragLayer"), "Testing player drag uses the production drag layer")
 	await test_duel._commit_card(player_card, 0, 1)
 	_check(test_duel.debug_get_board_occupancy() == 1 and test_duel.debug_get_simulation_turn_count() == 1, "Testing mode suppresses the automatic AI reply")
-	opponent_cards = _cards_below(test_duel.get_node("OpponentHand"))
-	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == 0 and _count_playable(opponent_cards) == opponent_cards.size(), "Testing mode enables only the opponent hand on the opponent turn")
-	_check("Testing" in (test_duel.get_node("TurnStatus") as Label).text and "Opponent" in (test_duel.get_node("TurnStatus") as Label).text, "Testing status identifies the opponent side")
+	opponent_cards = _cards_below(test_duel.get_node("DuelCanvas/OpponentHand"))
+	_check(_count_playable(_cards_below(test_duel.get_node("DuelCanvas/PlayerHand"))) == 0 and _count_playable(opponent_cards) == opponent_cards.size(), "Testing mode enables only the opponent hand on the opponent turn")
+	_check("Testing" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text and "Opponent" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text, "Testing status identifies the opponent side")
 
 	var opponent_card: Control = opponent_cards[0]
 	var opponent_home: Node = opponent_card.get_parent()
 	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
-	_check(opponent_card.get_parent() == test_duel.get_node("DragLayer"), "Testing opponent drag uses the production drag layer")
+	_check(opponent_card.get_parent() == test_duel.get_node("DuelCanvas/DragLayer"), "Testing opponent drag uses the production drag layer")
 	opponent_card.call("_try_end_drag", Vector2(-100.0, -100.0), -1)
 	await process_frame
 	_check(opponent_card.get_parent() == opponent_home, "Invalid testing opponent drop returns to its original top-hand slot")
@@ -622,10 +808,10 @@ func _check_testing_mode_manual_turns() -> void:
 	_check(opponent_card.get_parent() == opponent_home, "Focus loss returns a testing opponent card to its original top-hand slot")
 
 	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
-	_check(opponent_card.get_parent() == test_duel.get_node("DragLayer"), "Testing opponent card can begin a second valid drag")
+	_check(opponent_card.get_parent() == test_duel.get_node("DuelCanvas/DragLayer"), "Testing opponent card can begin a second valid drag")
 	await test_duel._commit_card(opponent_card, 1, 2)
 	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 2, "Manual opponent placement advances the production simulator path exactly once")
-	_check(_count_playable(_cards_below(test_duel.get_node("PlayerHand"))) == _count_cards(test_duel.get_node("PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
+	_check(_count_playable(_cards_below(test_duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(test_duel.get_node("DuelCanvas/PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("DuelCanvas/OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
 	_check(not test_duel.debug_is_search_running() and test_duel.debug_get_last_search_report().is_empty(), "Testing mode never starts an opponent search session")
 	test_duel.queue_free()
 	await process_frame
@@ -663,7 +849,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
-	var extra_turn_vfx: Control = duel.get_node_or_null("ExtraTurnVfx") as Control
+	var extra_turn_vfx: Control = duel.get_node_or_null("DuelCanvas/ExtraTurnVfx") as Control
 	_check(extra_turn_vfx != null, "Duel scene contains the reusable extra-turn VFX overlay")
 	if extra_turn_vfx != null:
 		_check(extra_turn_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Extra-turn VFX never intercepts input")
@@ -698,7 +884,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		await extra_turn_vfx.call(
 			"play_convergence",
 			[meng_view, meng_view],
-			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
 			0.0,
 			0.0,
 			Color("e3b84f")
@@ -707,7 +893,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		await extra_turn_vfx.call(
 			"play_convergence",
 			[meng_view, second_source],
-			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
 			0.0,
 			0.0,
 			Color("e3b84f")
@@ -717,16 +903,16 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		await extra_turn_vfx.call(
 			"play_convergence",
 			[],
-			(duel.get_node("BoardCenter/BoardGrid") as Control).get_global_rect(),
+			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
 			0.0,
 			0.0,
 			Color("e3b84f")
 		)
 		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == pulses_before_missing + 1, "Missing source views still produce the board pulse")
 		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Repeated and source-less playback cleans up completely")
-	_check((duel.get_node("TurnStatus") as Label).text == "你的回合 · 拖动卡牌", "Normal player status returns after extra-turn feedback")
-	_check(_count_playable(_cards_below(duel.get_node("PlayerHand"))) == _count_cards(duel.get_node("PlayerHand")), "Player hand is enabled for the granted extra turn")
-	_check(_count_playable(_cards_below(duel.get_node("OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")
+	_check((duel.get_node("DuelCanvas/TurnStatus") as Label).text == "你的回合 · 拖动卡牌", "Normal player status returns after extra-turn feedback")
+	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(duel.get_node("DuelCanvas/PlayerHand")), "Player hand is enabled for the granted extra turn")
+	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")
 	duel.queue_free()
 	await process_frame
 
@@ -738,7 +924,7 @@ func _check_player_gate_exile() -> void:
 	await process_frame
 	exile_duel.debug_set_fast_mode(true)
 	_check(exile_duel.has_node("RemovalAudio"), "Duel scene contains dedicated removal audio")
-	var gate_view: Control = _cards_below(exile_duel.get_node("PlayerHand"))[1]
+	var gate_view: Control = _cards_below(exile_duel.get_node("DuelCanvas/PlayerHand"))[1]
 	_check(gate_view.has_node("Overlay/InkSlash"), "Card view contains the exile ink overlay")
 	_check(gate_view.has_method("play_effect_pulse") and gate_view.has_method("play_exile"), "Card view exposes exile presentation methods")
 

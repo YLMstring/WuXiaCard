@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bmyl5ugxrgmyw" path="res://scripts/duel_controller.gd" id="1_duel"]
 [ext_resource type="Script" uid="uid://b00s123e1o5k8" path="res://scripts/extra_turn_vfx.gd" id="2_extra_turn_vfx"]
 [ext_resource type="PackedScene" path="res://scenes/card_inspector.tscn" id="3_b72to"]
+[ext_resource type="Script" path="res://scripts/duel_backdrop.gd" id="4_mgajk"]
 
 [node name="Duel" type="Control" unique_id=736667207]
 layout_mode = 3
@@ -13,17 +14,23 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_duel")
 
-[node name="Background" type="ColorRect" parent="." unique_id=1241142244]
-layout_mode = 1
-anchors_preset = 15
+[node name="DecorBackdrop" type="Control" parent="." unique_id=1745328884]
+z_index = -10
+anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.84, 0.81, 0.72, 1)
+script = ExtResource("4_mgajk")
 
-[node name="TopWash" type="ColorRect" parent="." unique_id=1782767355]
+[node name="DuelCanvas" type="Control" parent="." unique_id=920718762]
+anchors_preset = 0
+offset_right = 540.0
+offset_bottom = 960.0
+mouse_filter = 2
+
+[node name="TopWash" type="ColorRect" parent="DuelCanvas" unique_id=1782767355]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -32,7 +39,7 @@ grow_horizontal = 2
 mouse_filter = 2
 color = Color(0.188, 0.137, 0.129, 1)
 
-[node name="CenterTint" type="TextureRect" parent="TopWash" unique_id=544548291]
+[node name="CenterTint" type="TextureRect" parent="DuelCanvas/TopWash" unique_id=544548291]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -43,7 +50,7 @@ mouse_filter = 2
 expand_mode = 1
 stretch_mode = 6
 
-[node name="BottomEdge" type="ColorRect" parent="TopWash" unique_id=1551872338]
+[node name="BottomEdge" type="ColorRect" parent="DuelCanvas/TopWash" unique_id=1551872338]
 z_index = 2
 layout_mode = 1
 anchors_preset = 12
@@ -56,7 +63,7 @@ grow_vertical = 0
 mouse_filter = 2
 color = Color(0.761, 0.6, 0.412, 1)
 
-[node name="Shadow" type="ColorRect" parent="TopWash" unique_id=1300154638]
+[node name="Shadow" type="ColorRect" parent="DuelCanvas/TopWash" unique_id=1300154638]
 z_index = 1
 layout_mode = 1
 anchors_preset = 12
@@ -69,7 +76,7 @@ grow_vertical = 0
 mouse_filter = 2
 color = Color(0.08, 0.05, 0.04, 0.22)
 
-[node name="BoardCenter" type="Control" parent="." unique_id=1251176396]
+[node name="BoardCenter" type="Control" parent="DuelCanvas" unique_id=1251176396]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -78,7 +85,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="BoardGrid" type="GridContainer" parent="BoardCenter" unique_id=414401033]
+[node name="BoardGrid" type="GridContainer" parent="DuelCanvas/BoardCenter" unique_id=414401033]
 layout_mode = 0
 offset_right = 388.0
 offset_bottom = 497.0
@@ -87,7 +94,7 @@ theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 columns = 3
 
-[node name="TopBar" type="HBoxContainer" parent="." unique_id=394207926]
+[node name="TopBar" type="HBoxContainer" parent="DuelCanvas" unique_id=394207926]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 16.0
@@ -95,7 +102,7 @@ offset_right = 524.0
 offset_bottom = 64.0
 theme_override_constants/separation = 10
 
-[node name="OpponentName" type="Label" parent="TopBar" unique_id=762303091]
+[node name="OpponentName" type="Label" parent="DuelCanvas/TopBar" unique_id=762303091]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.15, 0.08, 0.07, 1)
@@ -103,25 +110,25 @@ theme_override_font_sizes/font_size = 26
 text = "对手名字"
 vertical_alignment = 1
 
-[node name="ExitButton" type="Button" parent="TopBar" unique_id=1498069092]
+[node name="ExitButton" type="Button" parent="DuelCanvas/TopBar" unique_id=1498069092]
 custom_minimum_size = Vector2(78, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "返回"
 
-[node name="EnemySeal" type="PanelContainer" parent="TopBar" unique_id=782021601]
+[node name="EnemySeal" type="PanelContainer" parent="DuelCanvas/TopBar" unique_id=782021601]
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
 
-[node name="Value" type="Label" parent="TopBar/EnemySeal" unique_id=403112583]
+[node name="Value" type="Label" parent="DuelCanvas/TopBar/EnemySeal" unique_id=403112583]
 layout_mode = 2
 text = "敌"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="OpponentHand" type="HBoxContainer" parent="." unique_id=2076592828]
+[node name="OpponentHand" type="HBoxContainer" parent="DuelCanvas" unique_id=2076592828]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 82.0
@@ -129,7 +136,7 @@ offset_right = 524.0
 offset_bottom = 213.0
 theme_override_constants/separation = 4
 
-[node name="PlayerHand" type="HBoxContainer" parent="." unique_id=1186937617]
+[node name="PlayerHand" type="HBoxContainer" parent="DuelCanvas" unique_id=1186937617]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 781.0
@@ -137,7 +144,7 @@ offset_right = 524.0
 offset_bottom = 912.0
 theme_override_constants/separation = 4
 
-[node name="ScoreOverlay" type="VBoxContainer" parent="." unique_id=1691405603]
+[node name="ScoreOverlay" type="VBoxContainer" parent="DuelCanvas" unique_id=1691405603]
 layout_mode = 0
 offset_left = 472.0
 offset_top = 437.0
@@ -145,11 +152,11 @@ offset_right = 514.0
 offset_bottom = 557.0
 theme_override_constants/separation = 10
 
-[node name="OpponentScorePanel" type="PanelContainer" parent="ScoreOverlay" unique_id=251340656]
+[node name="OpponentScorePanel" type="PanelContainer" parent="DuelCanvas/ScoreOverlay" unique_id=251340656]
 custom_minimum_size = Vector2(42, 48)
 layout_mode = 2
 
-[node name="OpponentScore" type="Label" parent="ScoreOverlay/OpponentScorePanel" unique_id=259357748]
+[node name="OpponentScore" type="Label" parent="DuelCanvas/ScoreOverlay/OpponentScorePanel" unique_id=259357748]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.12, 0.06, 0.05, 1)
 theme_override_font_sizes/font_size = 26
@@ -157,11 +164,11 @@ text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PlayerScorePanel" type="PanelContainer" parent="ScoreOverlay" unique_id=447771854]
+[node name="PlayerScorePanel" type="PanelContainer" parent="DuelCanvas/ScoreOverlay" unique_id=447771854]
 custom_minimum_size = Vector2(42, 48)
 layout_mode = 2
 
-[node name="PlayerScore" type="Label" parent="ScoreOverlay/PlayerScorePanel" unique_id=1440128631]
+[node name="PlayerScore" type="Label" parent="DuelCanvas/ScoreOverlay/PlayerScorePanel" unique_id=1440128631]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.06, 0.1, 0.12, 1)
 theme_override_font_sizes/font_size = 26
@@ -169,7 +176,7 @@ text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="TurnStatus" type="Label" parent="." unique_id=1605362713]
+[node name="TurnStatus" type="Label" parent="DuelCanvas" unique_id=1605362713]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 920.0
@@ -181,7 +188,7 @@ text = "你的回合 · 拖动卡牌"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ExtraTurnVfx" type="Control" parent="." unique_id=152827651]
+[node name="ExtraTurnVfx" type="Control" parent="DuelCanvas" unique_id=152827651]
 z_index = 15
 layout_mode = 1
 anchors_preset = 15
@@ -192,7 +199,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("2_extra_turn_vfx")
 
-[node name="DragLayer" type="Control" parent="." unique_id=990681160]
+[node name="DragLayer" type="Control" parent="DuelCanvas" unique_id=990681160]
 z_index = 20
 layout_mode = 1
 anchors_preset = 15
@@ -210,5 +217,5 @@ mouse_filter = 2
 
 [node name="MovementAudio" type="AudioStreamPlayer" parent="." unique_id=537273466]
 
-[node name="CardInspector" parent="." unique_id=2059062960 instance=ExtResource("3_b72to")]
+[node name="CardInspector" parent="DuelCanvas" unique_id=2059062960 instance=ExtResource("3_b72to")]
 layout_mode = 1
