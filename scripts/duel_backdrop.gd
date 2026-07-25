@@ -21,10 +21,12 @@ enum LayoutMode {
 
 var duel_rect: Rect2 = Rect2()
 var presentation_mode: int = LayoutMode.MODE_EXACT
+var _lacquer_tint_texture: GradientTexture2D
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lacquer_tint_texture = create_lacquer_tint_texture(540)
 	queue_redraw()
 
 
@@ -69,6 +71,23 @@ static func calculate_lacquer_geometry(rect: Rect2) -> Dictionary:
 	}
 
 
+static func create_lacquer_tint_texture(width: int = 540) -> GradientTexture2D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.52, 1.0])
+	gradient.colors = PackedColorArray([
+		Color(0.0, 0.0, 0.0, 0.0),
+		Color(0.42, 0.25, 0.22, 0.66),
+		Color(0.0, 0.0, 0.0, 0.0),
+	])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.width = maxi(1, width)
+	texture.height = 1
+	texture.fill_from = Vector2(0.0, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	return texture
+
+
 func configure(new_duel_rect: Rect2) -> void:
 	duel_rect = new_duel_rect
 	presentation_mode = classify_layout(size)
@@ -102,6 +121,7 @@ func _draw_tall_extensions() -> void:
 
 func _draw_lacquer_extension(rect: Rect2) -> void:
 	draw_rect(rect, LACQUER_COLOR)
+	draw_texture_rect(_lacquer_tint_texture, rect, false)
 	if rect.size.y < 8.0:
 		return
 	var geometry: Dictionary = calculate_lacquer_geometry(rect)

@@ -238,6 +238,16 @@ func _check_duel_header(duel: Node) -> void:
 		and header_shadow != null,
 		"Duel header uses layered ink tint, lower edge, and shadow presentation"
 	)
+	if center_tint != null and center_tint.texture is GradientTexture2D:
+		var expected_tint: GradientTexture2D = Backdrop.create_lacquer_tint_texture(540)
+		var actual_tint := center_tint.texture as GradientTexture2D
+		_check(
+			actual_tint.gradient.offsets == expected_tint.gradient.offsets
+			and actual_tint.gradient.colors == expected_tint.gradient.colors,
+			"Duel header uses the shared lacquer tint definition"
+		)
+	else:
+		_check(false, "Duel header uses the shared lacquer tint definition")
 	_check(enemy_seal != null, "Duel header contains the approved enemy seal")
 	if enemy_seal != null:
 		_check(

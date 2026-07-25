@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_layout_classification()
 	_test_decoration_description()
 	_test_lacquer_geometry()
+	_test_lacquer_tint_texture()
 
 	if _failures == 0:
 		print("DUEL_BACKDROP_TESTS_PASSED checks=%d" % _checks)
@@ -111,6 +112,27 @@ func _test_lacquer_geometry() -> void:
 			(float(geometry["first_y"]) + float(geometry["second_y"])) * 0.5
 		),
 		"Lacquer ornaments remain exactly centered between both gold lines"
+	)
+
+
+func _test_lacquer_tint_texture() -> void:
+	var texture: GradientTexture2D = Backdrop.create_lacquer_tint_texture(405)
+	var gradient: Gradient = texture.gradient
+	_check(texture.width == 405, "Shared lacquer tint preserves the requested texture width")
+	_check(
+		gradient.offsets == PackedFloat32Array([0.0, 0.52, 1.0]),
+		"Shared lacquer tint keeps the approved horizontal offsets"
+	)
+	_check(
+		gradient.colors[0].is_equal_approx(Color(0.0, 0.0, 0.0, 0.0))
+		and gradient.colors[1].is_equal_approx(Color(0.42, 0.25, 0.22, 0.66))
+		and gradient.colors[2].is_equal_approx(Color(0.0, 0.0, 0.0, 0.0)),
+		"Shared lacquer tint keeps transparent edges and the approved warm center"
+	)
+	_check(
+		texture.fill_from.is_equal_approx(Vector2(0.0, 0.5))
+		and texture.fill_to.is_equal_approx(Vector2(1.0, 0.5)),
+		"Shared lacquer tint runs horizontally across the full width"
 	)
 
 

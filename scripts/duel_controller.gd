@@ -1165,19 +1165,7 @@ func _style_duel_header() -> void:
 	top_wash_shadow.color = Color(0.08, 0.05, 0.04, 0.22)
 	top_wash_shadow.offset_bottom = 3.0
 
-	var header_gradient := Gradient.new()
-	header_gradient.offsets = PackedFloat32Array([0.0, 0.52, 1.0])
-	header_gradient.colors = PackedColorArray([
-		Color(0.0, 0.0, 0.0, 0.0),
-		Color(0.42, 0.25, 0.22, 0.66),
-		Color(0.0, 0.0, 0.0, 0.0),
-	])
-	var header_texture := GradientTexture2D.new()
-	header_texture.gradient = header_gradient
-	header_texture.width = 540
-	header_texture.height = 1
-	header_texture.fill_from = Vector2(0.0, 0.5)
-	header_texture.fill_to = Vector2(1.0, 0.5)
+	var header_texture: GradientTexture2D = DuelBackdropData.create_lacquer_tint_texture(540)
 	top_wash_tint.texture = header_texture
 
 	var seal_style := StyleBoxFlat.new()
