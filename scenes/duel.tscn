@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://b00s123e1o5k8" path="res://scripts/extra_turn_vfx.gd" id="2_extra_turn_vfx"]
 [ext_resource type="PackedScene" path="res://scenes/card_inspector.tscn" id="3_b72to"]
 [ext_resource type="Script" uid="uid://d4a8komn6bcnu" path="res://scripts/duel_backdrop.gd" id="4_mgajk"]
+[ext_resource type="Texture2D" uid="uid://grtv0stqh3fu" path="res://pics/back_arrow.svg" id="5_back_arrow"]
 
 [node name="Duel" type="Control" unique_id=736667207]
 layout_mode = 3
@@ -48,7 +49,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 expand_mode = 1
-stretch_mode = 6
 
 [node name="BottomEdge" type="ColorRect" parent="DuelCanvas/TopWash" unique_id=1551872338]
 z_index = 2
@@ -111,10 +111,12 @@ text = "对手名字"
 vertical_alignment = 1
 
 [node name="ExitButton" type="Button" parent="DuelCanvas/TopBar" unique_id=1498069092]
-custom_minimum_size = Vector2(78, 44)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "返回"
+tooltip_text = "返回"
+icon = ExtResource("5_back_arrow")
+flat = true
+icon_alignment = 1
 
 [node name="EnemySeal" type="PanelContainer" parent="DuelCanvas/TopBar" unique_id=782021601]
 custom_minimum_size = Vector2(28, 28)

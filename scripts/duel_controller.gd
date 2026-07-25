@@ -1114,7 +1114,7 @@ func _layout_duel() -> void:
 	var board_position := Vector2((canvas_size.x - board_width) * 0.5, opponent_bottom + equal_gap)
 
 	top_wash.position = Vector2.ZERO
-	top_wash.size = Vector2(canvas_size.x, header_height)
+	top_wash.offset_bottom = header_height
 	top_bar.position = Vector2(horizontal_margin, (header_height - top_bar_height) * 0.5)
 	top_bar.size = Vector2(available_hand_width, top_bar_height)
 	opponent_hand.position = Vector2(horizontal_margin, opponent_top)
@@ -1187,34 +1187,22 @@ func _style_duel_header() -> void:
 	opponent_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	opponent_name.clip_text = true
 
-	var exit_normal := StyleBoxFlat.new()
-	exit_normal.bg_color = Color(0.15, 0.105, 0.098, 0.88)
-	exit_normal.border_color = Color("a9875b")
-	exit_normal.set_border_width_all(1)
-	exit_normal.set_corner_radius_all(4)
-	exit_normal.content_margin_left = 12.0
-	exit_normal.content_margin_right = 12.0
-
-	var exit_hover := exit_normal.duplicate() as StyleBoxFlat
-	exit_hover.bg_color = Color("3a2925")
-	exit_hover.border_color = Color("c7a36d")
-
-	var exit_pressed := exit_normal.duplicate() as StyleBoxFlat
-	exit_pressed.bg_color = Color("1b1312")
-	exit_pressed.border_color = Color("8c6f4c")
-
-	var exit_focus := exit_hover.duplicate() as StyleBoxFlat
-	exit_focus.set_border_width_all(2)
-
-	exit_button.add_theme_stylebox_override("normal", exit_normal)
-	exit_button.add_theme_stylebox_override("hover", exit_hover)
-	exit_button.add_theme_stylebox_override("pressed", exit_pressed)
-	exit_button.add_theme_stylebox_override("focus", exit_focus)
-	exit_button.add_theme_color_override("font_color", Color("e2c89c"))
-	exit_button.add_theme_color_override("font_hover_color", Color("f4ddb2"))
-	exit_button.add_theme_color_override("font_pressed_color", Color("cdb387"))
-	exit_button.add_theme_color_override("font_focus_color", Color("f4ddb2"))
-	exit_button.add_theme_font_size_override("font_size", 16)
+	var exit_empty := StyleBoxEmpty.new()
+	for style_name: StringName in [
+		&"normal",
+		&"hover",
+		&"pressed",
+		&"hover_pressed",
+		&"disabled",
+		&"focus",
+	]:
+		exit_button.add_theme_stylebox_override(style_name, exit_empty)
+	exit_button.add_theme_color_override("icon_normal_color", Color("e2c89c"))
+	exit_button.add_theme_color_override("icon_hover_color", Color("f4ddb2"))
+	exit_button.add_theme_color_override("icon_pressed_color", Color("cdb387"))
+	exit_button.add_theme_color_override("icon_hover_pressed_color", Color("d8bd91"))
+	exit_button.add_theme_color_override("icon_focus_color", Color("f4ddb2"))
+	exit_button.add_theme_color_override("icon_disabled_color", Color(0.62, 0.52, 0.4, 0.55))
 
 
 func _create_placeholder_audio() -> void:

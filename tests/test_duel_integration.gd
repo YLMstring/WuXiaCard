@@ -79,7 +79,12 @@ func _run() -> void:
 	var opponent_name := duel.get_node("DuelCanvas/TopBar/OpponentName") as Label
 	var exit_button := duel.get_node("DuelCanvas/TopBar/ExitButton") as Button
 	_check(not opponent_name.text.is_empty() and opponent_name.get_index() < exit_button.get_index(), "Opponent name appears in the upper-left top bar")
-	_check(not exit_button.text.is_empty() and exit_button.get_index() > opponent_name.get_index(), "Exit button appears in the upper-right top bar")
+	_check(
+		exit_button.text.is_empty()
+		and exit_button.icon != null
+		and exit_button.get_index() > opponent_name.get_index(),
+		"Icon-only return control appears in the upper-right top bar"
+	)
 
 	duel.queue_free()
 	await process_frame
@@ -238,6 +243,11 @@ func _check_duel_header(duel: Node) -> void:
 		and header_shadow != null,
 		"Duel header uses layered ink tint, lower edge, and shadow presentation"
 	)
+	_check(
+		center_tint != null
+		and center_tint.stretch_mode == TextureRect.STRETCH_SCALE,
+		"Duel header scales the shared tint across its full width without aspect cropping"
+	)
 	if center_tint != null and center_tint.texture is GradientTexture2D:
 		var expected_tint: GradientTexture2D = Backdrop.create_lacquer_tint_texture(540)
 		var actual_tint := center_tint.texture as GradientTexture2D
@@ -269,6 +279,24 @@ func _check_duel_header(duel: Node) -> void:
 		exit_button.focus_mode != Control.FOCUS_NONE
 		and exit_button.size.y >= 44.0,
 		"Exit button remains focusable with at least a 44-pixel touch target"
+	)
+	_check(
+		exit_button.custom_minimum_size.is_equal_approx(Vector2(44.0, 44.0))
+		and exit_button.tooltip_text == "返回",
+		"Icon-only return control keeps its square mobile target and text tooltip"
+	)
+	_check(
+		exit_button.get_theme_stylebox("normal") is StyleBoxEmpty
+		and exit_button.get_theme_stylebox("hover") is StyleBoxEmpty
+		and exit_button.get_theme_stylebox("pressed") is StyleBoxEmpty
+		and exit_button.get_theme_stylebox("hover_pressed") is StyleBoxEmpty
+		and exit_button.get_theme_stylebox("disabled") is StyleBoxEmpty
+		and exit_button.get_theme_stylebox("focus") is StyleBoxEmpty,
+		"Icon-only return control has no visible button chrome"
+	)
+	_check(
+		exit_button.pressed.is_connected(Callable(duel, "_on_exit_pressed")),
+		"Icon-only return control keeps the existing exit action"
 	)
 	if top_wash is ColorRect:
 		var header_color: Color = (top_wash as ColorRect).color
