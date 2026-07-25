@@ -263,6 +263,10 @@ func _check_duel_header(duel: Node) -> void:
 	if top_wash is ColorRect:
 		var header_color: Color = (top_wash as ColorRect).color
 		_check(
+			header_color.is_equal_approx(Backdrop.LACQUER_COLOR),
+			"Duel header and decorative extension share one lacquer color"
+		)
+		_check(
 			header_color.get_luminance() < Color("8c403a").get_luminance()
 			and bottom_edge != null
 			and bottom_edge.color.is_equal_approx(Color("c29969")),

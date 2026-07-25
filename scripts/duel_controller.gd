@@ -1160,7 +1160,7 @@ func _style_static_ui() -> void:
 
 
 func _style_duel_header() -> void:
-	top_wash.color = Color("302321")
+	top_wash.color = DuelBackdropData.LACQUER_COLOR
 	top_wash_edge.color = Color("c29969")
 	top_wash_shadow.color = Color(0.08, 0.05, 0.04, 0.22)
 	top_wash_shadow.offset_bottom = 3.0

@@ -58,6 +58,17 @@ static func describe_decoration(viewport_size: Vector2) -> Dictionary:
 	}
 
 
+static func calculate_lacquer_geometry(rect: Rect2) -> Dictionary:
+	var inset: float = clampf(rect.size.y * 0.18, 3.0, 10.0)
+	var first_y: float = rect.position.y + inset
+	var second_y: float = rect.end.y - 0.5
+	return {
+		"first_y": first_y,
+		"second_y": second_y,
+		"ornament_y": (first_y + second_y) * 0.5,
+	}
+
+
 func configure(new_duel_rect: Rect2) -> void:
 	duel_rect = new_duel_rect
 	presentation_mode = classify_layout(size)
@@ -93,9 +104,10 @@ func _draw_lacquer_extension(rect: Rect2) -> void:
 	draw_rect(rect, LACQUER_COLOR)
 	if rect.size.y < 8.0:
 		return
-	var inset: float = clampf(rect.size.y * 0.18, 3.0, 10.0)
-	var first_y: float = rect.position.y + inset
-	var second_y: float = rect.end.y - inset
+	var geometry: Dictionary = calculate_lacquer_geometry(rect)
+	var first_y: float = float(geometry["first_y"])
+	var second_y: float = float(geometry["second_y"])
+	var ornament_y: float = float(geometry["ornament_y"])
 	draw_line(
 		Vector2(rect.position.x, first_y),
 		Vector2(rect.end.x, first_y),
@@ -108,14 +120,14 @@ func _draw_lacquer_extension(rect: Rect2) -> void:
 		ANTIQUE_GOLD,
 		1.0
 	)
-	var center := rect.get_center()
+	var center_x: float = rect.get_center().x
 	var ornament_scale: float = clampf(rect.size.y * 0.075, 2.0, 5.0)
 	for ornament_index: int in range(-2, 3):
-		var ornament_x: float = center.x + float(ornament_index) * ornament_scale * 7.0
+		var ornament_x: float = center_x + float(ornament_index) * ornament_scale * 7.0
 		if ornament_index % 2 == 0:
-			_draw_diamond(Vector2(ornament_x, center.y), ornament_scale, ANTIQUE_GOLD)
+			_draw_diamond(Vector2(ornament_x, ornament_y), ornament_scale, ANTIQUE_GOLD)
 		else:
-			draw_circle(Vector2(ornament_x, center.y), ornament_scale * 0.42, ANTIQUE_GOLD)
+			draw_circle(Vector2(ornament_x, ornament_y), ornament_scale * 0.42, ANTIQUE_GOLD)
 
 
 func _draw_bottom_ink_extension(rect: Rect2) -> void:

@@ -37,7 +37,7 @@ anchor_right = 1.0
 offset_bottom = 75.0
 grow_horizontal = 2
 mouse_filter = 2
-color = Color(0.188, 0.137, 0.129, 1)
+color = Color(0.270588, 0.156863, 0.141176, 1)
 
 [node name="CenterTint" type="TextureRect" parent="DuelCanvas/TopWash" unique_id=544548291]
 layout_mode = 1

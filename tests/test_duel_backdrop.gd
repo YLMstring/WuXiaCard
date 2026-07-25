@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_fitted_duel_rect()
 	_test_layout_classification()
 	_test_decoration_description()
+	_test_lacquer_geometry()
 
 	if _failures == 0:
 		print("DUEL_BACKDROP_TESTS_PASSED checks=%d" % _checks)
@@ -90,6 +91,26 @@ func _test_decoration_description() -> void:
 		and not wide["bottom_ridges"]
 		and wide["side_wash"],
 		"Wide mode uses mountain-free mirrored side wash"
+	)
+
+
+func _test_lacquer_geometry() -> void:
+	var extension_rect := Rect2(0.0, 0.0, 405.0, 90.0)
+	var geometry: Dictionary = Backdrop.calculate_lacquer_geometry(extension_rect)
+	_check(
+		is_equal_approx(float(geometry["first_y"]), 10.0),
+		"Upper lacquer line retains its responsive inset"
+	)
+	_check(
+		is_equal_approx(float(geometry["second_y"]), 89.5),
+		"Lower lacquer line sits half a pixel inside the duel seam"
+	)
+	_check(
+		is_equal_approx(
+			float(geometry["ornament_y"]),
+			(float(geometry["first_y"]) + float(geometry["second_y"])) * 0.5
+		),
+		"Lacquer ornaments remain exactly centered between both gold lines"
 	)
 
 

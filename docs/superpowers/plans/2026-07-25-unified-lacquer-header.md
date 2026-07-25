@@ -25,6 +25,7 @@
 **Files:**
 
 - Modify: `scripts/duel_backdrop.gd`
+- Modify: `scripts/duel_controller.gd`
 - Modify: `scenes/duel.tscn`
 
 **Steps:**
@@ -33,7 +34,8 @@
 2. Use that helper in `_draw_lacquer_extension()`.
 3. Draw the lower gold line half a pixel inside the seam.
 4. Draw every ornament at the calculated midpoint between the gold lines.
-5. Change `TopWash.color` to the exact lacquer color `#452824`.
+5. Make `_style_duel_header()` use `DuelBackdrop.LACQUER_COLOR` as the runtime source of truth.
+6. Change the scene's initial `TopWash.color` to `#452824` so editor previews also match.
 
 ## Task 3: Verify the result
 
