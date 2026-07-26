@@ -73,7 +73,7 @@ func _run_runtime_benchmark() -> void:
 
 
 func _test_action_and_state_keys() -> void:
-	var action: Action = Action.make_activate(4, &"unit_1", &"move", Action.TARGET_BOARD_CELL, 5)
+	var action: Action = Action.make_activate(4, &"unit_1", Action.TARGET_BOARD_CELL, 5)
 	_check(action.canonical_key() == action.duplicate_action().canonical_key(), "Duplicated actions retain a stable canonical key")
 	var changed_action: Action = action.duplicate_action()
 	changed_action.target_index = 3

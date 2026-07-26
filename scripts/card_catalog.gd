@@ -1,45 +1,59 @@
 class_name CardCatalog
 extends RefCounted
 
-const EFFECT_EXILE_INSTEAD_OF_FLIP: StringName = &"exile_instead_of_flip"
-const EFFECT_DRAW_CARDS_ON_PLAY: StringName = &"draw_cards_on_play"
-const EFFECT_MOVE_AND_ATTACK: StringName = &"move_and_attack"
-const EFFECT_BATTLE_MOMENTUM: StringName = &"battle_momentum"
-const EFFECT_WELCOMING_PINE: StringName = &"welcoming_pine"
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
-const TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF: StringName = &"after_successful_flip_by_self"
-const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
+const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
+const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
+const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
+const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
 const CONDITION_TRIGGER_CARD_IS_ENEMY: StringName = &"trigger_card_is_enemy"
 const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
-const TRIGGER_ACTION_GAIN_KI: StringName = &"gain_ki"
-const TRIGGER_ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
-const TRIGGER_ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
-const TRIGGER_ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
-const KNOWN_EFFECT_IDS: Array[StringName] = [
-	EFFECT_EXILE_INSTEAD_OF_FLIP,
-	EFFECT_DRAW_CARDS_ON_PLAY,
-	EFFECT_MOVE_AND_ATTACK,
-	EFFECT_BATTLE_MOMENTUM,
-	EFFECT_WELCOMING_PINE,
-]
+const CONDITION_TRIGGER_CARD_IS_SELF: StringName = &"trigger_card_is_self"
+const CONDITION_ATTACKER_CARD_IS_SELF: StringName = &"attacker_card_is_self"
+const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
+const ACTION_DRAW_CARDS: StringName = &"draw_cards"
+const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
+const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
+const ACTION_GAIN_KI: StringName = &"gain_ki"
+const ACTION_SPEND_KI: StringName = &"spend_ki"
+const ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
+const ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
+const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
+const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
+const ACTION_RESULT_APPLIED: StringName = &"applied"
+const ACTION_RESULT_NO_EFFECT: StringName = &"no_effect"
+const ACTION_RESULT_INVALID_CONTEXT: StringName = &"invalid_context"
+const STOP_RULE: StringName = &"stop_rule"
+const KNOWN_ACTIVATION_INPUTS: Array[StringName] = [ACTIVATION_DRAG_TO_TARGET]
+const KNOWN_TARGET_RULES: Array[StringName] = [TARGET_ADJACENT_EMPTY_BOARD]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
-	TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
-	TRIGGER_END_OWNER_TURN,
 	TRIGGER_CARD_SUMMONED,
+	TRIGGER_CARD_AFTER_SUMMONED,
+	CARD_BE_ATTACKED,
+	CARD_AFTER_FLIPPED,
+	TRIGGER_END_OWNER_TURN,
 ]
 const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_KI_AT_LEAST,
 	CONDITION_TRIGGER_CARD_IS_ENEMY,
 	CONDITION_TRIGGER_CARD_IN_RANGE,
+	CONDITION_TRIGGER_CARD_IS_SELF,
+	CONDITION_ATTACKER_CARD_IS_SELF,
+	CONDITION_TURN_OWNER_IS_SELF,
 ]
-const KNOWN_TRIGGER_ACTIONS: Array[StringName] = [
-	TRIGGER_ACTION_GAIN_KI,
-	TRIGGER_ACTION_SPEND_ALL_KI,
-	TRIGGER_ACTION_REQUEST_EXTRA_TURN,
-	TRIGGER_ACTION_ATTACK_TRIGGER_CARD,
+const KNOWN_ACTIONS: Array[StringName] = [
+	ACTION_DRAW_CARDS,
+	ACTION_EXILE_ATTACKED_CARD,
+	ACTION_ATTACK_TRIGGER_CARD,
+	ACTION_GAIN_KI,
+	ACTION_SPEND_KI,
+	ACTION_SPEND_ALL_KI,
+	ACTION_REQUEST_EXTRA_TURN,
+	ACTION_MOVE_SELF_TO_TARGET,
+	ACTION_STANDARD_ATTACK_WITH_SELF,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -66,7 +80,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [4, 7, 7, 4],
-		"effects": [],
+		"abilities": [],
 	},
 	&"CangSongYingKe2": {
 		"id": &"CangSongYingKe2",
@@ -78,9 +92,8 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对手招式进场时，若我可以，对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [4, 7, 7, 4],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_WELCOMING_PINE,
 				"triggers": [
 					{
 						"event": TRIGGER_CARD_SUMMONED,
@@ -89,7 +102,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
 						],
 						"actions": [
-							{"type": TRIGGER_ACTION_ATTACK_TRIGGER_CARD},
+							{"type": ACTION_ATTACK_TRIGGER_CARD},
 						],
 					},
 				],
@@ -106,10 +119,20 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [7, 7, 7, 7],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_EXILE_INSTEAD_OF_FLIP,
 				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
 			},
 		],
 	},
@@ -123,24 +146,27 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [8, 7, 2, 3],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_BATTLE_MOMENTUM,
 				"triggers": [
 					{
-						"event": TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
+						"event": CARD_AFTER_FLIPPED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
 						"actions": [
-							{"type": TRIGGER_ACTION_GAIN_KI, "amount": 1},
+							{"type": ACTION_GAIN_KI, "amount": 1},
 						],
 					},
 					{
 						"event": TRIGGER_END_OWNER_TURN,
 						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
 							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
 						],
 						"actions": [
-							{"type": TRIGGER_ACTION_SPEND_ALL_KI},
-							{"type": TRIGGER_ACTION_REQUEST_EXTRA_TURN},
+							{"type": ACTION_SPEND_ALL_KI},
+							{"type": ACTION_REQUEST_EXTRA_TURN},
 						],
 					},
 				],
@@ -158,11 +184,19 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "",
 		"powers": [6, 6, 6, 6],
 		"starting_ki": 1,
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_MOVE_AND_ATTACK,
-				"activation": ACTIVATION_DRAG_TO_TARGET,
-				"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
 			},
 		],
 	},
@@ -176,10 +210,19 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [5, 4, 4, 3],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_DRAW_CARDS_ON_PLAY,
-				"draw_count": 2,
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_DRAW_CARDS, "amount": 2},
+						],
+					},
+				],
 			},
 		],
 	},
@@ -193,7 +236,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [5, 5, 4, 4],
-		"effects": [],
+		"abilities": [],
 	},
 	&"tiger_general": {
 		"id": &"tiger_general",
@@ -205,10 +248,20 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [3, 4, 8, 8],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_EXILE_INSTEAD_OF_FLIP,
 				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
 			},
 		],
 	},
@@ -222,10 +275,19 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "",
 		"flavor": "",
 		"powers": [4, 4, 4, 4],
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_DRAW_CARDS_ON_PLAY,
-				"draw_count": 2,
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_DRAW_CARDS, "amount": 2},
+						],
+					},
+				],
 			},
 		],
 	},
@@ -240,11 +302,19 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "",
 		"powers": [3, 5, 8, 8],
 		"starting_ki": 1,
-		"effects": [
+		"abilities": [
 			{
-				"id": EFFECT_MOVE_AND_ATTACK,
-				"activation": ACTIVATION_DRAG_TO_TARGET,
-				"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
 			},
 		],
 	},
@@ -284,13 +354,13 @@ static func create_instance(
 		"powers": (definition["powers"] as Array).duplicate(),
 		"original_owner": original_owner,
 		"ki": int(definition.get("starting_ki", 0)),
-		"active_effects": _normalize_effects(definition["effects"] as Array),
+		"active_abilities": _normalize_abilities(definition["abilities"] as Array),
 	}
 
 
-static func validate_effect(effect: Dictionary, card_id: StringName = &"fixture") -> Array[String]:
+static func validate_ability(ability: Dictionary, card_id: StringName = &"fixture") -> Array[String]:
 	var errors: Array[String] = []
-	_validate_effect(card_id, effect, errors)
+	_validate_ability(card_id, ability, errors)
 	return errors
 
 
@@ -357,55 +427,56 @@ static func _validate_definition(
 	for power: Variant in powers:
 		if typeof(power) != TYPE_INT:
 			errors.append("Card %s has a non-integer power" % card_id)
-	var effects: Array = definition.get("effects", [])
+	if definition.has("effects"):
+		errors.append("Card %s still declares retired effects data" % card_id)
+	var abilities_value: Variant = definition.get("abilities", null)
 	var starting_ki: Variant = definition.get("starting_ki", 0)
 	if typeof(starting_ki) != TYPE_INT or int(starting_ki) < 0:
 		errors.append("Card %s requires a non-negative integer starting_ki" % card_id)
-	var activate_effect_count: int = 0
-	for effect_value: Variant in effects:
-		if not effect_value is Dictionary:
-			errors.append("Card %s has a non-dictionary effect" % card_id)
+	if not abilities_value is Array:
+		errors.append("Card %s requires an abilities array" % card_id)
+		return
+	var activation_count: int = 0
+	for ability_value: Variant in abilities_value as Array:
+		if not ability_value is Dictionary:
+			errors.append("Card %s has a non-dictionary ability" % card_id)
 			continue
-		var effect: Dictionary = effect_value
-		if effect.has("activation"):
-			activate_effect_count += 1
-		_validate_effect(card_id, effect, errors)
-	if activate_effect_count > 1:
-		errors.append("Card %s declares more than one activate effect" % card_id)
+		var ability: Dictionary = ability_value
+		if ability.has("activation"):
+			activation_count += 1
+		_validate_ability(card_id, ability, errors)
+	if activation_count > 1:
+		errors.append("Card %s declares more than one activation" % card_id)
 
 
-static func _normalize_effects(raw_effects: Array) -> Array:
-	var normalized_effects: Array = []
-	for effect_value: Variant in raw_effects:
-		var effect: Dictionary = (effect_value as Dictionary).duplicate(true)
-		if not effect.has("retained_on_flip"):
-			effect["retained_on_flip"] = false
-		normalized_effects.append(effect)
-	return normalized_effects
+static func _normalize_abilities(raw_abilities: Array) -> Array:
+	var normalized_abilities: Array = []
+	for ability_value: Variant in raw_abilities:
+		var ability: Dictionary = (ability_value as Dictionary).duplicate(true)
+		if not ability.has("retained_on_flip"):
+			ability["retained_on_flip"] = false
+		normalized_abilities.append(ability)
+	return normalized_abilities
 
 
-static func _validate_effect(
+static func _validate_ability(
 	card_id: StringName,
-	effect: Dictionary,
+	ability: Dictionary,
 	errors: Array[String]
 ) -> void:
-	var effect_id := StringName(effect.get("id", &""))
-	if effect_id not in KNOWN_EFFECT_IDS:
-		errors.append("Card %s uses unknown effect %s" % [card_id, effect_id])
-	if effect.has("retained_on_flip") and typeof(effect["retained_on_flip"]) != TYPE_BOOL:
-		errors.append("Card %s effect %s has non-Boolean retained_on_flip" % [card_id, effect_id])
-	if effect_id == EFFECT_DRAW_CARDS_ON_PLAY:
-		if not effect.has("draw_count") or typeof(effect["draw_count"]) != TYPE_INT:
-			errors.append("Card %s draw effect requires an integer draw_count" % card_id)
-		elif int(effect["draw_count"]) <= 0:
-			errors.append("Card %s draw effect requires a positive draw_count" % card_id)
-	if effect_id == EFFECT_MOVE_AND_ATTACK:
-		if StringName(effect.get("activation", &"")) != ACTIVATION_DRAG_TO_TARGET:
-			errors.append("Card %s move effect requires drag_to_target activation" % card_id)
-		if StringName(effect.get("target_rule", &"")) != TARGET_ADJACENT_EMPTY_BOARD:
-			errors.append("Card %s move effect requires adjacent_empty_board targeting" % card_id)
-	if effect_id in [EFFECT_BATTLE_MOMENTUM, EFFECT_WELCOMING_PINE]:
-		_validate_triggers(card_id, effect.get("triggers", null), errors)
+	if ability.has("id"):
+		errors.append("Card %s ability must not declare an id" % card_id)
+	for key: Variant in ability.keys():
+		if StringName(key) not in [&"retained_on_flip", &"triggers", &"activation"]:
+			errors.append("Card %s ability has unsupported field %s" % [card_id, key])
+	if ability.has("retained_on_flip") and typeof(ability["retained_on_flip"]) != TYPE_BOOL:
+		errors.append("Card %s ability has non-Boolean retained_on_flip" % card_id)
+	if not ability.has("triggers") and not ability.has("activation"):
+		errors.append("Card %s ability requires triggers or activation" % card_id)
+	if ability.has("triggers"):
+		_validate_triggers(card_id, ability["triggers"], errors)
+	if ability.has("activation"):
+		_validate_activation(card_id, ability["activation"], errors)
 
 
 static func _validate_triggers(card_id: StringName, trigger_value: Variant, errors: Array[String]) -> void:
@@ -438,7 +509,7 @@ static func _validate_trigger(card_id: StringName, trigger: Dictionary, errors: 
 			if not condition_value is Dictionary:
 				errors.append("Card %s trigger %s has a non-dictionary condition" % [card_id, event_id])
 				continue
-			_validate_trigger_condition(card_id, event_id, condition_value as Dictionary, errors)
+			_validate_condition(card_id, "trigger %s" % event_id, condition_value as Dictionary, errors)
 	var actions_value: Variant = trigger.get("actions", null)
 	if not actions_value is Array or (actions_value as Array).is_empty():
 		errors.append("Card %s trigger %s requires a non-empty action array" % [card_id, event_id])
@@ -447,46 +518,90 @@ static func _validate_trigger(card_id: StringName, trigger: Dictionary, errors: 
 		if not action_value is Dictionary:
 			errors.append("Card %s trigger %s has a non-dictionary action" % [card_id, event_id])
 			continue
-		_validate_trigger_action(card_id, event_id, action_value as Dictionary, errors)
+		_validate_action(card_id, "trigger %s" % event_id, action_value as Dictionary, false, errors)
 
 
-static func _validate_trigger_condition(
+static func _validate_condition(
 	card_id: StringName,
-	event_id: StringName,
+	context_name: String,
 	condition: Dictionary,
 	errors: Array[String]
 ) -> void:
 	var condition_type := StringName(condition.get("type", &""))
 	if condition_type not in KNOWN_TRIGGER_CONDITIONS:
-		errors.append("Card %s trigger %s uses unknown condition %s" % [card_id, event_id, condition_type])
+		errors.append("Card %s %s uses unknown condition %s" % [card_id, context_name, condition_type])
 		return
 	var allowed_keys: Array[StringName] = [&"type"]
 	if condition_type == CONDITION_KI_AT_LEAST:
 		allowed_keys.append(&"amount")
 		var threshold: Variant = condition.get("amount", null)
 		if typeof(threshold) != TYPE_INT or int(threshold) < 0:
-			errors.append("Card %s trigger %s requires a non-negative integer ki_at_least amount" % [card_id, event_id])
+			errors.append("Card %s %s requires a non-negative integer ki_at_least amount" % [card_id, context_name])
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
-			errors.append("Card %s trigger %s condition %s has unsupported field %s" % [card_id, event_id, condition_type, key])
+			errors.append("Card %s %s condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])
 
 
-static func _validate_trigger_action(
+static func _validate_activation(
 	card_id: StringName,
-	event_id: StringName,
+	activation_value: Variant,
+	errors: Array[String]
+) -> void:
+	if not activation_value is Dictionary:
+		errors.append("Card %s activation must be a Dictionary" % card_id)
+		return
+	var activation: Dictionary = activation_value
+	for key: Variant in activation.keys():
+		if StringName(key) not in [&"input", &"target_rule", &"costs", &"actions"]:
+			errors.append("Card %s activation has unsupported field %s" % [card_id, key])
+	var input_id := StringName(activation.get("input", &""))
+	if input_id not in KNOWN_ACTIVATION_INPUTS:
+		errors.append("Card %s uses unknown activation input %s" % [card_id, input_id])
+	var target_rule := StringName(activation.get("target_rule", &""))
+	if target_rule not in KNOWN_TARGET_RULES:
+		errors.append("Card %s uses unknown target rule %s" % [card_id, target_rule])
+	var costs_value: Variant = activation.get("costs", null)
+	if not costs_value is Array or (costs_value as Array).is_empty():
+		errors.append("Card %s activation requires a non-empty costs array" % card_id)
+	else:
+		for cost_value: Variant in costs_value as Array:
+			if not cost_value is Dictionary:
+				errors.append("Card %s activation has a non-dictionary cost" % card_id)
+				continue
+			_validate_action(card_id, "activation cost", cost_value as Dictionary, true, errors)
+	var actions_value: Variant = activation.get("actions", null)
+	if not actions_value is Array or (actions_value as Array).is_empty():
+		errors.append("Card %s activation requires a non-empty actions array" % card_id)
+	else:
+		for action_value: Variant in actions_value as Array:
+			if not action_value is Dictionary:
+				errors.append("Card %s activation has a non-dictionary action" % card_id)
+				continue
+			_validate_action(card_id, "activation", action_value as Dictionary, false, errors)
+
+
+static func _validate_action(
+	card_id: StringName,
+	context_name: String,
 	action: Dictionary,
+	is_cost: bool,
 	errors: Array[String]
 ) -> void:
 	var action_type := StringName(action.get("type", &""))
-	if action_type not in KNOWN_TRIGGER_ACTIONS:
-		errors.append("Card %s trigger %s uses unknown action %s" % [card_id, event_id, action_type])
+	if action_type not in KNOWN_ACTIONS:
+		errors.append("Card %s %s uses unknown action %s" % [card_id, context_name, action_type])
 		return
-	var allowed_keys: Array[StringName] = [&"type"]
-	if action_type == TRIGGER_ACTION_GAIN_KI:
+	if is_cost and action_type != ACTION_SPEND_KI:
+		errors.append("Card %s activation uses unsupported cost action %s" % [card_id, action_type])
+	var allowed_keys: Array[StringName] = [&"type", &"on_invalid_context"]
+	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI]:
 		allowed_keys.append(&"amount")
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
-			errors.append("Card %s trigger %s gain_ki requires a positive integer amount" % [card_id, event_id])
+			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action.has("on_invalid_context"):
+		if StringName(action.get("on_invalid_context", &"")) != STOP_RULE:
+			errors.append("Card %s %s action %s has invalid on_invalid_context policy" % [card_id, context_name, action_type])
 	for key: Variant in action.keys():
 		if StringName(key) not in allowed_keys:
-			errors.append("Card %s trigger %s action %s has unsupported field %s" % [card_id, event_id, action_type, key])
+			errors.append("Card %s %s action %s has unsupported field %s" % [card_id, context_name, action_type, key])

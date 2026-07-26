@@ -364,7 +364,7 @@ func _check_card_picture_layout() -> void:
 		"picture": "res://pics/LKT010_001.png",
 		"powers": [1, 2, 3, 4],
 		"ki": 0,
-		"active_effects": [],
+		"active_abilities": [],
 	}, Rules.PLAYER_OWNER, false)
 	await process_frame
 	var picture: TextureRect = card.get_node("Overlay/CardPicture") as TextureRect
@@ -393,7 +393,7 @@ func _check_card_picture_layout() -> void:
 	blank_fixture.call("configure", {
 		"powers": [1, 1, 1, 1],
 		"ki": 0,
-		"active_effects": [],
+		"active_abilities": [],
 	}, Rules.PLAYER_OWNER, false)
 	await process_frame
 	var blank_picture: TextureRect = blank_fixture.get_node("Overlay/CardPicture") as TextureRect
@@ -424,10 +424,10 @@ func _check_catalog_hands(duel: Node) -> void:
 	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
-	var gate_effects: Array = gate_card_data.get("active_effects", [])
-	var tiger_effects: Array = tiger_card_data.get("active_effects", [])
-	_check(gate_effects.size() == 1 and bool((gate_effects[0] as Dictionary).get("retained_on_flip", false)), "Gate General view receives its retained catalog effect")
-	_check(tiger_effects.size() == 1 and bool((tiger_effects[0] as Dictionary).get("retained_on_flip", false)), "Tiger General view receives its retained catalog effect")
+	var gate_abilities: Array = gate_card_data.get("active_abilities", [])
+	var tiger_abilities: Array = tiger_card_data.get("active_abilities", [])
+	_check(gate_abilities.size() == 1 and bool((gate_abilities[0] as Dictionary).get("retained_on_flip", false)), "Gate General view receives its retained catalog ability")
+	_check(tiger_abilities.size() == 1 and bool((tiger_abilities[0] as Dictionary).get("retained_on_flip", false)), "Tiger General view receives its retained catalog ability")
 	_check(not duel.has_method("_get_player_cards") and not duel.has_method("_get_opponent_cards"), "Controller no longer owns hard-coded card definitions")
 
 
@@ -1037,9 +1037,13 @@ func _check_cangsong_reaction_presentation() -> void:
 	var exile_state: Variant = exile_duel.get("duel_state")
 	var cang_hand: Array = exile_state.get_hand(Rules.PLAYER_OWNER)
 	var cang_card: Dictionary = cang_hand[0]
-	(cang_card.get("active_effects", []) as Array).append({
-		"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP,
+	(cang_card.get("active_abilities", []) as Array).append({
 		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+		}],
 	})
 	var cang_view: Control = _cards_below(exile_duel.get_node("DuelCanvas/PlayerHand"))[0]
 	cang_view.call("sync_runtime_data", cang_card, Rules.PLAYER_OWNER)

@@ -11,12 +11,12 @@ static func get_valid_targets(
 	state: StateData,
 	owner_id: int,
 	source_cell: int,
-	effect: Dictionary
+	activation: Dictionary
 ) -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
 	if not _has_owned_source(state, owner_id, source_cell):
 		return targets
-	var target_rule := StringName(effect.get("target_rule", &""))
+	var target_rule := StringName(activation.get("target_rule", &""))
 	if target_rule != Catalog.TARGET_ADJACENT_EMPTY_BOARD:
 		return targets
 	for direction: int in range(4):
@@ -33,11 +33,11 @@ static func is_target_valid(
 	state: StateData,
 	owner_id: int,
 	source_cell: int,
-	effect: Dictionary,
+	activation: Dictionary,
 	target_kind: StringName,
 	target_index: int
 ) -> bool:
-	for target: Dictionary in get_valid_targets(state, owner_id, source_cell, effect):
+	for target: Dictionary in get_valid_targets(state, owner_id, source_cell, activation):
 		if StringName(target.get("kind", &"")) == target_kind and int(target.get("index", -1)) == target_index:
 			return true
 	return false

@@ -6,7 +6,7 @@ This is the first document a replacement developer or AI should read. It describ
 
 ## Current Product
 
-Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven effects add draws, removal, movement activations, ki, triggers, and extra turns.
+Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra turns.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
@@ -37,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1
 2. `docs/ARCHITECTURE.md` — ownership and data flow
 3. `docs/DECISIONS.md` — durable rules agreed with the creator
 4. The focused document for the task:
-   - `docs/ADDING_CARDS_AND_EFFECTS.md`
+   - `docs/ADDING_CARDS_AND_ABILITIES.md`
    - `docs/AI_SEARCH.md`
    - `docs/UI_AND_ANDROID.md`
    - `docs/TESTING.md`
@@ -59,20 +59,20 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Player owner ID is `1`; opponent owner ID is `2`.
 - A turn permits either playing one hand card or activating one board card.
 - Any activation costs one ki.
-- Ki survives ownership flips; effects are lost unless that effect explicitly declares `retained_on_flip = true`.
-- Only cards with an activate effect count as ki-using for bead display.
-- Each card may have at most one activate effect. Replacing it keeps non-activate effects.
+- Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
+- Only cards with an activation count as ki-using for bead display.
+- Each card may have at most one activation. Replacing it keeps passive abilities.
 - Runtime card identity is `instance_id`, not a hand child index.
 - Main deck currently means the five-card starting hand. The side deck is a separate shuffled draw pile and may contain another copy of a main-hand card.
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 
-See `docs/DECISIONS.md` for effect-specific behavior.
+See `docs/DECISIONS.md` for ability-specific behavior.
 
 ## Immediate Cautions
 
-- `CangSongYingKe2` now resolves its printed summon reaction before the summoned card’s on-play effects and standard attack. There is still no general queued player-choice/interrupt engine.
+- `CangSongYingKe2` resolves `TRIGGER_CARD_SUMMONED` before the summoned card's own `TRIGGER_CARD_AFTER_SUMMONED` rules and standard attack. There is still no general queued player-choice/interrupt engine.
 - Repetition state is stored, but no repetition-draw rule is enforced. The only broad loop guard is `max_turns = 200`.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.

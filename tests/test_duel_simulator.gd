@@ -6,7 +6,8 @@ const Action = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Effects = preload("res://scripts/duel_effects.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
+const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
@@ -35,7 +36,7 @@ func _run() -> void:
 	_test_greedy_ai_values_flip_over_equal_exile()
 	_test_deeper_search_avoids_greedy_trap()
 	_test_activate_action_generation_and_resolution()
-	_test_activate_runs_standard_attack_without_on_play_effects()
+	_test_activate_runs_standard_attack_without_after_summoned_abilities()
 	_test_flipped_activate_ability_is_lost_but_ki_remains()
 	_test_greedy_tie_prefers_play_over_spending_ki()
 	_test_search_can_choose_activate_action()
@@ -52,6 +53,10 @@ func _run() -> void:
 	_test_meng_huo_extra_turn_can_chain()
 	_test_flipped_meng_huo_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
+	_test_retained_after_summon_draws_for_new_owner()
+	_test_invalid_context_defaults_to_no_effect()
+	_test_activation_costs_validate_as_a_batch()
+	_test_card_be_attacked_triggers_use_row_major_order()
 
 	if _failures == 0:
 		print("DUEL_SIMULATOR_TESTS_PASSED checks=%d" % _checks)
@@ -65,8 +70,8 @@ func _test_exile_effect_removes_every_target() -> void:
 	var defender: Dictionary = Rules.make_card("Guard", "守", [4, 4, 4, 4], [], Rules.OPPONENT_OWNER)
 	for neighbor_index: int in [1, 5, 7, 3]:
 		board[neighbor_index] = {"card": defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
-	var exile_effect: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var attacker: Dictionary = Rules.make_card("Exiler", "逐", [5, 5, 5, 5], exile_effect, Rules.PLAYER_OWNER)
+	var exile_abilities: Array = [_exile_ability()]
+	var attacker: Dictionary = Rules.make_card("Exiler", "逐", [5, 5, 5, 5], exile_abilities, Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
@@ -90,11 +95,11 @@ func _test_exile_effect_removes_every_target() -> void:
 
 func _test_exile_uses_original_owner_and_is_copy_isolated() -> void:
 	var board: Array = Rules.empty_board()
-	var target_effects: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var target: Dictionary = Rules.make_card("Turncoat", "反", [1, 1, 1, 1], target_effects, Rules.PLAYER_OWNER)
+	var target_abilities: Array = [_exile_ability()]
+	var target: Dictionary = Rules.make_card("Turncoat", "反", [1, 1, 1, 1], target_abilities, Rules.PLAYER_OWNER)
 	board[5] = {"card": target, "owner": Rules.OPPONENT_OWNER}
-	var source_effects: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var source: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], source_effects, Rules.PLAYER_OWNER)
+	var source_abilities: Array = [_exile_ability()]
+	var source: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], source_abilities, Rules.PLAYER_OWNER)
 	var state := State.new(board, [source], [], Rules.PLAYER_OWNER)
 
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
@@ -102,16 +107,18 @@ func _test_exile_uses_original_owner_and_is_copy_isolated() -> void:
 	var player_removed: Array = next_state.removed_cards[Rules.PLAYER_OWNER]
 	_check(player_removed.size() == 1, "Exile records a previously flipped target under its original owner")
 	_check((next_state.removed_cards[Rules.OPPONENT_OWNER] as Array).is_empty(), "Current owner does not receive the previously flipped target")
-	((player_removed[0] as Dictionary)["active_effects"] as Array).clear()
-	_check(((state.board[5] as Dictionary)["card"] as Dictionary)["active_effects"].size() == 1, "Removed-zone mutation is isolated from the source state")
+	((player_removed[0] as Dictionary)["active_abilities"] as Array).clear()
+	_check(((state.board[5] as Dictionary)["card"] as Dictionary)["active_abilities"].size() == 1, "Removed-zone mutation is isolated from the source state")
 	_check(Rules.can_place(next_state.board, 5), "An exiled cell is immediately reusable")
 
 
 func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	var board: Array = Rules.empty_board()
-	var retained_effect: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var tiger: Dictionary = Rules.make_card("Tiger General", "虎", [1, 1, 8, 1], retained_effect, Rules.OPPONENT_OWNER)
+	var retained_ability: Array = [_exile_ability()]
+	var tiger: Dictionary = Rules.make_card("Tiger General", "虎", [1, 1, 8, 1], retained_ability, Rules.OPPONENT_OWNER)
+	tiger["instance_id"] = &"retained_tiger"
 	var future_target: Dictionary = Rules.make_card("Future Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
+	future_target["instance_id"] = &"future_target"
 	board[5] = {"card": tiger, "owner": Rules.OPPONENT_OWNER}
 	board[8] = {"card": future_target, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 5, 1, 1], [], Rules.PLAYER_OWNER)
@@ -121,18 +128,29 @@ func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	var next_state: State = transition["state"] as State
 	var flipped_tiger: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Tiger General changes ownership through a normal flip")
-	_check((flipped_tiger["active_effects"] as Array).size() == 1, "Retained effect survives the ownership flip")
+	_check((flipped_tiger["active_abilities"] as Array).size() == 1, "Retained ability survives the ownership flip")
 
 	var combo_state: State = next_state.duplicate_state()
-	var combo_events: Array[Dictionary] = Effects.resolve_flip_attempt(combo_state, 5, 8, Rules.PLAYER_OWNER)
+	var combo_groups: Array[Dictionary] = Triggers.discover(
+		combo_state,
+		Catalog.CARD_BE_ATTACKED,
+		{
+			"attacker_cell": 5,
+			"attacker_instance_id": &"retained_tiger",
+			"attacked_cell": 8,
+			"attacked_instance_id": &"future_target",
+		}
+	)
+	var combo_result: Dictionary = Triggers.resolve_group(combo_state, combo_groups[0])
+	var combo_events: Array = combo_result.get("events", [])
 	_check(combo_events.size() == 1 and StringName(combo_events[0].get("type", &"")) == &"card_exiled", "A future attempt by the flipped Tiger General still exiles")
 	_check(combo_state.board[8] == null, "Future retained-effect attempt clears its target")
 
 
 func _test_nonretained_effect_is_permanently_lost() -> void:
 	var board: Array = Rules.empty_board()
-	var nonretained_effect: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": false}]
-	var target: Dictionary = Rules.make_card("Fragile Adept", "失", [1, 1, 1, 1], nonretained_effect, Rules.OPPONENT_OWNER)
+	var nonretained_ability: Array = [_draw_ability(1)]
+	var target: Dictionary = Rules.make_card("Fragile Adept", "失", [1, 1, 1, 1], nonretained_ability, Rules.OPPONENT_OWNER)
 	board[5] = {"card": target, "owner": Rules.OPPONENT_OWNER}
 	var first_attacker: Dictionary = Rules.make_card("First", "一", [1, 5, 1, 1], [], Rules.PLAYER_OWNER)
 	var second_attacker: Dictionary = Rules.make_card("Second", "二", [1, 1, 5, 1], [], Rules.OPPONENT_OWNER)
@@ -142,12 +160,16 @@ func _test_nonretained_effect_is_permanently_lost() -> void:
 	var first_state: State = first_transition["state"] as State
 	var first_events: Array = first_transition.get("events", [])
 	_check(_count_events(first_events, &"ability_lost") == 1, "A non-retained effect emits one ability-lost event")
-	_check((((first_state.board[5] as Dictionary)["card"] as Dictionary)["active_effects"] as Array).is_empty(), "Non-retained effect is removed after the first flip")
+	_check(
+		not _first_event(first_events, &"ability_lost").has("effect_id"),
+		"Ability-loss events contain no legacy ability identity"
+	)
+	_check((((first_state.board[5] as Dictionary)["card"] as Dictionary)["active_abilities"] as Array).is_empty(), "Non-retained ability is removed after the first flip")
 
 	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 2))
 	var second_state: State = second_transition["state"] as State
 	_check(int((second_state.board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Target can flip back to its original owner")
-	_check((((second_state.board[5] as Dictionary)["card"] as Dictionary)["active_effects"] as Array).is_empty(), "Lost effect does not return after flipping back")
+	_check((((second_state.board[5] as Dictionary)["card"] as Dictionary)["active_abilities"] as Array).is_empty(), "Lost ability does not return after flipping back")
 	_check(_count_events(second_transition.get("events", []), &"ability_lost") == 0, "Already-lost effect does not emit another loss event")
 
 
@@ -245,8 +267,8 @@ func _test_reopened_cell_keeps_match_alive() -> void:
 			board[cell_index] = {"card": sturdy.duplicate(true), "owner": Rules.OPPONENT_OWNER}
 	var weak_target: Dictionary = Rules.make_card("Weak", "弱", [9, 9, 9, 1], [], Rules.OPPONENT_OWNER)
 	board[5] = {"card": weak_target, "owner": Rules.OPPONENT_OWNER}
-	var exile_effect: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var exiler: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], exile_effect, Rules.PLAYER_OWNER)
+	var exile_abilities: Array = [_exile_ability()]
+	var exiler: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], exile_abilities, Rules.PLAYER_OWNER)
 	var opponent_reply: Dictionary = Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [exiler], [opponent_reply], Rules.PLAYER_OWNER)
 
@@ -294,8 +316,8 @@ func _test_greedy_ai_values_flip_over_equal_exile() -> void:
 			board[cell_index] = {"card": allied_guard.duplicate(true), "owner": Rules.OPPONENT_OWNER}
 	var target: Dictionary = Rules.make_card("Target", "标", [9, 9, 9, 1], [], Rules.PLAYER_OWNER)
 	board[5] = {"card": target, "owner": Rules.PLAYER_OWNER}
-	var exile_effect: Array = [{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true}]
-	var exile_card: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], exile_effect, Rules.OPPONENT_OWNER)
+	var exile_abilities: Array = [_exile_ability()]
+	var exile_card: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], exile_abilities, Rules.OPPONENT_OWNER)
 	var flip_card: Dictionary = Rules.make_card("Flipper", "翻", [1, 5, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [], [exile_card, flip_card], Rules.OPPONENT_OWNER)
 
@@ -327,25 +349,17 @@ func _test_activate_action_generation_and_resolution() -> void:
 	for event_value: Variant in transition.get("events", []):
 		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
 	_check(event_types == [&"ability_activated", &"ki_changed", &"card_moved"], "Movement events use the canonical activation order")
+	_check(
+		not _first_event(transition.get("events", []), &"ability_activated").has("effect_id"),
+		"Activation events contain no legacy ability identity"
+	)
 	_check(int(((state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1)) == 1, "Activate transition leaves source-state ki untouched")
 
 
-func _test_activate_runs_standard_attack_without_on_play_effects() -> void:
+func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> void:
 	var board: Array = Rules.empty_board()
-	var effects: Array = [
-		{
-			"id": Catalog.EFFECT_MOVE_AND_ATTACK,
-			"activation": Catalog.ACTIVATION_DRAG_TO_TARGET,
-			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
-			"retained_on_flip": false,
-		},
-		{
-			"id": Catalog.EFFECT_DRAW_CARDS_ON_PLAY,
-			"draw_count": 2,
-			"retained_on_flip": false,
-		},
-	]
-	var mover: Dictionary = Rules.make_card("Mover", "移", [7, 7, 7, 7], effects, Rules.PLAYER_OWNER)
+	var abilities: Array = [_move_ability(), _draw_ability(2)]
+	var mover: Dictionary = Rules.make_card("Mover", "移", [7, 7, 7, 7], abilities, Rules.PLAYER_OWNER)
 	mover["instance_id"] = &"mover"
 	mover["ki"] = 1
 	board[4] = {"card": mover, "owner": Rules.PLAYER_OWNER}
@@ -355,12 +369,12 @@ func _test_activate_runs_standard_attack_without_on_play_effects() -> void:
 	}
 	var deck: Array = [Catalog.create_instance(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"would_draw")]
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, deck, [])
-	var action: Action = Action.make_activate(4, &"mover", Catalog.EFFECT_MOVE_AND_ATTACK, Action.TARGET_BOARD_CELL, 5)
+	var action: Action = Action.make_activate(4, &"mover", Action.TARGET_BOARD_CELL, 5)
 	var transition: Dictionary = Simulator.apply_action(state, action)
 	var next_state: State = transition["state"] as State
 	_check(int((next_state.board[2] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Moved card performs its standard four-side attack")
 	_check(_count_events(transition.get("events", []), &"card_flipped") == 1, "Activation emits the ordinary flip event")
-	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "Movement does not retrigger on-play draw effects")
+	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "Movement does not retrigger after-summoned abilities")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Movement leaves the side deck untouched")
 
 
@@ -374,7 +388,7 @@ func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
 	var next_state: State = transition["state"] as State
 	var flipped_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int(flipped_card.get("ki", -1)) == 1, "Ownership flip preserves ki")
-	_check(Effects.get_activate_effect(flipped_card).is_empty(), "Ownership flip permanently removes non-retained activate ability")
+	_check(Abilities.get_activation(flipped_card).is_empty(), "Ownership flip permanently removes non-retained activate ability")
 	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "Lost activate ability emits the normal loss event")
 	var player_actions: Array = Simulator.get_legal_actions_for_owner(next_state, Rules.PLAYER_OWNER)
 	var can_activate_flipped_card: bool = false
@@ -387,16 +401,8 @@ func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
 
 func _test_greedy_tie_prefers_play_over_spending_ki() -> void:
 	var board: Array = Rules.empty_board()
-	var effects: Array = [
-		{
-			"id": Catalog.EFFECT_MOVE_AND_ATTACK,
-			"activation": Catalog.ACTIVATION_DRAG_TO_TARGET,
-			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
-			"retained_on_flip": false,
-		},
-		{"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP, "retained_on_flip": true},
-	]
-	var mover: Dictionary = Rules.make_card("Mover", "移", [1, 9, 1, 1], effects, Rules.PLAYER_OWNER)
+	var abilities: Array = [_move_ability(), _exile_ability()]
+	var mover: Dictionary = Rules.make_card("Mover", "移", [1, 9, 1, 1], abilities, Rules.PLAYER_OWNER)
 	mover["instance_id"] = &"tie_mover"
 	mover["ki"] = 1
 	board[0] = {"card": mover, "owner": Rules.PLAYER_OWNER}
@@ -432,14 +438,17 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	var groups: Array[Dictionary] = Triggers.discover(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
-		{"owner_id": Rules.PLAYER_OWNER}
+		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	_check(groups.size() == 2, "End-turn discovery finds both eligible Meng Huos")
 	_check(int(groups[0].get("source_cell", -1)) == 0 and int(groups[1].get("source_cell", -1)) == 8, "End-turn discovery uses row-major board order")
 	var copied: State = state.duplicate_state()
-	var result: Dictionary = Triggers.resolve(copied, groups)
-	var events: Array = result.get("events", [])
-	var requests: Array = result.get("extra_turn_requests", [])
+	var events: Array = []
+	var requests: Array = []
+	for group: Dictionary in groups:
+		var group_result: Dictionary = Triggers.resolve_group(copied, group)
+		events.append_array(group_result.get("events", []) as Array)
+		requests.append_array(group_result.get("extra_turn_requests", []) as Array)
 	_check(events.size() == 2 and requests.size() == 2, "Each valid rule drains ki and preserves its request after the spend")
 	_check(int((events[0] as Dictionary).get("source_cell", -1)) == 0 and int((events[1] as Dictionary).get("source_cell", -1)) == 8, "Ki drains preserve row-major group order")
 	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "First matched rule spends all ki")
@@ -450,8 +459,10 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	var replacement: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"replacement")
 	replacement["ki"] = 5
 	stale_state.board[0] = {"card": replacement, "owner": Rules.PLAYER_OWNER}
-	var stale_result: Dictionary = Triggers.resolve(stale_state, groups)
-	_check((stale_result.get("events", []) as Array).size() == 1, "Stale instance group is ignored while other groups still resolve")
+	var stale_events: Array = []
+	for group: Dictionary in groups:
+		stale_events.append_array((Triggers.resolve_group(stale_state, group)).get("events", []) as Array)
+	_check(stale_events.size() == 1, "Stale instance group is ignored while other groups still resolve")
 	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot spend replacement-card ki")
 
 
@@ -482,7 +493,7 @@ func _test_summon_trigger_discovery_and_stale_identity() -> void:
 		"Summon discovery uses row-major board order"
 	)
 	_check((groups[0].get("context", {}) as Dictionary) == context, "Summon group preserves stable trigger context")
-	var first_result: Dictionary = Triggers.resolve(state, [groups[0]])
+	var first_result: Dictionary = Triggers.resolve_group(state, groups[0])
 	var requests: Array = first_result.get("attack_requests", [])
 	_check(requests.size() == 1, "Resolved summon action emits one pure attack request")
 	_check(
@@ -495,7 +506,7 @@ func _test_summon_trigger_discovery_and_stale_identity() -> void:
 		"card": _make_runtime_card("Replacement", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"replacement_target"),
 		"owner": Rules.OPPONENT_OWNER,
 	}
-	var stale_result: Dictionary = Triggers.resolve(stale_state, [groups[0]])
+	var stale_result: Dictionary = Triggers.resolve_group(stale_state, groups[0])
 	_check((stale_result.get("attack_requests", []) as Array).is_empty(), "Stale trigger identity cannot attack a replacement occupant")
 
 
@@ -514,7 +525,7 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 		[9, 1, 1, 1],
 		Rules.OPPONENT_OWNER,
 		&"draw_attacker",
-		[{"id": Catalog.EFFECT_DRAW_CARDS_ON_PLAY, "draw_count": 2, "retained_on_flip": false}]
+		[_draw_ability(2)]
 	)
 	var side_deck: Array = [
 		_make_runtime_card("Would Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"would_draw"),
@@ -542,7 +553,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 		[1, 1, 1, 5],
 		Rules.OPPONENT_OWNER,
 		&"equal_target",
-		[{"id": Catalog.EFFECT_DRAW_CARDS_ON_PLAY, "draw_count": 1, "retained_on_flip": false}]
+		[_draw_ability(1)]
 	)
 	var equal_state := State.new(
 		equal_board,
@@ -555,7 +566,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 	)
 	var equal_transition: Dictionary = Simulator.apply_action(equal_state, Action.make_play(0, 1, &"equal_target"))
 	_check(_count_events(equal_transition.get("events", []), &"card_flipped") == 0, "Equal power does not trigger a reaction attack")
-	_check(_count_events(equal_transition.get("events", []), &"card_drawn") == 1, "Failed range condition allows on-play effects")
+	_check(_count_events(equal_transition.get("events", []), &"card_drawn") == 1, "Failed range condition allows after-summoned abilities")
 
 	var diagonal_board: Array = Rules.empty_board()
 	diagonal_board[0] = {
@@ -587,7 +598,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 
 	var lost_board: Array = Rules.empty_board()
 	var lost_cang: Dictionary = Catalog.create_instance(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"lost_cang")
-	lost_cang["active_effects"] = []
+	lost_cang["active_abilities"] = []
 	lost_board[0] = {"card": lost_cang, "owner": Rules.PLAYER_OWNER}
 	var lost_state := State.new(
 		lost_board,
@@ -636,7 +647,7 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 			[1, 1, 1, 1],
 			Rules.OPPONENT_OWNER,
 			&"exiled_draw",
-			[{"id": Catalog.EFFECT_DRAW_CARDS_ON_PLAY, "draw_count": 1, "retained_on_flip": false}]
+			[_draw_ability(1)]
 		)],
 		Rules.OPPONENT_OWNER,
 		0,
@@ -687,8 +698,8 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 	var spend_event: Dictionary = events[3]
 	_check(int(gain_event.get("previous_ki", -1)) == 0 and int(gain_event.get("ki", -1)) == 1, "Successful flip gains exactly one ki")
 	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
-	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_GAIN_KI, "Gain event identifies its generic trigger action")
-	_check(StringName(spend_event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_SPEND_ALL_KI, "Spend event identifies its generic trigger action")
+	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI, "Gain event identifies its generic action")
+	_check(StringName(spend_event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI, "Spend event identifies its generic action")
 	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra turn retains the acting owner without adding a turn count")
 	_check(int((((next_state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Final simulator state stores the drained ki")
 
@@ -715,7 +726,7 @@ func _test_meng_huo_multiple_flips_gain_in_order() -> void:
 		var event: Dictionary = event_value
 		if StringName(event.get("type", &"")) == &"card_flipped":
 			flip_targets.append(int(event.get("target_cell", -1)))
-		elif StringName(event.get("type", &"")) == &"ki_changed" and StringName(event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_GAIN_KI:
+		elif StringName(event.get("type", &"")) == &"ki_changed" and StringName(event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI:
 			gained_values.append(int(event.get("ki", -1)))
 	_check(flip_targets == [1, 5, 7, 3], "Multi-flip attacks retain top-right-bottom-left order")
 	_check(gained_values == [1, 2, 3, 4], "Meng Huo gains one ki immediately after each actual flip")
@@ -729,10 +740,7 @@ func _test_meng_huo_exile_grants_no_ki() -> void:
 		"owner": Rules.OPPONENT_OWNER,
 	}
 	var meng: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"exile_meng")
-	(meng.get("active_effects", []) as Array).append({
-		"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP,
-		"retained_on_flip": true,
-	})
+	(meng.get("active_abilities", []) as Array).append(_exile_ability())
 	var state := State.new(board, [meng], [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var events: Array = transition.get("events", [])
@@ -758,7 +766,7 @@ func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
 	var drain_cells: Array[int] = []
 	for event_value: Variant in events:
 		var event: Dictionary = event_value
-		if StringName(event.get("change_reason", &"")) == Catalog.TRIGGER_ACTION_SPEND_ALL_KI:
+		if StringName(event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI:
 			drain_cells.append(int(event.get("source_cell", -1)))
 	_check(drain_cells == [0, 8], "Multiple Meng Huos drain in row-major order")
 	_check(_count_events(events, &"extra_turn_granted") == 1, "Multiple request tokens coalesce into one extra turn")
@@ -798,7 +806,7 @@ func _test_flipped_meng_huo_loses_ability_but_keeps_ki() -> void:
 	var next_state: State = transition["state"] as State
 	var flipped: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int(flipped.get("ki", -1)) == 3, "Flipped Meng Huo keeps accumulated ki")
-	_check(Effects.find_active_effect(flipped, Catalog.EFFECT_BATTLE_MOMENTUM).is_empty(), "Flipped Meng Huo loses battle momentum")
+	_check((flipped.get("active_abilities", []) as Array).is_empty(), "Flipped Meng Huo loses battle momentum")
 	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "Battle momentum loss emits the standard loss event")
 
 
@@ -819,6 +827,208 @@ func _test_unusable_extra_turn_expires() -> void:
 	var next_state: State = transition["state"] as State
 	_check(_count_events(transition.get("events", []), &"extra_turn_granted") == 1, "Successful flip still grants the extra-turn event")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra turn expires when its owner has no legal action")
+
+
+func _test_retained_after_summon_draws_for_new_owner() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = {
+		"card": Catalog.create_instance(
+			&"CangSongYingKe2",
+			Rules.PLAYER_OWNER,
+			&"retained_draw_reactor"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var summoned: Dictionary = _make_runtime_card(
+		"Retained Draw",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"retained_draw_target",
+		[_draw_ability(1, true)]
+	)
+	var player_deck: Array = [
+		_make_runtime_card("Player Draw", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"player_draw"),
+	]
+	var opponent_deck: Array = [
+		_make_runtime_card("Wrong Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"wrong_draw"),
+	]
+	var state := State.new(
+		board,
+		[],
+		[summoned],
+		Rules.OPPONENT_OWNER,
+		0,
+		player_deck,
+		opponent_deck
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 5, &"retained_draw_target")
+	)
+	var next_state: State = transition["state"] as State
+	_check(
+		_event_types(transition.get("events", []))
+		== [&"card_placed", &"card_flipped", &"card_drawn"],
+		"Retained after-summon ability resolves after the reaction flip"
+	)
+	_check(
+		next_state.get_hand(Rules.PLAYER_OWNER).size() == 1
+		and StringName((next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("instance_id", &"")) == &"player_draw",
+		"Retained draw uses the flipped card's new owner"
+	)
+	_check(
+		(next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1,
+		"Retained draw does not use the summoning owner's deck"
+	)
+
+
+func _test_invalid_context_defaults_to_no_effect() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = _make_runtime_card(
+		"Context Source",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"context_source"
+	)
+	board[0] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var actions: Array = [
+		{"type": Catalog.ACTION_EXILE_ATTACKED_CARD},
+		{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
+	]
+	var result: Dictionary = Executor.execute_actions(
+		state,
+		0,
+		&"context_source",
+		Rules.PLAYER_OWNER,
+		actions,
+		{"attacked_cell": 1, "attacked_instance_id": &"missing"}
+	)
+	var state_source: Dictionary = (state.board[0] as Dictionary)["card"]
+	_check(
+		int(state_source.get("ki", 0)) == 1
+		and StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED,
+		"Missing exile context defaults to NO_EFFECT and later actions continue"
+	)
+
+	var stopped_state: State = State.new(board, [], [], Rules.PLAYER_OWNER)
+	var stopped_source: Dictionary = (stopped_state.board[0] as Dictionary)["card"]
+	stopped_source["ki"] = 0
+	var stopped_result: Dictionary = Executor.execute_actions(
+		stopped_state,
+		0,
+		&"context_source",
+		Rules.PLAYER_OWNER,
+		[
+			{
+				"type": Catalog.ACTION_EXILE_ATTACKED_CARD,
+				"on_invalid_context": Catalog.STOP_RULE,
+			},
+			{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
+		],
+		{"attacked_cell": 1, "attacked_instance_id": &"missing"}
+	)
+	_check(
+		int(stopped_source.get("ki", 0)) == 0
+		and StringName(stopped_result.get("result", &"")) == Catalog.ACTION_RESULT_INVALID_CONTEXT,
+		"Explicit STOP_RULE prevents only the current rule's later actions"
+	)
+
+
+func _test_activation_costs_validate_as_a_batch() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = _make_runtime_card(
+		"Double Cost",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"double_cost",
+		[{
+			"retained_on_flip": false,
+			"activation": {
+				"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+				"costs": [
+					{"type": Catalog.ACTION_SPEND_KI, "amount": 1},
+					{"type": Catalog.ACTION_SPEND_KI, "amount": 1},
+				],
+				"actions": [{"type": Catalog.ACTION_MOVE_SELF_TO_TARGET}],
+			},
+		}]
+	)
+	source["ki"] = 1
+	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var action: Action = Action.make_activate(4, &"double_cost", Action.TARGET_BOARD_CELL, 5)
+	_check(not Simulator.is_action_legal(state, action), "Combined activation costs validate before payment")
+	var transition: Dictionary = Simulator.apply_action(state, action)
+	_check(
+		not bool(transition.get("valid", true))
+		and int(source.get("ki", 0)) == 1
+		and state.board[4] != null,
+		"Failed batch cost validation pays nothing and performs no action"
+	)
+
+
+func _test_card_be_attacked_triggers_use_row_major_order() -> void:
+	var board: Array = Rules.empty_board()
+	var watcher_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}
+	board[0] = {
+		"card": _make_runtime_card(
+			"First Watcher",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			&"first_watcher",
+			[watcher_ability]
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[8] = {
+		"card": _make_runtime_card(
+			"Last Watcher",
+			[1, 1, 1, 1],
+			Rules.OPPONENT_OWNER,
+			&"last_watcher",
+			[watcher_ability]
+		),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	board[5] = {
+		"card": _make_runtime_card(
+			"Attack Target",
+			[1, 1, 1, 1],
+			Rules.OPPONENT_OWNER,
+			&"attack_target"
+		),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var attacker: Dictionary = _make_runtime_card(
+		"Attacker",
+		[1, 9, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"attack_source"
+	)
+	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4, &"attack_source")
+	)
+	var ki_cells: Array[int] = []
+	for event_value: Variant in transition.get("events", []):
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) == &"ki_changed":
+			ki_cells.append(int(event.get("source_cell", -1)))
+	_check(ki_cells == [0, 8], "CARD_BE_ATTACKED triggers resolve in row-major source order")
+	var event_types: Array[StringName] = _event_types(transition.get("events", []))
+	_check(
+		event_types.find(&"ki_changed") < event_types.find(&"card_flipped"),
+		"CARD_BE_ATTACKED trigger actions resolve before the original attack"
+	)
 
 
 func _event_types(events: Array) -> Array[StringName]:
@@ -849,9 +1059,9 @@ func _make_runtime_card(
 	powers: Array[int],
 	owner_id: int,
 	instance_id: StringName,
-	active_effects: Array = []
+	active_abilities: Array = []
 ) -> Dictionary:
-	var card: Dictionary = Rules.make_card(card_name, card_name.left(1), powers, active_effects, owner_id)
+	var card: Dictionary = Rules.make_card(card_name, card_name.left(1), powers, active_abilities, owner_id)
 	card["instance_id"] = instance_id
 	card["ki"] = 0
 	return card
@@ -865,43 +1075,74 @@ func _make_reaction_card(
 	include_exile: bool = false,
 	include_momentum: bool = false
 ) -> Dictionary:
-	var effects: Array = [
-		{
-			"id": Catalog.EFFECT_WELCOMING_PINE,
-			"retained_on_flip": false,
-			"triggers": [
-				{
-					"event": Catalog.TRIGGER_CARD_SUMMONED,
-					"conditions": [
-						{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
-						{"type": Catalog.CONDITION_TRIGGER_CARD_IN_RANGE},
-					],
-					"actions": [
-						{"type": Catalog.TRIGGER_ACTION_ATTACK_TRIGGER_CARD},
-					],
-				},
+	var abilities: Array = [_reaction_ability()]
+	if include_exile:
+		abilities.append(_exile_ability())
+	if include_momentum:
+		abilities.append(_momentum_gain_ability())
+	return _make_runtime_card(card_name, powers, owner_id, instance_id, abilities)
+
+
+func _reaction_ability() -> Dictionary:
+	return {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"conditions": [
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IN_RANGE},
+			],
+			"actions": [{"type": Catalog.ACTION_ATTACK_TRIGGER_CARD}],
+		}],
+	}
+
+
+func _draw_ability(amount: int, retained_on_flip: bool = false) -> Dictionary:
+	return {
+		"retained_on_flip": retained_on_flip,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": amount}],
+		}],
+	}
+
+
+func _exile_ability() -> Dictionary:
+	return {
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+		}],
+	}
+
+
+func _momentum_gain_ability() -> Dictionary:
+	return {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_FLIPPED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}
+
+
+func _move_ability() -> Dictionary:
+	return {
+		"retained_on_flip": false,
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [
+				{"type": Catalog.ACTION_MOVE_SELF_TO_TARGET},
+				{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF},
 			],
 		},
-	]
-	if include_exile:
-		effects.append({
-			"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP,
-			"retained_on_flip": true,
-		})
-	if include_momentum:
-		effects.append({
-			"id": Catalog.EFFECT_BATTLE_MOMENTUM,
-			"retained_on_flip": false,
-			"triggers": [
-				{
-					"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
-					"actions": [
-						{"type": Catalog.TRIGGER_ACTION_GAIN_KI, "amount": 1},
-					],
-				},
-			],
-		})
-	return _make_runtime_card(card_name, powers, owner_id, instance_id, effects)
+	}
 
 
 func _test_state_copy_is_isolated() -> void:
@@ -925,12 +1166,20 @@ func _test_state_copy_is_isolated() -> void:
 	copied.get_hand(Rules.PLAYER_OWNER).clear()
 	var copied_player_deck: Array = copied.decks[Rules.PLAYER_OWNER]
 	((copied_player_deck[0] as Dictionary)["powers"] as Array)[0] = 99
-	(((copied_player_deck[0] as Dictionary)["active_effects"] as Array)[0] as Dictionary)["draw_count"] = 9
+	var copied_abilities: Array = (copied_player_deck[0] as Dictionary)["active_abilities"]
+	var copied_triggers: Array = (copied_abilities[0] as Dictionary)["triggers"]
+	(copied_triggers[0] as Dictionary)["actions"] = [
+		{"type": Catalog.ACTION_DRAW_CARDS, "amount": 9},
+	]
 	_check(original.board[0] == null, "Duplicating state isolates board mutation")
 	_check(original.get_hand(Rules.PLAYER_OWNER).size() == 1, "Duplicating state isolates hand mutation")
 	var original_top: Dictionary = (original.decks[Rules.PLAYER_OWNER] as Array)[0]
 	_check(int((original_top["powers"] as Array)[0]) == 5, "Duplicating state isolates nested side-deck powers")
-	_check(int((((original_top["active_effects"] as Array)[0] as Dictionary)["draw_count"])) == 2, "Duplicating state isolates nested side-deck effects")
+	var original_abilities: Array = original_top["active_abilities"]
+	var original_triggers: Array = (original_abilities[0] as Dictionary)["triggers"]
+	var original_actions: Array = (original_triggers[0] as Dictionary)["actions"]
+	var original_draw_action: Dictionary = original_actions[0]
+	_check(int(original_draw_action.get("amount", 0)) == 2, "Duplicating state isolates nested side-deck abilities")
 
 
 func _test_legal_move_generation() -> void:

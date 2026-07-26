@@ -1,0 +1,579 @@
+class_name DuelAbilityExecutor
+extends RefCounted
+
+const MAX_HAND_SIZE: int = 5
+
+const Abilities = preload("res://scripts/duel_abilities.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
+const Rules = preload("res://scripts/duel_rules.gd")
+const StateData = preload("res://scripts/duel_state.gd")
+
+
+static func can_pay_costs(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	costs: Array
+) -> bool:
+	if state == null:
+		return false
+	var source_slot: Dictionary = _get_card_slot(state, source_cell, source_instance_id)
+	if source_slot.is_empty():
+		return false
+	var source_card: Dictionary = source_slot.get("card", {})
+	var required_ki: int = 0
+	for cost_value: Variant in costs:
+		if not cost_value is Dictionary:
+			return false
+		var cost: Dictionary = cost_value
+		var cost_type := StringName(cost.get("type", &""))
+		if cost_type != Catalog.ACTION_SPEND_KI:
+			return false
+		var amount: int = int(cost.get("amount", 0))
+		if amount <= 0:
+			return false
+		required_ki += amount
+	return int(source_card.get("ki", 0)) >= required_ki
+
+
+static func execute_activation(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	activation: Dictionary,
+	target_kind: StringName,
+	target_index: int
+) -> Dictionary:
+	var empty_result: Dictionary = _empty_result()
+	empty_result["valid"] = false
+	if state == null:
+		return empty_result
+	var source_slot: Dictionary = _get_card_slot(state, source_cell, source_instance_id)
+	if source_slot.is_empty():
+		return empty_result
+	var costs: Array = activation.get("costs", [])
+	if not can_pay_costs(state, source_cell, source_instance_id, costs):
+		return empty_result
+	var owner_id: int = int(source_slot.get("owner", 0))
+	var context: Dictionary = {
+		"target_kind": target_kind,
+		"target_index": target_index,
+	}
+	var events: Array[Dictionary] = [{
+		"type": &"ability_activated",
+		"source_cell": source_cell,
+		"target_cell": target_index,
+		"owner_id": owner_id,
+		"instance_id": source_instance_id,
+	}]
+	var cost_result: Dictionary = execute_actions(
+		state,
+		source_cell,
+		source_instance_id,
+		owner_id,
+		costs,
+		context
+	)
+	events.append_array(cost_result.get("events", []) as Array)
+	var action_result: Dictionary = execute_actions(
+		state,
+		int(cost_result.get("source_cell", source_cell)),
+		source_instance_id,
+		owner_id,
+		activation.get("actions", []) as Array,
+		context
+	)
+	events.append_array(action_result.get("events", []) as Array)
+	return {
+		"valid": true,
+		"events": events,
+		"attack_requests": action_result.get("attack_requests", []),
+		"extra_turn_requests": action_result.get("extra_turn_requests", []),
+		"source_cell": int(action_result.get("source_cell", source_cell)),
+		"result": action_result.get("result", Catalog.ACTION_RESULT_APPLIED),
+	}
+
+
+static func execute_actions(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	actions: Array,
+	context: Dictionary
+) -> Dictionary:
+	var result: Dictionary = _empty_result()
+	result["source_cell"] = source_cell
+	if state == null:
+		return result
+	var current_source_cell: int = source_cell
+	for action_value: Variant in actions:
+		if not action_value is Dictionary:
+			continue
+		var declaration: Dictionary = action_value
+		var action_result: Dictionary = _execute_action(
+			state,
+			current_source_cell,
+			source_instance_id,
+			expected_owner,
+			declaration,
+			context
+		)
+		result["events"].append_array(action_result.get("events", []) as Array)
+		result["attack_requests"].append_array(action_result.get("attack_requests", []) as Array)
+		result["extra_turn_requests"].append_array(action_result.get("extra_turn_requests", []) as Array)
+		current_source_cell = int(action_result.get("source_cell", current_source_cell))
+		var action_status := StringName(action_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT))
+		if (
+			action_status == Catalog.ACTION_RESULT_NO_EFFECT
+			and StringName(declaration.get("on_invalid_context", &"")) == Catalog.STOP_RULE
+		):
+			result["result"] = Catalog.ACTION_RESULT_INVALID_CONTEXT
+			break
+		if action_status == Catalog.ACTION_RESULT_APPLIED:
+			result["result"] = Catalog.ACTION_RESULT_APPLIED
+	result["source_cell"] = current_source_cell
+	return result
+
+
+static func resolve_normal_flip(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	target_cell: int,
+	target_instance_id: StringName,
+	new_owner: int
+) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	var source_slot: Dictionary = _get_card_slot(state, source_cell, source_instance_id, new_owner)
+	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
+	if source_slot.is_empty() or target_slot.is_empty():
+		return events
+	if int(target_slot.get("owner", 0)) == new_owner:
+		return events
+	var target_card: Dictionary = target_slot.get("card", {})
+	target_slot["owner"] = new_owner
+	events.append({
+		"type": &"card_flipped",
+		"source_cell": source_cell,
+		"target_cell": target_cell,
+		"owner_id": new_owner,
+		"instance_id": target_instance_id,
+	})
+	var removed_count: int = Abilities.remove_non_retained_abilities(target_card)
+	for _removed_index: int in range(removed_count):
+		events.append({
+			"type": &"ability_lost",
+			"source_cell": source_cell,
+			"target_cell": target_cell,
+			"owner_id": new_owner,
+			"instance_id": target_instance_id,
+		})
+	return events
+
+
+static func _execute_action(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	declaration: Dictionary,
+	context: Dictionary
+) -> Dictionary:
+	var action_type := StringName(declaration.get("type", &""))
+	if action_type == Catalog.ACTION_DRAW_CARDS:
+		return _draw_cards(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			int(declaration.get("amount", 0))
+		)
+	if action_type == Catalog.ACTION_EXILE_ATTACKED_CARD:
+		return _exile_attacked_card(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
+	if action_type == Catalog.ACTION_ATTACK_TRIGGER_CARD:
+		return _request_trigger_attack(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
+	if action_type == Catalog.ACTION_GAIN_KI:
+		return _change_ki(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			int(declaration.get("amount", 0)),
+			action_type
+		)
+	if action_type == Catalog.ACTION_SPEND_KI:
+		return _change_ki(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			-int(declaration.get("amount", 0)),
+			action_type
+		)
+	if action_type == Catalog.ACTION_SPEND_ALL_KI:
+		return _spend_all_ki(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		)
+	if action_type == Catalog.ACTION_REQUEST_EXTRA_TURN:
+		return _request_extra_turn(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		)
+	if action_type == Catalog.ACTION_MOVE_SELF_TO_TARGET:
+		return _move_self(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
+	if action_type == Catalog.ACTION_STANDARD_ATTACK_WITH_SELF:
+		return _request_standard_attack(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		)
+	return _no_effect(source_cell)
+
+
+static func _draw_cards(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	requested_count: int
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if source_slot.is_empty() or requested_count <= 0:
+		return _no_effect(source_cell)
+	var owner_id: int = int(source_slot.get("owner", 0))
+	var hand: Array = state.get_hand(owner_id)
+	var deck: Array = state.decks.get(owner_id, [])
+	var actual_count: int = mini(requested_count, mini(MAX_HAND_SIZE - hand.size(), deck.size()))
+	var events: Array[Dictionary] = []
+	for _draw_index: int in range(maxi(actual_count, 0)):
+		var drawn_card: Dictionary = deck.pop_front()
+		hand.append(drawn_card)
+		events.append({
+			"type": &"card_drawn",
+			"source_cell": source_cell,
+			"owner_id": owner_id,
+			"card_id": StringName(drawn_card.get("card_id", &"")),
+			"instance_id": StringName(drawn_card.get("instance_id", &"")),
+			"logical_hand_index": hand.size() - 1,
+		})
+	return _applied(source_cell, events) if actual_count > 0 else _no_effect(source_cell)
+
+
+static func _exile_attacked_card(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	var target_cell: int = int(context.get("attacked_cell", -1))
+	var target_instance_id := StringName(context.get("attacked_instance_id", &""))
+	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
+	if source_slot.is_empty() or target_slot.is_empty():
+		return _no_effect(source_cell)
+	var target_card: Dictionary = target_slot.get("card", {})
+	var original_owner: int = int(target_card.get("original_owner", 0))
+	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		original_owner = int(target_slot.get("owner", 0))
+	if not state.removed_cards.has(original_owner):
+		state.removed_cards[original_owner] = []
+	(state.removed_cards[original_owner] as Array).append(target_card)
+	state.board[target_cell] = null
+	return _applied(source_cell, [{
+		"type": &"card_exiled",
+		"source_cell": source_cell,
+		"target_cell": target_cell,
+		"owner_id": int(source_slot.get("owner", 0)),
+		"original_owner": original_owner,
+		"instance_id": target_instance_id,
+	}])
+
+
+static func _request_trigger_attack(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	var target_cell: int = int(context.get("trigger_cell", -1))
+	var target_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
+	if source_slot.is_empty() or target_slot.is_empty():
+		return _no_effect(source_cell)
+	if not Rules.can_attack_target(
+		state.board,
+		source_cell,
+		target_cell,
+		{"reason": &"card_summoned_reaction", "trigger_context": context}
+	):
+		return _no_effect(source_cell)
+	var result: Dictionary = _applied(source_cell)
+	result["attack_requests"].append({
+		"mode": &"targeted",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": int(source_slot.get("owner", 0)),
+		"target_cell": target_cell,
+		"target_instance_id": target_instance_id,
+		"target_owner_id": int(target_slot.get("owner", 0)),
+		"reason": &"card_summoned_reaction",
+	})
+	return result
+
+
+static func _change_ki(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	delta: int,
+	reason: StringName
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if source_slot.is_empty() or delta == 0:
+		return _no_effect(source_cell)
+	var card: Dictionary = source_slot.get("card", {})
+	var previous_ki: int = int(card.get("ki", 0))
+	var resulting_ki: int = previous_ki + delta
+	if resulting_ki < 0:
+		return _no_effect(source_cell)
+	card["ki"] = resulting_ki
+	return _applied(source_cell, [_make_ki_event(
+		source_cell,
+		int(source_slot.get("owner", 0)),
+		source_instance_id,
+		previous_ki,
+		resulting_ki,
+		reason
+	)])
+
+
+static func _spend_all_ki(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if source_slot.is_empty():
+		return _no_effect(source_cell)
+	var card: Dictionary = source_slot.get("card", {})
+	var previous_ki: int = int(card.get("ki", 0))
+	if previous_ki <= 0:
+		return _no_effect(source_cell)
+	card["ki"] = 0
+	return _applied(source_cell, [_make_ki_event(
+		source_cell,
+		int(source_slot.get("owner", 0)),
+		source_instance_id,
+		previous_ki,
+		0,
+		Catalog.ACTION_SPEND_ALL_KI
+	)])
+
+
+static func _request_extra_turn(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if source_slot.is_empty():
+		return _no_effect(source_cell)
+	var result: Dictionary = _applied(source_cell)
+	result["extra_turn_requests"].append({
+		"owner_id": int(source_slot.get("owner", 0)),
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+	})
+	return result
+
+
+static func _move_self(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	var target_kind := StringName(context.get("target_kind", &""))
+	var target_cell: int = int(context.get("target_index", -1))
+	if (
+		source_slot.is_empty()
+		or target_kind != &"board_cell"
+		or target_cell < 0
+		or target_cell >= state.board.size()
+		or state.board[target_cell] != null
+		or not _are_adjacent(source_cell, target_cell)
+	):
+		return _no_effect(source_cell)
+	state.board[source_cell] = null
+	state.board[target_cell] = source_slot
+	return _applied(target_cell, [{
+		"type": &"card_moved",
+		"source_cell": source_cell,
+		"target_cell": target_cell,
+		"owner_id": int(source_slot.get("owner", 0)),
+		"instance_id": source_instance_id,
+	}])
+
+
+static func _request_standard_attack(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if source_slot.is_empty():
+		return _no_effect(source_cell)
+	var result: Dictionary = _applied(source_cell)
+	result["attack_requests"].append({
+		"mode": &"standard",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": int(source_slot.get("owner", 0)),
+		"reason": &"activated_ability",
+	})
+	return result
+
+
+static func _get_card_slot(
+	state: StateData,
+	cell: int,
+	instance_id: StringName,
+	expected_owner: int = 0
+) -> Dictionary:
+	if state == null or cell < 0 or cell >= state.board.size():
+		return {}
+	var slot_value: Variant = state.board[cell]
+	if slot_value == null:
+		return {}
+	var slot: Dictionary = slot_value
+	var card: Dictionary = slot.get("card", {})
+	if StringName(card.get("instance_id", &"")) != instance_id:
+		return {}
+	if expected_owner != 0 and int(slot.get("owner", 0)) != expected_owner:
+		return {}
+	return slot
+
+
+static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
+	for direction: int in range(4):
+		if Rules.get_neighbor_index(first_cell, direction) == second_cell:
+			return true
+	return false
+
+
+static func _make_ki_event(
+	source_cell: int,
+	owner_id: int,
+	instance_id: StringName,
+	previous_ki: int,
+	resulting_ki: int,
+	action_type: StringName
+) -> Dictionary:
+	return {
+		"type": &"ki_changed",
+		"source_cell": source_cell,
+		"target_cell": source_cell,
+		"owner_id": owner_id,
+		"instance_id": instance_id,
+		"previous_ki": previous_ki,
+		"ki": resulting_ki,
+		"change_reason": action_type,
+	}
+
+
+static func _empty_result() -> Dictionary:
+	return {
+		"result": Catalog.ACTION_RESULT_NO_EFFECT,
+		"events": [],
+		"attack_requests": [],
+		"extra_turn_requests": [],
+		"source_cell": -1,
+	}
+
+
+static func _no_effect(source_cell: int) -> Dictionary:
+	var result: Dictionary = _empty_result()
+	result["source_cell"] = source_cell
+	return result
+
+
+static func _applied(source_cell: int, events: Array = []) -> Dictionary:
+	var result: Dictionary = _empty_result()
+	result["result"] = Catalog.ACTION_RESULT_APPLIED
+	result["source_cell"] = source_cell
+	result["events"] = events
+	return result

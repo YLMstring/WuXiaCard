@@ -36,7 +36,7 @@ Use this line for profiling regressions.
 - card power;
 - legal-action mobility;
 - ki;
-- active-effect count;
+- active-ability count;
 - danger and tempo.
 
 The heuristic matters at the leaf of an incomplete game tree: when the current depth limit is reached before a terminal position, it estimates which state is preferable. Terminal wins/losses dominate positional terms.
@@ -76,7 +76,7 @@ Even moderate branching compounds exponentially. A 3×3 board does not imply a t
 
 ## Deferred Optimization
 
-A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and hashing cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable effect primitives first, then revisit this optimization to avoid duplicated maintenance churn.
+A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and hashing cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
 
 When implementing it:
 
@@ -93,4 +93,4 @@ When implementing it:
 - No difficulty profiles beyond budget.
 - No persistent opening/endgame database.
 - No stochastic/hidden-information policy because perfect information is intentional.
-- Evaluation will need generic extensions as new effect primitives appear.
+- Evaluation will need generic extensions as new ability primitives appear.

@@ -11,7 +11,7 @@ var removed_cards: Dictionary = {}
 var active_player: int = Rules.PLAYER_OWNER
 var turn_count: int = 0
 var max_turns: int = 200
-var active_effects: Array = []
+var active_abilities: Array = []
 var effect_queue: Array = []
 var pending_choice: Dictionary = {}
 var repetition_hashes: Array = []
@@ -65,7 +65,7 @@ func duplicate_state():
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)
 	copied.max_turns = max_turns
-	copied.active_effects = active_effects.duplicate(true)
+	copied.active_abilities = active_abilities.duplicate(true)
 	copied.effect_queue = effect_queue.duplicate(true)
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)

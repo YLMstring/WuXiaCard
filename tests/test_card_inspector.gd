@@ -129,7 +129,7 @@ func _check_card_view_gestures() -> void:
 		"flavor": "风味",
 		"powers": [4, 7, 7, 4],
 		"ki": 0,
-		"active_effects": [],
+		"active_abilities": [],
 	}, 1, true)
 	await process_frame
 	var supports_inspection: bool = card.has_signal("inspection_requested")

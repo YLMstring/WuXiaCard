@@ -10,6 +10,7 @@ enum TurnState {
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
@@ -347,13 +348,12 @@ func debug_commit_activate(
 	if _inspection_open or duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
 		return false
 	var card := board_cards[source_cell] as CardView
-	var effect: Dictionary = DuelEffects.get_activate_effect(card.card_data)
-	if effect.is_empty():
+	var activation: Dictionary = Abilities.get_activation(card.card_data)
+	if activation.is_empty():
 		return false
 	var action: ActionData = ActionData.make_activate(
 		source_cell,
 		_get_card_instance_id(card),
-		StringName(effect.get("id", &"")),
 		ActionData.TARGET_BOARD_CELL,
 		target_cell
 	)
@@ -668,7 +668,6 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 			var changed_card := board_cards[target_cell] as CardView
 			if changed_card != null:
 				await changed_card.play_ability_lost(
-					StringName(event.get("effect_id", &"")),
 					capture_step_delay * 0.5
 				)
 		elif event_type == &"card_exiled":
@@ -1025,13 +1024,12 @@ func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
 			instance_id
 		)
 	if _drag_source_zone == ActionData.SOURCE_BOARD:
-		var effect: Dictionary = DuelEffects.get_activate_effect(card.card_data)
-		if effect.is_empty():
+		var activation: Dictionary = Abilities.get_activation(card.card_data)
+		if activation.is_empty():
 			return null
 		return ActionData.make_activate(
 			_drag_source_index,
 			instance_id,
-			StringName(effect.get("id", &"")),
 			ActionData.TARGET_BOARD_CELL,
 			target_cell
 		)

@@ -19,10 +19,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 
 ## Suites
 
-- `test_card_catalog.gd` — schema, metadata, effect/trigger validation, instance normalization.
+- `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
-- `test_duel_simulator.gd` — legal actions, rules, effects, triggers, ki, draw/removal/movement/extra turns.
+- `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki, draw/removal/movement/extra turns.
 - `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 
@@ -38,14 +38,15 @@ Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of 
 
 ## Expected Baseline
 
-The last full baseline before this handoff contained six passing suites and roughly 605 checks:
+The full baseline after the reusable-ability migration contains seven passing suites and at least 802 checks:
 
-- catalog: 234
+- catalog: 270
 - inspector: 17
-- rules: 18
-- simulator: 126
-- search: 34
-- integration: about 176
+- backdrop: 19
+- rules: 27
+- simulator: 162
+- search: 37
+- integration: about 270
 
 Treat the fresh runner output as authoritative; counts can change as tests grow and integration paths vary.
 
@@ -53,9 +54,9 @@ Treat the fresh runner output as authoritative; counts can change as tests grow 
 
 ### Catalog-only content
 
-Run catalog tests, simulator tests if effects changed, full suite, then open the inspector for the card.
+Run catalog tests, simulator tests if abilities changed, full suite, then open the inspector for the card.
 
-### Rules/effects
+### Rules/abilities
 
 Add a failing simulator case first. Verify state plus ordered events. Run simulator, search, integration, then full suite. Play both human and AI paths.
 
@@ -82,7 +83,7 @@ Existing editor diagnostics can include stale Summer authentication/setup messag
 - Use stable `instance_id` values.
 - Assert catalog declarations separately from simulator behavior.
 - Test both owners.
-- Test retained and lost effects across flips.
+- Test retained and lost abilities across flips.
 - Test terminal and no-legal-action states.
 - Test event order where presentation depends on it.
 - Seed deck shuffles when exact order matters.

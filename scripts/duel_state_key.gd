@@ -16,7 +16,7 @@ static func build(state: StateData) -> String:
 		"active_player": state.active_player,
 		"turn_count": state.turn_count,
 		"max_turns": state.max_turns,
-		"active_effects": state.active_effects,
+		"active_abilities": state.active_abilities,
 		"effect_queue": state.effect_queue,
 		"pending_choice": state.pending_choice,
 		"repetition_hashes": state.repetition_hashes,

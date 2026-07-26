@@ -2,7 +2,7 @@ class_name DuelTriggers
 extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Effects = preload("res://scripts/duel_effects.gd")
+const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
@@ -15,115 +15,53 @@ static func discover(
 	var groups: Array[Dictionary] = []
 	if state == null or event_id not in Catalog.KNOWN_TRIGGER_EVENTS:
 		return groups
-	var owner_id: int = int(context.get("owner_id", 0))
-	if event_id == Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF:
+	if event_id == Catalog.TRIGGER_CARD_AFTER_SUMMONED:
 		_discover_from_cell(
 			state,
 			event_id,
-			owner_id,
-			int(context.get("source_cell", -1)),
-			StringName(context.get("source_instance_id", &"")),
-			groups
+			int(context.get("trigger_cell", -1)),
+			groups,
+			context
 		)
-	elif event_id == Catalog.TRIGGER_END_OWNER_TURN:
-		for source_cell: int in range(state.board.size()):
-			_discover_from_cell(state, event_id, owner_id, source_cell, &"", groups)
-	elif event_id == Catalog.TRIGGER_CARD_SUMMONED:
-		for source_cell: int in range(state.board.size()):
-			_discover_from_cell(state, event_id, 0, source_cell, &"", groups, context)
+		return groups
+	for source_cell: int in range(state.board.size()):
+		_discover_from_cell(state, event_id, source_cell, groups, context)
 	return groups
 
 
-static func resolve(state: StateData, groups: Array[Dictionary]) -> Dictionary:
-	var events: Array[Dictionary] = []
-	var extra_turn_requests: Array[Dictionary] = []
-	var attack_requests: Array[Dictionary] = []
-	if state == null:
-		return {
-			"events": events,
-			"extra_turn_requests": extra_turn_requests,
-			"attack_requests": attack_requests,
-		}
-	for group: Dictionary in groups:
-		var resolved: Dictionary = _get_current_rule(state, group)
-		if resolved.is_empty():
-			continue
-		var card: Dictionary = resolved["card"]
-		var rule: Dictionary = resolved["rule"]
-		var context: Dictionary = group.get("context", {})
-		var source_cell: int = int(group.get("source_cell", -1))
-		if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
-			continue
-		var owner_id: int = int(group.get("owner_id", 0))
-		var instance_id := StringName(group.get("source_instance_id", &""))
-		var ability_id := StringName(group.get("ability_id", &""))
-		var actions: Array = rule.get("actions", [])
-		for action_value: Variant in actions:
-			var action: Dictionary = action_value
-			var action_type := StringName(action.get("type", &""))
-			if action_type == Catalog.TRIGGER_ACTION_GAIN_KI:
-				var previous_ki: int = int(card.get("ki", 0))
-				var resulting_ki: int = previous_ki + int(action.get("amount", 0))
-				card["ki"] = resulting_ki
-				events.append(_make_ki_event(
-					source_cell,
-					owner_id,
-					instance_id,
-					ability_id,
-					previous_ki,
-					resulting_ki,
-					action_type
-				))
-			elif action_type == Catalog.TRIGGER_ACTION_SPEND_ALL_KI:
-				var previous_ki: int = int(card.get("ki", 0))
-				card["ki"] = 0
-				if previous_ki != 0:
-					events.append(_make_ki_event(
-						source_cell,
-						owner_id,
-						instance_id,
-						ability_id,
-						previous_ki,
-						0,
-						action_type
-					))
-			elif action_type == Catalog.TRIGGER_ACTION_REQUEST_EXTRA_TURN:
-				extra_turn_requests.append({
-					"owner_id": owner_id,
-					"source_cell": source_cell,
-					"source_instance_id": instance_id,
-					"ability_id": ability_id,
-				})
-			elif action_type == Catalog.TRIGGER_ACTION_ATTACK_TRIGGER_CARD:
-				var target_slot: Dictionary = _get_trigger_card_slot(state, context)
-				if target_slot.is_empty():
-					continue
-				var target_card: Dictionary = target_slot.get("card", {})
-				attack_requests.append({
-					"source_cell": source_cell,
-					"source_instance_id": instance_id,
-					"source_owner_id": owner_id,
-					"target_cell": int(context.get("trigger_cell", -1)),
-					"target_instance_id": StringName(target_card.get("instance_id", &"")),
-					"target_owner_id": int(target_slot.get("owner", 0)),
-					"ability_id": ability_id,
-					"reason": &"card_summoned_reaction",
-				})
-	return {
-		"events": events,
-		"extra_turn_requests": extra_turn_requests,
-		"attack_requests": attack_requests,
+static func resolve_group(state: StateData, group: Dictionary) -> Dictionary:
+	var result: Dictionary = {
+		"events": [],
+		"extra_turn_requests": [],
+		"attack_requests": [],
 	}
+	if state == null:
+		return result
+	var resolved: Dictionary = _get_current_rule(state, group)
+	if resolved.is_empty():
+		return result
+	var card: Dictionary = resolved.get("card", {})
+	var rule: Dictionary = resolved.get("rule", {})
+	var source_cell: int = int(group.get("source_cell", -1))
+	var context: Dictionary = group.get("context", {})
+	if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
+		return result
+	return Executor.execute_actions(
+		state,
+		source_cell,
+		StringName(group.get("source_instance_id", &"")),
+		int(group.get("source_owner_id", 0)),
+		rule.get("actions", []) as Array,
+		context
+	)
 
 
 static func _discover_from_cell(
 	state: StateData,
 	event_id: StringName,
-	owner_id: int,
 	source_cell: int,
-	expected_instance_id: StringName,
 	groups: Array[Dictionary],
-	context: Dictionary = {}
+	context: Dictionary
 ) -> void:
 	if source_cell < 0 or source_cell >= state.board.size():
 		return
@@ -131,32 +69,39 @@ static func _discover_from_cell(
 	if slot_value == null:
 		return
 	var slot: Dictionary = slot_value
-	var current_owner_id: int = int(slot.get("owner", 0))
-	if owner_id != 0 and current_owner_id != owner_id:
-		return
 	var card: Dictionary = slot.get("card", {})
 	var instance_id := StringName(card.get("instance_id", &""))
-	if expected_instance_id != &"" and instance_id != expected_instance_id:
-		return
-	var active_effects: Array = card.get("active_effects", [])
-	for effect_value: Variant in active_effects:
-		var effect: Dictionary = effect_value
-		var triggers: Array = effect.get("triggers", [])
+	var active_abilities: Array = card.get("active_abilities", [])
+	for ability_index: int in range(active_abilities.size()):
+		var ability_value: Variant = active_abilities[ability_index]
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		var triggers: Array = ability.get("triggers", [])
 		for trigger_index: int in range(triggers.size()):
-			var rule: Dictionary = triggers[trigger_index]
+			var rule_value: Variant = triggers[trigger_index]
+			if not rule_value is Dictionary:
+				continue
+			var rule: Dictionary = rule_value
 			if StringName(rule.get("event", &"")) != event_id:
 				continue
-			if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
+			if not _conditions_match(
+				state,
+				source_cell,
+				card,
+				rule.get("conditions", []),
+				context
+			):
 				continue
 			groups.append({
 				"event_id": event_id,
-				"owner_id": current_owner_id,
+				"source_owner_id": int(slot.get("owner", 0)),
 				"source_cell": source_cell,
 				"source_instance_id": instance_id,
-				"ability_id": StringName(effect.get("id", &"")),
+				"ability_index": ability_index,
+				"ability_snapshot": ability.duplicate(true),
 				"trigger_index": trigger_index,
 				"context": context.duplicate(true),
-				"actions": (rule.get("actions", []) as Array).duplicate(true),
 			})
 
 
@@ -165,19 +110,35 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 	if source_cell < 0 or source_cell >= state.board.size():
 		return {}
 	var slot_value: Variant = state.board[source_cell]
-	if slot_value == null or int((slot_value as Dictionary).get("owner", 0)) != int(group.get("owner_id", 0)):
+	if slot_value == null:
 		return {}
-	var card: Dictionary = (slot_value as Dictionary).get("card", {})
-	if StringName(card.get("instance_id", &"")) != StringName(group.get("source_instance_id", &"")):
+	var slot: Dictionary = slot_value
+	if int(slot.get("owner", 0)) != int(group.get("source_owner_id", 0)):
 		return {}
-	var effect: Dictionary = Effects.find_active_effect(card, StringName(group.get("ability_id", &"")))
-	if effect.is_empty():
+	var card: Dictionary = slot.get("card", {})
+	if (
+		StringName(card.get("instance_id", &""))
+		!= StringName(group.get("source_instance_id", &""))
+	):
 		return {}
-	var triggers: Array = effect.get("triggers", [])
+	var active_abilities: Array = card.get("active_abilities", [])
+	var ability_index: int = int(group.get("ability_index", -1))
+	if ability_index < 0 or ability_index >= active_abilities.size():
+		return {}
+	var ability_value: Variant = active_abilities[ability_index]
+	if not ability_value is Dictionary:
+		return {}
+	var ability: Dictionary = ability_value
+	if ability != group.get("ability_snapshot", {}):
+		return {}
+	var triggers: Array = ability.get("triggers", [])
 	var trigger_index: int = int(group.get("trigger_index", -1))
 	if trigger_index < 0 or trigger_index >= triggers.size():
 		return {}
-	var rule: Dictionary = triggers[trigger_index]
+	var rule_value: Variant = triggers[trigger_index]
+	if not rule_value is Dictionary:
+		return {}
+	var rule: Dictionary = rule_value
 	if StringName(rule.get("event", &"")) != StringName(group.get("event_id", &"")):
 		return {}
 	return {"card": card, "rule": rule}
@@ -193,8 +154,6 @@ static func _conditions_match(
 	if not conditions_value is Array:
 		return false
 	var conditions: Array = conditions_value
-	if conditions.is_empty():
-		return true
 	for condition_value: Variant in conditions:
 		if not condition_value is Dictionary:
 			return false
@@ -204,11 +163,16 @@ static func _conditions_match(
 			if int(card.get("ki", 0)) < int(condition.get("amount", 0)):
 				return false
 		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY:
-			var target_slot: Dictionary = _get_trigger_card_slot(state, context)
-			if target_slot.is_empty():
+			var trigger_slot: Dictionary = _get_context_card_slot(
+				state,
+				context,
+				"trigger_cell",
+				"trigger_instance_id"
+			)
+			if trigger_slot.is_empty():
 				return false
 			var source_slot: Dictionary = state.board[source_cell]
-			if int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0)):
+			if int(source_slot.get("owner", 0)) == int(trigger_slot.get("owner", 0)):
 				return false
 		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IN_RANGE:
 			if not Rules.can_attack_target(
@@ -221,42 +185,43 @@ static func _conditions_match(
 				}
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IS_SELF:
+			if (
+				StringName(card.get("instance_id", &""))
+				!= StringName(context.get("trigger_instance_id", &""))
+				or source_cell != int(context.get("trigger_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_ATTACKER_CARD_IS_SELF:
+			if (
+				StringName(card.get("instance_id", &""))
+				!= StringName(context.get("attacker_instance_id", &""))
+				or source_cell != int(context.get("attacker_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
+			var source_slot: Dictionary = state.board[source_cell]
+			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):
+				return false
 		else:
 			return false
 	return true
 
 
-static func _get_trigger_card_slot(state: StateData, context: Dictionary) -> Dictionary:
-	var target_cell: int = int(context.get("trigger_cell", -1))
-	if target_cell < 0 or target_cell >= state.board.size():
-		return {}
-	var target_value: Variant = state.board[target_cell]
-	if target_value == null:
-		return {}
-	var target_slot: Dictionary = target_value
-	var target_card: Dictionary = target_slot.get("card", {})
-	if StringName(target_card.get("instance_id", &"")) != StringName(context.get("trigger_instance_id", &"")):
-		return {}
-	return target_slot
-
-
-static func _make_ki_event(
-	source_cell: int,
-	owner_id: int,
-	instance_id: StringName,
-	ability_id: StringName,
-	previous_ki: int,
-	resulting_ki: int,
-	action_type: StringName
+static func _get_context_card_slot(
+	state: StateData,
+	context: Dictionary,
+	cell_key: String,
+	instance_key: String
 ) -> Dictionary:
-	return {
-		"type": &"ki_changed",
-		"source_cell": source_cell,
-		"target_cell": source_cell,
-		"owner_id": owner_id,
-		"instance_id": instance_id,
-		"effect_id": ability_id,
-		"previous_ki": previous_ki,
-		"ki": resulting_ki,
-		"change_reason": action_type,
-	}
+	var cell: int = int(context.get(cell_key, -1))
+	if cell < 0 or cell >= state.board.size():
+		return {}
+	var slot_value: Variant = state.board[cell]
+	if slot_value == null:
+		return {}
+	var slot: Dictionary = slot_value
+	var card: Dictionary = slot.get("card", {})
+	if StringName(card.get("instance_id", &"")) != StringName(context.get(instance_key, &"")):
+		return {}
+	return slot

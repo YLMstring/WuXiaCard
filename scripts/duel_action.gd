@@ -14,7 +14,6 @@ var action_type: StringName = &""
 var source_zone: StringName = &""
 var source_index: int = -1
 var source_instance_id: StringName = &""
-var ability_id: StringName = &""
 var target_kind: StringName = &""
 var target_index: int = -1
 
@@ -24,7 +23,6 @@ func _init(
 	new_source_zone: StringName = &"",
 	new_source_index: int = -1,
 	new_source_instance_id: StringName = &"",
-	new_ability_id: StringName = &"",
 	new_target_kind: StringName = &"",
 	new_target_index: int = -1
 ) -> void:
@@ -32,7 +30,6 @@ func _init(
 	source_zone = new_source_zone
 	source_index = new_source_index
 	source_instance_id = new_source_instance_id
-	ability_id = new_ability_id
 	target_kind = new_target_kind
 	target_index = new_target_index
 
@@ -47,7 +44,6 @@ static func make_play(
 		SOURCE_HAND,
 		hand_index,
 		instance_id,
-		&"",
 		TARGET_BOARD_CELL,
 		cell_index
 	)
@@ -56,7 +52,6 @@ static func make_play(
 static func make_activate(
 	source_cell: int,
 	instance_id: StringName,
-	activate_ability_id: StringName,
 	new_target_kind: StringName,
 	new_target_index: int
 ):
@@ -65,7 +60,6 @@ static func make_activate(
 		SOURCE_BOARD,
 		source_cell,
 		instance_id,
-		activate_ability_id,
 		new_target_kind,
 		new_target_index
 	)
@@ -77,7 +71,6 @@ func duplicate_action():
 		source_zone,
 		source_index,
 		source_instance_id,
-		ability_id,
 		target_kind,
 		target_index
 	)
@@ -94,19 +87,17 @@ func is_same_as(other) -> bool:
 		and source_zone == other.source_zone
 		and source_index == other.source_index
 		and source_instance_id == other.source_instance_id
-		and ability_id == other.ability_id
 		and target_kind == other.target_kind
 		and target_index == other.target_index
 	)
 
 
 func canonical_key() -> String:
-	return "%s|%s|%010d|%s|%s|%s|%010d" % [
+	return "%s|%s|%010d|%s|%s|%010d" % [
 		String(action_type),
 		String(source_zone),
 		source_index,
 		String(source_instance_id),
-		String(ability_id),
 		String(target_kind),
 		target_index,
 	]

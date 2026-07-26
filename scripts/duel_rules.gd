@@ -22,7 +22,7 @@ static func make_card(
 	card_name: String,
 	glyph: String,
 	powers: Array[int],
-	active_effects: Array = [],
+	active_abilities: Array = [],
 	original_owner: int = 0,
 	card_id: StringName = &""
 ) -> Dictionary:
@@ -37,7 +37,7 @@ static func make_card(
 		"glyph": glyph,
 		"powers": powers.duplicate(),
 		"original_owner": original_owner,
-		"active_effects": active_effects.duplicate(true),
+		"active_abilities": active_abilities.duplicate(true),
 	}
 
 

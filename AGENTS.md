@@ -30,13 +30,13 @@ Never implement a historical plan merely because it exists. Confirm that it stil
 - `DuelSimulator` is the authoritative gameplay rules path for humans, testing mode, greedy fallback, and deep AI.
 - `DuelController` presents simulator transitions. Do not add gameplay-only branches to the controller.
 - `DuelState` and `DuelAction` contain pure data only. No scene nodes, Controls, tweens, audio players, or mutable live UI references.
-- Search code must remain card-agnostic. It may evaluate generic powers, ownership, zones, ki, legal actions, and active-effect counts; it must not check named card IDs.
+- Search code must remain card-agnostic. It may evaluate generic powers, ownership, zones, ki, legal actions, and active-ability counts; it must not check named card IDs.
 - Card definitions live in `scripts/card_catalog.gd`. Encounter hands live in `scripts/duel_decks.gd`.
 - Runtime card identity uses `instance_id`. Never rely on visual child order after cards are drawn into fixed hand slots.
-- A card can have at most one activate ability. Replacing one removes the previous activate ability but preserves non-activate abilities.
+- A card can have at most one activation. Replacing its ability entry removes the previous activation while preserving passive abilities.
 - Activating any ability costs one ki. Ki is independent state and survives ownership flips.
-- Effects are lost on flip unless the catalog effect explicitly sets `retained_on_flip = true`.
-- New effects must emit pure-data events for presentation and must be covered by simulator tests before UI work.
+- Abilities are lost on flip unless the catalog ability explicitly sets `retained_on_flip = true`.
+- New abilities must emit pure-data events for presentation and must be covered by simulator tests before UI work.
 
 ## Player-Visible Invariants
 
@@ -51,7 +51,7 @@ Never implement a historical plan merely because it exists. Confirm that it stil
 
 ## Safe Change Workflow
 
-For a new card or effect:
+For a new card or ability:
 
 1. Add/validate catalog data.
 2. Add a pure simulator fixture that fails without the feature.
@@ -102,7 +102,7 @@ A feature is not complete merely because scripts compile. For gameplay or visual
 - Current state and next steps: `docs/HANDOFF.md`
 - Architecture and data flow: `docs/ARCHITECTURE.md`
 - Durable product decisions: `docs/DECISIONS.md`
-- Adding cards/effects: `docs/ADDING_CARDS_AND_EFFECTS.md`
+- Adding cards/abilities: `docs/ADDING_CARDS_AND_ABILITIES.md`
 - AI search: `docs/AI_SEARCH.md`
 - UI and Android: `docs/UI_AND_ANDROID.md`
 - Tests and setup: `docs/TESTING.md`

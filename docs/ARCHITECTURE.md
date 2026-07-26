@@ -30,7 +30,7 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 ### Data
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
-- `duel_action.gd` — pure action descriptor. Current action types are play and activate. It already distinguishes source zone and target kind so future effects can target board cells or hand slots.
+- `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id`, never an ability ID.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
 - `duel_decks.gd` — starting hand lists and side-pool creation.
 
@@ -40,13 +40,18 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
-- `duel_effects.gd` — effect primitives: draw, exile instead of flip, normal flip/effect loss, activate-effect lookup/replacement, and ki-use detection.
+- `duel_abilities.gd` — structural activation lookup/replacement, flip retention, and ki-use detection.
+- `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, extra-turn requests, normal flip, and invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. The implemented rule is adjacent empty board cell.
-- `duel_triggers.gd` — trigger discovery and revalidation, composable conditions, ki actions, extra-turn requests, and pure-data attack requests.
+- `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
 
-For a normal hand play, the simulator places the card and emits `card_placed`, then resolves `TRIGGER_CARD_SUMMONED` groups in row-major source order before on-play effects and the summoned card’s standard attack. If a reaction removes the card or changes its ownership, those remaining summon phases are skipped and the turn still finishes. Board movement does not emit the summon trigger.
+For a normal hand play, the simulator places the card and emits `card_placed`, resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then resolves the exact summoned card's retained `TRIGGER_CARD_AFTER_SUMMONED` rules. Its standard attack follows only if the exact instance remains in its summoned cell under the summoning owner. Board movement emits neither summon event.
+
+Every attack first emits `CARD_BE_ATTACKED`, resolves eligible rules in row-major order, and then revalidates the exact attacker and target before flipping. Gate General and Tiger General exile through an ordinary trigger action; there is no separate replacement subsystem.
+
+An action with stale or missing context returns `NO_EFFECT` and later actions continue. Only a declaration with `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 
 ### Search
 
@@ -77,7 +82,7 @@ The board is an Array of nine entries. An empty cell is `null`; an occupied entr
 - `powers`
 - `original_owner`
 - `ki`
-- `active_effects`
+- `active_abilities`
 
 Use `instance_id` whenever an action or view must identify a specific copy. Logical hand arrays compact when a card leaves, while five visual hand slots remain fixed; indices alone are therefore unsafe across presentation delays.
 
@@ -92,13 +97,13 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `ki_changed`
 - extra-turn events emitted during turn resolution
 
-New rules should follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
+`ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 
 ## Extension Boundary
 
 Add reusable vocabulary before adding named-card branches:
 
-1. catalog identifier and schema validation;
+1. catalog event/condition/action identifier and schema validation;
 2. target/condition/action primitive;
 3. simulator resolution and event;
 4. simulator tests;
@@ -111,4 +116,4 @@ Search and evaluation must not check `card_id == ...`. Named content belongs in 
 
 `DuelState.effect_queue` and `pending_choice` reserve space for future multi-step effects, but there is not yet a general decision/interrupt engine. Do not pretend it exists.
 
-The current “compact” key hashes a canonical string. Search still deep-duplicates Dictionary-heavy states. A true compact, indexed simulation state was deliberately deferred until more reusable effect primitives stabilize; otherwise each new effect would require parallel maintenance in two rule engines.
+The current “compact” key hashes a canonical string. Search still deep-duplicates Dictionary-heavy states. A true compact, indexed simulation state was deliberately deferred until more reusable ability primitives stabilize; otherwise each new primitive would require parallel maintenance in two rule engines.

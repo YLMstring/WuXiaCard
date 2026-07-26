@@ -23,18 +23,26 @@ These decisions were explicitly established during development and should not be
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
 - Every activate ability costs one ki.
-- A card can have at most one activate ability. Receiving a new one replaces the old activate ability without deleting unrelated effects.
+- A card can have at most one activation. Receiving a new one replaces the old activation-bearing ability without deleting unrelated passive abilities.
 - Ki is independent from abilities and survives ownership flips.
 - A zero-ki card with no activate ability does not show a ki bead.
-- `card_uses_ki()` intentionally counts activate abilities only. Passive Meng Huo effects do not make a zero-ki bead appear.
+- `card_uses_ki()` intentionally counts activations only. Passive Meng Huo abilities do not make a zero-ki bead appear.
 
-## Ownership and Effect Retention
+## Ownership and Ability Retention
 
 - A successful flip means ownership actually changes.
-- Effects default to lost on flip. Catalog authors do not need to declare the common default.
-- Only an effect with `retained_on_flip = true` survives.
-- Once an effect is lost, later ownership changes do not restore it.
-- Ki remains on the card when effects are lost.
+- Abilities default to lost on flip. Catalog authors do not need to declare the common default.
+- Only an ability with `retained_on_flip = true` survives.
+- Once an ability is lost, later ownership changes do not restore it.
+- Ki remains on the card when abilities are lost.
+
+## Rule Resolution
+
+- Abilities have no behavior ID; runtime actions identify their source card by `instance_id`.
+- Global triggers resolve by row-major board cell, then ability order, then trigger order.
+- Missing, moved, or replaced context defaults to `NO_EFFECT`, and later actions in that rule continue.
+- Only an action explicitly declaring `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
+- Stopping one rule never cancels later trigger groups, the enclosing event, or the turn.
 
 ## Implemented Abilities
 
@@ -42,7 +50,7 @@ These decisions were explicitly established during development and should not be
 
 When either would flip a card through any present or future attack/combo source, it removes that card instead.
 
-- This replacement effect survives ownership flips.
+- This pre-attack trigger survives ownership flips.
 - The removed card goes to its original owner's removed zone.
 - The removed card keeps its original ownership identity.
 - Removal is not a successful flip and does not generate Meng Huo ki.
@@ -57,7 +65,7 @@ When played, draw the catalog-declared number of cards (`2` currently).
 - Cards are drawn/presented sequentially with an Ink Summon visual.
 - There is a small post-draw delay so later board effects do not visually clash.
 - The dedicated draw sound was deliberately removed because it was noisy.
-- Like most effects, the ability is lost on ownership flip; no catalog flag is needed for that default.
+- Like most abilities, the draw rule is lost on ownership flip; no catalog flag is needed for that default.
 
 ### Jiang Wei and Sun Zan
 
@@ -66,7 +74,7 @@ They start with one ki and have a movement activate ability.
 - Drag the owned board card to an orthogonally adjacent empty cell.
 - Pay one ki.
 - Resolve a standard attack from the destination.
-- Moving does not retrigger on-play effects.
+- Moving does not emit summon events.
 
 The action/target model should also support future non-movement activations with ally-square, enemy-square, or hand-slot targets.
 
@@ -85,7 +93,7 @@ The action/target model should also support future non-movement activations with
 
 Whenever an enemy card is summoned into an orthogonally adjacent slot that CangSongYingKe2 can beat by the normal strict power comparison, CangSongYingKe2 immediately attacks that exact card.
 
-- The reaction resolves after `card_placed` but before the summoned card’s on-play effects and standard attack.
+- The reaction resolves after `card_placed` but before the summoned card's `TRIGGER_CARD_AFTER_SUMMONED` rules and standard attack.
 - If the reaction flips or removes the summoned card, those remaining phases are cancelled and the turn still ends normally.
 - Multiple eligible reactors resolve in row-major board order and stop once the summoned card leaves or changes ownership.
 - Reaction attacks use the existing flip/exile path and successful-flip triggers.

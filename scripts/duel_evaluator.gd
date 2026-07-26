@@ -6,7 +6,7 @@ const DECK_CARD_WEIGHT: int = 25
 const POWER_WEIGHT: int = 1
 const MOBILITY_WEIGHT: int = 1
 const KI_WEIGHT: int = 4
-const ACTIVE_EFFECT_WEIGHT: int = 4
+const ACTIVE_ABILITY_WEIGHT: int = 4
 const DANGER_WEIGHT: int = 2
 const TEMPO_WEIGHT: int = 2
 const POSITIONAL_LIMIT: int = 499
@@ -59,7 +59,7 @@ static func _zone_value(cards: Array, card_weight: int) -> int:
 		var card: Dictionary = card_value
 		value += _power_sum(card) * POWER_WEIGHT
 		value += int(card.get("ki", 0)) * KI_WEIGHT
-		value += (card.get("active_effects", []) as Array).size() * ACTIVE_EFFECT_WEIGHT
+		value += (card.get("active_abilities", []) as Array).size() * ACTIVE_ABILITY_WEIGHT
 	return value
 
 
@@ -74,7 +74,7 @@ static func _board_resource_value(state: StateData, owner_id: int) -> int:
 		var card: Dictionary = slot.get("card", {})
 		value += _power_sum(card) * POWER_WEIGHT
 		value += int(card.get("ki", 0)) * KI_WEIGHT
-		value += (card.get("active_effects", []) as Array).size() * ACTIVE_EFFECT_WEIGHT
+		value += (card.get("active_abilities", []) as Array).size() * ACTIVE_ABILITY_WEIGHT
 	return value
 
 

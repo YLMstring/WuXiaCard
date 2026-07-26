@@ -13,7 +13,7 @@ const CARD_BACK_GLYPH: String = "◆"
 const CARD_PICTURE_SCALE: float = 0.8
 const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
-const Effects = preload("res://scripts/duel_effects.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -89,7 +89,7 @@ func _refresh_face_content() -> void:
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.visible = not face_down
 	var ki: int = int(card_data.get("ki", 0))
-	var has_ki_ability: bool = Effects.card_uses_ki(card_data)
+	var has_ki_ability: bool = Abilities.card_uses_ki(card_data)
 	ki_value.text = str(ki)
 	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
@@ -149,17 +149,17 @@ func set_card_owner(new_owner_id: int) -> void:
 	_apply_owner_style()
 
 
-func remove_active_effect(effect_id: StringName) -> bool:
-	var active_effects: Array = card_data.get("active_effects", [])
-	var retained_effects: Array = []
+func remove_next_non_retained_ability() -> bool:
+	var active_abilities: Array = card_data.get("active_abilities", [])
+	var retained_abilities: Array = []
 	var removed: bool = false
-	for effect_value: Variant in active_effects:
-		var effect: Dictionary = effect_value
-		if not removed and StringName(effect.get("id", &"")) == effect_id:
+	for ability_value: Variant in active_abilities:
+		var ability: Dictionary = ability_value
+		if not removed and not bool(ability.get("retained_on_flip", false)):
 			removed = true
 			continue
-		retained_effects.append(effect.duplicate(true))
-	card_data["active_effects"] = retained_effects
+		retained_abilities.append(ability.duplicate(true))
+	card_data["active_abilities"] = retained_abilities
 	_refresh_face_content()
 	return removed
 
@@ -270,13 +270,18 @@ func play_exile(duration: float, ink_color: Color) -> void:
 	await exile_tween.finished
 
 
-func play_ability_lost(effect_id: StringName, duration: float) -> void:
-	remove_active_effect(effect_id)
-	if duration <= 0.0:
+func play_ability_lost(animation_duration: float) -> void:
+	remove_next_non_retained_ability()
+	if animation_duration <= 0.0:
 		return
 	var loss_tween: Tween = create_tween()
-	loss_tween.tween_property(self, "modulate", Color(0.48, 0.48, 0.48, 1.0), duration * 0.5)
-	loss_tween.tween_property(self, "modulate", Color.WHITE, duration * 0.5)
+	loss_tween.tween_property(
+		self,
+		"modulate",
+		Color(0.48, 0.48, 0.48, 1.0),
+		animation_duration * 0.5
+	)
+	loss_tween.tween_property(self, "modulate", Color.WHITE, animation_duration * 0.5)
 	await loss_tween.finished
 
 
