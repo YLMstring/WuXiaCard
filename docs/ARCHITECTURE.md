@@ -73,7 +73,8 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
 - `ink_bloom.gd` — draw summon visual.
-- `attack_vfx.gd` — serialized vector-based flying-white attack strokes.
+- `attack_vfx.gd` — serialized, clipped playback of the supplied flying-white
+  attack bitmap.
 - `extra_turn_vfx.gd` — Meng Huo extra-turn convergence visual.
 
 The controller may choose timing, sound, animation, and labels. It must not independently decide captures, draws, targets, ki costs, or turn ownership.
@@ -108,9 +109,10 @@ Effects and triggers communicate presentation needs through dictionaries such as
 `attack_started` contains stable source/target cells, instance IDs, owners, and
 the attack reason. It is emitted after initial attack validation and before
 `CARD_BE_ATTACKED`; it is presentation data, not a catalog event or ability
-hook. The controller resolves live card rectangles by instance ID and derives
-the stroke from their facing edges, so current adjacent attacks and future
-non-neighbor attacks share the same geometry path.
+hook. The controller validates the source instance, derives an orthogonal
+direction from the source/target cells, and centers the fixed 64 × 22 bitmap on
+the first neighboring cell seam. A farther same-row or same-column target does
+not stretch or relocate the image.
 
 `ability_triggered` is emitted only after a passive rule survives revalidation and
 its conditions match. It precedes that rule's action events and drives the

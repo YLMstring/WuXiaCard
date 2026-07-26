@@ -27,7 +27,6 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var snap_duration: float = 0.12
 @export var capture_flip_duration: float = 0.18
 @export var attack_vfx_duration: float = 0.15
-@export var attack_ink_color: Color = Color("211824")
 @export var ability_trigger_pulse_duration: float = 0.14
 @export var exile_duration: float = 0.22
 @export var exile_step_delay: float = 0.10
@@ -239,6 +238,13 @@ func debug_get_presentation_trace() -> Array[StringName]:
 
 func debug_get_attack_vfx_trace() -> Array[Dictionary]:
 	return _attack_vfx_trace.duplicate(true)
+
+
+func debug_get_attack_vfx_placement(
+	source_cell: int,
+	target_cell: int
+) -> Dictionary:
+	return _get_attack_vfx_placement(source_cell, target_cell)
 
 
 func debug_get_ability_pulse_trace() -> Array[StringName]:
@@ -664,24 +670,37 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				await _wait_after_draw_before_board_effect()
 				waited_after_draw = true
 			_presentation_trace.append(event_type)
+			var source_cell: int = int(event.get("source_cell", -1))
 			var source_instance_id := StringName(event.get("source_instance_id", &""))
 			var target_instance_id := StringName(event.get("target_instance_id", &""))
-			var source_card: CardView = _get_board_card_view_by_instance(
-				source_instance_id
+			var source_card: CardView = null
+			if (
+				source_cell >= 0
+				and source_cell < board_cards.size()
+				and board_cards[source_cell] != null
+				and is_instance_valid(board_cards[source_cell])
+			):
+				source_card = board_cards[source_cell] as CardView
+			var placement: Dictionary = _get_attack_vfx_placement(
+				source_cell,
+				target_cell
 			)
-			var target_card: CardView = _get_board_card_view_by_instance(
-				target_instance_id
-			)
-			if source_card != null and target_card != null:
+			if (
+				source_card != null
+				and _get_card_instance_id(source_card) == source_instance_id
+				and not placement.is_empty()
+			):
 				_attack_vfx_trace.append({
 					"source_instance_id": source_instance_id,
 					"target_instance_id": target_instance_id,
+					"neighbor_cell": int(placement["neighbor_cell"]),
+					"center": placement["center"],
+					"rotation": float(placement["rotation"]),
 				})
 				await attack_vfx.play_attack(
-					source_card.get_global_rect(),
-					target_card.get_global_rect(),
-					attack_vfx_duration,
-					attack_ink_color
+					placement["center"],
+					float(placement["rotation"]),
+					attack_vfx_duration
 				)
 		elif event_type == &"ability_triggered":
 			_presentation_trace.append(event_type)
@@ -1017,6 +1036,80 @@ func _get_cards_in_hand(container: HBoxContainer) -> Array[CardView]:
 			if child is CardView:
 				result.append(child as CardView)
 	return result
+
+
+func _get_attack_vfx_placement(
+	source_cell: int,
+	target_cell: int
+) -> Dictionary:
+	if (
+		source_cell < 0
+		or source_cell >= 9
+		or target_cell < 0
+		or target_cell >= 9
+		or source_cell == target_cell
+		or board_cells.size() != 9
+	):
+		return {}
+
+	var source_row: int = floori(float(source_cell) / 3.0)
+	var source_column: int = source_cell % 3
+	var target_row: int = floori(float(target_cell) / 3.0)
+	var target_column: int = target_cell % 3
+	var neighbor_cell: int = -1
+	var rotation_radians: float = 0.0
+	var horizontal_step: int = 0
+	var vertical_step: int = 0
+	if source_row == target_row:
+		horizontal_step = 1 if target_column > source_column else -1
+		neighbor_cell = source_cell + horizontal_step
+		rotation_radians = 0.0 if horizontal_step > 0 else PI
+	elif source_column == target_column:
+		vertical_step = 1 if target_row > source_row else -1
+		neighbor_cell = source_cell + vertical_step * 3
+		rotation_radians = PI / 2.0 if vertical_step > 0 else -PI / 2.0
+	else:
+		return {}
+
+	if (
+		neighbor_cell < 0
+		or neighbor_cell >= board_cells.size()
+		or board_cells[source_cell] == null
+		or board_cells[neighbor_cell] == null
+		or not is_instance_valid(board_cells[source_cell])
+		or not is_instance_valid(board_cells[neighbor_cell])
+	):
+		return {}
+
+	var source_rect: Rect2 = board_cells[source_cell].get_global_rect()
+	var neighbor_rect: Rect2 = board_cells[neighbor_cell].get_global_rect()
+	var seam_center: Vector2
+	if horizontal_step > 0:
+		seam_center = Vector2(
+			(source_rect.end.x + neighbor_rect.position.x) * 0.5,
+			(source_rect.get_center().y + neighbor_rect.get_center().y) * 0.5
+		)
+	elif horizontal_step < 0:
+		seam_center = Vector2(
+			(source_rect.position.x + neighbor_rect.end.x) * 0.5,
+			(source_rect.get_center().y + neighbor_rect.get_center().y) * 0.5
+		)
+	elif vertical_step > 0:
+		seam_center = Vector2(
+			(source_rect.get_center().x + neighbor_rect.get_center().x) * 0.5,
+			(source_rect.end.y + neighbor_rect.position.y) * 0.5
+		)
+	else:
+		seam_center = Vector2(
+			(source_rect.get_center().x + neighbor_rect.get_center().x) * 0.5,
+			(source_rect.position.y + neighbor_rect.end.y) * 0.5
+		)
+
+	return {
+		"center": seam_center,
+		"rotation": rotation_radians,
+		"neighbor_cell": neighbor_cell,
+	}
 
 
 func _get_cell_at_position(pointer_position: Vector2) -> int:

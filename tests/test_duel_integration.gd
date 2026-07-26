@@ -182,108 +182,192 @@ func _check_attack_vfx_overlay(duel: Node) -> void:
 		),
 		"Attack VFX covers the complete fixed duel canvas"
 	)
-	_check(
+	var has_asset_api: bool = (
 		attack_vfx.has_method("play_attack")
-		and attack_vfx.has_method("debug_get_last_start")
-		and attack_vfx.has_method("debug_get_last_end")
-		and attack_vfx.has_method("debug_get_last_fleck_count")
-		and attack_vfx.has_method("debug_is_clean"),
-		"Attack overlay exposes reusable playback and focused diagnostics"
+		and attack_vfx.has_method("debug_get_last_center")
+		and attack_vfx.has_method("debug_get_last_rotation")
+		and attack_vfx.has_method("debug_get_display_size")
+		and attack_vfx.has_method("debug_get_texture_path")
+		and attack_vfx.has_method("debug_get_clip_size")
+		and attack_vfx.has_method("debug_is_clean")
+	)
+	_check(
+		has_asset_api,
+		"Attack overlay exposes asset-backed playback diagnostics"
+	)
+	if not has_asset_api:
+		return
+
+	var effect_root: Control = attack_vfx.get_node_or_null("EffectRoot") as Control
+	var clip: Control = attack_vfx.get_node_or_null("EffectRoot/Clip") as Control
+	var texture_rect: TextureRect = (
+		attack_vfx.get_node_or_null("EffectRoot/Clip/Texture") as TextureRect
+	)
+	_check(
+		effect_root != null and clip != null and texture_rect != null,
+		"Attack overlay owns one reusable clip and texture hierarchy"
+	)
+	if effect_root == null or clip == null or texture_rect == null:
+		return
+	_check(
+		String(attack_vfx.call("debug_get_texture_path"))
+		== "res://inkpics/attack.png",
+		"Attack overlay uses the supplied attack.png resource"
+	)
+	_check(
+		(attack_vfx.call("debug_get_display_size") as Vector2).is_equal_approx(
+			Vector2(64.0, 22.0)
+		)
+		and texture_rect.size.is_equal_approx(Vector2(64.0, 22.0))
+		and texture_rect.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED,
+		"Supplied texture uses the approved 64 by 22 keep-aspect display box"
+	)
+	_check(
+		clip.clip_contents
+		and clip.position.is_equal_approx(Vector2.ZERO),
+		"Reveal clip keeps its local left edge fixed"
 	)
 
-	var cases: Array[Dictionary] = [
-		{
-			"name": "right",
-			"source": Rect2(20.0, 20.0, 80.0, 120.0),
-			"target": Rect2(110.0, 20.0, 80.0, 120.0),
-			"start": Vector2(92.0, 80.0),
-			"end": Vector2(118.0, 80.0),
-		},
-		{
-			"name": "left",
-			"source": Rect2(110.0, 20.0, 80.0, 120.0),
-			"target": Rect2(20.0, 20.0, 80.0, 120.0),
-			"start": Vector2(118.0, 80.0),
-			"end": Vector2(92.0, 80.0),
-		},
-		{
-			"name": "down",
-			"source": Rect2(20.0, 20.0, 80.0, 120.0),
-			"target": Rect2(20.0, 150.0, 80.0, 120.0),
-			"start": Vector2(60.0, 132.0),
-			"end": Vector2(60.0, 158.0),
-		},
-		{
-			"name": "up",
-			"source": Rect2(20.0, 150.0, 80.0, 120.0),
-			"target": Rect2(20.0, 20.0, 80.0, 120.0),
-			"start": Vector2(60.0, 158.0),
-			"end": Vector2(60.0, 132.0),
-		},
+	attack_vfx.call("_set_reveal_progress", 0.5)
+	_check(
+		(attack_vfx.call("debug_get_clip_size") as Vector2).is_equal_approx(
+			Vector2(32.0, 22.0)
+		)
+		and clip.position.is_equal_approx(Vector2.ZERO),
+		"Half reveal grows from local x zero toward the local right"
+	)
+
+	var center_local := Vector2(200.0, 360.0)
+	var rotation_cases: Array[Dictionary] = [
+		{"name": "right", "rotation": 0.0},
+		{"name": "left", "rotation": PI},
+		{"name": "down", "rotation": PI / 2.0},
+		{"name": "up", "rotation": -PI / 2.0},
 	]
-	for case: Dictionary in cases:
-		var source_local: Rect2 = case["source"]
-		var target_local: Rect2 = case["target"]
+	for case: Dictionary in rotation_cases:
 		await attack_vfx.call(
 			"play_attack",
-			_local_rect_to_global(attack_vfx, source_local),
-			_local_rect_to_global(attack_vfx, target_local),
-			0.0,
-			Color("211824")
+			_local_point_to_global(attack_vfx, center_local),
+			float(case["rotation"]),
+			0.0
 		)
 		_check(
-			(attack_vfx.call("debug_get_last_start") as Vector2).is_equal_approx(
-				case["start"]
+			(attack_vfx.call("debug_get_last_center") as Vector2).is_equal_approx(
+				center_local
 			)
-			and (attack_vfx.call("debug_get_last_end") as Vector2).is_equal_approx(
-				case["end"]
+			and is_equal_approx(
+				float(attack_vfx.call("debug_get_last_rotation")),
+				float(case["rotation"])
 			),
-			"%s attack begins and ends just inside facing card edges" % case["name"]
-		)
-		_check(
-			int(attack_vfx.call("debug_get_last_fleck_count")) == 3,
-			"%s attack builds exactly three restrained ink flecks" % case["name"]
+			"%s attack preserves its seam center and approved rotation"
+			% case["name"]
 		)
 		_check(
 			bool(attack_vfx.call("debug_is_clean")),
-			"%s zero-duration attack cleans all temporary visuals" % case["name"]
+			"%s zero-duration bitmap attack leaves no residual visual"
+			% case["name"]
 		)
 
-	var diagonal_source := Rect2(24.0, 30.0, 80.0, 120.0)
-	var diagonal_target := Rect2(330.0, 640.0, 80.0, 120.0)
-	await attack_vfx.call(
-		"play_attack",
-		_local_rect_to_global(attack_vfx, diagonal_source),
-		_local_rect_to_global(attack_vfx, diagonal_target),
-		0.0,
-		Color("211824")
-	)
-	var diagonal_start: Vector2 = attack_vfx.call("debug_get_last_start")
-	var diagonal_end: Vector2 = attack_vfx.call("debug_get_last_end")
-	var center_direction: Vector2 = (
-		diagonal_target.get_center() - diagonal_source.get_center()
-	)
-	_check(
-		diagonal_source.has_point(diagonal_start)
-		and diagonal_target.has_point(diagonal_end),
-		"Non-neighbor diagonal endpoints remain inside their source and target cards"
-	)
-	_check(
-		(diagonal_end - diagonal_start).dot(center_direction) > 0.0,
-		"Non-neighbor diagonal stroke points from source toward target"
-	)
-	_check(
-		int(attack_vfx.call("debug_get_last_fleck_count")) == 3
-		and bool(attack_vfx.call("debug_is_clean")),
-		"Non-neighbor playback keeps three flecks and leaves the overlay clean"
-	)
+	_check_attack_vfx_placement(duel)
 
 
-func _local_rect_to_global(control: Control, local_rect: Rect2) -> Rect2:
+func _local_point_to_global(control: Control, local_point: Vector2) -> Vector2:
 	var transform: Transform2D = control.get_global_transform_with_canvas()
-	var global_start: Vector2 = transform * local_rect.position
-	var global_end: Vector2 = transform * local_rect.end
-	return Rect2(global_start, global_end - global_start).abs()
+	return transform * local_point
+
+
+func _check_attack_vfx_placement(duel: Node) -> void:
+	var has_placement_api: bool = duel.has_method("debug_get_attack_vfx_placement")
+	_check(
+		has_placement_api,
+		"Duel controller exposes focused first-seam placement diagnostics"
+	)
+	if not has_placement_api:
+		return
+
+	var right_adjacent: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 1)
+	var right_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 2)
+	var left_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 2, 0)
+	var down_adjacent: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 3)
+	var down_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 6)
+	var up_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 6, 0)
+
+	var cell0: Control = duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell0")
+	var cell1: Control = duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell1")
+	var cell3: Control = duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell3")
+	var cell0_rect: Rect2 = cell0.get_global_rect()
+	var cell1_rect: Rect2 = cell1.get_global_rect()
+	var cell3_rect: Rect2 = cell3.get_global_rect()
+	var expected_right_center := Vector2(
+		(cell0_rect.end.x + cell1_rect.position.x) * 0.5,
+		(cell0_rect.get_center().y + cell1_rect.get_center().y) * 0.5
+	)
+	var expected_down_center := Vector2(
+		(cell0_rect.get_center().x + cell3_rect.get_center().x) * 0.5,
+		(cell0_rect.end.y + cell3_rect.position.y) * 0.5
+	)
+	_check(
+		not right_adjacent.is_empty()
+		and (right_adjacent.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
+			expected_right_center
+		)
+		and int(right_adjacent.get("neighbor_cell", -1)) == 1
+		and is_equal_approx(float(right_adjacent.get("rotation", INF)), 0.0),
+		"Right attack centers the bitmap on the first horizontal seam"
+	)
+	_check(
+		not down_adjacent.is_empty()
+		and (down_adjacent.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
+			expected_down_center
+		)
+		and int(down_adjacent.get("neighbor_cell", -1)) == 3
+		and is_equal_approx(
+			float(down_adjacent.get("rotation", INF)),
+			PI / 2.0
+		),
+		"Down attack centers the bitmap on the first vertical seam"
+	)
+	_check(
+		not right_far.is_empty()
+		and (right_far.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
+			right_adjacent.get("center", Vector2.ZERO)
+		)
+		and int(right_far.get("neighbor_cell", -1)) == 1
+		and is_equal_approx(
+			float(right_far.get("rotation", INF)),
+			float(right_adjacent.get("rotation", -INF))
+		),
+		"Far same-row target keeps the bitmap on the first empty-neighbor seam"
+	)
+	_check(
+		not down_far.is_empty()
+		and (down_far.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
+			down_adjacent.get("center", Vector2.ZERO)
+		)
+		and int(down_far.get("neighbor_cell", -1)) == 3
+		and is_equal_approx(
+			float(down_far.get("rotation", INF)),
+			float(down_adjacent.get("rotation", -INF))
+		),
+		"Far same-column target keeps the bitmap on the first empty-neighbor seam"
+	)
+	_check(
+		int(left_far.get("neighbor_cell", -1)) == 1
+		and is_equal_approx(float(left_far.get("rotation", INF)), PI),
+		"Left attack rotates the supplied attacker side by 180 degrees"
+	)
+	_check(
+		int(up_far.get("neighbor_cell", -1)) == 3
+		and is_equal_approx(float(up_far.get("rotation", INF)), -PI / 2.0),
+		"Up attack rotates the supplied attacker side by negative 90 degrees"
+	)
+	_check(
+		(duel.call("debug_get_attack_vfx_placement", 0, 0) as Dictionary).is_empty()
+		and (duel.call("debug_get_attack_vfx_placement", 0, 4) as Dictionary).is_empty()
+		and (duel.call("debug_get_attack_vfx_placement", -1, 0) as Dictionary).is_empty()
+		and (duel.call("debug_get_attack_vfx_placement", 0, 9) as Dictionary).is_empty(),
+		"Equal, diagonal, and out-of-range placement inputs are rejected"
+	)
 
 
 func _check_fixed_duel_canvas_geometry(duel: Node) -> void:
@@ -1298,13 +1382,17 @@ func _check_ability_pulse_sequencing() -> void:
 		[
 			{
 				"type": &"attack_started",
+				"source_cell": 0,
 				"source_instance_id": source_a,
-				"target_instance_id": source_b,
+				"target_cell": 2,
+				"target_instance_id": &"synthetic_far_target",
 			},
 			{
 				"type": &"attack_started",
+				"source_cell": 0,
 				"source_instance_id": &"missing_source",
-				"target_instance_id": source_b,
+				"target_cell": 2,
+				"target_instance_id": &"synthetic_far_target",
 			},
 			{"type": &"card_moved"},
 		],

@@ -53,14 +53,18 @@ These decisions were explicitly established during development and should not be
 
 ## Attack Presentation
 
-- Every attack uses one serialized flying-white dry-brush stroke from source to
-  target before its pre-attack rules resolve.
-- Stroke endpoints come from live card rectangles: each begins just inside the
-  attacker's facing edge and ends just inside the target's facing edge.
-- Geometry is vector-based and does not assume adjacent, orthogonal, or
-  fixed-size cells.
-- Each stroke includes exactly three restrained deterministic ink flecks near
-  its target-facing end.
+- Every attack uses one serialized reveal of `res://inkpics/attack.png` before
+  its pre-attack rules resolve.
+- The supplied bitmap is not redrawn, recolored, or supplemented with generated
+  flecks. It uses a fixed 64 × 22 keep-aspect display box.
+- The image's local left side is the attacker side. Reveal always grows
+  local-left-to-right, then the whole visual rotates to face right, left, down,
+  or up.
+- The visual is centered on the first neighboring cell seam beside the
+  attacker. A farther orthogonal target does not stretch the image, and the
+  neighboring cell may be empty or different from the target.
+- Diagonal attacks require their future mechanic to define a first neighboring
+  step before using this presentation.
 - The cue adds no sound, haptic, bright color, or gameplay state.
 - It replaces the former silent pre-flip wait; capture audio and the flip
   animation remain.
