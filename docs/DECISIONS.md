@@ -40,6 +40,10 @@ These decisions were explicitly established during development and should not be
 
 - Abilities have no behavior ID; runtime actions identify their source card by `instance_id`.
 - Global triggers resolve by row-major board cell, then ability order, then trigger order.
+- Every accepted passive trigger emits `ability_triggered` before its actions.
+  The controller pulses that source card unless it was the last card pulsed in
+  the same move. Pulse memory resets between moves.
+- Activate abilities do not pulse.
 - Missing, moved, or replaced context defaults to `NO_EFFECT`, and later actions in that rule continue.
 - Only an action explicitly declaring `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 - Stopping one rule never cancels later trigger groups, the enclosing event, or the turn.
@@ -87,7 +91,9 @@ The action/target model should also support future non-movement activations with
 - Extra-turn chains are allowed if a later turn earns ki again.
 - The extra turn is granted only when the owner has a legal action.
 - Ownership flip removes this passive ability, but retained ki remains.
-- The extra-turn visual uses converging golden beads; it adds no new sound.
+- The extra-turn visual uses converging golden beads and a board-outline pulse;
+  its former source-card pulse is replaced by the generic pre-trigger pulse. It
+  adds no new sound.
 
 ### CangSongYingKe2
 
@@ -99,7 +105,8 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 - Reaction attacks use the existing flip/exile path and successful-flip triggers.
 - Movement is not a summon.
 - The ability is lost on flip by the default non-retention rule.
-- No special reaction cue is added yet; existing flip/removal presentation is used.
+- The reaction uses the generic passive-trigger card pulse before its existing
+  flip/removal presentation.
 
 ## Deck Semantics
 

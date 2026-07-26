@@ -46,7 +46,7 @@ static func resolve_group(state: StateData, group: Dictionary) -> Dictionary:
 	var context: Dictionary = group.get("context", {})
 	if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
 		return result
-	return Executor.execute_actions(
+	var action_result: Dictionary = Executor.execute_actions(
 		state,
 		source_cell,
 		StringName(group.get("source_instance_id", &"")),
@@ -54,6 +54,15 @@ static func resolve_group(state: StateData, group: Dictionary) -> Dictionary:
 		rule.get("actions", []) as Array,
 		context
 	)
+	var events: Array = action_result.get("events", [])
+	events.push_front({
+		"type": &"ability_triggered",
+		"source_cell": source_cell,
+		"source_instance_id": StringName(group.get("source_instance_id", &"")),
+		"source_owner_id": int(group.get("source_owner_id", 0)),
+	})
+	action_result["events"] = events
+	return action_result
 
 
 static func _discover_from_cell(

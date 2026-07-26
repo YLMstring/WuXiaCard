@@ -79,6 +79,10 @@ Conditions are ANDed in declaration order. Actions resolve in declaration
 order. Global trigger sources resolve by row-major board cell, then ability
 array order, then trigger array order.
 
+Every accepted passive trigger automatically emits the generic card-pulse cue
+before its actions. Do not declare presentation actions in the catalog for this.
+Activate abilities intentionally do not pulse.
+
 Every rule uses stable card instance and cell context. Stale or missing context
 returns `NO_EFFECT` by default, so later actions continue. To stop only that
 rule's remaining actions, opt in on the action:

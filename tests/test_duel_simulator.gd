@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_greedy_tie_prefers_play_over_spending_ki()
 	_test_search_can_choose_activate_action()
 	_test_trigger_groups_resolve_atomically()
+	_test_passive_trigger_event_semantics()
 	_test_summon_trigger_discovery_and_stale_identity()
 	_test_summon_reaction_interrupts_on_play_and_standard_attack()
 	_test_summon_reaction_conditions_and_ability_loss()
@@ -143,7 +144,10 @@ func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	)
 	var combo_result: Dictionary = Triggers.resolve_group(combo_state, combo_groups[0])
 	var combo_events: Array = combo_result.get("events", [])
-	_check(combo_events.size() == 1 and StringName(combo_events[0].get("type", &"")) == &"card_exiled", "A future attempt by the flipped Tiger General still exiles")
+	_check(
+		_event_types(combo_events) == [&"ability_triggered", &"card_exiled"],
+		"A future attempt by the flipped Tiger General cues and then exiles"
+	)
 	_check(combo_state.board[8] == null, "Future retained-effect attempt clears its target")
 
 
@@ -193,10 +197,10 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
 		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
-	_check(event_types == [&"card_placed", &"card_drawn", &"card_flipped"], "Draw resolves after placement and before flip events")
+	_check(event_types == [&"card_placed", &"ability_triggered", &"card_drawn", &"card_flipped"], "Draw pulse event resolves after placement and before draw and flip events")
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 5, "Playing from a full hand draws only enough to return to five")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Hand cap leaves the second side-deck card undrawn")
-	var draw_event: Dictionary = (transition.get("events", []) as Array)[1]
+	var draw_event: Dictionary = _first_event(transition.get("events", []), &"card_drawn")
 	_check(StringName(draw_event.get("card_id", &"")) == &"CangSongYingKe1", "Draw event identifies the top side-deck card")
 	_check(StringName(draw_event.get("instance_id", &"")) == &"side_1_top", "Draw event carries stable instance identity")
 	_check(int(draw_event.get("logical_hand_index", -1)) == 4, "Draw event reports its resulting logical hand index")
@@ -349,6 +353,7 @@ func _test_activate_action_generation_and_resolution() -> void:
 	for event_value: Variant in transition.get("events", []):
 		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
 	_check(event_types == [&"ability_activated", &"ki_changed", &"card_moved"], "Movement events use the canonical activation order")
+	_check(_count_events(transition.get("events", []), &"ability_triggered") == 0, "Activate abilities never emit passive trigger events")
 	_check(
 		not _first_event(transition.get("events", []), &"ability_activated").has("effect_id"),
 		"Activation events contain no legacy ability identity"
@@ -449,8 +454,12 @@ func _test_trigger_groups_resolve_atomically() -> void:
 		var group_result: Dictionary = Triggers.resolve_group(copied, group)
 		events.append_array(group_result.get("events", []) as Array)
 		requests.append_array(group_result.get("extra_turn_requests", []) as Array)
-	_check(events.size() == 2 and requests.size() == 2, "Each valid rule drains ki and preserves its request after the spend")
-	_check(int((events[0] as Dictionary).get("source_cell", -1)) == 0 and int((events[1] as Dictionary).get("source_cell", -1)) == 8, "Ki drains preserve row-major group order")
+	_check(events.size() == 4 and requests.size() == 2, "Each valid rule emits its trigger cue, drains ki, and preserves its request")
+	_check(
+		int((events[0] as Dictionary).get("source_cell", -1)) == 0
+			and int((events[2] as Dictionary).get("source_cell", -1)) == 8,
+		"Trigger cues preserve row-major group order"
+	)
 	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "First matched rule spends all ki")
 	_check(int((((copied.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Second matched rule spends all ki")
 	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "Trigger resolution leaves its source state untouched")
@@ -462,8 +471,90 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	var stale_events: Array = []
 	for group: Dictionary in groups:
 		stale_events.append_array((Triggers.resolve_group(stale_state, group)).get("events", []) as Array)
-	_check(stale_events.size() == 1, "Stale instance group is ignored while other groups still resolve")
+	_check(stale_events.size() == 2, "Stale instance group is ignored while the other trigger cue and action still resolve")
 	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot spend replacement-card ki")
+
+
+func _test_passive_trigger_event_semantics() -> void:
+	var board: Array = Rules.empty_board()
+	var triggered_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_END_OWNER_TURN,
+			"conditions": [{
+				"type": Catalog.CONDITION_KI_AT_LEAST,
+				"amount": 1,
+			}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}
+	var source: Dictionary = _make_runtime_card(
+		"Pulse Source",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"pulse_source",
+		[triggered_ability]
+	)
+	source["ki"] = 1
+	board[3] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var groups: Array[Dictionary] = Triggers.discover(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	var result: Dictionary = Triggers.resolve_group(state, groups[0])
+	var events: Array = result.get("events", [])
+	_check(
+		_event_types(events) == [&"ability_triggered", &"ki_changed"],
+		"Accepted passive rule emits its presentation event before action events"
+	)
+	var trigger_event: Dictionary = events[0]
+	_check(
+		int(trigger_event.get("source_cell", -1)) == 3
+			and StringName(trigger_event.get("source_instance_id", &"")) == &"pulse_source"
+			and int(trigger_event.get("source_owner_id", 0)) == Rules.PLAYER_OWNER,
+		"Passive trigger event carries stable source identity"
+	)
+
+	var condition_failed_state: State = state.duplicate_state()
+	((condition_failed_state.board[3] as Dictionary)["card"] as Dictionary)["ki"] = 0
+	_check(
+		(Triggers.resolve_group(condition_failed_state, groups[0]).get("events", []) as Array).is_empty(),
+		"A group whose condition fails during revalidation emits no trigger event"
+	)
+
+	var no_effect_board: Array = Rules.empty_board()
+	var no_effect_source: Dictionary = _make_runtime_card(
+		"No Effect Source",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"no_effect_source",
+		[{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.TRIGGER_END_OWNER_TURN,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+			}],
+		}]
+	)
+	no_effect_board[0] = {"card": no_effect_source, "owner": Rules.PLAYER_OWNER}
+	var no_effect_state := State.new(no_effect_board, [], [], Rules.PLAYER_OWNER)
+	var no_effect_groups: Array[Dictionary] = Triggers.discover(
+		no_effect_state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	var no_effect_result: Dictionary = Triggers.resolve_group(
+		no_effect_state,
+		no_effect_groups[0]
+	)
+	_check(
+		_event_types(no_effect_result.get("events", [])) == [&"ability_triggered"]
+			and StringName(no_effect_result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT,
+		"Accepted passive rule still emits its cue when its action has NO_EFFECT"
+	)
 
 
 func _test_summon_trigger_discovery_and_stale_identity() -> void:
@@ -534,7 +625,7 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 5, &"draw_attacker"))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
-	_check(_event_types(events) == [&"card_placed", &"card_flipped", &"ability_lost"], "Reaction resolves before and cancels draw-on-play")
+	_check(_event_types(events) == [&"card_placed", &"ability_triggered", &"card_flipped", &"ability_lost"], "Reaction pulse resolves before its attack and cancels draw-on-play")
 	_check(_count_events(events, &"card_drawn") == 0, "Interrupted summon draws no cards")
 	_check((next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1, "Interrupted draw leaves the side deck untouched")
 	_check(int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Reaction flips the summoned card")
@@ -656,7 +747,11 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 	)
 	var exile_transition: Dictionary = Simulator.apply_action(exile_state, Action.make_play(0, 1, &"exiled_draw"))
 	var exile_next: State = exile_transition["state"] as State
-	_check(_event_types(exile_transition.get("events", [])) == [&"card_placed", &"card_exiled"], "Reaction exile uses existing ordered events only")
+	_check(
+		_event_types(exile_transition.get("events", []))
+		== [&"card_placed", &"ability_triggered", &"ability_triggered", &"card_exiled"],
+		"Reaction and exile rules each emit a cue before the existing exile event"
+	)
 	_check(exile_next.board[1] == null, "Reaction exile clears the summoned cell")
 	_check((exile_next.removed_cards[Rules.OPPONENT_OWNER] as Array).size() == 1, "Reaction exile records the summoned card in its original removed zone")
 	_check((exile_next.decks[Rules.OPPONENT_OWNER] as Array).size() == 1, "Reaction exile cancels on-play draw")
@@ -693,9 +788,21 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	var event_types: Array[StringName] = _event_types(events)
-	_check(event_types == [&"card_placed", &"card_flipped", &"ki_changed", &"ki_changed", &"extra_turn_granted"], "Single flip gains ki, drains it, then grants an extra turn")
-	var gain_event: Dictionary = events[2]
-	var spend_event: Dictionary = events[3]
+	_check(
+		event_types
+		== [
+			&"card_placed",
+			&"card_flipped",
+			&"ability_triggered",
+			&"ki_changed",
+			&"ability_triggered",
+			&"ki_changed",
+			&"extra_turn_granted",
+		],
+		"Meng Huo cues each passive rule before gaining and spending ki"
+	)
+	var gain_event: Dictionary = events[3]
+	var spend_event: Dictionary = events[5]
 	_check(int(gain_event.get("previous_ki", -1)) == 0 and int(gain_event.get("ki", -1)) == 1, "Successful flip gains exactly one ki")
 	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
 	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI, "Gain event identifies its generic action")
@@ -868,7 +975,13 @@ func _test_retained_after_summon_draws_for_new_owner() -> void:
 	var next_state: State = transition["state"] as State
 	_check(
 		_event_types(transition.get("events", []))
-		== [&"card_placed", &"card_flipped", &"card_drawn"],
+		== [
+			&"card_placed",
+			&"ability_triggered",
+			&"card_flipped",
+			&"ability_triggered",
+			&"card_drawn",
+		],
 		"Retained after-summon ability resolves after the reaction flip"
 	)
 	_check(

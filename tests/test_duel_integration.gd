@@ -47,6 +47,7 @@ func _run() -> void:
 	await _check_opponent_draw_visibility()
 	await _check_manual_activate_move()
 	await _check_meng_huo_extra_turn_presentation()
+	await _check_ability_pulse_sequencing()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("DuelCanvas/PlayerHand"))
 
 	var player_turns: int = 0
@@ -871,6 +872,7 @@ func _check_manual_activate_move() -> void:
 	var jiang_instance: StringName = duel.debug_get_board_card_instance_id(4)
 	var opponent_played: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false)
 	_check(opponent_played, "Opponent action returns priority for activate testing")
+	var pulses_before_activation: Array[StringName] = duel.debug_get_ability_pulse_trace()
 	var activated: bool = await duel.debug_commit_activate(Rules.PLAYER_OWNER, 4, 5, false)
 	_check(activated, "Production controller accepts a legal board activation")
 	_check(not duel.debug_has_board_card_view(4) and duel.debug_has_board_card_view(5), "Controller moves the board view to the target cell")
@@ -882,6 +884,10 @@ func _check_manual_activate_move() -> void:
 	_check(ki_badge.visible and ki_value.text == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(trace.has(&"ability_activated") and trace.has(&"ki_changed") and trace.has(&"card_moved"), "Controller presents the canonical activation events")
+	_check(
+		duel.debug_get_ability_pulse_trace() == pulses_before_activation,
+		"Activate ability presentation adds no passive card pulse"
+	)
 	duel.queue_free()
 	await process_frame
 
@@ -914,6 +920,11 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Label
 	_check(int(meng_view.card_data.get("ki", -1)) == 0 and not ki_badge.visible and ki_value.text == "0", "End-turn spend hides Meng Huo's zero-ki bead because he has no activate ability")
+	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
+	_check(
+		duel.debug_get_ability_pulse_trace().count(meng_instance_id) == 1,
+		"Meng Huo's consecutive gain and end-turn triggers produce one generic card pulse"
+	)
 	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
 	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
 	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
@@ -1026,6 +1037,11 @@ func _check_cangsong_reaction_presentation() -> void:
 		&"card_flipped" in flip_duel.debug_get_presentation_trace(),
 		"Reaction flip uses the existing capture presentation"
 	)
+	var cang_instance_id: StringName = flip_duel.debug_get_board_card_instance_id(4)
+	_check(
+		flip_duel.debug_get_ability_pulse_trace().count(cang_instance_id) == 1,
+		"CangSong's reaction produces one generic card pulse"
+	)
 	flip_duel.queue_free()
 	await process_frame
 
@@ -1057,7 +1073,50 @@ func _check_cangsong_reaction_presentation() -> void:
 		&"card_exiled" in exile_duel.debug_get_presentation_trace(),
 		"Reaction exile uses the existing removal presentation"
 	)
+	var exile_cang_instance_id: StringName = exile_duel.debug_get_board_card_instance_id(4)
+	_check(
+		exile_duel.debug_get_ability_pulse_trace().count(exile_cang_instance_id) == 1,
+		"Consecutive reaction and exile triggers from one card pulse only once"
+	)
 	exile_duel.queue_free()
+	await process_frame
+
+
+func _check_ability_pulse_sequencing() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	_check(await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false), "Pulse fixture places source A")
+	_check(await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Pulse fixture places source B")
+	var source_a: StringName = duel.debug_get_board_card_instance_id(0)
+	var source_b: StringName = duel.debug_get_board_card_instance_id(8)
+	var baseline_size: int = duel.debug_get_ability_pulse_trace().size()
+	var synthetic_events: Array = [
+		{"type": &"ability_triggered", "source_instance_id": source_a},
+		{"type": &"ability_triggered", "source_instance_id": source_a},
+		{"type": &"ability_triggered", "source_instance_id": source_b},
+		{"type": &"ability_triggered", "source_instance_id": source_a},
+		{"type": &"ability_triggered", "source_instance_id": &"missing_source"},
+	]
+	await duel.call("_present_transition_events", synthetic_events, Rules.PLAYER_OWNER)
+	var first_trace: Array[StringName] = duel.debug_get_ability_pulse_trace()
+	_check(
+		first_trace.slice(baseline_size) == [source_a, source_b, source_a],
+		"One move suppresses A-A, permits A-B-A, and ignores a missing source"
+	)
+	await duel.call(
+		"_present_transition_events",
+		[{"type": &"ability_triggered", "source_instance_id": source_a}],
+		Rules.PLAYER_OWNER
+	)
+	var second_trace: Array[StringName] = duel.debug_get_ability_pulse_trace()
+	_check(
+		second_trace.size() == first_trace.size() + 1 and second_trace[-1] == source_a,
+		"Pulse suppression resets before the next move"
+	)
+	duel.queue_free()
 	await process_frame
 
 

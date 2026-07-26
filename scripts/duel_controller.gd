@@ -25,7 +25,7 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var drag_touch_offset: float = 48.0
 @export var snap_duration: float = 0.12
 @export var capture_step_delay: float = 0.18
-@export var exile_pulse_duration: float = 0.14
+@export var ability_trigger_pulse_duration: float = 0.14
 @export var exile_duration: float = 0.22
 @export var exile_step_delay: float = 0.10
 @export var exile_ink_color: Color = Color("6f1118")
@@ -59,6 +59,7 @@ var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
+var _ability_pulse_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
 var _opponent_search_session: SearchSession = null
 var _opponent_search_started_usec: int = 0
@@ -144,7 +145,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 	if enabled:
 		snap_duration = 0.0
 		capture_step_delay = 0.0
-		exile_pulse_duration = 0.0
+		ability_trigger_pulse_duration = 0.0
 		exile_duration = 0.0
 		exile_step_delay = 0.0
 		draw_bloom_duration = 0.0
@@ -228,6 +229,10 @@ func debug_get_all_instance_ids() -> Array[StringName]:
 
 func debug_get_presentation_trace() -> Array[StringName]:
 	return _presentation_trace.duplicate()
+
+
+func debug_get_ability_pulse_trace() -> Array[StringName]:
+	return _ability_pulse_trace.duplicate()
 
 
 func debug_get_ki_presentation_trace() -> Array[int]:
@@ -635,7 +640,7 @@ func _reconcile_committed_card_view(target_cell: int, instance_id: StringName) -
 
 func _present_transition_events(events: Array, fallback_owner: int) -> int:
 	var resolved_targets: int = 0
-	var source_pulsed: bool = false
+	var last_pulsed_instance_id: StringName = &""
 	var drew_card: bool = false
 	var waited_after_draw: bool = false
 	for event_value: Variant in events:
@@ -644,6 +649,14 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 		var target_cell: int = int(event.get("target_cell", -1))
 		if event_type in [&"ability_activated", &"card_moved"]:
 			_presentation_trace.append(event_type)
+		elif event_type == &"ability_triggered":
+			_presentation_trace.append(event_type)
+			var source_instance_id := StringName(event.get("source_instance_id", &""))
+			var source_card: CardView = _get_board_card_view_by_instance(source_instance_id)
+			if source_card != null and source_instance_id != last_pulsed_instance_id:
+				_ability_pulse_trace.append(source_instance_id)
+				await source_card.play_effect_pulse(ability_trigger_pulse_duration)
+				last_pulsed_instance_id = source_instance_id
 		elif event_type == &"ki_changed":
 			await _present_ki_changed_event(event)
 		elif event_type == &"extra_turn_granted":
@@ -675,13 +688,6 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				await _wait_after_draw_before_board_effect()
 				waited_after_draw = true
 			_presentation_trace.append(&"card_exiled")
-			if not source_pulsed:
-				var source_cell: int = int(event.get("source_cell", -1))
-				var source_card := board_cards[source_cell] as CardView if source_cell >= 0 and source_cell < board_cards.size() else null
-				if source_card != null:
-					_play_removal_feedback()
-					await source_card.play_effect_pulse(exile_pulse_duration)
-				source_pulsed = true
 			if exile_step_delay > 0.0:
 				await get_tree().create_timer(exile_step_delay).timeout
 			var exiled_card := board_cards[target_cell] as CardView

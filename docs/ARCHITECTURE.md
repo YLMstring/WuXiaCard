@@ -43,7 +43,7 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_abilities.gd` — structural activation lookup/replacement, flip retention, and ki-use detection.
 - `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, extra-turn requests, normal flip, and invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. The implemented rule is adjacent empty board cell.
-- `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, and delegation to the shared executor.
+- `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
 
@@ -95,7 +95,14 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `ability_lost`
 - `card_drawn`
 - `ki_changed`
+- `ability_triggered`
 - extra-turn events emitted during turn resolution
+
+`ability_triggered` is emitted only after a passive rule survives revalidation and
+its conditions match. It precedes that rule's action events and drives the
+generic whole-card pulse. Activations do not emit it. The controller suppresses
+only consecutive pulses from the same instance within one presented move; the
+memory resets for the next move.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 

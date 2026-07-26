@@ -2,7 +2,6 @@ class_name ExtraTurnVfx
 extends Control
 
 const BEAD_RADIUS: float = 7.0
-const SOURCE_PULSE_SCALE: float = 1.07
 
 var _beads: Array[Dictionary] = []
 var _board_rect: Rect2 = Rect2()
@@ -25,7 +24,7 @@ func play_convergence(
 	source_controls: Array,
 	board_global_rect: Rect2,
 	convergence_duration: float,
-	pulse_duration: float,
+	board_pulse_duration: float,
 	effect_color: Color
 ) -> void:
 	while _is_playing:
@@ -56,47 +55,19 @@ func play_convergence(
 	_pulse_count += 1
 	queue_redraw()
 
-	var source_records: Array[Dictionary] = _get_source_records(source_controls)
-	var source_tweens: Array[Tween] = []
-	if pulse_duration > 0.0:
-		for record: Dictionary in source_records:
-			var source: Control = record["control"] as Control
-			if not is_instance_valid(source):
-				continue
-			var resting_scale: Vector2 = record["scale"] as Vector2
-			source.pivot_offset = source.size * 0.5
-			var source_tween: Tween = source.create_tween()
-			source_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			source_tween.tween_property(
-				source,
-				"scale",
-				resting_scale * SOURCE_PULSE_SCALE,
-				pulse_duration * 0.35
-			)
-			source_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-			source_tween.tween_property(
-				source,
-				"scale",
-				resting_scale,
-				pulse_duration * 0.65
-			)
-			source_tweens.append(source_tween)
+	if board_pulse_duration > 0.0:
 		var board_tween: Tween = create_tween()
 		board_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		board_tween.tween_method(
 			Callable(self, "_set_pulse_progress"),
 			0.0,
 			1.0,
-			pulse_duration
+			board_pulse_duration
 		)
 		await board_tween.finished
 	else:
 		_set_pulse_progress(1.0)
 
-	for record: Dictionary in source_records:
-		var source: Control = record["control"] as Control
-		if is_instance_valid(source):
-			source.scale = record["scale"] as Vector2
 	_reset_visuals()
 	_is_playing = false
 
@@ -137,21 +108,6 @@ func _prepare_geometry(source_controls: Array, board_global_rect: Rect2) -> void
 
 func _global_to_local(global_point: Vector2) -> Vector2:
 	return get_global_transform_with_canvas().affine_inverse() * global_point
-
-
-func _get_source_records(source_controls: Array) -> Array[Dictionary]:
-	var records: Array[Dictionary] = []
-	var seen_sources: Dictionary = {}
-	for source_value: Variant in source_controls:
-		var source: Control = source_value as Control
-		if source == null or not is_instance_valid(source):
-			continue
-		var source_id: int = source.get_instance_id()
-		if seen_sources.has(source_id):
-			continue
-		seen_sources[source_id] = true
-		records.append({"control": source, "scale": source.scale})
-	return records
 
 
 func _set_bead_progress(value: float) -> void:

@@ -38,15 +38,15 @@ Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of 
 
 ## Expected Baseline
 
-The full baseline after the reusable-ability migration contains seven passing suites and at least 802 checks:
+The full baseline after generic passive ability pulses contains seven passing suites and at least 815 checks:
 
 - catalog: 270
 - inspector: 17
 - backdrop: 19
 - rules: 27
-- simulator: 162
+- simulator: 167
 - search: 37
-- integration: about 270
+- integration: 278
 
 Treat the fresh runner output as authoritative; counts can change as tests grow and integration paths vary.
 
