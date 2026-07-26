@@ -16,7 +16,7 @@ The effect contains:
 
 - a near-black, irregular brush body;
 - thinner gray-brown dry-brush fragments that create the flying-white texture;
-- two or three restrained ink flecks carried toward the target;
+- exactly three restrained ink flecks carried toward the target;
 - a tapered leading edge that makes the attack direction unmistakable.
 
 It introduces no new sound, haptic, gold, jade, or bright impact color. Existing
@@ -102,7 +102,7 @@ The stroke is procedural:
 - leave narrow gaps between fragments to expose the paper beneath;
 - use a perpendicular vector to vary fragment width and create an imperfect
   brush silhouette;
-- place a few deterministic flecks near the target-facing end;
+- place exactly three deterministic flecks near the target-facing end;
 - reveal fragments from source to target, hold briefly, then fade together.
 
 No particle nodes, textures, random allocations per frame, or persistent child
