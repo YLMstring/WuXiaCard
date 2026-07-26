@@ -545,6 +545,7 @@ func _commit_action(
 		return
 	if not Simulator.is_action_legal(duel_state, action):
 		return
+	var committed_instance_id: StringName = _get_card_instance_id(card)
 	var movement_start: Vector2 = Vector2.ZERO
 	if action.action_type == ActionData.TYPE_ACTIVATE:
 		movement_start = board_cells[action.source_index].get_global_rect().get_center()
@@ -568,8 +569,6 @@ func _commit_action(
 	if action.action_type == ActionData.TYPE_ACTIVATE:
 		board_cards[action.source_index] = null
 	board_cards[action.target_index] = card
-	var logical_slot: Dictionary = duel_state.board[action.target_index]
-	card.sync_runtime_data(logical_slot.get("card", {}), int(logical_slot.get("owner", owner_id)))
 
 	if action.action_type == ActionData.TYPE_PLAY:
 		_play_placement_feedback()
@@ -588,6 +587,7 @@ func _commit_action(
 		)
 
 	var resolved_targets: int = await _present_transition_events(events, owner_id)
+	_reconcile_committed_card_view(action.target_index, committed_instance_id)
 	if resolved_targets > 1:
 		_vibrate(multi_capture_haptic_ms)
 	_update_score()
@@ -610,6 +610,27 @@ func _commit_action(
 	if opponent_think_delay > 0.0:
 		await get_tree().create_timer(opponent_think_delay).timeout
 	await _perform_opponent_turn()
+
+
+func _reconcile_committed_card_view(target_cell: int, instance_id: StringName) -> void:
+	if (
+		target_cell < 0
+		or target_cell >= board_cards.size()
+		or board_cards[target_cell] == null
+		or not is_instance_valid(board_cards[target_cell])
+		or duel_state == null
+		or target_cell >= duel_state.board.size()
+	):
+		return
+	var logical_slot_value: Variant = duel_state.board[target_cell]
+	if logical_slot_value == null:
+		return
+	var logical_slot: Dictionary = logical_slot_value
+	var logical_card: Dictionary = logical_slot.get("card", {})
+	if StringName(logical_card.get("instance_id", &"")) != instance_id:
+		return
+	var card_view := board_cards[target_cell] as CardView
+	card_view.sync_runtime_data(logical_card, int(logical_slot.get("owner", card_view.owner_id)))
 
 
 func _present_transition_events(events: Array, fallback_owner: int) -> int:

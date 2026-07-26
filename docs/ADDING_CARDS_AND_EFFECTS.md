@@ -95,6 +95,41 @@ Passive triggers:
 }
 ```
 
+Composable conditions are declared as an array and are ANDed in order:
+
+```gdscript
+{
+    "event": TRIGGER_END_OWNER_TURN,
+    "conditions": [
+        {"type": CONDITION_KI_AT_LEAST, "amount": 1},
+    ],
+    "actions": [
+        {"type": TRIGGER_ACTION_SPEND_ALL_KI},
+        {"type": TRIGGER_ACTION_REQUEST_EXTRA_TURN},
+    ],
+}
+```
+
+Automatic summon reaction:
+
+```gdscript
+{
+    "id": EFFECT_WELCOMING_PINE,
+    "triggers": [{
+        "event": TRIGGER_CARD_SUMMONED,
+        "conditions": [
+            {"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+            {"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+        ],
+        "actions": [
+            {"type": TRIGGER_ACTION_ATTACK_TRIGGER_CARD},
+        ],
+    }],
+}
+```
+
+`TRIGGER_CARD_SUMMONED` is emitted when a card newly enters the board, not when an existing board card moves. Trigger attack actions create pure-data attack requests; `DuelSimulator` revalidates and resolves them through the same flip/exile path as standard attacks.
+
 ## Adding a New Primitive
 
 Do not add a `card_id` branch to the simulator or search. Add generic vocabulary:

@@ -1,10 +1,9 @@
 # Known Issues, Gaps, and Risks
 
-Updated: 2026-07-24
+Updated: 2026-07-26
 
 ## Gameplay and Content
 
-- Tier-2 `CangSongYingKe2` has a description promising a reaction attack when an opponent technique enters, but its `effects` array is empty. The rule is not implemented.
 - Only ten catalog definitions exist, and most metadata is placeholder/empty.
 - Balance is prototype-level.
 - No general queued choice/interrupt/reaction engine exists. `effect_queue` and `pending_choice` are scaffolding only.
@@ -57,10 +56,9 @@ Updated: 2026-07-24
 ## Deferred Work Order Recommendation
 
 1. Continue defining reusable gameplay primitives and tests.
-2. Add a real queued choice/reaction mechanism when the first ability requires it.
-3. Resolve the printed-but-unimplemented CangSong effect intentionally.
-4. Revisit compact simulation after effect vocabulary stabilizes.
-5. Add deck-building/save/content pipelines.
-6. Harden Android/export/legal/CI only when preparing wider distribution.
+2. Add a real queued choice/reaction mechanism when the first ability requires player input or deferral.
+3. Revisit compact simulation after effect vocabulary stabilizes.
+4. Add deck-building/save/content pipelines.
+5. Harden Android/export/legal/CI only when preparing wider distribution.
 
 Do not treat this ordering as authorization to implement features. Confirm the creator's current priority.

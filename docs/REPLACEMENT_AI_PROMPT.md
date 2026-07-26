@@ -31,7 +31,7 @@ Important constraints:
 
 For behavioral changes, add a focused failing test first, implement through generic simulator primitives, run the full suite after the final edit, and manually play the affected portrait flow before saying it works.
 
-Known mismatch: `CangSongYingKe2` has printed reaction text but no implemented catalog effect. Do not assume printed text is live gameplay.
+`CangSongYingKe2` implements its printed summon reaction through generic catalog trigger/condition/action vocabulary. It resolves before on-play effects and normal attack, and search inherits it through `DuelSimulator`.
 
 First tell me briefly what files own my requested behavior and any conflict you see between my request and current rules. Then proceed unless a genuinely consequential choice is missing.
 

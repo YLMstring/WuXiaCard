@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Evaluator = preload("res://scripts/duel_evaluator.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -27,6 +28,7 @@ func _run() -> void:
 	_test_action_and_state_keys()
 	_test_evaluator_terminal_priority()
 	_test_iterative_depth_and_interruption()
+	_test_search_inherits_summon_reactions()
 	await _test_search_session()
 	if _failures == 0:
 		print("DUEL_SEARCH_TESTS_PASSED checks=%d" % _checks)
@@ -130,6 +132,32 @@ func _test_iterative_depth_and_interruption() -> void:
 	)
 	_check(int(partial.get("completed_depth", 0)) == 1, "Cancelled deeper iteration retains the last fully completed depth")
 	_check(StringName(partial.get("completion_reason", &"")) == &"cancelled", "Mid-search cancellation reports cancellation")
+
+
+func _test_search_inherits_summon_reactions() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = {
+		"card": Catalog.create_instance(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"search_cang"),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var opponent_card: Dictionary = Rules.make_card("Search Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
+	opponent_card["instance_id"] = &"search_target"
+	var player_reply: Dictionary = Rules.make_card("Reply", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)
+	player_reply["instance_id"] = &"search_reply"
+	var state := State.new(board, [player_reply], [opponent_card], Rules.OPPONENT_OWNER)
+	var punished: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 5, &"search_target")
+	)
+	var punished_state: State = punished["state"] as State
+	_check(
+		int((punished_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Search fixture resolves the summon reaction through the simulator"
+	)
+	var first: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
+	var repeated: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
+	_check(first.is_same_as(repeated), "Reaction-aware search remains deterministic")
+	_check(first.target_index not in [1, 3, 5, 7], "Search avoids a summon square immediately punished by CangSong")
 
 
 func _test_search_session() -> void:

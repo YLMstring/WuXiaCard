@@ -42,9 +42,11 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_effects.gd` — effect primitives: draw, exile instead of flip, normal flip/effect loss, activate-effect lookup/replacement, and ki-use detection.
 - `duel_targeting.gd` — generic target discovery/validation. The implemented rule is adjacent empty board cell.
-- `duel_triggers.gd` — trigger discovery and revalidation, conditions, ki actions, and extra-turn requests.
+- `duel_triggers.gd` — trigger discovery and revalidation, composable conditions, ki actions, extra-turn requests, and pure-data attack requests.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
+
+For a normal hand play, the simulator places the card and emits `card_placed`, then resolves `TRIGGER_CARD_SUMMONED` groups in row-major source order before on-play effects and the summoned card’s standard attack. If a reaction removes the card or changes its ownership, those remaining summon phases are skipped and the turn still finishes. Board movement does not emit the summon trigger.
 
 ### Search
 

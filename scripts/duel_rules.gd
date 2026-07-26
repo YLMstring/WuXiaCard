@@ -77,31 +77,53 @@ static func get_would_flip_indices(board: Array, source_index: int) -> Array[int
 	if source_index < 0 or source_index >= board.size() or board[source_index] == null:
 		return targets
 
-	var source_slot: Dictionary = board[source_index]
-	var source_card: Dictionary = source_slot["card"]
-	var source_powers: Array = source_card["powers"]
-	var source_owner: int = int(source_slot["owner"])
-
 	for direction: int in range(4):
 		var neighbor_index: int = get_neighbor_index(source_index, direction)
-		if neighbor_index < 0 or board[neighbor_index] == null:
-			continue
-		var neighbor_slot: Dictionary = board[neighbor_index]
-		if int(neighbor_slot["owner"]) == source_owner:
-			continue
-		var neighbor_card: Dictionary = neighbor_slot["card"]
-		var neighbor_powers: Array = neighbor_card["powers"]
-		var attack_power: int = int(source_powers[direction])
-		var defense_power: int = int(neighbor_powers[OPPOSITE[direction]])
-		if attack_power > defense_power:
+		if can_attack_target(board, source_index, neighbor_index):
 			targets.append(neighbor_index)
 	return targets
+
+
+static func can_attack_target(
+	board: Array,
+	source_index: int,
+	target_index: int,
+	_context: Dictionary = {}
+) -> bool:
+	if (
+		board.size() != 9
+		or source_index < 0
+		or source_index >= board.size()
+		or target_index < 0
+		or target_index >= board.size()
+		or board[source_index] == null
+		or board[target_index] == null
+	):
+		return false
+	var direction: int = -1
+	for candidate_direction: int in range(DIRECTIONS.size()):
+		if get_neighbor_index(source_index, candidate_direction) == target_index:
+			direction = candidate_direction
+			break
+	if direction < 0:
+		return false
+	var source_slot: Dictionary = board[source_index]
+	var target_slot: Dictionary = board[target_index]
+	if int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0)):
+		return false
+	var source_card: Dictionary = source_slot.get("card", {})
+	var target_card: Dictionary = target_slot.get("card", {})
+	var source_powers: Array = source_card.get("powers", [])
+	var target_powers: Array = target_card.get("powers", [])
+	if source_powers.size() != 4 or target_powers.size() != 4:
+		return false
+	return int(source_powers[direction]) > int(target_powers[OPPOSITE[direction]])
 
 
 static func get_neighbor_index(cell_index: int, direction: int) -> int:
 	if cell_index < 0 or cell_index >= 9 or direction < 0 or direction >= DIRECTIONS.size():
 		return -1
-	var row: int = cell_index / 3
+	var row: int = floori(float(cell_index) / 3.0)
 	var column: int = cell_index % 3
 	var target: Vector2i = Vector2i(column, row) + DIRECTIONS[direction]
 	if target.x < 0 or target.x >= 3 or target.y < 0 or target.y >= 3:

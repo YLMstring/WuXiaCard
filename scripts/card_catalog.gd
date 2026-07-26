@@ -5,28 +5,41 @@ const EFFECT_EXILE_INSTEAD_OF_FLIP: StringName = &"exile_instead_of_flip"
 const EFFECT_DRAW_CARDS_ON_PLAY: StringName = &"draw_cards_on_play"
 const EFFECT_MOVE_AND_ATTACK: StringName = &"move_and_attack"
 const EFFECT_BATTLE_MOMENTUM: StringName = &"battle_momentum"
+const EFFECT_WELCOMING_PINE: StringName = &"welcoming_pine"
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF: StringName = &"after_successful_flip_by_self"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
+const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
+const CONDITION_TRIGGER_CARD_IS_ENEMY: StringName = &"trigger_card_is_enemy"
+const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
 const TRIGGER_ACTION_GAIN_KI: StringName = &"gain_ki"
 const TRIGGER_ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
 const TRIGGER_ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
+const TRIGGER_ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const KNOWN_EFFECT_IDS: Array[StringName] = [
 	EFFECT_EXILE_INSTEAD_OF_FLIP,
 	EFFECT_DRAW_CARDS_ON_PLAY,
 	EFFECT_MOVE_AND_ATTACK,
 	EFFECT_BATTLE_MOMENTUM,
+	EFFECT_WELCOMING_PINE,
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
 	TRIGGER_END_OWNER_TURN,
+	TRIGGER_CARD_SUMMONED,
+]
+const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
+	CONDITION_KI_AT_LEAST,
+	CONDITION_TRIGGER_CARD_IS_ENEMY,
+	CONDITION_TRIGGER_CARD_IN_RANGE,
 ]
 const KNOWN_TRIGGER_ACTIONS: Array[StringName] = [
 	TRIGGER_ACTION_GAIN_KI,
 	TRIGGER_ACTION_SPEND_ALL_KI,
 	TRIGGER_ACTION_REQUEST_EXTRA_TURN,
+	TRIGGER_ACTION_ATTACK_TRIGGER_CARD,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -65,7 +78,23 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对手招式进场时，若我可以，对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [4, 7, 7, 4],
-		"effects": [],
+		"effects": [
+			{
+				"id": EFFECT_WELCOMING_PINE,
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+						],
+						"actions": [
+							{"type": TRIGGER_ACTION_ATTACK_TRIGGER_CARD},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"gate_general": {
 		"id": &"gate_general",
@@ -106,7 +135,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 					},
 					{
 						"event": TRIGGER_END_OWNER_TURN,
-						"condition": {CONDITION_KI_AT_LEAST: 1},
+						"conditions": [
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
 						"actions": [
 							{"type": TRIGGER_ACTION_SPEND_ALL_KI},
 							{"type": TRIGGER_ACTION_REQUEST_EXTRA_TURN},
@@ -373,7 +404,7 @@ static func _validate_effect(
 			errors.append("Card %s move effect requires drag_to_target activation" % card_id)
 		if StringName(effect.get("target_rule", &"")) != TARGET_ADJACENT_EMPTY_BOARD:
 			errors.append("Card %s move effect requires adjacent_empty_board targeting" % card_id)
-	if effect_id == EFFECT_BATTLE_MOMENTUM:
+	if effect_id in [EFFECT_BATTLE_MOMENTUM, EFFECT_WELCOMING_PINE]:
 		_validate_triggers(card_id, effect.get("triggers", null), errors)
 
 
@@ -397,10 +428,17 @@ static func _validate_trigger(card_id: StringName, trigger: Dictionary, errors: 
 	if event_id not in KNOWN_TRIGGER_EVENTS:
 		errors.append("Card %s uses unknown trigger event %s" % [card_id, event_id])
 	for key: Variant in trigger.keys():
-		if StringName(key) not in [&"event", &"condition", &"actions"]:
+		if StringName(key) not in [&"event", &"conditions", &"actions"]:
 			errors.append("Card %s trigger %s has unsupported field %s" % [card_id, event_id, key])
-	if trigger.has("condition"):
-		_validate_trigger_condition(card_id, event_id, trigger["condition"], errors)
+	var conditions_value: Variant = trigger.get("conditions", [])
+	if not conditions_value is Array:
+		errors.append("Card %s trigger %s requires a conditions array" % [card_id, event_id])
+	else:
+		for condition_value: Variant in conditions_value as Array:
+			if not condition_value is Dictionary:
+				errors.append("Card %s trigger %s has a non-dictionary condition" % [card_id, event_id])
+				continue
+			_validate_trigger_condition(card_id, event_id, condition_value as Dictionary, errors)
 	var actions_value: Variant = trigger.get("actions", null)
 	if not actions_value is Array or (actions_value as Array).is_empty():
 		errors.append("Card %s trigger %s requires a non-empty action array" % [card_id, event_id])
@@ -415,19 +453,22 @@ static func _validate_trigger(card_id: StringName, trigger: Dictionary, errors: 
 static func _validate_trigger_condition(
 	card_id: StringName,
 	event_id: StringName,
-	condition_value: Variant,
+	condition: Dictionary,
 	errors: Array[String]
 ) -> void:
-	if not condition_value is Dictionary:
-		errors.append("Card %s trigger %s requires a condition dictionary" % [card_id, event_id])
+	var condition_type := StringName(condition.get("type", &""))
+	if condition_type not in KNOWN_TRIGGER_CONDITIONS:
+		errors.append("Card %s trigger %s uses unknown condition %s" % [card_id, event_id, condition_type])
 		return
-	var condition: Dictionary = condition_value
-	if condition.size() != 1 or not condition.has(CONDITION_KI_AT_LEAST):
-		errors.append("Card %s trigger %s uses an unknown condition" % [card_id, event_id])
-		return
-	var threshold: Variant = condition[CONDITION_KI_AT_LEAST]
-	if typeof(threshold) != TYPE_INT or int(threshold) < 0:
-		errors.append("Card %s trigger %s requires a non-negative integer ki_at_least" % [card_id, event_id])
+	var allowed_keys: Array[StringName] = [&"type"]
+	if condition_type == CONDITION_KI_AT_LEAST:
+		allowed_keys.append(&"amount")
+		var threshold: Variant = condition.get("amount", null)
+		if typeof(threshold) != TYPE_INT or int(threshold) < 0:
+			errors.append("Card %s trigger %s requires a non-negative integer ki_at_least amount" % [card_id, event_id])
+	for key: Variant in condition.keys():
+		if StringName(key) not in allowed_keys:
+			errors.append("Card %s trigger %s condition %s has unsupported field %s" % [card_id, event_id, condition_type, key])
 
 
 static func _validate_trigger_action(

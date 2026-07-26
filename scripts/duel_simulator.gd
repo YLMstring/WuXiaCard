@@ -167,15 +167,30 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"owner_id": moving_owner,
 		"instance_id": StringName(card.get("instance_id", &"")),
 	}]
-	events.append_array(Effects.resolve_on_play_effects(next_state, action.target_index, moving_owner))
-	var attack_result: Dictionary = _resolve_attacks(next_state, action.target_index, moving_owner)
-	events.append_array(attack_result["events"] as Array)
+	var captures: Array[int] = []
+	var exiles: Array[int] = []
+	var reaction_result: Dictionary = _resolve_summon_reactions(
+		next_state,
+		action.target_index,
+		StringName(card.get("instance_id", &"")),
+		moving_owner,
+		&"hand_play"
+	)
+	captures.append_array(reaction_result.get("captures", []) as Array)
+	exiles.append_array(reaction_result.get("exiles", []) as Array)
+	events.append_array(reaction_result.get("events", []) as Array)
+	if not bool(reaction_result.get("interrupted", false)):
+		events.append_array(Effects.resolve_on_play_effects(next_state, action.target_index, moving_owner))
+		var attack_result: Dictionary = _resolve_attacks(next_state, action.target_index, moving_owner)
+		captures.append_array(attack_result.get("captures", []) as Array)
+		exiles.append_array(attack_result.get("exiles", []) as Array)
+		events.append_array(attack_result.get("events", []) as Array)
 	events.append_array(_finish_turn(next_state, moving_owner))
 	return {
 		"valid": true,
 		"state": next_state,
-		"captures": attack_result["captures"],
-		"exiles": attack_result["exiles"],
+		"captures": captures,
+		"exiles": exiles,
 		"events": events,
 	}
 
@@ -234,37 +249,157 @@ static func _resolve_attacks(state: StateData, source_cell: int, owner_id: int) 
 	var events: Array[Dictionary] = []
 	var would_flip: Array[int] = Rules.get_would_flip_indices(state.board, source_cell)
 	for target_cell: int in would_flip:
-		var resolution_events: Array[Dictionary] = Effects.resolve_flip_attempt(
-			state,
-			source_cell,
-			target_cell,
-			owner_id
-		)
-		var did_flip: bool = false
-		for event: Dictionary in resolution_events:
-			var event_type := StringName(event.get("type", &""))
-			if event_type == &"card_flipped":
-				captures.append(target_cell)
-				did_flip = true
-			elif event_type == &"card_exiled":
-				exiles.append(target_cell)
-		events.append_array(resolution_events)
-		if did_flip:
-			var source_slot: Dictionary = state.board[source_cell]
-			var source_card: Dictionary = source_slot.get("card", {})
-			var trigger_groups: Array[Dictionary] = Triggers.discover(
-				state,
-				Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
-				{
-					"owner_id": owner_id,
-					"source_cell": source_cell,
-					"source_instance_id": StringName(source_card.get("instance_id", &"")),
-					"target_cell": target_cell,
-				}
-			)
-			var trigger_result: Dictionary = Triggers.resolve(state, trigger_groups)
-			events.append_array(trigger_result.get("events", []) as Array)
+		var target_result: Dictionary = _resolve_attack_target(state, source_cell, target_cell, owner_id)
+		captures.append_array(target_result.get("captures", []) as Array)
+		exiles.append_array(target_result.get("exiles", []) as Array)
+		events.append_array(target_result.get("events", []) as Array)
 	return {"captures": captures, "exiles": exiles, "events": events}
+
+
+static func _resolve_summon_reactions(
+	state: StateData,
+	trigger_cell: int,
+	trigger_instance_id: StringName,
+	summoning_owner: int,
+	summon_reason: StringName
+) -> Dictionary:
+	var captures: Array[int] = []
+	var exiles: Array[int] = []
+	var events: Array[Dictionary] = []
+	var context: Dictionary = {
+		"trigger_cell": trigger_cell,
+		"trigger_instance_id": trigger_instance_id,
+		"trigger_owner_id": summoning_owner,
+		"summon_reason": summon_reason,
+	}
+	var groups: Array[Dictionary] = Triggers.discover(
+		state,
+		Catalog.TRIGGER_CARD_SUMMONED,
+		context
+	)
+	for group: Dictionary in groups:
+		if not _trigger_card_remains(state, trigger_cell, trigger_instance_id, summoning_owner):
+			break
+		var trigger_result: Dictionary = Triggers.resolve(state, [group])
+		events.append_array(trigger_result.get("events", []) as Array)
+		for request_value: Variant in trigger_result.get("attack_requests", []):
+			var request: Dictionary = request_value
+			if not _reaction_attack_request_is_valid(state, request):
+				continue
+			var source_cell: int = int(request.get("source_cell", -1))
+			var target_cell: int = int(request.get("target_cell", -1))
+			var source_owner: int = int(request.get("source_owner_id", 0))
+			var target_result: Dictionary = _resolve_attack_target(
+				state,
+				source_cell,
+				target_cell,
+				source_owner
+			)
+			captures.append_array(target_result.get("captures", []) as Array)
+			exiles.append_array(target_result.get("exiles", []) as Array)
+			events.append_array(target_result.get("events", []) as Array)
+		if not _trigger_card_remains(state, trigger_cell, trigger_instance_id, summoning_owner):
+			break
+	return {
+		"captures": captures,
+		"exiles": exiles,
+		"events": events,
+		"interrupted": not _trigger_card_remains(
+			state,
+			trigger_cell,
+			trigger_instance_id,
+			summoning_owner
+		),
+	}
+
+
+static func _resolve_attack_target(
+	state: StateData,
+	source_cell: int,
+	target_cell: int,
+	owner_id: int
+) -> Dictionary:
+	var captures: Array[int] = []
+	var exiles: Array[int] = []
+	var events: Array[Dictionary] = Effects.resolve_flip_attempt(
+		state,
+		source_cell,
+		target_cell,
+		owner_id
+	)
+	var did_flip: bool = false
+	for event: Dictionary in events:
+		var event_type := StringName(event.get("type", &""))
+		if event_type == &"card_flipped":
+			captures.append(target_cell)
+			did_flip = true
+		elif event_type == &"card_exiled":
+			exiles.append(target_cell)
+	if did_flip and source_cell >= 0 and source_cell < state.board.size() and state.board[source_cell] != null:
+		var source_slot: Dictionary = state.board[source_cell]
+		var source_card: Dictionary = source_slot.get("card", {})
+		var trigger_groups: Array[Dictionary] = Triggers.discover(
+			state,
+			Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF,
+			{
+				"owner_id": owner_id,
+				"source_cell": source_cell,
+				"source_instance_id": StringName(source_card.get("instance_id", &"")),
+				"target_cell": target_cell,
+			}
+		)
+		var trigger_result: Dictionary = Triggers.resolve(state, trigger_groups)
+		events.append_array(trigger_result.get("events", []) as Array)
+	return {"captures": captures, "exiles": exiles, "events": events}
+
+
+static func _reaction_attack_request_is_valid(state: StateData, request: Dictionary) -> bool:
+	var source_cell: int = int(request.get("source_cell", -1))
+	var target_cell: int = int(request.get("target_cell", -1))
+	if (
+		source_cell < 0
+		or source_cell >= state.board.size()
+		or target_cell < 0
+		or target_cell >= state.board.size()
+		or state.board[source_cell] == null
+		or state.board[target_cell] == null
+	):
+		return false
+	var source_slot: Dictionary = state.board[source_cell]
+	var target_slot: Dictionary = state.board[target_cell]
+	var source_card: Dictionary = source_slot.get("card", {})
+	var target_card: Dictionary = target_slot.get("card", {})
+	if (
+		StringName(source_card.get("instance_id", &""))
+			!= StringName(request.get("source_instance_id", &""))
+		or StringName(target_card.get("instance_id", &""))
+			!= StringName(request.get("target_instance_id", &""))
+		or int(source_slot.get("owner", 0)) != int(request.get("source_owner_id", 0))
+		or int(target_slot.get("owner", 0)) != int(request.get("target_owner_id", 0))
+	):
+		return false
+	return Rules.can_attack_target(
+		state.board,
+		source_cell,
+		target_cell,
+		{"reason": request.get("reason", &"card_summoned_reaction")}
+	)
+
+
+static func _trigger_card_remains(
+	state: StateData,
+	trigger_cell: int,
+	trigger_instance_id: StringName,
+	summoning_owner: int
+) -> bool:
+	if trigger_cell < 0 or trigger_cell >= state.board.size() or state.board[trigger_cell] == null:
+		return false
+	var slot: Dictionary = state.board[trigger_cell]
+	var card: Dictionary = slot.get("card", {})
+	return (
+		int(slot.get("owner", 0)) == summoning_owner
+		and StringName(card.get("instance_id", &"")) == trigger_instance_id
+	)
 
 
 static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionary]:

@@ -81,6 +81,18 @@ The action/target model should also support future non-movement activations with
 - Ownership flip removes this passive ability, but retained ki remains.
 - The extra-turn visual uses converging golden beads; it adds no new sound.
 
+### CangSongYingKe2
+
+Whenever an enemy card is summoned into an orthogonally adjacent slot that CangSongYingKe2 can beat by the normal strict power comparison, CangSongYingKe2 immediately attacks that exact card.
+
+- The reaction resolves after `card_placed` but before the summoned card’s on-play effects and standard attack.
+- If the reaction flips or removes the summoned card, those remaining phases are cancelled and the turn still ends normally.
+- Multiple eligible reactors resolve in row-major board order and stop once the summoned card leaves or changes ownership.
+- Reaction attacks use the existing flip/exile path and successful-flip triggers.
+- Movement is not a summon.
+- The ability is lost on flip by the default non-retention rule.
+- No special reaction cue is added yet; existing flip/removal presentation is used.
+
 ## Deck Semantics
 
 - “Main deck” currently means the five cards forming the starting hand. Those cards are not also waiting to be drawn.

@@ -42,6 +42,7 @@ func _run() -> void:
 	await _check_testing_mode_manual_turns()
 	await _check_player_gate_exile()
 	await _check_opponent_tiger_exile()
+	await _check_cangsong_reaction_presentation()
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
 	await _check_manual_activate_move()
@@ -282,8 +283,8 @@ func _check_duel_header(duel: Node) -> void:
 	)
 	_check(
 		exit_button.custom_minimum_size.is_equal_approx(Vector2(44.0, 44.0))
-		and exit_button.tooltip_text == "返回",
-		"Icon-only return control keeps its square mobile target and text tooltip"
+		and exit_button.tooltip_text.is_empty(),
+		"Icon-only return control keeps its square mobile target without text chrome"
 	)
 	_check(
 		exit_button.get_theme_stylebox("normal") is StyleBoxEmpty
@@ -462,9 +463,9 @@ func _check_player_draw_and_instance_mapping() -> void:
 	if ink_bloom.has_method("get_pool_count") and ink_bloom.has_method("get_droplet_count"):
 		_check(int(ink_bloom.call("get_pool_count")) >= 3 and int(ink_bloom.call("get_droplet_count")) >= 3, "Ink bloom contains overlapping pools and detached droplets")
 
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false), "Draw fixture places the first player card")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 0, false), "Draw fixture places the first player card")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Draw fixture places the first opponent card")
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 6, false), "Draw fixture places the second player card")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 6, false), "Draw fixture places the second player card")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 1, false), "Draw fixture places a future flip target")
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 2, 4, false), "Playing Fa Zheng from a three-card hand commits")
 
@@ -1001,6 +1002,57 @@ func _check_opponent_tiger_exile() -> void:
 	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 4)), "Tiger General's cleared cell is reusable")
 	var tiger_scores: Vector2i = exile_duel.debug_get_scores()
 	_check(tiger_scores == Vector2i(0, 1), "Tiger General exile awards no point for the removed target")
+	exile_duel.queue_free()
+	await process_frame
+
+
+func _check_cangsong_reaction_presentation() -> void:
+	var flip_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(flip_duel)
+	await process_frame
+	await process_frame
+	flip_duel.debug_set_fast_mode(true)
+	_check(await flip_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "Reaction fixture places CangSong")
+	var opponent_fire_ids: Array[StringName] = flip_duel.debug_get_hand_instance_ids(Rules.OPPONENT_OWNER)
+	var fire_instance_id: StringName = opponent_fire_ids[1]
+	_check(await flip_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 5, false), "Enemy card commits inside CangSong range")
+	await process_frame
+	var flipped_views: Array = flip_duel.get("board_cards")
+	var flipped_view: Control = flipped_views[5] as Control
+	_check(flipped_view != null and is_instance_valid(flipped_view), "Reaction flip keeps the summoned card view on board")
+	_check(flip_duel.debug_get_board_card_instance_id(5) == fire_instance_id, "Reaction flip preserves summoned view identity")
+	_check(int(flipped_view.get("owner_id")) == Rules.PLAYER_OWNER, "Reaction flip reconciles the summoned view to its new owner")
+	_check(
+		&"card_flipped" in flip_duel.debug_get_presentation_trace(),
+		"Reaction flip uses the existing capture presentation"
+	)
+	flip_duel.queue_free()
+	await process_frame
+
+	var exile_duel: Node = DUEL_SCENE.instantiate()
+	root.add_child(exile_duel)
+	await process_frame
+	await process_frame
+	exile_duel.debug_set_fast_mode(true)
+	var exile_state: Variant = exile_duel.get("duel_state")
+	var cang_hand: Array = exile_state.get_hand(Rules.PLAYER_OWNER)
+	var cang_card: Dictionary = cang_hand[0]
+	(cang_card.get("active_effects", []) as Array).append({
+		"id": Catalog.EFFECT_EXILE_INSTEAD_OF_FLIP,
+		"retained_on_flip": true,
+	})
+	var cang_view: Control = _cards_below(exile_duel.get_node("DuelCanvas/PlayerHand"))[0]
+	cang_view.call("sync_runtime_data", cang_card, Rules.PLAYER_OWNER)
+	_check(await exile_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "Reaction-exile fixture places augmented CangSong")
+	_check(await exile_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 5, false), "Reaction-exile target commits through production")
+	await process_frame
+	_check(exile_duel.debug_get_board_occupancy() == 1, "Reaction exile removes the summoned card from logical board")
+	_check(not exile_duel.debug_has_board_card_view(5), "Reaction exile clears the summoned card view")
+	_check(exile_duel.debug_get_removed_count(Rules.OPPONENT_OWNER) == 1, "Reaction exile records the opponent card")
+	_check(
+		&"card_exiled" in exile_duel.debug_get_presentation_trace(),
+		"Reaction exile uses the existing removal presentation"
+	)
 	exile_duel.queue_free()
 	await process_frame
 

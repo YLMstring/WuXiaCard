@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-07-24
+Updated: 2026-07-26
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -72,7 +72,7 @@ See `docs/DECISIONS.md` for effect-specific behavior.
 
 ## Immediate Cautions
 
-- `CangSongYingKe2` prints “对手招式进场时，若我可以，对其发起攻击。” but has no effect implementation. Do not assume the text is live rules.
+- `CangSongYingKe2` now resolves its printed summon reaction before the summoned card’s on-play effects and standard attack. There is still no general queued player-choice/interrupt engine.
 - Repetition state is stored, but no repetition-draw rule is enforced. The only broad loop guard is `max_turns = 200`.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.

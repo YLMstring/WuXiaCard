@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_activate_effect_declarations()
 	_test_activate_effect_replacement()
 	_test_trigger_ability_schema()
+	_test_welcoming_pine_schema()
 
 	if _failures == 0:
 		print("CARD_CATALOG_TESTS_PASSED checks=%d" % _checks)
@@ -232,6 +233,12 @@ func _test_trigger_ability_schema() -> void:
 	_check(triggers.size() == 2, "Battle momentum declares two trigger rules")
 	_check(StringName((triggers[0] as Dictionary).get("event", &"")) == Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "First rule reacts to successful flips")
 	_check(StringName((triggers[1] as Dictionary).get("event", &"")) == Catalog.TRIGGER_END_OWNER_TURN, "Second rule reacts at end of turn")
+	_check(
+		(triggers[1] as Dictionary).get("conditions", []) == [
+			{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1},
+		],
+		"Meng Huo uses the shared typed conditions array"
+	)
 	var instance: Dictionary = Catalog.create_instance(&"meng_huo", 1, &"trigger_meng")
 	_check(int(instance.get("ki", -1)) == 0, "Meng Huo starts with zero ki")
 	var runtime_effect: Dictionary = (instance.get("active_effects", []) as Array)[0]
@@ -243,13 +250,53 @@ func _test_trigger_ability_schema() -> void:
 		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": []},
 		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": &"unknown", "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
 		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "actions": []}]},
-		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "condition": {"unknown": 1}, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
-		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "condition": {Catalog.CONDITION_KI_AT_LEAST: -1}, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": {}, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [1], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": &"unknown"}], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST}], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1.5}], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": -1}], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1, "extra": true}], "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI}]}]},
 		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "actions": [{"type": Catalog.TRIGGER_ACTION_GAIN_KI, "amount": 0}]}]},
 		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "actions": [{"type": &"unknown"}]}]},
+		{"id": Catalog.EFFECT_BATTLE_MOMENTUM, "triggers": [{"event": Catalog.TRIGGER_AFTER_SUCCESSFUL_FLIP_BY_SELF, "actions": [{"type": Catalog.TRIGGER_ACTION_SPEND_ALL_KI, "extra": true}]}]},
 	]
 	for invalid_effect: Dictionary in invalid_effects:
 		_check(not Catalog.validate_effect(invalid_effect).is_empty(), "Malformed trigger effect fails validation: %s" % str(invalid_effect))
+
+
+func _test_welcoming_pine_schema() -> void:
+	var definition: Dictionary = Catalog.get_definition(&"CangSongYingKe2")
+	var effects: Array = definition.get("effects", [])
+	_check(effects.size() == 1, "Tier-two CangSong declares one effect")
+	if effects.is_empty():
+		return
+	var effect: Dictionary = effects[0]
+	_check(StringName(effect.get("id", &"")) == Catalog.EFFECT_WELCOMING_PINE, "Tier-two CangSong declares Welcoming Pine")
+	_check(not effect.has("retained_on_flip"), "Welcoming Pine relies on default non-retention")
+	var triggers: Array = effect.get("triggers", [])
+	_check(triggers.size() == 1, "Welcoming Pine declares one summon trigger")
+	if triggers.is_empty():
+		return
+	var trigger: Dictionary = triggers[0]
+	_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_SUMMONED, "Welcoming Pine reacts to summoned cards")
+	_check(
+		trigger.get("conditions", []) == [
+			{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
+			{"type": Catalog.CONDITION_TRIGGER_CARD_IN_RANGE},
+		],
+		"Welcoming Pine ANDs enemy and in-range conditions in order"
+	)
+	_check(
+		trigger.get("actions", []) == [
+			{"type": Catalog.TRIGGER_ACTION_ATTACK_TRIGGER_CARD},
+		],
+		"Welcoming Pine attacks the triggering card"
+	)
+	_check(Catalog.validate_effect(effect, &"welcoming_pine_fixture").is_empty(), "Welcoming Pine schema passes validation")
+	var instance: Dictionary = Catalog.create_instance(&"CangSongYingKe2", 1, &"welcoming_pine")
+	var runtime_effect: Dictionary = (instance.get("active_effects", []) as Array)[0]
+	_check(runtime_effect.has("retained_on_flip") and not bool(runtime_effect["retained_on_flip"]), "Welcoming Pine normalizes to non-retained")
 
 
 func _check(condition: bool, message: String) -> void:
