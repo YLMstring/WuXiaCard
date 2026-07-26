@@ -25,6 +25,7 @@ func _run() -> void:
 
 	_check_layout(duel)
 	_check_duel_canvas_structure(duel)
+	await _check_attack_vfx_overlay(duel)
 	await _check_fixed_duel_canvas_geometry(duel)
 	await _check_duel_header(duel)
 	_check_card_edge_labels(duel)
@@ -137,6 +138,7 @@ func _check_duel_canvas_structure(duel: Node) -> void:
 		"PlayerHand",
 		"ScoreOverlay",
 		"TurnStatus",
+		"AttackVfx",
 		"ExtraTurnVfx",
 		"DragLayer",
 		"CardInspector",
@@ -156,6 +158,132 @@ func _check_duel_canvas_structure(duel: Node) -> void:
 			and duel.get_node(audio_path).get_parent() == duel,
 			"%s remains a non-visual root child" % audio_path
 		)
+
+
+func _check_attack_vfx_overlay(duel: Node) -> void:
+	var attack_vfx: Control = duel.get_node_or_null("DuelCanvas/AttackVfx") as Control
+	var extra_turn_vfx: Control = duel.get_node("DuelCanvas/ExtraTurnVfx") as Control
+	var drag_layer: Control = duel.get_node("DuelCanvas/DragLayer") as Control
+	_check(attack_vfx != null, "Duel scene contains the reusable attack VFX overlay")
+	if attack_vfx == null:
+		return
+	_check(
+		attack_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Attack VFX never intercepts mouse or touch input"
+	)
+	_check(
+		attack_vfx.z_index < extra_turn_vfx.z_index
+		and attack_vfx.z_index < drag_layer.z_index,
+		"Attack VFX renders below extra-turn, drag, and modal presentation"
+	)
+	_check(
+		attack_vfx.size.is_equal_approx(
+			duel.get_node("DuelCanvas").size
+		),
+		"Attack VFX covers the complete fixed duel canvas"
+	)
+	_check(
+		attack_vfx.has_method("play_attack")
+		and attack_vfx.has_method("debug_get_last_start")
+		and attack_vfx.has_method("debug_get_last_end")
+		and attack_vfx.has_method("debug_get_last_fleck_count")
+		and attack_vfx.has_method("debug_is_clean"),
+		"Attack overlay exposes reusable playback and focused diagnostics"
+	)
+
+	var cases: Array[Dictionary] = [
+		{
+			"name": "right",
+			"source": Rect2(20.0, 20.0, 80.0, 120.0),
+			"target": Rect2(110.0, 20.0, 80.0, 120.0),
+			"start": Vector2(92.0, 80.0),
+			"end": Vector2(118.0, 80.0),
+		},
+		{
+			"name": "left",
+			"source": Rect2(110.0, 20.0, 80.0, 120.0),
+			"target": Rect2(20.0, 20.0, 80.0, 120.0),
+			"start": Vector2(118.0, 80.0),
+			"end": Vector2(92.0, 80.0),
+		},
+		{
+			"name": "down",
+			"source": Rect2(20.0, 20.0, 80.0, 120.0),
+			"target": Rect2(20.0, 150.0, 80.0, 120.0),
+			"start": Vector2(60.0, 132.0),
+			"end": Vector2(60.0, 158.0),
+		},
+		{
+			"name": "up",
+			"source": Rect2(20.0, 150.0, 80.0, 120.0),
+			"target": Rect2(20.0, 20.0, 80.0, 120.0),
+			"start": Vector2(60.0, 158.0),
+			"end": Vector2(60.0, 132.0),
+		},
+	]
+	for case: Dictionary in cases:
+		var source_local: Rect2 = case["source"]
+		var target_local: Rect2 = case["target"]
+		await attack_vfx.call(
+			"play_attack",
+			_local_rect_to_global(attack_vfx, source_local),
+			_local_rect_to_global(attack_vfx, target_local),
+			0.0,
+			Color("211824")
+		)
+		_check(
+			(attack_vfx.call("debug_get_last_start") as Vector2).is_equal_approx(
+				case["start"]
+			)
+			and (attack_vfx.call("debug_get_last_end") as Vector2).is_equal_approx(
+				case["end"]
+			),
+			"%s attack begins and ends just inside facing card edges" % case["name"]
+		)
+		_check(
+			int(attack_vfx.call("debug_get_last_fleck_count")) == 3,
+			"%s attack builds exactly three restrained ink flecks" % case["name"]
+		)
+		_check(
+			bool(attack_vfx.call("debug_is_clean")),
+			"%s zero-duration attack cleans all temporary visuals" % case["name"]
+		)
+
+	var diagonal_source := Rect2(24.0, 30.0, 80.0, 120.0)
+	var diagonal_target := Rect2(330.0, 640.0, 80.0, 120.0)
+	await attack_vfx.call(
+		"play_attack",
+		_local_rect_to_global(attack_vfx, diagonal_source),
+		_local_rect_to_global(attack_vfx, diagonal_target),
+		0.0,
+		Color("211824")
+	)
+	var diagonal_start: Vector2 = attack_vfx.call("debug_get_last_start")
+	var diagonal_end: Vector2 = attack_vfx.call("debug_get_last_end")
+	var center_direction: Vector2 = (
+		diagonal_target.get_center() - diagonal_source.get_center()
+	)
+	_check(
+		diagonal_source.has_point(diagonal_start)
+		and diagonal_target.has_point(diagonal_end),
+		"Non-neighbor diagonal endpoints remain inside their source and target cards"
+	)
+	_check(
+		(diagonal_end - diagonal_start).dot(center_direction) > 0.0,
+		"Non-neighbor diagonal stroke points from source toward target"
+	)
+	_check(
+		int(attack_vfx.call("debug_get_last_fleck_count")) == 3
+		and bool(attack_vfx.call("debug_is_clean")),
+		"Non-neighbor playback keeps three flecks and leaves the overlay clean"
+	)
+
+
+func _local_rect_to_global(control: Control, local_rect: Rect2) -> Rect2:
+	var transform: Transform2D = control.get_global_transform_with_canvas()
+	var global_start: Vector2 = transform * local_rect.position
+	var global_end: Vector2 = transform * local_rect.end
+	return Rect2(global_start, global_end - global_start).abs()
 
 
 func _check_fixed_duel_canvas_geometry(duel: Node) -> void:
@@ -475,7 +603,18 @@ func _check_player_draw_and_instance_mapping() -> void:
 	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
 	_check(logical_ids.size() == 4 and visual_ids.size() == 4, "Fa Zheng draws two cards without exceeding five")
 	_check(logical_ids != visual_ids, "Drawn cards fill earlier empty slots without repacking logical hand order")
-	_check(trace.size() >= 4 and trace.slice(trace.size() - 4) == [&"card_drawn", &"card_drawn", &"post_draw_gap", &"card_flipped"], "Sequential Ink Summons and their gap finish before flip presentation")
+	_check(
+		trace.size() >= 5
+		and trace.slice(trace.size() - 5)
+		== [
+			&"card_drawn",
+			&"card_drawn",
+			&"post_draw_gap",
+			&"attack_started",
+			&"card_flipped",
+		],
+		"Sequential Ink Summons and their gap finish before attack and flip presentation"
+	)
 	_check(_count_face_down(_cards_below(draw_duel.get_node("DuelCanvas/PlayerHand"))) == 0, "Testing-mode player draws remain face-up")
 	_check_hand_slots(draw_duel.get_node("DuelCanvas/PlayerHand"))
 
@@ -928,7 +1067,12 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
 	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
 	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
-	_check(presentation_trace.has(&"card_flipped") and presentation_trace.has(&"extra_turn_granted"), "Capture and extra-turn feedback both use the ordered event presenter")
+	_check(
+		presentation_trace.has(&"attack_started")
+		and presentation_trace.has(&"card_flipped")
+		and presentation_trace.has(&"extra_turn_granted"),
+		"Attack, capture, and extra-turn feedback use the ordered event presenter"
+	)
 	if extra_turn_vfx != null and extra_turn_vfx.has_method("debug_get_last_bead_count"):
 		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 1, "One granting Meng Huo produces one convergence bead")
 		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 1, "One granted extra turn produces one board pulse")
@@ -993,6 +1137,16 @@ func _check_player_gate_exile() -> void:
 	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 5)), "Gate General's cleared cell is reusable")
 	var gate_scores: Vector2i = exile_duel.debug_get_scores()
 	_check(gate_scores == Vector2i(2, 0), "Gate General exile awards no point for the removed target")
+	var gate_trace: Array[StringName] = exile_duel.debug_get_presentation_trace()
+	_check(
+		gate_trace.rfind(&"attack_started") < gate_trace.rfind(&"ability_triggered")
+		and gate_trace.rfind(&"ability_triggered") < gate_trace.rfind(&"card_exiled"),
+		"Gate interception presents attack cue, target pulse, then exile"
+	)
+	_check(
+		exile_duel.debug_get_attack_vfx_trace().size() == 1,
+		"Gate interception still plays one attempted-attack stroke"
+	)
 	exile_duel.queue_free()
 	await process_frame
 
@@ -1037,6 +1191,18 @@ func _check_cangsong_reaction_presentation() -> void:
 		&"card_flipped" in flip_duel.debug_get_presentation_trace(),
 		"Reaction flip uses the existing capture presentation"
 	)
+	var reaction_trace: Array[StringName] = flip_duel.debug_get_presentation_trace()
+	_check(
+		reaction_trace.rfind(&"ability_triggered")
+		< reaction_trace.rfind(&"attack_started")
+		and reaction_trace.rfind(&"attack_started")
+		< reaction_trace.rfind(&"card_flipped"),
+		"CangSong presents its pulse, attack stroke, then reaction flip"
+	)
+	_check(
+		flip_duel.debug_get_attack_vfx_trace().size() == 1,
+		"CangSong reaction plays one attack stroke"
+	)
 	var cang_instance_id: StringName = flip_duel.debug_get_board_card_instance_id(4)
 	_check(
 		flip_duel.debug_get_ability_pulse_trace().count(cang_instance_id) == 1,
@@ -1072,6 +1238,16 @@ func _check_cangsong_reaction_presentation() -> void:
 	_check(
 		&"card_exiled" in exile_duel.debug_get_presentation_trace(),
 		"Reaction exile uses the existing removal presentation"
+	)
+	var reaction_exile_trace: Array[StringName] = exile_duel.debug_get_presentation_trace()
+	_check(
+		reaction_exile_trace.rfind(&"attack_started")
+		< reaction_exile_trace.rfind(&"card_exiled"),
+		"Reaction attack stroke remains visible before intercepted exile"
+	)
+	_check(
+		exile_duel.debug_get_attack_vfx_trace().size() == 1,
+		"Reaction exile still plays one attempted-attack stroke"
 	)
 	var exile_cang_instance_id: StringName = exile_duel.debug_get_board_card_instance_id(4)
 	_check(
@@ -1115,6 +1291,32 @@ func _check_ability_pulse_sequencing() -> void:
 	_check(
 		second_trace.size() == first_trace.size() + 1 and second_trace[-1] == source_a,
 		"Pulse suppression resets before the next move"
+	)
+	var attack_trace_size: int = duel.debug_get_attack_vfx_trace().size()
+	await duel.call(
+		"_present_transition_events",
+		[
+			{
+				"type": &"attack_started",
+				"source_instance_id": source_a,
+				"target_instance_id": source_b,
+			},
+			{
+				"type": &"attack_started",
+				"source_instance_id": &"missing_source",
+				"target_instance_id": source_b,
+			},
+			{"type": &"card_moved"},
+		],
+		Rules.PLAYER_OWNER
+	)
+	_check(
+		duel.debug_get_attack_vfx_trace().size() == attack_trace_size + 1,
+		"Valid synthetic attack plays once while a missing source skips without delay"
+	)
+	_check(
+		bool(duel.get_node("DuelCanvas/AttackVfx").call("debug_is_clean")),
+		"Controller attack playback leaves no residual overlay"
 	)
 	duel.queue_free()
 	await process_frame

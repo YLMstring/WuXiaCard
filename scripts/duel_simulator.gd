@@ -338,6 +338,16 @@ static func _resolve_attack_target(
 		"attacked_owner_id": int(attacked_slot.get("owner", 0)),
 		"attack_reason": reason,
 	}
+	result["events"].append({
+		"type": &"attack_started",
+		"source_cell": attacker_cell,
+		"source_instance_id": attacker_instance_id,
+		"source_owner_id": int(attacker_slot.get("owner", 0)),
+		"target_cell": attacked_cell,
+		"target_instance_id": attacked_instance_id,
+		"target_owner_id": int(attacked_slot.get("owner", 0)),
+		"attack_reason": reason,
+	})
 	var before_result: Dictionary = _resolve_trigger_event(
 		state,
 		Catalog.CARD_BE_ATTACKED,

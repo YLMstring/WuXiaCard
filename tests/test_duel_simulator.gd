@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_state_copy_is_isolated()
 	_test_legal_move_generation()
 	_test_move_application_and_capture_parity()
+	_test_attack_started_event_semantics()
 	_test_exile_effect_removes_every_target()
 	_test_exile_uses_original_owner_and_is_copy_isolated()
 	_test_retained_effect_survives_flip_and_future_attempt()
@@ -197,7 +198,17 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
 		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
-	_check(event_types == [&"card_placed", &"ability_triggered", &"card_drawn", &"card_flipped"], "Draw pulse event resolves after placement and before draw and flip events")
+	_check(
+		event_types
+		== [
+			&"card_placed",
+			&"ability_triggered",
+			&"card_drawn",
+			&"attack_started",
+			&"card_flipped",
+		],
+		"Draw resolves before the standard attack cue and flip"
+	)
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 5, "Playing from a full hand draws only enough to return to five")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Hand cap leaves the second side-deck card undrawn")
 	var draw_event: Dictionary = _first_event(transition.get("events", []), &"card_drawn")
@@ -377,6 +388,17 @@ func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> v
 	var action: Action = Action.make_activate(4, &"mover", Action.TARGET_BOARD_CELL, 5)
 	var transition: Dictionary = Simulator.apply_action(state, action)
 	var next_state: State = transition["state"] as State
+	_check(
+		_event_types(transition.get("events", []))
+		== [
+			&"ability_activated",
+			&"ki_changed",
+			&"card_moved",
+			&"attack_started",
+			&"card_flipped",
+		],
+		"Movement activation cues its standard attack after movement and before flip"
+	)
 	_check(int((next_state.board[2] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Moved card performs its standard four-side attack")
 	_check(_count_events(transition.get("events", []), &"card_flipped") == 1, "Activation emits the ordinary flip event")
 	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "Movement does not retrigger after-summoned abilities")
@@ -625,7 +647,17 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 5, &"draw_attacker"))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
-	_check(_event_types(events) == [&"card_placed", &"ability_triggered", &"card_flipped", &"ability_lost"], "Reaction pulse resolves before its attack and cancels draw-on-play")
+	_check(
+		_event_types(events)
+		== [
+			&"card_placed",
+			&"ability_triggered",
+			&"attack_started",
+			&"card_flipped",
+			&"ability_lost",
+		],
+		"Reaction pulse and attack cue resolve before the flip that cancels draw-on-play"
+	)
 	_check(_count_events(events, &"card_drawn") == 0, "Interrupted summon draws no cards")
 	_check((next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1, "Interrupted draw leaves the side deck untouched")
 	_check(int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Reaction flips the summoned card")
@@ -749,8 +781,14 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 	var exile_next: State = exile_transition["state"] as State
 	_check(
 		_event_types(exile_transition.get("events", []))
-		== [&"card_placed", &"ability_triggered", &"ability_triggered", &"card_exiled"],
-		"Reaction and exile rules each emit a cue before the existing exile event"
+		== [
+			&"card_placed",
+			&"ability_triggered",
+			&"attack_started",
+			&"ability_triggered",
+			&"card_exiled",
+		],
+		"An attack cue remains between the reaction pulse and intercepted exile rule"
 	)
 	_check(exile_next.board[1] == null, "Reaction exile clears the summoned cell")
 	_check((exile_next.removed_cards[Rules.OPPONENT_OWNER] as Array).size() == 1, "Reaction exile records the summoned card in its original removed zone")
@@ -792,6 +830,7 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 		event_types
 		== [
 			&"card_placed",
+			&"attack_started",
 			&"card_flipped",
 			&"ability_triggered",
 			&"ki_changed",
@@ -801,8 +840,8 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 		],
 		"Meng Huo cues each passive rule before gaining and spending ki"
 	)
-	var gain_event: Dictionary = events[3]
-	var spend_event: Dictionary = events[5]
+	var gain_event: Dictionary = events[4]
+	var spend_event: Dictionary = events[6]
 	_check(int(gain_event.get("previous_ki", -1)) == 0 and int(gain_event.get("ki", -1)) == 1, "Successful flip gains exactly one ki")
 	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
 	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI, "Gain event identifies its generic action")
@@ -828,14 +867,21 @@ func _test_meng_huo_multiple_flips_gain_in_order() -> void:
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var events: Array = transition.get("events", [])
 	var flip_targets: Array[int] = []
+	var attack_targets: Array[int] = []
 	var gained_values: Array[int] = []
 	for event_value: Variant in events:
 		var event: Dictionary = event_value
-		if StringName(event.get("type", &"")) == &"card_flipped":
+		if StringName(event.get("type", &"")) == &"attack_started":
+			attack_targets.append(int(event.get("target_cell", -1)))
+		elif StringName(event.get("type", &"")) == &"card_flipped":
 			flip_targets.append(int(event.get("target_cell", -1)))
 		elif StringName(event.get("type", &"")) == &"ki_changed" and StringName(event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI:
 			gained_values.append(int(event.get("ki", -1)))
 	_check(flip_targets == [1, 5, 7, 3], "Multi-flip attacks retain top-right-bottom-left order")
+	_check(
+		attack_targets == [1, 5, 7, 3],
+		"Multi-target attacks emit one cue in canonical attack order"
+	)
 	_check(gained_values == [1, 2, 3, 4], "Meng Huo gains one ki immediately after each actual flip")
 	_check(_count_events(events, &"extra_turn_granted") == 1, "Any amount of gained ki grants one extra turn")
 
@@ -978,6 +1024,7 @@ func _test_retained_after_summon_draws_for_new_owner() -> void:
 		== [
 			&"card_placed",
 			&"ability_triggered",
+			&"attack_started",
 			&"card_flipped",
 			&"ability_triggered",
 			&"card_drawn",
@@ -1139,8 +1186,9 @@ func _test_card_be_attacked_triggers_use_row_major_order() -> void:
 	_check(ki_cells == [0, 8], "CARD_BE_ATTACKED triggers resolve in row-major source order")
 	var event_types: Array[StringName] = _event_types(transition.get("events", []))
 	_check(
-		event_types.find(&"ki_changed") < event_types.find(&"card_flipped"),
-		"CARD_BE_ATTACKED trigger actions resolve before the original attack"
+		event_types.find(&"attack_started") < event_types.find(&"ability_triggered")
+		and event_types.find(&"ki_changed") < event_types.find(&"card_flipped"),
+		"Attack cue precedes row-major CARD_BE_ATTACKED rules and the original flip"
 	)
 
 
@@ -1325,6 +1373,59 @@ func _test_move_application_and_capture_parity() -> void:
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).is_empty(), "Placed card leaves the simulated hand")
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Captured ownership updates in the simulated board")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER and next_state.turn_count == 1, "Simulation advances player and turn count")
+
+
+func _test_attack_started_event_semantics() -> void:
+	var board: Array = Rules.empty_board()
+	var defender: Dictionary = Rules.make_card("Guard", "守", [1, 1, 1, 3])
+	defender["instance_id"] = &"attack_event_target"
+	board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
+	var attacker: Dictionary = Rules.make_card("Blade", "刀", [1, 5, 1, 1])
+	attacker["instance_id"] = &"attack_event_source"
+	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4, &"attack_event_source")
+	)
+	var events: Array = transition.get("events", [])
+	_check(
+		_event_types(events) == [&"card_placed", &"attack_started", &"card_flipped"],
+		"A valid standard attack cues before its flip"
+	)
+	var attack_event: Dictionary = _first_event(events, &"attack_started")
+	_check(
+		int(attack_event.get("source_cell", -1)) == 4
+		and StringName(attack_event.get("source_instance_id", &"")) == &"attack_event_source"
+		and int(attack_event.get("source_owner_id", 0)) == Rules.PLAYER_OWNER,
+		"Attack cue identifies its exact source card"
+	)
+	_check(
+		int(attack_event.get("target_cell", -1)) == 5
+		and StringName(attack_event.get("target_instance_id", &"")) == &"attack_event_target"
+		and int(attack_event.get("target_owner_id", 0)) == Rules.OPPONENT_OWNER,
+		"Attack cue identifies its exact target card"
+	)
+	_check(
+		StringName(attack_event.get("attack_reason", &"")) == &"summon_standard_attack",
+		"Attack cue preserves the common resolver's reason"
+	)
+
+	var stale_board: Array = Rules.empty_board()
+	stale_board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
+	stale_board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
+	var stale_state := State.new(stale_board, [], [], Rules.PLAYER_OWNER)
+	var stale_result: Dictionary = Simulator._resolve_attack_target(
+		stale_state,
+		4,
+		&"missing_source",
+		5,
+		&"attack_event_target",
+		&"stale_test"
+	)
+	_check(
+		_count_events(stale_result.get("events", []), &"attack_started") == 0,
+		"An invalid attacker identity emits no attack cue"
+	)
 
 
 func _test_greedy_choice_matches_prototype() -> void:

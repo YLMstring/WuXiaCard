@@ -43,10 +43,27 @@ These decisions were explicitly established during development and should not be
 - Every accepted passive trigger emits `ability_triggered` before its actions.
   The controller pulses that source card unless it was the last card pulsed in
   the same move. Pulse memory resets between moves.
+- Every initially valid attack emits `attack_started` before
+  `CARD_BE_ATTACKED`. This presentation-only cue remains even when a later rule
+  exiles or otherwise prevents the target from flipping.
 - Activate abilities do not pulse.
 - Missing, moved, or replaced context defaults to `NO_EFFECT`, and later actions in that rule continue.
 - Only an action explicitly declaring `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 - Stopping one rule never cancels later trigger groups, the enclosing event, or the turn.
+
+## Attack Presentation
+
+- Every attack uses one serialized flying-white dry-brush stroke from source to
+  target before its pre-attack rules resolve.
+- Stroke endpoints come from live card rectangles: each begins just inside the
+  attacker's facing edge and ends just inside the target's facing edge.
+- Geometry is vector-based and does not assume adjacent, orthogonal, or
+  fixed-size cells.
+- Each stroke includes exactly three restrained deterministic ink flecks near
+  its target-facing end.
+- The cue adds no sound, haptic, bright color, or gameplay state.
+- It replaces the former silent pre-flip wait; capture audio and the flip
+  animation remain.
 
 ## Implemented Abilities
 

@@ -19,12 +19,15 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
+const AttackVfxData = preload("res://scripts/attack_vfx.gd")
 const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
 @export var snap_duration: float = 0.12
-@export var capture_step_delay: float = 0.18
+@export var capture_flip_duration: float = 0.18
+@export var attack_vfx_duration: float = 0.15
+@export var attack_ink_color: Color = Color("211824")
 @export var ability_trigger_pulse_duration: float = 0.14
 @export var exile_duration: float = 0.22
 @export var exile_step_delay: float = 0.10
@@ -59,6 +62,7 @@ var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
+var _attack_vfx_trace: Array[Dictionary] = []
 var _ability_pulse_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
 var _opponent_search_session: SearchSession = null
@@ -92,6 +96,7 @@ var _status_before_inspection: String = ""
 @onready var turn_status: Label = $DuelCanvas/TurnStatus
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
 @onready var extra_turn_vfx: ExtraTurnVfxData = $DuelCanvas/ExtraTurnVfx
+@onready var attack_vfx: AttackVfxData = $DuelCanvas/AttackVfx
 @onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
@@ -144,7 +149,8 @@ func debug_set_fast_mode(enabled: bool) -> void:
 	_fast_mode = enabled
 	if enabled:
 		snap_duration = 0.0
-		capture_step_delay = 0.0
+		capture_flip_duration = 0.0
+		attack_vfx_duration = 0.0
 		ability_trigger_pulse_duration = 0.0
 		exile_duration = 0.0
 		exile_step_delay = 0.0
@@ -229,6 +235,10 @@ func debug_get_all_instance_ids() -> Array[StringName]:
 
 func debug_get_presentation_trace() -> Array[StringName]:
 	return _presentation_trace.duplicate()
+
+
+func debug_get_attack_vfx_trace() -> Array[Dictionary]:
+	return _attack_vfx_trace.duplicate(true)
 
 
 func debug_get_ability_pulse_trace() -> Array[StringName]:
@@ -649,6 +659,30 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 		var target_cell: int = int(event.get("target_cell", -1))
 		if event_type in [&"ability_activated", &"card_moved"]:
 			_presentation_trace.append(event_type)
+		elif event_type == &"attack_started":
+			if drew_card and not waited_after_draw:
+				await _wait_after_draw_before_board_effect()
+				waited_after_draw = true
+			_presentation_trace.append(event_type)
+			var source_instance_id := StringName(event.get("source_instance_id", &""))
+			var target_instance_id := StringName(event.get("target_instance_id", &""))
+			var source_card: CardView = _get_board_card_view_by_instance(
+				source_instance_id
+			)
+			var target_card: CardView = _get_board_card_view_by_instance(
+				target_instance_id
+			)
+			if source_card != null and target_card != null:
+				_attack_vfx_trace.append({
+					"source_instance_id": source_instance_id,
+					"target_instance_id": target_instance_id,
+				})
+				await attack_vfx.play_attack(
+					source_card.get_global_rect(),
+					target_card.get_global_rect(),
+					attack_vfx_duration,
+					attack_ink_color
+				)
 		elif event_type == &"ability_triggered":
 			_presentation_trace.append(event_type)
 			var source_instance_id := StringName(event.get("source_instance_id", &""))
@@ -669,19 +703,20 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				await _wait_after_draw_before_board_effect()
 				waited_after_draw = true
 			_presentation_trace.append(&"card_flipped")
-			if capture_step_delay > 0.0:
-				await get_tree().create_timer(capture_step_delay).timeout
 			var flipped_card := board_cards[target_cell] as CardView
 			if flipped_card != null:
 				_play_capture_feedback()
 				var new_owner: int = int(event.get("owner_id", fallback_owner))
-				await flipped_card.play_capture_flip(new_owner, maxf(capture_step_delay, 0.02))
+				await flipped_card.play_capture_flip(
+					new_owner,
+					maxf(capture_flip_duration, 0.02)
+				)
 			resolved_targets += 1
 		elif event_type == &"ability_lost":
 			var changed_card := board_cards[target_cell] as CardView
 			if changed_card != null:
 				await changed_card.play_ability_lost(
-					capture_step_delay * 0.5
+					capture_flip_duration * 0.5
 				)
 		elif event_type == &"card_exiled":
 			if drew_card and not waited_after_draw:

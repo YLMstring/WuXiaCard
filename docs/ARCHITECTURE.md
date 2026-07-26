@@ -49,7 +49,12 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 For a normal hand play, the simulator places the card and emits `card_placed`, resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then resolves the exact summoned card's retained `TRIGGER_CARD_AFTER_SUMMONED` rules. Its standard attack follows only if the exact instance remains in its summoned cell under the summoning owner. Board movement emits neither summon event.
 
-Every attack first emits `CARD_BE_ATTACKED`, resolves eligible rules in row-major order, and then revalidates the exact attacker and target before flipping. Gate General and Tiger General exile through an ordinary trigger action; there is no separate replacement subsystem.
+Every initially valid attack first emits the presentation-only `attack_started`
+transition event, then emits `CARD_BE_ATTACKED`, resolves eligible rules in
+row-major order, and revalidates the exact attacker and target before flipping.
+Gate General and Tiger General exile through an ordinary trigger action; there
+is no separate replacement subsystem. The initial attack cue remains even when
+one of those rules prevents the flip.
 
 An action with stale or missing context returns `NO_EFFECT` and later actions continue. Only a declaration with `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 
@@ -68,6 +73,7 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
 - `ink_bloom.gd` — draw summon visual.
+- `attack_vfx.gd` — serialized vector-based flying-white attack strokes.
 - `extra_turn_vfx.gd` — Meng Huo extra-turn convergence visual.
 
 The controller may choose timing, sound, animation, and labels. It must not independently decide captures, draws, targets, ki costs, or turn ownership.
@@ -96,7 +102,15 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `card_drawn`
 - `ki_changed`
 - `ability_triggered`
+- `attack_started`
 - extra-turn events emitted during turn resolution
+
+`attack_started` contains stable source/target cells, instance IDs, owners, and
+the attack reason. It is emitted after initial attack validation and before
+`CARD_BE_ATTACKED`; it is presentation data, not a catalog event or ability
+hook. The controller resolves live card rectangles by instance ID and derives
+the stroke from their facing edges, so current adjacent attacks and future
+non-neighbor attacks share the same geometry path.
 
 `ability_triggered` is emitted only after a passive rule survives revalidation and
 its conditions match. It precedes that rule's action events and drives the

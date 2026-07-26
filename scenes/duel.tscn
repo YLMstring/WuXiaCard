@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://scenes/card_inspector.tscn" id="3_b72to"]
 [ext_resource type="Script" uid="uid://d4a8komn6bcnu" path="res://scripts/duel_backdrop.gd" id="4_mgajk"]
 [ext_resource type="Texture2D" uid="uid://grtv0stqh3fu" path="res://pics/back_arrow.svg" id="5_back_arrow"]
+[ext_resource type="Script" path="res://scripts/attack_vfx.gd" id="6_ur6ul"]
 
 [node name="Duel" type="Control" unique_id=736667207]
 layout_mode = 3
@@ -212,6 +213,16 @@ mouse_filter = 2
 
 [node name="CardInspector" parent="DuelCanvas" unique_id=2059062960 instance=ExtResource("3_b72to")]
 layout_mode = 1
+
+[node name="AttackVfx" type="Control" parent="DuelCanvas" unique_id=1242099741]
+z_index = 14
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("6_ur6ul")
 
 [node name="PlacementAudio" type="AudioStreamPlayer" parent="." unique_id=502979519]
 

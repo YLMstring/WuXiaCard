@@ -38,15 +38,16 @@ Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of 
 
 ## Expected Baseline
 
-The full baseline after generic passive ability pulses contains seven passing suites and at least 815 checks:
+The full baseline after flying-white attack presentation contains seven passing
+suites and at least 851 checks:
 
 - catalog: 270
 - inspector: 17
 - backdrop: 19
 - rules: 27
-- simulator: 167
+- simulator: 174
 - search: 37
-- integration: 278
+- integration: at least 307
 
 Treat the fresh runner output as authoritative; counts can change as tests grow and integration paths vary.
 
