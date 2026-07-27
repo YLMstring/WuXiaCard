@@ -136,6 +136,31 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 - The current side pool contains a fresh copy of every catalog card and can therefore duplicate a card present in the starting hand.
 - Each side currently receives ten side-deck cards, shuffled independently.
 - A zero RNG seed means nondeterministic setup; a nonzero seed supports deterministic tests.
+- The player's main deck is persisted in a versioned profile and is read by new duel scenes.
+- The collection library has 1,000 logical positions. Unlocked cards occupy a compact prefix; all remaining positions are empty slots.
+- A persistent card ID exists in exactly one place: the five-card main deck or the occupied library prefix.
+- The initial unlocked pool contains every current catalog card except `CangSongYingKe1`. With the default five-card main deck, four cards begin in the library.
+- A newly unlocked card is inserted at library position one. Existing library cards shift down and empty slots remain at the tail.
+
+## Deck Builder
+
+- Deck building is a separate scene at `res://scenes/deck_builder.tscn`; it does not run the duel simulator, scores, AI, combat VFX, or audio.
+- It reuses the duel's fixed 9:16 presentation, decorative backdrop, top header, five-slot opponent hand, five-slot player hand, CardView, and CardInspector.
+- The opponent hand represents the upcoming enemy. It stays face-down in normal mode and is revealed in script-controlled testing mode.
+- The center parchment is titled `藏经阁` and displays four standard 3:4 library cards per row with exactly three visible rows.
+- Its exterior uses the exact same parchment geometry and shared style code as the card inspector.
+- The vertical scrollbar is hidden. Players navigate by swiping up/down; desktop mouse swipes are handled locally without enabling project-wide mouse-to-touch emulation.
+- The first card row begins eight pixels below the title-divider content boundary.
+- Seven-pixel side insets keep the first and fourth card borders, shadows, and hold lift visible inside the clipped scroll viewport.
+- Library card names use tier colors: slate grey for tier 1, forest green for 2, steel blue for 3, muted violet for 4, dark orange for 5, and crimson for every other value.
+- The 1,000 logical library slots form 250 rows and are virtualized. Only three visible rows plus one buffer row above and below—20 slot Controls total—are live.
+- A short tap on any revealed card opens the existing inspector. Closing it restores the prior library scroll position.
+- Immediate pointer movement scrolls the library. Holding a library card for roughly 0.25 seconds arms a drag.
+- Dropping an armed library card onto one of the five main-deck slots exchanges the two cards. The displaced main-deck card returns to the exact logical library position from which the dragged card came.
+- Invalid drops and empty library slots do nothing.
+- Exchanges save immediately. If persistence fails, the displayed exchange is rolled back.
+- The header icon only emits `back_requested`; a future scene router will decide where to navigate.
+- The deck builder has no score panels.
 
 ## Inspector
 

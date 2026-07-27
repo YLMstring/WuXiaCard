@@ -32,7 +32,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id`, never an ability ID.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
-- `duel_decks.gd` — starting hand lists and side-pool creation.
+- `deck_profile_store.gd` — versioned persistent deck profile, validation/repair, atomic save, unlock insertion, and main-deck/library exchanges.
+- `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and side-pool construction.
 
 Neither state nor action data may contain Nodes, Controls, audio players, tweens, or live scene references.
 
@@ -70,6 +71,10 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 ### Presentation
 
 - `duel_controller.gd` — creates the encounter, translates drag gestures into actions, calls the simulator, and presents transition events sequentially.
+- `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand slots, library-to-hand exchange, inspection, and the navigation-neutral `back_requested` signal.
+- `deck_library_grid.gd` / `deck_library_grid.tscn` — four-column, 1,000-slot virtualized and scrollable library surface.
+- `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.
+- `parchment_chrome.gd` — shared inspector/library scroll body, shadow, border, and rod styling.
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
 - `ink_bloom.gd` — draw summon visual.
@@ -78,6 +83,51 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `extra_turn_vfx.gd` — Meng Huo extra-turn convergence visual.
 
 The controller may choose timing, sound, animation, and labels. It must not independently decide captures, draws, targets, ki costs, or turn ownership.
+
+## Deck-Building Data Flow
+
+```text
+user://wuxia_deck_profile.json
+             |
+             v
+     DeckProfileStore
+       /           \
+      v             v
+DeckBuilder      DuelDecks
+Controller           |
+      |               v
+      v          starting hand
+virtual library     in duel
+and fixed hand
+```
+
+The persisted profile owns the five-card main deck and a logical library of
+exactly 1,000 entries. Occupied library entries form a compact prefix followed
+by empty entries. A card ID may appear in exactly one of the main deck or
+library. Save data is schema-versioned, validated on load, repaired when
+possible, and replaced with a valid default when necessary.
+
+`DeckLibraryGrid` never creates 1,000 Controls. It maintains a pool of 20 slot
+views: three visible rows plus one buffer row above and below. Scrolling
+rebinds that pool to logical library indices. Recycling pauses while a
+long-press or drag is active so the source slot cannot change identity during
+an exchange.
+
+The library has 250 logical rows of four standard 3:4 card faces. Slot views
+apply the catalog tier to the separate name label, reset that override whenever
+they are rebound, and start the first logical row eight pixels below the scroll
+content origin. Seven-pixel side insets keep the outer card shadows and scaled
+hold cue inside the clipped scroll viewport.
+
+The library uses the inspector's exact parchment chrome. Its vertical scrollbar
+is deliberately hidden while scrolling remains enabled. Android/iOS use
+`ScrollContainer`'s native touch drag; desktop mouse swipes are translated
+locally by the library so the project does not need global mouse-to-touch
+emulation, which could interfere with duel card dragging.
+
+The deck builder is a separate scene, `res://scenes/deck_builder.tscn`. It
+emits `back_requested` and deliberately does not know which future scene owns
+navigation. The playable duel remains `res://main.tscn`.
 
 ## State Shape
 

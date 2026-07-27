@@ -20,7 +20,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 ## Suites
 
 - `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
+- `test_deck_profile_store.gd` — default profile, validation/repair, atomic persistence, exchanges, unlock ordering, and save-failure rollback.
+- `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
+- `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
+- `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki, draw/removal/movement/extra turns.
 - `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
@@ -38,10 +42,13 @@ Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of 
 
 ## Expected Baseline
 
-The full baseline after flying-white attack presentation contains seven passing
-suites and at least 857 checks:
+The full baseline after the persistent deck builder contains ten passing
+suites and at least 934 checks:
 
 - catalog: 270
+- deck profile: 24
+- library grid: 29
+- deck-builder integration: 24
 - inspector: 17
 - backdrop: 19
 - rules: 27
@@ -68,6 +75,11 @@ Run simulator and search suites. Check deterministic action selection and deadli
 ### UI
 
 Run inspector/integration and full suite. Manually test at 540×960 and Android-like aspect ratios with mouse and touch. Automated headless checks do not prove visual correctness.
+
+For deck-builder UI changes, also run the profile, library-grid, and
+deck-builder integration suites. Manually verify tap-to-inspect,
+hold-then-drag exchange, swipe scrolling, invalid drops, and normal/testing
+opponent concealment.
 
 ### Android
 

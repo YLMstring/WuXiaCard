@@ -48,6 +48,7 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var invalid_shake_duration: float = 0.18
 @export var placement_haptic_ms: int = 20
 @export var multi_capture_haptic_ms: int = 45
+@export var deck_profile_path: String = "user://wuxia_deck_profile.json"
 
 var turn_state: TurnState = TurnState.PLAYER
 var testing_mode: bool = Settings.TESTING_MODE
@@ -109,7 +110,7 @@ func _ready() -> void:
 	_create_board_cells()
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
-	var player_cards: Array = _create_card_instances(Decks.get_player_card_ids(), DuelRules.PLAYER_OWNER, "main")
+	var player_cards: Array = _create_card_instances(Decks.get_player_card_ids(deck_profile_path), DuelRules.PLAYER_OWNER, "main")
 	var opponent_cards: Array = _create_card_instances(Decks.get_opponent_card_ids(), DuelRules.OPPONENT_OWNER, "main")
 	var player_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.PLAYER_OWNER, "side")
 	var opponent_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.OPPONENT_OWNER, "side")

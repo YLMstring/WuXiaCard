@@ -43,6 +43,7 @@ The scroll shows:
 - Empty-card-slot visuals for unoccupied positions
 - Continuous vertical scrolling through 1,000 logical library positions
 - An 8-pixel visual inset between the title divider and the first card row
+- Symmetric 7-pixel side insets so outer-card borders, shadows, and hold lift are not clipped
 - No visible scrollbar; mouse and touch swipes move the library directly
 
 The 1,000 slots form 250 rows. The initial profile has four library cards followed by 996 empty slots.

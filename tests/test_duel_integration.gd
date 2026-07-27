@@ -6,6 +6,7 @@ const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
+const TEST_PROFILE_PATH: String = "user://duel_integration_deck_test.json"
 
 var _failures: int = 0
 var _checks: int = 0
@@ -16,7 +17,8 @@ func _init() -> void:
 
 
 func _run() -> void:
-	var duel: Node = DUEL_SCENE.instantiate()
+	_cleanup_test_profile()
+	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
 	await process_frame
@@ -91,6 +93,7 @@ func _run() -> void:
 
 	duel.queue_free()
 	await process_frame
+	_cleanup_test_profile()
 	if _failures == 0:
 		print("DUEL_INTEGRATION_PASSED checks=%d player=%d opponent=%d" % [_checks, scores.x, scores.y])
 	else:
@@ -659,7 +662,7 @@ func _check_side_deck_setup(duel: Node) -> void:
 
 
 func _check_player_draw_and_instance_mapping() -> void:
-	var draw_duel: Node = DUEL_SCENE.instantiate()
+	var draw_duel: Node = _instantiate_duel()
 	draw_duel.set("testing_mode", true)
 	draw_duel.set("side_deck_shuffle_seed", 4102)
 	root.add_child(draw_duel)
@@ -712,7 +715,7 @@ func _check_player_draw_and_instance_mapping() -> void:
 
 
 func _check_opponent_draw_visibility() -> void:
-	var draw_duel: Node = DUEL_SCENE.instantiate()
+	var draw_duel: Node = _instantiate_duel()
 	draw_duel.set("side_deck_shuffle_seed", 991)
 	root.add_child(draw_duel)
 	await process_frame
@@ -785,7 +788,7 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 
 
 func _check_card_inspector_modal() -> void:
-	var inspect_duel: Node = DUEL_SCENE.instantiate()
+	var inspect_duel: Node = _instantiate_duel()
 	root.add_child(inspect_duel)
 	await process_frame
 	await process_frame
@@ -881,7 +884,7 @@ func _submit_card_tap(card: Control) -> void:
 
 
 func _check_inspector_holds_completed_ai_move() -> void:
-	var ai_duel: Node = DUEL_SCENE.instantiate()
+	var ai_duel: Node = _instantiate_duel()
 	root.add_child(ai_duel)
 	await process_frame
 	await process_frame
@@ -922,7 +925,7 @@ func _check_inspector_holds_completed_ai_move() -> void:
 
 
 func _check_focus_loss_return() -> void:
-	var focus_duel: Node = DUEL_SCENE.instantiate()
+	var focus_duel: Node = _instantiate_duel()
 	root.add_child(focus_duel)
 	await process_frame
 	await process_frame
@@ -941,7 +944,7 @@ func _check_focus_loss_return() -> void:
 
 
 func _check_dragged_card_commits_through_simulator() -> void:
-	var drag_duel: Node = DUEL_SCENE.instantiate()
+	var drag_duel: Node = _instantiate_duel()
 	root.add_child(drag_duel)
 	await process_frame
 	await process_frame
@@ -969,7 +972,7 @@ func _check_aspect_ratio_input_paths() -> void:
 	for target_size: Vector2i in [Vector2i(405, 900), Vector2i(1280, 839)]:
 		root.size = target_size
 		await process_frame
-		var aspect_duel: Node = DUEL_SCENE.instantiate()
+		var aspect_duel: Node = _instantiate_duel()
 		aspect_duel.set("testing_mode", true)
 		root.add_child(aspect_duel)
 		await process_frame
@@ -1035,7 +1038,7 @@ func _check_aspect_ratio_input_paths() -> void:
 
 
 func _check_testing_mode_manual_turns() -> void:
-	var test_duel: Node = DUEL_SCENE.instantiate()
+	var test_duel: Node = _instantiate_duel()
 	test_duel.set("testing_mode", true)
 	root.add_child(test_duel)
 	await process_frame
@@ -1085,7 +1088,7 @@ func _check_testing_mode_manual_turns() -> void:
 
 
 func _check_manual_activate_move() -> void:
-	var duel: Node = DUEL_SCENE.instantiate()
+	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
 	await process_frame
@@ -1116,7 +1119,7 @@ func _check_manual_activate_move() -> void:
 
 
 func _check_meng_huo_extra_turn_presentation() -> void:
-	var duel: Node = DUEL_SCENE.instantiate()
+	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
 	await process_frame
@@ -1200,7 +1203,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 
 
 func _check_player_gate_exile() -> void:
-	var exile_duel: Node = DUEL_SCENE.instantiate()
+	var exile_duel: Node = _instantiate_duel()
 	root.add_child(exile_duel)
 	await process_frame
 	await process_frame
@@ -1236,7 +1239,7 @@ func _check_player_gate_exile() -> void:
 
 
 func _check_opponent_tiger_exile() -> void:
-	var exile_duel: Node = DUEL_SCENE.instantiate()
+	var exile_duel: Node = _instantiate_duel()
 	root.add_child(exile_duel)
 	await process_frame
 	await process_frame
@@ -1256,7 +1259,7 @@ func _check_opponent_tiger_exile() -> void:
 
 
 func _check_cangsong_reaction_presentation() -> void:
-	var flip_duel: Node = DUEL_SCENE.instantiate()
+	var flip_duel: Node = _instantiate_duel()
 	root.add_child(flip_duel)
 	await process_frame
 	await process_frame
@@ -1295,7 +1298,7 @@ func _check_cangsong_reaction_presentation() -> void:
 	flip_duel.queue_free()
 	await process_frame
 
-	var exile_duel: Node = DUEL_SCENE.instantiate()
+	var exile_duel: Node = _instantiate_duel()
 	root.add_child(exile_duel)
 	await process_frame
 	await process_frame
@@ -1343,7 +1346,7 @@ func _check_cangsong_reaction_presentation() -> void:
 
 
 func _check_ability_pulse_sequencing() -> void:
-	var duel: Node = DUEL_SCENE.instantiate()
+	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
 	await process_frame
@@ -1462,6 +1465,19 @@ func _count_face_down(cards: Array[Control]) -> int:
 		if card.has_method("is_face_down") and bool(card.call("is_face_down")):
 			count += 1
 	return count
+
+
+func _instantiate_duel() -> Node:
+	var duel: Node = DUEL_SCENE.instantiate()
+	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	return duel
+
+
+func _cleanup_test_profile() -> void:
+	for suffix: String in ["", ".tmp", ".bak"]:
+		var path: String = TEST_PROFILE_PATH + suffix
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _check(condition: bool, message: String) -> void:

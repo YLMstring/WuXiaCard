@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/deck_library_slot.gd" id="1_slot"]
+[ext_resource type="PackedScene" path="res://scenes/card_view.tscn" id="2_card"]
+
+[node name="DeckLibrarySlot" type="Control"]
+custom_minimum_size = Vector2(54, 88)
+mouse_filter = 1
+script = ExtResource("1_slot")
+
+[node name="CardHost" type="Control" parent="."]
+layout_mode = 0
+mouse_filter = 2
+
+[node name="EmptyFrame" type="PanelContainer" parent="CardHost"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="CardView" parent="CardHost" instance=ExtResource("2_card")]
+layout_mode = 1
+
+[node name="Name" type="Label" parent="."]
+layout_mode = 0
+mouse_filter = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+text_overrun_behavior = 3
+
+[node name="HoldTimer" type="Timer" parent="."]
+one_shot = true

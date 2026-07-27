@@ -154,12 +154,21 @@ func _test_ability_declarations() -> void:
 
 
 func _test_encounter_decks() -> void:
-	var player_ids: Array[StringName] = Decks.get_player_card_ids()
+	var test_profile_path: String = "user://card_catalog_deck_test.json"
+	for suffix: String in ["", ".tmp", ".bak"]:
+		var cleanup_path: String = test_profile_path + suffix
+		if FileAccess.file_exists(cleanup_path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
+	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
 	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player deck preserves current hand order")
 	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
+	for suffix: String in ["", ".tmp", ".bak"]:
+		var cleanup_path: String = test_profile_path + suffix
+		if FileAccess.file_exists(cleanup_path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
 
 
 func _test_side_deck_pool() -> void:

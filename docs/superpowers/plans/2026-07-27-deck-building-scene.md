@@ -361,7 +361,9 @@ Only `DuelDecks` and the test runner integrate with existing runtime paths.
    visible rows and one buffer row on each side, yielding exactly 20 live slot
    controls.
 6. Calculate card height from column width at 3:4, center the card-and-name
-   group within its row, and leave all duel/hand CardView sizing untouched.
+   group within its row, reserve seven pixels at each clipped viewport edge for
+   border/shadow/hold-lift overflow, and leave all duel/hand CardView sizing
+   untouched.
 7. Apply tier name color inside `DeckLibrarySlot.bind()` and reset the override
    on every rebind so recycled slots never inherit stale colors.
 8. Offset logical row positions by 8 pixels and include that inset in the
