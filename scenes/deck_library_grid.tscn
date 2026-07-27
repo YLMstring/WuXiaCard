@@ -5,7 +5,7 @@
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_library_title"]
 atlas = ExtResource("2_library_title")
-region = Rect2(438, 21, 460, 172)
+region = Rect2(202, 25, 959, 161)
 
 [node name="DeckLibraryGrid" type="Control"]
 custom_minimum_size = Vector2(300, 420)
