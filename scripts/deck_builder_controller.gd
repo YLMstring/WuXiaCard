@@ -24,6 +24,7 @@ const PRESSED_CHOICE_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.62)
 @export var upcoming_enemy_card_ids: Array[StringName] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
+@export var library_color_seed: int = 0
 
 var testing_mode: bool = Settings.TESTING_MODE
 var profile: Dictionary = {}
@@ -38,6 +39,7 @@ var _go_first_allowed: bool = true
 var _go_first_ink_material: ShaderMaterial = null
 var _choice_feedback_tweens: Dictionary = {}
 var _blocked_feedback_tween: Tween = null
+var _library_display_owner_ids: Array[int] = []
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -65,10 +67,11 @@ func _ready() -> void:
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
+	_roll_library_display_owners()
 	_style_header()
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
-	library_grid.set_library_slots(profile["library_slots"])
+	_refresh_library_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
 	library_grid.drag_started.connect(_on_library_drag_started)
 	library_grid.drag_moved.connect(_on_library_drag_moved)
@@ -92,7 +95,7 @@ func debug_exchange(library_index: int, deck_index: int) -> bool:
 		return false
 	profile = result["profile"]
 	_refresh_player_slot(deck_index)
-	library_grid.set_library_slots(profile["library_slots"])
+	_refresh_library_grid()
 	_refresh_start_controls()
 	return true
 
@@ -122,6 +125,33 @@ func debug_can_go_first() -> bool:
 
 func debug_get_status() -> String:
 	return status_label.text
+
+
+func debug_get_library_display_owner_ids() -> Array[int]:
+	return _library_display_owner_ids.duplicate()
+
+
+func _roll_library_display_owners() -> void:
+	var random := RandomNumberGenerator.new()
+	if library_color_seed == 0:
+		random.randomize()
+	else:
+		random.seed = library_color_seed
+	_library_display_owner_ids.resize(DeckLibraryGrid.TOTAL_SLOTS)
+	_library_display_owner_ids.fill(DuelRules.PLAYER_OWNER)
+	var library_values: Array = profile.get("library_slots", [])
+	for logical_index: int in range(mini(library_values.size(), DeckLibraryGrid.TOTAL_SLOTS)):
+		if String(library_values[logical_index]).is_empty():
+			continue
+		_library_display_owner_ids[logical_index] = (
+			DuelRules.PLAYER_OWNER
+			if random.randi_range(0, 1) == 0
+			else DuelRules.OPPONENT_OWNER
+		)
+
+
+func _refresh_library_grid() -> void:
+	library_grid.set_library_slots(profile["library_slots"], _library_display_owner_ids)
 
 
 func _create_hands() -> void:
@@ -226,7 +256,7 @@ func _on_library_drag_started(logical_index: int, data: Dictionary, pointer_posi
 	drag_layer.add_child(_drag_proxy)
 	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_drag_proxy.set_ki_badge_enabled(false)
-	_drag_proxy.configure(data, DuelRules.PLAYER_OWNER, false)
+	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
 	var source_size: Vector2 = Vector2(64.0, 86.0)
 	if source_slot != null:
@@ -250,7 +280,7 @@ func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> vo
 		if bool(result.get("ok", false)):
 			profile = result["profile"]
 			_refresh_player_slot(deck_index)
-			library_grid.set_library_slots(profile["library_slots"])
+			_refresh_library_grid()
 			_refresh_start_controls()
 			status_label.text = DEFAULT_STATUS
 		else:

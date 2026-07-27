@@ -23,6 +23,7 @@ const OTHER_TIER_NAME_COLOR: Color = Color("963f4a")
 
 var logical_index: int = -1
 var card_data: Dictionary = {}
+var display_owner_id: int = DuelRules.PLAYER_OWNER
 var interaction_enabled: bool = true
 
 var _pointer_active: bool = false
@@ -52,10 +53,19 @@ func _ready() -> void:
 	bind(-1, {})
 
 
-func bind(new_logical_index: int, new_card_data: Dictionary) -> void:
+func bind(
+	new_logical_index: int,
+	new_card_data: Dictionary,
+	new_display_owner_id: int = DuelRules.PLAYER_OWNER
+) -> void:
 	cancel_gesture()
 	logical_index = new_logical_index
 	card_data = new_card_data.duplicate(true)
+	display_owner_id = (
+		DuelRules.OPPONENT_OWNER
+		if new_display_owner_id == DuelRules.OPPONENT_OWNER
+		else DuelRules.PLAYER_OWNER
+	)
 	var occupied: bool = not card_data.is_empty()
 	empty_frame.visible = not occupied
 	card_view.visible = occupied
@@ -63,7 +73,7 @@ func bind(new_logical_index: int, new_card_data: Dictionary) -> void:
 	name_label.remove_theme_color_override("font_color")
 	if occupied:
 		name_label.add_theme_color_override("font_color", _tier_name_color(card_data.get("tier", null)))
-		card_view.configure(card_data, DuelRules.PLAYER_OWNER, false)
+		card_view.configure(card_data, display_owner_id, false)
 		card_view.set_face_down(false)
 	_set_drag_vacancy_visible(false)
 	modulate = Color.WHITE

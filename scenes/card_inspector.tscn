@@ -151,6 +151,7 @@ theme_override_colors/font_color = Color(0.2, 0.15, 0.1, 1)
 theme_override_font_sizes/font_size = 15
 text = "对手招式进场时，若我可以，对其发起攻击。"
 autowrap_mode = 3
+language = "zh"
 
 [node name="DescriptionGap" type="Control" parent="Parchment/Body/Margin/Scroll/Content"]
 custom_minimum_size = Vector2(0, 1)
@@ -172,6 +173,7 @@ theme_override_colors/font_color = Color(0.42, 0.34, 0.27, 1)
 theme_override_font_sizes/font_size = 15
 text = "华山剑法的绝招。"
 autowrap_mode = 3
+language = "zh"
 
 [node name="CloseHint" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2

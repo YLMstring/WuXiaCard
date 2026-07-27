@@ -21,6 +21,7 @@ const CONTENT_SIDE_PADDING: float = 7.0
 @export var hold_duration: float = 0.25
 
 var library_slots: Array = []
+var library_display_owner_ids: Array[int] = []
 var interaction_enabled: bool = true
 var _slot_pool: Array = []
 var _row_height: float = 1.0
@@ -53,12 +54,16 @@ func _ready() -> void:
 	_queue_layout_grid()
 
 
-func set_library_slots(values: Array) -> void:
+func set_library_slots(values: Array, display_owner_ids: Array[int] = []) -> void:
 	library_slots = values.duplicate()
 	library_slots.resize(TOTAL_SLOTS)
+	library_display_owner_ids.resize(TOTAL_SLOTS)
 	for index: int in range(TOTAL_SLOTS):
 		if library_slots[index] == null:
 			library_slots[index] = ""
+		library_display_owner_ids[index] = _normalized_display_owner(
+			display_owner_ids[index] if index < display_owner_ids.size() else DuelRules.PLAYER_OWNER
+		)
 	_pending_refresh = true
 	_refresh_pool(true)
 
@@ -125,6 +130,12 @@ func debug_get_bound_slot(logical_index: int) -> Variant:
 
 func debug_get_row_height() -> float:
 	return _row_height
+
+
+func get_display_owner_id(logical_index: int) -> int:
+	if logical_index < 0 or logical_index >= library_display_owner_ids.size():
+		return DuelRules.PLAYER_OWNER
+	return _normalized_display_owner(library_display_owner_ids[logical_index])
 
 
 func _create_pool() -> void:
@@ -202,8 +213,22 @@ func _bind_slot(slot: Variant, logical_index: int) -> void:
 	if card_id not in CardCatalog.get_all_card_ids():
 		slot.bind(logical_index, {})
 		return
-	slot.bind(logical_index, CardCatalog.create_instance(card_id, DuelRules.PLAYER_OWNER, StringName("library_%d" % logical_index)))
+	slot.bind(
+		logical_index,
+		CardCatalog.create_instance(
+			card_id,
+			DuelRules.PLAYER_OWNER,
+			StringName("library_%d" % logical_index)
+		),
+		get_display_owner_id(logical_index)
+	)
 	slot.set_interaction_enabled(interaction_enabled)
+
+
+func _normalized_display_owner(owner_id: int) -> int:
+	if owner_id == DuelRules.OPPONENT_OWNER:
+		return DuelRules.OPPONENT_OWNER
+	return DuelRules.PLAYER_OWNER
 
 
 func _on_scroll_changed(_value: float) -> void:

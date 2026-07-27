@@ -29,6 +29,10 @@ window/handheld/orientation=1
 
 project/assembly_name="Wuxia Card"
 
+[internationalization]
+
+locale/include_text_server_data=true
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

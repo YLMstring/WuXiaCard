@@ -22,7 +22,11 @@ func _run() -> void:
 	grid.size = Vector2(388.0, 497.0)
 	var store: RefCounted = Store.new("user://unused_grid_profile.json")
 	var profile: Dictionary = store.create_default_profile()
-	grid.set_library_slots(profile["library_slots"])
+	var display_owner_ids: Array[int] = []
+	display_owner_ids.resize(1000)
+	display_owner_ids.fill(DuelRules.PLAYER_OWNER)
+	display_owner_ids[0] = DuelRules.OPPONENT_OWNER
+	grid.set_library_slots(profile["library_slots"], display_owner_ids)
 	await process_frame
 	grid.call("_layout_grid")
 	await process_frame
@@ -59,6 +63,14 @@ func _run() -> void:
 	var fifth: Variant = grid.debug_get_bound_slot(4)
 	_check(first != null and not first.is_empty(), "First logical slot displays a card")
 	_check(fifth != null and fifth.is_empty(), "First slot after the four-card row displays an empty placeholder")
+	_check(
+		(first.get_node("CardHost/CardView") as CardView).owner_id == DuelRules.OPPONENT_OWNER,
+		"Explicit opponent display owner renders a red library card"
+	)
+	_check(
+		(grid.debug_get_bound_slot(1).get_node("CardHost/CardView") as CardView).owner_id == DuelRules.PLAYER_OWNER,
+		"Explicit player display owner renders a blue library card"
+	)
 	var hold_scale_overflow: float = first.size.x * (1.035 - 1.0) * 0.5
 	var card_shadow_overflow: float = 4.0
 	_check(
@@ -102,6 +114,10 @@ func _run() -> void:
 	grid.set_scroll_offset(0.0)
 	await process_frame
 	first = grid.debug_get_bound_slot(0)
+	_check(
+		(first.get_node("CardHost/CardView") as CardView).owner_id == DuelRules.OPPONENT_OWNER,
+		"Library display color remains stable after virtualized scrolling"
+	)
 	_connect_slot_signals(first)
 	first.debug_begin_pointer(Vector2(10.0, 10.0))
 	first.debug_end_pointer(Vector2(10.0, 10.0))

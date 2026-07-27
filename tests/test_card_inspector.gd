@@ -47,6 +47,10 @@ func _run() -> void:
 	var flavor: Label = content.get_node("Flavor") as Label
 	var scroll: ScrollContainer = inspector.get_node("Parchment/Body/Margin/Scroll") as ScrollContainer
 
+	_check(
+		bool(ProjectSettings.get_setting("internationalization/locale/include_text_server_data", false)),
+		"Exports include ICU text-server data for proper Chinese line breaking"
+	)
 	_check(bool(inspector.call("is_open")), "Present opens the inspector")
 	_check(parchment.position.is_equal_approx(board_rect.position) and parchment.size.is_equal_approx(board_rect.size), "Parchment exactly occupies the supplied board rectangle")
 	_check(title.text == "苍松迎客", "Glyph is displayed as the card name")
@@ -59,6 +63,7 @@ func _run() -> void:
 	)
 	_check(description.text == "对手招式进场时，若我可以，对其发起攻击。", "Description is displayed as rules text")
 	_check(flavor.text == "华山剑法的绝招。", "Flavor text is displayed separately")
+	_check(description.language == "zh" and flavor.language == "zh", "Wrapped inspector text explicitly uses Chinese line-breaking rules")
 	_check(scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED, "Inspector never scrolls horizontally")
 
 	inspector.call("present", {

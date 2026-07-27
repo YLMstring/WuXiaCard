@@ -20,6 +20,7 @@ func _run() -> void:
 	var builder: Variant = BUILDER_SCENE.instantiate()
 	builder.profile_path = _save_path
 	builder.testing_mode = false
+	builder.library_color_seed = 12345
 	root.add_child(builder)
 	builder.size = Vector2(540.0, 960.0)
 	await process_frame
@@ -61,6 +62,16 @@ func _run() -> void:
 	var profile: Dictionary = builder.debug_get_profile()
 	_check(_occupied_count(profile["library_slots"]) == 4, "Production scene starts with four library cards")
 	_check(grid.debug_get_bound_slot(4).is_empty(), "First slot after the full four-card row is empty")
+	var display_owner_ids: Array[int] = builder.debug_get_library_display_owner_ids()
+	_check(display_owner_ids.size() == 1000, "Deck-builder entry rolls one stable display color per library slot")
+	for logical_index: int in range(4):
+		var expected_owner: int = display_owner_ids[logical_index]
+		var library_card := grid.debug_get_bound_slot(logical_index).get_node("CardHost/CardView") as CardView
+		_check(
+			expected_owner in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]
+			and library_card.owner_id == expected_owner,
+			"Occupied library card %d uses its rolled blue-or-red appearance" % logical_index
+		)
 
 	for slot: Node in opponent_hand.get_children():
 		var card: CardView = slot.get_child(0) as CardView
@@ -104,6 +115,11 @@ func _run() -> void:
 	var target_slot := player_hand.get_child(1) as Control
 	var target_point: Vector2 = target_slot.get_global_rect().get_center()
 	builder.call("_on_library_drag_started", 1, drag_data, target_point)
+	var drag_proxy := canvas.get_node("DragLayer").get_child(-1) as CardView
+	_check(
+		drag_proxy.owner_id == grid.get_display_owner_id(1),
+		"Library drag preview preserves the source card's rolled color"
+	)
 	builder.call("_on_library_drag_ended", 1, target_point)
 	var dragged_profile: Dictionary = builder.debug_get_profile()
 	_check(String(dragged_profile["main_deck"][1]) == String(drag_source_id), "Production drag hit-test exchanges into target hand slot")
@@ -137,6 +153,7 @@ func _run() -> void:
 	var testing_builder: Variant = BUILDER_SCENE.instantiate()
 	testing_builder.profile_path = _save_path
 	testing_builder.testing_mode = true
+	testing_builder.library_color_seed = 67890
 	root.add_child(testing_builder)
 	await process_frame
 	var testing_hand: HBoxContainer = testing_builder.get_node("DuelCanvas/OpponentHand") as HBoxContainer
