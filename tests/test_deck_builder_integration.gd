@@ -39,6 +39,12 @@ func _run() -> void:
 	_check(grid.debug_get_pool_size() == 20, "Production scene uses four-column virtualized library pool")
 	_check(go_first.flat and go_second.flat and go_first.text.is_empty() and go_second.text.is_empty(), "Opening choices show only supplied ink pictures")
 	_check(go_first.position.x < grid.position.x and go_second.position.x > grid.position.x + grid.size.x, "Opening choices flank the library scroll")
+	_check(
+		go_first.size.is_equal_approx(go_second.size)
+		and go_first.size.x < 40.0
+		and go_first.size.y < 170.0,
+		"Side-choice art and hit rectangles shrink together to the title-matched size"
+	)
 	_check(go_first.get_node("Characters").get_child_count() == 4, "Go-first control stacks four character pictures")
 	_check(go_second.get_node("Characters").get_child_count() == 4, "Go-second control stacks four character pictures")
 	for control_path: String in [
@@ -56,9 +62,41 @@ func _run() -> void:
 	var library_ki_badge := ki_library_slot.get_node("CardHost/CardView/Overlay/KiBadge") as Control
 	_check(int(ki_library_slot.card_data.get("ki", 0)) > 0, "Library bead fixture uses a card with ki")
 	_check(not library_ki_badge.visible, "Library cards hide ki beads")
+	var go_second_material := (
+		go_second.get_node("Characters/Hou") as TextureRect
+	).material as ShaderMaterial
+	var go_second_resting_ink: Color = go_second_material.get_shader_parameter("ink_color")
 	go_second.button_down.emit()
-	_check(go_second.scale.x < 1.0 and go_second.modulate.a < 1.0, "Opening choice visibly responds while held")
+	var go_second_pressed_ink: Color = go_second_material.get_shader_parameter("ink_color")
+	_check(
+		go_second.scale.x < 1.0
+		and go_second_pressed_ink.r > go_second_resting_ink.r
+		and is_equal_approx(go_second_pressed_ink.r, go_second_pressed_ink.g)
+		and is_equal_approx(go_second_pressed_ink.g, go_second_pressed_ink.b),
+		"Go-second ink becomes neutral grey while held"
+	)
 	go_second.button_up.emit()
+	_check(
+		(go_second_material.get_shader_parameter("ink_color") as Color).is_equal_approx(go_second_resting_ink),
+		"Go-second ink restores on release"
+	)
+	var go_first_material := (
+		go_first.get_node("Characters/Qiang") as TextureRect
+	).material as ShaderMaterial
+	var go_first_resting_ink: Color = go_first_material.get_shader_parameter("ink_color")
+	go_first.button_down.emit()
+	var go_first_pressed_ink: Color = go_first_material.get_shader_parameter("ink_color")
+	_check(
+		not go_first_pressed_ink.is_equal_approx(go_first_resting_ink)
+		and is_equal_approx(go_first_pressed_ink.r, go_first_pressed_ink.g)
+		and is_equal_approx(go_first_pressed_ink.g, go_first_pressed_ink.b),
+		"Go-first ink also becomes neutral grey while held"
+	)
+	go_first.button_up.emit()
+	_check(
+		(go_first_material.get_shader_parameter("ink_color") as Color).is_equal_approx(go_first_resting_ink),
+		"Go-first ink restores on release"
+	)
 	var profile: Dictionary = builder.debug_get_profile()
 	_check(_occupied_count(profile["library_slots"]) == 4, "Production scene starts with four library cards")
 	_check(grid.debug_get_bound_slot(4).is_empty(), "First slot after the full four-card row is empty")

@@ -16,8 +16,9 @@ const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
 const GO_FIRST_BLOCKED_NOTICE: String = "主卡组总品阶不高于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
+const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
+const CHOICE_SIZE_SCALE: float = 0.72
 const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
-const PRESSED_CHOICE_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.62)
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -37,6 +38,7 @@ var _drag_proxy_offset: Vector2 = Vector2.ZERO
 var _effective_enemy_card_ids: Array[StringName] = []
 var _go_first_allowed: bool = true
 var _go_first_ink_material: ShaderMaterial = null
+var _go_second_ink_material: ShaderMaterial = null
 var _choice_feedback_tweens: Dictionary = {}
 var _blocked_feedback_tween: Tween = null
 var _library_display_owner_ids: Array[int] = []
@@ -364,20 +366,27 @@ func _layout_scene() -> void:
 	opponent_hand.size = Vector2(hand_width, hand_height)
 	library_grid.position = library_position
 	library_grid.size = Vector2(library_width, library_height)
-	var choice_width: float = clampf((canvas_size.x - library_width) * 0.32, 44.0, 54.0)
-	var choice_height: float = minf(220.0, library_height * 0.48)
+	var choice_slot_width: float = clampf((canvas_size.x - library_width) * 0.32, 44.0, 54.0)
+	var choice_slot_height: float = minf(220.0, library_height * 0.48)
+	var choice_width: float = choice_slot_width * CHOICE_SIZE_SCALE
+	var choice_height: float = choice_slot_height * CHOICE_SIZE_SCALE
 	var choice_gap: float = maxf(6.0, canvas_size.x * 0.014)
 	var choice_y: float = library_position.y + (library_height - choice_height) * 0.5
+	var go_first_slot_x: float = maxf(
+		horizontal_margin,
+		library_position.x - choice_gap - choice_slot_width
+	)
 	go_first_button.position = Vector2(
-		maxf(horizontal_margin, library_position.x - choice_gap - choice_width),
+		go_first_slot_x + (choice_slot_width - choice_width) * 0.5,
 		choice_y
 	)
 	go_first_button.size = Vector2(choice_width, choice_height)
+	var go_second_slot_x: float = minf(
+		canvas_size.x - horizontal_margin - choice_slot_width,
+		library_position.x + library_width + choice_gap
+	)
 	go_second_button.position = Vector2(
-		minf(
-			canvas_size.x - horizontal_margin - choice_width,
-			library_position.x + library_width + choice_gap
-		),
+		go_second_slot_x + (choice_slot_width - choice_width) * 0.5,
 		choice_y
 	)
 	go_second_button.size = Vector2(choice_width, choice_height)
@@ -424,7 +433,10 @@ func _refresh_start_controls() -> void:
 			"ink_color",
 			ACTIVE_INK_COLOR if _go_first_allowed else BLOCKED_INK_COLOR
 		)
+	if _go_second_ink_material != null:
+		_go_second_ink_material.set_shader_parameter("ink_color", ACTIVE_INK_COLOR)
 	go_first_button.modulate = Color.WHITE
+	go_second_button.modulate = Color.WHITE
 	go_first_button.tooltip_text = ""
 
 
@@ -459,27 +471,54 @@ void fragment() {
 	COLOR = vec4(ink_color.rgb, source.a * ink_color.a);
 }
 """
-	_go_first_ink_material = ShaderMaterial.new()
-	_go_first_ink_material.shader = ink_shader
+	_go_first_ink_material = _create_choice_ink_material(ink_shader)
 	for child: Node in go_first_button.get_node("Characters").get_children():
 		if child is TextureRect:
 			(child as TextureRect).material = _go_first_ink_material
+	_go_second_ink_material = _create_choice_ink_material(ink_shader)
+	for child: Node in go_second_button.get_node("Characters").get_children():
+		if child is TextureRect:
+			(child as TextureRect).material = _go_second_ink_material
+
+
+func _create_choice_ink_material(shader: Shader) -> ShaderMaterial:
+	var ink_material := ShaderMaterial.new()
+	ink_material.shader = shader
+	ink_material.set_shader_parameter("ink_color", ACTIVE_INK_COLOR)
+	return ink_material
 
 
 func _on_start_button_down(button: Button) -> void:
 	_kill_choice_feedback_tween(button)
 	button.pivot_offset = button.size * 0.5
 	button.scale = PRESSED_CHOICE_SCALE
-	button.modulate = PRESSED_CHOICE_MODULATE
+	_set_choice_pressed_ink(button, true)
 
 
 func _on_start_button_up(button: Button) -> void:
 	_kill_choice_feedback_tween(button)
+	_set_choice_pressed_ink(button, false)
 	var tween: Tween = button.create_tween()
 	_choice_feedback_tweens[button.get_instance_id()] = tween
 	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(button, "scale", Vector2.ONE, 0.10)
-	tween.parallel().tween_property(button, "modulate", Color.WHITE, 0.08)
+
+
+func _set_choice_pressed_ink(button: Button, pressed: bool) -> void:
+	var ink_material: ShaderMaterial = (
+		_go_first_ink_material
+		if button == go_first_button
+		else _go_second_ink_material
+	)
+	if ink_material == null:
+		return
+	var resting_color: Color = ACTIVE_INK_COLOR
+	if button == go_first_button and not _go_first_allowed:
+		resting_color = BLOCKED_INK_COLOR
+	ink_material.set_shader_parameter(
+		"ink_color",
+		PRESSED_INK_COLOR if pressed else resting_color
+	)
 
 
 func _kill_choice_feedback_tween(button: Button) -> void:
