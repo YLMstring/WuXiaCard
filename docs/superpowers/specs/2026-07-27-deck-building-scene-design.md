@@ -30,18 +30,31 @@ The opponent's five cards represent the upcoming enemy's main deck. They are fac
 
 ### Library scroll
 
-The central board is replaced by a parchment scroll matching the existing card inspector. Its title is `藏经阁`.
+The central board is replaced by a parchment scroll using the exact same
+exterior geometry and shared chrome styling as the existing card inspector.
+Its title is `藏经阁`.
 
 The scroll shows:
 
-- Five slots per row
+- Four slots per row
 - Three complete rows in the visible area
-- Card artwork and power values using the existing card view
+- Card artwork and power values using the existing card view at the standard 3:4 card ratio
 - The card's catalog `glyph` below each occupied slot
 - Empty-card-slot visuals for unoccupied positions
 - Continuous vertical scrolling through 1,000 logical library positions
+- An 8-pixel visual inset between the title divider and the first card row
+- No visible scrollbar; mouse and touch swipes move the library directly
 
-The 1,000 slots form 200 rows. The initial profile has four library cards followed by 996 empty slots.
+The 1,000 slots form 250 rows. The initial profile has four library cards followed by 996 empty slots.
+
+Card-name text uses a restrained, readable tier palette against the parchment:
+
+- Tier 1: slate grey `#66717A`
+- Tier 2: forest green `#3E7659`
+- Tier 3: steel blue `#3F6F9C`
+- Tier 4: muted violet `#715A96`
+- Tier 5: dark orange `#9A612D`
+- Any other tier: crimson `#963F4A`
 
 The grid is virtualized. It instantiates only the three visible rows plus a small row buffer and rebinds those controls as the scroll position changes. This avoids constructing 1,000 card controls on Android.
 
@@ -142,7 +155,7 @@ Owns persistent collection data independently from UI:
 
 ### `DeckLibraryGrid`
 
-Owns the virtualized five-column library:
+Owns the virtualized four-column library:
 
 - Maps scroll offset to logical row indices.
 - Maintains three visible rows plus a small buffer.
@@ -251,7 +264,11 @@ The player's side deck, opponent decks, AI, simulation, turn rules, scoring, and
 
 ### Virtual-grid tests
 
-- Exactly five logical columns are used.
+- Exactly four logical columns are used, producing 250 logical rows.
+- Every occupied card face preserves the standard 3:4 ratio.
+- Card-name colors follow the catalog tier palette, with all unexpected tier values using crimson.
+- The first row starts 8 pixels below the title/divider content boundary.
+- The vertical scrollbar remains hidden while swipe scrolling stays enabled.
 - Three full rows are visible at the reference 9:16 layout.
 - The visible controls map correctly at the top, middle, and final row.
 - Slot 1,000 is reachable.
@@ -280,7 +297,7 @@ The player's side deck, opponent decks, AI, simulation, turn rules, scoring, and
 - The deck builder contains no score panels and starts no AI.
 - The scene remains at the established 9:16 proportions.
 - Tall Android displays and wide PC displays use the existing decorative extensions without stretching the central UI.
-- Android touch scrolling remains smooth across all 200 logical rows.
+- Android touch scrolling remains smooth across all 250 logical rows.
 
 ## Non-Goals
 
@@ -302,7 +319,9 @@ The feature is accepted when the standalone deck-building scene:
 
 1. Matches the duel's established chrome and fixed-canvas behavior.
 2. Shows the upcoming enemy hand with correct privacy behavior.
-3. Displays `藏经阁` with three visible five-slot rows and a smooth 1,000-slot vertical scroll.
+3. Displays `藏经阁` with three visible four-slot rows, standard 3:4 cards,
+   tier-colored names, and a smooth 1,000-slot vertical scroll without a
+   visible scrollbar.
 4. Shows four initial library cards followed by empty slots.
 5. Exchanges an occupied library card with any main-deck position through the
    approved hold-then-drag interaction.
