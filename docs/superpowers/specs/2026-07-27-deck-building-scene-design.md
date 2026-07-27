@@ -53,7 +53,9 @@ The bottom hand contains five fixed main-deck slots. Card size and slot position
 
 ### Library-to-deck exchange
 
-Only an occupied library slot starts a deck-building drag.
+Only an occupied library slot can start a deck-building drag. The player must
+hold it briefly before dragging; the initial hold threshold is 0.25 seconds and
+is exposed as a deck-builder tuning value.
 
 Dragging a library card onto one of the five main-deck slots performs a literal exchange:
 
@@ -71,13 +73,18 @@ The drag layer uses a visual proxy, while the logical library index remains auth
 
 ### Tap, drag, and scroll separation
 
-The scene preserves the existing card-view tap-versus-drag threshold:
+The library resolves its three competing gestures as follows:
 
-- A short tap on a revealed occupied card requests inspection.
-- Movement toward a valid drag starts card dragging.
-- Predominantly vertical movement scrolls the library.
+- Releasing an occupied revealed card before the hold threshold, without
+  meaningful movement, requests inspection.
+- Moving before the hold threshold scrolls the library.
+- Holding an occupied card through the threshold arms it for dragging; movement
+  after that point starts the library-to-deck drag.
+- Empty slots can start scrolling but cannot arm a drag or request inspection.
 
-An interaction resolves to only one of tap, drag, or scroll. Scrolling cannot accidentally inspect a card or begin a deck swap.
+The armed card receives a restrained lift cue so the player knows that dragging
+is ready. An interaction resolves to only one of tap, drag, or scroll.
+Scrolling cannot accidentally inspect a card or begin a deck swap.
 
 ### Card inspection
 
@@ -140,6 +147,7 @@ Owns the virtualized five-column library:
 - Maps scroll offset to logical row indices.
 - Maintains three visible rows plus a small buffer.
 - Rebinds reusable slot controls.
+- Resolves tap, pre-hold scrolling, and hold-then-drag gestures.
 - Emits inspection and drag requests with logical slot indices.
 - Displays occupied and empty slot states.
 - Preserves scroll offset through swaps and inspection.
@@ -255,6 +263,9 @@ The player's side deck, opponent decks, AI, simulation, turn rules, scoring, and
 - Revealed card taps inspect.
 - Face-down and empty slots do not inspect.
 - Vertical gestures scroll without tapping or dragging.
+- Releasing before the hold threshold inspects an occupied card.
+- Holding through the threshold arms drag and shows the lift cue.
+- Moving before the hold threshold scrolls instead of dragging.
 - Library cards drag only to main-deck slots.
 - Valid drops exchange cards and save.
 - Cancelled and invalid drops preserve data.
@@ -293,7 +304,8 @@ The feature is accepted when the standalone deck-building scene:
 2. Shows the upcoming enemy hand with correct privacy behavior.
 3. Displays `藏经阁` with three visible five-slot rows and a smooth 1,000-slot vertical scroll.
 4. Shows four initial library cards followed by empty slots.
-5. Exchanges an occupied library card with any main-deck position through drag-and-drop.
+5. Exchanges an occupied library card with any main-deck position through the
+   approved hold-then-drag interaction.
 6. Persists and reloads the exact resulting deck and library arrangement.
 7. Opens the existing inspector for every revealed occupied card.
 8. Emits `back_requested` without navigating.
