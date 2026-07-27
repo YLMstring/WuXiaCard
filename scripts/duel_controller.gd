@@ -1,6 +1,8 @@
 class_name DuelController
 extends Control
 
+signal return_requested
+
 enum TurnState {
 	PLAYER,
 	RESOLVING,
@@ -49,6 +51,9 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var placement_haptic_ms: int = 20
 @export var multi_capture_haptic_ms: int = 45
 @export var deck_profile_path: String = "user://wuxia_deck_profile.json"
+@export var starting_owner_id: int = DuelRules.PLAYER_OWNER
+@export var opponent_name_text: String = "对手名字"
+@export var opponent_card_ids: Array[StringName] = []
 
 var turn_state: TurnState = TurnState.PLAYER
 var testing_mode: bool = Settings.TESTING_MODE
@@ -111,15 +116,19 @@ func _ready() -> void:
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	var player_cards: Array = _create_card_instances(Decks.get_player_card_ids(deck_profile_path), DuelRules.PLAYER_OWNER, "main")
-	var opponent_cards: Array = _create_card_instances(Decks.get_opponent_card_ids(), DuelRules.OPPONENT_OWNER, "main")
+	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
+	if effective_opponent_ids.size() != 5:
+		effective_opponent_ids = Decks.get_opponent_card_ids()
+	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
 	var player_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.PLAYER_OWNER, "side")
 	var opponent_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.OPPONENT_OWNER, "side")
 	_shuffle_side_decks(player_side_deck, opponent_side_deck)
+	var opening_owner: int = _get_valid_starting_owner()
 	duel_state = StateData.new(
 		board,
 		player_cards,
 		opponent_cards,
-		DuelRules.PLAYER_OWNER,
+		opening_owner,
 		0,
 		player_side_deck,
 		opponent_side_deck
@@ -133,16 +142,37 @@ func _ready() -> void:
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
-	opponent_name.text = "对手名字"
-	turn_state = TurnState.PLAYER
+	opponent_name.text = opponent_name_text
+	turn_state = TurnState.PLAYER if opening_owner == DuelRules.PLAYER_OWNER else TurnState.OPPONENT
 	_sync_hand_playability()
 	_update_score()
 	_update_turn_status()
 	_layout_duel.call_deferred()
+	if opening_owner == DuelRules.OPPONENT_OWNER and not testing_mode:
+		_begin_opening_opponent_turn.call_deferred()
 
 
 func _exit_tree() -> void:
 	_cancel_opponent_search()
+
+
+func _get_valid_starting_owner() -> int:
+	if starting_owner_id == DuelRules.OPPONENT_OWNER:
+		return DuelRules.OPPONENT_OWNER
+	return DuelRules.PLAYER_OWNER
+
+
+func _begin_opening_opponent_turn() -> void:
+	if opponent_think_delay > 0.0:
+		await get_tree().create_timer(opponent_think_delay).timeout
+	if (
+		is_inside_tree()
+		and not testing_mode
+		and duel_state != null
+		and duel_state.active_player == DuelRules.OPPONENT_OWNER
+		and turn_state == TurnState.OPPONENT
+	):
+		await _perform_opponent_turn()
 
 
 func debug_set_fast_mode(enabled: bool) -> void:
@@ -1480,4 +1510,4 @@ func _vibrate(duration_ms: int) -> void:
 
 func _on_exit_pressed() -> void:
 	_cancel_opponent_search()
-	get_tree().quit()
+	return_requested.emit()

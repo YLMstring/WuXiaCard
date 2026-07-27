@@ -7,6 +7,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 var _checks: int = 0
 var _failures: int = 0
 var _back_count: int = 0
+var _duel_requests: Array[int] = []
 var _save_path: String = "user://deck_builder_integration_test.json"
 
 
@@ -29,10 +30,27 @@ func _run() -> void:
 	var opponent_hand: HBoxContainer = canvas.get_node("OpponentHand") as HBoxContainer
 	var player_hand: HBoxContainer = canvas.get_node("PlayerHand") as HBoxContainer
 	var grid: Variant = canvas.get_node("DeckLibraryGrid")
+	var go_first := canvas.get_node("GoFirstButton") as Button
+	var go_second := canvas.get_node("GoSecondButton") as Button
 	_check(canvas.find_child("ScoreOverlay", true, false) == null, "Deck builder has no score panels")
 	_check(opponent_hand.get_child_count() == 5, "Opponent hand keeps five slots")
 	_check(player_hand.get_child_count() == 5, "Player main deck keeps five slots")
 	_check(grid.debug_get_pool_size() == 20, "Production scene uses four-column virtualized library pool")
+	_check(go_first.flat and go_second.flat and go_first.text.is_empty() and go_second.text.is_empty(), "Opening choices show only supplied ink pictures")
+	_check(go_first.position.x < grid.position.x and go_second.position.x > grid.position.x + grid.size.x, "Opening choices flank the library scroll")
+	_check(go_first.get_node("Characters").get_child_count() == 4, "Go-first control stacks four character pictures")
+	_check(go_second.get_node("Characters").get_child_count() == 4, "Go-second control stacks four character pictures")
+	for control_path: String in [
+		"GoFirstButton/Characters/Qiang",
+		"GoFirstButton/Characters/Zhan",
+		"GoFirstButton/Characters/Xian",
+		"GoFirstButton/Characters/Ji",
+		"GoSecondButton/Characters/Hou",
+		"GoSecondButton/Characters/Fa",
+		"GoSecondButton/Characters/Zhi",
+		"GoSecondButton/Characters/Ren",
+	]:
+		_check((canvas.get_node(control_path) as TextureRect).texture != null, "%s uses a supplied character picture" % control_path)
 	var profile: Dictionary = builder.debug_get_profile()
 	_check(_occupied_count(profile["library_slots"]) == 4, "Production scene starts with four library cards")
 	_check(grid.debug_get_bound_slot(4).is_empty(), "First slot after the full four-card row is empty")
@@ -40,6 +58,16 @@ func _run() -> void:
 	for slot: Node in opponent_hand.get_children():
 		var card: CardView = slot.get_child(0) as CardView
 		_check(card.is_face_down(), "Normal mode keeps opponent card face-down")
+
+	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
+	var tier_totals: Vector2i = builder.debug_get_tier_totals()
+	_check(tier_totals == Vector2i(6, 5), "Default player and enemy tier totals are calculated from catalog data")
+	_check(not builder.debug_can_go_first() and go_first.modulate != Color.WHITE, "Higher-tier player deck greys the go-first ink")
+	go_first.pressed.emit()
+	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
+	_check(builder.debug_get_status() == "主卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
+	go_second.pressed.emit()
+	_check(_duel_requests == [DuelRules.OPPONENT_OWNER], "Go-second choice requests an opponent opening turn")
 
 	builder.back_requested.connect(func() -> void: _back_count += 1)
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
@@ -51,6 +79,9 @@ func _run() -> void:
 	var exchanged: Dictionary = builder.debug_get_profile()
 	_check(String(exchanged["main_deck"][0]) == old_library_card, "Library card enters selected main-deck slot")
 	_check(String(exchanged["library_slots"][0]) == old_deck_card, "Displaced card occupies exact library source")
+	_check(builder.debug_can_go_first() and go_first.modulate == Color.WHITE, "Deck exchange immediately refreshes go-first eligibility")
+	go_first.pressed.emit()
+	_check(_duel_requests.back() == DuelRules.PLAYER_OWNER, "Eligible go-first choice requests a player opening turn")
 	var reload_store: Variant = Store.new(_save_path)
 	var reloaded: Dictionary = reload_store.load_profile()
 	_check(reloaded == exchanged, "Production exchange persists immediately")

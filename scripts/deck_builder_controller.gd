@@ -2,6 +2,7 @@ class_name DeckBuilderController
 extends Control
 
 signal back_requested
+signal duel_requested(starting_owner_id: int)
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -12,6 +13,9 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
 const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
+const GO_FIRST_BLOCKED_NOTICE: String = "主卡组总品阶不高于对手时方可选择先攻"
+const ACTIVE_INK_MODULATE: Color = Color.WHITE
+const BLOCKED_INK_MODULATE: Color = Color(0.48, 0.48, 0.48, 0.68)
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -27,6 +31,8 @@ var _scroll_before_inspection: float = 0.0
 var _drag_source_index: int = -1
 var _drag_proxy: CardView = null
 var _drag_proxy_offset: Vector2 = Vector2.ZERO
+var _effective_enemy_card_ids: Array[StringName] = []
+var _go_first_allowed: bool = true
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -41,6 +47,8 @@ var _drag_proxy_offset: Vector2 = Vector2.ZERO
 @onready var back_button: Button = $DuelCanvas/TopBar/BackButton
 @onready var opponent_hand: HBoxContainer = $DuelCanvas/OpponentHand
 @onready var library_grid: Control = $DuelCanvas/DeckLibraryGrid
+@onready var go_first_button: Button = $DuelCanvas/GoFirstButton
+@onready var go_second_button: Button = $DuelCanvas/GoSecondButton
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
 @onready var status_label: Label = $DuelCanvas/Status
 @onready var drag_layer: Control = $DuelCanvas/DragLayer
@@ -61,11 +69,15 @@ func _ready() -> void:
 	library_grid.drag_moved.connect(_on_library_drag_moved)
 	library_grid.drag_ended.connect(_on_library_drag_ended)
 	back_button.pressed.connect(_on_back_pressed)
+	go_first_button.pressed.connect(_on_go_first_pressed)
+	go_second_button.pressed.connect(_on_go_second_pressed)
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	opponent_name.text = upcoming_enemy_name
 	status_label.text = DEFAULT_STATUS
+	_style_start_controls()
+	_refresh_start_controls()
 	_layout_scene.call_deferred()
 
 
@@ -76,6 +88,7 @@ func debug_exchange(library_index: int, deck_index: int) -> bool:
 	profile = result["profile"]
 	_refresh_player_slot(deck_index)
 	library_grid.set_library_slots(profile["library_slots"])
+	_refresh_start_controls()
 	return true
 
 
@@ -91,12 +104,28 @@ func debug_is_inspecting() -> bool:
 	return _inspection_open
 
 
+func debug_get_tier_totals() -> Vector2i:
+	return Vector2i(
+		_get_tier_total(_get_player_main_deck_ids()),
+		_get_tier_total(_effective_enemy_card_ids)
+	)
+
+
+func debug_can_go_first() -> bool:
+	return _go_first_allowed
+
+
+func debug_get_status() -> String:
+	return status_label.text
+
+
 func _create_hands() -> void:
 	_create_hand_slots(opponent_hand)
 	_create_hand_slots(player_hand)
 	var enemy_ids: Array[StringName] = upcoming_enemy_card_ids.duplicate()
 	if enemy_ids.size() != 5:
 		enemy_ids = Decks.get_opponent_card_ids()
+	_effective_enemy_card_ids = enemy_ids.duplicate()
 	for card_index: int in range(5):
 		var enemy_data: Dictionary = Catalog.create_instance(
 			enemy_ids[card_index],
@@ -167,6 +196,7 @@ func _on_card_inspection_requested(data: Dictionary) -> void:
 	_scroll_before_inspection = library_grid.get_scroll_offset()
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
+	_set_start_controls_visible(false)
 	status_label.text = "查看卡牌详情 · 轻触返回"
 	card_inspector.present(data, _get_library_rect())
 
@@ -178,6 +208,8 @@ func _on_inspection_closed() -> void:
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
 	library_grid.set_scroll_offset(_scroll_before_inspection)
+	_set_start_controls_visible(true)
+	_refresh_start_controls()
 	status_label.text = DEFAULT_STATUS
 
 
@@ -213,6 +245,7 @@ func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> vo
 			profile = result["profile"]
 			_refresh_player_slot(deck_index)
 			library_grid.set_library_slots(profile["library_slots"])
+			_refresh_start_controls()
 			status_label.text = DEFAULT_STATUS
 		else:
 			status_label.text = "保存失败"
@@ -243,6 +276,17 @@ func _clear_drag_proxy() -> void:
 
 func _on_back_pressed() -> void:
 	back_requested.emit()
+
+
+func _on_go_first_pressed() -> void:
+	if not _go_first_allowed:
+		status_label.text = GO_FIRST_BLOCKED_NOTICE
+		return
+	duel_requested.emit(DuelRules.PLAYER_OWNER)
+
+
+func _on_go_second_pressed() -> void:
+	duel_requested.emit(DuelRules.OPPONENT_OWNER)
 
 
 func _layout_scene() -> void:
@@ -283,6 +327,23 @@ func _layout_scene() -> void:
 	opponent_hand.size = Vector2(hand_width, hand_height)
 	library_grid.position = library_position
 	library_grid.size = Vector2(library_width, library_height)
+	var choice_width: float = clampf((canvas_size.x - library_width) * 0.32, 44.0, 54.0)
+	var choice_height: float = minf(220.0, library_height * 0.48)
+	var choice_gap: float = maxf(6.0, canvas_size.x * 0.014)
+	var choice_y: float = library_position.y + (library_height - choice_height) * 0.5
+	go_first_button.position = Vector2(
+		maxf(horizontal_margin, library_position.x - choice_gap - choice_width),
+		choice_y
+	)
+	go_first_button.size = Vector2(choice_width, choice_height)
+	go_second_button.position = Vector2(
+		minf(
+			canvas_size.x - horizontal_margin - choice_width,
+			library_position.x + library_width + choice_gap
+		),
+		choice_y
+	)
+	go_second_button.size = Vector2(choice_width, choice_height)
 	player_hand.position = Vector2(horizontal_margin, player_top)
 	player_hand.size = Vector2(hand_width, hand_height)
 	var desired_status_y: float = player_hand.position.y + player_hand.size.y + status_gap
@@ -298,6 +359,51 @@ func _get_library_rect() -> Rect2:
 		library_grid.global_position - duel_canvas.global_position,
 		library_grid.size
 	)
+
+
+func _get_player_main_deck_ids() -> Array[StringName]:
+	var result: Array[StringName] = []
+	for value: Variant in profile.get("main_deck", []):
+		result.append(StringName(String(value)))
+	return result
+
+
+func _get_tier_total(card_ids: Array[StringName]) -> int:
+	var total: int = 0
+	for card_id: StringName in card_ids:
+		if Catalog.has_card(card_id):
+			total += int(Catalog.get_definition(card_id).get("tier", 0))
+	return total
+
+
+func _refresh_start_controls() -> void:
+	if not is_node_ready():
+		return
+	var player_total: int = _get_tier_total(_get_player_main_deck_ids())
+	var enemy_total: int = _get_tier_total(_effective_enemy_card_ids)
+	_go_first_allowed = player_total <= enemy_total
+	go_first_button.modulate = ACTIVE_INK_MODULATE if _go_first_allowed else BLOCKED_INK_MODULATE
+	go_first_button.tooltip_text = "" if _go_first_allowed else GO_FIRST_BLOCKED_NOTICE
+
+
+func _set_start_controls_visible(controls_visible: bool) -> void:
+	go_first_button.visible = controls_visible
+	go_second_button.visible = controls_visible
+
+
+func _style_start_controls() -> void:
+	var empty_style := StyleBoxEmpty.new()
+	for button: Button in [go_first_button, go_second_button]:
+		button.focus_mode = Control.FOCUS_NONE
+		for style_name: StringName in [
+			&"normal",
+			&"hover",
+			&"pressed",
+			&"hover_pressed",
+			&"disabled",
+			&"focus",
+		]:
+			button.add_theme_stylebox_override(style_name, empty_style)
 
 
 func _style_header() -> void:

@@ -1,10 +1,50 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/deck_builder_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/duel_backdrop.gd" id="2_backdrop"]
 [ext_resource type="Texture2D" path="res://pics/back_arrow.svg" id="3_back_arrow"]
 [ext_resource type="PackedScene" path="res://scenes/deck_library_grid.tscn" id="4_grid"]
 [ext_resource type="PackedScene" path="res://scenes/card_inspector.tscn" id="5_inspector"]
+[ext_resource type="Texture2D" path="res://inkpics/抢.png" id="6_qiang"]
+[ext_resource type="Texture2D" path="res://inkpics/占.png" id="7_zhan"]
+[ext_resource type="Texture2D" path="res://inkpics/先.png" id="8_xian"]
+[ext_resource type="Texture2D" path="res://inkpics/机.png" id="9_ji"]
+[ext_resource type="Texture2D" path="res://inkpics/后.png" id="10_hou"]
+[ext_resource type="Texture2D" path="res://inkpics/发.png" id="11_fa"]
+[ext_resource type="Texture2D" path="res://inkpics/制.png" id="12_zhi"]
+[ext_resource type="Texture2D" path="res://inkpics/人.png" id="13_ren"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qiang"]
+atlas = ExtResource("6_qiang")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_zhan"]
+atlas = ExtResource("7_zhan")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xian"]
+atlas = ExtResource("8_xian")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ji"]
+atlas = ExtResource("9_ji")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hou"]
+atlas = ExtResource("10_hou")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fa"]
+atlas = ExtResource("11_fa")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_zhi"]
+atlas = ExtResource("12_zhi")
+region = Rect2(590, 20, 180, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ren"]
+atlas = ExtResource("13_ren")
+region = Rect2(590, 20, 180, 170)
 
 [node name="DeckBuilder" type="Control"]
 layout_mode = 3
@@ -118,6 +158,106 @@ offset_left = 76.0
 offset_top = 250.0
 offset_right = 464.0
 offset_bottom = 747.0
+
+[node name="GoFirstButton" type="Button" parent="DuelCanvas"]
+offset_left = 16.0
+offset_top = 389.0
+offset_right = 68.0
+offset_bottom = 609.0
+focus_mode = 0
+flat = true
+
+[node name="Characters" type="VBoxContainer" parent="DuelCanvas/GoFirstButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = -4
+
+[node name="Qiang" type="TextureRect" parent="DuelCanvas/GoFirstButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_qiang")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Zhan" type="TextureRect" parent="DuelCanvas/GoFirstButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_zhan")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Xian" type="TextureRect" parent="DuelCanvas/GoFirstButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_xian")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Ji" type="TextureRect" parent="DuelCanvas/GoFirstButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_ji")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="GoSecondButton" type="Button" parent="DuelCanvas"]
+offset_left = 472.0
+offset_top = 389.0
+offset_right = 524.0
+offset_bottom = 609.0
+focus_mode = 0
+flat = true
+
+[node name="Characters" type="VBoxContainer" parent="DuelCanvas/GoSecondButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = -4
+
+[node name="Hou" type="TextureRect" parent="DuelCanvas/GoSecondButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_hou")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Fa" type="TextureRect" parent="DuelCanvas/GoSecondButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_fa")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Zhi" type="TextureRect" parent="DuelCanvas/GoSecondButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_zhi")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Ren" type="TextureRect" parent="DuelCanvas/GoSecondButton/Characters"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+texture = SubResource("AtlasTexture_ren")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="PlayerHand" type="HBoxContainer" parent="DuelCanvas"]
 offset_left = 16.0
