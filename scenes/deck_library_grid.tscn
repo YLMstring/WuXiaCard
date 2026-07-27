@@ -65,16 +65,14 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = -1.5
+offset_bottom = 1.5
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = SubResource("AtlasTexture_library_title")
 expand_mode = 1
 stretch_mode = 5
-
-[node name="TitleDivider" type="HSeparator" parent="Body/Margin/Layout"]
-layout_mode = 2
-mouse_filter = 2
 
 [node name="Scroll" type="ScrollContainer" parent="Body/Margin/Layout"]
 layout_mode = 2
