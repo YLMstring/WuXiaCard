@@ -19,6 +19,7 @@ var card_data: Dictionary = {}
 var owner_id: int = 0
 var playable: bool = false
 var face_down: bool = false
+var ki_badge_enabled: bool = true
 
 var _dragging: bool = false
 var _pointer_id: int = -2
@@ -91,7 +92,7 @@ func _refresh_face_content() -> void:
 	var ki: int = int(card_data.get("ki", 0))
 	var has_ki_ability: bool = Abilities.card_uses_ki(card_data)
 	ki_value.text = str(ki)
-	ki_badge.visible = not face_down and (ki > 0 or has_ki_ability)
+	ki_badge.visible = ki_badge_enabled and not face_down and (ki > 0 or has_ki_ability)
 	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else ""
 	_refresh_picture()
@@ -121,6 +122,12 @@ func set_playable(value: bool) -> void:
 func set_runtime_ki(value: int) -> void:
 	card_data["ki"] = maxi(value, 0)
 	_refresh_face_content()
+
+
+func set_ki_badge_enabled(value: bool) -> void:
+	ki_badge_enabled = value
+	if is_node_ready():
+		_refresh_face_content()
 
 
 func play_ki_gain_pulse(duration: float) -> void:

@@ -14,8 +14,10 @@ const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
 const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
 const GO_FIRST_BLOCKED_NOTICE: String = "主卡组总品阶不高于对手时方可选择先攻"
-const ACTIVE_INK_MODULATE: Color = Color.WHITE
-const BLOCKED_INK_MODULATE: Color = Color(0.48, 0.48, 0.48, 0.68)
+const ACTIVE_INK_COLOR: Color = Color("1a1513")
+const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
+const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
+const PRESSED_CHOICE_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.62)
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -33,6 +35,9 @@ var _drag_proxy: CardView = null
 var _drag_proxy_offset: Vector2 = Vector2.ZERO
 var _effective_enemy_card_ids: Array[StringName] = []
 var _go_first_allowed: bool = true
+var _go_first_ink_material: ShaderMaterial = null
+var _choice_feedback_tweens: Dictionary = {}
+var _blocked_feedback_tween: Tween = null
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -220,6 +225,7 @@ func _on_library_drag_started(logical_index: int, data: Dictionary, pointer_posi
 	_drag_proxy = CARD_SCENE.instantiate() as CardView
 	drag_layer.add_child(_drag_proxy)
 	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_drag_proxy.set_ki_badge_enabled(false)
 	_drag_proxy.configure(data, DuelRules.PLAYER_OWNER, false)
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
 	var source_size: Vector2 = Vector2(64.0, 86.0)
@@ -281,6 +287,7 @@ func _on_back_pressed() -> void:
 func _on_go_first_pressed() -> void:
 	if not _go_first_allowed:
 		status_label.text = GO_FIRST_BLOCKED_NOTICE
+		_play_blocked_choice_feedback()
 		return
 	duel_requested.emit(DuelRules.PLAYER_OWNER)
 
@@ -382,8 +389,13 @@ func _refresh_start_controls() -> void:
 	var player_total: int = _get_tier_total(_get_player_main_deck_ids())
 	var enemy_total: int = _get_tier_total(_effective_enemy_card_ids)
 	_go_first_allowed = player_total <= enemy_total
-	go_first_button.modulate = ACTIVE_INK_MODULATE if _go_first_allowed else BLOCKED_INK_MODULATE
-	go_first_button.tooltip_text = "" if _go_first_allowed else GO_FIRST_BLOCKED_NOTICE
+	if _go_first_ink_material != null:
+		_go_first_ink_material.set_shader_parameter(
+			"ink_color",
+			ACTIVE_INK_COLOR if _go_first_allowed else BLOCKED_INK_COLOR
+		)
+	go_first_button.modulate = Color.WHITE
+	go_first_button.tooltip_text = ""
 
 
 func _set_start_controls_visible(controls_visible: bool) -> void:
@@ -395,6 +407,8 @@ func _style_start_controls() -> void:
 	var empty_style := StyleBoxEmpty.new()
 	for button: Button in [go_first_button, go_second_button]:
 		button.focus_mode = Control.FOCUS_NONE
+		button.button_down.connect(_on_start_button_down.bind(button))
+		button.button_up.connect(_on_start_button_up.bind(button))
 		for style_name: StringName in [
 			&"normal",
 			&"hover",
@@ -404,6 +418,57 @@ func _style_start_controls() -> void:
 			&"focus",
 		]:
 			button.add_theme_stylebox_override(style_name, empty_style)
+	var ink_shader := Shader.new()
+	ink_shader.code = """
+shader_type canvas_item;
+
+uniform vec4 ink_color : source_color = vec4(0.10, 0.08, 0.07, 1.0);
+
+void fragment() {
+	vec4 source = texture(TEXTURE, UV);
+	COLOR = vec4(ink_color.rgb, source.a * ink_color.a);
+}
+"""
+	_go_first_ink_material = ShaderMaterial.new()
+	_go_first_ink_material.shader = ink_shader
+	for child: Node in go_first_button.get_node("Characters").get_children():
+		if child is TextureRect:
+			(child as TextureRect).material = _go_first_ink_material
+
+
+func _on_start_button_down(button: Button) -> void:
+	_kill_choice_feedback_tween(button)
+	button.pivot_offset = button.size * 0.5
+	button.scale = PRESSED_CHOICE_SCALE
+	button.modulate = PRESSED_CHOICE_MODULATE
+
+
+func _on_start_button_up(button: Button) -> void:
+	_kill_choice_feedback_tween(button)
+	var tween: Tween = button.create_tween()
+	_choice_feedback_tweens[button.get_instance_id()] = tween
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(button, "scale", Vector2.ONE, 0.10)
+	tween.parallel().tween_property(button, "modulate", Color.WHITE, 0.08)
+
+
+func _kill_choice_feedback_tween(button: Button) -> void:
+	var instance_id: int = button.get_instance_id()
+	var existing: Variant = _choice_feedback_tweens.get(instance_id, null)
+	if existing is Tween and (existing as Tween).is_valid():
+		(existing as Tween).kill()
+	_choice_feedback_tweens.erase(instance_id)
+
+
+func _play_blocked_choice_feedback() -> void:
+	if _blocked_feedback_tween != null and _blocked_feedback_tween.is_valid():
+		_blocked_feedback_tween.kill()
+	var resting_position: Vector2 = go_first_button.position
+	_blocked_feedback_tween = go_first_button.create_tween()
+	_blocked_feedback_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x - 4.0, 0.035)
+	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x + 4.0, 0.055)
+	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x, 0.035)
 
 
 func _style_header() -> void:

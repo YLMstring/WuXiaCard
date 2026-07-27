@@ -134,8 +134,19 @@ func _run() -> void:
 	first.debug_begin_pointer(Vector2(10.0, 10.0))
 	first.debug_force_hold_timeout()
 	first.debug_move_pointer(Vector2(12.0, 24.0))
+	var dragged_card := first.get_node("CardHost/CardView") as CardView
+	var dragged_empty_frame := first.get_node("CardHost/EmptyFrame") as Control
+	var dragged_name := first.get_node("Name") as Label
+	_check(
+		not dragged_card.visible and dragged_empty_frame.visible and not dragged_name.visible,
+		"Active library drag leaves a visually empty slot behind"
+	)
 	first.debug_end_pointer(Vector2(12.0, 24.0))
 	_check(_drag_start_count == 1 and _drag_end_count == 2, "Movement after hold completes a drag")
+	_check(
+		dragged_card.visible and not dragged_empty_frame.visible and dragged_name.visible,
+		"Ending an uncommitted drag restores the library card and name"
+	)
 
 	grid.refresh_logical_index(0, "")
 	_check(first.is_empty(), "Recycled card slot clears to empty state")

@@ -51,6 +51,13 @@ func _run() -> void:
 		"GoSecondButton/Characters/Ren",
 	]:
 		_check((canvas.get_node(control_path) as TextureRect).texture != null, "%s uses a supplied character picture" % control_path)
+	var ki_library_slot: Variant = grid.debug_get_bound_slot(3)
+	var library_ki_badge := ki_library_slot.get_node("CardHost/CardView/Overlay/KiBadge") as Control
+	_check(int(ki_library_slot.card_data.get("ki", 0)) > 0, "Library bead fixture uses a card with ki")
+	_check(not library_ki_badge.visible, "Library cards hide ki beads")
+	go_second.button_down.emit()
+	_check(go_second.scale.x < 1.0 and go_second.modulate.a < 1.0, "Opening choice visibly responds while held")
+	go_second.button_up.emit()
 	var profile: Dictionary = builder.debug_get_profile()
 	_check(_occupied_count(profile["library_slots"]) == 4, "Production scene starts with four library cards")
 	_check(grid.debug_get_bound_slot(4).is_empty(), "First slot after the full four-card row is empty")
@@ -62,7 +69,13 @@ func _run() -> void:
 	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
 	var tier_totals: Vector2i = builder.debug_get_tier_totals()
 	_check(tier_totals == Vector2i(6, 5), "Default player and enemy tier totals are calculated from catalog data")
-	_check(not builder.debug_can_go_first() and go_first.modulate != Color.WHITE, "Higher-tier player deck greys the go-first ink")
+	_check(not builder.debug_can_go_first(), "Higher-tier player deck blocks the go-first choice")
+	var blocked_character := go_first.get_node("Characters/Qiang") as TextureRect
+	var blocked_material := blocked_character.material as ShaderMaterial
+	_check(blocked_material != null, "Blocked go-first ink uses a recoloring material")
+	if blocked_material != null:
+		var blocked_ink: Color = blocked_material.get_shader_parameter("ink_color")
+		_check(blocked_ink.r >= 0.45 and blocked_ink.g >= 0.45 and blocked_ink.b >= 0.45, "Blocked go-first strokes become clearly grey")
 	go_first.pressed.emit()
 	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
 	_check(builder.debug_get_status() == "主卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
@@ -79,7 +92,7 @@ func _run() -> void:
 	var exchanged: Dictionary = builder.debug_get_profile()
 	_check(String(exchanged["main_deck"][0]) == old_library_card, "Library card enters selected main-deck slot")
 	_check(String(exchanged["library_slots"][0]) == old_deck_card, "Displaced card occupies exact library source")
-	_check(builder.debug_can_go_first() and go_first.modulate == Color.WHITE, "Deck exchange immediately refreshes go-first eligibility")
+	_check(builder.debug_can_go_first(), "Deck exchange immediately refreshes go-first eligibility")
 	go_first.pressed.emit()
 	_check(_duel_requests.back() == DuelRules.PLAYER_OWNER, "Eligible go-first choice requests a player opening turn")
 	var reload_store: Variant = Store.new(_save_path)

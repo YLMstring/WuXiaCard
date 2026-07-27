@@ -31,6 +31,7 @@ var _pointer_start: Vector2 = Vector2.ZERO
 var _scrolling: bool = false
 var _drag_is_armed: bool = false
 var _dragging: bool = false
+var _drag_vacancy_visible: bool = false
 
 @onready var empty_frame: PanelContainer = $CardHost/EmptyFrame
 @onready var card_view: CardView = $CardHost/CardView
@@ -44,6 +45,7 @@ func _ready() -> void:
 	hold_timer.timeout.connect(_on_hold_timeout)
 	card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card_view.set_ki_badge_enabled(false)
 	resized.connect(_layout_content)
 	_style_empty_frame()
 	_layout_content()
@@ -63,6 +65,7 @@ func bind(new_logical_index: int, new_card_data: Dictionary) -> void:
 		name_label.add_theme_color_override("font_color", _tier_name_color(card_data.get("tier", null)))
 		card_view.configure(card_data, DuelRules.PLAYER_OWNER, false)
 		card_view.set_face_down(false)
+	_set_drag_vacancy_visible(false)
 	modulate = Color.WHITE
 	scale = Vector2.ONE
 
@@ -85,6 +88,7 @@ func cancel_gesture() -> void:
 	_scrolling = false
 	_drag_is_armed = false
 	_dragging = false
+	_set_drag_vacancy_visible(false)
 	scale = Vector2.ONE
 	z_index = 0
 
@@ -177,6 +181,7 @@ func _update_pointer(pointer_position: Vector2) -> void:
 	if _drag_is_armed:
 		if not _dragging:
 			_dragging = true
+			_set_drag_vacancy_visible(true)
 			drag_started.emit(logical_index, card_data.duplicate(true), pointer_position)
 		drag_moved.emit(logical_index, pointer_position)
 		return
@@ -229,6 +234,17 @@ func _layout_content() -> void:
 	name_label.size = Vector2(size.x, label_height)
 	var short_side: float = maxf(1.0, minf($CardHost.size.x, $CardHost.size.y))
 	name_label.add_theme_font_size_override("font_size", clampi(int(short_side * 0.17), 9, 14))
+
+
+func _set_drag_vacancy_visible(value: bool) -> void:
+	_drag_vacancy_visible = value and not card_data.is_empty()
+	var occupied: bool = not card_data.is_empty()
+	card_view.visible = occupied and not _drag_vacancy_visible
+	empty_frame.visible = not occupied or _drag_vacancy_visible
+	name_label.visible = not _drag_vacancy_visible
+	if _drag_vacancy_visible:
+		scale = Vector2.ONE
+		z_index = 0
 
 
 func _tier_name_color(tier_value: Variant) -> Color:
