@@ -12,6 +12,9 @@ signal mouse_scroll_started(logical_index: int, pointer_position: Vector2, initi
 @export var movement_threshold: float = 12.0
 
 const CARD_ASPECT_RATIO: float = 0.75
+const BASE_CARD_NAME_GAP: float = 4.0
+const CARD_NAME_GAP: float = 6.0
+const ROW_HEIGHT_INCREMENT: float = CARD_NAME_GAP - BASE_CARD_NAME_GAP
 const TIER_NAME_COLORS: Dictionary = {
 	1: Color("66717a"),
 	2: Color("3e7659"),
@@ -231,16 +234,15 @@ func _layout_content() -> void:
 	if not is_node_ready():
 		return
 	var label_height: float = clampf(size.x * 0.18, 14.0, 18.0)
-	var label_gap: float = 2.0
 	var desired_card_size := Vector2(size.x, size.x / CARD_ASPECT_RATIO)
-	var available_card_height: float = maxf(1.0, size.y - label_height - label_gap)
+	var available_card_height: float = maxf(1.0, size.y - label_height - CARD_NAME_GAP)
 	var card_height: float = minf(desired_card_size.y, available_card_height)
 	var card_width: float = card_height * CARD_ASPECT_RATIO
-	var group_height: float = card_height + label_gap + label_height
+	var group_height: float = card_height + CARD_NAME_GAP + label_height
 	var group_top: float = maxf(0.0, (size.y - group_height) * 0.5)
 	$CardHost.position = Vector2((size.x - card_width) * 0.5, group_top)
 	$CardHost.size = Vector2(card_width, card_height)
-	name_label.position = Vector2(0.0, group_top + card_height + label_gap)
+	name_label.position = Vector2(0.0, group_top + card_height + CARD_NAME_GAP)
 	name_label.size = Vector2(size.x, label_height)
 	var short_side: float = maxf(1.0, minf($CardHost.size.x, $CardHost.size.y))
 	name_label.add_theme_font_size_override("font_size", clampi(int(short_side * 0.17), 9, 14))

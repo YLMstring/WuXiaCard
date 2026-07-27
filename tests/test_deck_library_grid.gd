@@ -79,11 +79,28 @@ func _run() -> void:
 		"Outer cards retain their borders and hold lift inside the clipped scroll viewport"
 	)
 	var card_host := first.get_node("CardHost") as Control
+	var first_name := first.get_node("Name") as Label
 	_check(
 		is_equal_approx(card_host.size.x / card_host.size.y, 0.75),
 		"Library card host preserves the standard 3:4 ratio"
 	)
+	_check(
+		is_equal_approx(
+			first_name.position.y - (card_host.position.y + card_host.size.y),
+			4.0
+		),
+		"Library card name starts four pixels below its card"
+	)
 	_check(is_equal_approx(first.position.y, 8.0), "First library row starts eight pixels below the scroll origin")
+	var fitted_row_height: float = (library_scroll.size.y - 8.0) / 3.0
+	_check(
+		is_equal_approx(grid.debug_get_row_height(), fitted_row_height + 2.0),
+		"Virtual rows gain the same two pixels added to the card-name gap"
+	)
+	_check(
+		is_equal_approx(fifth.position.y, 8.0 + grid.debug_get_row_height()),
+		"Cards below move down with the expanded virtual row"
+	)
 
 	var color_probe: Variant = fifth
 	var color_data: Dictionary = first.card_data.duplicate(true)

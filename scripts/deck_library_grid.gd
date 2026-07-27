@@ -8,6 +8,7 @@ signal drag_moved(logical_index: int, pointer_position: Vector2)
 signal drag_ended(logical_index: int, pointer_position: Vector2)
 
 const SLOT_SCENE: PackedScene = preload("res://scenes/deck_library_slot.tscn")
+const SlotLayoutData = preload("res://scripts/deck_library_slot.gd")
 const ParchmentChromeData = preload("res://scripts/parchment_chrome.gd")
 const COLUMN_COUNT: int = 4
 const TOTAL_SLOTS: int = 1000
@@ -166,7 +167,10 @@ func _layout_grid() -> void:
 	var horizontal_gap: float = 6.0
 	var usable_width: float = scroll.size.x - CONTENT_SIDE_PADDING * 2.0
 	_column_width = maxf(1.0, (usable_width - horizontal_gap * float(COLUMN_COUNT - 1)) / float(COLUMN_COUNT))
-	_row_height = maxf(1.0, (scroll.size.y - CONTENT_TOP_PADDING) / float(VISIBLE_ROWS))
+	var fitted_row_height: float = (
+		(scroll.size.y - CONTENT_TOP_PADDING) / float(VISIBLE_ROWS)
+	)
+	_row_height = maxf(1.0, fitted_row_height + SlotLayoutData.ROW_HEIGHT_INCREMENT)
 	content.custom_minimum_size = Vector2(
 		scroll.size.x,
 		CONTENT_TOP_PADDING + _row_height * float(TOTAL_ROWS)
