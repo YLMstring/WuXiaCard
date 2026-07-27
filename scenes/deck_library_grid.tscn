@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/deck_library_grid.gd" id="1_grid"]
+[ext_resource type="Texture2D" path="res://inkpics/藏经阁.png" id="2_library_title"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_library_title"]
+atlas = ExtResource("2_library_title")
+region = Rect2(438, 21, 460, 172)
 
 [node name="DeckLibraryGrid" type="Control"]
 custom_minimum_size = Vector2(300, 420)
@@ -52,9 +57,20 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.18, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 26
-text = "藏经阁"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="Image" type="TextureRect" parent="Body/Margin/Layout/Title"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("AtlasTexture_library_title")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="TitleDivider" type="HSeparator" parent="Body/Margin/Layout"]
 layout_mode = 2
