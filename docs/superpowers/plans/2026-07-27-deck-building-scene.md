@@ -331,3 +331,45 @@ Only `DuelDecks` and the test runner integrate with existing runtime paths.
 9. Run `git diff --check`, inspect `git status --short`, and preserve all
    unrelated user-owned changes.
 10. Commit only the focused implementation, tests, and documentation.
+
+## Task 8: Refine library density, ratio, spacing, and tier names
+
+**Files:**
+- Modify: `scripts/deck_library_grid.gd`
+- Modify: `scripts/deck_library_slot.gd`
+- Modify: `tests/test_deck_library_grid.gd`
+- Modify: `tests/test_deck_builder_integration.gd`
+- Modify: `docs/ARCHITECTURE.md`
+- Modify: `docs/DECISIONS.md`
+- Modify: `docs/TESTING.md`
+
+1. Add failing virtual-grid checks for four columns, a 20-control pool, 250
+   logical rows, reachability of logical slot 1,000, and unchanged three-row
+   visibility.
+2. Add a failing slot-layout check that the rendered CardView host remains at
+   the standard 3:4 width-to-height ratio after the library is laid out.
+3. Add failing checks for the six approved name colors:
+   - tier 1 `#66717A`;
+   - tier 2 `#3E7659`;
+   - tier 3 `#3F6F9C`;
+   - tier 4 `#715A96`;
+   - tier 5 `#9A612D`;
+   - every other value `#963F4A`.
+4. Add a failing geometry check for an 8-pixel first-row inset below the
+   scroll content origin.
+5. Change the virtual grid constants to four columns and 250 rows. Keep three
+   visible rows and one buffer row on each side, yielding exactly 20 live slot
+   controls.
+6. Calculate card height from column width at 3:4, center the card-and-name
+   group within its row, and leave all duel/hand CardView sizing untouched.
+7. Apply tier name color inside `DeckLibrarySlot.bind()` and reset the override
+   on every rebind so recycled slots never inherit stale colors.
+8. Offset logical row positions by 8 pixels and include that inset in the
+   content minimum height and bottom scroll range.
+9. Update deck-builder integration expectations from 25 to 20 pooled controls
+   and from a partial first row to a full four-card first row.
+10. Run script-error checks, the focused library suite, then the complete
+    ten-suite runner.
+11. Restart `res://scenes/deck_builder.tscn` and manually verify proportions,
+    spacing, tier-name readability, swipe scrolling, inspection, and
+    hold-then-drag exchange.
