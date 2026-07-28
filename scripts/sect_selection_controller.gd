@@ -11,7 +11,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const DEFAULT_STATUS: String = "轻触门派查看详情，长按已解锁门派并拖至下方"
+const DEFAULT_STATUS: String = "轻触门派查看详情，长按门派并拖至下方"
 const LOCKED_STATUS: String = "该门派尚未解锁"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
