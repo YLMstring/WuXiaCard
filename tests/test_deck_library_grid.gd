@@ -221,6 +221,17 @@ func _run() -> void:
 	_check(_hold_count == holds_before_locked_hold + 1, "A non-draggable entry still reports a recognized hold")
 	_check(_armed_count == arms_before_locked_hold, "A non-draggable entry never arms a drag")
 	_check(_inspection_count == inspections_before_locked_hold, "Releasing a recognized hold does not also inspect")
+	_check(first.debug_get_rejected_drag_pulse_count() == 0, "Non-draggable holds do not pulse without an explicit request")
+	grid.play_rejected_drag_pulse(0)
+	_check(first.debug_get_rejected_drag_pulse_count() == 1, "Grid requests one pulse from the bound logical slot")
+	grid.play_rejected_drag_pulse(0)
+	_check(first.debug_get_rejected_drag_pulse_count() == 2, "A repeated request cleanly restarts the pulse")
+	grid.play_rejected_drag_pulse(999)
+	_check(first.debug_get_rejected_drag_pulse_count() == 2, "An off-screen pulse request is a safe no-op")
+	var pulsing_card_host := first.get_node("CardHost") as Control
+	pulsing_card_host.scale = Vector2(1.02, 1.02)
+	first.bind(0, sect_data, DuelRules.PLAYER_OWNER, false, false)
+	_check(pulsing_card_host.scale == Vector2.ONE, "Rebinding restores the pulsing card host to unit scale")
 
 	var previous_offset: float = grid.get_scroll_offset()
 	grid.set_interaction_enabled(false)

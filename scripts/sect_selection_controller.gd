@@ -249,11 +249,12 @@ func _on_library_inspection_requested(_logical_index: int, data: Dictionary) -> 
 	_open_inspector(data)
 
 
-func _on_library_hold_recognized(_logical_index: int, data: Dictionary) -> void:
+func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
 	_select_sect(data)
 	var sect_id := StringName(String(data.get("id", "")))
 	if sect_id not in _profile_store.get_unlocked_sect_ids(profile):
 		status_label.text = LOCKED_STATUS
+		library_grid.play_rejected_drag_pulse(logical_index)
 	else:
 		status_label.text = DEFAULT_STATUS
 

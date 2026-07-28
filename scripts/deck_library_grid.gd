@@ -174,6 +174,15 @@ func get_display_owner_id(logical_index: int) -> int:
 	return _normalized_display_owner(library_display_owner_ids[logical_index])
 
 
+func play_rejected_drag_pulse(
+	logical_index: int,
+	duration: float = DeckLibrarySlot.REJECTED_DRAG_PULSE_DURATION
+) -> void:
+	var visible_slot: Variant = debug_get_bound_slot(logical_index)
+	if visible_slot != null:
+		visible_slot.play_rejected_drag_pulse(duration)
+
+
 func _create_pool() -> void:
 	for pool_index: int in range(POOLED_ROWS * COLUMN_COUNT):
 		var slot: Variant = SLOT_SCENE.instantiate()

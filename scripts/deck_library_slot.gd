@@ -14,6 +14,7 @@ signal mouse_scroll_started(logical_index: int, pointer_position: Vector2, initi
 
 const CARD_ASPECT_RATIO: float = 0.75
 const HOLD_SCALE: float = 1.035
+const REJECTED_DRAG_PULSE_DURATION: float = 0.18
 const BASE_CARD_NAME_GAP: float = 4.0
 const CARD_NAME_GAP: float = 6.0
 const ROW_HEIGHT_INCREMENT: float = CARD_NAME_GAP - BASE_CARD_NAME_GAP
@@ -40,7 +41,10 @@ var _hold_recognized: bool = false
 var _drag_is_armed: bool = false
 var _dragging: bool = false
 var _drag_vacancy_visible: bool = false
+var _rejected_drag_pulse_tween: Tween = null
+var _rejected_drag_pulse_count: int = 0
 
+@onready var card_host: Control = $CardHost
 @onready var empty_frame: PanelContainer = $CardHost/EmptyFrame
 @onready var card_view: CardView = $CardHost/CardView
 @onready var name_label: Label = $Name
@@ -67,6 +71,7 @@ func bind(
 	new_drag_enabled: bool = true,
 	show_power_numbers: bool = true
 ) -> void:
+	_cancel_rejected_drag_pulse()
 	cancel_gesture()
 	logical_index = new_logical_index
 	card_data = new_card_data.duplicate(true)
@@ -128,7 +133,41 @@ func is_dragging() -> bool:
 
 
 func get_drag_preview_size() -> Vector2:
-	return $CardHost.size * HOLD_SCALE
+	return card_host.size * HOLD_SCALE
+
+
+func play_rejected_drag_pulse(
+	duration: float = REJECTED_DRAG_PULSE_DURATION
+) -> void:
+	if not is_node_ready() or card_data.is_empty() or duration <= 0.0:
+		return
+	if (
+		_rejected_drag_pulse_tween != null
+		and _rejected_drag_pulse_tween.is_valid()
+	):
+		_rejected_drag_pulse_tween.kill()
+	_rejected_drag_pulse_count += 1
+	card_host.pivot_offset = card_host.size * 0.5
+	card_host.scale = Vector2.ONE
+	_rejected_drag_pulse_tween = card_host.create_tween()
+	_rejected_drag_pulse_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_rejected_drag_pulse_tween.tween_property(
+		card_host,
+		"scale",
+		Vector2.ONE * HOLD_SCALE,
+		duration * 0.45
+	)
+	_rejected_drag_pulse_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_rejected_drag_pulse_tween.tween_property(
+		card_host,
+		"scale",
+		Vector2.ONE,
+		duration * 0.55
+	)
+
+
+func debug_get_rejected_drag_pulse_count() -> int:
+	return _rejected_drag_pulse_count
 
 
 func debug_begin_pointer(pointer_position: Vector2, pointer_id: int = -1) -> void:
@@ -186,6 +225,8 @@ func _input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_EXIT_TREE:
 		cancel_gesture()
+	if what == NOTIFICATION_EXIT_TREE:
+		_cancel_rejected_drag_pulse()
 
 
 func _begin_pointer(pointer_position: Vector2, pointer_id: int) -> void:
@@ -258,11 +299,11 @@ func _layout_content() -> void:
 	var card_width: float = card_height * CARD_ASPECT_RATIO
 	var group_height: float = card_height + CARD_NAME_GAP + label_height
 	var group_top: float = maxf(0.0, (size.y - group_height) * 0.5)
-	$CardHost.position = Vector2((size.x - card_width) * 0.5, group_top)
-	$CardHost.size = Vector2(card_width, card_height)
+	card_host.position = Vector2((size.x - card_width) * 0.5, group_top)
+	card_host.size = Vector2(card_width, card_height)
 	name_label.position = Vector2(0.0, group_top + card_height + CARD_NAME_GAP)
 	name_label.size = Vector2(size.x, label_height)
-	var short_side: float = maxf(1.0, minf($CardHost.size.x, $CardHost.size.y))
+	var short_side: float = maxf(1.0, minf(card_host.size.x, card_host.size.y))
 	name_label.add_theme_font_size_override("font_size", clampi(int(short_side * 0.17), 9, 14))
 
 
@@ -275,6 +316,17 @@ func _set_drag_vacancy_visible(value: bool) -> void:
 	if _drag_vacancy_visible:
 		scale = Vector2.ONE
 		z_index = 0
+
+
+func _cancel_rejected_drag_pulse() -> void:
+	if (
+		_rejected_drag_pulse_tween != null
+		and _rejected_drag_pulse_tween.is_valid()
+	):
+		_rejected_drag_pulse_tween.kill()
+	_rejected_drag_pulse_tween = null
+	if is_node_ready():
+		card_host.scale = Vector2.ONE
 
 
 func _tier_name_color(tier_value: Variant) -> Color:

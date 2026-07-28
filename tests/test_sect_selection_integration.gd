@@ -112,6 +112,11 @@ func _run() -> void:
 	var locked_slot: Variant = grid.debug_get_bound_slot(1)
 	var locked_center: Vector2 = locked_slot.get_global_rect().get_center()
 	locked_slot.debug_begin_pointer(locked_center)
+	locked_slot.debug_end_pointer(locked_center)
+	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 0, "Tapping a locked sect does not pulse")
+	selector.card_inspector.close()
+	await process_frame
+	locked_slot.debug_begin_pointer(locked_center)
 	locked_slot.debug_force_hold_timeout()
 	locked_slot.debug_end_pointer(locked_center)
 	_check(selector.debug_get_selected_sect_id() == &"yanyu_lou", "Holding a locked sect updates selection")
@@ -123,6 +128,11 @@ func _run() -> void:
 	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
 	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")
 	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked hold reports its status")
+	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 1, "A locked hold pulses exactly once")
+	locked_slot.debug_begin_pointer(locked_center)
+	locked_slot.debug_force_hold_timeout()
+	locked_slot.debug_end_pointer(locked_center)
+	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 2, "A repeated locked hold restarts one pulse")
 
 	_check(selector.debug_select_sect(&"chisha_men"), "Debug selection accepts a known sect")
 	_check(
@@ -140,6 +150,7 @@ func _run() -> void:
 	first_slot.debug_force_hold_timeout()
 	first_slot.debug_move_pointer(cancel_center + Vector2(0.0, 20.0))
 	first_slot.debug_end_pointer(Vector2(4.0, 4.0))
+	_check(first_slot.debug_get_rejected_drag_pulse_count() == 0, "An unlocked hold never uses rejected-drag feedback")
 	_check(_builder_requests == 0, "Dropping outside the lower hand cancels selection")
 	_check(
 		&"hanfeng_liezhen" not in Store.new(_save_path).get_unlocked_ids(
