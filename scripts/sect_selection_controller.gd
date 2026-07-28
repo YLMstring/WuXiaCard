@@ -70,6 +70,18 @@ func _ready() -> void:
 	)
 	SelectionShell.create_hand_slots(opponent_hand)
 	SelectionShell.create_hand_slots(player_hand)
+	_refresh_preview_hand(
+		opponent_hand,
+		_upper_preview_ids,
+		DuelRules.OPPONENT_OWNER,
+		"sect_preview_upper"
+	)
+	_refresh_preview_hand(
+		player_hand,
+		_lower_preview_ids,
+		DuelRules.PLAYER_OWNER,
+		"sect_preview_lower"
+	)
 	go_first_button.visible = false
 	go_first_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	go_second_button.visible = false
@@ -221,6 +233,7 @@ func _refresh_preview_hand(
 			slot.remove_child(child)
 			child.queue_free()
 		if slot_index >= card_ids.size():
+			_spawn_preview_card_back(slot, owner_id)
 			continue
 		var card_data: Dictionary = Catalog.create_instance(
 			card_ids[slot_index],
@@ -241,6 +254,19 @@ func _spawn_preview_card(
 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	card.configure(data, owner_id, false)
 	card.inspection_requested.connect(_on_card_inspection_requested)
+	return card
+
+
+func _spawn_preview_card_back(
+	slot: PanelContainer,
+	owner_id: int
+) -> CardView:
+	var card := CARD_SCENE.instantiate() as CardView
+	slot.add_child(card)
+	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card.configure({}, owner_id, false)
+	card.set_face_down(true)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card
 
 

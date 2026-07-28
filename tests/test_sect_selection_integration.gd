@@ -39,8 +39,14 @@ func _run() -> void:
 	_check(not (canvas.get_node("GoSecondButton") as Button).visible, "Go-second control is hidden")
 	_check(opponent_hand.get_child_count() == 5, "Upper preview hand keeps five fixed slots")
 	_check(player_hand.get_child_count() == 5, "Lower preview hand keeps five fixed slots")
-	_check(_occupied_hand_slots(opponent_hand) == 0, "Upper preview hand starts empty")
-	_check(_occupied_hand_slots(player_hand) == 0, "Lower preview hand starts empty")
+	_check(_occupied_hand_slots(opponent_hand) == 5, "Upper preview hand starts visually filled")
+	_check(_occupied_hand_slots(player_hand) == 5, "Lower preview hand starts visually filled")
+	_check(_face_down_hand_slots(opponent_hand) == 5, "Upper preview hand starts with five card backs")
+	_check(_face_down_hand_slots(player_hand) == 5, "Lower preview hand starts with five card backs")
+	_check(_data_free_hand_slots(opponent_hand) == 5, "Upper initial card backs contain no card data")
+	_check(_data_free_hand_slots(player_hand) == 5, "Lower initial card backs contain no card data")
+	_check(_inspectable_hand_slots(opponent_hand) == 0, "Upper initial card backs are not inspectable")
+	_check(_inspectable_hand_slots(player_hand) == 0, "Lower initial card backs are not inspectable")
 
 	var expected_sect_ids: Array[StringName] = [
 		&"xuanyue_jianzong",
@@ -91,12 +97,18 @@ func _run() -> void:
 		== [&"hanfeng_liezhen", &"huixue_liuguang", &"qiyao_lianfeng", &"wanyue_guizong"],
 		"Lower hand orders Xuanyue cards from lowest tier"
 	)
-	_check(_occupied_hand_slots(opponent_hand) == 4, "Upper hand leaves one empty preview slot")
-	_check(_occupied_hand_slots(player_hand) == 4, "Lower hand leaves one empty preview slot")
+	_check(_occupied_hand_slots(opponent_hand) == 5, "Upper preview hand remains visually filled")
+	_check(_occupied_hand_slots(player_hand) == 5, "Lower preview hand remains visually filled")
+	_check(_face_down_hand_slots(opponent_hand) == 1, "Upper hand fills its unused slot with a card back")
+	_check(_face_down_hand_slots(player_hand) == 1, "Lower hand fills its unused slot with a card back")
+	_check(_data_free_hand_slots(opponent_hand) == 1, "Upper unused card back contains no card data")
+	_check(_data_free_hand_slots(player_hand) == 1, "Lower unused card back contains no card data")
+	_check(_inspectable_hand_slots(opponent_hand) == 4, "Only revealed upper previews are inspectable")
+	_check(_inspectable_hand_slots(player_hand) == 4, "Only revealed lower previews are inspectable")
 	selector.card_inspector.close()
 	await process_frame
 	_check(not selector.debug_is_inspecting() and grid.visible, "Closing inspection restores the sect grid")
-	_check(_occupied_hand_slots(player_hand) == 4, "Closing inspection preserves the previews")
+	_check(_occupied_hand_slots(player_hand) == 5, "Closing inspection preserves previews and card backs")
 
 	var preview_card := player_hand.get_child(0).get_child(0) as CardView
 	preview_card.inspection_requested.emit(preview_card.card_data)
@@ -188,6 +200,39 @@ func _occupied_hand_slots(hand: HBoxContainer) -> int:
 	var result: int = 0
 	for slot: Node in hand.get_children():
 		if slot.get_child_count() > 0:
+			result += 1
+	return result
+
+
+func _face_down_hand_slots(hand: HBoxContainer) -> int:
+	var result: int = 0
+	for slot: Node in hand.get_children():
+		if slot.get_child_count() == 0:
+			continue
+		var card := slot.get_child(0) as CardView
+		if card.is_face_down():
+			result += 1
+	return result
+
+
+func _data_free_hand_slots(hand: HBoxContainer) -> int:
+	var result: int = 0
+	for slot: Node in hand.get_children():
+		if slot.get_child_count() == 0:
+			continue
+		var card := slot.get_child(0) as CardView
+		if card.card_data.is_empty():
+			result += 1
+	return result
+
+
+func _inspectable_hand_slots(hand: HBoxContainer) -> int:
+	var result: int = 0
+	for slot: Node in hand.get_children():
+		if slot.get_child_count() == 0:
+			continue
+		var card := slot.get_child(0) as CardView
+		if not card.inspection_requested.get_connections().is_empty():
 			result += 1
 	return result
 
