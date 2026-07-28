@@ -150,10 +150,16 @@ func _run() -> void:
 
 	var drag_source_id := StringName(String(exchanged["library_slots"][1]))
 	var drag_data: Dictionary = Catalog.create_instance(drag_source_id, DuelRules.PLAYER_OWNER, &"drag_source")
+	var source_library_slot: Variant = grid.debug_get_bound_slot(1)
+	var expected_drag_size: Vector2 = source_library_slot.get_drag_preview_size()
 	var target_slot := player_hand.get_child(1) as Control
 	var target_point: Vector2 = target_slot.get_global_rect().get_center()
 	builder.call("_on_library_drag_started", 1, drag_data, target_point)
 	var drag_proxy := canvas.get_node("DragLayer").get_child(-1) as CardView
+	_check(
+		drag_proxy.size.is_equal_approx(expected_drag_size),
+		"Library drag preview keeps the card's enlarged held size"
+	)
 	_check(
 		drag_proxy.owner_id == grid.get_display_owner_id(1),
 		"Library drag preview preserves the source card's rolled color"

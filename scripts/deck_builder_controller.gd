@@ -260,9 +260,9 @@ func _on_library_drag_started(logical_index: int, data: Dictionary, pointer_posi
 	_drag_proxy.set_ki_badge_enabled(false)
 	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
-	var source_size: Vector2 = Vector2(64.0, 86.0)
+	var source_size: Vector2 = _drag_proxy.size
 	if source_slot != null:
-		source_size = Vector2(source_slot.size.x, source_slot.size.y * 0.84)
+		source_size = source_slot.get_drag_preview_size()
 	_drag_proxy.size = source_size
 	_drag_proxy_offset = Vector2(-source_size.x * 0.5, -source_size.y * 0.72)
 	_position_drag_proxy(pointer_position)

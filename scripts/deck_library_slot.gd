@@ -12,6 +12,7 @@ signal mouse_scroll_started(logical_index: int, pointer_position: Vector2, initi
 @export var movement_threshold: float = 12.0
 
 const CARD_ASPECT_RATIO: float = 0.75
+const HOLD_SCALE: float = 1.035
 const BASE_CARD_NAME_GAP: float = 4.0
 const CARD_NAME_GAP: float = 6.0
 const ROW_HEIGHT_INCREMENT: float = CARD_NAME_GAP - BASE_CARD_NAME_GAP
@@ -116,6 +117,10 @@ func is_drag_armed() -> bool:
 
 func is_dragging() -> bool:
 	return _dragging
+
+
+func get_drag_preview_size() -> Vector2:
+	return $CardHost.size * HOLD_SCALE
 
 
 func debug_begin_pointer(pointer_position: Vector2, pointer_id: int = -1) -> void:
@@ -225,7 +230,7 @@ func _on_hold_timeout() -> void:
 		return
 	_drag_is_armed = true
 	pivot_offset = size * 0.5
-	scale = Vector2(1.035, 1.035)
+	scale = Vector2.ONE * HOLD_SCALE
 	z_index = 2
 	drag_armed.emit(logical_index, card_data.duplicate(true))
 
