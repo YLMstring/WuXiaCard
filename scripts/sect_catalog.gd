@@ -1,0 +1,157 @@
+class_name SectCatalog
+extends RefCounted
+
+const ALL_SECT_IDS: Array[StringName] = [
+	&"xuanyue_jianzong",
+	&"yanyu_lou",
+	&"chisha_men",
+	&"tingchao_gu",
+	&"bailu_shuyuan",
+]
+
+const _DEFINITION_FIELDS: Array[StringName] = [
+	&"id",
+	&"glyph",
+	&"picture",
+	&"sect",
+	&"tier",
+	&"weapon",
+	&"description",
+	&"flavor",
+]
+
+const _SECT_DEFINITIONS: Dictionary = {
+	&"xuanyue_jianzong": {
+		"id": &"xuanyue_jianzong",
+		"glyph": "玄岳剑宗",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "北岳玄岭",
+		"tier": 5,
+		"weapon": "剑阵",
+		"description": "玄岳剑宗奉行“众锋同心”，弟子以步法牵引剑势，擅长多人结阵、封锁退路，并在严寒山势中磨炼持久战法。",
+		"flavor": "宗门立于终年积雪的玄岭之巅。每逢朔月，山门百剑齐鸣，传说那是历代剑主仍在风中校正后辈的锋芒。",
+	},
+	&"yanyu_lou": {
+		"id": &"yanyu_lou",
+		"glyph": "烟雨楼",
+		"picture": "res://pics/LKT010_002.png",
+		"sect": "江南水乡",
+		"tier": 4,
+		"weapon": "暗器",
+		"description": "烟雨楼讲究藏锋于柔，以水巷、舟桥与薄雾掩护身形，门人精于细小暗器、情报传递和不留痕迹的牵制。",
+		"flavor": "楼中没有永远点亮的灯，只有雨夜偶尔响起的铜铃。江湖人说，听见第三声时，烟雨楼早已知道你为何而来。",
+	},
+	&"chisha_men": {
+		"id": &"chisha_men",
+		"glyph": "赤砂门",
+		"picture": "res://pics/LKT010_003.png",
+		"sect": "西域赤沙",
+		"tier": 3,
+		"weapon": "刀法",
+		"description": "赤砂门崇尚直取胜机，刀法借旋风与流沙之势不断变向，重视体魄、耐渴训练和在恶劣地形中的迅猛突袭。",
+		"flavor": "门中弟子入门时要独自穿过一片红色沙海。归来者把第一捧赤砂封入刀柄，以提醒自己绝不畏惧无路可走。",
+	},
+	&"tingchao_gu": {
+		"id": &"tingchao_gu",
+		"glyph": "听潮谷",
+		"picture": "res://pics/LKT010_004.png",
+		"sect": "东海群岛",
+		"tier": 4,
+		"weapon": "掌法",
+		"description": "听潮谷以潮汐悟劲，掌法时缓时急，善于卸去正面冲击，再以层叠内劲反攻。门人也精通舟行与水上身法。",
+		"flavor": "谷中石壁布满天然孔洞，涨潮时会奏出低沉长音。掌门择徒不问出身，只问来者能否听出潮声中的第七次回响。",
+	},
+	&"bailu_shuyuan": {
+		"id": &"bailu_shuyuan",
+		"glyph": "白鹿书院",
+		"picture": "res://pics/LKT010_005.png",
+		"sect": "中州鹿鸣山",
+		"tier": 2,
+		"weapon": "奇门",
+		"description": "白鹿书院主张先明理而后用武，将机关、阵图与经义融为奇门之术。门人正面武力不盛，却擅长准备、推演和改变战场条件。",
+		"flavor": "书院藏书楼前常有白鹿出没，从不畏人。院中旧规写道：“能胜一局者可学术，能止一战者方可传道。”",
+	},
+}
+
+
+static func has_sect(sect_id: StringName) -> bool:
+	return _SECT_DEFINITIONS.has(sect_id)
+
+
+static func get_all_sect_ids() -> Array[StringName]:
+	return ALL_SECT_IDS.duplicate()
+
+
+static func get_definition(sect_id: StringName) -> Dictionary:
+	assert(has_sect(sect_id), "Unknown sect ID: %s" % sect_id)
+	var definition: Dictionary = _SECT_DEFINITIONS.get(sect_id, {})
+	return definition.duplicate(true)
+
+
+static func validate_definition(
+	definition: Dictionary,
+	sect_id: StringName = &"fixture"
+) -> Array[String]:
+	var errors: Array[String] = []
+	_validate_definition(sect_id, definition, errors)
+	return errors
+
+
+static func validate_catalog() -> Array[String]:
+	var errors: Array[String] = []
+	var observed_ids: Dictionary = {}
+	for sect_id: StringName in ALL_SECT_IDS:
+		if observed_ids.has(sect_id):
+			errors.append("Duplicate sect catalog ID: %s" % sect_id)
+			continue
+		observed_ids[sect_id] = true
+		if not _SECT_DEFINITIONS.has(sect_id):
+			errors.append("Missing sect definition for ID: %s" % sect_id)
+			continue
+		_validate_definition(sect_id, _SECT_DEFINITIONS[sect_id] as Dictionary, errors)
+	for raw_key: Variant in _SECT_DEFINITIONS.keys():
+		var definition_id := StringName(raw_key)
+		if not observed_ids.has(definition_id):
+			errors.append("Sect definition is absent from ALL_SECT_IDS: %s" % definition_id)
+	return errors
+
+
+static func _validate_definition(
+	sect_id: StringName,
+	definition: Dictionary,
+	errors: Array[String]
+) -> void:
+	if sect_id == &"":
+		errors.append("Sect ID cannot be empty")
+	var id_value: Variant = definition.get("id", null)
+	if typeof(id_value) != TYPE_STRING_NAME:
+		errors.append("Sect %s requires a StringName id" % sect_id)
+	elif id_value != sect_id:
+		errors.append("Sect definition ID does not match key: %s" % sect_id)
+	for raw_key: Variant in definition.keys():
+		if StringName(raw_key) not in _DEFINITION_FIELDS:
+			errors.append("Sect %s has unsupported field %s" % [sect_id, raw_key])
+
+	var glyph_value: Variant = definition.get("glyph", null)
+	if typeof(glyph_value) != TYPE_STRING:
+		errors.append("Sect %s requires a String glyph" % sect_id)
+	else:
+		var glyph_length: int = (glyph_value as String).length()
+		if glyph_length < 1 or glyph_length > 7:
+			errors.append("Sect %s glyph must contain 1 to 7 characters" % sect_id)
+
+	for field: StringName in [&"picture", &"sect", &"weapon", &"description", &"flavor"]:
+		var value: Variant = definition.get(field, null)
+		if typeof(value) != TYPE_STRING or String(value).strip_edges().is_empty():
+			errors.append("Sect %s requires non-empty String metadata %s" % [sect_id, field])
+	var picture_value: Variant = definition.get("picture", null)
+	if (
+		typeof(picture_value) == TYPE_STRING
+		and not String(picture_value).is_empty()
+		and not ResourceLoader.exists(String(picture_value))
+	):
+		errors.append("Sect %s picture resource does not exist: %s" % [sect_id, picture_value])
+
+	var tier_value: Variant = definition.get("tier", null)
+	if typeof(tier_value) != TYPE_INT or int(tier_value) <= 0:
+		errors.append("Sect %s requires a positive integer prestige tier" % sect_id)
