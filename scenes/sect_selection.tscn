@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://r0vp7s317pdl"]
 
 [ext_resource type="PackedScene" path="res://scenes/deck_builder.tscn" id="1_base"]
-[ext_resource type="Script" path="res://scripts/sect_selection_controller.gd" id="2_controller"]
+[ext_resource type="Script" uid="uid://b32nwrhj2taoe" path="res://scripts/sect_selection_controller.gd" id="2_controller"]
 
 [node name="SectSelection" unique_id=632780980 instance=ExtResource("1_base")]
 script = ExtResource("2_controller")
