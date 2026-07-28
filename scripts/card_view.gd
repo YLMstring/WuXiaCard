@@ -504,14 +504,10 @@ func _apply_drag_style() -> void:
 
 
 func _get_display_background() -> Color:
-	if face_down:
-		return Color("df7a70")
 	return _get_owner_background()
 
 
 func _get_display_border() -> Color:
-	if face_down:
-		return Color("b61522")
 	return _get_owner_border()
 
 
