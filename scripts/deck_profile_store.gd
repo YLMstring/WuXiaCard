@@ -16,6 +16,26 @@ const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 ]
 const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
+	&"hanfeng_liezhen",
+	&"huixue_liuguang",
+	&"qiyao_lianfeng",
+	&"wanyue_guizong",
+	&"yuyan_tousuo",
+	&"wusuo_changqiao",
+	&"feixing_ruye",
+	&"qianji_tingyu",
+	&"hengsha_duanlu",
+	&"chilian_huifeng",
+	&"shahai_zhuri",
+	&"damo_guzhan",
+	&"dielang_tuizhou",
+	&"huichao_tingjin",
+	&"canghai_sandie",
+	&"haitian_yizhang",
+	&"zhujian_cangfeng",
+	&"luming_wenlu",
+	&"jingwei_dingju",
+	&"zhishang_shanhe",
 ]
 
 var save_path: String

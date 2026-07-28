@@ -78,7 +78,11 @@ func _run() -> void:
 	if duel.has_method("debug_get_simulation_turn_count"):
 		var removed_cards: int = duel.debug_get_removed_count(Rules.PLAYER_OWNER) + duel.debug_get_removed_count(Rules.OPPONENT_OWNER)
 		_check(simulation_turns >= occupancy + removed_cards, "Action turns account for every card that entered the board")
-	_check(duel.debug_get_total_card_count() == 30, "All ten main-deck and twenty side-deck instances remain accounted for")
+	var expected_total_cards: int = 10 + Catalog.get_all_card_ids().size() * 2
+	_check(
+		duel.debug_get_total_card_count() == expected_total_cards,
+		"All main-deck and catalog-sized side-deck instances remain accounted for"
+	)
 	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
 	var opponent_name := duel.get_node("DuelCanvas/TopBar/OpponentName") as Label
@@ -658,7 +662,12 @@ func _check_side_deck_setup(duel: Node) -> void:
 	var unique_instance_ids: Dictionary = {}
 	for instance_id: StringName in all_instance_ids:
 		unique_instance_ids[instance_id] = true
-	_check(all_instance_ids.size() == 30 and unique_instance_ids.size() == 30, "Main and side decks use thirty unique runtime instance IDs")
+	var expected_instance_count: int = 10 + expected_ids.size() * 2
+	_check(
+		all_instance_ids.size() == expected_instance_count
+		and unique_instance_ids.size() == expected_instance_count,
+		"Main and side decks use unique runtime instance IDs"
+	)
 
 
 func _check_player_draw_and_instance_mapping() -> void:

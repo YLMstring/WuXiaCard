@@ -2,6 +2,29 @@ extends SceneTree
 
 const Store = preload("res://scripts/deck_profile_store.gd")
 
+const NEW_SECT_CARD_IDS: Array[StringName] = [
+	&"hanfeng_liezhen",
+	&"huixue_liuguang",
+	&"qiyao_lianfeng",
+	&"wanyue_guizong",
+	&"yuyan_tousuo",
+	&"wusuo_changqiao",
+	&"feixing_ruye",
+	&"qianji_tingyu",
+	&"hengsha_duanlu",
+	&"chilian_huifeng",
+	&"shahai_zhuri",
+	&"damo_guzhan",
+	&"dielang_tuizhou",
+	&"huichao_tingjin",
+	&"canghai_sandie",
+	&"haitian_yizhang",
+	&"zhujian_cangfeng",
+	&"luming_wenlu",
+	&"jingwei_dingju",
+	&"zhishang_shanhe",
+]
+
 var _checks: int = 0
 var _failures: int = 0
 var _save_path: String = "user://deck_profile_store_test.json"
@@ -21,6 +44,12 @@ func _run() -> void:
 	_check(_occupied_count(profile["library_slots"]) == 4, "Default library has four occupied slots")
 	_check(String(profile["library_slots"][4]).is_empty(), "The fifth library slot is empty")
 	_check(not (&"CangSongYingKe1" in store.get_unlocked_ids(profile)), "CangSongYingKe1 starts locked")
+	for card_id: StringName in NEW_SECT_CARD_IDS:
+		_check(card_id not in store.get_unlocked_ids(profile), "%s starts locked" % card_id)
+	_check(
+		store.repair_profile(profile) == profile,
+		"Repairing an existing valid profile does not auto-unlock new sect cards"
+	)
 
 	var original_deck: Array = (profile["main_deck"] as Array).duplicate()
 	var original_library_card: String = String(profile["library_slots"][1])

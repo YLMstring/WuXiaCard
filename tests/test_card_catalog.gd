@@ -4,6 +4,29 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 
+const NEW_SECT_CARD_IDS: Array[StringName] = [
+	&"hanfeng_liezhen",
+	&"huixue_liuguang",
+	&"qiyao_lianfeng",
+	&"wanyue_guizong",
+	&"yuyan_tousuo",
+	&"wusuo_changqiao",
+	&"feixing_ruye",
+	&"qianji_tingyu",
+	&"hengsha_duanlu",
+	&"chilian_huifeng",
+	&"shahai_zhuri",
+	&"damo_guzhan",
+	&"dielang_tuizhou",
+	&"huichao_tingjin",
+	&"canghai_sandie",
+	&"haitian_yizhang",
+	&"zhujian_cangfeng",
+	&"luming_wenlu",
+	&"jingwei_dingju",
+	&"zhishang_shanhe",
+]
+
 var _failures: int = 0
 var _checks: int = 0
 
@@ -17,6 +40,7 @@ func _run() -> void:
 	_test_catalog_definitions()
 	_test_definition_schema_validation()
 	_test_definition_copy_isolation()
+	_test_new_sect_card_definitions()
 	_test_ability_declarations()
 	_test_encounter_decks()
 	_test_side_deck_pool()
@@ -36,7 +60,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 10, "Catalog contains the ten current cards")
+	_check(Catalog.get_all_card_ids().size() == 30, "Catalog contains all thirty current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -52,6 +76,26 @@ func _test_catalog_definitions() -> void:
 		&"tiger_general": "res://pics/LKT010_008.png",
 		&"strategist": "res://pics/LKT010_009.png",
 		&"sun_zan": "res://pics/LKT010_010.png",
+		&"hanfeng_liezhen": "res://pics/LKT010_011.png",
+		&"huixue_liuguang": "res://pics/LKT010_012.png",
+		&"qiyao_lianfeng": "res://pics/LKT010_013.png",
+		&"wanyue_guizong": "res://pics/LKT010_014.png",
+		&"yuyan_tousuo": "res://pics/LKT010_015.png",
+		&"wusuo_changqiao": "res://pics/LKT010_016.png",
+		&"feixing_ruye": "res://pics/LKT010_017.png",
+		&"qianji_tingyu": "res://pics/LKT010_018.png",
+		&"hengsha_duanlu": "res://pics/LKT010_019.png",
+		&"chilian_huifeng": "res://pics/LKT010_020.png",
+		&"shahai_zhuri": "res://pics/LKT010_021.png",
+		&"damo_guzhan": "res://pics/LKT010_022.png",
+		&"dielang_tuizhou": "res://pics/LKT010_023.png",
+		&"huichao_tingjin": "res://pics/LKT010_024.png",
+		&"canghai_sandie": "res://pics/LKT010_025.png",
+		&"haitian_yizhang": "res://pics/LKT010_026.png",
+		&"zhujian_cangfeng": "res://pics/LKT010_027.png",
+		&"luming_wenlu": "res://pics/LKT010_028.png",
+		&"jingwei_dingju": "res://pics/LKT010_029.png",
+		&"zhishang_shanhe": "res://pics/LKT010_030.png",
 	}
 	for card_id: StringName in Catalog.get_all_card_ids():
 		var definition: Dictionary = Catalog.get_definition(card_id)
@@ -73,7 +117,7 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 10, "Catalog IDs are unique")
+	_check(observed_ids.size() == 30, "Catalog IDs are unique")
 
 
 func _test_definition_schema_validation() -> void:
@@ -119,6 +163,50 @@ func _test_definition_copy_isolation() -> void:
 	(first["abilities"] as Array).clear()
 	_check(int((second["powers"] as Array)[0]) == 7, "Power mutation does not alter another catalog copy")
 	_check((second["abilities"] as Array).size() == 1, "Ability mutation does not alter another catalog copy")
+
+
+func _test_new_sect_card_definitions() -> void:
+	var expected_sects: Dictionary = {
+		&"hanfeng_liezhen": "玄岳剑宗",
+		&"huixue_liuguang": "玄岳剑宗",
+		&"qiyao_lianfeng": "玄岳剑宗",
+		&"wanyue_guizong": "玄岳剑宗",
+		&"yuyan_tousuo": "烟雨楼",
+		&"wusuo_changqiao": "烟雨楼",
+		&"feixing_ruye": "烟雨楼",
+		&"qianji_tingyu": "烟雨楼",
+		&"hengsha_duanlu": "赤砂门",
+		&"chilian_huifeng": "赤砂门",
+		&"shahai_zhuri": "赤砂门",
+		&"damo_guzhan": "赤砂门",
+		&"dielang_tuizhou": "听潮谷",
+		&"huichao_tingjin": "听潮谷",
+		&"canghai_sandie": "听潮谷",
+		&"haitian_yizhang": "听潮谷",
+		&"zhujian_cangfeng": "白鹿书院",
+		&"luming_wenlu": "白鹿书院",
+		&"jingwei_dingju": "白鹿书院",
+		&"zhishang_shanhe": "白鹿书院",
+	}
+	var observed_pictures: Dictionary = {}
+	_check(
+		Catalog.get_all_card_ids().slice(10) == NEW_SECT_CARD_IDS,
+		"Twenty sect cards preserve their approved catalog order"
+	)
+	for card_id: StringName in NEW_SECT_CARD_IDS:
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		_check(definition.get("sect", "") == expected_sects[card_id], "%s belongs to its approved sect" % card_id)
+		for field: StringName in [&"glyph", &"picture", &"sect", &"weapon", &"description", &"flavor"]:
+			_check(
+				typeof(definition.get(field, null)) == TYPE_STRING
+				and not String(definition[field]).strip_edges().is_empty(),
+				"%s has nonempty %s metadata" % [card_id, field]
+			)
+		_check((definition.get("abilities", []) as Array).is_empty(), "%s has no abilities" % card_id)
+		var picture_path := String(definition.get("picture", ""))
+		_check(not observed_pictures.has(picture_path), "%s uses a distinct picture" % card_id)
+		observed_pictures[picture_path] = true
+	_check(observed_pictures.size() == 20, "All twenty sect cards use distinct pictures")
 
 
 func _test_ability_declarations() -> void:
@@ -175,7 +263,7 @@ func _test_side_deck_pool() -> void:
 	var side_ids: Array[StringName] = Decks.get_side_deck_card_ids()
 	_check(side_ids == Catalog.get_all_card_ids(), "Side deck contains every catalog card exactly once")
 	side_ids.clear()
-	_check(Decks.get_side_deck_card_ids().size() == 10, "Side deck getter returns a defensive copy")
+	_check(Decks.get_side_deck_card_ids().size() == 30, "Side deck getter returns a defensive copy")
 
 
 func _test_draw_action_validation() -> void:
