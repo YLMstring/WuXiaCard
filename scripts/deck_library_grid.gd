@@ -2,6 +2,7 @@ class_name DeckLibraryGrid
 extends Control
 
 signal inspection_requested(logical_index: int, card_data: Dictionary)
+signal hold_recognized(logical_index: int, card_data: Dictionary)
 signal drag_armed(logical_index: int, card_data: Dictionary)
 signal drag_started(logical_index: int, card_data: Dictionary, pointer_position: Vector2)
 signal drag_moved(logical_index: int, pointer_position: Vector2)
@@ -23,6 +24,8 @@ const CONTENT_SIDE_PADDING: float = 7.0
 
 var library_slots: Array = []
 var library_display_owner_ids: Array[int] = []
+var library_drag_enabled: Array[bool] = []
+var display_power_numbers_enabled: bool = true
 var interaction_enabled: bool = true
 var _slot_pool: Array = []
 var _row_height: float = 1.0
@@ -56,14 +59,46 @@ func _ready() -> void:
 
 
 func set_library_slots(values: Array, display_owner_ids: Array[int] = []) -> void:
+	_set_display_data(values, display_owner_ids, [], true, true)
+
+
+func set_display_entries(
+	values: Array,
+	display_owner_ids: Array = [],
+	drag_enabled_values: Array = [],
+	show_power_numbers: bool = true
+) -> void:
+	_set_display_data(
+		values,
+		display_owner_ids,
+		drag_enabled_values,
+		show_power_numbers,
+		false
+	)
+
+
+func _set_display_data(
+	values: Array,
+	display_owner_ids: Array,
+	drag_enabled_values: Array,
+	show_power_numbers: bool,
+	default_drag_enabled: bool
+) -> void:
 	library_slots = values.duplicate()
 	library_slots.resize(TOTAL_SLOTS)
 	library_display_owner_ids.resize(TOTAL_SLOTS)
+	library_drag_enabled.resize(TOTAL_SLOTS)
+	display_power_numbers_enabled = show_power_numbers
 	for index: int in range(TOTAL_SLOTS):
 		if library_slots[index] == null:
 			library_slots[index] = ""
 		library_display_owner_ids[index] = _normalized_display_owner(
 			display_owner_ids[index] if index < display_owner_ids.size() else DuelRules.PLAYER_OWNER
+		)
+		library_drag_enabled[index] = (
+			bool(drag_enabled_values[index])
+			if index < drag_enabled_values.size()
+			else default_drag_enabled
 		)
 	_pending_refresh = true
 	_refresh_pool(true)
@@ -146,6 +181,7 @@ func _create_pool() -> void:
 		content.add_child(slot)
 		slot.set_hold_duration(hold_duration)
 		slot.inspection_requested.connect(_on_slot_inspection_requested)
+		slot.hold_recognized.connect(_on_slot_hold_recognized)
 		slot.drag_armed.connect(_on_slot_drag_armed)
 		slot.drag_started.connect(_on_slot_drag_started)
 		slot.drag_moved.connect(_on_slot_drag_moved)
@@ -210,21 +246,31 @@ func _refresh_pool(force: bool = false) -> void:
 
 func _bind_slot(slot: Variant, logical_index: int) -> void:
 	var value: Variant = library_slots[logical_index] if logical_index >= 0 and logical_index < library_slots.size() else ""
-	if String(value).is_empty():
+	var display_data: Dictionary = {}
+	if typeof(value) == TYPE_DICTIONARY:
+		display_data = (value as Dictionary).duplicate(true)
+	elif String(value).is_empty():
 		slot.bind(logical_index, {})
 		return
-	var card_id := StringName(String(value))
-	if card_id not in CardCatalog.get_all_card_ids():
+	else:
+		var card_id := StringName(String(value))
+		if card_id not in CardCatalog.get_all_card_ids():
+			slot.bind(logical_index, {})
+			return
+		display_data = CardCatalog.create_instance(
+			card_id,
+			DuelRules.PLAYER_OWNER,
+			StringName("library_%d" % logical_index)
+		)
+	if display_data.is_empty():
 		slot.bind(logical_index, {})
 		return
 	slot.bind(
 		logical_index,
-		CardCatalog.create_instance(
-			card_id,
-			DuelRules.PLAYER_OWNER,
-			StringName("library_%d" % logical_index)
-		),
-		get_display_owner_id(logical_index)
+		display_data,
+		get_display_owner_id(logical_index),
+		library_drag_enabled[logical_index] if logical_index < library_drag_enabled.size() else false,
+		display_power_numbers_enabled
 	)
 	slot.set_interaction_enabled(interaction_enabled)
 
@@ -279,6 +325,11 @@ func _apply_manual_mouse_scroll(delta_y: float) -> void:
 func _on_slot_inspection_requested(logical_index: int, data: Dictionary) -> void:
 	if interaction_enabled:
 		inspection_requested.emit(logical_index, data)
+
+
+func _on_slot_hold_recognized(logical_index: int, data: Dictionary) -> void:
+	if interaction_enabled:
+		hold_recognized.emit(logical_index, data)
 
 
 func _on_slot_drag_armed(logical_index: int, data: Dictionary) -> void:

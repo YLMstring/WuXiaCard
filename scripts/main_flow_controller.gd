@@ -1,8 +1,10 @@
 class_name MainFlowController
 extends Control
 
+const SECT_SELECTION_SCENE: PackedScene = preload("res://scenes/sect_selection.tscn")
 const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
+const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 
@@ -15,11 +17,19 @@ var _current_screen: Control = null
 
 
 func _ready() -> void:
-	_show_deck_builder()
+	_show_sect_selection()
 
 
 func debug_get_current_screen() -> Control:
 	return _current_screen
+
+
+func _show_sect_selection() -> void:
+	var selector := SECT_SELECTION_SCENE.instantiate() as SelectorController
+	selector.profile_path = deck_profile_path
+	selector.upcoming_enemy_name = upcoming_enemy_name
+	selector.deck_builder_requested.connect(_on_deck_builder_requested)
+	_replace_screen(selector)
 
 
 func _show_deck_builder() -> void:
@@ -54,6 +64,10 @@ func _replace_screen(next_screen: Control) -> void:
 
 func _on_duel_requested(starting_owner_id: int) -> void:
 	_show_duel(starting_owner_id)
+
+
+func _on_deck_builder_requested() -> void:
+	_show_deck_builder()
 
 
 func _on_duel_return_requested() -> void:

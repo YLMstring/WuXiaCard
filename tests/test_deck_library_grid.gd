@@ -7,6 +7,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 var _checks: int = 0
 var _failures: int = 0
 var _inspection_count: int = 0
+var _hold_count: int = 0
 var _armed_count: int = 0
 var _drag_start_count: int = 0
 var _drag_end_count: int = 0
@@ -180,6 +181,47 @@ func _run() -> void:
 	first.debug_end_pointer(Vector2(10.0, 10.0))
 	_check(_inspection_count == 1 and _armed_count == 2, "Empty slot neither inspects nor arms")
 
+	var sect_data := {
+		"id": &"xuanyue_jianzong",
+		"glyph": "玄岳剑宗",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "北岳玄岭",
+		"tier": 5,
+		"weapon": "剑阵",
+		"description": "测试门派",
+		"flavor": "测试背景",
+	}
+	grid.set_display_entries(
+		[sect_data],
+		[DuelRules.PLAYER_OWNER],
+		[false],
+		false
+	)
+	await process_frame
+	first = grid.debug_get_bound_slot(0)
+	var sect_card := first.get_node("CardHost/CardView") as CardView
+	_check(StringName(first.card_data.get("id", &"")) == &"xuanyue_jianzong", "Prepared definitions bind without CardCatalog lookup")
+	_check(
+		not (sect_card.get_node("Overlay/TopPower") as Label).visible
+		and not (sect_card.get_node("Overlay/RightPower") as Label).visible
+		and not (sect_card.get_node("Overlay/BottomPower") as Label).visible
+		and not (sect_card.get_node("Overlay/LeftPower") as Label).visible,
+		"Prepared sect entries can hide all power numbers"
+	)
+	var inspections_before_locked_tap: int = _inspection_count
+	first.debug_begin_pointer(Vector2(10.0, 10.0))
+	first.debug_end_pointer(Vector2(10.0, 10.0))
+	_check(_inspection_count == inspections_before_locked_tap + 1, "A non-draggable entry still supports tap inspection")
+	var holds_before_locked_hold: int = _hold_count
+	var inspections_before_locked_hold: int = _inspection_count
+	var arms_before_locked_hold: int = _armed_count
+	first.debug_begin_pointer(Vector2(10.0, 10.0))
+	first.debug_force_hold_timeout()
+	first.debug_end_pointer(Vector2(10.0, 10.0))
+	_check(_hold_count == holds_before_locked_hold + 1, "A non-draggable entry still reports a recognized hold")
+	_check(_armed_count == arms_before_locked_hold, "A non-draggable entry never arms a drag")
+	_check(_inspection_count == inspections_before_locked_hold, "Releasing a recognized hold does not also inspect")
+
 	var previous_offset: float = grid.get_scroll_offset()
 	grid.set_interaction_enabled(false)
 	grid.set_interaction_enabled(true)
@@ -193,6 +235,7 @@ func _run() -> void:
 
 func _connect_slot_signals(slot: Variant) -> void:
 	slot.inspection_requested.connect(func(_index: int, _data: Dictionary) -> void: _inspection_count += 1)
+	slot.hold_recognized.connect(func(_index: int, _data: Dictionary) -> void: _hold_count += 1)
 	slot.drag_armed.connect(func(_index: int, _data: Dictionary) -> void: _armed_count += 1)
 	slot.drag_started.connect(func(_index: int, _data: Dictionary, _position: Vector2) -> void: _drag_start_count += 1)
 	slot.drag_ended.connect(func(_index: int, _position: Vector2) -> void: _drag_end_count += 1)

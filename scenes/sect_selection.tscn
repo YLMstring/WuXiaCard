@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://r0vp7s317pdl"]
+
+[ext_resource type="PackedScene" path="res://scenes/deck_builder.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/sect_selection_controller.gd" id="2_controller"]
+
+[node name="SectSelection" unique_id=632780980 instance=ExtResource("1_base")]
+script = ExtResource("2_controller")
+
+[node name="DuelCanvas" parent="." index="1"]
+anchors_preset = 0
+
+[node name="BottomEdge" parent="DuelCanvas/TopWash" index="1"]
+grow_vertical = 0
+
+[node name="Shadow" parent="DuelCanvas/TopWash" index="2"]
+grow_vertical = 0
+
+[node name="TopBar" parent="DuelCanvas" index="1"]
+layout_mode = 0
+
+[node name="OpponentHand" parent="DuelCanvas" index="2"]
+layout_mode = 0
+
+[node name="DeckLibraryGrid" parent="DuelCanvas" index="3"]
+anchors_preset = 0
+
+[node name="GoFirstButton" parent="DuelCanvas" index="4"]
+visible = false
+layout_mode = 0
+mouse_filter = 2
+
+[node name="GoSecondButton" parent="DuelCanvas" index="5"]
+visible = false
+layout_mode = 0
+mouse_filter = 2
+
+[node name="PlayerHand" parent="DuelCanvas" index="6"]
+layout_mode = 0
+
+[node name="Status" parent="DuelCanvas" index="7"]
+layout_mode = 0

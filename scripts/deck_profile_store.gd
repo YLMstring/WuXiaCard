@@ -2,11 +2,15 @@ class_name DeckProfileStore
 extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
+const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
+	&"xuanyue_jianzong",
+]
 const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"gate_general",
@@ -57,6 +61,7 @@ func create_default_profile() -> Dictionary:
 			library_cards.append(String(card_id))
 	return {
 		"schema_version": SCHEMA_VERSION,
+		"unlocked_sect_ids": _string_array(DEFAULT_UNLOCKED_SECT_IDS),
 		"unlocked_card_ids": _string_array(unlocked_ids),
 		"main_deck": main_deck,
 		"library_slots": _padded_library(library_cards),
@@ -116,11 +121,27 @@ func save_profile(profile: Dictionary) -> bool:
 func is_profile_valid(profile: Dictionary) -> bool:
 	if int(profile.get("schema_version", -1)) != SCHEMA_VERSION:
 		return false
+	var unlocked_sects_value: Variant = profile.get("unlocked_sect_ids", null)
 	var unlocked_value: Variant = profile.get("unlocked_card_ids", null)
 	var deck_value: Variant = profile.get("main_deck", null)
 	var library_value: Variant = profile.get("library_slots", null)
-	if typeof(unlocked_value) != TYPE_ARRAY or typeof(deck_value) != TYPE_ARRAY or typeof(library_value) != TYPE_ARRAY:
+	if (
+		typeof(unlocked_sects_value) != TYPE_ARRAY
+		or typeof(unlocked_value) != TYPE_ARRAY
+		or typeof(deck_value) != TYPE_ARRAY
+		or typeof(library_value) != TYPE_ARRAY
+	):
 		return false
+	var sect_catalog_ids: Array[StringName] = Sects.get_all_sect_ids()
+	var unlocked_sect_set: Dictionary = {}
+	for value: Variant in unlocked_sects_value as Array:
+		var sect_id := StringName(String(value))
+		if sect_id == &"" or sect_id not in sect_catalog_ids or unlocked_sect_set.has(sect_id):
+			return false
+		unlocked_sect_set[sect_id] = true
+	for default_sect_id: StringName in DEFAULT_UNLOCKED_SECT_IDS:
+		if not unlocked_sect_set.has(default_sect_id):
+			return false
 	var unlocked: Array = unlocked_value
 	var deck: Array = deck_value
 	var library: Array = library_value
@@ -157,6 +178,9 @@ func is_profile_valid(profile: Dictionary) -> bool:
 
 
 func repair_profile(profile: Dictionary) -> Dictionary:
+	var unlocked_sects: Array[StringName] = _repair_unlocked_sect_ids(
+		profile.get("unlocked_sect_ids", [])
+	)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	var unlocked: Array[StringName] = []
 	var raw_unlocked: Variant = profile.get("unlocked_card_ids", null)
@@ -209,6 +233,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		return create_default_profile()
 	return {
 		"schema_version": SCHEMA_VERSION,
+		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
 		"library_slots": _padded_library(repaired_library),
@@ -252,9 +277,53 @@ func unlock_and_save(profile: Dictionary, card_id: StringName) -> Dictionary:
 	return {"ok": true, "profile": candidate}
 
 
+func unlock_cards_and_save(profile: Dictionary, ordered_card_ids: Array) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
+	var additions: Array[StringName] = []
+	for value: Variant in ordered_card_ids:
+		var card_id := StringName(String(value))
+		if (
+			card_id != &""
+			and card_id in catalog_ids
+			and card_id not in already_unlocked
+			and card_id not in additions
+		):
+			additions.append(card_id)
+	if additions.is_empty():
+		return {"ok": true, "profile": unchanged, "added_ids": additions}
+	var occupied: Array = _occupied_library(profile["library_slots"])
+	if occupied.size() + additions.size() > LIBRARY_CAPACITY:
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+
+	var candidate: Dictionary = profile.duplicate(true)
+	var combined_library: Array = _string_array(additions)
+	combined_library.append_array(occupied)
+	candidate["library_slots"] = _padded_library(combined_library)
+	var combined_unlocked: Array = _string_array(additions)
+	combined_unlocked.append_array((profile["unlocked_card_ids"] as Array).duplicate())
+	candidate["unlocked_card_ids"] = combined_unlocked
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	return {"ok": true, "profile": candidate, "added_ids": additions}
+
+
 func get_unlocked_ids(profile: Dictionary) -> Array[StringName]:
 	var result: Array[StringName] = []
 	var raw: Variant = profile.get("unlocked_card_ids", [])
+	if typeof(raw) != TYPE_ARRAY:
+		return result
+	for value: Variant in raw:
+		result.append(StringName(String(value)))
+	return result
+
+
+func get_unlocked_sect_ids(profile: Dictionary) -> Array[StringName]:
+	var result: Array[StringName] = []
+	var raw: Variant = profile.get("unlocked_sect_ids", [])
 	if typeof(raw) != TYPE_ARRAY:
 		return result
 	for value: Variant in raw:
@@ -276,6 +345,18 @@ func _default_unlocked_ids() -> Array[StringName]:
 	for card_id: StringName in Catalog.get_all_card_ids():
 		if card_id not in DEFAULT_LOCKED_IDS:
 			result.append(card_id)
+	return result
+
+
+func _repair_unlocked_sect_ids(raw_value: Variant) -> Array[StringName]:
+	var result: Array[StringName] = DEFAULT_UNLOCKED_SECT_IDS.duplicate()
+	if typeof(raw_value) != TYPE_ARRAY:
+		return result
+	var catalog_ids: Array[StringName] = Sects.get_all_sect_ids()
+	for value: Variant in raw_value as Array:
+		var sect_id := StringName(String(value))
+		if sect_id != &"" and sect_id in catalog_ids and sect_id not in result:
+			result.append(sect_id)
 	return result
 
 

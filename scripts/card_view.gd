@@ -20,6 +20,7 @@ var owner_id: int = 0
 var playable: bool = false
 var face_down: bool = false
 var ki_badge_enabled: bool = true
+var power_numbers_enabled: bool = true
 
 var _dragging: bool = false
 var _pointer_id: int = -2
@@ -88,7 +89,7 @@ func _refresh_face_content() -> void:
 	bottom_power.text = str(powers[DuelRules.BOTTOM])
 	left_power.text = str(powers[DuelRules.LEFT])
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
-		power_label.visible = not face_down
+		power_label.visible = power_numbers_enabled and not face_down
 	var ki: int = int(card_data.get("ki", 0))
 	var has_ki_ability: bool = Abilities.card_uses_ki(card_data)
 	ki_value.text = str(ki)
@@ -126,6 +127,12 @@ func set_runtime_ki(value: int) -> void:
 
 func set_ki_badge_enabled(value: bool) -> void:
 	ki_badge_enabled = value
+	if is_node_ready():
+		_refresh_face_content()
+
+
+func set_power_numbers_enabled(value: bool) -> void:
+	power_numbers_enabled = value
 	if is_node_ready():
 		_refresh_face_content()
 

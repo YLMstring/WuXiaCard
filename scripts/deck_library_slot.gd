@@ -2,6 +2,7 @@ class_name DeckLibrarySlot
 extends Control
 
 signal inspection_requested(logical_index: int, card_data: Dictionary)
+signal hold_recognized(logical_index: int, card_data: Dictionary)
 signal drag_armed(logical_index: int, card_data: Dictionary)
 signal drag_started(logical_index: int, card_data: Dictionary, pointer_position: Vector2)
 signal drag_moved(logical_index: int, pointer_position: Vector2)
@@ -29,11 +30,13 @@ var logical_index: int = -1
 var card_data: Dictionary = {}
 var display_owner_id: int = DuelRules.PLAYER_OWNER
 var interaction_enabled: bool = true
+var drag_enabled: bool = true
 
 var _pointer_active: bool = false
 var _pointer_id: int = -2
 var _pointer_start: Vector2 = Vector2.ZERO
 var _scrolling: bool = false
+var _hold_recognized: bool = false
 var _drag_is_armed: bool = false
 var _dragging: bool = false
 var _drag_vacancy_visible: bool = false
@@ -60,11 +63,14 @@ func _ready() -> void:
 func bind(
 	new_logical_index: int,
 	new_card_data: Dictionary,
-	new_display_owner_id: int = DuelRules.PLAYER_OWNER
+	new_display_owner_id: int = DuelRules.PLAYER_OWNER,
+	new_drag_enabled: bool = true,
+	show_power_numbers: bool = true
 ) -> void:
 	cancel_gesture()
 	logical_index = new_logical_index
 	card_data = new_card_data.duplicate(true)
+	drag_enabled = new_drag_enabled
 	display_owner_id = (
 		DuelRules.OPPONENT_OWNER
 		if new_display_owner_id == DuelRules.OPPONENT_OWNER
@@ -77,6 +83,7 @@ func bind(
 	name_label.remove_theme_color_override("font_color")
 	if occupied:
 		name_label.add_theme_color_override("font_color", _tier_name_color(card_data.get("tier", null)))
+		card_view.set_power_numbers_enabled(show_power_numbers)
 		card_view.configure(card_data, display_owner_id, false)
 		card_view.set_face_down(false)
 	_set_drag_vacancy_visible(false)
@@ -100,6 +107,7 @@ func cancel_gesture() -> void:
 	_pointer_id = -2
 	_pointer_start = Vector2.ZERO
 	_scrolling = false
+	_hold_recognized = false
 	_drag_is_armed = false
 	_dragging = false
 	_set_drag_vacancy_visible(false)
@@ -187,6 +195,7 @@ func _begin_pointer(pointer_position: Vector2, pointer_id: int) -> void:
 	_pointer_id = pointer_id
 	_pointer_start = pointer_position
 	_scrolling = false
+	_hold_recognized = false
 	_drag_is_armed = false
 	_dragging = false
 	if not card_data.is_empty():
@@ -219,7 +228,7 @@ func _end_pointer(pointer_position: Vector2, pointer_id: int) -> void:
 		return
 	if _dragging or _drag_is_armed:
 		drag_ended.emit(logical_index, pointer_position)
-	elif not _scrolling and not _drag_is_armed and not card_data.is_empty():
+	elif not _scrolling and not _hold_recognized and not card_data.is_empty():
 		if pointer_position.distance_to(_pointer_start) <= movement_threshold:
 			inspection_requested.emit(logical_index, card_data.duplicate(true))
 	cancel_gesture()
@@ -227,6 +236,10 @@ func _end_pointer(pointer_position: Vector2, pointer_id: int) -> void:
 
 func _on_hold_timeout() -> void:
 	if not _pointer_active or _scrolling or card_data.is_empty() or not interaction_enabled:
+		return
+	_hold_recognized = true
+	hold_recognized.emit(logical_index, card_data.duplicate(true))
+	if not drag_enabled:
 		return
 	_drag_is_armed = true
 	pivot_offset = size * 0.5

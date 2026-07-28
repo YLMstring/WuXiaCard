@@ -39,6 +39,11 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
+	_check(int(profile["schema_version"]) == 2, "Default profile uses schema version 2")
+	_check(
+		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
+		"Only Xuanyue Jianzong starts unlocked"
+	)
 	_check((profile["main_deck"] as Array).size() == 5, "Default main deck has five cards")
 	_check((profile["library_slots"] as Array).size() == 1000, "Default library has 1000 slots")
 	_check(_occupied_count(profile["library_slots"]) == 4, "Default library has four occupied slots")
@@ -78,14 +83,82 @@ func _run() -> void:
 	_check(not bool(duplicate_unlock.get("ok", true)), "Duplicate unlock is rejected")
 	_check(duplicate_unlock.get("profile", {}) == unlocked, "Duplicate unlock preserves profile")
 
+	var batch_result: Dictionary = store.unlock_cards_and_save(
+		unlocked,
+		[&"hengsha_duanlu", &"chilian_huifeng"]
+	)
+	_check(bool(batch_result.get("ok", false)), "An ordered card batch saves")
+	var batch_profile: Dictionary = batch_result.get("profile", {})
+	_check(
+		(batch_result.get("added_ids", []) as Array) == [&"hengsha_duanlu", &"chilian_huifeng"],
+		"Batch result reports added IDs in input order"
+	)
+	_check(
+		String(batch_profile["library_slots"][0]) == "hengsha_duanlu"
+		and String(batch_profile["library_slots"][1]) == "chilian_huifeng",
+		"Batch cards enter the library top without reversing"
+	)
+	_check(
+		String(batch_profile["library_slots"][2]) == String(unlocked["library_slots"][0]),
+		"Existing library order follows the complete new batch"
+	)
+	var partial_batch: Dictionary = store.unlock_cards_and_save(
+		batch_profile,
+		[&"hengsha_duanlu", &"shahai_zhuri"]
+	)
+	_check(bool(partial_batch.get("ok", false)), "A partially owned batch succeeds")
+	var partial_profile: Dictionary = partial_batch.get("profile", {})
+	_check(
+		(partial_batch.get("added_ids", []) as Array) == [&"shahai_zhuri"],
+		"Only the missing card is reported from a partial batch"
+	)
+	_check(
+		String(partial_profile["library_slots"][0]) == "shahai_zhuri"
+		and String(partial_profile["library_slots"][1]) == "hengsha_duanlu",
+		"Only newly unlocked cards are inserted ahead of existing cards"
+	)
+	_check(
+		partial_profile["unlocked_card_ids"].count("hengsha_duanlu") == 1,
+		"Batch unlock never duplicates ownership"
+	)
+	var no_op_batch: Dictionary = store.unlock_cards_and_save(
+		partial_profile,
+		[&"hengsha_duanlu", &"missing_card"]
+	)
+	_check(bool(no_op_batch.get("ok", false)), "An empty filtered batch is a successful no-op")
+	_check(no_op_batch.get("profile", {}) == partial_profile, "A no-op batch preserves the exact profile")
+	_check((no_op_batch.get("added_ids", []) as Array).is_empty(), "A no-op batch reports no additions")
+
+	var schema_one: Dictionary = profile.duplicate(true)
+	schema_one["schema_version"] = 1
+	schema_one.erase("unlocked_sect_ids")
+	var migrated: Dictionary = store.repair_profile(schema_one)
+	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
+	_check(int(migrated["schema_version"]) == 2, "Migration advances the schema version")
+	_check(
+		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
+		"Migration adds only the default sect"
+	)
+	_check(migrated["main_deck"] == profile["main_deck"], "Migration preserves main-deck order")
+	_check(migrated["library_slots"] == profile["library_slots"], "Migration preserves library order")
+	_check(
+		migrated["unlocked_card_ids"] == profile["unlocked_card_ids"],
+		"Migration does not unlock cards"
+	)
+
 	var malformed := {
 		"schema_version": 1,
 		"unlocked_card_ids": ["gate_general", "meng_huo", "jiang_wei", "fa_zheng", "fire_envoy", "tiger_general"],
+		"unlocked_sect_ids": ["missing_sect", "yanyu_lou", "yanyu_lou"],
 		"main_deck": ["gate_general", "gate_general", "missing", "jiang_wei"],
 		"library_slots": ["", "meng_huo", "", "fa_zheng", "fire_envoy", "tiger_general"],
 	}
 	var repaired: Dictionary = store.repair_profile(malformed)
 	_check(store.is_profile_valid(repaired), "Malformed profile repairs to a valid profile")
+	_check(
+		store.get_unlocked_sect_ids(repaired) == [&"xuanyue_jianzong", &"yanyu_lou"],
+		"Repair removes unknown and duplicate sects while restoring the default"
+	)
 	_check(String(repaired["library_slots"][0]) != "", "Repair compacts occupied slots to the top")
 	_check(_library_has_no_gaps(repaired["library_slots"]), "Repair leaves no gaps in occupied prefix")
 
@@ -94,6 +167,12 @@ func _run() -> void:
 	var failed_save: Dictionary = failing_store.exchange_and_save(saved_before_failure, 0, 0)
 	_check(not bool(failed_save.get("ok", true)), "Save failure is reported")
 	_check(failed_save.get("profile", {}) == saved_before_failure, "Save failure rolls back candidate data")
+	var failed_batch: Dictionary = failing_store.unlock_cards_and_save(
+		saved_before_failure,
+		[&"hanfeng_liezhen"]
+	)
+	_check(not bool(failed_batch.get("ok", true)), "Batch save failure is reported")
+	_check(failed_batch.get("profile", {}) == saved_before_failure, "Batch save failure rolls back candidate data")
 
 	_cleanup()
 	_finish()
