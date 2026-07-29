@@ -21,10 +21,12 @@ func _run() -> void:
 	var run_reset_button := menu.get_node("MenuLayer/Actions/RunResetButton") as Button
 	var progress_reset_button := menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
 	var notice := menu.get_node("MenuLayer/Notice") as Label
+	var artwork := menu.get_node("Artwork") as TextureRect
 	_check(journey_button.text == "踏入江湖", "Journey label is exact")
 	_check(run_reset_button.text == "闭关重修", "Run-reset label is exact")
 	_check(progress_reset_button.text == "封剑归隐", "Progress-reset label is exact")
 	_check(notice.text.is_empty(), "Notice starts empty")
+	_check(artwork.texture != null, "Main-menu artwork texture is always assigned")
 
 	var signal_counts := {
 		"journey": 0,

@@ -9,6 +9,7 @@ const RUN_RESET_PRESSES: int = 5
 const PROGRESS_RESET_PRESSES: int = 10
 const DEFAULT_CONFIRMATION_TIMEOUT: float = 3.0
 const BackdropScript = preload("res://scripts/main_menu_backdrop.gd")
+const MENU_ARTWORK: Texture2D = preload("res://pics/main_menu_background.png")
 
 @onready var backdrop: Control = $Backdrop
 @onready var artwork: TextureRect = $Artwork
@@ -26,6 +27,7 @@ var _artwork_rect: Rect2 = Rect2()
 
 
 func _ready() -> void:
+	artwork.texture = MENU_ARTWORK
 	resized.connect(_layout_menu)
 	journey_button.pressed.connect(_on_journey_pressed)
 	run_reset_button.pressed.connect(_on_run_reset_pressed)
