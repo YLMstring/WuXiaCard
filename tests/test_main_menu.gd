@@ -21,13 +21,15 @@ func _run() -> void:
 	var progress_reset_button := menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
 	var notice := menu.get_node("MenuLayer/Notice") as Label
 	var artwork := menu.get_node("Artwork") as TextureRect
-	_check((menu.get_node("MenuLayer/Title") as Label).text.is_empty(), "Title text is replaced")
+	var title := menu.get_node("MenuLayer/Title") as Label
+	_check(title.text.is_empty(), "Title text is replaced")
 	_check(journey_button.text.is_empty(), "Journey text is replaced")
 	_check(run_reset_button.text.is_empty(), "Run-reset text is replaced")
 	_check(progress_reset_button.text.is_empty(), "Progress-reset text is replaced")
 	_check(notice.text.is_empty(), "Notice starts empty")
 	_check(artwork.texture != null, "Main-menu artwork texture is always assigned")
-	_check(_has_glyph_texture(menu.get_node("MenuLayer/Title")), "Title uses its ink image")
+	_check(_has_glyph_texture(title), "Title uses its ink image")
+	_check(_has_title_glow(title), "Title has a non-interactive shader glow behind its ink")
 	_check(_has_glyph_texture(journey_button), "Journey action uses its ink image")
 	_check(_has_glyph_texture(run_reset_button), "Run reset uses its ink image")
 	_check(_has_glyph_texture(progress_reset_button), "Progress reset uses its ink image")
@@ -89,6 +91,13 @@ func _run() -> void:
 	var tall_artwork: Rect2 = menu.debug_get_artwork_rect()
 	_check(tall_artwork == Rect2(0.0, 210.0, 540.0, 540.0), "Tall layout centers the full square")
 	_check(
+		is_equal_approx(
+			title.size.x,
+			clampf(tall_artwork.size.x * 0.46, 210.0, 330.0) * 1.35
+		),
+		"Title image uses the 135 percent responsive width"
+	)
+	_check(
 		notice.position.y >= tall_artwork.position.y + tall_artwork.size.y * 0.8,
 		"Tall layout places the notice below the illustrated grid"
 	)
@@ -117,6 +126,19 @@ func _run() -> void:
 func _has_glyph_texture(parent: Node) -> bool:
 	var glyph := parent.get_node_or_null("InkGlyph") as TextureRect
 	return glyph != null and glyph.texture != null and glyph.mouse_filter == Control.MOUSE_FILTER_IGNORE
+
+
+func _has_title_glow(parent: Node) -> bool:
+	var glow := parent.get_node_or_null("TitleGlow") as TextureRect
+	var glyph := parent.get_node_or_null("InkGlyph") as TextureRect
+	return (
+		glow != null
+		and glyph != null
+		and glow.texture != null
+		and glow.material is ShaderMaterial
+		and glow.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and glow.get_index() < glyph.get_index()
+	)
 
 
 func _finish() -> void:

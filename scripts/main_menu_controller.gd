@@ -11,6 +11,7 @@ const DEFAULT_CONFIRMATION_TIMEOUT: float = 3.0
 const BackdropScript = preload("res://scripts/main_menu_backdrop.gd")
 const MENU_ARTWORK: Texture2D = preload("res://pics/main_menu_background.png")
 const TITLE_INK: Texture2D = preload("res://inkpics/九宫论剑.png")
+const TITLE_GLOW_SHADER: Shader = preload("res://scripts/main_menu_title_glow.gdshader")
 const JOURNEY_INK: Texture2D = preload("res://inkpics/踏入江湖.png")
 const RUN_RESET_INK: Texture2D = preload("res://inkpics/闭关重修.png")
 const PROGRESS_RESET_INK: Texture2D = preload("res://inkpics/封剑归隐.png")
@@ -50,6 +51,7 @@ func _ready() -> void:
 
 func _install_ink_glyphs() -> void:
 	title_label.text = ""
+	_add_title_glow(title_label, TITLE_INK)
 	_add_ink_glyph(title_label, TITLE_INK, false)
 	var button_textures: Dictionary = {
 		journey_button: JOURNEY_INK,
@@ -61,6 +63,25 @@ func _install_ink_glyphs() -> void:
 		_add_ink_glyph(button, button_textures[button] as Texture2D, true)
 		button.mouse_entered.connect(_on_action_hover_changed.bind(button, true))
 		button.mouse_exited.connect(_on_action_hover_changed.bind(button, false))
+
+
+func _add_title_glow(parent: Control, texture: Texture2D) -> void:
+	var glow := TextureRect.new()
+	glow.name = "TitleGlow"
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.texture = texture
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var glow_material := ShaderMaterial.new()
+	glow_material.shader = TITLE_GLOW_SHADER
+	glow.material = glow_material
+	glow.self_modulate.a = 0.38
+	parent.add_child(glow)
+	glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var pulse: Tween = glow.create_tween().set_loops()
+	pulse.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	pulse.tween_property(glow, "self_modulate:a", 0.72, 1.3)
+	pulse.tween_property(glow, "self_modulate:a", 0.38, 1.3)
 
 
 func _add_ink_glyph(parent: Control, texture: Texture2D, subdued: bool) -> void:
@@ -213,13 +234,17 @@ func _layout_menu() -> void:
 	artwork.size = _artwork_rect.size
 	var square_side: float = _artwork_rect.size.x
 	var content_width: float = clampf(square_side * 0.46, 210.0, 330.0)
-	var title_height: float = clampf(square_side * 0.09, 44.0, 72.0)
-	var title_y: float = _artwork_rect.position.y + square_side * 0.105
-	title_label.position = Vector2(
-		_artwork_rect.get_center().x - content_width * 0.5,
-		title_y
+	var base_title_height: float = clampf(square_side * 0.09, 44.0, 72.0)
+	var title_width: float = content_width * 1.35
+	var title_height: float = base_title_height * 1.35
+	var title_center_y: float = (
+		_artwork_rect.position.y + square_side * 0.105 + base_title_height * 0.5
 	)
-	title_label.size = Vector2(content_width, title_height)
+	title_label.position = Vector2(
+		_artwork_rect.get_center().x - title_width * 0.5,
+		title_center_y - title_height * 0.5
+	)
+	title_label.size = Vector2(title_width, title_height)
 	title_label.add_theme_font_size_override(
 		"font_size",
 		roundi(clampf(square_side * 0.068, 32.0, 52.0))
