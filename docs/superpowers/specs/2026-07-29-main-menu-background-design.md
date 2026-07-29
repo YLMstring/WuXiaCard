@@ -49,7 +49,13 @@ No single edge contains unique narrative information.
 - Exactly nine swordsmen: one champion entirely on the center slab and one
   opponent entirely on each surrounding slab.
 - Every opponent faces or turns toward the central champion in a radial siege.
-- Positions and restrained attack stances vary naturally within each slab.
+- Every swordsman stands near the visual center of their assigned slab, with a
+  clearly visible margin of empty stone separating feet, body, robes, and
+  weapon from all four seams.
+- Restrained attack stances vary naturally without changing this centered
+  placement.
+- If narrow-screen visibility requires adjustment, reduce figure scale rather
+  than moving figures toward seams.
 - No swordsman touches, crosses, or stands between grid seams.
 - No lettering, logos, interface elements, decorative frame, or watermark.
 - No oversized foreground character portrait.
