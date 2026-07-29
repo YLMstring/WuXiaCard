@@ -108,8 +108,8 @@ func _run() -> void:
 		"Title image uses the 135 percent responsive width"
 	)
 	_check(
-		notice.position.y >= normal_safe.position.y + normal_safe.size.y * 0.8,
-		"Normal-phone layout places the notice below the illustrated grid"
+		notice.get_rect().end.y < normal_safe.position.y + normal_safe.size.y * 0.6,
+		"Normal-phone layout places the notice directly above the illustrated grid"
 	)
 	menu.size = Vector2(540.0, 1200.0)
 	await process_frame
@@ -127,8 +127,8 @@ func _run() -> void:
 	_check(wide_artwork == Rect2(437.5, 0.0, 405.0, 720.0), "Wide layout centers a 9:16 artwork crop")
 	_check(wide_artwork == wide_safe, "Wide layout anchors UI to the centered portrait canvas")
 	_check(
-		notice.position.y >= wide_safe.position.y + wide_safe.size.y * 0.8,
-		"Wide layout keeps the notice below the illustrated grid"
+		notice.get_rect().end.y < wide_safe.position.y + wide_safe.size.y * 0.6,
+		"Wide layout keeps the notice directly above the illustrated grid"
 	)
 	var buttons: Array[Button] = [journey_button, run_reset_button, progress_reset_button]
 	for button: Button in buttons:
