@@ -282,7 +282,7 @@ func _layout_menu() -> void:
 	var notice_width: float = content_width * 1.4
 	notice_label.position = Vector2(
 		_safe_rect.get_center().x - notice_width * 0.5,
-		actions_y + actions_height + button_gap
+		actions_y + actions_height + button_gap - 265
 	)
 	notice_label.size = Vector2(notice_width, notice_height)
 	notice_label.add_theme_font_size_override(
