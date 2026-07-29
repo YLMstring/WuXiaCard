@@ -85,7 +85,7 @@ func _on_run_reset_pressed() -> void:
 		notice_label.text = ""
 		run_reset_confirmed.emit()
 		return
-	notice_label.text = "再按 %d 次闭关重修" % (RUN_RESET_PRESSES - _run_reset_count)
+	notice_label.text = "再按 %d 次重置本局进度" % (RUN_RESET_PRESSES - _run_reset_count)
 
 
 func _on_progress_reset_pressed() -> void:
@@ -98,7 +98,7 @@ func _on_progress_reset_pressed() -> void:
 		notice_label.text = ""
 		progress_reset_confirmed.emit()
 		return
-	notice_label.text = "再按 %d 次封剑归隐" % (
+	notice_label.text = "再按 %d 次重置所有进度" % (
 		PROGRESS_RESET_PRESSES - _progress_reset_count
 	)
 
