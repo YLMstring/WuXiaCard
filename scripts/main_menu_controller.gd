@@ -8,6 +8,17 @@ signal progress_reset_confirmed
 const RUN_RESET_PRESSES: int = 5
 const PROGRESS_RESET_PRESSES: int = 10
 const DEFAULT_CONFIRMATION_TIMEOUT: float = 3.0
+const COUNTDOWN_NUMERALS: Dictionary = {
+	1: "一",
+	2: "二",
+	3: "三",
+	4: "四",
+	5: "五",
+	6: "六",
+	7: "七",
+	8: "八",
+	9: "九",
+}
 const BackdropScript = preload("res://scripts/main_menu_backdrop.gd")
 const MENU_ARTWORK: Texture2D = preload("res://pics/main_menu_background_phone.png")
 const TITLE_INK: Texture2D = preload("res://inkpics/九宫论剑.png")
@@ -141,6 +152,11 @@ func debug_get_safe_rect() -> Rect2:
 	return _safe_rect
 
 
+func _countdown_notice(remaining: int, action_text: String) -> String:
+	var numeral: String = str(COUNTDOWN_NUMERALS.get(remaining, str(remaining)))
+	return "再按%s次\n%s" % [numeral, action_text]
+
+
 func _on_journey_pressed() -> void:
 	reset_confirmation_state()
 	journey_requested.emit()
@@ -156,7 +172,10 @@ func _on_run_reset_pressed() -> void:
 		notice_label.text = ""
 		run_reset_confirmed.emit()
 		return
-	notice_label.text = "再按 %d 次重置本局进度" % (RUN_RESET_PRESSES - _run_reset_count)
+	notice_label.text = _countdown_notice(
+		RUN_RESET_PRESSES - _run_reset_count,
+		"放弃本局"
+	)
 
 
 func _on_progress_reset_pressed() -> void:
@@ -169,8 +188,9 @@ func _on_progress_reset_pressed() -> void:
 		notice_label.text = ""
 		progress_reset_confirmed.emit()
 		return
-	notice_label.text = "再按 %d 次重置所有进度" % (
-		PROGRESS_RESET_PRESSES - _progress_reset_count
+	notice_label.text = _countdown_notice(
+		PROGRESS_RESET_PRESSES - _progress_reset_count,
+		"删档重来"
 	)
 
 
@@ -247,8 +267,8 @@ func _layout_menu() -> void:
 	var safe_height: float = _safe_rect.size.y
 	var content_width: float = clampf(safe_width * 0.46, 210.0, 330.0)
 	var base_title_height: float = clampf(safe_width * 0.09, 44.0, 72.0)
-	var title_width: float = content_width * 1.35
-	var title_height: float = base_title_height * 1.35
+	var title_width: float = content_width * 1.50
+	var title_height: float = base_title_height * 1.50
 	var title_center_y: float = (
 		_safe_rect.position.y + safe_height * 0.105 + base_title_height * 0.5
 	)
@@ -278,7 +298,7 @@ func _layout_menu() -> void:
 			"font_size",
 			roundi(clampf(safe_width * 0.043, 23.0, 34.0))
 		)
-	var notice_height: float = clampf(safe_width * 0.07, 34.0, 50.0)
+	var notice_height: float = clampf(safe_width * 0.11, 52.0, 72.0)
 	var notice_width: float = content_width * 1.4
 	notice_label.position = Vector2(
 		_safe_rect.get_center().x - notice_width * 0.5,

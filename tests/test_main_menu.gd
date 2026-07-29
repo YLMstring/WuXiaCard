@@ -58,18 +58,22 @@ func _run() -> void:
 			signal_counts["progress_reset"] = int(signal_counts["progress_reset"]) + 1
 	)
 
-	for press_index: int in range(4):
+	run_reset_button.pressed.emit()
+	_check(notice.text == "再按四次\n放弃本局", "Run-reset countdown starts at four in two lines")
+	for press_index: int in range(3):
 		run_reset_button.pressed.emit()
 	_check(int(signal_counts["run_reset"]) == 0, "Four run-reset presses do not confirm")
-	_check(notice.text == "再按 1 次重置本局进度", "Run-reset countdown reaches one")
+	_check(notice.text == "再按一次\n放弃本局", "Run-reset countdown reaches one")
 	run_reset_button.pressed.emit()
 	_check(int(signal_counts["run_reset"]) == 1, "The fifth run-reset press confirms")
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Confirmation clears run counter")
 
-	for press_index: int in range(9):
+	progress_reset_button.pressed.emit()
+	_check(notice.text == "再按九次\n删档重来", "Progress-reset countdown starts at nine in two lines")
+	for press_index: int in range(8):
 		progress_reset_button.pressed.emit()
 	_check(int(signal_counts["progress_reset"]) == 0, "Nine progress-reset presses do not confirm")
-	_check(notice.text == "再按 1 次重置所有进度", "Progress-reset countdown reaches one")
+	_check(notice.text == "再按一次\n删档重来", "Progress-reset countdown reaches one")
 	progress_reset_button.pressed.emit()
 	_check(int(signal_counts["progress_reset"]) == 1, "The tenth progress-reset press confirms")
 
@@ -103,14 +107,15 @@ func _run() -> void:
 	_check(
 		is_equal_approx(
 			title.size.x,
-			clampf(normal_safe.size.x * 0.46, 210.0, 330.0) * 1.35
+			clampf(normal_safe.size.x * 0.46, 210.0, 330.0) * 1.50
 		),
-		"Title image uses the 135 percent responsive width"
+		"Title image uses the 150 percent responsive width"
 	)
 	_check(
 		notice.get_rect().end.y < normal_safe.position.y + normal_safe.size.y * 0.6,
 		"Normal-phone layout places the notice directly above the illustrated grid"
 	)
+	_check(notice.size.y >= 52.0, "Notice has enough height for two text lines")
 	menu.size = Vector2(540.0, 1200.0)
 	await process_frame
 	var long_artwork: Rect2 = menu.debug_get_artwork_rect()
