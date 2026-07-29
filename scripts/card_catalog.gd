@@ -59,6 +59,8 @@ const KNOWN_ACTIONS: Array[StringName] = [
 const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
 	&"CangSongYingKe2",
+	&"CangSongYingKe3",
+	&"CangSongYingKe4",
 	&"gate_general",
 	&"meng_huo",
 	&"jiang_wei",
@@ -99,7 +101,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [4, 7, 7, 4],
+		"powers": [3, 7, 7, 4],
 		"abilities": [],
 	},
 	&"CangSongYingKe2": {
@@ -109,9 +111,63 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "华山派",
 		"tier": 2,
 		"weapon": "剑法",
-		"description": "对手招式进场时，若我可以，对其发起攻击。",
+		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [4, 7, 7, 4],
+		"powers": [3, 7, 7, 4],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+						],
+						"actions": [
+							{"type": ACTION_ATTACK_TRIGGER_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"CangSongYingKe3": {
+		"id": &"CangSongYingKe3",
+		"glyph": "苍松迎客",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "华山派",
+		"tier": 3,
+		"weapon": "剑法",
+		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，耗尽我的内力以获取一张我的复制。",
+		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
+		"powers": [3, 7, 7, 4],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+						],
+						"actions": [
+							{"type": ACTION_ATTACK_TRIGGER_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"CangSongYingKe4": {
+		"id": &"CangSongYingKe4",
+		"glyph": "苍松迎客",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "华山派",
+		"tier": 4,
+		"weapon": "剑法",
+		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，耗尽我的内力以获取一张我的复制。",
+		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
+		"powers": [4, 7, 8, 4],
 		"abilities": [
 			{
 				"triggers": [
