@@ -4,7 +4,7 @@ extends RefCounted
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
 
-const SCHEMA_VERSION: int = 2
+const SCHEMA_VERSION: int = 3
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
@@ -61,6 +61,8 @@ func create_default_profile() -> Dictionary:
 			library_cards.append(String(card_id))
 	return {
 		"schema_version": SCHEMA_VERSION,
+		"run_active": false,
+		"selected_sect_id": "",
 		"unlocked_sect_ids": _string_array(DEFAULT_UNLOCKED_SECT_IDS),
 		"unlocked_card_ids": _string_array(unlocked_ids),
 		"main_deck": main_deck,
@@ -121,6 +123,12 @@ func save_profile(profile: Dictionary) -> bool:
 func is_profile_valid(profile: Dictionary) -> bool:
 	if int(profile.get("schema_version", -1)) != SCHEMA_VERSION:
 		return false
+	var run_active_value: Variant = profile.get("run_active", null)
+	var selected_sect_value: Variant = profile.get("selected_sect_id", null)
+	if typeof(run_active_value) != TYPE_BOOL or typeof(selected_sect_value) != TYPE_STRING:
+		return false
+	var run_active: bool = bool(run_active_value)
+	var selected_sect_id := StringName(String(selected_sect_value))
 	var unlocked_sects_value: Variant = profile.get("unlocked_sect_ids", null)
 	var unlocked_value: Variant = profile.get("unlocked_card_ids", null)
 	var deck_value: Variant = profile.get("main_deck", null)
@@ -142,6 +150,11 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	for default_sect_id: StringName in DEFAULT_UNLOCKED_SECT_IDS:
 		if not unlocked_sect_set.has(default_sect_id):
 			return false
+	if run_active:
+		if selected_sect_id == &"" or not unlocked_sect_set.has(selected_sect_id):
+			return false
+	elif selected_sect_id != &"":
+		return false
 	var unlocked: Array = unlocked_value
 	var deck: Array = deck_value
 	var library: Array = library_value
@@ -181,6 +194,16 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var unlocked_sects: Array[StringName] = _repair_unlocked_sect_ids(
 		profile.get("unlocked_sect_ids", [])
 	)
+	var run_active: bool = false
+	var selected_sect_id: StringName = &""
+	if int(profile.get("schema_version", -1)) >= SCHEMA_VERSION:
+		var raw_run_active: Variant = profile.get("run_active", false)
+		var raw_selected_sect: Variant = profile.get("selected_sect_id", "")
+		if typeof(raw_run_active) == TYPE_BOOL and bool(raw_run_active):
+			var candidate_sect := StringName(String(raw_selected_sect))
+			if candidate_sect in unlocked_sects:
+				run_active = true
+				selected_sect_id = candidate_sect
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	var unlocked: Array[StringName] = []
 	var raw_unlocked: Variant = profile.get("unlocked_card_ids", null)
@@ -233,6 +256,8 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		return create_default_profile()
 	return {
 		"schema_version": SCHEMA_VERSION,
+		"run_active": run_active,
+		"selected_sect_id": String(selected_sect_id),
 		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
@@ -311,6 +336,78 @@ func unlock_cards_and_save(profile: Dictionary, ordered_card_ids: Array) -> Dict
 	return {"ok": true, "profile": candidate, "added_ids": additions}
 
 
+func begin_run_and_save(
+	profile: Dictionary,
+	sect_id: StringName,
+	ordered_card_ids: Array
+) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if (
+		not is_profile_valid(profile)
+		or bool(profile["run_active"])
+		or sect_id == &""
+		or sect_id not in get_unlocked_sect_ids(profile)
+	):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var additions: Array[StringName] = _collect_unlock_additions(profile, ordered_card_ids)
+	var occupied: Array = _occupied_library(profile["library_slots"])
+	if occupied.size() + additions.size() > LIBRARY_CAPACITY:
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var candidate: Dictionary = profile.duplicate(true)
+	if not additions.is_empty():
+		var combined_library: Array = _string_array(additions)
+		combined_library.append_array(occupied)
+		candidate["library_slots"] = _padded_library(combined_library)
+		var combined_unlocked: Array = _string_array(additions)
+		combined_unlocked.append_array((profile["unlocked_card_ids"] as Array).duplicate())
+		candidate["unlocked_card_ids"] = combined_unlocked
+	candidate["run_active"] = true
+	candidate["selected_sect_id"] = String(sect_id)
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	return {"ok": true, "profile": candidate, "added_ids": additions}
+
+
+func reset_run_and_save(profile: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": unchanged}
+	var unlocked_ids: Array[StringName] = get_unlocked_ids(profile)
+	for card_id: StringName in DEFAULT_MAIN_DECK_IDS:
+		if card_id not in unlocked_ids:
+			return {"ok": false, "profile": unchanged}
+	var library_order: Array[StringName] = []
+	for value: Variant in profile["library_slots"]:
+		var card_id := StringName(String(value))
+		if card_id != &"" and card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
+			library_order.append(card_id)
+	for value: Variant in profile["main_deck"]:
+		var card_id := StringName(String(value))
+		if card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
+			library_order.append(card_id)
+	for card_id: StringName in unlocked_ids:
+		if card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
+			library_order.append(card_id)
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["run_active"] = false
+	candidate["selected_sect_id"] = ""
+	candidate["main_deck"] = _string_array(DEFAULT_MAIN_DECK_IDS)
+	candidate["library_slots"] = _padded_library(_string_array(library_order))
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
+
+
+func reset_all_progress_and_save(profile: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": unchanged}
+	var candidate: Dictionary = create_default_profile()
+	if not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
+
+
 func get_unlocked_ids(profile: Dictionary) -> Array[StringName]:
 	var result: Array[StringName] = []
 	var raw: Variant = profile.get("unlocked_card_ids", [])
@@ -340,12 +437,38 @@ func get_main_deck_ids(profile: Dictionary) -> Array[StringName]:
 	return result
 
 
+func is_run_active(profile: Dictionary) -> bool:
+	return is_profile_valid(profile) and bool(profile["run_active"])
+
+
+func get_selected_sect_id(profile: Dictionary) -> StringName:
+	if not is_profile_valid(profile):
+		return &""
+	return StringName(String(profile["selected_sect_id"]))
+
+
 func _default_unlocked_ids() -> Array[StringName]:
 	var result: Array[StringName] = []
 	for card_id: StringName in Catalog.get_all_card_ids():
 		if card_id not in DEFAULT_LOCKED_IDS:
 			result.append(card_id)
 	return result
+
+
+func _collect_unlock_additions(profile: Dictionary, ordered_card_ids: Array) -> Array[StringName]:
+	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
+	var additions: Array[StringName] = []
+	for value: Variant in ordered_card_ids:
+		var card_id := StringName(String(value))
+		if (
+			card_id != &""
+			and card_id in catalog_ids
+			and card_id not in already_unlocked
+			and card_id not in additions
+		):
+			additions.append(card_id)
+	return additions
 
 
 func _repair_unlocked_sect_ids(raw_value: Variant) -> Array[StringName]:

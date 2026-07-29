@@ -56,6 +56,7 @@ $testScripts = @(
     "test_deck_library_grid.gd",
     "test_deck_builder_integration.gd",
     "test_sect_selection_integration.gd",
+    "test_main_menu.gd",
     "test_main_flow.gd",
     "test_card_inspector.gd",
     "test_duel_backdrop.gd",

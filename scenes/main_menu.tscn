@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://cymyldcckvbpd"]
+
+[ext_resource type="Script" path="res://scripts/main_menu_controller.gd" id="1_l6cm7"]
+[ext_resource type="Script" path="res://scripts/main_menu_backdrop.gd" id="2_ekxnf"]
+
+[node name="MainMenu" type="Control" unique_id=1290723060]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_l6cm7")
+
+[node name="Backdrop" type="Control" parent="." unique_id=103806070]
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_ekxnf")
+
+[node name="Artwork" type="TextureRect" parent="." unique_id=959975738]
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MenuLayer" type="Control" parent="." unique_id=927926380]
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="MenuLayer" unique_id=1114452536]
+layout_mode = 0
+text = "九宫论剑"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Actions" type="VBoxContainer" parent="MenuLayer" unique_id=612359062]
+layout_mode = 0
+
+[node name="JourneyButton" type="Button" parent="MenuLayer/Actions" unique_id=416104335]
+layout_mode = 2
+text = "踏入江湖"
+
+[node name="RunResetButton" type="Button" parent="MenuLayer/Actions" unique_id=21363578]
+layout_mode = 2
+text = "闭关重修"
+
+[node name="ProgressResetButton" type="Button" parent="MenuLayer/Actions" unique_id=26766047]
+layout_mode = 2
+text = "封剑归隐"
+
+[node name="Notice" type="Label" parent="MenuLayer" unique_id=1914595293]
+layout_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RunResetTimer" type="Timer" parent="." unique_id=1219115360]
+wait_time = 3.0
+one_shot = true
+
+[node name="ProgressResetTimer" type="Timer" parent="." unique_id=1959448859]
+one_shot = true

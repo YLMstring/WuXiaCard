@@ -363,8 +363,9 @@ func _complete_selected_sect() -> bool:
 	):
 		status_label.text = LOCKED_STATUS
 		return false
-	var result: Dictionary = _profile_store.unlock_cards_and_save(
+	var result: Dictionary = _profile_store.begin_run_and_save(
 		profile,
+		_selected_sect_id,
 		_get_tier_one_ids(_selected_sect_id)
 	)
 	if not bool(result.get("ok", false)):

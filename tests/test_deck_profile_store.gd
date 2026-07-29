@@ -39,15 +39,24 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 2, "Default profile uses schema version 2")
+	_check(int(profile["schema_version"]) == 3, "Default profile uses schema version 3")
+	_check(not bool(profile["run_active"]), "Default profile has no active run")
+	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(
 		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
 		"Only Xuanyue Jianzong starts unlocked"
 	)
 	_check((profile["main_deck"] as Array).size() == 5, "Default main deck has five cards")
 	_check((profile["library_slots"] as Array).size() == 1000, "Default library has 1000 slots")
-	_check(_occupied_count(profile["library_slots"]) == 4, "Default library has four occupied slots")
-	_check(String(profile["library_slots"][4]).is_empty(), "The fifth library slot is empty")
+	var expected_library_count: int = (profile["unlocked_card_ids"] as Array).size() - 5
+	_check(
+		_occupied_count(profile["library_slots"]) == expected_library_count,
+		"Default library contains every unlocked card outside the main deck"
+	)
+	_check(
+		String(profile["library_slots"][expected_library_count]).is_empty(),
+		"The first unused default library slot is empty"
+	)
 	_check(not (&"CangSongYingKe1" in store.get_unlocked_ids(profile)), "CangSongYingKe1 starts locked")
 	for card_id: StringName in NEW_SECT_CARD_IDS:
 		_check(card_id not in store.get_unlocked_ids(profile), "%s starts locked" % card_id)
@@ -132,9 +141,11 @@ func _run() -> void:
 	var schema_one: Dictionary = profile.duplicate(true)
 	schema_one["schema_version"] = 1
 	schema_one.erase("unlocked_sect_ids")
+	schema_one.erase("run_active")
+	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 2, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 3, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"
@@ -144,6 +155,24 @@ func _run() -> void:
 	_check(
 		migrated["unlocked_card_ids"] == profile["unlocked_card_ids"],
 		"Migration does not unlock cards"
+	)
+	_check(not bool(migrated["run_active"]), "Legacy migration starts with no active run")
+	_check(String(migrated["selected_sect_id"]).is_empty(), "Legacy migration clears the selected sect")
+
+	var schema_two: Dictionary = profile.duplicate(true)
+	schema_two["schema_version"] = 2
+	schema_two.erase("run_active")
+	schema_two.erase("selected_sect_id")
+	var migrated_schema_two: Dictionary = store.repair_profile(schema_two)
+	_check(store.is_profile_valid(migrated_schema_two), "A schema-2 profile migrates successfully")
+	_check(migrated_schema_two["main_deck"] == profile["main_deck"], "Schema-2 migration preserves deck order")
+	_check(
+		migrated_schema_two["library_slots"] == profile["library_slots"],
+		"Schema-2 migration preserves library order"
+	)
+	_check(
+		migrated_schema_two["unlocked_card_ids"] == profile["unlocked_card_ids"],
+		"Schema-2 migration preserves unlocked cards"
 	)
 
 	var malformed := {
@@ -159,8 +188,53 @@ func _run() -> void:
 		store.get_unlocked_sect_ids(repaired) == [&"xuanyue_jianzong", &"yanyu_lou"],
 		"Repair removes unknown and duplicate sects while restoring the default"
 	)
-	_check(String(repaired["library_slots"][0]) != "", "Repair compacts occupied slots to the top")
 	_check(_library_has_no_gaps(repaired["library_slots"]), "Repair leaves no gaps in occupied prefix")
+
+	var run_start_source: Dictionary = store.create_default_profile()
+	_check(store.save_profile(run_start_source), "Run-state fixture saves")
+	var begin_result: Dictionary = store.begin_run_and_save(
+		run_start_source,
+		&"xuanyue_jianzong",
+		[&"hanfeng_liezhen"]
+	)
+	_check(bool(begin_result.get("ok", false)), "Beginning a valid run saves atomically")
+	var active_profile: Dictionary = begin_result.get("profile", {})
+	_check(store.is_run_active(active_profile), "Beginning a run marks it active")
+	_check(
+		store.get_selected_sect_id(active_profile) == &"xuanyue_jianzong",
+		"Beginning a run records the selected sect"
+	)
+	_check(
+		String(active_profile["library_slots"][0]) == "hanfeng_liezhen",
+		"Newly unlocked run cards appear at the top of the library"
+	)
+	var active_unlocked: Array = (active_profile["unlocked_card_ids"] as Array).duplicate()
+	var exchange_for_reset: Dictionary = store.exchange_and_save(active_profile, 0, 0)
+	_check(bool(exchange_for_reset.get("ok", false)), "Run fixture can change its main deck")
+	var changed_profile: Dictionary = exchange_for_reset.get("profile", {})
+	var reset_result: Dictionary = store.reset_run_and_save(changed_profile)
+	_check(bool(reset_result.get("ok", false)), "Resetting the current run saves")
+	var reset_profile: Dictionary = reset_result.get("profile", {})
+	_check(not store.is_run_active(reset_profile), "Run reset clears active state")
+	_check(store.get_selected_sect_id(reset_profile) == &"", "Run reset clears the selected sect")
+	_check(
+		store.get_main_deck_ids(reset_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Run reset restores the default main deck"
+	)
+	_check(
+		reset_profile["unlocked_card_ids"] == active_unlocked,
+		"Run reset preserves card unlocks"
+	)
+	_check(
+		reset_profile["unlocked_sect_ids"] == active_profile["unlocked_sect_ids"],
+		"Run reset preserves sect unlocks"
+	)
+	var full_reset_result: Dictionary = store.reset_all_progress_and_save(reset_profile)
+	_check(bool(full_reset_result.get("ok", false)), "Full progress reset saves")
+	_check(
+		full_reset_result.get("profile", {}) == store.create_default_profile(),
+		"Full progress reset restores the complete default profile"
+	)
 
 	var saved_before_failure: Dictionary = store.load_profile()
 	var failing_store: RefCounted = Store.new("user://missing_parent/deck_profile.json")
@@ -173,6 +247,19 @@ func _run() -> void:
 	)
 	_check(not bool(failed_batch.get("ok", true)), "Batch save failure is reported")
 	_check(failed_batch.get("profile", {}) == saved_before_failure, "Batch save failure rolls back candidate data")
+	var failed_begin: Dictionary = failing_store.begin_run_and_save(
+		saved_before_failure,
+		&"xuanyue_jianzong",
+		[]
+	)
+	_check(not bool(failed_begin.get("ok", true)), "Run-start save failure is reported")
+	_check(failed_begin.get("profile", {}) == saved_before_failure, "Run-start save failure rolls back")
+	var failed_reset: Dictionary = failing_store.reset_run_and_save(saved_before_failure)
+	_check(not bool(failed_reset.get("ok", true)), "Run-reset save failure is reported")
+	_check(failed_reset.get("profile", {}) == saved_before_failure, "Run-reset save failure rolls back")
+	var failed_full_reset: Dictionary = failing_store.reset_all_progress_and_save(saved_before_failure)
+	_check(not bool(failed_full_reset.get("ok", true)), "Full-reset save failure is reported")
+	_check(failed_full_reset.get("profile", {}) == saved_before_failure, "Full-reset save failure rolls back")
 
 	_cleanup()
 	_finish()

@@ -189,6 +189,11 @@ func _run() -> void:
 		saved_profile["unlocked_card_ids"].count("hanfeng_liezhen") == 1,
 		"Successful selection unlocks its tier-1 card exactly once"
 	)
+	_check(bool(saved_profile["run_active"]), "Successful selection starts the run")
+	_check(
+		StringName(String(saved_profile["selected_sect_id"])) == &"xuanyue_jianzong",
+		"Successful selection records the chosen sect"
+	)
 
 	selector.queue_free()
 	await process_frame
