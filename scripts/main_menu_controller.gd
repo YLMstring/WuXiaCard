@@ -10,6 +10,10 @@ const PROGRESS_RESET_PRESSES: int = 10
 const DEFAULT_CONFIRMATION_TIMEOUT: float = 3.0
 const BackdropScript = preload("res://scripts/main_menu_backdrop.gd")
 const MENU_ARTWORK: Texture2D = preload("res://pics/main_menu_background.png")
+const TITLE_INK: Texture2D = preload("res://inkpics/九宫论剑.png")
+const JOURNEY_INK: Texture2D = preload("res://inkpics/踏入江湖.png")
+const RUN_RESET_INK: Texture2D = preload("res://inkpics/闭关重修.png")
+const PROGRESS_RESET_INK: Texture2D = preload("res://inkpics/封剑归隐.png")
 
 @onready var backdrop: Control = $Backdrop
 @onready var artwork: TextureRect = $Artwork
@@ -28,6 +32,7 @@ var _artwork_rect: Rect2 = Rect2()
 
 func _ready() -> void:
 	artwork.texture = MENU_ARTWORK
+	_install_ink_glyphs()
 	resized.connect(_layout_menu)
 	journey_button.pressed.connect(_on_journey_pressed)
 	run_reset_button.pressed.connect(_on_run_reset_pressed)
@@ -41,6 +46,41 @@ func _ready() -> void:
 	_style_text()
 	reset_confirmation_state()
 	_layout_menu()
+
+
+func _install_ink_glyphs() -> void:
+	title_label.text = ""
+	_add_ink_glyph(title_label, TITLE_INK, false)
+	var button_textures: Dictionary = {
+		journey_button: JOURNEY_INK,
+		run_reset_button: RUN_RESET_INK,
+		progress_reset_button: PROGRESS_RESET_INK,
+	}
+	for button: Button in button_textures:
+		button.text = ""
+		_add_ink_glyph(button, button_textures[button] as Texture2D, true)
+		button.mouse_entered.connect(_on_action_hover_changed.bind(button, true))
+		button.mouse_exited.connect(_on_action_hover_changed.bind(button, false))
+
+
+func _add_ink_glyph(parent: Control, texture: Texture2D, subdued: bool) -> void:
+	var glyph := TextureRect.new()
+	glyph.name = "InkGlyph"
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glyph.texture = texture
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.self_modulate.a = 0.88 if subdued else 1.0
+	parent.add_child(glyph)
+	glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _on_action_hover_changed(button: Button, hovered: bool) -> void:
+	var glyph := button.get_node_or_null("InkGlyph") as TextureRect
+	if glyph == null:
+		return
+	var tween: Tween = glyph.create_tween()
+	tween.tween_property(glyph, "self_modulate:a", 1.0 if hovered else 0.88, 0.08)
 
 
 func show_notice(message: String) -> void:
@@ -202,11 +242,12 @@ func _layout_menu() -> void:
 			roundi(clampf(square_side * 0.043, 23.0, 34.0))
 		)
 	var notice_height: float = clampf(square_side * 0.07, 34.0, 50.0)
+	var notice_width: float = content_width * 1.4
 	notice_label.position = Vector2(
-		_artwork_rect.get_center().x - content_width * 0.62,
-		actions_y + actions_height + button_gap
+		_artwork_rect.get_center().x - notice_width * 0.5,
+		_artwork_rect.position.y + square_side * 0.83
 	)
-	notice_label.size = Vector2(content_width * 1.24, notice_height)
+	notice_label.size = Vector2(notice_width, notice_height)
 	notice_label.add_theme_font_size_override(
 		"font_size",
 		roundi(clampf(square_side * 0.03, 16.0, 23.0))
