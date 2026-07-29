@@ -94,7 +94,7 @@ func _on_run_reset_confirmed() -> void:
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_run_and_save(profile)
 	_show_main_menu(
-		"本次江湖历程已重置"
+		""
 		if bool(result.get("ok", false))
 		else "保存失败，请重试"
 	)
@@ -105,7 +105,7 @@ func _on_progress_reset_confirmed() -> void:
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_all_progress_and_save(profile)
 	_show_main_menu(
-		"所有进度已清除"
+		""
 		if bool(result.get("ok", false))
 		else "保存失败，请重试"
 	)
