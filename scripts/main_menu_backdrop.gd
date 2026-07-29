@@ -6,6 +6,8 @@ const SAGE_COLOR: Color = Color("929b8b")
 const INK_COLOR: Color = Color(0.12, 0.17, 0.15, 0.15)
 const MIST_COLOR: Color = Color(0.96, 0.94, 0.85, 0.16)
 const GOLD_COLOR: Color = Color("b88d58")
+const PHONE_ASPECT: float = 9.0 / 20.0
+const SAFE_ASPECT: float = 9.0 / 16.0
 
 var artwork_rect: Rect2 = Rect2()
 
@@ -20,6 +22,32 @@ static func fit_square_rect(viewport_size: Vector2) -> Rect2:
 	if side <= 0.0:
 		return Rect2()
 	return Rect2((viewport_size - Vector2(side, side)) * 0.5, Vector2(side, side))
+
+
+static func fit_aspect_rect(viewport_size: Vector2, aspect_ratio: float) -> Rect2:
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0 or aspect_ratio <= 0.0:
+		return Rect2()
+	var fitted_size: Vector2
+	if viewport_size.x / viewport_size.y > aspect_ratio:
+		fitted_size = Vector2(viewport_size.y * aspect_ratio, viewport_size.y)
+	else:
+		fitted_size = Vector2(viewport_size.x, viewport_size.x / aspect_ratio)
+	return Rect2((viewport_size - fitted_size) * 0.5, fitted_size)
+
+
+static func fit_safe_rect(viewport_size: Vector2) -> Rect2:
+	return fit_aspect_rect(viewport_size, SAFE_ASPECT)
+
+
+static func fit_phone_artwork_rect(viewport_size: Vector2) -> Rect2:
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return Rect2()
+	var viewport_aspect: float = viewport_size.x / viewport_size.y
+	if viewport_aspect > SAFE_ASPECT:
+		return fit_safe_rect(viewport_size)
+	if viewport_aspect < PHONE_ASPECT:
+		return fit_aspect_rect(viewport_size, PHONE_ASPECT)
+	return Rect2(Vector2.ZERO, viewport_size)
 
 
 func configure(new_artwork_rect: Rect2) -> void:
@@ -89,6 +117,24 @@ func _draw_wide_extensions() -> void:
 		Vector2(right_rect.position.x + right_rect.size.x * 0.58, size.y * 0.68),
 		minf(right_rect.size.x, size.y) * 0.58,
 		INK_COLOR
+	)
+	_draw_ridge(left_rect, 0.74, 0.12, Color(0.09, 0.14, 0.12, 0.10))
+	_draw_ridge(left_rect, 0.86, 0.07, Color(0.09, 0.14, 0.12, 0.08))
+	_draw_ridge(right_rect, 0.74, 0.12, Color(0.09, 0.14, 0.12, 0.10))
+	_draw_ridge(right_rect, 0.86, 0.07, Color(0.09, 0.14, 0.12, 0.08))
+	var seam_color: Color = GOLD_COLOR
+	seam_color.a = 0.58
+	draw_line(
+		Vector2(artwork_rect.position.x, 0.0),
+		Vector2(artwork_rect.position.x, size.y),
+		seam_color,
+		1.0
+	)
+	draw_line(
+		Vector2(artwork_rect.end.x, 0.0),
+		Vector2(artwork_rect.end.x, size.y),
+		seam_color,
+		1.0
 	)
 
 

@@ -28,6 +28,14 @@ func _run() -> void:
 	_check(progress_reset_button.text.is_empty(), "Progress-reset text is replaced")
 	_check(notice.text.is_empty(), "Notice starts empty")
 	_check(artwork.texture != null, "Main-menu artwork texture is always assigned")
+	_check(
+		artwork.texture.get_width() == 1080 and artwork.texture.get_height() == 2400,
+		"Main-menu artwork uses the exact 1080 by 2400 phone master"
+	)
+	_check(
+		artwork.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_COVERED,
+		"Phone artwork center-crops without distortion"
+	)
 	_check(_has_glyph_texture(title), "Title uses its ink image")
 	_check(_has_title_glow(title), "Title has a non-interactive shader glow behind its ink")
 	_check(_has_glyph_texture(journey_button), "Journey action uses its ink image")
@@ -88,25 +96,38 @@ func _run() -> void:
 
 	menu.size = Vector2(540.0, 960.0)
 	await process_frame
-	var tall_artwork: Rect2 = menu.debug_get_artwork_rect()
-	_check(tall_artwork == Rect2(0.0, 210.0, 540.0, 540.0), "Tall layout centers the full square")
+	var normal_artwork: Rect2 = menu.debug_get_artwork_rect()
+	var normal_safe := Rect2(0.0, 0.0, 540.0, 960.0)
+	_check(normal_artwork == Rect2(0.0, 0.0, 540.0, 960.0), "Normal phone fills the screen")
+	_check(normal_artwork == normal_safe, "Normal phone uses the full 9:16 UI-safe region")
 	_check(
 		is_equal_approx(
 			title.size.x,
-			clampf(tall_artwork.size.x * 0.46, 210.0, 330.0) * 1.35
+			clampf(normal_safe.size.x * 0.46, 210.0, 330.0) * 1.35
 		),
 		"Title image uses the 135 percent responsive width"
 	)
 	_check(
-		notice.position.y >= tall_artwork.position.y + tall_artwork.size.y * 0.8,
-		"Tall layout places the notice below the illustrated grid"
+		notice.position.y >= normal_safe.position.y + normal_safe.size.y * 0.8,
+		"Normal-phone layout places the notice below the illustrated grid"
+	)
+	menu.size = Vector2(540.0, 1200.0)
+	await process_frame
+	var long_artwork: Rect2 = menu.debug_get_artwork_rect()
+	var long_safe := Rect2(0.0, 120.0, 540.0, 960.0)
+	_check(long_artwork == Rect2(0.0, 0.0, 540.0, 1200.0), "Long phone reveals the complete 9:20 artwork")
+	_check(
+		is_equal_approx(title.get_global_rect().get_center().x, long_safe.get_center().x),
+		"Long-phone title remains centered in the safe region"
 	)
 	menu.size = Vector2(1280.0, 720.0)
 	await process_frame
 	var wide_artwork: Rect2 = menu.debug_get_artwork_rect()
-	_check(wide_artwork == Rect2(280.0, 0.0, 720.0, 720.0), "Wide layout centers the full square")
+	var wide_safe := Rect2(437.5, 0.0, 405.0, 720.0)
+	_check(wide_artwork == Rect2(437.5, 0.0, 405.0, 720.0), "Wide layout centers a 9:16 artwork crop")
+	_check(wide_artwork == wide_safe, "Wide layout anchors UI to the centered portrait canvas")
 	_check(
-		notice.position.y >= wide_artwork.position.y + wide_artwork.size.y * 0.8,
+		notice.position.y >= wide_safe.position.y + wide_safe.size.y * 0.8,
 		"Wide layout keeps the notice below the illustrated grid"
 	)
 	var buttons: Array[Button] = [journey_button, run_reset_button, progress_reset_button]
