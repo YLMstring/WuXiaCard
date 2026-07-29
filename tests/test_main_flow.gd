@@ -83,6 +83,7 @@ func _run() -> void:
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
+	var run_reset_menu_id: int = menu.get_instance_id()
 	var run_reset_button := menu.get_node("MenuLayer/Actions/RunResetButton") as Button
 	for press_index: int in range(5):
 		run_reset_button.pressed.emit()
@@ -90,8 +91,12 @@ func _run() -> void:
 	menu = flow.debug_get_current_screen() as MenuController
 	_check(menu != null, "Run reset stays on the main menu")
 	_check(
-		(menu.get_node("MenuLayer/Notice") as Label).text == "本次江湖历程已重置",
-		"Run reset reports completion"
+		menu.get_instance_id() == run_reset_menu_id,
+		"Run reset preserves the existing main-menu animation instance"
+	)
+	_check(
+		(menu.get_node("MenuLayer/Notice") as Label).text.is_empty(),
+		"Successful run reset clears the countdown notice"
 	)
 	var reset_profile: Dictionary = Store.new(_save_path).load_profile()
 	_check(not bool(reset_profile["run_active"]), "Run reset clears active state")
@@ -104,14 +109,19 @@ func _run() -> void:
 		"Run reset preserves unlocked cards"
 	)
 
+	var progress_reset_menu_id: int = menu.get_instance_id()
 	var progress_reset_button := menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
 	for press_index: int in range(10):
 		progress_reset_button.pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
 	_check(
-		(menu.get_node("MenuLayer/Notice") as Label).text == "所有进度已清除",
-		"Full progress reset reports completion"
+		menu.get_instance_id() == progress_reset_menu_id,
+		"Full progress reset preserves the existing main-menu animation instance"
+	)
+	_check(
+		(menu.get_node("MenuLayer/Notice") as Label).text.is_empty(),
+		"Successful full reset clears the countdown notice"
 	)
 	var fully_reset_profile: Dictionary = Store.new(_save_path).load_profile()
 	_check(

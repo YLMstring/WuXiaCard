@@ -93,7 +93,7 @@ func _on_run_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_run_and_save(profile)
-	_show_main_menu(
+	_finish_reset_on_current_menu(
 		""
 		if bool(result.get("ok", false))
 		else "保存失败，请重试"
@@ -104,11 +104,19 @@ func _on_progress_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_all_progress_and_save(profile)
-	_show_main_menu(
+	_finish_reset_on_current_menu(
 		""
 		if bool(result.get("ok", false))
 		else "保存失败，请重试"
 	)
+
+
+func _finish_reset_on_current_menu(notice: String) -> void:
+	var menu := _current_screen as MenuController
+	if menu != null:
+		menu.show_notice(notice)
+		return
+	_show_main_menu(notice)
 
 
 func _on_deck_builder_requested() -> void:

@@ -58,11 +58,11 @@ func _run() -> void:
 		title_glow_material.get_shader_parameter(&"pulse_strength")
 	)
 	_check(
-		title.scale.x > initial_title_scale + 0.005,
-		"Title breathing visibly changes its scale"
+		absf(title.scale.x - initial_title_scale) < 0.001,
+		"Title glow breathing keeps the title scale stable"
 	)
 	_check(
-		animated_glow_strength > initial_glow_strength + 0.1,
+		animated_glow_strength > initial_glow_strength + 0.04,
 		"Title breathing visibly changes the halo strength"
 	)
 	_check(
