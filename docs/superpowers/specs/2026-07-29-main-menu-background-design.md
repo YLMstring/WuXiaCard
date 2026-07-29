@@ -8,7 +8,7 @@ phones, and wide desktop displays.
 
 ## Art Direction
 
-The scene depicts two tiny martial masters facing each other across a
+The scene depicts one tiny martial champion surrounded by eight swordsmen on a
 monumental nine-square stone arena on a storm-lit mountaintop. The arena is
 viewed from a slightly elevated cinematic angle and reads clearly as a
 three-by-three grid without resembling the literal duel interface.
@@ -33,8 +33,8 @@ All essential imagery stays within the central crop-safe region:
 
 - the upper center remains relatively calm for the title;
 - the middle-to-lower center remains readable behind the menu actions;
-- the two masters and the recognizable core of the nine-square arena survive
-  both narrow portrait and wide landscape crops;
+- all nine swordsmen and the recognizable core of the nine-square arena
+  survive both narrow portrait and wide landscape crops;
 - outer mountains, cloud banks, mist, and ink texture provide expendable
   material at every edge.
 
@@ -46,6 +46,11 @@ No single edge contains unique narrative information.
 - Raster illustration suitable for a full-screen game menu.
 - High-resolution square master to support opposing portrait and landscape
   crops.
+- Exactly nine swordsmen: one champion entirely on the center slab and one
+  opponent entirely on each surrounding slab.
+- Every opponent faces or turns toward the central champion in a radial siege.
+- Positions and restrained attack stances vary naturally within each slab.
+- No swordsman touches, crosses, or stands between grid seams.
 - No lettering, logos, interface elements, decorative frame, or watermark.
 - No oversized foreground character portrait.
 - Avoid anime styling, photorealism, neon colors, sharp alpine peaks, cluttered
@@ -56,5 +61,5 @@ No single edge contains unique narrative information.
 ## Review
 
 Before project integration, inspect the generated master and representative
-9:16, 9:20, 16:9, and ultrawide center crops. The arena, duelists, title space,
-and menu space must remain legible in each.
+9:16, 9:20, 16:9, and ultrawide center crops. The arena, all nine swordsmen,
+title space, and menu space must remain legible in each.
