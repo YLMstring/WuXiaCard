@@ -29,17 +29,20 @@ The mood is tense, mythic, and prestigious rather than violent or grim.
 The artwork contains no text or UI. Godot will render the title `九宫论剑` and
 the three actions `踏入江湖`, `名震武林`, and `封剑归隐`.
 
-All essential imagery stays within the central crop-safe region:
+All essential imagery stays inside the square master:
 
 - the upper center remains relatively calm for the title;
 - the middle-to-lower center remains readable behind the menu actions;
-- all nine swordsmen and the recognizable core of the nine-square arena
-  survive both narrow portrait and wide landscape crops;
-- outer mountains, cloud banks, mist, and ink texture provide expendable
-  material at every edge.
+- all nine swordsmen and the complete nine-square arena remain visible on every
+  supported aspect ratio;
+- outer mountains, cloud banks, mist, and ink texture transition naturally
+  into decorative screen extensions.
 
-The final master should support center-crop rendering rather than stretching.
-No single edge contains unique narrative information.
+The final master is never stretched or cropped. Godot displays the entire
+square at the largest size that fits the viewport, then fills the remaining
+top-and-bottom or left-and-right bands with matching mist, paper, mountain, and
+ink extensions. These extensions are decorative and contain no title, menu
+actions, swordsmen, or unique narrative information.
 
 ## Asset Requirements
 
@@ -67,5 +70,6 @@ No single edge contains unique narrative information.
 ## Review
 
 Before project integration, inspect the generated master and representative
-9:16, 9:20, 16:9, and ultrawide center crops. The arena, all nine swordsmen,
-title space, and menu space must remain legible in each.
+9:16, 9:20, 16:9, and ultrawide contain-plus-extension compositions. The
+complete arena, all nine swordsmen, title space, and menu space must remain
+legible in each.
