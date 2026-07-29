@@ -23,6 +23,12 @@ const BackdropScript = preload("res://scripts/main_menu_backdrop.gd")
 const MENU_ARTWORK: Texture2D = preload("res://pics/main_menu_background_phone.png")
 const TITLE_INK: Texture2D = preload("res://inkpics/九宫论剑.png")
 const TITLE_GLOW_SHADER: Shader = preload("res://scripts/main_menu_title_glow.gdshader")
+const TITLE_BREATH_MIN_SCALE: Vector2 = Vector2(0.99, 0.99)
+const TITLE_BREATH_MAX_SCALE: Vector2 = Vector2(1.01, 1.01)
+const TITLE_BREATH_DURATION: float = 1.1
+const TITLE_GLOW_MIN_STRENGTH: float = 0.3
+const TITLE_GLOW_MAX_STRENGTH: float = 0.7
+const TITLE_GLOW_COLOR: Color = Color(1.0, 0.78, 0.28, 0.82)
 const JOURNEY_INK: Texture2D = preload("res://inkpics/踏入江湖.png")
 const RUN_RESET_INK: Texture2D = preload("res://inkpics/闭关重修.png")
 const PROGRESS_RESET_INK: Texture2D = preload("res://inkpics/封剑归隐.png")
@@ -87,14 +93,30 @@ func _add_title_glow(parent: Control, texture: Texture2D) -> void:
 	glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	var glow_material := ShaderMaterial.new()
 	glow_material.shader = TITLE_GLOW_SHADER
-	glow_material.set_shader_parameter(&"pulse_strength", 0.38)
+	glow_material.set_shader_parameter(&"radius", 11.5)
+	glow_material.set_shader_parameter(&"pulse_strength", TITLE_GLOW_MIN_STRENGTH)
+	glow_material.set_shader_parameter(&"glow_color", TITLE_GLOW_COLOR)
 	glow.material = glow_material
 	parent.add_child(glow)
 	glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var pulse: Tween = glow.create_tween().set_loops()
+	parent.scale = TITLE_BREATH_MIN_SCALE
+	parent.self_modulate = Color.WHITE
+	var pulse: Tween = parent.create_tween().set_loops()
 	pulse.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	pulse.tween_method(_set_title_glow_strength.bind(glow_material), 0.38, 0.72, 1.3)
-	pulse.tween_method(_set_title_glow_strength.bind(glow_material), 0.72, 0.38, 1.3)
+	pulse.tween_property(parent, "scale", TITLE_BREATH_MAX_SCALE, TITLE_BREATH_DURATION)
+	pulse.parallel().tween_method(
+		_set_title_glow_strength.bind(glow_material),
+		TITLE_GLOW_MIN_STRENGTH,
+		TITLE_GLOW_MAX_STRENGTH,
+		TITLE_BREATH_DURATION
+	)
+	pulse.tween_property(parent, "scale", TITLE_BREATH_MIN_SCALE, TITLE_BREATH_DURATION)
+	pulse.parallel().tween_method(
+		_set_title_glow_strength.bind(glow_material),
+		TITLE_GLOW_MAX_STRENGTH,
+		TITLE_GLOW_MIN_STRENGTH,
+		TITLE_BREATH_DURATION
+	)
 
 
 func _set_title_glow_strength(strength: float, glow_material: ShaderMaterial) -> void:
@@ -277,6 +299,7 @@ func _layout_menu() -> void:
 		title_center_y - title_height * 0.5
 	)
 	title_label.size = Vector2(title_width, title_height)
+	title_label.pivot_offset = title_label.size * 0.5
 	title_label.add_theme_font_size_override(
 		"font_size",
 		roundi(clampf(safe_width * 0.068, 32.0, 52.0))

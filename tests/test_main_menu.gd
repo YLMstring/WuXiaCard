@@ -38,6 +38,41 @@ func _run() -> void:
 	)
 	_check(_has_glyph_texture(title), "Title uses its ink image")
 	_check(_has_title_glow(title), "Title has a non-interactive shader glow behind its ink")
+	var title_glow := title.get_node("TitleGlow") as TextureRect
+	var title_glow_material := title_glow.material as ShaderMaterial
+	var initial_title_scale: float = title.scale.x
+	var initial_title_color: Color = title.self_modulate
+	var initial_glow_parameter: Variant = title_glow_material.get_shader_parameter(&"glow_color")
+	var initial_glow_color: Color = (
+		initial_glow_parameter if initial_glow_parameter is Color else Color.TRANSPARENT
+	)
+	var initial_glow_strength: float = float(
+		title_glow_material.get_shader_parameter(&"pulse_strength")
+	)
+	await create_timer(0.65).timeout
+	var animated_glow_parameter: Variant = title_glow_material.get_shader_parameter(&"glow_color")
+	var animated_glow_color: Color = (
+		animated_glow_parameter if animated_glow_parameter is Color else Color.TRANSPARENT
+	)
+	var animated_glow_strength: float = float(
+		title_glow_material.get_shader_parameter(&"pulse_strength")
+	)
+	_check(
+		title.scale.x > initial_title_scale + 0.005,
+		"Title breathing visibly changes its scale"
+	)
+	_check(
+		animated_glow_strength > initial_glow_strength + 0.1,
+		"Title breathing visibly changes the halo strength"
+	)
+	_check(
+		_color_difference(initial_title_color, title.self_modulate) < 0.01,
+		"Title breathing keeps the ink color stable"
+	)
+	_check(
+		_color_difference(initial_glow_color, animated_glow_color) < 0.01,
+		"Title breathing keeps one stable halo color"
+	)
 	_check(_has_glyph_texture(journey_button), "Journey action uses its ink image")
 	_check(_has_glyph_texture(run_reset_button), "Run reset uses its ink image")
 	_check(_has_glyph_texture(progress_reset_button), "Progress reset uses its ink image")
@@ -164,6 +199,15 @@ func _has_title_glow(parent: Node) -> bool:
 		and glow.material is ShaderMaterial
 		and glow.mouse_filter == Control.MOUSE_FILTER_IGNORE
 		and glow.get_index() < glyph.get_index()
+	)
+
+
+func _color_difference(a: Color, b: Color) -> float:
+	return (
+		absf(a.r - b.r)
+		+ absf(a.g - b.g)
+		+ absf(a.b - b.b)
+		+ absf(a.a - b.a)
 	)
 
 
