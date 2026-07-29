@@ -61,9 +61,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"CangSongYingKe3",
 	&"CangSongYingKe4",
-	&"gate_general",
-	&"meng_huo",
-	&"jiang_wei",
+	&"YouFenLaiYi",
 	&"fa_zheng",
 	&"fire_envoy",
 	&"tiger_general",
@@ -89,6 +87,8 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"luming_wenlu",
 	&"jingwei_dingju",
 	&"zhishang_shanhe",
+	&"gate_general",
+	&"meng_huo",
 ]
 
 const _CARD_DEFINITIONS: Dictionary = {
@@ -185,77 +185,13 @@ const _CARD_DEFINITIONS: Dictionary = {
 			},
 		],
 	},
-	&"gate_general": {
-		"id": &"gate_general",
-		"glyph": "关",
-		"picture": "res://pics/LKT010_002.png",
-		"sect": "",
-		"tier": 1,
-		"weapon": "",
-		"description": "",
-		"flavor": "",
-		"powers": [7, 7, 7, 7],
-		"abilities": [
-			{
-				"retained_on_flip": true,
-				"triggers": [
-					{
-						"event": CARD_BE_ATTACKED,
-						"conditions": [
-							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
-						],
-					},
-				],
-			},
-		],
-	},
-	&"meng_huo": {
-		"id": &"meng_huo",
-		"glyph": "孟",
-		"picture": "res://pics/LKT010_003.png",
-		"sect": "",
-		"tier": 1,
-		"weapon": "",
-		"description": "",
-		"flavor": "",
-		"powers": [8, 7, 2, 3],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": CARD_AFTER_FLIPPED,
-						"conditions": [
-							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_GAIN_KI, "amount": 1},
-						],
-					},
-					{
-						"event": TRIGGER_END_OWNER_TURN,
-						"conditions": [
-							{"type": CONDITION_TURN_OWNER_IS_SELF},
-							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
-						],
-						"actions": [
-							{"type": ACTION_SPEND_ALL_KI},
-							{"type": ACTION_REQUEST_EXTRA_TURN},
-						],
-					},
-				],
-			},
-		],
-	},
-	&"jiang_wei": {
-		"id": &"jiang_wei",
-		"glyph": "姜",
-		"picture": "res://pics/LKT010_004.png",
-		"sect": "",
-		"tier": 1,
-		"weapon": "",
+	&"YouFenLaiYi": {
+		"id": &"YouFenLaiYi",
+		"glyph": "有凤来仪",
+		"picture": "res://pics/LKT010_558.png",
+		"sect": "华山派",
+		"tier": 2,
+		"weapon": "剑法",
 		"description": "",
 		"flavor": "",
 		"powers": [6, 6, 6, 6],
@@ -633,6 +569,70 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "书院地窖藏着一幅从未完成的天下图，据说每当江湖格局改变，纸上便会自行多出一道墨痕。",
 		"powers": [7, 5, 6, 4],
 		"abilities": [],
+	},
+	&"gate_general": {
+		"id": &"gate_general",
+		"glyph": "关",
+		"picture": "res://pics/LKT010_002.png",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
+		"powers": [7, 7, 7, 7],
+		"abilities": [
+			{
+				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"meng_huo": {
+		"id": &"meng_huo",
+		"glyph": "孟",
+		"picture": "res://pics/LKT010_003.png",
+		"sect": "",
+		"tier": 1,
+		"weapon": "",
+		"description": "",
+		"flavor": "",
+		"powers": [8, 7, 2, 3],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": CARD_AFTER_FLIPPED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_GAIN_KI, "amount": 1},
+						],
+					},
+					{
+						"event": TRIGGER_END_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_ALL_KI},
+							{"type": ACTION_REQUEST_EXTRA_TURN},
+						],
+					},
+				],
+			},
+		],
 	},
 }
 

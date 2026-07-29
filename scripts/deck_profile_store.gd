@@ -15,7 +15,7 @@ const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"gate_general",
 	&"meng_huo",
-	&"jiang_wei",
+	&"YouFenLaiYi",
 	&"fa_zheng",
 ]
 const DEFAULT_LOCKED_IDS: Array[StringName] = [
