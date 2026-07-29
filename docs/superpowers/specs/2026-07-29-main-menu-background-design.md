@@ -8,8 +8,8 @@ phones, and wide desktop displays.
 
 ## Art Direction
 
-The scene depicts one tiny martial champion surrounded by eight swordsmen on a
-monumental nine-square stone arena on a storm-lit mountaintop. The arena is
+The scene depicts two tiny martial masters facing each other diagonally across
+a monumental nine-square stone arena on a storm-lit mountaintop. The arena is
 viewed from a slightly elevated cinematic angle and reads clearly as a
 three-by-three grid without resembling the literal duel interface.
 
@@ -33,7 +33,7 @@ All essential imagery stays inside the square master:
 
 - the upper center remains relatively calm for the title;
 - the middle-to-lower center remains readable behind the menu actions;
-- all nine swordsmen and the complete nine-square arena remain visible on every
+- both swordsmen and the complete nine-square arena remain visible on every
   supported aspect ratio;
 - outer mountains, cloud banks, mist, and ink texture transition naturally
   into decorative screen extensions.
@@ -49,16 +49,15 @@ actions, swordsmen, or unique narrative information.
 - Raster illustration suitable for a full-screen game menu.
 - High-resolution square master to support opposing portrait and landscape
   crops.
-- Exactly nine swordsmen: one champion entirely on the center slab and one
-  opponent entirely on each surrounding slab.
-- Every opponent faces or turns toward the central champion in a radial siege.
-- Every swordsman stands near the visual center of their assigned slab, with a
-  clearly visible margin of empty stone separating feet, body, robes, and
-  weapon from all four seams.
-- Restrained attack stances vary naturally without changing this centered
-  placement.
-- If narrow-screen visibility requires adjustment, reduce figure scale rather
-  than moving figures toward seams.
+- Exactly two swordsmen.
+- One stands near the visual center of the middle-left slab and faces
+  diagonally up-right.
+- The other stands near the visual center of the top-right slab and faces
+  diagonally down-left.
+- Heads, torsos, feet, and weapons reinforce the same line of confrontation.
+- A clearly visible margin of empty stone separates each complete figure from
+  all four seams of their assigned slab.
+- The other seven slabs remain empty.
 - No swordsman touches, crosses, or stands between grid seams.
 - No lettering, logos, interface elements, decorative frame, or watermark.
 - No oversized foreground character portrait.
@@ -71,5 +70,5 @@ actions, swordsmen, or unique narrative information.
 
 Before project integration, inspect the generated master and representative
 9:16, 9:20, 16:9, and ultrawide contain-plus-extension compositions. The
-complete arena, all nine swordsmen, title space, and menu space must remain
-legible in each.
+complete arena, both swordsmen, title space, and menu space must remain legible
+in each.
