@@ -19,12 +19,23 @@ const BUFFER_ROWS: int = 1
 const POOLED_ROWS: int = VISIBLE_ROWS + BUFFER_ROWS * 2
 const CONTENT_TOP_PADDING: float = 8.0
 const CONTENT_SIDE_PADDING: float = 7.0
+const SCROLL_VIEWPORT_BOTTOM_EXTENSION: float = 8.0
+const TRIANGLE_SLOT_WIDTH_SCALE: float = 1.4
+const TRIANGLE_HORIZONTAL_GAP: float = 10.0
+const TRIANGLE_VERTICAL_GAP: float = 8.0
+const TRIANGLE_BOTTOM_PADDING: float = 4.0
+
+enum SlotLayoutMode {
+	VIRTUAL_GRID,
+	UPWARD_TRIANGLE,
+}
 
 @export var hold_duration: float = 0.25
 @export_range(1, 8, 1) var column_count: int = COLUMN_COUNT
 @export_range(1, 1000, 1) var total_slots: int = TOTAL_SLOTS
 @export_range(1, 10, 1) var visible_rows: int = VISIBLE_ROWS
 @export_range(0, 4, 1) var buffer_rows: int = BUFFER_ROWS
+@export var slot_layout_mode: SlotLayoutMode = SlotLayoutMode.VIRTUAL_GRID
 
 var library_slots: Array = []
 var library_display_owner_ids: Array[int] = []
@@ -60,7 +71,11 @@ func _ready() -> void:
 	_pooled_rows = mini(_total_rows, visible_rows + buffer_rows * 2)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	scroll.vertical_scroll_mode = (
+		ScrollContainer.SCROLL_MODE_DISABLED
+		if slot_layout_mode == SlotLayoutMode.UPWARD_TRIANGLE
+		else ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	)
 	scroll.focus_mode = Control.FOCUS_ALL
 	scroll.get_v_scroll_bar().value_changed.connect(_on_scroll_changed)
 	resized.connect(_queue_layout_grid)
@@ -221,6 +236,9 @@ func _layout_grid() -> void:
 	title.add_theme_font_size_override("font_size", clampi(int(size.x * 0.07), 22, 30))
 	if scroll.size.x <= 0.0 or scroll.size.y <= 0.0:
 		return
+	if slot_layout_mode == SlotLayoutMode.UPWARD_TRIANGLE:
+		_layout_upward_triangle()
+		return
 	var horizontal_gap: float = 6.0
 	var usable_width: float = scroll.size.x - CONTENT_SIDE_PADDING * 2.0
 	_column_width = maxf(
@@ -228,7 +246,8 @@ func _layout_grid() -> void:
 		(usable_width - horizontal_gap * float(column_count - 1)) / float(column_count)
 	)
 	var fitted_row_height: float = (
-		(scroll.size.y - CONTENT_TOP_PADDING) / float(visible_rows)
+		(scroll.size.y - CONTENT_TOP_PADDING - SCROLL_VIEWPORT_BOTTOM_EXTENSION)
+		/ float(visible_rows)
 	)
 	_row_height = maxf(1.0, fitted_row_height + SlotLayoutData.ROW_HEIGHT_INCREMENT)
 	content.custom_minimum_size = Vector2(
@@ -241,11 +260,44 @@ func _layout_grid() -> void:
 	_refresh_pool(true)
 
 
+func _layout_upward_triangle() -> void:
+	var usable_width: float = scroll.size.x - CONTENT_SIDE_PADDING * 2.0
+	var old_three_column_width: float = (
+		(usable_width - 6.0 * 2.0) / 3.0
+	)
+	var maximum_two_column_width: float = (
+		(usable_width - TRIANGLE_HORIZONTAL_GAP) * 0.5
+	)
+	_column_width = maxf(
+		1.0,
+		minf(
+			old_three_column_width * TRIANGLE_SLOT_WIDTH_SCALE,
+			maximum_two_column_width
+		)
+	)
+	var usable_height: float = maxf(
+		2.0,
+		scroll.size.y
+		- CONTENT_TOP_PADDING
+		- TRIANGLE_BOTTOM_PADDING
+		- TRIANGLE_VERTICAL_GAP
+	)
+	_row_height = usable_height * 0.5
+	content.custom_minimum_size = scroll.size
+	for slot: Variant in _slot_pool:
+		slot.size = Vector2(_column_width, _row_height)
+	_pending_refresh = true
+	_refresh_pool(true)
+
+
 func _refresh_pool(force: bool = false) -> void:
 	if not is_node_ready() or _slot_pool.is_empty():
 		return
 	if _recycling_frozen:
 		_pending_refresh = true
+		return
+	if slot_layout_mode == SlotLayoutMode.UPWARD_TRIANGLE:
+		_refresh_triangle_pool(force)
 		return
 	var effective_scroll: float = maxf(0.0, float(scroll.scroll_vertical) - CONTENT_TOP_PADDING)
 	var max_first_visible_row: int = maxi(0, _total_rows - visible_rows)
@@ -272,6 +324,35 @@ func _refresh_pool(force: bool = false) -> void:
 			CONTENT_TOP_PADDING + float(logical_row) * _row_height
 		)
 		_bind_slot(slot, logical_index)
+
+
+func _refresh_triangle_pool(force: bool = false) -> void:
+	if not force and not _pending_refresh and _pool_start_row == 0:
+		return
+	_pool_start_row = 0
+	_pending_refresh = false
+	var lower_left_x: float = (
+		scroll.size.x - (_column_width * 2.0 + TRIANGLE_HORIZONTAL_GAP)
+	) * 0.5
+	var positions: Array[Vector2] = [
+		Vector2((scroll.size.x - _column_width) * 0.5, CONTENT_TOP_PADDING),
+		Vector2(
+			lower_left_x,
+			CONTENT_TOP_PADDING + _row_height + TRIANGLE_VERTICAL_GAP
+		),
+		Vector2(
+			lower_left_x + _column_width + TRIANGLE_HORIZONTAL_GAP,
+			CONTENT_TOP_PADDING + _row_height + TRIANGLE_VERTICAL_GAP
+		),
+	]
+	for pool_index: int in range(_slot_pool.size()):
+		var slot: Variant = _slot_pool[pool_index]
+		slot.position = (
+			positions[pool_index]
+			if pool_index < positions.size()
+			else Vector2(-10000.0, -10000.0)
+		)
+		_bind_slot(slot, pool_index)
 
 
 func _bind_slot(slot: Variant, logical_index: int) -> void:

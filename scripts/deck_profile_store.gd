@@ -19,7 +19,7 @@ const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"gate_general",
 	&"meng_huo",
-	&"YouFenLaiYi",
+	&"YouFenLaiYi2",
 	&"fa_zheng",
 ]
 const DEFAULT_LOCKED_IDS: Array[StringName] = [
@@ -737,8 +737,6 @@ func advance_after_victory_and_save(
 
 
 static func tier_for_level(level: int) -> int:
-	if level >= 15:
-		return 6
 	if level >= 11:
 		return 5
 	if level >= 8:

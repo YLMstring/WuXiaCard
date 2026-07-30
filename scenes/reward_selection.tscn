@@ -11,6 +11,7 @@ column_count = 3
 total_slots = 3
 visible_rows = 1
 buffer_rows = 0
+slot_layout_mode = 1
 
 [node name="GoFirstButton" parent="DuelCanvas" index="4"]
 visible = false

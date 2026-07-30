@@ -85,10 +85,14 @@ func _run() -> void:
 		"Library card host preserves the standard 3:4 ratio"
 	)
 	_check(is_equal_approx(first.position.y, 8.0), "First library row starts eight pixels below the scroll origin")
-	var fitted_row_height: float = (library_scroll.size.y - 8.0) / 3.0
+	var fitted_row_height: float = (library_scroll.size.y - 8.0 - 8.0) / 3.0
 	_check(
 		is_equal_approx(grid.debug_get_row_height(), fitted_row_height + 2.0),
 		"Virtual rows gain the same two pixels added to the card-name gap"
+	)
+	_check(
+		8.0 + grid.debug_get_row_height() * 3.0 <= library_scroll.size.y - 1.0,
+		"Third visible row remains inside the extended scroll viewport"
 	)
 	_check(
 		is_equal_approx(fifth.position.y, 8.0 + grid.debug_get_row_height()),

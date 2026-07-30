@@ -44,7 +44,7 @@ mouse_filter = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 18
+theme_override_constants/margin_bottom = 10
 
 [node name="Layout" type="VBoxContainer" parent="Body/Margin"]
 layout_mode = 2

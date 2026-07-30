@@ -68,6 +68,29 @@ func _run() -> void:
 	_check(first_slot != null and not first_slot.is_placeholder(), "First reward is revealed")
 	_check(second_slot != null and second_slot.is_placeholder(), "Second position is a card back")
 	_check(third_slot != null and third_slot.is_placeholder(), "Third position is a card back")
+	var reward_scroll := grid.find_child("Scroll", true, false) as ScrollContainer
+	var scroll_center_x: float = reward_scroll.size.x * 0.5
+	var first_center_x: float = first_slot.position.x + first_slot.size.x * 0.5
+	var second_center_x: float = second_slot.position.x + second_slot.size.x * 0.5
+	var third_center_x: float = third_slot.position.x + third_slot.size.x * 0.5
+	var old_three_column_width: float = (reward_scroll.size.x - 14.0 - 12.0) / 3.0
+	_check(
+		is_equal_approx(first_center_x, scroll_center_x),
+		"First reward forms the centered upper point"
+	)
+	_check(
+		second_slot.position.y > first_slot.position.y
+		and is_equal_approx(second_slot.position.y, third_slot.position.y),
+		"Second and third rewards form one lower row"
+	)
+	_check(
+		is_equal_approx(second_center_x + third_center_x, reward_scroll.size.x),
+		"Lower reward cards are symmetric around the scroll center"
+	)
+	_check(
+		first_slot.size.x >= old_three_column_width * 1.35,
+		"Reward triangle uses visibly larger card slots"
+	)
 	_check(
 		second_slot.get_node("CardHost/CardView").is_face_down()
 		and third_slot.get_node("CardHost/CardView").is_face_down(),

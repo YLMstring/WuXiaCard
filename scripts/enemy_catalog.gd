@@ -38,10 +38,10 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 
 const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"qingfeng_xuedi", "name": "清风学弟", "level": 1, "deck": [&"CangSongYingKe1", &"CangSongYingKe2", &"fire_envoy", &"tiger_general", &"strategist"]},
-	{"id": &"dukou_xiaoke", "name": "渡口侠客", "level": 1, "deck": [&"CangSongYingKe2", &"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi", &"fa_zheng"]},
-	{"id": &"tieshan_menren", "name": "铁山门人", "level": 2, "deck": [&"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi", &"fa_zheng", &"fire_envoy"]},
-	{"id": &"qingzhu_daoke", "name": "青竹刀客", "level": 2, "deck": [&"CangSongYingKe4", &"YouFenLaiYi", &"fa_zheng", &"fire_envoy", &"tiger_general"]},
-	{"id": &"luoxia_jianji", "name": "落霞剑姬", "level": 3, "deck": [&"YouFenLaiYi", &"fa_zheng", &"fire_envoy", &"tiger_general", &"strategist"]},
+	{"id": &"dukou_xiaoke", "name": "渡口侠客", "level": 1, "deck": [&"CangSongYingKe2", &"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi2", &"fa_zheng"]},
+	{"id": &"tieshan_menren", "name": "铁山门人", "level": 2, "deck": [&"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi2", &"fa_zheng", &"fire_envoy"]},
+	{"id": &"qingzhu_daoke", "name": "青竹刀客", "level": 2, "deck": [&"CangSongYingKe4", &"YouFenLaiYi2", &"fa_zheng", &"fire_envoy", &"tiger_general"]},
+	{"id": &"luoxia_jianji", "name": "落霞剑姬", "level": 3, "deck": [&"YouFenLaiYi2", &"fa_zheng", &"fire_envoy", &"tiger_general", &"strategist"]},
 	{"id": &"heisha_xingzhe", "name": "黑砂行者", "level": 3, "deck": [&"fa_zheng", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"]},
 	{"id": &"beiling_shuangying", "name": "北岭双影", "level": 4, "deck": [&"fire_envoy", &"tiger_general", &"strategist", &"sun_zan", &"hanfeng_liezhen"]},
 	{"id": &"yanbo_yuke", "name": "烟波渔客", "level": 4, "deck": [&"tiger_general", &"strategist", &"sun_zan", &"hanfeng_liezhen", &"huixue_liuguang"]},

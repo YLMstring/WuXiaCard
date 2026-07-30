@@ -61,7 +61,9 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"CangSongYingKe3",
 	&"CangSongYingKe4",
-	&"YouFenLaiYi",
+	&"YouFenLaiYi2",
+	&"YouFenLaiYi3",
+	&"YouFenLaiYi4",
 	&"fa_zheng",
 	&"fire_envoy",
 	&"tiger_general",
@@ -185,17 +187,71 @@ const _CARD_DEFINITIONS: Dictionary = {
 			},
 		],
 	},
-	&"YouFenLaiYi": {
-		"id": &"YouFenLaiYi",
+	&"YouFenLaiYi2": {
+		"id": &"YouFenLaiYi2",
 		"glyph": "有凤来仪",
 		"picture": "res://pics/LKT010_558.png",
 		"sect": "华山派",
 		"tier": 2,
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。",
-		"flavor": "",
+		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
 		"powers": [6, 6, 6, 6],
 		"starting_ki": 1,
+		"abilities": [
+			{
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
+			},
+		],
+	},
+	&"YouFenLaiYi3": {
+		"id": &"YouFenLaiYi3",
+		"glyph": "有凤来仪",
+		"picture": "res://pics/LKT010_558.png",
+		"sect": "华山派",
+		"tier": 3,
+		"weapon": "剑法",
+		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。",
+		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
+		"powers": [6, 6, 6, 6],
+		"starting_ki": 2,
+		"abilities": [
+			{
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
+			},
+		],
+	},
+	&"YouFenLaiYi4": {
+		"id": &"YouFenLaiYi4",
+		"glyph": "有凤来仪",
+		"picture": "res://pics/LKT010_558.png",
+		"sect": "华山派",
+		"tier": 4,
+		"weapon": "剑法",
+		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。锁定，指定：与一个相邻敌方交换位置，然后发起攻击。",
+		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
+		"powers": [6, 6, 6, 6],
+		"starting_ki": 3,
 		"abilities": [
 			{
 				"activation": {
