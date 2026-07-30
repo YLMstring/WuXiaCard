@@ -20,11 +20,13 @@ const DEFAULT_STATUS: String = "长按奖励卡牌，然后拖至主牌组"
 @export var remembered_enemy_glyphs: Array[String] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
+@export var reward_color_seed: int = 0
 
 var testing_mode: bool = Settings.TESTING_MODE
 var profile: Dictionary = {}
 var _profile_store: RefCounted
 var _reward_ids: Array[StringName] = []
+var _reward_display_owner_ids: Array[int] = []
 var _inspection_open: bool = false
 var _drag_source_index: int = -1
 var _drag_proxy: CardView = null
@@ -73,6 +75,7 @@ func _ready() -> void:
 	go_second_button.visible = false
 	go_second_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	library_grid.set_hold_duration(hold_duration)
+	_roll_reward_display_owners()
 	_refresh_reward_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
 	library_grid.drag_started.connect(_on_library_drag_started)
@@ -89,6 +92,10 @@ func _ready() -> void:
 
 func debug_get_reward_ids() -> Array[StringName]:
 	return _reward_ids.duplicate()
+
+
+func debug_get_reward_display_owner_ids() -> Array[int]:
+	return _reward_display_owner_ids.duplicate()
 
 
 func debug_is_inspecting() -> bool:
@@ -149,7 +156,6 @@ func _spawn_card_in_slot(
 
 func _refresh_reward_grid() -> void:
 	var entries: Array = []
-	var owner_ids: Array = []
 	var drag_enabled: Array = []
 	for reward_index: int in range(3):
 		if reward_index < _reward_ids.size():
@@ -158,8 +164,27 @@ func _refresh_reward_grid() -> void:
 		else:
 			entries.append({"_display_placeholder": true})
 			drag_enabled.append(false)
-		owner_ids.append(DuelRules.PLAYER_OWNER)
-	library_grid.set_display_entries(entries, owner_ids, drag_enabled, true)
+	library_grid.set_display_entries(
+		entries,
+		_reward_display_owner_ids,
+		drag_enabled,
+		true
+	)
+
+
+func _roll_reward_display_owners() -> void:
+	var random := RandomNumberGenerator.new()
+	if reward_color_seed == 0:
+		random.randomize()
+	else:
+		random.seed = reward_color_seed
+	_reward_display_owner_ids.clear()
+	for reward_index: int in range(3):
+		_reward_display_owner_ids.append(
+			DuelRules.PLAYER_OWNER
+			if random.randi_range(0, 1) == 0
+			else DuelRules.OPPONENT_OWNER
+		)
 
 
 func _on_library_inspection_requested(

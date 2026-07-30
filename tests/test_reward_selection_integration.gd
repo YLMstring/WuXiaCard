@@ -53,6 +53,7 @@ func _run() -> void:
 	reward.upcoming_enemy_name = String(enemy["name"])
 	reward.upcoming_enemy_card_ids = _string_names(enemy["deck"])
 	reward.testing_mode = false
+	reward.set("reward_color_seed", 411)
 	reward.reward_claimed.connect(_on_reward_claimed)
 	reward.back_requested.connect(_on_back_requested)
 	root.add_child(reward)
@@ -65,6 +66,18 @@ func _run() -> void:
 	var first_slot: Variant = grid.debug_get_bound_slot(0)
 	var second_slot: Variant = grid.debug_get_bound_slot(1)
 	var third_slot: Variant = grid.debug_get_bound_slot(2)
+	_check(
+		[
+			grid.get_display_owner_id(0),
+			grid.get_display_owner_id(1),
+			grid.get_display_owner_id(2),
+		] == [
+			DuelRules.OPPONENT_OWNER,
+			DuelRules.PLAYER_OWNER,
+			DuelRules.OPPONENT_OWNER,
+		],
+		"Fixed reward color seed rolls the expected independent red/blue sequence"
+	)
 	_check(first_slot != null and not first_slot.is_placeholder(), "First reward is revealed")
 	_check(second_slot != null and second_slot.is_placeholder(), "Second position is a card back")
 	_check(third_slot != null and third_slot.is_placeholder(), "Third position is a card back")
