@@ -129,14 +129,14 @@ mouse_filter = 2
 
 [node name="Value" type="Label" parent="DuelCanvas/TopBar/EnemySeal"]
 layout_mode = 2
-text = "敌"
+text = "友"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="OpponentName" type="Label" parent="DuelCanvas/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "对手名字"
+text = "江湖门派"
 vertical_alignment = 1
 
 [node name="BackButton" type="Button" parent="DuelCanvas/TopBar"]
