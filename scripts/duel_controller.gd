@@ -71,6 +71,7 @@ var _hovered_cell: int = -1
 var _drag_source_zone: StringName = &""
 var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
+var _drag_action_candidates: Array[ActionData] = []
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
 var _attack_vfx_trace: Array[Dictionary] = []
@@ -408,19 +409,21 @@ func debug_commit_activate(
 	owner_id: int,
 	source_cell: int,
 	target_cell: int,
-	continue_automatically: bool = false
+	continue_automatically: bool = false,
+	activation_index: int = 0
 ) -> bool:
 	if _inspection_open or duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
 		return false
 	var card := board_cards[source_cell] as CardView
-	var activation: Dictionary = Abilities.get_activation(card.card_data)
+	var activation: Dictionary = Abilities.get_activation(card.card_data, activation_index)
 	if activation.is_empty():
 		return false
 	var action: ActionData = ActionData.make_activate(
 		source_cell,
 		_get_card_instance_id(card),
 		ActionData.TARGET_BOARD_CELL,
-		target_cell
+		target_cell,
+		activation_index
 	)
 	if not Simulator.is_action_legal(duel_state, action):
 		return false
@@ -621,10 +624,11 @@ func _commit_action(
 		return
 	if not Simulator.is_action_legal(duel_state, action):
 		return
-	var committed_instance_id: StringName = _get_card_instance_id(card)
 	var movement_start: Vector2 = Vector2.ZERO
+	var activation_views: Dictionary = {}
 	if action.action_type == ActionData.TYPE_ACTIVATE:
 		movement_start = board_cells[action.source_index].get_global_rect().get_center()
+		activation_views = _capture_board_views()
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
@@ -637,16 +641,21 @@ func _commit_action(
 	_sync_hand_playability()
 	_update_turn_status()
 
-	var target_cell: PanelContainer = board_cells[action.target_index]
 	card.set_face_down(false)
-	card.reparent(target_cell, false)
 	card.set_playable(false)
 	card.z_index = 1
 	card.scale = Vector2(0.9, 0.9) if action.action_type == ActionData.TYPE_PLAY else Vector2.ONE
 	card.rotation = 0.0
-	if action.action_type == ActionData.TYPE_ACTIVATE:
-		board_cards[action.source_index] = null
-	board_cards[action.target_index] = card
+	var activation_final_cell: int = action.source_index
+	if action.action_type == ActionData.TYPE_PLAY:
+		card.reparent(board_cells[action.target_index], false)
+		board_cards[action.target_index] = card
+	else:
+		activation_final_cell = _remap_board_views_from_movements(
+			activation_views,
+			events,
+			action.source_instance_id
+		)
 
 	if action.action_type == ActionData.TYPE_PLAY:
 		_play_placement_feedback()
@@ -657,15 +666,19 @@ func _commit_action(
 		await snap_tween.finished
 	else:
 		card.scale = Vector2.ONE
-	if action.action_type == ActionData.TYPE_ACTIVATE:
+	if (
+		action.action_type == ActionData.TYPE_ACTIVATE
+		and activation_final_cell >= 0
+		and activation_final_cell != action.source_index
+	):
 		_play_movement_feedback()
 		await _play_movement_trail(
 			movement_start,
-			board_cells[action.target_index].get_global_rect().get_center()
+			board_cells[activation_final_cell].get_global_rect().get_center()
 		)
 
 	var resolved_targets: int = await _present_transition_events(events, owner_id)
-	_reconcile_committed_card_view(action.target_index, committed_instance_id)
+	_reconcile_board_card_views()
 	if resolved_targets > 1:
 		_vibrate(multi_capture_haptic_ms)
 	_update_score()
@@ -690,25 +703,74 @@ func _commit_action(
 	await _perform_opponent_turn()
 
 
-func _reconcile_committed_card_view(target_cell: int, instance_id: StringName) -> void:
-	if (
-		target_cell < 0
-		or target_cell >= board_cards.size()
-		or board_cards[target_cell] == null
-		or not is_instance_valid(board_cards[target_cell])
-		or duel_state == null
-		or target_cell >= duel_state.board.size()
-	):
+func _capture_board_views() -> Dictionary:
+	var captured: Dictionary = {}
+	for cell_index: int in range(board_cards.size()):
+		var card_view := board_cards[cell_index] as CardView
+		if card_view == null or not is_instance_valid(card_view):
+			continue
+		var instance_id: StringName = _get_card_instance_id(card_view)
+		if instance_id == &"":
+			continue
+		captured[instance_id] = {
+			"view": card_view,
+			"cell": cell_index,
+		}
+	return captured
+
+
+func _remap_board_views_from_movements(
+	captured: Dictionary,
+	events: Array,
+	source_instance_id: StringName
+) -> int:
+	var final_cells: Dictionary = {}
+	for instance_value: Variant in captured:
+		var instance_id := StringName(instance_value)
+		var entry: Dictionary = captured[instance_value]
+		final_cells[instance_id] = int(entry.get("cell", -1))
+	for event_value: Variant in events:
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) != &"card_moved":
+			continue
+		var moved_instance_id := StringName(event.get("instance_id", &""))
+		if captured.has(moved_instance_id):
+			final_cells[moved_instance_id] = int(event.get("target_cell", -1))
+	board_cards.fill(null)
+	for instance_value: Variant in captured:
+		var instance_id := StringName(instance_value)
+		var entry: Dictionary = captured[instance_value]
+		var card_view := entry.get("view", null) as CardView
+		var final_cell: int = int(final_cells.get(instance_id, -1))
+		if (
+			card_view == null
+			or not is_instance_valid(card_view)
+			or final_cell < 0
+			or final_cell >= board_cells.size()
+		):
+			continue
+		card_view.reparent(board_cells[final_cell], false)
+		card_view.z_index = 1
+		board_cards[final_cell] = card_view
+	return int(final_cells.get(source_instance_id, -1))
+
+
+func _reconcile_board_card_views() -> void:
+	if duel_state == null:
 		return
-	var logical_slot_value: Variant = duel_state.board[target_cell]
-	if logical_slot_value == null:
-		return
-	var logical_slot: Dictionary = logical_slot_value
-	var logical_card: Dictionary = logical_slot.get("card", {})
-	if StringName(logical_card.get("instance_id", &"")) != instance_id:
-		return
-	var card_view := board_cards[target_cell] as CardView
-	card_view.sync_runtime_data(logical_card, int(logical_slot.get("owner", card_view.owner_id)))
+	for cell_index: int in range(mini(board_cards.size(), duel_state.board.size())):
+		var card_view := board_cards[cell_index] as CardView
+		var logical_slot_value: Variant = duel_state.board[cell_index]
+		if card_view == null or logical_slot_value == null:
+			continue
+		var logical_slot: Dictionary = logical_slot_value
+		var logical_card: Dictionary = logical_slot.get("card", {})
+		if _get_card_instance_id(card_view) != StringName(logical_card.get("instance_id", &"")):
+			continue
+		card_view.sync_runtime_data(
+			logical_card,
+			int(logical_slot.get("owner", card_view.owner_id))
+		)
 
 
 func _present_transition_events(events: Array, fallback_owner: int) -> int:
@@ -1187,6 +1249,7 @@ func _get_board_cell_for_card(card: CardView) -> int:
 
 func _get_drag_targets(card: CardView) -> Array[int]:
 	var targets: Array[int] = []
+	_drag_action_candidates.clear()
 	if duel_state == null:
 		return targets
 	var source_cell: int = _get_board_cell_for_card(card)
@@ -1202,7 +1265,9 @@ func _get_drag_targets(card: CardView) -> Array[int]:
 			and action.source_instance_id == _get_card_instance_id(card)
 			and action.target_kind == ActionData.TARGET_BOARD_CELL
 		):
-			targets.append(action.target_index)
+			_drag_action_candidates.append(action)
+			if action.target_index not in targets:
+				targets.append(action.target_index)
 	return targets
 
 
@@ -1217,15 +1282,12 @@ func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
 			instance_id
 		)
 	if _drag_source_zone == ActionData.SOURCE_BOARD:
-		var activation: Dictionary = Abilities.get_activation(card.card_data)
-		if activation.is_empty():
-			return null
-		return ActionData.make_activate(
-			_drag_source_index,
-			instance_id,
-			ActionData.TARGET_BOARD_CELL,
-			target_cell
-		)
+		for action: ActionData in _drag_action_candidates:
+			if (
+				action.target_kind == ActionData.TARGET_BOARD_CELL
+				and action.target_index == target_cell
+			):
+				return action.duplicate_action()
 	return null
 
 
@@ -1233,6 +1295,7 @@ func _clear_drag_context() -> void:
 	_drag_source_zone = &""
 	_drag_source_index = -1
 	_drag_valid_targets.clear()
+	_drag_action_candidates.clear()
 
 
 func _has_legal_activate_from(source_cell: int) -> bool:

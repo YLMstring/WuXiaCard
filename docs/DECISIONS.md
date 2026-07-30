@@ -23,7 +23,9 @@ These decisions were explicitly established during development and should not be
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
 - Every activate ability costs one ki.
-- A card can have at most one activation. Receiving a new one replaces the old activation-bearing ability without deleting unrelated passive abilities.
+- A card may have multiple innate catalog activations in listed priority order.
+  Receiving a new activation replaces every current activation-bearing ability
+  without deleting unrelated passive abilities.
 - Ki is independent from abilities and survives ownership flips.
 - A zero-ki card with no activate ability does not show a ki bead.
 - `card_uses_ki()` intentionally counts activations only. Passive Meng Huo abilities do not make a zero-ki bead appear.

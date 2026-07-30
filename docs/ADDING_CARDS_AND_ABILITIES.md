@@ -38,7 +38,8 @@ Catalog rules:
 - Exactly four integer powers are required.
 - Starting ki is a nonnegative integer.
 - Abilities have no ID.
-- At most one ability entry may declare `activation`.
+- Multiple ability entries may declare `activation`; their array order is
+  activation priority.
 - Unknown events, conditions, actions, inputs, targets, fields, and policies are
   rejected.
 
@@ -82,6 +83,12 @@ array order, then trigger array order.
 Every accepted passive trigger automatically emits the generic card-pulse cue
 before its actions. Do not declare presentation actions in the catalog for this.
 Activate abilities intentionally do not pulse.
+
+When several activate abilities accept the same dragged target, live input uses
+the first legal activation in catalog order. AI actions retain an
+`activation_index`, so search can evaluate every activation separately.
+A dynamically granted activation still replaces all current activate abilities
+while preserving passive abilities.
 
 Every rule uses stable card instance and cell context. Stale or missing context
 returns `NO_EFFECT` by default, so later actions continue. To stop only that
@@ -141,6 +148,25 @@ Move-and-attack activation:
         ],
         "actions": [
             {"type": ACTION_MOVE_SELF_TO_TARGET},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+        ],
+    },
+}
+```
+
+Swap-and-attack activation:
+
+```gdscript
+{
+    "retained_on_flip": true,
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_ADJACENT_ALLY_BOARD,
+        "costs": [
+            {"type": ACTION_SPEND_KI, "amount": 1},
+        ],
+        "actions": [
+            {"type": ACTION_SWAP_SELF_WITH_TARGET},
             {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
         ],
     },

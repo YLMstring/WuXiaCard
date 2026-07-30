@@ -60,7 +60,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 30, "Catalog contains all thirty current cards")
+	_check(Catalog.get_all_card_ids().size() == 34, "Catalog contains all thirty-four current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -68,9 +68,13 @@ func _test_catalog_definitions() -> void:
 	var expected_pictures: Dictionary = {
 		&"CangSongYingKe1": "res://pics/LKT010_568.png",
 		&"CangSongYingKe2": "res://pics/LKT010_568.png",
+		&"CangSongYingKe3": "res://pics/LKT010_568.png",
+		&"CangSongYingKe4": "res://pics/LKT010_568.png",
+		&"YouFenLaiYi2": "res://pics/LKT010_558.png",
+		&"YouFenLaiYi3": "res://pics/LKT010_558.png",
+		&"YouFenLaiYi4": "res://pics/LKT010_558.png",
 		&"gate_general": "res://pics/LKT010_002.png",
 		&"meng_huo": "res://pics/LKT010_003.png",
-		&"jiang_wei": "res://pics/LKT010_004.png",
 		&"fa_zheng": "res://pics/LKT010_005.png",
 		&"fire_envoy": "res://pics/LKT010_007.png",
 		&"tiger_general": "res://pics/LKT010_008.png",
@@ -117,7 +121,7 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 30, "Catalog IDs are unique")
+	_check(observed_ids.size() == 34, "Catalog IDs are unique")
 
 
 func _test_definition_schema_validation() -> void:
@@ -189,8 +193,12 @@ func _test_new_sect_card_definitions() -> void:
 		&"zhishang_shanhe": "白鹿书院",
 	}
 	var observed_pictures: Dictionary = {}
+	var observed_new_sect_ids: Array[StringName] = []
+	for card_id: StringName in Catalog.get_all_card_ids():
+		if card_id in NEW_SECT_CARD_IDS:
+			observed_new_sect_ids.append(card_id)
 	_check(
-		Catalog.get_all_card_ids().slice(10) == NEW_SECT_CARD_IDS,
+		observed_new_sect_ids == NEW_SECT_CARD_IDS,
 		"Twenty sect cards preserve their approved catalog order"
 	)
 	for card_id: StringName in NEW_SECT_CARD_IDS:
@@ -249,7 +257,7 @@ func _test_encounter_decks() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
-	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player deck preserves current hand order")
+	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"YouFenLaiYi2", &"fa_zheng"], "Player deck preserves current hand order")
 	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
@@ -263,7 +271,7 @@ func _test_side_deck_pool() -> void:
 	var side_ids: Array[StringName] = Decks.get_side_deck_card_ids()
 	_check(side_ids == Catalog.get_all_card_ids(), "Side deck contains every catalog card exactly once")
 	side_ids.clear()
-	_check(Decks.get_side_deck_card_ids().size() == 30, "Side deck getter returns a defensive copy")
+	_check(Decks.get_side_deck_card_ids().size() == 34, "Side deck getter returns a defensive copy")
 
 
 func _test_draw_action_validation() -> void:
@@ -309,25 +317,46 @@ func _test_draw_action_validation() -> void:
 
 
 func _test_activate_ability_declarations() -> void:
-	for card_id: StringName in [&"jiang_wei", &"sun_zan"]:
+	var expected_rules: Dictionary = {
+		&"YouFenLaiYi2": [Catalog.TARGET_ADJACENT_EMPTY_BOARD],
+		&"YouFenLaiYi3": [
+			Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			Catalog.TARGET_ADJACENT_ALLY_BOARD,
+		],
+		&"YouFenLaiYi4": [
+			Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			Catalog.TARGET_ADJACENT_ALLY_BOARD,
+			Catalog.TARGET_ADJACENT_ENEMY_BOARD,
+		],
+	}
+	for card_id: StringName in expected_rules:
 		var definition: Dictionary = Catalog.get_definition(card_id)
-		_check(int(definition.get("starting_ki", 0)) == 1, "%s starts with one ki" % card_id)
 		var abilities: Array = definition.get("abilities", [])
-		_check(abilities.size() == 1, "%s declares one ability" % card_id)
-		if abilities.is_empty():
-			continue
-		var ability: Dictionary = abilities[0]
-		_check(not ability.has("id"), "%s activation is identity-free" % card_id)
-		var activation: Dictionary = ability.get("activation", {})
-		_check(StringName(activation.get("input", &"")) == Catalog.ACTIVATION_DRAG_TO_TARGET, "%s activates by dragging" % card_id)
-		_check(StringName(activation.get("target_rule", &"")) == Catalog.TARGET_ADJACENT_EMPTY_BOARD, "%s targets an adjacent empty board cell" % card_id)
-		_check(activation.get("costs", []) == [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}], "%s spends one ki" % card_id)
-		_check(activation.get("actions", []) == [{"type": Catalog.ACTION_MOVE_SELF_TO_TARGET}, {"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}], "%s moves then attacks" % card_id)
-		_check(not ability.has("retained_on_flip"), "%s relies on default non-retention" % card_id)
+		var rules: Array = expected_rules[card_id]
+		_check(abilities.size() == rules.size(), "%s declares every cataloged activation" % card_id)
+		for ability_index: int in range(abilities.size()):
+			var ability: Dictionary = abilities[ability_index]
+			_check(not ability.has("id"), "%s activation %d is identity-free" % [card_id, ability_index])
+			_check(bool(ability.get("retained_on_flip", false)), "%s activation %d is retained on flip" % [card_id, ability_index])
+			var activation: Dictionary = ability.get("activation", {})
+			_check(StringName(activation.get("input", &"")) == Catalog.ACTIVATION_DRAG_TO_TARGET, "%s activation %d uses dragging" % [card_id, ability_index])
+			_check(StringName(activation.get("target_rule", &"")) == rules[ability_index], "%s activation %d preserves target priority" % [card_id, ability_index])
+			_check(activation.get("costs", []) == [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}], "%s activation %d spends one ki" % [card_id, ability_index])
+			var expected_first_action: StringName = (
+				Catalog.ACTION_MOVE_SELF_TO_TARGET
+				if ability_index == 0
+				else Catalog.ACTION_SWAP_SELF_WITH_TARGET
+			)
+			_check(
+				activation.get("actions", []) == [
+					{"type": expected_first_action},
+					{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF},
+				],
+				"%s activation %d performs its board operation then attacks" % [card_id, ability_index]
+			)
 		var instance: Dictionary = Catalog.create_instance(card_id, 1, StringName("test_%s" % card_id))
-		_check(int(instance.get("ki", 0)) == 1, "%s instances receive one ki" % card_id)
-		var active_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
-		_check(active_ability.has("retained_on_flip") and not bool(active_ability["retained_on_flip"]), "%s activate ability is lost on flip" % card_id)
+		_check((Abilities.get_activate_abilities(instance) as Array).size() == rules.size(), "%s instances preserve every activation" % card_id)
+		_check(Abilities.card_uses_ki(instance), "%s uses ki when any activation exists" % card_id)
 	var invalid_activation: Dictionary = {
 		"activation": {
 			"input": &"click",
@@ -338,23 +367,25 @@ func _test_activate_ability_declarations() -> void:
 	}
 	_check(not Catalog.validate_ability(invalid_activation).is_empty(), "Unsupported activation input fails validation")
 	var duplicate_activation_definition: Dictionary = Catalog.get_definition(&"CangSongYingKe1")
-	var activate_ability: Dictionary = Catalog.get_definition(&"jiang_wei")["abilities"][0]
+	var activate_ability: Dictionary = Catalog.get_definition(&"YouFenLaiYi2")["abilities"][0]
 	duplicate_activation_definition["id"] = &"fixture"
 	duplicate_activation_definition["abilities"] = [
 		activate_ability.duplicate(true),
 		activate_ability.duplicate(true),
 	]
 	_check(
-		not Catalog.validate_definition(duplicate_activation_definition).is_empty(),
-		"More than one activation in a definition fails validation"
+		Catalog.validate_definition(duplicate_activation_definition).is_empty(),
+		"More than one valid activation in a definition passes validation"
 	)
 
 
 func _test_activate_ability_replacement() -> void:
 	var card: Dictionary = Catalog.create_instance(&"fa_zheng", 1, &"replacement_fixture")
-	var first_activate: Dictionary = Catalog.get_definition(&"jiang_wei")["abilities"][0]
+	var first_activate: Dictionary = Catalog.get_definition(&"YouFenLaiYi2")["abilities"][0]
 	Abilities.replace_activate_ability(card, first_activate)
 	_check((card.get("active_abilities", []) as Array).size() == 2, "Adding activation preserves unrelated passive ability")
+	var second_activate: Dictionary = Catalog.get_definition(&"YouFenLaiYi3")["abilities"][1]
+	(card.get("active_abilities", []) as Array).append(second_activate.duplicate(true))
 	var replacement: Dictionary = first_activate.duplicate(true)
 	(replacement["activation"] as Dictionary)["target_rule"] = Catalog.TARGET_ADJACENT_EMPTY_BOARD
 	Abilities.replace_activate_ability(card, replacement)
@@ -363,7 +394,7 @@ func _test_activate_ability_replacement() -> void:
 	for ability_value: Variant in active_abilities:
 		if Abilities.is_activate_ability(ability_value as Dictionary):
 			activate_count += 1
-	_check(active_abilities.size() == 2 and activate_count == 1, "New activation replaces the old activation slot")
+	_check(active_abilities.size() == 2 and activate_count == 1, "New activation replaces all old activation slots")
 	_check(not Abilities.get_activation(card).is_empty(), "Replacement activation becomes active")
 
 

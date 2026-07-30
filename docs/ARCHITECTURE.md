@@ -30,7 +30,7 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 ### Data
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
-- `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id`, never an ability ID.
+- `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
 - `deck_profile_store.gd` — versioned persistent deck profile, validation/repair, atomic save, unlock insertion, and main-deck/library exchanges.
 - `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and side-pool construction.
@@ -41,9 +41,9 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
-- `duel_abilities.gd` — structural activation lookup/replacement, flip retention, and ki-use detection.
-- `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, extra-turn requests, normal flip, and invalid-context policy.
-- `duel_targeting.gd` — generic target discovery/validation. The implemented rule is adjacent empty board cell.
+- `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, and ki-use detection.
+- `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, ordered swaps, extra-turn requests, normal flip, and invalid-context policy.
+- `duel_targeting.gd` — generic target discovery/validation. Implemented rules cover adjacent empty, allied, and enemy board cells.
 - `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.

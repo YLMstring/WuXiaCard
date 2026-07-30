@@ -1102,16 +1102,16 @@ func _check_manual_activate_move() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
-	var placed_jiang: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 3, 4, false)
-	_check(placed_jiang, "Jiang Wei can enter the board through the production action path")
-	var jiang_instance: StringName = duel.debug_get_board_card_instance_id(4)
+	var placed_youfen: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 3, 4, false)
+	_check(placed_youfen, "有凤来仪 can enter the board through the production action path")
+	var youfen_instance: StringName = duel.debug_get_board_card_instance_id(4)
 	var opponent_played: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false)
 	_check(opponent_played, "Opponent action returns priority for activate testing")
 	var pulses_before_activation: Array[StringName] = duel.debug_get_ability_pulse_trace()
 	var activated: bool = await duel.debug_commit_activate(Rules.PLAYER_OWNER, 4, 5, false)
 	_check(activated, "Production controller accepts a legal board activation")
 	_check(not duel.debug_has_board_card_view(4) and duel.debug_has_board_card_view(5), "Controller moves the board view to the target cell")
-	_check(duel.debug_get_board_card_instance_id(5) == jiang_instance, "Controller preserves the moving card view identity")
+	_check(duel.debug_get_board_card_instance_id(5) == youfen_instance, "Controller preserves the moving card view identity")
 	var moved_card: CardView = (duel.get("board_cards") as Array)[5] as CardView
 	var ki_badge := moved_card.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := moved_card.get_node("Overlay/KiBadge/Value") as Label

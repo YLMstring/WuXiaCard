@@ -8,25 +8,37 @@ static func is_activate_ability(ability: Dictionary) -> bool:
 
 
 static func get_activate_ability(card: Dictionary) -> Dictionary:
+	return get_activate_ability_at(card, 0)
+
+
+static func get_activate_abilities(card: Dictionary) -> Array[Dictionary]:
+	var activate_abilities: Array[Dictionary] = []
 	var active_abilities: Array = card.get("active_abilities", [])
 	for ability_value: Variant in active_abilities:
 		if not ability_value is Dictionary:
 			continue
 		var ability: Dictionary = ability_value
 		if is_activate_ability(ability):
-			return ability
-	return {}
+			activate_abilities.append(ability)
+	return activate_abilities
 
 
-static func get_activation(card: Dictionary) -> Dictionary:
-	var ability: Dictionary = get_activate_ability(card)
+static func get_activate_ability_at(card: Dictionary, activation_index: int) -> Dictionary:
+	var activate_abilities: Array[Dictionary] = get_activate_abilities(card)
+	if activation_index < 0 or activation_index >= activate_abilities.size():
+		return {}
+	return activate_abilities[activation_index]
+
+
+static func get_activation(card: Dictionary, activation_index: int = 0) -> Dictionary:
+	var ability: Dictionary = get_activate_ability_at(card, activation_index)
 	if ability.is_empty():
 		return {}
 	return ability.get("activation", {}) as Dictionary
 
 
 static func card_uses_ki(card: Dictionary) -> bool:
-	return not get_activate_ability(card).is_empty()
+	return not get_activate_abilities(card).is_empty()
 
 
 static func replace_activate_ability(card: Dictionary, new_ability: Dictionary) -> void:

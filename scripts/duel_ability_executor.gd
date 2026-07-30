@@ -245,6 +245,14 @@ static func _execute_action(
 			expected_owner,
 			context
 		)
+	if action_type == Catalog.ACTION_SWAP_SELF_WITH_TARGET:
+		return _swap_self_with_target(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
 	if action_type == Catalog.ACTION_STANDARD_ATTACK_WITH_SELF:
 		return _request_standard_attack(
 			state,
@@ -472,6 +480,99 @@ static func _move_self(
 		or not _are_adjacent(source_cell, target_cell)
 	):
 		return _no_effect(source_cell)
+	return _move_card_between_cells(
+		state,
+		source_cell,
+		target_cell,
+		source_instance_id,
+		expected_owner
+	)
+
+
+static func _swap_self_with_target(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner
+	)
+	var target_kind := StringName(context.get("target_kind", &""))
+	var target_cell: int = int(context.get("target_index", -1))
+	if (
+		source_slot.is_empty()
+		or target_kind != &"board_cell"
+		or target_cell < 0
+		or target_cell >= state.board.size()
+		or state.board[target_cell] == null
+		or not _are_adjacent(source_cell, target_cell)
+	):
+		return _no_effect(source_cell)
+	var target_slot: Dictionary = state.board[target_cell] as Dictionary
+	var target_card: Dictionary = target_slot.get("card", {})
+	var target_instance_id := StringName(target_card.get("instance_id", &""))
+	var target_owner: int = int(target_slot.get("owner", 0))
+	if target_instance_id == &"":
+		return _no_effect(source_cell)
+
+	var reserved_target: Dictionary = target_slot
+	state.board[target_cell] = null
+	var source_move: Dictionary = _move_card_between_cells(
+		state,
+		source_cell,
+		target_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if StringName(source_move.get("result", &"")) != Catalog.ACTION_RESULT_APPLIED:
+		state.board[target_cell] = reserved_target
+		return _no_effect(source_cell)
+
+	var reserved_source: Dictionary = state.board[target_cell] as Dictionary
+	state.board[target_cell] = reserved_target
+	var target_move: Dictionary = _move_card_between_cells(
+		state,
+		target_cell,
+		source_cell,
+		target_instance_id,
+		target_owner
+	)
+	if StringName(target_move.get("result", &"")) != Catalog.ACTION_RESULT_APPLIED:
+		state.board[source_cell] = reserved_source
+		state.board[target_cell] = reserved_target
+		return _no_effect(source_cell)
+	state.board[target_cell] = reserved_source
+
+	var events: Array = source_move.get("events", []) as Array
+	events.append_array(target_move.get("events", []) as Array)
+	return _applied(target_cell, events)
+
+
+static func _move_card_between_cells(
+	state: StateData,
+	source_cell: int,
+	target_cell: int,
+	instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var source_slot: Dictionary = _get_card_slot(
+		state,
+		source_cell,
+		instance_id,
+		expected_owner
+	)
+	if (
+		source_slot.is_empty()
+		or target_cell < 0
+		or target_cell >= state.board.size()
+		or state.board[target_cell] != null
+	):
+		return _no_effect(source_cell)
 	state.board[source_cell] = null
 	state.board[target_cell] = source_slot
 	return _applied(target_cell, [{
@@ -479,7 +580,7 @@ static func _move_self(
 		"source_cell": source_cell,
 		"target_cell": target_cell,
 		"owner_id": int(source_slot.get("owner", 0)),
-		"instance_id": source_instance_id,
+		"instance_id": instance_id,
 	}])
 
 

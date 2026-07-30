@@ -3,6 +3,8 @@ extends RefCounted
 
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
+const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
+const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
@@ -22,13 +24,18 @@ const ACTION_SPEND_KI: StringName = &"spend_ki"
 const ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
 const ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
+const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
 const ACTION_RESULT_APPLIED: StringName = &"applied"
 const ACTION_RESULT_NO_EFFECT: StringName = &"no_effect"
 const ACTION_RESULT_INVALID_CONTEXT: StringName = &"invalid_context"
 const STOP_RULE: StringName = &"stop_rule"
 const KNOWN_ACTIVATION_INPUTS: Array[StringName] = [ACTIVATION_DRAG_TO_TARGET]
-const KNOWN_TARGET_RULES: Array[StringName] = [TARGET_ADJACENT_EMPTY_BOARD]
+const KNOWN_TARGET_RULES: Array[StringName] = [
+	TARGET_ADJACENT_EMPTY_BOARD,
+	TARGET_ADJACENT_ALLY_BOARD,
+	TARGET_ADJACENT_ENEMY_BOARD,
+]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
@@ -53,6 +60,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_SPEND_ALL_KI,
 	ACTION_REQUEST_EXTRA_TURN,
 	ACTION_MOVE_SELF_TO_TARGET,
+	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
 ]
 
@@ -241,6 +249,20 @@ const _CARD_DEFINITIONS: Dictionary = {
 					],
 				},
 			},
+			{
+				"retained_on_flip": true,
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_ALLY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_SWAP_SELF_WITH_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
+			},
 		],
 	},
 	&"YouFenLaiYi4": {
@@ -265,6 +287,34 @@ const _CARD_DEFINITIONS: Dictionary = {
 					],
 					"actions": [
 						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
+			},
+			{
+				"retained_on_flip": true,
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_ALLY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_SWAP_SELF_WITH_TARGET},
+						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+					],
+				},
+			},
+			{
+				"retained_on_flip": true,
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ADJACENT_ENEMY_BOARD,
+					"costs": [
+						{"type": ACTION_SPEND_KI, "amount": 1},
+					],
+					"actions": [
+						{"type": ACTION_SWAP_SELF_WITH_TARGET},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -811,17 +861,12 @@ static func _validate_definition(
 	if not abilities_value is Array:
 		errors.append("Card %s requires an abilities array" % card_id)
 		return
-	var activation_count: int = 0
 	for ability_value: Variant in abilities_value as Array:
 		if not ability_value is Dictionary:
 			errors.append("Card %s has a non-dictionary ability" % card_id)
 			continue
 		var ability: Dictionary = ability_value
-		if ability.has("activation"):
-			activation_count += 1
 		_validate_ability(card_id, ability, errors)
-	if activation_count > 1:
-		errors.append("Card %s declares more than one activation" % card_id)
 
 
 static func _normalize_abilities(raw_abilities: Array) -> Array:

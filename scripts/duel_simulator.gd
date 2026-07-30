@@ -36,29 +36,33 @@ static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Arra
 		):
 			continue
 		var source_card: Dictionary = (source_slot_value as Dictionary).get("card", {})
-		var activation: Dictionary = Abilities.get_activation(source_card)
-		if activation.is_empty():
-			continue
 		var source_instance_id := StringName(source_card.get("instance_id", &""))
-		if not Executor.can_pay_costs(
-			state,
-			source_cell,
-			source_instance_id,
-			activation.get("costs", []) as Array
-		):
-			continue
-		for target: Dictionary in Targeting.get_valid_targets(
-			state,
-			owner_id,
-			source_cell,
-			activation
-		):
-			actions.append(ActionData.make_activate(
+		var activate_abilities: Array[Dictionary] = Abilities.get_activate_abilities(source_card)
+		for activation_index: int in range(activate_abilities.size()):
+			var activation: Dictionary = activate_abilities[activation_index].get(
+				"activation",
+				{}
+			) as Dictionary
+			if not Executor.can_pay_costs(
+				state,
 				source_cell,
 				source_instance_id,
-				StringName(target.get("kind", &"")),
-				int(target.get("index", -1))
-			))
+				activation.get("costs", []) as Array
+			):
+				continue
+			for target: Dictionary in Targeting.get_valid_targets(
+				state,
+				owner_id,
+				source_cell,
+				activation
+			):
+				actions.append(ActionData.make_activate(
+					source_cell,
+					source_instance_id,
+					StringName(target.get("kind", &"")),
+					int(target.get("index", -1)),
+					activation_index
+				))
 	return actions
 
 
@@ -154,7 +158,7 @@ static func _is_activate_action_legal(state: StateData, action: ActionData) -> b
 	var card: Dictionary = (source_slot_value as Dictionary).get("card", {})
 	if not _matches_instance(card, action.source_instance_id):
 		return false
-	var activation: Dictionary = Abilities.get_activation(card)
+	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
 	if activation.is_empty():
 		return false
 	if not Executor.can_pay_costs(
@@ -247,7 +251,7 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	var moving_owner: int = next_state.active_player
 	var source_slot: Dictionary = next_state.board[action.source_index]
 	var card: Dictionary = source_slot.get("card", {})
-	var activation: Dictionary = Abilities.get_activation(card)
+	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
 	var activation_result: Dictionary = Executor.execute_activation(
 		next_state,
 		action.source_index,

@@ -70,7 +70,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Any activation costs one ki.
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
 - Only cards with an activation count as ki-using for bead display.
-- Each card may have at most one activation. Replacing it keeps passive abilities.
+- A card may declare multiple catalog activations in priority order. A dynamically
+  received activation replaces all current activations while preserving passive
+  abilities.
 - Runtime card identity is `instance_id`, not a hand child index.
 - Main deck currently means the five-card starting hand. The side deck is a separate shuffled draw pile and may contain another copy of a main-hand card.
 - The player's five-card main deck is loaded from

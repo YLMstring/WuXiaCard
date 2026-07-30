@@ -37,6 +37,9 @@ func _run() -> void:
 	_test_greedy_ai_values_flip_over_equal_exile()
 	_test_deeper_search_avoids_greedy_trap()
 	_test_activate_action_generation_and_resolution()
+	_test_multiple_activation_generation_and_identity()
+	_test_ordered_ally_swap_then_attack()
+	_test_ordered_enemy_swap_then_attack()
 	_test_activate_runs_standard_attack_without_after_summoned_abilities()
 	_test_flipped_activate_ability_is_lost_but_ki_remains()
 	_test_greedy_tie_prefers_play_over_spending_ki()
@@ -342,8 +345,8 @@ func _test_greedy_ai_values_flip_over_equal_exile() -> void:
 
 func _test_activate_action_generation_and_resolution() -> void:
 	var board: Array = Rules.empty_board()
-	var jiang_wei: Dictionary = Catalog.create_instance(&"jiang_wei", Rules.PLAYER_OWNER, &"board_jiang")
-	board[4] = {"card": jiang_wei, "owner": Rules.PLAYER_OWNER}
+	var youfen: Dictionary = Catalog.create_instance(&"YouFenLaiYi2", Rules.PLAYER_OWNER, &"board_youfen")
+	board[4] = {"card": youfen, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
 	var actions: Array = Simulator.get_legal_actions(state)
 	_check(actions.size() == 4, "Center move-and-attack card generates four orthogonal activate targets")
@@ -358,7 +361,7 @@ func _test_activate_action_generation_and_resolution() -> void:
 	_check(bool(transition.get("valid", false)), "Legal activate action is accepted")
 	_check(next_state.board[4] == null and next_state.board[5] != null, "Activate moves the existing card to its target")
 	var moved_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
-	_check(StringName(moved_card.get("instance_id", &"")) == &"board_jiang", "Movement preserves stable card identity")
+	_check(StringName(moved_card.get("instance_id", &"")) == &"board_youfen", "Movement preserves stable card identity")
 	_check(int(moved_card.get("ki", -1)) == 0, "Successful activation spends one ki")
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
@@ -370,6 +373,206 @@ func _test_activate_action_generation_and_resolution() -> void:
 		"Activation events contain no legacy ability identity"
 	)
 	_check(int(((state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1)) == 1, "Activate transition leaves source-state ki untouched")
+
+
+func _test_multiple_activation_generation_and_identity() -> void:
+	var board: Array = Rules.empty_board()
+	var youfen: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi4",
+		Rules.PLAYER_OWNER,
+		&"multi_youfen"
+	)
+	board[4] = {"card": youfen, "owner": Rules.PLAYER_OWNER}
+	board[1] = {
+		"card": _make_runtime_card("Ally", [9, 9, 9, 9], Rules.PLAYER_OWNER, &"multi_ally"),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[5] = {
+		"card": _make_runtime_card("Enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER, &"multi_enemy"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var actions: Array = Simulator.get_legal_actions(state)
+	var target_order: Array[int] = []
+	var activation_order: Array[int] = []
+	for action: Action in actions:
+		target_order.append(action.target_index)
+		activation_order.append(action.activation_index)
+	_check(target_order == [7, 3, 1, 5], "Multiple activations preserve ability order then directional target order")
+	_check(activation_order == [0, 0, 1, 2], "Each legal action records its activate-ability index")
+	_check(
+		not Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 1).is_same_as(
+			Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 2)
+		),
+		"Activation indices participate in action equality"
+	)
+	_check(
+		Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 1).canonical_key()
+		!= Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 2).canonical_key(),
+		"Activation indices participate in canonical action identity"
+	)
+	_check(
+		not Simulator.is_action_legal(
+			state,
+			Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 5, 1)
+		),
+		"Ally-swap activation rejects an enemy target"
+	)
+	_check(
+		not Simulator.is_action_legal(
+			state,
+			Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 2)
+		),
+		"Enemy-swap activation rejects an allied target"
+	)
+	_check(
+		not Simulator.is_action_legal(
+			state,
+			Action.make_activate(4, &"multi_youfen", Action.TARGET_BOARD_CELL, 1, 3)
+		),
+		"Out-of-range activation indices are illegal"
+	)
+	var retained_copy: Dictionary = youfen.duplicate(true)
+	_check(
+		Abilities.remove_non_retained_abilities(retained_copy) == 0
+		and Abilities.get_activate_abilities(retained_copy).size() == 3,
+		"Every 有凤来仪 activation survives an ownership flip"
+	)
+
+
+func _test_ordered_ally_swap_then_attack() -> void:
+	var board: Array = Rules.empty_board()
+	var youfen: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi3",
+		Rules.PLAYER_OWNER,
+		&"ally_swap_youfen"
+	)
+	board[4] = {"card": youfen, "owner": Rules.PLAYER_OWNER}
+	board[5] = {
+		"card": _make_runtime_card("Ally", [9, 9, 9, 9], Rules.PLAYER_OWNER, &"ally_swap_target"),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[2] = {
+		"card": _make_runtime_card("Enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"ally_swap_enemy"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var action: Action = Action.make_activate(
+		4,
+		&"ally_swap_youfen",
+		Action.TARGET_BOARD_CELL,
+		5,
+		1
+	)
+	var transition: Dictionary = Simulator.apply_action(state, action)
+	var next_state: State = transition["state"] as State
+	_check(bool(transition.get("valid", false)), "Adjacent allied swap is a legal activation")
+	_check(
+		StringName((((next_state.board[5] as Dictionary)["card"]) as Dictionary).get("instance_id", &""))
+		== &"ally_swap_youfen",
+		"Activating card finishes in the ally's original square"
+	)
+	_check(
+		StringName((((next_state.board[4] as Dictionary)["card"]) as Dictionary).get("instance_id", &""))
+		== &"ally_swap_target",
+		"Allied target finishes in the activating card's original square"
+	)
+	_check(
+		int((((next_state.board[5] as Dictionary)["card"]) as Dictionary).get("ki", -1)) == 1,
+		"Allied swap spends exactly one ki"
+	)
+	_check(
+		_event_types(transition.get("events", [])) == [
+			&"ability_activated",
+			&"ki_changed",
+			&"card_moved",
+			&"card_moved",
+			&"attack_started",
+			&"card_flipped",
+		],
+		"Allied swap moves A then B before A attacks"
+	)
+	var move_events: Array[Dictionary] = []
+	for event_value: Variant in transition.get("events", []):
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) == &"card_moved":
+			move_events.append(event)
+	_check(
+		StringName(move_events[0].get("instance_id", &"")) == &"ally_swap_youfen"
+		and int(move_events[0].get("source_cell", -1)) == 4
+		and int(move_events[0].get("target_cell", -1)) == 5,
+		"First movement event moves A into B's original square"
+	)
+	_check(
+		StringName(move_events[1].get("instance_id", &"")) == &"ally_swap_target"
+		and int(move_events[1].get("source_cell", -1)) == 5
+		and int(move_events[1].get("target_cell", -1)) == 4,
+		"Second movement event moves B into A's original square"
+	)
+	_check(
+		int((next_state.board[2] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"A performs its standard attack from the new square"
+	)
+	_check(
+		StringName((((state.board[4] as Dictionary)["card"]) as Dictionary).get("instance_id", &""))
+		== &"ally_swap_youfen",
+		"Ordered swap leaves its source state untouched"
+	)
+
+
+func _test_ordered_enemy_swap_then_attack() -> void:
+	var board: Array = Rules.empty_board()
+	var youfen: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi4",
+		Rules.PLAYER_OWNER,
+		&"enemy_swap_youfen"
+	)
+	board[4] = {"card": youfen, "owner": Rules.PLAYER_OWNER}
+	board[5] = {
+		"card": _make_runtime_card("Enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"enemy_swap_target"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var action: Action = Action.make_activate(
+		4,
+		&"enemy_swap_youfen",
+		Action.TARGET_BOARD_CELL,
+		5,
+		2
+	)
+	var transition: Dictionary = Simulator.apply_action(state, action)
+	var next_state: State = transition["state"] as State
+	_check(bool(transition.get("valid", false)), "Adjacent enemy swap is a legal activation")
+	_check(
+		StringName((((next_state.board[5] as Dictionary)["card"]) as Dictionary).get("instance_id", &""))
+		== &"enemy_swap_youfen",
+		"Enemy swap restores A to B's original square"
+	)
+	_check(
+		StringName((((next_state.board[4] as Dictionary)["card"]) as Dictionary).get("instance_id", &""))
+		== &"enemy_swap_target",
+		"Enemy swap moves B to A's original square"
+	)
+	_check(
+		_event_types(transition.get("events", [])).slice(0, 6) == [
+			&"ability_activated",
+			&"ki_changed",
+			&"card_moved",
+			&"card_moved",
+			&"attack_started",
+			&"card_flipped",
+		],
+		"Enemy swap completes both movements before attacking the displaced enemy"
+	)
+	_check(
+		int((next_state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Standard attack can flip the enemy after it reaches A's original square"
+	)
+	_check(
+		_count_events(transition.get("events", []), &"card_placed") == 0
+		and _count_events(transition.get("events", []), &"card_exiled") == 0,
+		"Reservation and restoration emit no summon or exile events"
+	)
 
 
 func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> void:
@@ -407,8 +610,8 @@ func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> v
 
 func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
 	var board: Array = Rules.empty_board()
-	var jiang_wei: Dictionary = Catalog.create_instance(&"jiang_wei", Rules.OPPONENT_OWNER, &"flip_jiang")
-	board[5] = {"card": jiang_wei, "owner": Rules.OPPONENT_OWNER}
+	var sun_zan: Dictionary = Catalog.create_instance(&"sun_zan", Rules.OPPONENT_OWNER, &"flip_sun")
+	board[5] = {"card": sun_zan, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))

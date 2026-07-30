@@ -68,6 +68,7 @@ $testScripts = @(
     "test_duel_rules.gd",
     "test_duel_simulator.gd",
     "test_duel_search.gd",
+    "test_youfen_integration.gd",
     "test_duel_integration.gd"
 )
 

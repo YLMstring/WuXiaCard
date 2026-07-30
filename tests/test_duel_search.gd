@@ -78,6 +78,13 @@ func _test_action_and_state_keys() -> void:
 	var changed_action: Action = action.duplicate_action()
 	changed_action.target_index = 3
 	_check(action.canonical_key() != changed_action.canonical_key(), "Every target participates in the canonical action key")
+	var changed_activation: Action = action.duplicate_action()
+	changed_activation.activation_index = 1
+	_check(
+		action.canonical_key() != changed_activation.canonical_key()
+		and not action.is_same_as(changed_activation),
+		"Activate ability index participates in canonical action identity"
+	)
 
 	var state: State = _make_opening_state()
 	var copied: State = state.duplicate_state()
