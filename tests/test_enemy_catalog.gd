@@ -15,6 +15,7 @@ func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
 	_check(Catalog.get_all_enemy_ids().size() == 30, "Catalog contains two enemies per level")
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
+	var observed_decks: Dictionary = {}
 	for level: int in range(1, 16):
 		var enemy_ids: Array[StringName] = Catalog.get_enemy_ids_for_level(level)
 		_check(enemy_ids.size() == 2, "Level %d has two random candidates" % level)
@@ -25,6 +26,11 @@ func _run() -> void:
 			_check(not String(definition["name"]).is_empty(), "%s has a name" % enemy_id)
 			var deck: Array = definition["deck"]
 			_check(deck.size() == 5, "%s has a five-card deck" % enemy_id)
+			var deck_signature: String = "|".join(
+				deck.map(func(value: Variant) -> String: return String(value))
+			)
+			_check(not observed_decks.has(deck_signature), "%s has a unique deck" % enemy_id)
+			observed_decks[deck_signature] = enemy_id
 			for value: Variant in deck:
 				_check(StringName(String(value)) in card_ids, "%s uses a known card" % enemy_id)
 

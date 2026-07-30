@@ -15,7 +15,7 @@ const DEFAULT_STATUS: String = "轻触门派查看详情，长按门派并拖至
 const LOCKED_STATUS: String = "该门派尚未解锁"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
-@export var upcoming_enemy_name: String = "对手名字"
+@export var upcoming_enemy_name: String = "江湖门派"
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
 
@@ -97,6 +97,7 @@ func _ready() -> void:
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
+	enemy_seal_label.text = "友"
 	opponent_name.text = upcoming_enemy_name
 	status_label.text = DEFAULT_STATUS
 	_layout_scene.call_deferred()

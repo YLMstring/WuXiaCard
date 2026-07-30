@@ -23,6 +23,7 @@ const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
 @export var upcoming_enemy_card_ids: Array[StringName] = []
+@export var remembered_enemy_glyphs: Array[String] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
 @export var library_color_seed: int = 0
@@ -174,7 +175,10 @@ func _create_hands() -> void:
 			enemy_data,
 			DuelRules.OPPONENT_OWNER
 		)
-		enemy_card.set_face_down(not testing_mode)
+		var glyph: String = String(enemy_data.get("glyph", ""))
+		enemy_card.set_face_down(
+			not testing_mode and glyph not in remembered_enemy_glyphs
+		)
 	for card_index: int in range(5):
 		_refresh_player_slot(card_index)
 

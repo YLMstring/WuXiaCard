@@ -34,6 +34,10 @@ func _run() -> void:
 	var title_image := grid.get_node("Body/Margin/Layout/Title/Image") as TextureRect
 	_check(selector.upcoming_enemy_name == "测试对手", "Selector accepts the upcoming enemy name")
 	_check((canvas.get_node("TopBar/OpponentName") as Label).text == "测试对手", "Header shows the upcoming enemy name")
+	_check(
+		(canvas.get_node("TopBar/EnemySeal/Value") as Label).text == "友",
+		"Sect selection uses the friend seal"
+	)
 	_check(title_image.texture != null, "Selector keeps the inherited Cangjingge title image")
 	_check(not (canvas.get_node("GoFirstButton") as Button).visible, "Go-first control is hidden")
 	_check(not (canvas.get_node("GoSecondButton") as Button).visible, "Go-second control is hidden")

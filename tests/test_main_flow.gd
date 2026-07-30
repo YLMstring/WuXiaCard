@@ -31,7 +31,7 @@ func _run() -> void:
 	await process_frame
 	var selector := flow.debug_get_current_screen() as SelectorController
 	_check(selector != null, "An inactive run routes to sect selection")
-	_check(selector.upcoming_enemy_name == "对手待定", "Inactive runs do not reveal an unchosen enemy")
+	_check(selector.upcoming_enemy_name == "江湖门派", "Sect selection labels its friendly sect preview")
 	(selector.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
@@ -79,6 +79,18 @@ func _run() -> void:
 		duel.opponent_name_text == String(level_one_enemy["name"]),
 		"Duel receives the same saved enemy"
 	)
+	var opponent_hand := duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+	var played_card := opponent_hand.get_child(0).get_child(0) as CardView
+	var played_glyph: String = String(played_card.card_data.get("glyph", ""))
+	_check(
+		await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false),
+		"Opponent hand play commits for memory tracking"
+	)
+	var memory_profile: Dictionary = store.load_profile()
+	_check(
+		played_glyph in store.get_remembered_enemy_glyphs(memory_profile),
+		"Opponent hand play immediately persists its glyph"
+	)
 	(duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
@@ -88,6 +100,14 @@ func _run() -> void:
 	_check(
 		store.get_current_enemy_id(abandoned_profile) == level_one_enemy_id,
 		"Abandoning a duel preserves the rematch enemy"
+	)
+	_check(
+		played_glyph in store.get_remembered_enemy_glyphs(abandoned_profile),
+		"Abandoning preserves remembered enemy cards"
+	)
+	_check(
+		played_glyph in builder.remembered_enemy_glyphs,
+		"Returning deck builder receives remembered enemy cards"
 	)
 
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
@@ -102,6 +122,10 @@ func _run() -> void:
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
 	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
 	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Builder refreshes to the new enemy")
+	_check(
+		store.get_remembered_enemy_glyphs(victorious_profile).is_empty(),
+		"New enemy starts with no remembered cards"
+	)
 
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
 	await process_frame

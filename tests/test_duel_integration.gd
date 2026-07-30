@@ -1479,6 +1479,7 @@ func _count_face_down(cards: Array[Control]) -> int:
 func _instantiate_duel() -> Node:
 	var duel: Node = DUEL_SCENE.instantiate()
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	duel.set("opponent_hand_shuffle_seed", -1)
 	return duel
 
 

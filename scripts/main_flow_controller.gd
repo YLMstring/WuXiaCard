@@ -50,9 +50,12 @@ func _show_sect_selection() -> void:
 func _show_deck_builder() -> void:
 	var builder := DECK_BUILDER_SCENE.instantiate() as DeckBuilderController
 	var enemy: Dictionary = _get_upcoming_enemy()
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
 	builder.profile_path = deck_profile_path
 	builder.upcoming_enemy_name = String(enemy["name"])
 	builder.upcoming_enemy_card_ids = _enemy_deck_from_details(enemy)
+	builder.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 	builder.testing_mode = testing_mode
 	builder.duel_requested.connect(_on_duel_requested)
 	builder.back_requested.connect(_on_return_to_menu_requested)
@@ -67,6 +70,7 @@ func _show_duel(starting_owner_id: int) -> void:
 	duel.opponent_name_text = String(enemy["name"])
 	duel.opponent_card_ids = _enemy_deck_from_details(enemy)
 	duel.testing_mode = testing_mode
+	duel.opponent_card_played.connect(_on_opponent_card_played)
 	duel.return_requested.connect(_on_duel_return_requested)
 	_replace_screen(duel)
 
@@ -137,6 +141,14 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 	_show_deck_builder()
 
 
+func _on_opponent_card_played(glyph: String) -> void:
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	var result: Dictionary = store.remember_enemy_glyph_and_save(profile, glyph)
+	if not bool(result.get("ok", false)):
+		push_warning("Enemy card memory could not be saved")
+
+
 func _on_return_to_menu_requested() -> void:
 	_show_main_menu()
 
@@ -157,7 +169,7 @@ func _get_upcoming_enemy() -> Dictionary:
 	if enemy_id != &"" and Enemies.has_enemy(enemy_id):
 		return Enemies.get_definition(enemy_id)
 	return {
-		"name": "对手待定",
+		"name": "江湖门派",
 		"deck": [],
 	}
 

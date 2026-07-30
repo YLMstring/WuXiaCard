@@ -5,7 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 
-const SCHEMA_VERSION: int = 4
+const SCHEMA_VERSION: int = 5
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
@@ -67,6 +67,7 @@ func create_default_profile() -> Dictionary:
 		"selected_sect_id": "",
 		"level": 0,
 		"current_enemy_id": "",
+		"remembered_enemy_glyphs": [],
 		"unlocked_sect_ids": _string_array(DEFAULT_UNLOCKED_SECT_IDS),
 		"unlocked_card_ids": _string_array(unlocked_ids),
 		"main_deck": main_deck,
@@ -131,11 +132,13 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var selected_sect_value: Variant = profile.get("selected_sect_id", null)
 	var level_value: Variant = profile.get("level", null)
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
+	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
 	if (
 		typeof(run_active_value) != TYPE_BOOL
 		or typeof(selected_sect_value) != TYPE_STRING
 		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(enemy_value) != TYPE_STRING
+		or typeof(remembered_glyphs_value) != TYPE_ARRAY
 	):
 		return false
 	var run_active: bool = bool(run_active_value)
@@ -172,8 +175,22 @@ func is_profile_valid(profile: Dictionary) -> bool:
 			return false
 		if int(Enemies.get_definition(current_enemy_id).get("level", -1)) != level:
 			return false
-	elif selected_sect_id != &"" or level != 0 or current_enemy_id != &"":
+	elif (
+		selected_sect_id != &""
+		or level != 0
+		or current_enemy_id != &""
+		or not (remembered_glyphs_value as Array).is_empty()
+	):
 		return false
+	var valid_enemy_glyphs: Dictionary = _enemy_glyph_set(current_enemy_id)
+	var observed_glyphs: Dictionary = {}
+	for value: Variant in remembered_glyphs_value as Array:
+		if typeof(value) != TYPE_STRING:
+			return false
+		var glyph: String = String(value)
+		if glyph.is_empty() or observed_glyphs.has(glyph) or not valid_enemy_glyphs.has(glyph):
+			return false
+		observed_glyphs[glyph] = true
 	var unlocked: Array = unlocked_value
 	var deck: Array = deck_value
 	var library: Array = library_value
@@ -217,7 +234,9 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var selected_sect_id: StringName = &""
 	var level: int = 0
 	var current_enemy_id: StringName = &""
-	if int(profile.get("schema_version", -1)) >= SCHEMA_VERSION:
+	var remembered_enemy_glyphs: Array[String] = []
+	var schema_version: int = int(profile.get("schema_version", -1))
+	if schema_version >= 4:
 		var raw_run_active: Variant = profile.get("run_active", false)
 		var raw_selected_sect: Variant = profile.get("selected_sect_id", "")
 		if typeof(raw_run_active) == TYPE_BOOL and bool(raw_run_active):
@@ -241,7 +260,21 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				else:
 					level = 1
 					current_enemy_id = Enemies.get_enemy_ids_for_level(1)[0]
-	elif int(profile.get("schema_version", -1)) >= 3:
+				if schema_version >= SCHEMA_VERSION:
+					var valid_glyphs: Dictionary = _enemy_glyph_set(current_enemy_id)
+					var raw_memories: Variant = profile.get("remembered_enemy_glyphs", [])
+					if typeof(raw_memories) == TYPE_ARRAY:
+						for value: Variant in raw_memories as Array:
+							if typeof(value) != TYPE_STRING:
+								continue
+							var glyph: String = String(value)
+							if (
+								not glyph.is_empty()
+								and valid_glyphs.has(glyph)
+								and glyph not in remembered_enemy_glyphs
+							):
+								remembered_enemy_glyphs.append(glyph)
+	elif schema_version >= 3:
 		var legacy_run_active: Variant = profile.get("run_active", false)
 		var legacy_selected_sect: Variant = profile.get("selected_sect_id", "")
 		if typeof(legacy_run_active) == TYPE_BOOL and bool(legacy_run_active):
@@ -307,6 +340,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"selected_sect_id": String(selected_sect_id),
 		"level": level,
 		"current_enemy_id": String(current_enemy_id),
+		"remembered_enemy_glyphs": remembered_enemy_glyphs,
 		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
@@ -418,6 +452,7 @@ func begin_run_and_save(
 	candidate["selected_sect_id"] = String(sect_id)
 	candidate["level"] = 1
 	candidate["current_enemy_id"] = String(enemy_id)
+	candidate["remembered_enemy_glyphs"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	return {"ok": true, "profile": candidate, "added_ids": additions}
@@ -448,6 +483,7 @@ func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	candidate["selected_sect_id"] = ""
 	candidate["level"] = 0
 	candidate["current_enemy_id"] = ""
+	candidate["remembered_enemy_glyphs"] = []
 	candidate["main_deck"] = _string_array(DEFAULT_MAIN_DECK_IDS)
 	candidate["library_slots"] = _padded_library(_string_array(library_order))
 	if not is_profile_valid(candidate) or not save_profile(candidate):
@@ -520,6 +556,30 @@ func get_current_enemy_id(profile: Dictionary) -> StringName:
 	return StringName(String(profile["current_enemy_id"]))
 
 
+func get_remembered_enemy_glyphs(profile: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	if not is_profile_valid(profile):
+		return result
+	for value: Variant in profile["remembered_enemy_glyphs"]:
+		result.append(String(value))
+	return result
+
+
+func remember_enemy_glyph_and_save(profile: Dictionary, glyph: String) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile) or not is_run_active(profile) or glyph.is_empty():
+		return {"ok": false, "profile": unchanged}
+	if not _enemy_glyph_set(get_current_enemy_id(profile)).has(glyph):
+		return {"ok": false, "profile": unchanged}
+	if glyph in get_remembered_enemy_glyphs(profile):
+		return {"ok": true, "profile": unchanged}
+	var candidate: Dictionary = profile.duplicate(true)
+	(candidate["remembered_enemy_glyphs"] as Array).append(glyph)
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
+
+
 func advance_after_victory_and_save(
 	profile: Dictionary,
 	enemy_id_override: StringName = &""
@@ -537,6 +597,7 @@ func advance_after_victory_and_save(
 	var candidate: Dictionary = profile.duplicate(true)
 	candidate["level"] = next_level
 	candidate["current_enemy_id"] = String(next_enemy_id)
+	candidate["remembered_enemy_glyphs"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "advanced": false, "profile": unchanged}
 	return {"ok": true, "advanced": true, "profile": candidate}
@@ -589,6 +650,21 @@ func _choose_enemy_id(level: int, enemy_id_override: StringName) -> StringName:
 			return enemy_id_override
 		return &""
 	return Enemies.pick_random_enemy_id(level)
+
+
+static func _enemy_glyph_set(enemy_id: StringName) -> Dictionary:
+	var result: Dictionary = {}
+	if enemy_id == &"" or not Enemies.has_enemy(enemy_id):
+		return result
+	var enemy: Dictionary = Enemies.get_definition(enemy_id)
+	for value: Variant in enemy.get("deck", []):
+		var card_id := StringName(String(value))
+		if not Catalog.has_card(card_id):
+			continue
+		var glyph: String = String(Catalog.get_definition(card_id).get("glyph", ""))
+		if not glyph.is_empty():
+			result[glyph] = true
+	return result
 
 
 func _repair_unlocked_sect_ids(raw_value: Variant) -> Array[StringName]:

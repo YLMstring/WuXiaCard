@@ -2,6 +2,7 @@ class_name DuelController
 extends Control
 
 signal return_requested(outcome: StringName)
+signal opponent_card_played(glyph: String)
 
 const OUTCOME_VICTORY: StringName = &"victory"
 const OUTCOME_DEFEAT: StringName = &"defeat"
@@ -49,6 +50,7 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var draw_post_effect_gap: float = 0.20
 @export var draw_ink_color: Color = Color("211824")
 @export var side_deck_shuffle_seed: int = 0
+@export var opponent_hand_shuffle_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var opponent_search_budget_seconds: float = 10.0
 @export var invalid_shake_duration: float = 0.18
@@ -125,6 +127,7 @@ func _ready() -> void:
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
+	_shuffle_opponent_hand_ids(effective_opponent_ids)
 	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
 	var player_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.PLAYER_OWNER, "side")
 	var opponent_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.OPPONENT_OWNER, "side")
@@ -467,6 +470,17 @@ func _shuffle_side_decks(player_deck: Array, opponent_deck: Array) -> void:
 	_shuffle_with_rng(opponent_deck, random)
 
 
+func _shuffle_opponent_hand_ids(card_ids: Array[StringName]) -> void:
+	if opponent_hand_shuffle_seed < 0:
+		return
+	var random := RandomNumberGenerator.new()
+	if opponent_hand_shuffle_seed == 0:
+		random.randomize()
+	else:
+		random.seed = opponent_hand_shuffle_seed
+	_shuffle_with_rng(card_ids, random)
+
+
 func _shuffle_with_rng(cards: Array, random: RandomNumberGenerator) -> void:
 	for card_index: int in range(cards.size() - 1, 0, -1):
 		var swap_index: int = random.randi_range(0, card_index)
@@ -614,6 +628,8 @@ func _commit_action(
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
+	if owner_id == DuelRules.OPPONENT_OWNER and action.action_type == ActionData.TYPE_PLAY:
+		opponent_card_played.emit(String(card.card_data.get("glyph", "")))
 	duel_state = transition["state"] as StateData
 	board = duel_state.board
 	var events: Array = transition.get("events", [])

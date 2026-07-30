@@ -2,6 +2,7 @@ extends SceneTree
 
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Cards = preload("res://scripts/card_catalog.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"hanfeng_liezhen",
@@ -40,12 +41,13 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 4, "Default profile uses schema version 4")
+	_check(int(profile["schema_version"]) == 5, "Default profile uses schema version 5")
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
 	_check(store.get_character_tier(profile) == 1, "Character tier begins at one")
 	_check(store.get_current_enemy_id(profile) == &"", "Inactive profiles have no enemy")
+	_check(store.get_remembered_enemy_glyphs(profile).is_empty(), "New profiles remember no enemy cards")
 	_check(
 		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
 		"Only Xuanyue Jianzong starts unlocked"
@@ -149,7 +151,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 4, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 5, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"
@@ -199,7 +201,8 @@ func _run() -> void:
 	var begin_result: Dictionary = store.begin_run_and_save(
 		run_start_source,
 		&"xuanyue_jianzong",
-		[&"hanfeng_liezhen"]
+		[&"hanfeng_liezhen"],
+		&"qingfeng_xuedi"
 	)
 	_check(bool(begin_result.get("ok", false)), "Beginning a valid run saves atomically")
 	var active_profile: Dictionary = begin_result.get("profile", {})
@@ -211,6 +214,34 @@ func _run() -> void:
 		first_enemy_id in Enemies.get_enemy_ids_for_level(1),
 		"Beginning a run assigns a level-one enemy"
 	)
+	var first_enemy_deck: Array = Enemies.get_definition(first_enemy_id)["deck"]
+	var remembered_glyph: String = String(
+		Cards.get_definition(StringName(String(first_enemy_deck[0])))["glyph"]
+	)
+	var remember_result: Dictionary = store.remember_enemy_glyph_and_save(
+		active_profile,
+		remembered_glyph
+	)
+	_check(bool(remember_result.get("ok", false)), "Seeing an enemy card saves its glyph")
+	active_profile = remember_result.get("profile", active_profile)
+	_check(
+		store.get_remembered_enemy_glyphs(active_profile) == [remembered_glyph],
+		"Remembered enemy glyph persists in the active run"
+	)
+	var duplicate_memory: Dictionary = store.remember_enemy_glyph_and_save(
+		active_profile,
+		remembered_glyph
+	)
+	_check(bool(duplicate_memory.get("ok", false)), "Remembering the same glyph is a successful no-op")
+	_check(
+		duplicate_memory.get("profile", {}) == active_profile,
+		"Duplicate memory does not change the profile"
+	)
+	var invalid_memory: Dictionary = store.remember_enemy_glyph_and_save(
+		active_profile,
+		"不在敌方牌组"
+	)
+	_check(not bool(invalid_memory.get("ok", true)), "Unknown enemy glyphs cannot be remembered")
 	_check(
 		store.get_selected_sect_id(active_profile) == &"xuanyue_jianzong",
 		"Beginning a run records the selected sect"
@@ -232,6 +263,10 @@ func _run() -> void:
 	_check(
 		store.get_current_enemy_id(migrated_active) in Enemies.get_enemy_ids_for_level(1),
 		"Legacy active runs receive a level-one enemy"
+	)
+	_check(
+		store.get_remembered_enemy_glyphs(migrated_active).is_empty(),
+		"Legacy active runs begin with no remembered cards"
 	)
 	var active_unlocked: Array = (active_profile["unlocked_card_ids"] as Array).duplicate()
 	var exchange_for_reset: Dictionary = store.exchange_and_save(active_profile, 0, 0)
@@ -278,6 +313,10 @@ func _run() -> void:
 			"Level %d receives a same-level new enemy" % expected_level
 		)
 		previous_enemy_id = enemy_id
+		_check(
+			store.get_remembered_enemy_glyphs(progression_profile).is_empty(),
+			"Changing to level %d clears remembered enemy cards" % expected_level
+		)
 	var capped_result: Dictionary = store.advance_after_victory_and_save(progression_profile)
 	_check(bool(capped_result.get("ok", false)), "A level-fifteen victory is a successful no-op")
 	_check(not bool(capped_result.get("advanced", true)), "Level fifteen does not advance")
