@@ -4,9 +4,11 @@ extends Control
 const MAIN_MENU_SCENE: PackedScene = preload("res://scenes/main_menu.tscn")
 const SECT_SELECTION_SCENE: PackedScene = preload("res://scenes/sect_selection.tscn")
 const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn")
+const REWARD_SELECTION_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
+const RewardController = preload("res://scripts/reward_selection_controller.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
@@ -62,6 +64,21 @@ func _show_deck_builder() -> void:
 	_replace_screen(builder)
 
 
+func _show_reward_selection() -> void:
+	var reward := REWARD_SELECTION_SCENE.instantiate() as RewardController
+	var enemy: Dictionary = _get_upcoming_enemy()
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	reward.profile_path = deck_profile_path
+	reward.upcoming_enemy_name = String(enemy["name"])
+	reward.upcoming_enemy_card_ids = _enemy_deck_from_details(enemy)
+	reward.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
+	reward.testing_mode = testing_mode
+	reward.reward_claimed.connect(_on_reward_claimed)
+	reward.back_requested.connect(_on_return_to_menu_requested)
+	_replace_screen(reward)
+
+
 func _show_duel(starting_owner_id: int) -> void:
 	var duel := DUEL_SCENE.instantiate() as DuelController
 	var enemy: Dictionary = _get_upcoming_enemy()
@@ -91,7 +108,9 @@ func _on_duel_requested(starting_owner_id: int) -> void:
 func _on_journey_requested() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
-	if store.is_run_active(profile):
+	if not store.get_pending_reward_ids(profile).is_empty():
+		_show_reward_selection()
+	elif store.is_run_active(profile):
 		_show_deck_builder()
 	else:
 		_show_sect_selection()
@@ -132,12 +151,38 @@ func _on_deck_builder_requested() -> void:
 
 
 func _on_duel_return_requested(outcome: StringName) -> void:
+	if outcome == DuelController.OUTCOME_ABANDONED:
+		_show_deck_builder()
+		return
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
 	if outcome == DuelController.OUTCOME_VICTORY:
-		var store := Store.new(deck_profile_path)
-		var profile: Dictionary = store.load_profile()
 		var result: Dictionary = store.advance_after_victory_and_save(profile)
 		if not bool(result.get("ok", false)):
 			push_warning("Victory progression could not be saved")
+			_show_deck_builder()
+			return
+		profile = result.get("profile", profile)
+	var reward_outcome: StringName = (
+		Store.REWARD_VICTORY
+		if outcome == DuelController.OUTCOME_VICTORY
+		else Store.REWARD_DEFEAT
+	)
+	var offer_result: Dictionary = store.create_reward_offer_and_save(
+		profile,
+		reward_outcome
+	)
+	if not bool(offer_result.get("ok", false)):
+		push_warning("Reward offer could not be saved")
+		_show_deck_builder()
+		return
+	if bool(offer_result.get("offered", false)):
+		_show_reward_selection()
+	else:
+		_show_deck_builder()
+
+
+func _on_reward_claimed() -> void:
 	_show_deck_builder()
 
 

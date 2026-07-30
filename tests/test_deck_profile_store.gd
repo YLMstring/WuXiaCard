@@ -41,13 +41,14 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 5, "Default profile uses schema version 5")
+	_check(int(profile["schema_version"]) == 6, "Default profile uses schema version 6")
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
 	_check(store.get_character_tier(profile) == 1, "Character tier begins at one")
 	_check(store.get_current_enemy_id(profile) == &"", "Inactive profiles have no enemy")
 	_check(store.get_remembered_enemy_glyphs(profile).is_empty(), "New profiles remember no enemy cards")
+	_check(store.get_pending_reward_ids(profile).is_empty(), "New profiles have no pending reward")
 	_check(
 		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
 		"Only Xuanyue Jianzong starts unlocked"
@@ -151,7 +152,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 5, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 6, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"

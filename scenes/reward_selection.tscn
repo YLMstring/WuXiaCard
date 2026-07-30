@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/deck_builder.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/reward_selection_controller.gd" id="2_controller"]
+
+[node name="RewardSelection" instance=ExtResource("1_base")]
+script = ExtResource("2_controller")
+
+[node name="DeckLibraryGrid" parent="DuelCanvas" index="3"]
+column_count = 3
+total_slots = 3
+visible_rows = 1
+buffer_rows = 0
+
+[node name="GoFirstButton" parent="DuelCanvas" index="4"]
+visible = false
+mouse_filter = 2
+
+[node name="GoSecondButton" parent="DuelCanvas" index="5"]
+visible = false
+mouse_filter = 2

@@ -32,6 +32,7 @@ var card_data: Dictionary = {}
 var display_owner_id: int = DuelRules.PLAYER_OWNER
 var interaction_enabled: bool = true
 var drag_enabled: bool = true
+var placeholder: bool = false
 
 var _pointer_active: bool = false
 var _pointer_id: int = -2
@@ -75,6 +76,7 @@ func bind(
 	cancel_gesture()
 	logical_index = new_logical_index
 	card_data = new_card_data.duplicate(true)
+	placeholder = bool(card_data.get("_display_placeholder", false))
 	drag_enabled = new_drag_enabled
 	display_owner_id = (
 		DuelRules.OPPONENT_OWNER
@@ -84,13 +86,17 @@ func bind(
 	var occupied: bool = not card_data.is_empty()
 	empty_frame.visible = not occupied
 	card_view.visible = occupied
-	name_label.text = String(card_data.get("glyph", "")) if occupied else ""
+	name_label.text = (
+		""
+		if placeholder
+		else String(card_data.get("glyph", "")) if occupied else ""
+	)
 	name_label.remove_theme_color_override("font_color")
 	if occupied:
 		name_label.add_theme_color_override("font_color", _tier_name_color(card_data.get("tier", null)))
 		card_view.set_power_numbers_enabled(show_power_numbers)
 		card_view.configure(card_data, display_owner_id, false)
-		card_view.set_face_down(false)
+		card_view.set_face_down(placeholder)
 	_set_drag_vacancy_visible(false)
 	modulate = Color.WHITE
 	scale = Vector2.ONE
@@ -122,6 +128,10 @@ func cancel_gesture() -> void:
 
 func is_empty() -> bool:
 	return card_data.is_empty()
+
+
+func is_placeholder() -> bool:
+	return placeholder
 
 
 func is_drag_armed() -> bool:
@@ -230,7 +240,7 @@ func _notification(what: int) -> void:
 
 
 func _begin_pointer(pointer_position: Vector2, pointer_id: int) -> void:
-	if not interaction_enabled or _pointer_active:
+	if not interaction_enabled or _pointer_active or placeholder:
 		return
 	_pointer_active = true
 	_pointer_id = pointer_id
@@ -269,14 +279,25 @@ func _end_pointer(pointer_position: Vector2, pointer_id: int) -> void:
 		return
 	if _dragging or _drag_is_armed:
 		drag_ended.emit(logical_index, pointer_position)
-	elif not _scrolling and not _hold_recognized and not card_data.is_empty():
+	elif (
+		not _scrolling
+		and not _hold_recognized
+		and not card_data.is_empty()
+		and not placeholder
+	):
 		if pointer_position.distance_to(_pointer_start) <= movement_threshold:
 			inspection_requested.emit(logical_index, card_data.duplicate(true))
 	cancel_gesture()
 
 
 func _on_hold_timeout() -> void:
-	if not _pointer_active or _scrolling or card_data.is_empty() or not interaction_enabled:
+	if (
+		not _pointer_active
+		or _scrolling
+		or card_data.is_empty()
+		or placeholder
+		or not interaction_enabled
+	):
 		return
 	_hold_recognized = true
 	hold_recognized.emit(logical_index, card_data.duplicate(true))

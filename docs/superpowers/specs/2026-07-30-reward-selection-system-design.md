@@ -1,7 +1,7 @@
 # Reward Selection System Design
 
 Date: 2026-07-30  
-Status: Approved for implementation
+Status: Implemented
 
 ## Purpose
 
@@ -210,3 +210,23 @@ golden path as:
 finish duel → press return → inspect reward → drag reward to hand
 → deck builder opens → chosen card is at library top → main deck is unchanged
 ```
+
+## Implementation Record
+
+Implemented on 2026-07-30:
+
+- `DeckProfileStore` schema 6 persists exact pending reward IDs and provides
+  seeded offer creation plus atomic claims.
+- `reward_selection.tscn` inherits the deck-building scene.
+- `RewardSelectionController` owns reward presentation, inspection, dragging,
+  cancellation, claiming, and return behavior.
+- `DeckLibraryGrid` retains its four-column/1000-slot defaults but now supports
+  the reward scene's three-column/three-slot configuration.
+- `DeckLibrarySlot` supports non-interactive face-down display placeholders.
+- `MainFlowController` routes victory, defeat, abandonment, claims, and pending
+  reward resume.
+
+Focused reward-profile, reward-scene, main-flow, profile-store, and sect
+selection tests pass. The full suite passes 14 of 19 suites; the remaining five
+are the established stale card-fixture suites documented by the project
+baseline and are unrelated to reward selection.

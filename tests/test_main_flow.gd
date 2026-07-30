@@ -4,8 +4,10 @@ const MAIN_SCENE: PackedScene = preload("res://main.tscn")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Cards = preload("res://scripts/card_catalog.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
+const RewardController = preload("res://scripts/reward_selection_controller.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -115,16 +117,29 @@ func _run() -> void:
 	duel = flow.debug_get_current_screen() as DuelController
 	duel.return_requested.emit(&"victory")
 	await process_frame
-	builder = flow.debug_get_current_screen() as DeckBuilderController
+	var reward := flow.debug_get_current_screen() as RewardController
+	_check(reward != null, "Victory opens reward selection")
 	var victorious_profile: Dictionary = store.load_profile()
 	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
 	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
 	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
-	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Builder refreshes to the new enemy")
+	_check(reward.upcoming_enemy_name == String(level_two_enemy["name"]), "Reward scene previews the new enemy")
 	_check(
 		store.get_remembered_enemy_glyphs(victorious_profile).is_empty(),
 		"New enemy starts with no remembered cards"
+	)
+	var victory_reward_ids: Array[StringName] = store.get_pending_reward_ids(victorious_profile)
+	_check(not victory_reward_ids.is_empty(), "Victory persists a reward offer")
+	for reward_id: StringName in victory_reward_ids:
+		_check(int(Cards.get_definition(reward_id)["tier"]) == 2, "Victory uses the new tier")
+	_check(reward.debug_claim_reward(0), "Victory reward can be claimed")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Claiming a victory reward enters deck building")
+	_check(
+		victory_reward_ids[0] in store.get_unlocked_ids(store.load_profile()),
+		"Claimed victory reward is unlocked"
 	)
 
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
@@ -132,14 +147,33 @@ func _run() -> void:
 	duel = flow.debug_get_current_screen() as DuelController
 	duel.return_requested.emit(&"defeat")
 	await process_frame
-	builder = flow.debug_get_current_screen() as DeckBuilderController
+	reward = flow.debug_get_current_screen() as RewardController
+	_check(reward != null, "Defeat opens reward selection")
 	var defeated_profile: Dictionary = store.load_profile()
 	_check(store.get_character_level(defeated_profile) == 2, "Defeat does not level up")
 	_check(
 		store.get_current_enemy_id(defeated_profile) == level_two_enemy_id,
 		"Defeat preserves the rematch enemy"
 	)
+	var defeat_reward_ids: Array[StringName] = store.get_pending_reward_ids(defeated_profile)
+	_check(not defeat_reward_ids.is_empty(), "Defeat persists a lower-tier offer")
+	for reward_id: StringName in defeat_reward_ids:
+		_check(int(Cards.get_definition(reward_id)["tier"]) < 2, "Defeat uses a lower tier")
 
+	(reward.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
+	await process_frame
+	menu = flow.debug_get_current_screen() as MenuController
+	_check(menu != null, "Reward return icon goes to the main menu")
+	(menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	reward = flow.debug_get_current_screen() as RewardController
+	_check(
+		reward != null and reward.debug_get_reward_ids() == defeat_reward_ids,
+		"Journey resumes the exact pending reward"
+	)
+	_check(reward.debug_claim_reward(0), "Resumed defeat reward can be claimed")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController

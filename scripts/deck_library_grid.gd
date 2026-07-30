@@ -21,6 +21,10 @@ const CONTENT_TOP_PADDING: float = 8.0
 const CONTENT_SIDE_PADDING: float = 7.0
 
 @export var hold_duration: float = 0.25
+@export_range(1, 8, 1) var column_count: int = COLUMN_COUNT
+@export_range(1, 1000, 1) var total_slots: int = TOTAL_SLOTS
+@export_range(1, 10, 1) var visible_rows: int = VISIBLE_ROWS
+@export_range(0, 4, 1) var buffer_rows: int = BUFFER_ROWS
 
 var library_slots: Array = []
 var library_display_owner_ids: Array[int] = []
@@ -35,6 +39,8 @@ var _recycling_frozen: bool = false
 var _pending_refresh: bool = false
 var _manual_mouse_scroll_active: bool = false
 var _manual_mouse_scroll_last: Vector2 = Vector2.ZERO
+var _total_rows: int = TOTAL_ROWS
+var _pooled_rows: int = POOLED_ROWS
 
 @onready var shadow: Panel = $Shadow
 @onready var body: PanelContainer = $Body
@@ -46,6 +52,12 @@ var _manual_mouse_scroll_last: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
+	column_count = maxi(1, column_count)
+	total_slots = maxi(1, total_slots)
+	visible_rows = maxi(1, visible_rows)
+	buffer_rows = maxi(0, buffer_rows)
+	_total_rows = maxi(1, ceili(float(total_slots) / float(column_count)))
+	_pooled_rows = mini(_total_rows, visible_rows + buffer_rows * 2)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
@@ -85,11 +97,11 @@ func _set_display_data(
 	default_drag_enabled: bool
 ) -> void:
 	library_slots = values.duplicate()
-	library_slots.resize(TOTAL_SLOTS)
-	library_display_owner_ids.resize(TOTAL_SLOTS)
-	library_drag_enabled.resize(TOTAL_SLOTS)
+	library_slots.resize(total_slots)
+	library_display_owner_ids.resize(total_slots)
+	library_drag_enabled.resize(total_slots)
 	display_power_numbers_enabled = show_power_numbers
-	for index: int in range(TOTAL_SLOTS):
+	for index: int in range(total_slots):
 		if library_slots[index] == null:
 			library_slots[index] = ""
 		library_display_owner_ids[index] = _normalized_display_owner(
@@ -114,7 +126,7 @@ func get_scroll_offset() -> float:
 
 
 func refresh_logical_index(logical_index: int, value: Variant) -> void:
-	if logical_index < 0 or logical_index >= TOTAL_SLOTS:
+	if logical_index < 0 or logical_index >= total_slots:
 		return
 	library_slots[logical_index] = value
 	var visible_slot: Variant = debug_get_bound_slot(logical_index)
@@ -184,7 +196,7 @@ func play_rejected_drag_pulse(
 
 
 func _create_pool() -> void:
-	for pool_index: int in range(POOLED_ROWS * COLUMN_COUNT):
+	for pool_index: int in range(_pooled_rows * column_count):
 		var slot: Variant = SLOT_SCENE.instantiate()
 		slot.name = "PooledSlot%d" % pool_index
 		content.add_child(slot)
@@ -211,14 +223,17 @@ func _layout_grid() -> void:
 		return
 	var horizontal_gap: float = 6.0
 	var usable_width: float = scroll.size.x - CONTENT_SIDE_PADDING * 2.0
-	_column_width = maxf(1.0, (usable_width - horizontal_gap * float(COLUMN_COUNT - 1)) / float(COLUMN_COUNT))
+	_column_width = maxf(
+		1.0,
+		(usable_width - horizontal_gap * float(column_count - 1)) / float(column_count)
+	)
 	var fitted_row_height: float = (
-		(scroll.size.y - CONTENT_TOP_PADDING) / float(VISIBLE_ROWS)
+		(scroll.size.y - CONTENT_TOP_PADDING) / float(visible_rows)
 	)
 	_row_height = maxf(1.0, fitted_row_height + SlotLayoutData.ROW_HEIGHT_INCREMENT)
 	content.custom_minimum_size = Vector2(
 		scroll.size.x,
-		CONTENT_TOP_PADDING + _row_height * float(TOTAL_ROWS)
+		CONTENT_TOP_PADDING + _row_height * float(_total_rows)
 	)
 	for slot: Variant in _slot_pool:
 		slot.size = Vector2(_column_width, _row_height)
@@ -233,18 +248,24 @@ func _refresh_pool(force: bool = false) -> void:
 		_pending_refresh = true
 		return
 	var effective_scroll: float = maxf(0.0, float(scroll.scroll_vertical) - CONTENT_TOP_PADDING)
-	var first_visible_row: int = clampi(int(floor(effective_scroll / _row_height)), 0, TOTAL_ROWS - VISIBLE_ROWS)
-	var start_row: int = clampi(first_visible_row - BUFFER_ROWS, 0, TOTAL_ROWS - POOLED_ROWS)
+	var max_first_visible_row: int = maxi(0, _total_rows - visible_rows)
+	var first_visible_row: int = clampi(
+		int(floor(effective_scroll / _row_height)),
+		0,
+		max_first_visible_row
+	)
+	var max_pool_start: int = maxi(0, _total_rows - _pooled_rows)
+	var start_row: int = clampi(first_visible_row - buffer_rows, 0, max_pool_start)
 	if not force and not _pending_refresh and start_row == _pool_start_row:
 		return
 	_pool_start_row = start_row
 	_pending_refresh = false
 	var horizontal_gap: float = 6.0
 	for pool_index: int in range(_slot_pool.size()):
-		var pool_row: int = floori(float(pool_index) / float(COLUMN_COUNT))
-		var column: int = pool_index % COLUMN_COUNT
+		var pool_row: int = floori(float(pool_index) / float(column_count))
+		var column: int = pool_index % column_count
 		var logical_row: int = start_row + pool_row
-		var logical_index: int = logical_row * COLUMN_COUNT + column
+		var logical_index: int = logical_row * column_count + column
 		var slot: Variant = _slot_pool[pool_index]
 		slot.position = Vector2(
 			CONTENT_SIDE_PADDING + float(column) * (_column_width + horizontal_gap),
