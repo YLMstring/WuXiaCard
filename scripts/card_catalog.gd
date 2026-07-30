@@ -192,7 +192,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "华山派",
 		"tier": 2,
 		"weapon": "剑法",
-		"description": "",
+		"description": "主动触发：移动至相邻空格，然后发起攻击。",
 		"flavor": "",
 		"powers": [6, 6, 6, 6],
 		"starting_ki": 1,
