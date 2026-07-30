@@ -141,8 +141,18 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 - The player's main deck is persisted in a versioned profile and is read by new duel scenes.
 - The collection library has 1,000 logical positions. Unlocked cards occupy a compact prefix; all remaining positions are empty slots.
 - A persistent card ID exists in exactly one place: the five-card main deck or the occupied library prefix.
-- The initial unlocked pool contains every current catalog card except `CangSongYingKe1`. With the default five-card main deck, four cards begin in the library.
-- A newly unlocked card is inserted at library position one. Existing library cards shift down and empty slots remain at the tail.
+- The initial unlocked pool is every catalog card not listed in
+  `DeckProfileStore.DEFAULT_LOCKED_IDS`. The default main deck takes five of
+  those cards and every remaining unlocked card begins in the library.
+- A directly unlocked card is inserted at the library top. If it has
+  still-locked lower-tier cards with the same `glyph` and sect, those cards
+  unlock in catalog order at the occupied library bottom.
+- Reaching character tiers 2–5 unlocks all exact-tier cards of the selected
+  sect before reward generation. Tier boundaries are levels 2, 5, 8, and 11;
+  tier 5 remains the cap through level 15.
+- Unlock expansion and victory progression save atomically. Loading or
+  repairing an existing valid profile never retroactively applies the namesake
+  cascade.
 
 ## Deck Builder
 

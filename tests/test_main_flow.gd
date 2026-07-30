@@ -121,6 +121,14 @@ func _run() -> void:
 	_check(reward != null, "Victory opens reward selection")
 	var victorious_profile: Dictionary = store.load_profile()
 	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
+	_check(
+		&"huixue_liuguang" in store.get_unlocked_ids(victorious_profile),
+		"Crossing into tier two unlocks the selected sect's tier-two card"
+	)
+	_check(
+		String(victorious_profile["library_slots"][0]) == "huixue_liuguang",
+		"Automatic tier card reaches the library top before reward selection"
+	)
 	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
 	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
@@ -133,6 +141,10 @@ func _run() -> void:
 	_check(not victory_reward_ids.is_empty(), "Victory persists a reward offer")
 	for reward_id: StringName in victory_reward_ids:
 		_check(int(Cards.get_definition(reward_id)["tier"]) == 2, "Victory uses the new tier")
+		_check(
+			reward_id != &"huixue_liuguang",
+			"Automatic tier unlock cannot reappear in the victory reward"
+		)
 	_check(reward.debug_claim_reward(0), "Victory reward can be claimed")
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController

@@ -32,7 +32,9 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
-- `deck_profile_store.gd` — versioned persistent deck profile, validation/repair, atomic save, unlock insertion, and main-deck/library exchanges.
+- `deck_profile_store.gd` — versioned persistent deck profile, validation/repair,
+  atomic save, tier and namesake unlock expansion, and main-deck/library
+  exchanges.
 - `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and side-pool construction.
 
 Neither state nor action data may contain Nodes, Controls, audio players, tweens, or live scene references.
@@ -106,6 +108,17 @@ exactly 1,000 entries. Occupied library entries form a compact prefix followed
 by empty entries. A card ID may appear in exactly one of the main deck or
 library. Save data is schema-versioned, validated on load, repaired when
 possible, and replaced with a valid default when necessary.
+
+All gameplay unlock paths use one profile-store transaction. Requested primary
+cards enter the library top in caller order. Still-locked cards with the same
+`glyph` and sect at lower tiers are inherited in catalog order and appended to
+the occupied library bottom. Profile repair never invokes this cascade.
+
+Victory progression compares the old and new character tiers. Crossing levels
+2, 5, 8, or 11 unlocks every exact-tier card of the selected sect before the
+reward offer is generated. Level 11 establishes the current tier-5 cap through
+level 15. The level, next enemy, tier cards, inherited cards, and cleared enemy
+memory are validated and saved atomically.
 
 `DeckLibraryGrid` never creates 1,000 Controls. It maintains a pool of 20 slot
 views: three visible rows plus one buffer row above and below. Scrolling

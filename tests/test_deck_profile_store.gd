@@ -145,6 +145,109 @@ func _run() -> void:
 	_check(no_op_batch.get("profile", {}) == partial_profile, "A no-op batch preserves the exact profile")
 	_check((no_op_batch.get("added_ids", []) as Array).is_empty(), "A no-op batch reports no additions")
 
+	var family_profile: Dictionary = _profile_with_locked_cards(
+		store,
+		[&"CangSongYingKe1", &"CangSongYingKe3", &"CangSongYingKe4"]
+	)
+	var family_library_before: Array = _occupied_values(family_profile["library_slots"])
+	var family_unlock: Dictionary = store.unlock_and_save(
+		family_profile,
+		&"CangSongYingKe4"
+	)
+	_check(bool(family_unlock.get("ok", false)), "A high-tier family card unlock saves")
+	var family_unlocked: Dictionary = family_unlock.get("profile", {})
+	_check(
+		(family_unlock.get("added_ids", []) as Array)
+		== [&"CangSongYingKe4", &"CangSongYingKe1", &"CangSongYingKe3"],
+		"Single unlock reports its primary before inherited lower-tier namesakes"
+	)
+	_check(
+		String(family_unlocked["library_slots"][0]) == "CangSongYingKe4",
+		"The directly unlocked family card enters the library top"
+	)
+	_check(
+		_occupied_values(family_unlocked["library_slots"]).slice(
+			1,
+			1 + family_library_before.size()
+		) == family_library_before,
+		"Existing library order remains between primary and inherited cards"
+	)
+	_check(
+		String(family_unlocked["library_slots"][1 + family_library_before.size()])
+		== "CangSongYingKe1"
+		and String(family_unlocked["library_slots"][2 + family_library_before.size()])
+		== "CangSongYingKe3",
+		"Inherited lower-tier namesakes append at the library bottom in catalog order"
+	)
+	_check(
+		Store._is_lower_namesake(
+			{"glyph": "同名", "sect": "甲门", "tier": 4},
+			{"glyph": "同名", "sect": "乙门", "tier": 1}
+		) == false,
+		"Equal glyphs from different sects do not form an unlock family"
+	)
+	_check(
+		Store._is_lower_namesake(
+			{"glyph": "同名", "sect": "甲门", "tier": 4},
+			{"glyph": "同名", "sect": "甲门", "tier": 2}
+		),
+		"Matching glyph and sect with a lower tier forms an unlock family"
+	)
+	_check(
+		not Store._is_lower_namesake(
+			{"glyph": "同名", "sect": "甲门", "tier": 4},
+			{"glyph": "同名", "sect": "甲门", "tier": 4}
+		),
+		"Equal-tier namesakes are not inherited"
+	)
+
+	var overlapping_profile: Dictionary = _profile_with_locked_cards(
+		store,
+		[&"CangSongYingKe1", &"CangSongYingKe3", &"CangSongYingKe4"]
+	)
+	var overlapping_library_before: Array = _occupied_values(
+		overlapping_profile["library_slots"]
+	)
+	var overlapping_unlock: Dictionary = store.unlock_cards_and_save(
+		overlapping_profile,
+		[&"CangSongYingKe4", &"CangSongYingKe3", &"CangSongYingKe4"]
+	)
+	_check(bool(overlapping_unlock.get("ok", false)), "Overlapping family batch saves")
+	var overlapping_result: Dictionary = overlapping_unlock.get("profile", {})
+	_check(
+		(overlapping_unlock.get("added_ids", []) as Array)
+		== [&"CangSongYingKe4", &"CangSongYingKe3", &"CangSongYingKe1"],
+		"Explicit primaries remain at the front and overlapping inheritance is deduplicated"
+	)
+	_check(
+		String(overlapping_result["library_slots"][0]) == "CangSongYingKe4"
+		and String(overlapping_result["library_slots"][1]) == "CangSongYingKe3"
+		and String(
+			overlapping_result["library_slots"][2 + overlapping_library_before.size()]
+		) == "CangSongYingKe1",
+		"Batch primaries enter the top while only the inherited card enters the bottom"
+	)
+
+	var legacy_family_profile: Dictionary = family_profile.duplicate(true)
+	var legacy_family_library: Array = _occupied_values(
+		legacy_family_profile["library_slots"]
+	)
+	legacy_family_library.push_front("CangSongYingKe4")
+	while legacy_family_library.size() < Store.LIBRARY_CAPACITY:
+		legacy_family_library.append("")
+	legacy_family_profile["library_slots"] = legacy_family_library
+	(legacy_family_profile["unlocked_card_ids"] as Array).push_front(
+		"CangSongYingKe4"
+	)
+	_check(
+		store.is_profile_valid(legacy_family_profile),
+		"Legacy family fixture with missing lower tiers is valid"
+	)
+	_check(
+		store.repair_profile(legacy_family_profile) == legacy_family_profile,
+		"Profile repair does not retroactively cascade a prior high-tier unlock"
+	)
+
 	var schema_one: Dictionary = profile.duplicate(true)
 	schema_one["schema_version"] = 1
 	schema_one.erase("unlocked_sect_ids")
@@ -251,6 +354,51 @@ func _run() -> void:
 		String(active_profile["library_slots"][0]) == "hanfeng_liezhen",
 		"Newly unlocked run cards appear at the top of the library"
 	)
+	_check(
+		(begin_result.get("added_ids", []) as Array) == [&"hanfeng_liezhen"],
+		"Run start reports every newly owned sect card"
+	)
+
+	var reward_family_source: Dictionary = _profile_with_locked_cards(
+		store,
+		[&"CangSongYingKe1", &"CangSongYingKe3", &"CangSongYingKe4"]
+	)
+	var reward_family_begin: Dictionary = store.begin_run_and_save(
+		reward_family_source,
+		&"xuanyue_jianzong",
+		[&"hanfeng_liezhen"],
+		&"qingfeng_xuedi"
+	)
+	var reward_family_profile: Dictionary = reward_family_begin.get("profile", {})
+	reward_family_profile["pending_reward_card_ids"] = ["CangSongYingKe4"]
+	_check(
+		store.is_profile_valid(reward_family_profile),
+		"Reward family fixture remains a valid active profile"
+	)
+	var reward_family_before: Array = _occupied_values(
+		reward_family_profile["library_slots"]
+	)
+	var reward_family_claim: Dictionary = store.claim_pending_reward_and_save(
+		reward_family_profile,
+		&"CangSongYingKe4"
+	)
+	_check(bool(reward_family_claim.get("ok", false)), "Claiming a family reward saves")
+	var reward_family_result: Dictionary = reward_family_claim.get("profile", {})
+	_check(
+		String(reward_family_result["library_slots"][0]) == "CangSongYingKe4",
+		"Claimed reward remains the primary top-of-library unlock"
+	)
+	_check(
+		String(reward_family_result["library_slots"][1 + reward_family_before.size()])
+		== "CangSongYingKe1"
+		and String(reward_family_result["library_slots"][2 + reward_family_before.size()])
+		== "CangSongYingKe3",
+		"Reward inheritance appends lower-tier namesakes at the bottom"
+	)
+	_check(
+		store.get_pending_reward_ids(reward_family_result).is_empty(),
+		"Successful cascading reward claim clears the pending offer"
+	)
 	var legacy_active: Dictionary = active_profile.duplicate(true)
 	legacy_active["schema_version"] = 3
 	legacy_active.erase("level")
@@ -293,8 +441,41 @@ func _run() -> void:
 	_check(store.get_character_level(reset_profile) == 0, "Run reset clears character level")
 	_check(store.get_current_enemy_id(reset_profile) == &"", "Run reset clears the enemy")
 
+	var tier_reward_advance: Dictionary = store.advance_after_victory_and_save(
+		active_profile,
+		&"tieshan_menren"
+	)
+	var tier_reward_profile: Dictionary = tier_reward_advance.get(
+		"profile",
+		active_profile
+	)
+	_check(
+		&"huixue_liuguang" in store.get_unlocked_ids(tier_reward_profile),
+		"Level-two progression owns the selected sect's tier-two card"
+	)
+	var reward_rng := RandomNumberGenerator.new()
+	reward_rng.seed = 2902
+	var post_tier_reward: Dictionary = store.create_reward_offer_and_save(
+		tier_reward_profile,
+		Store.REWARD_VICTORY,
+		reward_rng
+	)
+	_check(bool(post_tier_reward.get("ok", false)), "Post-tier reward offer saves")
+	_check(
+		&"huixue_liuguang" not in (
+			post_tier_reward.get("reward_ids", []) as Array
+		),
+		"Automatic tier unlock is excluded from the following reward offer"
+	)
+
 	var progression_profile: Dictionary = active_profile
 	var previous_enemy_id: StringName = first_enemy_id
+	var expected_tier_unlocks: Dictionary = {
+		2: [&"huixue_liuguang"],
+		5: [&"qiyao_lianfeng"],
+		8: [],
+		11: [&"wanyue_guizong"],
+	}
 	for expected_level: int in range(2, 16):
 		var candidate_ids: Array[StringName] = Enemies.get_enemy_ids_for_level(expected_level)
 		var advance_result: Dictionary = store.advance_after_victory_and_save(
@@ -318,6 +499,23 @@ func _run() -> void:
 			store.get_remembered_enemy_glyphs(progression_profile).is_empty(),
 			"Changing to level %d clears remembered enemy cards" % expected_level
 		)
+		var expected_added_ids: Array = expected_tier_unlocks.get(expected_level, [])
+		_check(
+			(advance_result.get("added_ids", []) as Array) == expected_added_ids,
+			"Level %d reports only its exact-tier sect unlocks" % expected_level
+		)
+		for unlocked_id: StringName in expected_added_ids:
+			_check(
+				unlocked_id in store.get_unlocked_ids(progression_profile),
+				"Level %d owns automatic sect card %s" % [expected_level, unlocked_id]
+			)
+		if not expected_added_ids.is_empty():
+			_check(
+				String(progression_profile["library_slots"][0])
+				== String(expected_added_ids[0]),
+				"Level %d inserts automatic sect cards at the library top"
+				% expected_level
+			)
 	var capped_result: Dictionary = store.advance_after_victory_and_save(progression_profile)
 	_check(bool(capped_result.get("ok", false)), "A level-fifteen victory is a successful no-op")
 	_check(not bool(capped_result.get("advanced", true)), "Level fifteen does not advance")
@@ -337,7 +535,7 @@ func _run() -> void:
 		10: 4,
 		11: 5,
 		14: 5,
-		15: 6,
+		15: 5,
 	}
 	for level_value: Variant in expected_tiers:
 		_check(
@@ -369,6 +567,15 @@ func _run() -> void:
 	)
 	_check(not bool(failed_begin.get("ok", true)), "Run-start save failure is reported")
 	_check(failed_begin.get("profile", {}) == saved_before_failure, "Run-start save failure rolls back")
+	var failed_advance: Dictionary = failing_store.advance_after_victory_and_save(
+		active_profile,
+		&"tieshan_menren"
+	)
+	_check(not bool(failed_advance.get("ok", true)), "Progression save failure is reported")
+	_check(
+		failed_advance.get("profile", {}) == active_profile,
+		"Progression save failure rolls back level, enemy, and automatic unlocks"
+	)
 	var failed_reset: Dictionary = failing_store.reset_run_and_save(saved_before_failure)
 	_check(not bool(failed_reset.get("ok", true)), "Run-reset save failure is reported")
 	_check(failed_reset.get("profile", {}) == saved_before_failure, "Run-reset save failure rolls back")
@@ -386,6 +593,36 @@ func _occupied_count(slots: Array) -> int:
 		if not String(value).is_empty():
 			count += 1
 	return count
+
+
+func _occupied_values(slots: Array) -> Array:
+	var result: Array = []
+	for value: Variant in slots:
+		var card_id: String = String(value)
+		if not card_id.is_empty():
+			result.append(card_id)
+	return result
+
+
+func _profile_with_locked_cards(
+	store: RefCounted,
+	card_ids: Array[StringName]
+) -> Dictionary:
+	var profile: Dictionary = store.create_default_profile()
+	var unlocked: Array = (profile["unlocked_card_ids"] as Array).duplicate()
+	var occupied: Array = _occupied_values(profile["library_slots"])
+	for card_id: StringName in card_ids:
+		unlocked.erase(String(card_id))
+		occupied.erase(String(card_id))
+	profile["unlocked_card_ids"] = unlocked
+	while occupied.size() < Store.LIBRARY_CAPACITY:
+		occupied.append("")
+	profile["library_slots"] = occupied
+	_check(
+		store.is_profile_valid(profile),
+		"Locked-card fixture remains valid for %s" % str(card_ids)
+	)
+	return profile
 
 
 func _library_has_no_gaps(slots: Array) -> bool:

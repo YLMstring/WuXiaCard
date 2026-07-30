@@ -408,53 +408,38 @@ func exchange_and_save(profile: Dictionary, library_index: int, deck_index: int)
 func unlock_and_save(profile: Dictionary, card_id: StringName) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if not is_profile_valid(profile):
-		return {"ok": false, "profile": unchanged}
+		return {"ok": false, "profile": unchanged, "added_ids": []}
 	if card_id not in Catalog.get_all_card_ids() or card_id in get_unlocked_ids(profile):
-		return {"ok": false, "profile": unchanged}
-	var occupied: Array = _occupied_library(profile["library_slots"])
-	if occupied.size() >= LIBRARY_CAPACITY:
-		return {"ok": false, "profile": unchanged}
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var expansion: Dictionary = _build_unlock_expansion(profile, [card_id])
+	if not bool(expansion.get("ok", false)):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
-	occupied.push_front(String(card_id))
-	candidate["library_slots"] = _padded_library(occupied)
-	(candidate["unlocked_card_ids"] as Array).push_front(String(card_id))
+	_apply_unlock_expansion(candidate, expansion)
 	if not is_profile_valid(candidate) or not save_profile(candidate):
-		return {"ok": false, "profile": unchanged}
-	return {"ok": true, "profile": candidate}
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	return {
+		"ok": true,
+		"profile": candidate,
+		"added_ids": expansion.get("added_ids", []),
+	}
 
 
 func unlock_cards_and_save(profile: Dictionary, ordered_card_ids: Array) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if not is_profile_valid(profile):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
-	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
-	var additions: Array[StringName] = []
-	for value: Variant in ordered_card_ids:
-		var card_id := StringName(String(value))
-		if (
-			card_id != &""
-			and card_id in catalog_ids
-			and card_id not in already_unlocked
-			and card_id not in additions
-		):
-			additions.append(card_id)
-	if additions.is_empty():
-		return {"ok": true, "profile": unchanged, "added_ids": additions}
-	var occupied: Array = _occupied_library(profile["library_slots"])
-	if occupied.size() + additions.size() > LIBRARY_CAPACITY:
+	var expansion: Dictionary = _build_unlock_expansion(profile, ordered_card_ids)
+	if not bool(expansion.get("ok", false)):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-
+	var added_ids: Array = expansion.get("added_ids", []) as Array
+	if added_ids.is_empty():
+		return {"ok": true, "profile": unchanged, "added_ids": added_ids}
 	var candidate: Dictionary = profile.duplicate(true)
-	var combined_library: Array = _string_array(additions)
-	combined_library.append_array(occupied)
-	candidate["library_slots"] = _padded_library(combined_library)
-	var combined_unlocked: Array = _string_array(additions)
-	combined_unlocked.append_array((profile["unlocked_card_ids"] as Array).duplicate())
-	candidate["unlocked_card_ids"] = combined_unlocked
+	_apply_unlock_expansion(candidate, expansion)
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	return {"ok": true, "profile": candidate, "added_ids": additions}
+	return {"ok": true, "profile": candidate, "added_ids": added_ids}
 
 
 func begin_run_and_save(
@@ -471,21 +456,14 @@ func begin_run_and_save(
 		or sect_id not in get_unlocked_sect_ids(profile)
 	):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	var additions: Array[StringName] = _collect_unlock_additions(profile, ordered_card_ids)
-	var occupied: Array = _occupied_library(profile["library_slots"])
-	if occupied.size() + additions.size() > LIBRARY_CAPACITY:
+	var expansion: Dictionary = _build_unlock_expansion(profile, ordered_card_ids)
+	if not bool(expansion.get("ok", false)):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
 	var enemy_id: StringName = _choose_enemy_id(1, enemy_id_override)
 	if enemy_id == &"":
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	if not additions.is_empty():
-		var combined_library: Array = _string_array(additions)
-		combined_library.append_array(occupied)
-		candidate["library_slots"] = _padded_library(combined_library)
-		var combined_unlocked: Array = _string_array(additions)
-		combined_unlocked.append_array((profile["unlocked_card_ids"] as Array).duplicate())
-		candidate["unlocked_card_ids"] = combined_unlocked
+	_apply_unlock_expansion(candidate, expansion)
 	candidate["run_active"] = true
 	candidate["selected_sect_id"] = String(sect_id)
 	candidate["level"] = 1
@@ -494,7 +472,11 @@ func begin_run_and_save(
 	candidate["pending_reward_card_ids"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	return {"ok": true, "profile": candidate, "added_ids": additions}
+	return {
+		"ok": true,
+		"profile": candidate,
+		"added_ids": expansion.get("added_ids", []),
+	}
 
 
 func reset_run_and_save(profile: Dictionary) -> Dictionary:
@@ -695,18 +677,20 @@ func claim_pending_reward_and_save(profile: Dictionary, card_id: StringName) -> 
 		or card_id not in get_pending_reward_ids(profile)
 		or card_id in get_unlocked_ids(profile)
 	):
-		return {"ok": false, "profile": unchanged}
-	var occupied: Array = _occupied_library(profile["library_slots"])
-	if occupied.size() >= LIBRARY_CAPACITY:
-		return {"ok": false, "profile": unchanged}
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var expansion: Dictionary = _build_unlock_expansion(profile, [card_id])
+	if not bool(expansion.get("ok", false)):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
-	occupied.push_front(String(card_id))
-	candidate["library_slots"] = _padded_library(occupied)
-	(candidate["unlocked_card_ids"] as Array).push_front(String(card_id))
+	_apply_unlock_expansion(candidate, expansion)
 	candidate["pending_reward_card_ids"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
-		return {"ok": false, "profile": unchanged}
-	return {"ok": true, "profile": candidate}
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	return {
+		"ok": true,
+		"profile": candidate,
+		"added_ids": expansion.get("added_ids", []),
+	}
 
 
 func advance_after_victory_and_save(
@@ -719,21 +703,60 @@ func advance_after_victory_and_save(
 		or not is_run_active(profile)
 		or not get_pending_reward_ids(profile).is_empty()
 	):
-		return {"ok": false, "advanced": false, "profile": unchanged}
+		return {
+			"ok": false,
+			"advanced": false,
+			"profile": unchanged,
+			"added_ids": [],
+		}
 	var current_level: int = get_character_level(profile)
 	if current_level >= MAX_CHARACTER_LEVEL:
-		return {"ok": true, "advanced": false, "profile": unchanged}
+		return {
+			"ok": true,
+			"advanced": false,
+			"profile": unchanged,
+			"added_ids": [],
+		}
 	var next_level: int = current_level + 1
 	var next_enemy_id: StringName = _choose_enemy_id(next_level, enemy_id_override)
 	if next_enemy_id == &"":
-		return {"ok": false, "advanced": false, "profile": unchanged}
+		return {
+			"ok": false,
+			"advanced": false,
+			"profile": unchanged,
+			"added_ids": [],
+		}
+	var requested_unlocks: Array[StringName] = []
+	var current_tier: int = tier_for_level(current_level)
+	var next_tier: int = tier_for_level(next_level)
+	if next_tier > current_tier:
+		requested_unlocks = _get_selected_sect_card_ids_for_tier(profile, next_tier)
+	var expansion: Dictionary = _build_unlock_expansion(profile, requested_unlocks)
+	if not bool(expansion.get("ok", false)):
+		return {
+			"ok": false,
+			"advanced": false,
+			"profile": unchanged,
+			"added_ids": [],
+		}
 	var candidate: Dictionary = profile.duplicate(true)
+	_apply_unlock_expansion(candidate, expansion)
 	candidate["level"] = next_level
 	candidate["current_enemy_id"] = String(next_enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
-		return {"ok": false, "advanced": false, "profile": unchanged}
-	return {"ok": true, "advanced": true, "profile": candidate}
+		return {
+			"ok": false,
+			"advanced": false,
+			"profile": unchanged,
+			"added_ids": [],
+		}
+	return {
+		"ok": true,
+		"advanced": true,
+		"profile": candidate,
+		"added_ids": expansion.get("added_ids", []),
+	}
 
 
 static func tier_for_level(level: int) -> int:
@@ -770,6 +793,112 @@ func _collect_unlock_additions(profile: Dictionary, ordered_card_ids: Array) -> 
 		):
 			additions.append(card_id)
 	return additions
+
+
+func _build_unlock_expansion(
+	profile: Dictionary,
+	ordered_card_ids: Array
+) -> Dictionary:
+	var primary_additions: Array[StringName] = _collect_unlock_additions(
+		profile,
+		ordered_card_ids
+	)
+	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
+	var inherited_additions: Array[StringName] = []
+	for candidate_id: StringName in Catalog.get_all_card_ids():
+		if (
+			candidate_id in already_unlocked
+			or candidate_id in primary_additions
+			or candidate_id in inherited_additions
+		):
+			continue
+		var candidate_definition: Dictionary = Catalog.get_definition(candidate_id)
+		for primary_id: StringName in primary_additions:
+			var primary_definition: Dictionary = Catalog.get_definition(primary_id)
+			if _is_lower_namesake(primary_definition, candidate_definition):
+				inherited_additions.append(candidate_id)
+				break
+
+	var occupied: Array = _occupied_library(profile["library_slots"])
+	var resulting_size: int = (
+		primary_additions.size()
+		+ occupied.size()
+		+ inherited_additions.size()
+	)
+	if resulting_size > LIBRARY_CAPACITY:
+		return {
+			"ok": false,
+			"primary_ids": [],
+			"inherited_ids": [],
+			"added_ids": [],
+		}
+
+	var library_values: Array = _string_array(primary_additions)
+	library_values.append_array(occupied)
+	library_values.append_array(_string_array(inherited_additions))
+	var unlocked_values: Array = _string_array(primary_additions)
+	unlocked_values.append_array((profile["unlocked_card_ids"] as Array).duplicate())
+	unlocked_values.append_array(_string_array(inherited_additions))
+	var added_ids: Array[StringName] = primary_additions.duplicate()
+	added_ids.append_array(inherited_additions)
+	return {
+		"ok": true,
+		"primary_ids": primary_additions,
+		"inherited_ids": inherited_additions,
+		"added_ids": added_ids,
+		"library_slots": _padded_library(library_values),
+		"unlocked_card_ids": unlocked_values,
+	}
+
+
+func _apply_unlock_expansion(
+	candidate: Dictionary,
+	expansion: Dictionary
+) -> void:
+	candidate["library_slots"] = (
+		expansion.get("library_slots", candidate.get("library_slots", [])) as Array
+	).duplicate()
+	candidate["unlocked_card_ids"] = (
+		expansion.get(
+			"unlocked_card_ids",
+			candidate.get("unlocked_card_ids", [])
+		) as Array
+	).duplicate()
+
+
+static func _is_lower_namesake(
+	primary_definition: Dictionary,
+	candidate_definition: Dictionary
+) -> bool:
+	var primary_glyph: String = String(primary_definition.get("glyph", ""))
+	var primary_sect: String = String(primary_definition.get("sect", ""))
+	return (
+		not primary_glyph.is_empty()
+		and not primary_sect.is_empty()
+		and String(candidate_definition.get("glyph", "")) == primary_glyph
+		and String(candidate_definition.get("sect", "")) == primary_sect
+		and int(candidate_definition.get("tier", 0))
+		< int(primary_definition.get("tier", 0))
+	)
+
+
+func _get_selected_sect_card_ids_for_tier(
+	profile: Dictionary,
+	tier: int
+) -> Array[StringName]:
+	var result: Array[StringName] = []
+	var sect_id: StringName = get_selected_sect_id(profile)
+	if sect_id == &"" or not Sects.has_sect(sect_id):
+		return result
+	var sect_glyph: String = String(Sects.get_definition(sect_id).get("glyph", ""))
+	for card_id: StringName in Catalog.get_all_card_ids():
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		if (
+			String(definition.get("sect", "")) == sect_glyph
+			and int(definition.get("tier", 0)) == tier
+		):
+			result.append(card_id)
+	return result
 
 
 func _choose_enemy_id(level: int, enemy_id_override: StringName) -> StringName:

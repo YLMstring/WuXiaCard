@@ -35,17 +35,13 @@ func _run() -> void:
 		)
 		profile = advance_result.get("profile", profile)
 	_check(store.get_character_tier(profile) == 5, "Reward-scene fixture reaches tier five")
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 411
-	var offer_result: Dictionary = store.create_reward_offer_and_save(
-		profile,
-		Store.REWARD_VICTORY,
-		rng
+	profile["pending_reward_card_ids"] = ["CangSongYingKe1"]
+	_check(
+		store.save_profile(profile),
+		"Single-card reward-scene fixture saves after tier progression"
 	)
-	_check(bool(offer_result.get("ok", false)), "Tier-five reward offer saves")
-	profile = offer_result.get("profile", profile)
 	var reward_ids: Array[StringName] = store.get_pending_reward_ids(profile)
-	_check(reward_ids.size() == 1, "Current catalog provides one locked tier-five reward")
+	_check(reward_ids.size() == 1, "Reward-scene fixture provides one visible choice")
 
 	var enemy: Dictionary = Enemies.get_definition(store.get_current_enemy_id(profile))
 	var reward: Variant = REWARD_SCENE.instantiate()

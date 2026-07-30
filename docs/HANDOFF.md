@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-07-27
+Updated: 2026-07-30
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -10,12 +10,11 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
-The separate deck-building scene persists a five-card main deck and exposes a
-virtualized 1,000-slot collection library. It is independently runnable for
-now; no campaign or scene router opens it from `main.tscn` yet.
+The main flow routes the main menu, sect selection, deck builder, duel, and
+reward selection. The deck-building scene persists a five-card main deck and
+exposes a virtualized 1,000-slot collection library.
 
-Not yet present: story/dialogue, result/progression flow, a scene router,
-collection-unlock progression, final content balance, multiplayer, or a
+Not yet present: story/dialogue, final content balance, multiplayer, or a
 release-ready Android package.
 
 ## Exact Starting Point
@@ -84,8 +83,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
   Occupied cards are a compact prefix followed by empty slots.
 - A library card exchanges with a main-deck slot after a roughly 0.25-second
   hold and drag. A short tap inspects; immediate movement scrolls.
-- Newly unlocked cards insert at the top of the library. Unlock progression
-  itself is not yet connected to gameplay.
+- Primary unlocks insert at the library top. Still-locked lower-tier cards with
+  the same `glyph` and sect append at the library bottom.
+- Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
+  sect before reward selection. Tier 5 remains the cap through level 15.
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.

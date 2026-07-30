@@ -46,6 +46,26 @@ Catalog rules:
 `&"text"` is a Godot `StringName`, used for stable vocabulary identifiers.
 Display text remains a normal String.
 
+## Card Families and Progression Unlocks
+
+Cards form an unlock family when both `glyph` and `sect` match. Whenever a card
+is newly unlocked, every still-locked family member at a strictly lower tier
+also unlocks. The requested card is a primary unlock and enters the library
+top; inherited lower-tier cards follow catalog order and append at the occupied
+library bottom.
+
+Because catalog order controls inherited ordering, list related cards in their
+intended stable order in `ALL_CARD_IDS`.
+
+The selected sect is matched through the sect catalog's `glyph`. Crossing into
+character tiers 2, 3, 4, or 5 unlocks all cards of that exact tier whose `sect`
+matches the selected sect. Current tier boundaries are levels 2, 5, 8, and 11,
+with tier 5 remaining the cap through level 15.
+
+Unlocks occur only through explicit profile-store operations. Do not add family
+expansion to profile validation or repair: loading an older valid save must not
+silently grant cards or reorder its library.
+
 ## Instances and Runtime Abilities
 
 `CardCatalog.create_instance()` copies definition data into a runtime
