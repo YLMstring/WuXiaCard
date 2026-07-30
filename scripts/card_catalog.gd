@@ -200,6 +200,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"starting_ki": 1,
 		"abilities": [
 			{
+				"retained_on_flip": true,
 				"activation": {
 					"input": ACTIVATION_DRAG_TO_TARGET,
 					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
@@ -227,6 +228,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"starting_ki": 2,
 		"abilities": [
 			{
+				"retained_on_flip": true,
 				"activation": {
 					"input": ACTIVATION_DRAG_TO_TARGET,
 					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
@@ -254,6 +256,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"starting_ki": 3,
 		"abilities": [
 			{
+				"retained_on_flip": true,
 				"activation": {
 					"input": ACTIVATION_DRAG_TO_TARGET,
 					"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
