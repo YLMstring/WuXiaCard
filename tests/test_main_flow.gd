@@ -3,6 +3,7 @@ extends SceneTree
 const MAIN_SCENE: PackedScene = preload("res://main.tscn")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 
@@ -20,15 +21,6 @@ func _run() -> void:
 	var flow: Variant = MAIN_SCENE.instantiate()
 	flow.deck_profile_path = _save_path
 	flow.testing_mode = true
-	flow.upcoming_enemy_name = "测试对手"
-	var enemy_ids: Array[StringName] = [
-		&"CangSongYingKe2",
-		&"fire_envoy",
-		&"tiger_general",
-		&"strategist",
-		&"sun_zan",
-	]
-	flow.upcoming_enemy_card_ids = enemy_ids
 	root.add_child(flow)
 	await process_frame
 	await process_frame
@@ -39,7 +31,7 @@ func _run() -> void:
 	await process_frame
 	var selector := flow.debug_get_current_screen() as SelectorController
 	_check(selector != null, "An inactive run routes to sect selection")
-	_check(selector.upcoming_enemy_name == "测试对手", "Main flow passes enemy details to sect selection")
+	_check(selector.upcoming_enemy_name == "对手待定", "Inactive runs do not reveal an unchosen enemy")
 	(selector.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
@@ -59,6 +51,15 @@ func _run() -> void:
 		String(active_profile["selected_sect_id"]) == "xuanyue_jianzong",
 		"Sect confirmation persists the chosen sect"
 	)
+	var store := Store.new(_save_path)
+	_check(store.get_character_level(active_profile) == 1, "Sect confirmation starts level one")
+	var level_one_enemy_id: StringName = store.get_current_enemy_id(active_profile)
+	var level_one_enemy: Dictionary = Enemies.get_definition(level_one_enemy_id)
+	_check(builder.upcoming_enemy_name == String(level_one_enemy["name"]), "Deck builder shows the saved level-one enemy")
+	_check(
+		builder.upcoming_enemy_card_ids == level_one_enemy["deck"],
+		"Deck builder shows the saved enemy deck"
+	)
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
@@ -68,17 +69,52 @@ func _run() -> void:
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "An active run resumes directly in deck building")
-	_check(builder.upcoming_enemy_name == "测试对手", "Deck builder receives enemy details")
+	_check(builder.upcoming_enemy_name == String(level_one_enemy["name"]), "Resuming preserves the enemy")
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
 	await process_frame
 	var duel := flow.debug_get_current_screen() as DuelController
 	_check(duel != null, "Go-second choice enters the duel")
 	_check(duel.debug_get_active_owner() == Rules.OPPONENT_OWNER, "Go-second gives the opponent opening turn")
-	_check(duel.opponent_name_text == "测试对手", "Duel receives the same enemy")
+	_check(
+		duel.opponent_name_text == String(level_one_enemy["name"]),
+		"Duel receives the same saved enemy"
+	)
 	(duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Duel return still goes back to deck building")
+	var abandoned_profile: Dictionary = store.load_profile()
+	_check(store.get_character_level(abandoned_profile) == 1, "Abandoning a duel does not level up")
+	_check(
+		store.get_current_enemy_id(abandoned_profile) == level_one_enemy_id,
+		"Abandoning a duel preserves the rematch enemy"
+	)
+
+	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	await process_frame
+	duel = flow.debug_get_current_screen() as DuelController
+	duel.return_requested.emit(&"victory")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	var victorious_profile: Dictionary = store.load_profile()
+	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
+	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
+	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
+	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
+	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Builder refreshes to the new enemy")
+
+	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	await process_frame
+	duel = flow.debug_get_current_screen() as DuelController
+	duel.return_requested.emit(&"defeat")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	var defeated_profile: Dictionary = store.load_profile()
+	_check(store.get_character_level(defeated_profile) == 2, "Defeat does not level up")
+	_check(
+		store.get_current_enemy_id(defeated_profile) == level_two_enemy_id,
+		"Defeat preserves the rematch enemy"
+	)
 
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame

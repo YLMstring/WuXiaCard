@@ -52,6 +52,7 @@ $resolvedEngine = Resolve-EnginePath -RequestedPath $EnginePath
 $testScripts = @(
     "test_card_catalog.gd",
     "test_sect_catalog.gd",
+    "test_enemy_catalog.gd",
     "test_deck_profile_store.gd",
     "test_deck_library_grid.gd",
     "test_deck_builder_integration.gd",
@@ -60,6 +61,7 @@ $testScripts = @(
     "test_main_flow.gd",
     "test_card_inspector.gd",
     "test_duel_backdrop.gd",
+    "test_duel_outcome.gd",
     "test_duel_rules.gd",
     "test_duel_simulator.gd",
     "test_duel_search.gd",

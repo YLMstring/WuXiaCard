@@ -1,7 +1,11 @@
 class_name DuelController
 extends Control
 
-signal return_requested
+signal return_requested(outcome: StringName)
+
+const OUTCOME_VICTORY: StringName = &"victory"
+const OUTCOME_DEFEAT: StringName = &"defeat"
+const OUTCOME_ABANDONED: StringName = &"abandoned"
 
 enum TurnState {
 	PLAYER,
@@ -77,6 +81,8 @@ var _last_search_report: Dictionary = {}
 var _inspection_open: bool = false
 var _board_visible_before_inspection: bool = true
 var _scores_visible_before_inspection: bool = true
+var _match_outcome: StringName = &""
+var _return_emitted: bool = false
 var _status_before_inspection: String = ""
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
@@ -236,6 +242,10 @@ func debug_get_scores() -> Vector2i:
 
 func debug_is_complete() -> bool:
 	return turn_state == TurnState.COMPLETE
+
+
+func debug_get_match_outcome() -> StringName:
+	return _match_outcome
 
 
 func debug_get_simulation_turn_count() -> int:
@@ -938,8 +948,10 @@ func _finish_match() -> void:
 	var player_total: int = DuelRules.count_owned(board, DuelRules.PLAYER_OWNER)
 	var opponent_total: int = DuelRules.count_owned(board, DuelRules.OPPONENT_OWNER)
 	if player_total > opponent_total:
+		_match_outcome = OUTCOME_VICTORY
 		turn_status.text = "获胜 · %d–%d" % [player_total, opponent_total]
 	else:
+		_match_outcome = OUTCOME_DEFEAT
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	turn_status.modulate = Color("3b211d")
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
@@ -1509,5 +1521,13 @@ func _vibrate(duration_ms: int) -> void:
 
 
 func _on_exit_pressed() -> void:
+	if _return_emitted:
+		return
+	_return_emitted = true
 	_cancel_opponent_search()
-	return_requested.emit()
+	var outcome: StringName = (
+		_match_outcome
+		if turn_state == TurnState.COMPLETE and _match_outcome != &""
+		else OUTCOME_ABANDONED
+	)
+	return_requested.emit(outcome)

@@ -3,10 +3,12 @@ extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 
-const SCHEMA_VERSION: int = 3
+const SCHEMA_VERSION: int = 4
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
+const MAX_CHARACTER_LEVEL: int = 15
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
 const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
 	&"xuanyue_jianzong",
@@ -63,6 +65,8 @@ func create_default_profile() -> Dictionary:
 		"schema_version": SCHEMA_VERSION,
 		"run_active": false,
 		"selected_sect_id": "",
+		"level": 0,
+		"current_enemy_id": "",
 		"unlocked_sect_ids": _string_array(DEFAULT_UNLOCKED_SECT_IDS),
 		"unlocked_card_ids": _string_array(unlocked_ids),
 		"main_deck": main_deck,
@@ -125,10 +129,21 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		return false
 	var run_active_value: Variant = profile.get("run_active", null)
 	var selected_sect_value: Variant = profile.get("selected_sect_id", null)
-	if typeof(run_active_value) != TYPE_BOOL or typeof(selected_sect_value) != TYPE_STRING:
+	var level_value: Variant = profile.get("level", null)
+	var enemy_value: Variant = profile.get("current_enemy_id", null)
+	if (
+		typeof(run_active_value) != TYPE_BOOL
+		or typeof(selected_sect_value) != TYPE_STRING
+		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
+		or typeof(enemy_value) != TYPE_STRING
+	):
 		return false
 	var run_active: bool = bool(run_active_value)
 	var selected_sect_id := StringName(String(selected_sect_value))
+	var level: int = int(level_value)
+	if float(level_value) != float(level):
+		return false
+	var current_enemy_id := StringName(String(enemy_value))
 	var unlocked_sects_value: Variant = profile.get("unlocked_sect_ids", null)
 	var unlocked_value: Variant = profile.get("unlocked_card_ids", null)
 	var deck_value: Variant = profile.get("main_deck", null)
@@ -153,7 +168,11 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	if run_active:
 		if selected_sect_id == &"" or not unlocked_sect_set.has(selected_sect_id):
 			return false
-	elif selected_sect_id != &"":
+		if level < 1 or level > MAX_CHARACTER_LEVEL or not Enemies.has_enemy(current_enemy_id):
+			return false
+		if int(Enemies.get_definition(current_enemy_id).get("level", -1)) != level:
+			return false
+	elif selected_sect_id != &"" or level != 0 or current_enemy_id != &"":
 		return false
 	var unlocked: Array = unlocked_value
 	var deck: Array = deck_value
@@ -196,6 +215,8 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	)
 	var run_active: bool = false
 	var selected_sect_id: StringName = &""
+	var level: int = 0
+	var current_enemy_id: StringName = &""
 	if int(profile.get("schema_version", -1)) >= SCHEMA_VERSION:
 		var raw_run_active: Variant = profile.get("run_active", false)
 		var raw_selected_sect: Variant = profile.get("selected_sect_id", "")
@@ -204,6 +225,32 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 			if candidate_sect in unlocked_sects:
 				run_active = true
 				selected_sect_id = candidate_sect
+				var candidate_level: int = clampi(
+					int(profile.get("level", 1)),
+					1,
+					MAX_CHARACTER_LEVEL
+				)
+				var candidate_enemy := StringName(String(profile.get("current_enemy_id", "")))
+				if (
+					Enemies.has_enemy(candidate_enemy)
+					and int(Enemies.get_definition(candidate_enemy).get("level", -1))
+					== candidate_level
+				):
+					level = candidate_level
+					current_enemy_id = candidate_enemy
+				else:
+					level = 1
+					current_enemy_id = Enemies.get_enemy_ids_for_level(1)[0]
+	elif int(profile.get("schema_version", -1)) >= 3:
+		var legacy_run_active: Variant = profile.get("run_active", false)
+		var legacy_selected_sect: Variant = profile.get("selected_sect_id", "")
+		if typeof(legacy_run_active) == TYPE_BOOL and bool(legacy_run_active):
+			var legacy_sect := StringName(String(legacy_selected_sect))
+			if legacy_sect in unlocked_sects:
+				run_active = true
+				selected_sect_id = legacy_sect
+				level = 1
+				current_enemy_id = Enemies.get_enemy_ids_for_level(1)[0]
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	var unlocked: Array[StringName] = []
 	var raw_unlocked: Variant = profile.get("unlocked_card_ids", null)
@@ -258,6 +305,8 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"schema_version": SCHEMA_VERSION,
 		"run_active": run_active,
 		"selected_sect_id": String(selected_sect_id),
+		"level": level,
+		"current_enemy_id": String(current_enemy_id),
 		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
@@ -339,7 +388,8 @@ func unlock_cards_and_save(profile: Dictionary, ordered_card_ids: Array) -> Dict
 func begin_run_and_save(
 	profile: Dictionary,
 	sect_id: StringName,
-	ordered_card_ids: Array
+	ordered_card_ids: Array,
+	enemy_id_override: StringName = &""
 ) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if (
@@ -354,6 +404,9 @@ func begin_run_and_save(
 	if occupied.size() + additions.size() > LIBRARY_CAPACITY:
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
+	var enemy_id: StringName = _choose_enemy_id(1, enemy_id_override)
+	if enemy_id == &"":
+		return {"ok": false, "profile": unchanged, "added_ids": []}
 	if not additions.is_empty():
 		var combined_library: Array = _string_array(additions)
 		combined_library.append_array(occupied)
@@ -363,6 +416,8 @@ func begin_run_and_save(
 		candidate["unlocked_card_ids"] = combined_unlocked
 	candidate["run_active"] = true
 	candidate["selected_sect_id"] = String(sect_id)
+	candidate["level"] = 1
+	candidate["current_enemy_id"] = String(enemy_id)
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	return {"ok": true, "profile": candidate, "added_ids": additions}
@@ -391,6 +446,8 @@ func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	var candidate: Dictionary = profile.duplicate(true)
 	candidate["run_active"] = false
 	candidate["selected_sect_id"] = ""
+	candidate["level"] = 0
+	candidate["current_enemy_id"] = ""
 	candidate["main_deck"] = _string_array(DEFAULT_MAIN_DECK_IDS)
 	candidate["library_slots"] = _padded_library(_string_array(library_order))
 	if not is_profile_valid(candidate) or not save_profile(candidate):
@@ -447,6 +504,58 @@ func get_selected_sect_id(profile: Dictionary) -> StringName:
 	return StringName(String(profile["selected_sect_id"]))
 
 
+func get_character_level(profile: Dictionary) -> int:
+	if not is_profile_valid(profile):
+		return 0
+	return int(profile["level"])
+
+
+func get_character_tier(profile: Dictionary) -> int:
+	return tier_for_level(get_character_level(profile))
+
+
+func get_current_enemy_id(profile: Dictionary) -> StringName:
+	if not is_profile_valid(profile):
+		return &""
+	return StringName(String(profile["current_enemy_id"]))
+
+
+func advance_after_victory_and_save(
+	profile: Dictionary,
+	enemy_id_override: StringName = &""
+) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile) or not is_run_active(profile):
+		return {"ok": false, "advanced": false, "profile": unchanged}
+	var current_level: int = get_character_level(profile)
+	if current_level >= MAX_CHARACTER_LEVEL:
+		return {"ok": true, "advanced": false, "profile": unchanged}
+	var next_level: int = current_level + 1
+	var next_enemy_id: StringName = _choose_enemy_id(next_level, enemy_id_override)
+	if next_enemy_id == &"":
+		return {"ok": false, "advanced": false, "profile": unchanged}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["level"] = next_level
+	candidate["current_enemy_id"] = String(next_enemy_id)
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "advanced": false, "profile": unchanged}
+	return {"ok": true, "advanced": true, "profile": candidate}
+
+
+static func tier_for_level(level: int) -> int:
+	if level >= 15:
+		return 6
+	if level >= 11:
+		return 5
+	if level >= 8:
+		return 4
+	if level >= 5:
+		return 3
+	if level >= 2:
+		return 2
+	return 1
+
+
 func _default_unlocked_ids() -> Array[StringName]:
 	var result: Array[StringName] = []
 	for card_id: StringName in Catalog.get_all_card_ids():
@@ -469,6 +578,17 @@ func _collect_unlock_additions(profile: Dictionary, ordered_card_ids: Array) -> 
 		):
 			additions.append(card_id)
 	return additions
+
+
+func _choose_enemy_id(level: int, enemy_id_override: StringName) -> StringName:
+	if enemy_id_override != &"":
+		if (
+			Enemies.has_enemy(enemy_id_override)
+			and int(Enemies.get_definition(enemy_id_override).get("level", -1)) == level
+		):
+			return enemy_id_override
+		return &""
+	return Enemies.pick_random_enemy_id(level)
 
 
 func _repair_unlocked_sect_ids(raw_value: Variant) -> Array[StringName]:

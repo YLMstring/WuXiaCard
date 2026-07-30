@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Store = preload("res://scripts/deck_profile_store.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"hanfeng_liezhen",
@@ -39,9 +40,12 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 3, "Default profile uses schema version 3")
+	_check(int(profile["schema_version"]) == 4, "Default profile uses schema version 4")
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
+	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
+	_check(store.get_character_tier(profile) == 1, "Character tier begins at one")
+	_check(store.get_current_enemy_id(profile) == &"", "Inactive profiles have no enemy")
 	_check(
 		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
 		"Only Xuanyue Jianzong starts unlocked"
@@ -145,7 +149,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 3, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 4, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"
@@ -200,6 +204,13 @@ func _run() -> void:
 	_check(bool(begin_result.get("ok", false)), "Beginning a valid run saves atomically")
 	var active_profile: Dictionary = begin_result.get("profile", {})
 	_check(store.is_run_active(active_profile), "Beginning a run marks it active")
+	_check(store.get_character_level(active_profile) == 1, "Beginning a run advances to level one")
+	_check(store.get_character_tier(active_profile) == 1, "Level one remains tier one")
+	var first_enemy_id: StringName = store.get_current_enemy_id(active_profile)
+	_check(
+		first_enemy_id in Enemies.get_enemy_ids_for_level(1),
+		"Beginning a run assigns a level-one enemy"
+	)
 	_check(
 		store.get_selected_sect_id(active_profile) == &"xuanyue_jianzong",
 		"Beginning a run records the selected sect"
@@ -207,6 +218,20 @@ func _run() -> void:
 	_check(
 		String(active_profile["library_slots"][0]) == "hanfeng_liezhen",
 		"Newly unlocked run cards appear at the top of the library"
+	)
+	var legacy_active: Dictionary = active_profile.duplicate(true)
+	legacy_active["schema_version"] = 3
+	legacy_active.erase("level")
+	legacy_active.erase("current_enemy_id")
+	var migrated_active: Dictionary = store.repair_profile(legacy_active)
+	_check(store.is_run_active(migrated_active), "A schema-three active run remains active")
+	_check(
+		store.get_character_level(migrated_active) == 1,
+		"Legacy active runs enter progression at level one"
+	)
+	_check(
+		store.get_current_enemy_id(migrated_active) in Enemies.get_enemy_ids_for_level(1),
+		"Legacy active runs receive a level-one enemy"
 	)
 	var active_unlocked: Array = (active_profile["unlocked_card_ids"] as Array).duplicate()
 	var exchange_for_reset: Dictionary = store.exchange_and_save(active_profile, 0, 0)
@@ -229,6 +254,56 @@ func _run() -> void:
 		reset_profile["unlocked_sect_ids"] == active_profile["unlocked_sect_ids"],
 		"Run reset preserves sect unlocks"
 	)
+	_check(store.get_character_level(reset_profile) == 0, "Run reset clears character level")
+	_check(store.get_current_enemy_id(reset_profile) == &"", "Run reset clears the enemy")
+
+	var progression_profile: Dictionary = active_profile
+	var previous_enemy_id: StringName = first_enemy_id
+	for expected_level: int in range(2, 16):
+		var candidate_ids: Array[StringName] = Enemies.get_enemy_ids_for_level(expected_level)
+		var advance_result: Dictionary = store.advance_after_victory_and_save(
+			progression_profile,
+			candidate_ids[expected_level % candidate_ids.size()]
+		)
+		_check(bool(advance_result.get("ok", false)), "Victory advances to level %d" % expected_level)
+		_check(bool(advance_result.get("advanced", false)), "Level %d reports advancement" % expected_level)
+		progression_profile = advance_result.get("profile", progression_profile)
+		_check(
+			store.get_character_level(progression_profile) == expected_level,
+			"Victory persists level %d" % expected_level
+		)
+		var enemy_id: StringName = store.get_current_enemy_id(progression_profile)
+		_check(
+			enemy_id in candidate_ids and enemy_id != previous_enemy_id,
+			"Level %d receives a same-level new enemy" % expected_level
+		)
+		previous_enemy_id = enemy_id
+	var capped_result: Dictionary = store.advance_after_victory_and_save(progression_profile)
+	_check(bool(capped_result.get("ok", false)), "A level-fifteen victory is a successful no-op")
+	_check(not bool(capped_result.get("advanced", true)), "Level fifteen does not advance")
+	_check(
+		capped_result.get("profile", {}) == progression_profile,
+		"Level-fifteen victory preserves the opponent"
+	)
+
+	var expected_tiers: Dictionary = {
+		0: 1,
+		1: 1,
+		2: 2,
+		4: 2,
+		5: 3,
+		7: 3,
+		8: 4,
+		10: 4,
+		11: 5,
+		14: 5,
+		15: 6,
+	}
+	for level_value: Variant in expected_tiers:
+		_check(
+			Store.tier_for_level(int(level_value)) == int(expected_tiers[level_value]),
+			"Level %d maps to tier %d" % [level_value, expected_tiers[level_value]]
+		)
 	var full_reset_result: Dictionary = store.reset_all_progress_and_save(reset_profile)
 	_check(bool(full_reset_result.get("ok", false)), "Full progress reset saves")
 	_check(

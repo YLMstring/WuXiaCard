@@ -9,9 +9,10 @@ const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 @export var deck_profile_path: String = Store.DEFAULT_SAVE_PATH
-@export var upcoming_enemy_name: String = "对手名字"
+@export var upcoming_enemy_name: String = ""
 @export var upcoming_enemy_card_ids: Array[StringName] = []
 
 var testing_mode: bool = Settings.TESTING_MODE
@@ -38,8 +39,9 @@ func _show_main_menu(notice: String = "") -> void:
 
 func _show_sect_selection() -> void:
 	var selector := SECT_SELECTION_SCENE.instantiate() as SelectorController
+	var enemy: Dictionary = _get_upcoming_enemy()
 	selector.profile_path = deck_profile_path
-	selector.upcoming_enemy_name = upcoming_enemy_name
+	selector.upcoming_enemy_name = String(enemy["name"])
 	selector.deck_builder_requested.connect(_on_deck_builder_requested)
 	selector.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(selector)
@@ -47,9 +49,10 @@ func _show_sect_selection() -> void:
 
 func _show_deck_builder() -> void:
 	var builder := DECK_BUILDER_SCENE.instantiate() as DeckBuilderController
+	var enemy: Dictionary = _get_upcoming_enemy()
 	builder.profile_path = deck_profile_path
-	builder.upcoming_enemy_name = upcoming_enemy_name
-	builder.upcoming_enemy_card_ids = upcoming_enemy_card_ids.duplicate()
+	builder.upcoming_enemy_name = String(enemy["name"])
+	builder.upcoming_enemy_card_ids = _enemy_deck_from_details(enemy)
 	builder.testing_mode = testing_mode
 	builder.duel_requested.connect(_on_duel_requested)
 	builder.back_requested.connect(_on_return_to_menu_requested)
@@ -58,10 +61,11 @@ func _show_deck_builder() -> void:
 
 func _show_duel(starting_owner_id: int) -> void:
 	var duel := DUEL_SCENE.instantiate() as DuelController
+	var enemy: Dictionary = _get_upcoming_enemy()
 	duel.deck_profile_path = deck_profile_path
 	duel.starting_owner_id = starting_owner_id
-	duel.opponent_name_text = upcoming_enemy_name
-	duel.opponent_card_ids = upcoming_enemy_card_ids.duplicate()
+	duel.opponent_name_text = String(enemy["name"])
+	duel.opponent_card_ids = _enemy_deck_from_details(enemy)
 	duel.testing_mode = testing_mode
 	duel.return_requested.connect(_on_duel_return_requested)
 	_replace_screen(duel)
@@ -123,9 +127,43 @@ func _on_deck_builder_requested() -> void:
 	_show_deck_builder()
 
 
-func _on_duel_return_requested() -> void:
+func _on_duel_return_requested(outcome: StringName) -> void:
+	if outcome == DuelController.OUTCOME_VICTORY:
+		var store := Store.new(deck_profile_path)
+		var profile: Dictionary = store.load_profile()
+		var result: Dictionary = store.advance_after_victory_and_save(profile)
+		if not bool(result.get("ok", false)):
+			push_warning("Victory progression could not be saved")
 	_show_deck_builder()
 
 
 func _on_return_to_menu_requested() -> void:
 	_show_main_menu()
+
+
+func _get_upcoming_enemy() -> Dictionary:
+	if not upcoming_enemy_name.is_empty() or not upcoming_enemy_card_ids.is_empty():
+		return {
+			"name": (
+				upcoming_enemy_name
+				if not upcoming_enemy_name.is_empty()
+				else "对手名字"
+			),
+			"deck": upcoming_enemy_card_ids.duplicate(),
+		}
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	var enemy_id: StringName = store.get_current_enemy_id(profile)
+	if enemy_id != &"" and Enemies.has_enemy(enemy_id):
+		return Enemies.get_definition(enemy_id)
+	return {
+		"name": "对手待定",
+		"deck": [],
+	}
+
+
+func _enemy_deck_from_details(enemy: Dictionary) -> Array[StringName]:
+	var result: Array[StringName] = []
+	for value: Variant in enemy.get("deck", []):
+		result.append(StringName(String(value)))
+	return result
