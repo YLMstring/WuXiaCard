@@ -12,9 +12,9 @@ Every activation costs 1 ki. All three cards retain their activate abilities whe
 
 ## Catalog Representation
 
-An `abilities` array may contain multiple entries whose `"kind"` is `ABILITY_ACTIVATE`.
+An `abilities` array may contain multiple entries with an `"activation"` dictionary. Each such entry is an activate ability; no separate `"kind"` field is added.
 
-Activate abilities remain listed in gameplay priority order. Each entry declares:
+Activate abilities are separate entries listed in gameplay priority order. Each entry declares:
 
 - its target rule;
 - its ki cost;
