@@ -36,6 +36,15 @@ inspection, hold feedback, drag vacancy, and drag signals remain shared.
 - Empty or missing reward entries retain the existing card-back behavior.
 - The triangle does not scroll because it contains exactly three reward slots.
 
+## Display Colors
+
+- Each of the three reward slots independently rolls red or blue with equal
+  probability whenever the reward scene opens.
+- Placeholder card backs participate in the same independent color roll.
+- Rolled colors remain stable for the lifetime of that reward scene.
+- Display color does not change card ownership, reward contents, inspection,
+  dragging, or claiming.
+
 ## Validation
 
 - Assert that the first slot is horizontally centered above the other two.
@@ -43,6 +52,8 @@ inspection, hold feedback, drag vacancy, and drag signals remain shared.
   coordinate and are symmetric around the scroll center.
 - Assert that reward cards preserve the 3:4 ratio and reach the 1.4-times
   width target at the reference portrait size.
+- With a fixed test seed, assert the expected red/blue owner sequence for all
+  three slots, including placeholders.
 - Run the reward-selection integration tests.
 - Render the reward scene at portrait and wide-window sizes and confirm that
   all three card names remain visible and the triangle stays centered.
