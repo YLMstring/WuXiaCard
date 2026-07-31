@@ -26,9 +26,13 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
 - `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
+- `test_duel_card_selector.gd` — generic zone ordering, filters, limits,
+  movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki, draw/removal/movement/extra turns.
 - `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
+- `test_zixia_integration.gd` — hand/board mutable-value presentation and
+  face-down concealment for generic selected-card effects.
 
 These are `SceneTree` scripts run with:
 

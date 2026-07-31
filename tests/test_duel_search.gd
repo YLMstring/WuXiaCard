@@ -93,6 +93,20 @@ func _test_action_and_state_keys() -> void:
 	_check(StateKey.build(state) == StateKey.build(copied), "Live state version is excluded from the transposition key")
 	(copied.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary)["ki"] = 2
 	_check(StateKey.build(state) != StateKey.build(copied), "Card ki changes the canonical state key")
+	copied = state.duplicate_state()
+	var copied_powers: Array = (
+		(copied.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("powers", [])
+	)
+	copied_powers[0] = int(copied_powers[0]) + 1
+	_check(
+		StateKey.build(state) != StateKey.build(copied),
+		"Permanent runtime power changes participate in the canonical state key"
+	)
+	_check(
+		(state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("powers", [])
+		!= copied_powers,
+		"Search-state copies do not alias mutable runtime power arrays"
+	)
 	var first_order: Dictionary = {"alpha": 1, "beta": 2}
 	var second_order: Dictionary = {}
 	second_order["beta"] = 2

@@ -49,6 +49,9 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, and ki-use detection.
 - `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, ordered swaps, extra-turn requests, normal flip, and invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. Implemented rules cover adjacent empty, allied, and enemy board cells.
+- `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
+  snapshots, source-relative selected-card conditions, and current-state
+  revalidation.
 - `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
@@ -184,6 +187,7 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `ability_lost`
 - `card_drawn`
 - `ki_changed`
+- `powers_changed`
 - `ability_triggered`
 - `attack_started`
 - extra-turn events emitted during turn resolution
@@ -203,6 +207,13 @@ only consecutive pulses from the same instance within one presented move; the
 memory resets for the next move.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
+
+Action execution preserves an immutable ability-source identity and a current
+action subject. Root actions use the source as subject. A
+`for_each_selected_card` wrapper snapshots matching instance IDs, revalidates
+only its declared conditions, and runs nested actions with each selected card
+as subject. Mutable ki and powers can therefore be changed consistently in
+hands or on the board without card-specific simulator branches.
 
 ## Extension Boundary
 

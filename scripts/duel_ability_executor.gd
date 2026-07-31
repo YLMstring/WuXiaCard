@@ -5,6 +5,7 @@ const MAX_HAND_SIZE: int = 5
 
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Selector = preload("res://scripts/duel_card_selector.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
@@ -106,6 +107,10 @@ static func execute_actions(
 	result["source_cell"] = source_cell
 	if state == null:
 		return result
+	var action_context: Dictionary = context.duplicate(true)
+	if not action_context.has("ability_source_instance_id"):
+		action_context["ability_source_instance_id"] = source_instance_id
+		action_context["ability_source_owner_id"] = expected_owner
 	var current_source_cell: int = source_cell
 	for action_value: Variant in actions:
 		if not action_value is Dictionary:
@@ -117,13 +122,16 @@ static func execute_actions(
 			source_instance_id,
 			expected_owner,
 			declaration,
-			context
+			action_context
 		)
 		result["events"].append_array(action_result.get("events", []) as Array)
 		result["attack_requests"].append_array(action_result.get("attack_requests", []) as Array)
 		result["extra_turn_requests"].append_array(action_result.get("extra_turn_requests", []) as Array)
 		current_source_cell = int(action_result.get("source_cell", current_source_cell))
 		var action_status := StringName(action_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT))
+		if action_status == Catalog.ACTION_RESULT_INVALID_CONTEXT:
+			result["result"] = Catalog.ACTION_RESULT_INVALID_CONTEXT
+			break
 		if (
 			action_status == Catalog.ACTION_RESULT_NO_EFFECT
 			and StringName(declaration.get("on_invalid_context", &"")) == Catalog.STOP_RULE
@@ -181,6 +189,13 @@ static func _execute_action(
 	context: Dictionary
 ) -> Dictionary:
 	var action_type := StringName(declaration.get("type", &""))
+	if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
+		return _for_each_selected_card(
+			state,
+			source_cell,
+			declaration,
+			context
+		)
 	if action_type == Catalog.ACTION_DRAW_CARDS:
 		return _draw_cards(
 			state,
@@ -213,6 +228,14 @@ static func _execute_action(
 			expected_owner,
 			int(declaration.get("amount", 0)),
 			action_type
+		)
+	if action_type == Catalog.ACTION_ADD_POWERS:
+		return _add_powers(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			int(declaration.get("amount", 0))
 		)
 	if action_type == Catalog.ACTION_SPEND_KI:
 		return _change_ki(
@@ -263,6 +286,62 @@ static func _execute_action(
 	return _no_effect(source_cell)
 
 
+static func _for_each_selected_card(
+	state: StateData,
+	source_cell: int,
+	declaration: Dictionary,
+	context: Dictionary
+) -> Dictionary:
+	var result: Dictionary = _empty_result()
+	result["source_cell"] = source_cell
+	var source_instance_id := StringName(context.get("ability_source_instance_id", &""))
+	var selector: Dictionary = declaration.get("selector", {})
+	var conditions: Array = selector.get("conditions", [])
+	var selected_ids: Array[StringName] = Selector.snapshot(
+		state,
+		selector,
+		source_instance_id
+	)
+	for selected_instance_id: StringName in selected_ids:
+		var selected: Dictionary = Selector.revalidate(
+			state,
+			selected_instance_id,
+			source_instance_id,
+			conditions
+		)
+		if selected.is_empty():
+			continue
+		var selected_cell: int = (
+			int(selected.get("index", -1))
+			if StringName(selected.get("zone", &"")) == Catalog.CARD_ZONE_BOARD
+			else -1
+		)
+		var nested_result: Dictionary = execute_actions(
+			state,
+			selected_cell,
+			selected_instance_id,
+			int(selected.get("owner_id", 0)),
+			declaration.get("actions", []) as Array,
+			context
+		)
+		result["events"].append_array(nested_result.get("events", []) as Array)
+		result["attack_requests"].append_array(
+			nested_result.get("attack_requests", []) as Array
+		)
+		result["extra_turn_requests"].append_array(
+			nested_result.get("extra_turn_requests", []) as Array
+		)
+		var nested_status := StringName(
+			nested_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT)
+		)
+		if nested_status == Catalog.ACTION_RESULT_INVALID_CONTEXT:
+			result["result"] = Catalog.ACTION_RESULT_INVALID_CONTEXT
+			return result
+		if nested_status == Catalog.ACTION_RESULT_APPLIED:
+			result["result"] = Catalog.ACTION_RESULT_APPLIED
+	return result
+
+
 static func _draw_cards(
 	state: StateData,
 	source_cell: int,
@@ -270,15 +349,10 @@ static func _draw_cards(
 	expected_owner: int,
 	requested_count: int
 ) -> Dictionary:
-	var source_slot: Dictionary = _get_card_slot(
-		state,
-		source_cell,
-		source_instance_id,
-		expected_owner
-	)
-	if source_slot.is_empty() or requested_count <= 0:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or requested_count <= 0:
 		return _no_effect(source_cell)
-	var owner_id: int = int(source_slot.get("owner", 0))
+	var owner_id: int = int(source.get("owner_id", 0))
 	var hand: Array = state.get_hand(owner_id)
 	var deck: Array = state.decks.get(owner_id, [])
 	var actual_count: int = mini(requested_count, mini(MAX_HAND_SIZE - hand.size(), deck.size()))
@@ -380,28 +454,59 @@ static func _change_ki(
 	delta: int,
 	reason: StringName
 ) -> Dictionary:
-	var source_slot: Dictionary = _get_card_slot(
-		state,
-		source_cell,
-		source_instance_id,
-		expected_owner
-	)
-	if source_slot.is_empty() or delta == 0:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or delta == 0:
 		return _no_effect(source_cell)
-	var card: Dictionary = source_slot.get("card", {})
+	var card: Dictionary = source.get("card", {})
 	var previous_ki: int = int(card.get("ki", 0))
 	var resulting_ki: int = previous_ki + delta
 	if resulting_ki < 0:
 		return _no_effect(source_cell)
 	card["ki"] = resulting_ki
+	var current_cell: int = _get_location_cell(source)
 	return _applied(source_cell, [_make_ki_event(
-		source_cell,
-		int(source_slot.get("owner", 0)),
+		current_cell,
+		int(source.get("owner_id", 0)),
 		source_instance_id,
 		previous_ki,
 		resulting_ki,
-		reason
+		reason,
+		StringName(source.get("zone", &"")),
+		int(source.get("index", -1))
 	)])
+
+
+static func _add_powers(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	amount: int
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or amount <= 0:
+		return _no_effect(source_cell)
+	var card: Dictionary = source.get("card", {})
+	var previous_powers: Array = (card.get("powers", []) as Array).duplicate()
+	if previous_powers.size() != 4:
+		return _no_effect(source_cell)
+	var resulting_powers: Array = previous_powers.duplicate()
+	for power_index: int in range(resulting_powers.size()):
+		resulting_powers[power_index] = int(resulting_powers[power_index]) + amount
+	card["powers"] = resulting_powers
+	var current_cell: int = _get_location_cell(source)
+	return _applied(source_cell, [{
+		"type": &"powers_changed",
+		"source_cell": current_cell,
+		"target_cell": current_cell,
+		"owner_id": int(source.get("owner_id", 0)),
+		"instance_id": source_instance_id,
+		"previous_powers": previous_powers,
+		"powers": resulting_powers.duplicate(),
+		"change_reason": Catalog.ACTION_ADD_POWERS,
+		"zone": StringName(source.get("zone", &"")),
+		"logical_index": int(source.get("index", -1)),
+	}])
 
 
 static func _spend_all_ki(
@@ -410,26 +515,24 @@ static func _spend_all_ki(
 	source_instance_id: StringName,
 	expected_owner: int
 ) -> Dictionary:
-	var source_slot: Dictionary = _get_card_slot(
-		state,
-		source_cell,
-		source_instance_id,
-		expected_owner
-	)
-	if source_slot.is_empty():
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty():
 		return _no_effect(source_cell)
-	var card: Dictionary = source_slot.get("card", {})
+	var card: Dictionary = source.get("card", {})
 	var previous_ki: int = int(card.get("ki", 0))
 	if previous_ki <= 0:
 		return _no_effect(source_cell)
 	card["ki"] = 0
+	var current_cell: int = _get_location_cell(source)
 	return _applied(source_cell, [_make_ki_event(
-		source_cell,
-		int(source_slot.get("owner", 0)),
+		current_cell,
+		int(source.get("owner_id", 0)),
 		source_instance_id,
 		previous_ki,
 		0,
-		Catalog.ACTION_SPEND_ALL_KI
+		Catalog.ACTION_SPEND_ALL_KI,
+		StringName(source.get("zone", &"")),
+		int(source.get("index", -1))
 	)])
 
 
@@ -439,18 +542,13 @@ static func _request_extra_turn(
 	source_instance_id: StringName,
 	expected_owner: int
 ) -> Dictionary:
-	var source_slot: Dictionary = _get_card_slot(
-		state,
-		source_cell,
-		source_instance_id,
-		expected_owner
-	)
-	if source_slot.is_empty():
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty():
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
 	result["extra_turn_requests"].append({
-		"owner_id": int(source_slot.get("owner", 0)),
-		"source_cell": source_cell,
+		"owner_id": int(source.get("owner_id", 0)),
+		"source_cell": _get_location_cell(source),
 		"source_instance_id": source_instance_id,
 	})
 	return result
@@ -629,6 +727,27 @@ static func _get_card_slot(
 	return slot
 
 
+static func _get_subject(
+	state: StateData,
+	instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var subject: Dictionary = Selector.locate_card(state, instance_id)
+	if (
+		subject.is_empty()
+		or expected_owner != 0
+		and int(subject.get("owner_id", 0)) != expected_owner
+	):
+		return {}
+	return subject
+
+
+static func _get_location_cell(location: Dictionary) -> int:
+	if StringName(location.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return -1
+	return int(location.get("index", -1))
+
+
 static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
 	for direction: int in range(4):
 		if Rules.get_neighbor_index(first_cell, direction) == second_cell:
@@ -642,7 +761,9 @@ static func _make_ki_event(
 	instance_id: StringName,
 	previous_ki: int,
 	resulting_ki: int,
-	action_type: StringName
+	action_type: StringName,
+	zone: StringName,
+	logical_index: int
 ) -> Dictionary:
 	return {
 		"type": &"ki_changed",
@@ -653,6 +774,8 @@ static func _make_ki_event(
 		"previous_ki": previous_ki,
 		"ki": resulting_ki,
 		"change_reason": action_type,
+		"zone": zone,
+		"logical_index": logical_index,
 	}
 
 

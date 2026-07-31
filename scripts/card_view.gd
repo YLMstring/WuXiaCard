@@ -125,6 +125,13 @@ func set_runtime_ki(value: int) -> void:
 	_refresh_face_content()
 
 
+func set_runtime_powers(value: Array) -> void:
+	if value.size() != 4:
+		return
+	card_data["powers"] = value.duplicate()
+	_refresh_face_content()
+
+
 func set_ki_badge_enabled(value: bool) -> void:
 	ki_badge_enabled = value
 	if is_node_ready():

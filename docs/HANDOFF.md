@@ -97,6 +97,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
+- ZiXiaGong1–4 use the generic `for_each_selected_card` action. The selector
+  supports ordered hand/board snapshots, reusable selected-card conditions,
+  optional limits, and source-versus-subject execution context.
+- Runtime ki and all four powers can change permanently in hand or on board.
+  Start-owner-turn triggers run on ordinary and granted extra turns.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

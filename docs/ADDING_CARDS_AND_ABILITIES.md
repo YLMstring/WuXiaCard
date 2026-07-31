@@ -130,6 +130,36 @@ rule's remaining actions, opt in on the action:
 
 ## Current Examples
 
+Generic ordered card selection:
+
+```gdscript
+{
+    "type": ACTION_FOR_EACH_SELECTED_CARD,
+    "selector": {
+        "zones": [CARD_ZONE_HAND, CARD_ZONE_BOARD],
+        "conditions": [
+            {"type": CONDITION_SELECTED_CARD_IS_ALLY},
+            {
+                "type": CONDITION_SELECTED_CARD_WEAPON_IS,
+                "weapon": "剑法",
+            },
+        ],
+        "limit": 2,
+    },
+    "actions": [
+        {"type": ACTION_GAIN_KI, "amount": 1},
+    ],
+}
+```
+
+Zones are visited in declaration order. The source owner's hand is visited
+before the other hand; board order is `0..8`. Selection snapshots matching
+instance IDs. Each card completes all nested actions before the next card.
+Before resolution, only the declared selector conditions are checked again:
+movement or a zone change remains valid unless a condition becomes false.
+Inside the wrapper, the selected card is the action subject while the original
+ability source remains available to source-relative conditions.
+
 Draw after summon reactions:
 
 ```gdscript
@@ -230,6 +260,10 @@ Meng Huo:
 ```
 
 ## Resolution Timing
+
+`TRIGGER_START_OWNER_TURN` resolves after the simulator chooses the next active
+owner, including an owner receiving an extra turn, and before that owner may
+act. `TRIGGER_END_OWNER_TURN` still resolves before this choice.
 
 Normal summon:
 

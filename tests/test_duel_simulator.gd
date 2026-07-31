@@ -62,12 +62,372 @@ func _run() -> void:
 	_test_invalid_context_defaults_to_no_effect()
 	_test_activation_costs_validate_as_a_batch()
 	_test_card_be_attacked_triggers_use_row_major_order()
+	_test_generic_selection_wrapper_modifies_hand_and_board()
+	_test_zixia_catalog_abilities_validate()
+	_test_zixia_gong_after_summon_ki_and_draw_order()
+	_test_zixia_gong_start_turn_and_stacking()
+	_test_zixia_gong_start_turn_on_extra_turn()
+	_test_zixia_gong_four_end_turn_order()
 
 	if _failures == 0:
 		print("DUEL_SIMULATOR_TESTS_PASSED checks=%d" % _checks)
 	else:
 		push_error("DUEL_SIMULATOR_TESTS_FAILED failures=%d checks=%d" % [_failures, _checks])
 	quit(_failures)
+
+
+func _test_zixia_catalog_abilities_validate() -> void:
+	for card_id: StringName in [
+		&"ZiXiaGong1",
+		&"ZiXiaGong2",
+		&"ZiXiaGong3",
+		&"ZiXiaGong4",
+	]:
+		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
+		_check(abilities.size() == 1, "%s declares one passive ability" % card_id)
+		_check(
+			Catalog.validate_ability(abilities[0] as Dictionary, card_id).is_empty(),
+			"%s generic selection declaration passes catalog validation" % card_id
+		)
+	var invalid_wrapper: Dictionary = {
+		"triggers": [{
+			"event": Catalog.TRIGGER_START_OWNER_TURN,
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND, Catalog.CARD_ZONE_HAND],
+					"conditions": [{"type": &"unknown_selector_condition"}],
+					"limit": 0,
+				},
+				"actions": [],
+			}],
+		}],
+	}
+	_check(
+		not Catalog.validate_ability(invalid_wrapper).is_empty(),
+		"Malformed selector zones, conditions, limit, and nested actions fail validation"
+	)
+
+
+func _test_generic_selection_wrapper_modifies_hand_and_board() -> void:
+	var source: Dictionary = _make_runtime_card(
+		"Source",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"selection_source"
+	)
+	source["weapon"] = "心法"
+	var hand_sword: Dictionary = _make_runtime_card(
+		"Hand Sword",
+		[2, 2, 2, 2],
+		Rules.PLAYER_OWNER,
+		&"selection_hand"
+	)
+	hand_sword["weapon"] = "剑法"
+	var board_sword: Dictionary = _make_runtime_card(
+		"Board Sword",
+		[3, 3, 3, 3],
+		Rules.PLAYER_OWNER,
+		&"selection_board"
+	)
+	board_sword["weapon"] = "剑法"
+	var enemy_sword: Dictionary = _make_runtime_card(
+		"Enemy Sword",
+		[4, 4, 4, 4],
+		Rules.OPPONENT_OWNER,
+		&"selection_enemy"
+	)
+	enemy_sword["weapon"] = "剑法"
+	var board: Array = Rules.empty_board()
+	board[0] = {"card": board_sword, "owner": Rules.PLAYER_OWNER}
+	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": enemy_sword, "owner": Rules.OPPONENT_OWNER}
+	var state := State.new(board, [hand_sword], [])
+	var result: Dictionary = Executor.execute_actions(
+		state,
+		4,
+		&"selection_source",
+		Rules.PLAYER_OWNER,
+		[
+			{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND, Catalog.CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": Catalog.CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "剑法",
+						},
+					],
+				},
+				"actions": [
+					{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
+					{"type": Catalog.ACTION_ADD_POWERS, "amount": 1},
+				],
+			},
+		],
+		{}
+	)
+	var events: Array = result.get("events", [])
+	_check(
+		_event_types(events) == [
+			&"ki_changed",
+			&"powers_changed",
+			&"ki_changed",
+			&"powers_changed",
+		],
+		"Selection wrapper completes all nested actions for hand card before board card"
+	)
+	var changed_hand: Dictionary = state.get_hand(Rules.PLAYER_OWNER)[0]
+	var changed_board: Dictionary = (state.board[0] as Dictionary).get("card", {})
+	_check(
+		int(changed_hand.get("ki", 0)) == 1
+		and changed_hand.get("powers", []) == [3, 3, 3, 3],
+		"Selection wrapper mutates selected hand-card ki and every power"
+	)
+	_check(
+		int(changed_board.get("ki", 0)) == 1
+		and changed_board.get("powers", []) == [4, 4, 4, 4],
+		"Selection wrapper mutates selected board-card ki and every power"
+	)
+	_check(
+		int(((state.board[8] as Dictionary).get("card", {}) as Dictionary).get("ki", 0)) == 0,
+		"Selection wrapper leaves nonmatching enemy card unchanged"
+	)
+
+
+func _test_zixia_gong_after_summon_ki_and_draw_order() -> void:
+	var zixia_one: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong1",
+		Rules.PLAYER_OWNER,
+		&"zixia_one"
+	)
+	var hand_sword: Dictionary = _make_runtime_card(
+		"Hand Sword",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_hand_sword"
+	)
+	hand_sword["weapon"] = "剑法"
+	var board_sword: Dictionary = _make_runtime_card(
+		"Board Sword",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_board_sword"
+	)
+	board_sword["weapon"] = "剑法"
+	var board: Array = Rules.empty_board()
+	board[0] = {"card": board_sword, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(
+		board,
+		[zixia_one, hand_sword],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var next_state: State = transition.get("state") as State
+	_check(
+		int((next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1
+		and int(((next_state.board[0] as Dictionary).get("card", {}) as Dictionary).get("ki", 0)) == 1,
+		"ZiXiaGong1 grants ki to allied sword cards in hand and on board"
+	)
+
+	var zixia_two: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong2",
+		Rules.PLAYER_OWNER,
+		&"zixia_two"
+	)
+	var second_sword: Dictionary = hand_sword.duplicate(true)
+	second_sword["instance_id"] = &"zixia_two_sword"
+	second_sword["ki"] = 0
+	var drawn: Dictionary = _make_runtime_card(
+		"Drawn",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_drawn"
+	)
+	var draw_state := State.new(
+		Rules.empty_board(),
+		[zixia_two, second_sword],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[drawn]
+	)
+	var draw_transition: Dictionary = Simulator.apply_action(
+		draw_state,
+		Action.make_play(0, 4)
+	)
+	var draw_events: Array = draw_transition.get("events", [])
+	_check(
+		_event_types(draw_events).find(&"ki_changed")
+		< _event_types(draw_events).find(&"card_drawn"),
+		"ZiXiaGong2 grants selected-card ki before drawing"
+	)
+	_check(
+		((draw_transition.get("state") as State).get_hand(Rules.PLAYER_OWNER) as Array).size() == 2,
+		"ZiXiaGong2 draws one card after its source leaves the hand"
+	)
+
+
+func _test_zixia_gong_start_turn_and_stacking() -> void:
+	var first: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong3",
+		Rules.PLAYER_OWNER,
+		&"zixia_start_one"
+	)
+	var second: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong3",
+		Rules.PLAYER_OWNER,
+		&"zixia_start_two"
+	)
+	var player_hand: Dictionary = _make_runtime_card(
+		"Growing",
+		[1, 2, 3, 4],
+		Rules.PLAYER_OWNER,
+		&"zixia_growing_hand"
+	)
+	var opponent_play: Dictionary = _make_runtime_card(
+		"Opponent",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"zixia_opponent_play"
+	)
+	var board: Array = Rules.empty_board()
+	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
+	board[2] = {"card": second, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(
+		board,
+		[player_hand],
+		[opponent_play],
+		Rules.OPPONENT_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var resulting_hand: Dictionary = (
+		(transition.get("state") as State).get_hand(Rules.PLAYER_OWNER)[0]
+	)
+	_check(
+		resulting_hand.get("powers", []) == [3, 4, 5, 6],
+		"Multiple ZiXiaGong3 sources stack at their owner's turn start"
+	)
+	_check(
+		_count_events(transition.get("events", []), &"powers_changed") == 2,
+		"Each stacked start-turn source emits its own ordered power event"
+	)
+
+
+func _test_zixia_gong_four_end_turn_order() -> void:
+	var source: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong4",
+		Rules.PLAYER_OWNER,
+		&"zixia_four"
+	)
+	var first: Dictionary = _make_runtime_card(
+		"First",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_first"
+	)
+	var second: Dictionary = _make_runtime_card(
+		"Second",
+		[2, 2, 2, 2],
+		Rules.PLAYER_OWNER,
+		&"zixia_second"
+	)
+	var third: Dictionary = _make_runtime_card(
+		"Third",
+		[3, 3, 3, 3],
+		Rules.PLAYER_OWNER,
+		&"zixia_third"
+	)
+	var played: Dictionary = _make_runtime_card(
+		"Played",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_played"
+	)
+	var opponent_hand: Dictionary = _make_runtime_card(
+		"Opponent",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"zixia_opponent_hand"
+	)
+	var board: Array = Rules.empty_board()
+	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
+	board[2] = {"card": second, "owner": Rules.PLAYER_OWNER}
+	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	board[6] = {"card": third, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(
+		board,
+		[played],
+		[opponent_hand],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var next_state: State = transition.get("state") as State
+	_check(
+		((next_state.board[0] as Dictionary).get("card", {}) as Dictionary).get("powers", [])
+		== [2, 2, 2, 2]
+		and ((next_state.board[2] as Dictionary).get("card", {}) as Dictionary).get("powers", [])
+		== [3, 3, 3, 3],
+		"ZiXiaGong4 buffs the first two other allies in row-major order"
+	)
+	_check(
+		((next_state.board[6] as Dictionary).get("card", {}) as Dictionary).get("powers", [])
+		== [3, 3, 3, 3]
+		and ((next_state.board[4] as Dictionary).get("card", {}) as Dictionary).get("powers", [])
+		== [3, 2, 2, 2],
+		"ZiXiaGong4 leaves later allies and itself unchanged at turn end"
+	)
+
+
+func _test_zixia_gong_start_turn_on_extra_turn() -> void:
+	var zixia: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong3",
+		Rules.PLAYER_OWNER,
+		&"zixia_extra_start"
+	)
+	var meng: Dictionary = Catalog.create_instance(
+		&"meng_huo",
+		Rules.PLAYER_OWNER,
+		&"zixia_extra_meng"
+	)
+	meng["ki"] = 1
+	var played: Dictionary = _make_runtime_card(
+		"Played",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"zixia_extra_played"
+	)
+	var growing: Dictionary = _make_runtime_card(
+		"Growing",
+		[2, 2, 2, 2],
+		Rules.PLAYER_OWNER,
+		&"zixia_extra_growing"
+	)
+	var board: Array = Rules.empty_board()
+	board[0] = {"card": zixia, "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": meng, "owner": Rules.PLAYER_OWNER}
+	var state := State.new(
+		board,
+		[played, growing],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var next_state: State = transition.get("state") as State
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER
+		and (next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("powers", [])
+		== [3, 3, 3, 3],
+		"ZiXiaGong start-turn effect resolves when Meng Huo grants an extra turn"
+	)
+	var event_types: Array[StringName] = _event_types(transition.get("events", []))
+	_check(
+		event_types.find(&"extra_turn_granted") < event_types.rfind(&"powers_changed"),
+		"Extra-turn grant is announced before the granted turn's start effects"
+	)
 
 
 func _test_exile_effect_removes_every_target() -> void:

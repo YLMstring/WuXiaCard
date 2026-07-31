@@ -52,6 +52,15 @@ These decisions were explicitly established during development and should not be
 - Missing, moved, or replaced context defaults to `NO_EFFECT`, and later actions in that rule continue.
 - Only an action explicitly declaring `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 - Stopping one rule never cancels later trigger groups, the enclosing event, or the turn.
+- Generic card selection snapshots matching instances in declared zone order.
+  Every nested action finishes for one selected card before the next begins.
+- A selected card is skipped only when one or more declared selector conditions
+  no longer match. Moving between cells or zones does not invalidate it by
+  itself.
+- The original ability source remains distinct from the selected action
+  subject.
+- Owner-turn start triggers resolve after active-owner selection, including
+  extra turns, and before that owner can act.
 
 ## Attack Presentation
 

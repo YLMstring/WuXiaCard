@@ -9,6 +9,7 @@ const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
+const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
 const CONDITION_TRIGGER_CARD_IS_ENEMY: StringName = &"trigger_card_is_enemy"
@@ -16,6 +17,9 @@ const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
 const CONDITION_TRIGGER_CARD_IS_SELF: StringName = &"trigger_card_is_self"
 const CONDITION_ATTACKER_CARD_IS_SELF: StringName = &"attacker_card_is_self"
 const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
+const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
+const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
+const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not_source"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -26,6 +30,10 @@ const ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
+const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
+const ACTION_ADD_POWERS: StringName = &"add_powers"
+const CARD_ZONE_HAND: StringName = &"hand"
+const CARD_ZONE_BOARD: StringName = &"board"
 const ACTION_RESULT_APPLIED: StringName = &"applied"
 const ACTION_RESULT_NO_EFFECT: StringName = &"no_effect"
 const ACTION_RESULT_INVALID_CONTEXT: StringName = &"invalid_context"
@@ -41,6 +49,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_AFTER_SUMMONED,
 	CARD_BE_ATTACKED,
 	CARD_AFTER_FLIPPED,
+	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
 ]
 const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
@@ -51,6 +60,12 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ATTACKER_CARD_IS_SELF,
 	CONDITION_TURN_OWNER_IS_SELF,
 ]
+const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
+	CONDITION_SELECTED_CARD_IS_ALLY,
+	CONDITION_SELECTED_CARD_WEAPON_IS,
+	CONDITION_SELECTED_CARD_IS_NOT_SOURCE,
+]
+const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DRAW_CARDS,
 	ACTION_EXILE_ATTACKED_CARD,
@@ -62,6 +77,8 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_MOVE_SELF_TO_TARGET,
 	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
+	ACTION_FOR_EACH_SELECTED_CARD,
+	ACTION_ADD_POWERS,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -376,7 +393,36 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，手牌和场上的友方剑法牌内力加一。",
 		"flavor": "华山气宗正统的运气口诀，气功一成，无往不利。",
 		"powers": [2, 1, 1, 2],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+						],
+						"actions": [
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_HAND, CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{
+											"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+											"weapon": "剑法",
+										},
+									],
+								},
+								"actions": [
+									{"type": ACTION_GAIN_KI, "amount": 1},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"ZiXiaGong2": {
 		"id": &"ZiXiaGong2",
@@ -388,7 +434,37 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，手牌和场上的友方剑法牌内力加一，抽一张牌。",
 		"flavor": "华山气宗正统的运气口诀，气功一成，无往不利。",
 		"powers": [2, 1, 1, 2],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+						],
+						"actions": [
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_HAND, CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{
+											"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+											"weapon": "剑法",
+										},
+									],
+								},
+								"actions": [
+									{"type": ACTION_GAIN_KI, "amount": 1},
+								],
+							},
+							{"type": ACTION_DRAW_CARDS, "amount": 1},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"ZiXiaGong3": {
 		"id": &"ZiXiaGong3",
@@ -400,7 +476,32 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "你的回合开始时，所有手牌点数加一。",
 		"flavor": "紫霞功威力极大，自来有“华山九功，第一紫霞”的说法。这门内功初发时若有若无，绵如云霞，然而蓄劲极韧，到后来更铺天盖地，势不可当，“紫霞”二字由此而来。",
 		"powers": [3, 2, 2, 2],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+						],
+						"actions": [
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_HAND],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+									],
+								},
+								"actions": [
+									{"type": ACTION_ADD_POWERS, "amount": 1},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"ZiXiaGong4": {
 		"id": &"ZiXiaGong4",
@@ -412,7 +513,54 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "你的回合开始时，所有手牌点数加一。你的回合结束时，场上首两个其它友方点数加一。",
 		"flavor": "紫霞功威力极大，自来有“华山九功，第一紫霞”的说法。这门内功初发时若有若无，绵如云霞，然而蓄劲极韧，到后来更铺天盖地，势不可当，“紫霞”二字由此而来。",
 		"powers": [3, 2, 2, 2],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+						],
+						"actions": [
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_HAND],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+									],
+								},
+								"actions": [
+									{"type": ACTION_ADD_POWERS, "amount": 1},
+								],
+							},
+						],
+					},
+					{
+						"event": TRIGGER_END_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+						],
+						"actions": [
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+									],
+									"limit": 2,
+								},
+								"actions": [
+									{"type": ACTION_ADD_POWERS, "amount": 1},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"fa_zheng": {
 		"id": &"fa_zheng",
@@ -1107,14 +1255,102 @@ static func _validate_action(
 	if is_cost and action_type != ACTION_SPEND_KI:
 		errors.append("Card %s activation uses unsupported cost action %s" % [card_id, action_type])
 	var allowed_keys: Array[StringName] = [&"type", &"on_invalid_context"]
-	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI]:
+	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_ADD_POWERS]:
 		allowed_keys.append(&"amount")
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_FOR_EACH_SELECTED_CARD:
+		allowed_keys.append(&"selector")
+		allowed_keys.append(&"actions")
+		_validate_selector(card_id, context_name, action.get("selector", null), errors)
+		var nested_actions_value: Variant = action.get("actions", null)
+		if not nested_actions_value is Array or (nested_actions_value as Array).is_empty():
+			errors.append("Card %s %s selection action requires a non-empty actions array" % [card_id, context_name])
+		else:
+			for nested_value: Variant in nested_actions_value as Array:
+				if not nested_value is Dictionary:
+					errors.append("Card %s %s selection action has a non-dictionary action" % [card_id, context_name])
+					continue
+				_validate_action(
+					card_id,
+					"%s selected card" % context_name,
+					nested_value as Dictionary,
+					false,
+					errors
+				)
 	if action.has("on_invalid_context"):
 		if StringName(action.get("on_invalid_context", &"")) != STOP_RULE:
 			errors.append("Card %s %s action %s has invalid on_invalid_context policy" % [card_id, context_name, action_type])
 	for key: Variant in action.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s action %s has unsupported field %s" % [card_id, context_name, action_type, key])
+
+
+static func _validate_selector(
+	card_id: StringName,
+	context_name: String,
+	selector_value: Variant,
+	errors: Array[String]
+) -> void:
+	if not selector_value is Dictionary:
+		errors.append("Card %s %s selection action requires a selector Dictionary" % [card_id, context_name])
+		return
+	var selector: Dictionary = selector_value
+	for key: Variant in selector.keys():
+		if StringName(key) not in [&"zones", &"conditions", &"limit"]:
+			errors.append("Card %s %s selector has unsupported field %s" % [card_id, context_name, key])
+	var zones_value: Variant = selector.get("zones", null)
+	if not zones_value is Array or (zones_value as Array).is_empty():
+		errors.append("Card %s %s selector requires a non-empty zones array" % [card_id, context_name])
+	else:
+		var seen_zones: Dictionary = {}
+		for zone_value: Variant in zones_value as Array:
+			if typeof(zone_value) != TYPE_STRING and typeof(zone_value) != TYPE_STRING_NAME:
+				errors.append("Card %s %s selector has a non-string zone" % [card_id, context_name])
+				continue
+			var zone := StringName(zone_value)
+			if zone not in KNOWN_CARD_ZONES:
+				errors.append("Card %s %s selector uses unknown zone %s" % [card_id, context_name, zone])
+			elif seen_zones.has(zone):
+				errors.append("Card %s %s selector repeats zone %s" % [card_id, context_name, zone])
+			seen_zones[zone] = true
+	var conditions_value: Variant = selector.get("conditions", null)
+	if not conditions_value is Array:
+		errors.append("Card %s %s selector requires a conditions array" % [card_id, context_name])
+	else:
+		for condition_value: Variant in conditions_value as Array:
+			if not condition_value is Dictionary:
+				errors.append("Card %s %s selector has a non-dictionary condition" % [card_id, context_name])
+				continue
+			_validate_selector_condition(
+				card_id,
+				context_name,
+				condition_value as Dictionary,
+				errors
+			)
+	if selector.has("limit"):
+		var limit_value: Variant = selector.get("limit", null)
+		if typeof(limit_value) != TYPE_INT or int(limit_value) <= 0:
+			errors.append("Card %s %s selector requires a positive integer limit" % [card_id, context_name])
+
+
+static func _validate_selector_condition(
+	card_id: StringName,
+	context_name: String,
+	condition: Dictionary,
+	errors: Array[String]
+) -> void:
+	var condition_type := StringName(condition.get("type", &""))
+	if condition_type not in KNOWN_SELECTOR_CONDITIONS:
+		errors.append("Card %s %s selector uses unknown condition %s" % [card_id, context_name, condition_type])
+		return
+	var allowed_keys: Array[StringName] = [&"type"]
+	if condition_type == CONDITION_SELECTED_CARD_WEAPON_IS:
+		allowed_keys.append(&"weapon")
+		var weapon_value: Variant = condition.get("weapon", null)
+		if typeof(weapon_value) != TYPE_STRING or String(weapon_value).is_empty():
+			errors.append("Card %s %s selector weapon condition requires a non-empty String weapon" % [card_id, context_name])
+	for key: Variant in condition.keys():
+		if StringName(key) not in allowed_keys:
+			errors.append("Card %s %s selector condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])

@@ -840,6 +840,8 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				last_pulsed_instance_id = source_instance_id
 		elif event_type == &"ki_changed":
 			await _present_ki_changed_event(event)
+		elif event_type == &"powers_changed":
+			_present_powers_changed_event(event)
 		elif event_type == &"extra_turn_granted":
 			await _present_extra_turn_event(event)
 		elif event_type == &"card_drawn":
@@ -885,7 +887,7 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 func _present_ki_changed_event(event: Dictionary) -> void:
 	_presentation_trace.append(&"ki_changed")
 	var instance_id := StringName(event.get("instance_id", &""))
-	var card: CardView = _get_board_card_view_by_instance(instance_id)
+	var card: CardView = _get_card_view_by_instance(instance_id)
 	if card == null:
 		return
 	var previous_ki: int = int(event.get("previous_ki", card.card_data.get("ki", 0)))
@@ -894,6 +896,17 @@ func _present_ki_changed_event(event: Dictionary) -> void:
 	card.set_runtime_ki(resulting_ki)
 	if resulting_ki > previous_ki:
 		await card.play_ki_gain_pulse(ki_gain_pulse_duration)
+
+
+func _present_powers_changed_event(event: Dictionary) -> void:
+	_presentation_trace.append(&"powers_changed")
+	var instance_id := StringName(event.get("instance_id", &""))
+	var card: CardView = _get_card_view_by_instance(instance_id)
+	if card == null:
+		return
+	var powers_value: Variant = event.get("powers", [])
+	if powers_value is Array:
+		card.set_runtime_powers(powers_value as Array)
 
 
 func _present_extra_turn_event(event: Dictionary) -> void:
@@ -1141,6 +1154,16 @@ func _get_board_card_view_by_instance(instance_id: StringName) -> CardView:
 		if card != null and is_instance_valid(card) and _get_card_instance_id(card) == instance_id:
 			return card
 	return null
+
+
+func _get_card_view_by_instance(instance_id: StringName) -> CardView:
+	var board_card: CardView = _get_board_card_view_by_instance(instance_id)
+	if board_card != null:
+		return board_card
+	var player_card: CardView = _get_hand_card_view_by_instance(player_hand, instance_id)
+	if player_card != null:
+		return player_card
+	return _get_hand_card_view_by_instance(opponent_hand, instance_id)
 
 
 func _get_first_empty_hand_slot(container: HBoxContainer) -> PanelContainer:

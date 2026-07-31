@@ -1,0 +1,168 @@
+class_name DuelCardSelector
+extends RefCounted
+
+const Catalog = preload("res://scripts/card_catalog.gd")
+const Rules = preload("res://scripts/duel_rules.gd")
+const StateData = preload("res://scripts/duel_state.gd")
+
+
+static func snapshot(
+	state: StateData,
+	selector: Dictionary,
+	source_instance_id: StringName
+) -> Array[StringName]:
+	var selected: Array[StringName] = []
+	if state == null or source_instance_id == &"":
+		return selected
+	var source: Dictionary = locate_card(state, source_instance_id)
+	if source.is_empty():
+		return selected
+	var limit: int = int(selector.get("limit", 0))
+	var observed: Dictionary = {}
+	for zone_value: Variant in selector.get("zones", []):
+		var zone := StringName(zone_value)
+		for candidate: Dictionary in _get_zone_candidates(
+			state,
+			zone,
+			int(source.get("owner_id", 0))
+		):
+			var instance_id := StringName(
+				(candidate.get("card", {}) as Dictionary).get("instance_id", &"")
+			)
+			if instance_id == &"" or observed.has(instance_id):
+				continue
+			observed[instance_id] = true
+			if not conditions_match(
+				state,
+				candidate,
+				source_instance_id,
+				selector.get("conditions", [])
+			):
+				continue
+			selected.append(instance_id)
+			if limit > 0 and selected.size() >= limit:
+				return selected
+	return selected
+
+
+static func revalidate(
+	state: StateData,
+	instance_id: StringName,
+	source_instance_id: StringName,
+	conditions: Array
+) -> Dictionary:
+	var candidate: Dictionary = locate_card(state, instance_id)
+	if candidate.is_empty():
+		return {}
+	if not conditions_match(state, candidate, source_instance_id, conditions):
+		return {}
+	return candidate
+
+
+static func conditions_match(
+	state: StateData,
+	candidate: Dictionary,
+	source_instance_id: StringName,
+	conditions: Array
+) -> bool:
+	if state == null or candidate.is_empty():
+		return false
+	var selected_card: Dictionary = candidate.get("card", {})
+	var selected_instance_id := StringName(selected_card.get("instance_id", &""))
+	if selected_instance_id == &"":
+		return false
+	var source: Dictionary = locate_card(state, source_instance_id)
+	if source.is_empty():
+		return false
+	for condition_value: Variant in conditions:
+		if not condition_value is Dictionary:
+			return false
+		var condition: Dictionary = condition_value
+		var condition_type := StringName(condition.get("type", &""))
+		if condition_type == Catalog.CONDITION_SELECTED_CARD_IS_ALLY:
+			if int(candidate.get("owner_id", 0)) != int(source.get("owner_id", 0)):
+				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_WEAPON_IS:
+			if String(selected_card.get("weapon", "")) != String(condition.get("weapon", "")):
+				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE:
+			if selected_instance_id == source_instance_id:
+				return false
+		else:
+			return false
+	return true
+
+
+static func locate_card(state: StateData, instance_id: StringName) -> Dictionary:
+	if state == null or instance_id == &"":
+		return {}
+	for cell: int in range(state.board.size()):
+		var slot_value: Variant = state.board[cell]
+		if slot_value == null:
+			continue
+		var slot: Dictionary = slot_value
+		var card: Dictionary = slot.get("card", {})
+		if StringName(card.get("instance_id", &"")) == instance_id:
+			return {
+				"zone": Catalog.CARD_ZONE_BOARD,
+				"owner_id": int(slot.get("owner", 0)),
+				"index": cell,
+				"card": card,
+			}
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var hand: Array = state.get_hand(owner_id)
+		for hand_index: int in range(hand.size()):
+			var card_value: Variant = hand[hand_index]
+			if not card_value is Dictionary:
+				continue
+			var card: Dictionary = card_value
+			if StringName(card.get("instance_id", &"")) == instance_id:
+				return {
+					"zone": Catalog.CARD_ZONE_HAND,
+					"owner_id": owner_id,
+					"index": hand_index,
+					"card": card,
+				}
+	return {}
+
+
+static func _get_zone_candidates(
+	state: StateData,
+	zone: StringName,
+	source_owner: int
+) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	if zone == Catalog.CARD_ZONE_HAND:
+		var owner_order: Array[int] = [source_owner]
+		var other_owner: int = (
+			Rules.OPPONENT_OWNER
+			if source_owner == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+		if other_owner != source_owner:
+			owner_order.append(other_owner)
+		for owner_id: int in owner_order:
+			var hand: Array = state.get_hand(owner_id)
+			for hand_index: int in range(hand.size()):
+				var card_value: Variant = hand[hand_index]
+				if not card_value is Dictionary:
+					continue
+				candidates.append({
+					"zone": Catalog.CARD_ZONE_HAND,
+					"owner_id": owner_id,
+					"index": hand_index,
+					"card": card_value,
+				})
+	elif zone == Catalog.CARD_ZONE_BOARD:
+		for cell: int in range(state.board.size()):
+			var slot_value: Variant = state.board[cell]
+			if slot_value == null:
+				continue
+			var slot: Dictionary = slot_value
+			candidates.append({
+				"zone": Catalog.CARD_ZONE_BOARD,
+				"owner_id": int(slot.get("owner", 0)),
+				"index": cell,
+				"card": slot.get("card", {}),
+			})
+	return candidates

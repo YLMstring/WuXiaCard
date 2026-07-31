@@ -534,6 +534,12 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionar
 		state.active_player = moving_owner
 	else:
 		state.active_player = _get_next_active_owner(state, moving_owner)
+	var start_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_START_OWNER_TURN,
+		{"turn_owner_id": state.active_player}
+	)
+	events.append_array(start_result.get("events", []) as Array)
 	return events
 
 
