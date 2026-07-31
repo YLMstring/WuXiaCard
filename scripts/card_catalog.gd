@@ -325,6 +325,18 @@ const _CARD_DEFINITIONS: Dictionary = {
 			},
 		],
 	},
+	&"SanQinFeng1": {
+		"id": &"SanQinFeng1",
+		"glyph": "太岳三青峰",
+		"picture": "res://pics/LKT010_495.png",
+		"sect": "华山派",
+		"tier": 1,
+		"weapon": "心法",
+		"description": "进场时，手牌和场上的友方剑法牌内力加一。",
+		"flavor": "华山气宗正统的运气口诀，气功一成，无往不利。",
+		"powers": [2, 1, 1, 2],
+		"abilities": [],
+	},
 	&"ZiXiaGong1": {
 		"id": &"ZiXiaGong1",
 		"glyph": "以气御剑",
