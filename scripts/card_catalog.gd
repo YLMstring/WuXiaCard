@@ -469,15 +469,16 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"ZiXiaGong3": {
 		"id": &"ZiXiaGong3",
 		"glyph": "紫霞功",
-		"picture": "res://pics/LKT010_495.png",
+		"picture": "res://pics/LKT010_496.png",
 		"sect": "华山派",
 		"tier": 3,
 		"weapon": "心法",
-		"description": "你的回合开始时，所有手牌点数加一。",
+		"description": "锁定：你的回合开始时，所有手牌点数加一。",
 		"flavor": "紫霞功威力极大，自来有“华山九功，第一紫霞”的说法。这门内功初发时若有若无，绵如云霞，然而蓄劲极韧，到后来更铺天盖地，势不可当，“紫霞”二字由此而来。",
 		"powers": [3, 2, 2, 2],
 		"abilities": [
 			{
+				"retained_on_flip": true,
 				"triggers": [
 					{
 						"event": TRIGGER_START_OWNER_TURN,
@@ -506,15 +507,16 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"ZiXiaGong4": {
 		"id": &"ZiXiaGong4",
 		"glyph": "紫霞功",
-		"picture": "res://pics/LKT010_495.png",
+		"picture": "res://pics/LKT010_496.png",
 		"sect": "华山派",
 		"tier": 4,
 		"weapon": "心法",
-		"description": "你的回合开始时，所有手牌点数加一。你的回合结束时，场上首两个其它友方点数加一。",
+		"description": "锁定：你的回合开始时，所有手牌点数加一。锁定：你的回合结束时，场上首两个其它友方点数加一。",
 		"flavor": "紫霞功威力极大，自来有“华山九功，第一紫霞”的说法。这门内功初发时若有若无，绵如云霞，然而蓄劲极韧，到后来更铺天盖地，势不可当，“紫霞”二字由此而来。",
 		"powers": [3, 2, 2, 2],
 		"abilities": [
 			{
+				"retained_on_flip": true,
 				"triggers": [
 					{
 						"event": TRIGGER_START_OWNER_TURN,
