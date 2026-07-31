@@ -44,19 +44,23 @@ An attack that may flip a card resolves in this order:
 4. If step 3 fails, stop. Emit neither `CARD_BEFORE_FLIPPED` nor
    `CARD_AFTER_FLIPPED`.
 5. Emit and resolve `CARD_BEFORE_FLIPPED`.
-6. Locate and validate the pending flip again.
+6. Locate the pending target again and validate only non-movement
+   invalidators.
 7. If step 6 succeeds, change ownership and emit the normal flip events.
 8. Resolve `CARD_AFTER_FLIPPED`.
 
-If a `CARD_BEFORE_FLIPPED` rule itself invalidates the pending flip, its
-already-resolved costs and effects remain. The flip and
-`CARD_AFTER_FLIPPED` do not occur.
+If a `CARD_BEFORE_FLIPPED` rule removes the pending target, changes it to the
+intended new owner, removes the attack source, or otherwise invalidates the
+flip for a reason other than board movement, its already-resolved costs and
+effects remain. The flip and `CARD_AFTER_FLIPPED` do not occur.
 
 Attack flips remain range-bound. If either card moves during
 `CARD_BE_ATTACKED` and the exact target is no longer in the exact attacker's
 range, step 3 fails and no before-flip event is emitted. If movement happens
-during `CARD_BEFORE_FLIPPED`, that event has already resolved; the second
-attack-validity check then cancels the flip when the target is out of range.
+during `CARD_BEFORE_FLIPPED`, the flip is already committed with respect to
+movement. Moving either card, including moving the target outside the
+attacker's current range, never cancels the flip at step 6. The pending flip
+follows the exact target instance to its new board cell.
 
 ### Non-Attack Flip Order
 
@@ -282,8 +286,10 @@ Automated coverage must include:
 - full-hand `NO_EFFECT` without rolling back an earlier ki spend;
 - attack invalidation after `CARD_BE_ATTACKED` producing neither before- nor
   after-flip triggers;
-- attack invalidation during `CARD_BEFORE_FLIPPED` retaining prior effects
-  but producing no flip or after-flip trigger;
+- non-movement attack invalidation during `CARD_BEFORE_FLIPPED` retaining
+  prior effects but producing no flip or after-flip trigger;
+- movement during `CARD_BEFORE_FLIPPED`, including movement out of attack
+  range, not cancelling the committed flip;
 - a non-attack pending flip following a moved target instance;
 - CangSong copying for its pre-flip owner with fresh catalog state;
 - CangSong summon reaction remaining intact;
