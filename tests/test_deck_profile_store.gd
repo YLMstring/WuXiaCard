@@ -71,14 +71,42 @@ func _run() -> void:
 		store.repair_profile(profile) == profile,
 		"Repairing an existing valid profile does not auto-unlock new sect cards"
 	)
+	var legacy_duplicate: Dictionary = profile.duplicate(true)
+	var duplicate_source_index: int = (
+		legacy_duplicate["library_slots"] as Array
+	).find("CangSongYingKe3")
+	_check(duplicate_source_index >= 0, "Legacy repair fixture finds a higher namesake")
+	if duplicate_source_index >= 0:
+		var displaced_for_fixture: String = String(legacy_duplicate["main_deck"][1])
+		legacy_duplicate["main_deck"][1] = "CangSongYingKe3"
+		legacy_duplicate["library_slots"][duplicate_source_index] = displaced_for_fixture
+		_check(
+			not store.is_profile_valid(legacy_duplicate),
+			"Player profiles reject repeated glyphs"
+		)
+		var repaired_duplicate: Dictionary = store.repair_profile(legacy_duplicate)
+		_check(
+			store.is_profile_valid(repaired_duplicate),
+			"Legacy repeated-glyph profile repairs to a valid deck"
+		)
+		_check(
+			String(repaired_duplicate["main_deck"][1]) == "CangSongYingKe3",
+			"Legacy repair keeps the highest-tier namesake in its original slot"
+		)
+		_check(
+			String(repaired_duplicate["library_slots"][
+				_occupied_count(repaired_duplicate["library_slots"]) - 1
+			]) == "CangSongYingKe2",
+			"Removed legacy namesake moves to the library bottom"
+		)
 
 	var original_deck: Array = (profile["main_deck"] as Array).duplicate()
-	var original_library_card: String = String(profile["library_slots"][1])
-	var exchange_result: Dictionary = store.exchange_and_save(profile, 1, 3)
+	var original_library_card: String = String(profile["library_slots"][4])
+	var exchange_result: Dictionary = store.exchange_and_save(profile, 4, 3)
 	_check(bool(exchange_result.get("ok", false)), "A valid exchange saves")
 	var exchanged: Dictionary = exchange_result.get("profile", {})
 	_check(String(exchanged["main_deck"][3]) == original_library_card, "Library card enters target deck slot")
-	_check(String(exchanged["library_slots"][1]) == String(original_deck[3]), "Displaced deck card takes exact source slot")
+	_check(String(exchanged["library_slots"][4]) == String(original_deck[3]), "Displaced deck card takes exact source slot")
 	_check(store.is_profile_valid(exchanged), "Exchanged profile remains valid")
 
 	var reloaded: Dictionary = store.load_profile()
@@ -94,6 +122,29 @@ func _run() -> void:
 	_check(String(unlocked["library_slots"][0]) == "CangSongYingKe1", "New unlock enters the first library slot")
 	_check(String(unlocked["library_slots"][1]) == String(reloaded["library_slots"][0]), "Existing library order shifts forward")
 	_check((unlocked["main_deck"] as Array) == (reloaded["main_deck"] as Array), "Unlock does not change main deck")
+	var namesake_source_index: int = (
+		unlocked["library_slots"] as Array
+	).find("CangSongYingKe1")
+	var rotated_result: Dictionary = store.exchange_and_save(
+		unlocked,
+		namesake_source_index,
+		2
+	)
+	_check(bool(rotated_result.get("ok", false)), "Namesake exchange saves atomically")
+	var rotated_profile: Dictionary = rotated_result.get("profile", {})
+	_check(
+		String(rotated_profile["main_deck"][2]) == "CangSongYingKe1",
+		"Incoming namesake enters the selected main-deck slot"
+	)
+	_check(
+		String(rotated_profile["main_deck"][0]) == String(unlocked["main_deck"][2]),
+		"Selected-slot card rotates into the old namesake slot"
+	)
+	_check(
+		String(rotated_profile["library_slots"][namesake_source_index])
+		== "CangSongYingKe2",
+		"Old namesake rotates into the original library source"
+	)
 
 	var duplicate_unlock: Dictionary = store.unlock_and_save(unlocked, &"CangSongYingKe1")
 	_check(not bool(duplicate_unlock.get("ok", true)), "Duplicate unlock is rejected")

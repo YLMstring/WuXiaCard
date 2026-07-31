@@ -44,6 +44,37 @@ func _run() -> void:
 		"Seeded enemy selection is deterministic"
 	)
 	_check(Catalog.pick_random_enemy_id(0) == &"", "Invalid levels have no enemy")
+	var duplicate_fixture: Dictionary = Catalog.get_definition(&"qingfeng_xuedi")
+	duplicate_fixture["id"] = &"duplicate_fixture"
+	duplicate_fixture["deck"] = [
+		&"fire_envoy",
+		&"fire_envoy",
+		&"CangSongYingKe1",
+		&"CangSongYingKe2",
+		&"CangSongYingKe3",
+	]
+	_check(
+		Catalog.validate_definition(duplicate_fixture).is_empty(),
+		"Enemy definitions may contain exact duplicates and repeated glyphs"
+	)
+	var short_fixture: Dictionary = duplicate_fixture.duplicate(true)
+	short_fixture["deck"] = [&"fire_envoy"]
+	_check(
+		not Catalog.validate_definition(short_fixture).is_empty(),
+		"Enemy definitions still require exactly five cards"
+	)
+	var unknown_fixture: Dictionary = duplicate_fixture.duplicate(true)
+	unknown_fixture["deck"] = [
+		&"fire_envoy",
+		&"fire_envoy",
+		&"fire_envoy",
+		&"fire_envoy",
+		&"missing_card",
+	]
+	_check(
+		not Catalog.validate_definition(unknown_fixture).is_empty(),
+		"Enemy definitions still reject unknown cards"
+	)
 	_finish()
 
 

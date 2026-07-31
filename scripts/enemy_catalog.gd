@@ -138,6 +138,13 @@ static func validate_catalog() -> Array[String]:
 	return errors
 
 
+static func validate_definition(definition: Dictionary) -> Array[String]:
+	var errors: Array[String] = []
+	var enemy_id := StringName(String(definition.get("id", "")))
+	_validate_definition(enemy_id, definition, errors)
+	return errors
+
+
 static func _deck_signature(deck_value: Variant) -> String:
 	if typeof(deck_value) != TYPE_ARRAY:
 		return ""
@@ -168,14 +175,10 @@ static func _validate_definition(
 	if deck.size() != 5:
 		errors.append("Enemy %s requires exactly five cards" % enemy_id)
 	var known_card_ids: Array[StringName] = Cards.get_all_card_ids()
-	var observed_cards: Dictionary = {}
 	for value: Variant in deck:
 		var card_id := StringName(String(value))
 		if card_id not in known_card_ids:
 			errors.append("Enemy %s uses unknown card %s" % [enemy_id, card_id])
-		elif observed_cards.has(card_id):
-			errors.append("Enemy %s repeats card %s" % [enemy_id, card_id])
-		observed_cards[card_id] = true
 
 
 static func _build_definition_map() -> Dictionary:

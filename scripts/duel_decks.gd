@@ -1,8 +1,8 @@
 class_name DuelDecks
 extends RefCounted
 
-const Catalog = preload("res://scripts/card_catalog.gd")
 const ProfileStore = preload("res://scripts/deck_profile_store.gd")
+const DeckRules = preload("res://scripts/deck_rules.gd")
 
 const PLAYER_CARD_IDS: Array[StringName] = ProfileStore.DEFAULT_MAIN_DECK_IDS
 
@@ -24,5 +24,5 @@ static func get_opponent_card_ids() -> Array[StringName]:
 	return OPPONENT_CARD_IDS.duplicate()
 
 
-static func get_side_deck_card_ids() -> Array[StringName]:
-	return Catalog.get_all_card_ids()
+static func get_side_deck_card_ids(main_deck_ids: Array) -> Array[StringName]:
+	return DeckRules.build_side_deck_card_ids(main_deck_ids)

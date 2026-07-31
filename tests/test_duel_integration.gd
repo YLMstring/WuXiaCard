@@ -4,6 +4,7 @@ const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Decks = preload("res://scripts/duel_decks.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
 const TEST_PROFILE_PATH: String = "user://duel_integration_deck_test.json"
@@ -36,6 +37,7 @@ func _run() -> void:
 	_check_hand_slots(duel.get_node("DuelCanvas/OpponentHand"))
 	_check_catalog_hands(duel)
 	_check_side_deck_setup(duel)
+	await _check_duplicate_enemy_instances()
 	_check_normal_opponent_concealment(duel)
 	await _check_card_inspector_modal()
 	await _check_inspector_holds_completed_ai_move()
@@ -78,10 +80,10 @@ func _run() -> void:
 	if duel.has_method("debug_get_simulation_turn_count"):
 		var removed_cards: int = duel.debug_get_removed_count(Rules.PLAYER_OWNER) + duel.debug_get_removed_count(Rules.OPPONENT_OWNER)
 		_check(simulation_turns >= occupancy + removed_cards, "Action turns account for every card that entered the board")
-	var expected_total_cards: int = 10 + Catalog.get_all_card_ids().size() * 2
+	var expected_total_cards: int = _expected_total_card_count()
 	_check(
 		duel.debug_get_total_card_count() == expected_total_cards,
-		"All main-deck and catalog-sized side-deck instances remain accounted for"
+		"All main-deck and owner-derived side-deck instances remain accounted for"
 	)
 	_check(remaining_cards <= 10, "Both fixed hands remain within their five-card limits")
 	_check(not duel.has_node("Arrow"), "Approved layout contains no right-side arrow")
@@ -652,22 +654,82 @@ func _check_catalog_hands(duel: Node) -> void:
 
 
 func _check_side_deck_setup(duel: Node) -> void:
-	var expected_ids: Array[StringName] = Catalog.get_all_card_ids()
-	expected_ids.sort()
+	var expected_by_owner: Dictionary = {
+		Rules.PLAYER_OWNER: Decks.get_side_deck_card_ids(
+			Decks.get_player_card_ids(TEST_PROFILE_PATH)
+		),
+		Rules.OPPONENT_OWNER: Decks.get_side_deck_card_ids(
+			Decks.get_opponent_card_ids()
+		),
+	}
+	var expected_instance_count: int = 10
 	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var expected_ids: Array[StringName] = (
+			expected_by_owner[owner_id] as Array[StringName]
+		).duplicate()
+		expected_ids.sort()
 		var observed_ids: Array[StringName] = duel.debug_get_side_deck_card_ids(owner_id)
 		observed_ids.sort()
-		_check(observed_ids == expected_ids, "Owner %d side deck contains every catalog card once" % owner_id)
+		_check(observed_ids == expected_ids, "Owner %d side deck matches its main deck" % owner_id)
+		expected_instance_count += expected_ids.size()
 	var all_instance_ids: Array[StringName] = duel.debug_get_all_instance_ids()
 	var unique_instance_ids: Dictionary = {}
 	for instance_id: StringName in all_instance_ids:
 		unique_instance_ids[instance_id] = true
-	var expected_instance_count: int = 10 + expected_ids.size() * 2
 	_check(
 		all_instance_ids.size() == expected_instance_count
 		and unique_instance_ids.size() == expected_instance_count,
 		"Main and side decks use unique runtime instance IDs"
 	)
+
+
+func _expected_total_card_count() -> int:
+	return (
+		10
+		+ Decks.get_side_deck_card_ids(
+			Decks.get_player_card_ids(TEST_PROFILE_PATH)
+		).size()
+		+ Decks.get_side_deck_card_ids(Decks.get_opponent_card_ids()).size()
+	)
+
+
+func _check_duplicate_enemy_instances() -> void:
+	var duplicate_duel: Node = _instantiate_duel()
+	var duplicate_card_ids: Array[StringName] = [
+		&"fire_envoy",
+		&"fire_envoy",
+		&"fire_envoy",
+		&"fire_envoy",
+		&"fire_envoy",
+	]
+	duplicate_duel.set("opponent_card_ids", duplicate_card_ids)
+	root.add_child(duplicate_duel)
+	await process_frame
+	await process_frame
+	var instance_ids: Array[StringName] = duplicate_duel.debug_get_hand_instance_ids(
+		Rules.OPPONENT_OWNER
+	)
+	var unique_ids: Dictionary = {}
+	for instance_id: StringName in instance_ids:
+		unique_ids[instance_id] = true
+	_check(
+		instance_ids.size() == 5 and unique_ids.size() == 5,
+		"Exact duplicate enemy cards receive distinct runtime instance IDs"
+	)
+	var observed_side_ids: Array[StringName] = duplicate_duel.debug_get_side_deck_card_ids(
+		Rules.OPPONENT_OWNER
+	)
+	var expected_side_ids: Array[StringName] = Decks.get_side_deck_card_ids(
+		duplicate_card_ids
+	)
+	observed_side_ids.sort()
+	expected_side_ids.sort()
+	_check(
+		observed_side_ids == expected_side_ids,
+		"Exact duplicate enemy main cards do not multiply side-deck entries"
+	)
+	duplicate_duel.queue_free()
+	await process_frame
 
 
 func _check_player_draw_and_instance_mapping() -> void:

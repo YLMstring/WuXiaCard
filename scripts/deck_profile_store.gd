@@ -4,6 +4,7 @@ extends RefCounted
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const DeckRules = preload("res://scripts/deck_rules.gd")
 
 const SCHEMA_VERSION: int = 6
 const MAIN_DECK_CAPACITY: int = 5
@@ -202,6 +203,8 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var library: Array = library_value
 	if deck.size() != MAIN_DECK_CAPACITY or library.size() != LIBRARY_CAPACITY:
 		return false
+	if not DeckRules.has_unique_glyphs(deck):
+		return false
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	var unlocked_set: Dictionary = {}
 	for value: Variant in unlocked:
@@ -334,43 +337,19 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				):
 					pending_reward_card_ids.append(card_id)
 
-	var deck: Array[StringName] = []
 	var raw_deck: Variant = profile.get("main_deck", [])
-	if typeof(raw_deck) == TYPE_ARRAY:
-		for value: Variant in raw_deck:
-			var card_id := StringName(String(value))
-			if card_id in unlocked and card_id not in deck and deck.size() < MAIN_DECK_CAPACITY:
-				deck.append(card_id)
-
-	var library_order: Array[StringName] = []
 	var raw_library: Variant = profile.get("library_slots", [])
-	if typeof(raw_library) == TYPE_ARRAY:
-		for value: Variant in raw_library:
-			var card_id := StringName(String(value))
-			if card_id != &"" and card_id in unlocked and card_id not in deck and card_id not in library_order:
-				library_order.append(card_id)
-
-	for card_id: StringName in library_order.duplicate():
-		if deck.size() >= MAIN_DECK_CAPACITY:
-			break
-		deck.append(card_id)
-		library_order.erase(card_id)
-	for card_id: StringName in unlocked:
-		if deck.size() >= MAIN_DECK_CAPACITY:
-			break
-		if card_id not in deck and card_id not in library_order:
-			deck.append(card_id)
-	if deck.size() != MAIN_DECK_CAPACITY:
+	var placement: Dictionary = DeckRules.repair_player_placement(
+		unlocked,
+		raw_deck as Array if typeof(raw_deck) == TYPE_ARRAY else [],
+		raw_library as Array if typeof(raw_library) == TYPE_ARRAY else [],
+		MAIN_DECK_CAPACITY,
+		LIBRARY_CAPACITY
+	)
+	if not bool(placement.get("ok", false)):
 		return create_default_profile()
-
-	var missing_library: Array[StringName] = []
-	for card_id: StringName in unlocked:
-		if card_id not in deck and card_id not in library_order:
-			missing_library.append(card_id)
-	var repaired_library: Array = _string_array(missing_library)
-	repaired_library.append_array(_string_array(library_order))
-	if repaired_library.size() > LIBRARY_CAPACITY:
-		return create_default_profile()
+	var deck: Array = placement.get("main_deck", [])
+	var repaired_library: Array = placement.get("library_cards", [])
 	return {
 		"schema_version": SCHEMA_VERSION,
 		"run_active": run_active,
@@ -382,7 +361,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
-		"library_slots": _padded_library(repaired_library),
+		"library_slots": _padded_library(_string_array(repaired_library)),
 	}
 
 
@@ -396,10 +375,17 @@ func exchange_and_save(profile: Dictionary, library_index: int, deck_index: int)
 		return {"ok": false, "profile": unchanged}
 	if String(profile["library_slots"][library_index]).is_empty():
 		return {"ok": false, "profile": unchanged}
+	var exchange: Dictionary = DeckRules.build_player_exchange(
+		profile["main_deck"],
+		profile["library_slots"],
+		library_index,
+		deck_index
+	)
+	if not bool(exchange.get("ok", false)):
+		return {"ok": false, "profile": unchanged}
 	var candidate: Dictionary = profile.duplicate(true)
-	var displaced: Variant = candidate["main_deck"][deck_index]
-	candidate["main_deck"][deck_index] = candidate["library_slots"][library_index]
-	candidate["library_slots"][library_index] = displaced
+	candidate["main_deck"] = (exchange["main_deck"] as Array).duplicate()
+	candidate["library_slots"] = (exchange["library_slots"] as Array).duplicate()
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged}
 	return {"ok": true, "profile": candidate}

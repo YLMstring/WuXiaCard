@@ -124,14 +124,23 @@ func _ready() -> void:
 	_create_board_cells()
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
-	var player_cards: Array = _create_card_instances(Decks.get_player_card_ids(deck_profile_path), DuelRules.PLAYER_OWNER, "main")
+	var player_card_ids: Array[StringName] = Decks.get_player_card_ids(deck_profile_path)
+	var player_cards: Array = _create_card_instances(player_card_ids, DuelRules.PLAYER_OWNER, "main")
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
 	_shuffle_opponent_hand_ids(effective_opponent_ids)
 	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
-	var player_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.PLAYER_OWNER, "side")
-	var opponent_side_deck: Array = _create_card_instances(Decks.get_side_deck_card_ids(), DuelRules.OPPONENT_OWNER, "side")
+	var player_side_deck: Array = _create_card_instances(
+		Decks.get_side_deck_card_ids(player_card_ids),
+		DuelRules.PLAYER_OWNER,
+		"side"
+	)
+	var opponent_side_deck: Array = _create_card_instances(
+		Decks.get_side_deck_card_ids(effective_opponent_ids),
+		DuelRules.OPPONENT_OWNER,
+		"side"
+	)
 	_shuffle_side_decks(player_side_deck, opponent_side_deck)
 	var opening_owner: int = _get_valid_starting_owner()
 	duel_state = StateData.new(

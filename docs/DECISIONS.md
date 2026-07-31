@@ -135,8 +135,16 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 
 - “Main deck” currently means the five cards forming the starting hand. Those cards are not also waiting to be drawn.
 - “Side deck” is the separate draw pile.
-- The current side pool contains a fresh copy of every catalog card and can therefore duplicate a card present in the starting hand.
-- Each side currently receives ten side-deck cards, shuffled independently.
+- The player main deck cannot contain two cards with the same `glyph`, even
+  when their IDs or sects differ. Enemy main decks may repeat glyphs and exact
+  card IDs.
+- Each owner's side deck is derived separately from that owner's actual main
+  deck. A non-`江湖` main card contributes every catalog card of the same sect
+  at a lower or equal tier; a `江湖` card contributes nothing, including itself.
+- Side-deck candidates come from the whole catalog, regardless of player
+  unlocks. Duplicate glyphs collapse to the highest-tier candidate; equal-tier
+  ties keep the earliest catalog entry. Final order is catalog order before
+  each side shuffles independently.
 - A zero RNG seed means nondeterministic setup; a nonzero seed supports deterministic tests.
 - The player's main deck is persisted in a versioned profile and is read by new duel scenes.
 - The collection library has 1,000 logical positions. Unlocked cards occupy a compact prefix; all remaining positions are empty slots.
@@ -168,7 +176,10 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 - The 1,000 logical library slots form 250 rows and are virtualized. Only three visible rows plus one buffer row above and below—20 slot Controls total—are live.
 - A short tap on any revealed card opens the existing inspector. Closing it restores the prior library scroll position.
 - Immediate pointer movement scrolls the library. Holding a library card for roughly 0.25 seconds arms a drag.
-- Dropping an armed library card onto one of the five main-deck slots exchanges the two cards. The displaced main-deck card returns to the exact logical library position from which the dragged card came.
+- Dropping an armed library card with a new glyph onto a main-deck slot
+  exchanges the two cards. If that glyph already occupies another main slot,
+  the incoming card enters the chosen slot, the chosen-slot card moves into the
+  old namesake slot, and the old namesake returns to the exact library source.
 - Invalid drops and empty library slots do nothing.
 - Exchanges save immediately. If persistence fails, the displayed exchange is rolled back.
 - The header icon only emits `back_requested`; a future scene router will decide where to navigate.

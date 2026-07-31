@@ -75,9 +75,16 @@ creates `active_abilities`.
 Abilities without `retained_on_flip` normalize to `false`. Add the flag only
 for an unusual ability that survives an ownership flip.
 
-Starting encounter hands are in `scripts/duel_decks.gd`. The side pool currently
-contains all catalog IDs. Never reuse one runtime Dictionary for two physical
-copies; every copy needs a unique `instance_id`.
+Starting encounter hands are in `scripts/duel_decks.gd`. Each owner's side deck
+is derived from that owner's main deck through `scripts/deck_rules.gd`. A
+non-`江湖` main card contributes every catalog card of the same sect whose tier
+does not exceed its own; overlapping contributions merge, and only the
+highest-tier card for each `glyph` survives. Equal-tier ties keep the earlier
+catalog entry. Player unlock ownership does not restrict this candidate pool.
+
+Never reuse one runtime Dictionary for two physical copies; every copy needs a
+unique `instance_id`. Enemy main decks may contain repeated IDs, but each
+physical copy still receives a distinct runtime ID.
 
 ## Triggered Ability Shape
 

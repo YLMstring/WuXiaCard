@@ -268,10 +268,19 @@ func _test_encounter_decks() -> void:
 
 
 func _test_side_deck_pool() -> void:
-	var side_ids: Array[StringName] = Decks.get_side_deck_card_ids()
-	_check(side_ids == Catalog.get_all_card_ids(), "Side deck contains every catalog card exactly once")
+	var main_ids: Array[StringName] = Decks.get_player_card_ids()
+	var side_ids: Array[StringName] = Decks.get_side_deck_card_ids(main_ids)
+	_check(not side_ids.is_empty(), "A catalog-backed main deck derives side cards")
+	var observed_glyphs: Dictionary = {}
+	for card_id: StringName in side_ids:
+		var glyph: String = String(Catalog.get_definition(card_id).get("glyph", ""))
+		_check(not observed_glyphs.has(glyph), "Side deck keeps at most one card per glyph")
+		observed_glyphs[glyph] = true
 	side_ids.clear()
-	_check(Decks.get_side_deck_card_ids().size() == 34, "Side deck getter returns a defensive copy")
+	_check(
+		not Decks.get_side_deck_card_ids(main_ids).is_empty(),
+		"Side deck getter returns a defensive result"
+	)
 
 
 func _test_draw_action_validation() -> void:

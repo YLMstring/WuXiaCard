@@ -73,7 +73,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   received activation replaces all current activations while preserving passive
   abilities.
 - Runtime card identity is `instance_id`, not a hand child index.
-- Main deck currently means the five-card starting hand. The side deck is a separate shuffled draw pile and may contain another copy of a main-hand card.
+- Main deck means the five-card starting hand. Player main-deck glyphs must be
+  unique; enemy decks may repeat glyphs and exact IDs.
+- The side deck is a separate shuffled draw pile derived independently for each
+  owner. Non-`江湖` main cards set same-sect tier ceilings over the full catalog.
+  The highest-tier card per glyph survives (catalog order breaks ties);
+  `江湖` main cards contribute nothing.
 - The player's five-card main deck is loaded from
   `user://wuxia_deck_profile.json`; malformed data is repaired or replaced by a
   valid default.
@@ -82,7 +87,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   their name color reflects catalog tier.
   Occupied cards are a compact prefix followed by empty slots.
 - A library card exchanges with a main-deck slot after a roughly 0.25-second
-  hold and drag. A short tap inspects; immediate movement scrolls.
+  hold and drag. When its glyph already exists in another main slot, the
+  profile performs the approved three-way rotation without leaving a gap. A
+  short tap inspects; immediate movement scrolls.
 - Primary unlocks insert at the library top. Still-locked lower-tier cards with
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected

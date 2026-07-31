@@ -35,7 +35,10 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `deck_profile_store.gd` — versioned persistent deck profile, validation/repair,
   atomic save, tier and namesake unlock expansion, and main-deck/library
   exchanges.
-- `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and side-pool construction.
+- `deck_rules.gd` — pure glyph-uniqueness, legacy placement repair, two-/three-way
+  deck exchange, and owner-specific side-deck derivation.
+- `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and
+  owner-specific side-deck construction.
 
 Neither state nor action data may contain Nodes, Controls, audio players, tweens, or live scene references.
 
@@ -109,6 +112,13 @@ by empty entries. A card ID may appear in exactly one of the main deck or
 library. Save data is schema-versioned, validated on load, repaired when
 possible, and replaced with a valid default when necessary.
 
+Player main-deck IDs must also have five distinct `glyph` values. Legacy saves
+keep the highest-tier namesake in its original slot (earlier deck occurrence
+wins an equal-tier tie), fill vacancies from stable library order, and append
+removed namesakes to the library bottom. Dropping a library card whose glyph is
+already in another main slot performs a three-way rotation so the incoming
+card, displaced target, and old namesake all remain placed.
+
 All gameplay unlock paths use one profile-store transaction. Requested primary
 cards enter the library top in caller order. Still-locked cards with the same
 `glyph` and sect at lower tiers are inherited in catalog order and appended to
@@ -141,6 +151,15 @@ emulation, which could interfere with duel card dragging.
 The deck builder is a separate scene, `res://scenes/deck_builder.tscn`. It
 emits `back_requested` and deliberately does not know which future scene owns
 navigation. The playable duel remains `res://main.tscn`.
+
+At duel construction, each side deck is derived independently from its owner's
+actual main deck. Every non-`江湖` main card raises a tier threshold for its
+sect. Catalog cards at or below those thresholds are eligible even when the
+player has not unlocked them. Candidates collapse by `glyph` to the
+highest-tier version; equal-tier ties and final output follow catalog order.
+The resulting arrays are then shuffled independently. Enemy main decks may
+contain repeated IDs or glyphs, and every repeated main copy receives a unique
+runtime `instance_id`.
 
 ## State Shape
 

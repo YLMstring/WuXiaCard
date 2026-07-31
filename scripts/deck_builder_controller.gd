@@ -97,7 +97,8 @@ func debug_exchange(library_index: int, deck_index: int) -> bool:
 	if not bool(result.get("ok", false)):
 		return false
 	profile = result["profile"]
-	_refresh_player_slot(deck_index)
+	for player_slot_index: int in range(Store.MAIN_DECK_CAPACITY):
+		_refresh_player_slot(player_slot_index)
 	_refresh_library_grid()
 	_refresh_start_controls()
 	return true
@@ -271,7 +272,8 @@ func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> vo
 		var result: Dictionary = _profile_store.exchange_and_save(profile, logical_index, deck_index)
 		if bool(result.get("ok", false)):
 			profile = result["profile"]
-			_refresh_player_slot(deck_index)
+			for player_slot_index: int in range(Store.MAIN_DECK_CAPACITY):
+				_refresh_player_slot(player_slot_index)
 			_refresh_library_grid()
 			_refresh_start_controls()
 			status_label.text = DEFAULT_STATUS
