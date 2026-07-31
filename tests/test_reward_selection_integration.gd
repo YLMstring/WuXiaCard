@@ -114,6 +114,11 @@ func _run() -> void:
 	var deck_before: Array[StringName] = store.get_main_deck_ids(profile)
 	var source_point: Vector2 = first_slot.get_global_rect().get_center()
 	reward.call("_on_library_drag_started", 0, first_slot.card_data, source_point)
+	var drag_proxy := reward.get_node("DuelCanvas/DragLayer").get_child(-1) as CardView
+	_check(
+		drag_proxy.owner_id == grid.get_display_owner_id(0),
+		"Reward drag preview preserves the source card's randomized color"
+	)
 	reward.call("_on_library_drag_ended", 0, Vector2(-100.0, -100.0))
 	_check(
 		store.get_pending_reward_ids(store.load_profile()) == reward_ids,
