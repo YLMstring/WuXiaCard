@@ -140,6 +140,42 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
 - The reaction uses the generic passive-trigger card pulse before its existing
   flip/removal presentation.
 
+### CangSongYingKe3 and CangSongYingKe4
+
+They retain CangSongYingKe2's summon reaction. Immediately before either card
+would flip through an attack or any future non-attack effect, it spends exactly
+one ki and adds a fresh catalog copy of its own exact card ID to its current
+owner's hand.
+
+- The recipient is the owner immediately before the flip.
+- The copy has fresh powers, ki, and abilities from the catalog; runtime
+  modifications are not copied.
+- A full five-card hand still consumes the ki, then the add action has no
+  effect.
+- The source card flips normally afterward and loses this ability under the
+  default non-retention rule.
+- If `CARD_BE_ATTACKED` movement takes the exact target outside the exact
+  attacker's range, no before-flip event is emitted.
+- Once `CARD_BEFORE_FLIPPED` begins, movement alone never cancels that
+  committed flip; the exact target is followed to its current cell.
+- Removal, source ownership change, or the target already belonging to the
+  intended owner still prevents the flip.
+
+### SanQinFeng1–3
+
+At the start of their owner's turn, an eligible card spends exactly one ki and
+selects the first one, two, or three allied board cards with weapon `剑法`,
+respectively, in row-major order. The source itself is eligible.
+
+- Each selected card performs its normal four-direction standard attack.
+- One card's full attack and trigger chain resolves before the next selected
+  instance is revalidated.
+- A later snapshot member is skipped only if it no longer satisfies one or
+  more declared selector conditions.
+- The source spends its ki even when no card matches or no selected card has a
+  valid attack target.
+- Multiple sources resolve in normal row-major passive-trigger order.
+
 ## Deck Semantics
 
 - “Main deck” currently means the five cards forming the starting hand. Those cards are not also waiting to be drawn.

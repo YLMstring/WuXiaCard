@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-07-30
+Updated: 2026-07-31
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -100,6 +100,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - ZiXiaGong1–4 use the generic `for_each_selected_card` action. The selector
   supports ordered hand/board snapshots, reusable selected-card conditions,
   optional limits, and source-versus-subject execution context.
+- CangSongYingKe3–4 use `CARD_BEFORE_FLIPPED` plus the generic
+  `add_card_to_hand` action to spend one ki and create a fresh exact copy for
+  the pre-flip owner. Full hands still consume the ki.
+- SanQinFeng1–3 use the same selector wrapper to make the first 1/2/3 allied
+  board sword cards attack sequentially. Each attack resolves completely
+  before the next snapshot member is revalidated.
+- Attack flips recheck exact attacker/target range after `CARD_BE_ATTACKED`.
+  Once `CARD_BEFORE_FLIPPED` starts, movement alone no longer cancels the
+  committed flip; the target instance is followed to its current cell.
 - Runtime ki and all four powers can change permanently in hand or on board.
   Start-owner-turn triggers run on ordinary and granted extra turns.
 
@@ -108,6 +117,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
 ## Immediate Cautions
 
 - `CangSongYingKe2` resolves `TRIGGER_CARD_SUMMONED` before the summoned card's own `TRIGGER_CARD_AFTER_SUMMONED` rules and standard attack. There is still no general queued player-choice/interrupt engine.
+- `CARD_BEFORE_FLIPPED` is a committed-flip boundary, not a second attack-range
+  check. Future rules that need to cancel a committed flip must do so through a
+  non-movement invalidator with explicitly defined semantics.
 - `deck_builder.tscn` emits `back_requested` only. Do not add navigation inside
   its controller; connect it from the future scene router.
 - Deck-builder tests use isolated `user://` paths. Do not point tests at the

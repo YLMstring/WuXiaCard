@@ -8,6 +8,7 @@ const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
+const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
@@ -32,8 +33,11 @@ const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
 const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
 const ACTION_ADD_POWERS: StringName = &"add_powers"
+const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
+const RECIPIENT_SELF: StringName = &"self"
+const RECIPIENT_OPPONENT: StringName = &"opponent"
 const ACTION_RESULT_APPLIED: StringName = &"applied"
 const ACTION_RESULT_NO_EFFECT: StringName = &"no_effect"
 const ACTION_RESULT_INVALID_CONTEXT: StringName = &"invalid_context"
@@ -48,6 +52,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
 	CARD_BE_ATTACKED,
+	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
 	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
@@ -79,7 +84,9 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_STANDARD_ATTACK_WITH_SELF,
 	ACTION_FOR_EACH_SELECTED_CARD,
 	ACTION_ADD_POWERS,
+	ACTION_ADD_CARD_TO_HAND,
 ]
+const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 
 const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
@@ -188,6 +195,21 @@ const _CARD_DEFINITIONS: Dictionary = {
 							{"type": ACTION_ATTACK_TRIGGER_CARD},
 						],
 					},
+					{
+						"event": CARD_BEFORE_FLIPPED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_KI, "amount": 1},
+							{
+								"type": ACTION_ADD_CARD_TO_HAND,
+								"card_id": &"CangSongYingKe3",
+								"recipient": RECIPIENT_SELF,
+							},
+						],
+					},
 				],
 			},
 		],
@@ -213,6 +235,21 @@ const _CARD_DEFINITIONS: Dictionary = {
 						],
 						"actions": [
 							{"type": ACTION_ATTACK_TRIGGER_CARD},
+						],
+					},
+					{
+						"event": CARD_BEFORE_FLIPPED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_KI, "amount": 1},
+							{
+								"type": ACTION_ADD_CARD_TO_HAND,
+								"card_id": &"CangSongYingKe4",
+								"recipient": RECIPIENT_SELF,
+							},
 						],
 					},
 				],
@@ -355,7 +392,39 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合开始时，耗内力以令场上首一个友方剑法发起攻击。",
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
 		"powers": [7, 2, 4, 7],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_KI, "amount": 1},
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{
+											"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+											"weapon": "剑法",
+										},
+									],
+									"limit": 1,
+								},
+								"actions": [
+									{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"SanQinFeng2": {
 		"id": &"SanQinFeng2",
@@ -368,7 +437,39 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
 		"powers": [7, 2, 4, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_KI, "amount": 1},
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{
+											"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+											"weapon": "剑法",
+										},
+									],
+									"limit": 2,
+								},
+								"actions": [
+									{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"SanQinFeng3": {
 		"id": &"SanQinFeng3",
@@ -381,7 +482,39 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
 		"powers": [7, 3, 4, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+						],
+						"actions": [
+							{"type": ACTION_SPEND_KI, "amount": 1},
+							{
+								"type": ACTION_FOR_EACH_SELECTED_CARD,
+								"selector": {
+									"zones": [CARD_ZONE_BOARD],
+									"conditions": [
+										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{
+											"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+											"weapon": "剑法",
+										},
+									],
+									"limit": 3,
+								},
+								"actions": [
+									{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+								],
+							},
+						],
+					},
+				],
+			},
+		],
 	},
 	&"ZiXiaGong1": {
 		"id": &"ZiXiaGong1",
@@ -1281,6 +1414,31 @@ static func _validate_action(
 					false,
 					errors
 				)
+	if action_type == ACTION_ADD_CARD_TO_HAND:
+		allowed_keys.append(&"card_id")
+		allowed_keys.append(&"recipient")
+		var added_card_value: Variant = action.get("card_id", null)
+		var added_card_id: StringName = (
+			StringName(added_card_value)
+			if typeof(added_card_value) in [TYPE_STRING, TYPE_STRING_NAME]
+			else &""
+		)
+		if added_card_id not in ALL_CARD_IDS:
+			errors.append(
+				"Card %s %s action %s requires a known card_id"
+				% [card_id, context_name, action_type]
+			)
+		var recipient_value: Variant = action.get("recipient", null)
+		var recipient: StringName = (
+			StringName(recipient_value)
+			if typeof(recipient_value) in [TYPE_STRING, TYPE_STRING_NAME]
+			else &""
+		)
+		if recipient not in KNOWN_RECIPIENTS:
+			errors.append(
+				"Card %s %s action %s requires a known recipient"
+				% [card_id, context_name, action_type]
+			)
 	if action.has("on_invalid_context"):
 		if StringName(action.get("on_invalid_context", &"")) != STOP_RULE:
 			errors.append("Card %s %s action %s has invalid on_invalid_context policy" % [card_id, context_name, action_type])

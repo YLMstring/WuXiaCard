@@ -47,7 +47,10 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, and ki-use detection.
-- `duel_ability_executor.gd` — generic costs and actions: draw, exile, attack requests, ki, movement, ordered swaps, extra-turn requests, normal flip, and invalid-context policy.
+- `duel_ability_executor.gd` — generic costs and actions: draw, fresh catalog
+  card creation in either relative hand, exile, immediately serviced attack
+  requests, ki, movement, ordered swaps, extra-turn requests, normal flip, and
+  invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. Implemented rules cover adjacent empty, allied, and enemy board cells.
 - `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
   snapshots, source-relative selected-card conditions, and current-state
@@ -60,7 +63,13 @@ For a normal hand play, the simulator places the card and emits `card_placed`, r
 
 Every initially valid attack first emits the presentation-only `attack_started`
 transition event, then emits `CARD_BE_ATTACKED`, resolves eligible rules in
-row-major order, and revalidates the exact attacker and target before flipping.
+row-major order, relocates the exact instances, and revalidates the normal
+attack. Only a surviving attack emits `CARD_BEFORE_FLIPPED`. After that event
+starts, movement does not cancel the committed flip: the exact target is
+relocated and flipped in its current cell. Removal, source ownership change,
+or the target already belonging to the intended owner still cancels it.
+Successful flips then emit `CARD_AFTER_FLIPPED`. Non-attack flips use the same
+before/after boundary and target-following behavior.
 Gate General and Tiger General exile through an ordinary trigger action; there
 is no separate replacement subsystem. The initial attack cue remains even when
 one of those rules prevents the flip.
@@ -186,6 +195,7 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `card_exiled`
 - `ability_lost`
 - `card_drawn`
+- `card_added_to_hand`
 - `ki_changed`
 - `powers_changed`
 - `ability_triggered`
@@ -206,14 +216,21 @@ generic whole-card pulse. Activations do not emit it. The controller suppresses
 only consecutive pulses from the same instance within one presented move; the
 memory resets for the next move.
 
+`card_added_to_hand` carries the fresh card payload, stable instance ID,
+relative recipient owner, and logical hand index. The controller presents it
+through the same silent Ink Summon path as a draw while preserving opponent
+concealment. It does not imply that any side-deck card was removed.
+
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 
 Action execution preserves an immutable ability-source identity and a current
 action subject. Root actions use the source as subject. A
 `for_each_selected_card` wrapper snapshots matching instance IDs, revalidates
 only its declared conditions, and runs nested actions with each selected card
-as subject. Mutable ki and powers can therefore be changed consistently in
-hands or on the board without card-specific simulator branches.
+as subject. Nested attack requests are serviced immediately, so one selected
+card's complete attack and trigger chain mutates state before the next selected
+instance is revalidated. Mutable ki and powers can therefore be changed
+consistently in hands or on the board without card-specific simulator branches.
 
 ## Extension Boundary
 

@@ -236,7 +236,8 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 			&"summon_standard_attack"
 		)
 		_merge_resolution(captures, exiles, events, attack_result)
-	events.append_array(_finish_turn(next_state, summoning_owner))
+	var finish_result: Dictionary = _finish_turn(next_state, summoning_owner)
+	_merge_resolution(captures, exiles, events, finish_result)
 	return {
 		"valid": true,
 		"state": next_state,
@@ -252,25 +253,29 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	var source_slot: Dictionary = next_state.board[action.source_index]
 	var card: Dictionary = source_slot.get("card", {})
 	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
+	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_attack_request(next_state, request)
 	var activation_result: Dictionary = Executor.execute_activation(
 		next_state,
 		action.source_index,
 		action.source_instance_id,
 		activation,
 		action.target_kind,
-		action.target_index
+		action.target_index,
+		attack_resolver
 	)
 	if not bool(activation_result.get("valid", false)):
 		return _invalid_transition(state)
-	var captures: Array[int] = []
-	var exiles: Array[int] = []
+	var captures: Array = activation_result.get("captures", [])
+	var exiles: Array = activation_result.get("exiles", [])
 	var events: Array[Dictionary] = activation_result.get("events", [])
 	for request_value: Variant in activation_result.get("attack_requests", []):
 		if not request_value is Dictionary:
 			continue
 		var request_result: Dictionary = _resolve_attack_request(next_state, request_value)
 		_merge_resolution(captures, exiles, events, request_result)
-	events.append_array(_finish_turn(next_state, moving_owner))
+	var finish_result: Dictionary = _finish_turn(next_state, moving_owner)
+	_merge_resolution(captures, exiles, events, finish_result)
 	return {
 		"valid": true,
 		"state": next_state,
@@ -363,6 +368,16 @@ static func _resolve_attack_target(
 		result["events"],
 		before_result
 	)
+	attacker_cell = _find_board_card_cell(
+		state,
+		attacker_instance_id,
+		attacker_cell
+	)
+	attacked_cell = _find_board_card_cell(
+		state,
+		attacked_instance_id,
+		attacked_cell
+	)
 	if not _attack_is_valid(
 		state,
 		attacker_cell,
@@ -373,6 +388,49 @@ static func _resolve_attack_target(
 		return result
 	attacker_slot = state.board[attacker_cell]
 	var attacker_owner: int = int(attacker_slot.get("owner", 0))
+	var attacked_owner: int = int(
+		(state.board[attacked_cell] as Dictionary).get("owner", 0)
+	)
+	var before_flip_context: Dictionary = attack_context.duplicate(true)
+	before_flip_context["attacker_cell"] = attacker_cell
+	before_flip_context["attacker_owner_id"] = attacker_owner
+	before_flip_context["attacked_cell"] = attacked_cell
+	before_flip_context["attacked_owner_id"] = attacked_owner
+	before_flip_context["trigger_cell"] = attacked_cell
+	before_flip_context["trigger_instance_id"] = attacked_instance_id
+	before_flip_context["trigger_owner_id"] = attacked_owner
+	before_flip_context["new_owner_id"] = attacker_owner
+	before_flip_context["flip_reason"] = reason
+	var before_flip_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.CARD_BEFORE_FLIPPED,
+		before_flip_context
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		before_flip_result
+	)
+	attacker_cell = _find_board_card_cell(
+		state,
+		attacker_instance_id,
+		attacker_cell
+	)
+	attacked_cell = _find_board_card_cell(
+		state,
+		attacked_instance_id,
+		attacked_cell
+	)
+	if (
+		attacker_cell < 0
+		or attacked_cell < 0
+		or int((state.board[attacker_cell] as Dictionary).get("owner", 0))
+		!= attacker_owner
+		or int((state.board[attacked_cell] as Dictionary).get("owner", 0))
+		== attacker_owner
+	):
+		return result
 	var flip_events: Array[Dictionary] = Executor.resolve_normal_flip(
 		state,
 		attacker_cell,
@@ -385,10 +443,80 @@ static func _resolve_attack_target(
 		return result
 	result["captures"].append(attacked_cell)
 	result["events"].append_array(flip_events)
+	before_flip_context["attacker_cell"] = attacker_cell
+	before_flip_context["attacked_cell"] = attacked_cell
+	before_flip_context["trigger_cell"] = attacked_cell
 	var after_result: Dictionary = _resolve_trigger_event(
 		state,
 		Catalog.CARD_AFTER_FLIPPED,
-		attack_context
+		before_flip_context
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		after_result
+	)
+	return result
+
+
+static func resolve_non_attack_flip(
+	state: StateData,
+	target_instance_id: StringName,
+	new_owner: int,
+	reason: StringName = &"non_attack_flip"
+) -> Dictionary:
+	var result: Dictionary = _empty_resolution()
+	if state == null or new_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return result
+	var target_cell: int = _find_board_card_cell(state, target_instance_id)
+	if target_cell < 0:
+		return result
+	var target_slot: Dictionary = state.board[target_cell]
+	var previous_owner: int = int(target_slot.get("owner", 0))
+	if previous_owner == new_owner:
+		return result
+	var context: Dictionary = {
+		"trigger_cell": target_cell,
+		"trigger_instance_id": target_instance_id,
+		"trigger_owner_id": previous_owner,
+		"new_owner_id": new_owner,
+		"flip_reason": reason,
+	}
+	var before_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.CARD_BEFORE_FLIPPED,
+		context
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		before_result
+	)
+	target_cell = _find_board_card_cell(state, target_instance_id)
+	if target_cell < 0:
+		return result
+	target_slot = state.board[target_cell]
+	if int(target_slot.get("owner", 0)) == new_owner:
+		return result
+	var flip_events: Array[Dictionary] = Executor.resolve_normal_flip(
+		state,
+		-1,
+		&"",
+		target_cell,
+		target_instance_id,
+		new_owner
+	)
+	if flip_events.is_empty():
+		return result
+	result["captures"].append(target_cell)
+	result["events"].append_array(flip_events)
+	context["trigger_cell"] = target_cell
+	var after_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.CARD_AFTER_FLIPPED,
+		context
 	)
 	_merge_resolution(
 		result["captures"],
@@ -407,9 +535,23 @@ static func _resolve_trigger_event(
 	var result: Dictionary = _empty_resolution()
 	result["extra_turn_requests"] = []
 	var groups: Array[Dictionary] = Triggers.discover(state, event_id, context)
+	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_attack_request(state, request)
 	for group: Dictionary in groups:
-		var group_result: Dictionary = Triggers.resolve_group(state, group)
+		var group_result: Dictionary = Triggers.resolve_group(
+			state,
+			group,
+			attack_resolver
+		)
 		var group_events: Array = group_result.get("events", [])
+		_append_unique_indices(
+			result["captures"],
+			group_result.get("captures", []) as Array
+		)
+		_append_unique_indices(
+			result["exiles"],
+			group_result.get("exiles", []) as Array
+		)
 		_record_direct_resolution_events(result, group_events)
 		result["events"].append_array(group_events)
 		result["extra_turn_requests"].append_array(
@@ -500,14 +642,19 @@ static func _attack_is_valid(
 	)
 
 
-static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionary]:
-	var events: Array[Dictionary] = []
+static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
+	var result: Dictionary = _empty_resolution()
 	var end_result: Dictionary = _resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": moving_owner}
 	)
-	events.append_array(end_result.get("events", []) as Array)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		end_result
+	)
 	var extra_turn_requests: Array = end_result.get("extra_turn_requests", [])
 	var extra_turn_granted: bool = not extra_turn_requests.is_empty()
 	if extra_turn_granted:
@@ -522,7 +669,7 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionar
 				)
 		extra_turn_granted = not source_instance_ids.is_empty()
 		if extra_turn_granted:
-			events.append({
+			result["events"].append({
 				"type": &"extra_turn_granted",
 				"owner_id": moving_owner,
 				"request_count": source_instance_ids.size(),
@@ -539,8 +686,13 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Array[Dictionar
 		Catalog.TRIGGER_START_OWNER_TURN,
 		{"turn_owner_id": state.active_player}
 	)
-	events.append_array(start_result.get("events", []) as Array)
-	return events
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		start_result
+	)
+	return result
 
 
 static func _normalize_runtime_card(
@@ -575,6 +727,21 @@ static func _card_instance_at(
 		return false
 	var card: Dictionary = (slot_value as Dictionary).get("card", {})
 	return StringName(card.get("instance_id", &"")) == instance_id
+
+
+static func _find_board_card_cell(
+	state: StateData,
+	instance_id: StringName,
+	fallback_cell: int = -1
+) -> int:
+	if state == null:
+		return -1
+	if instance_id == &"":
+		return fallback_cell if _card_instance_at(state, fallback_cell, &"") else -1
+	for cell: int in range(state.board.size()):
+		if _card_instance_at(state, cell, instance_id):
+			return cell
+	return -1
 
 
 static func _owned_card_instance_at(
@@ -625,9 +792,16 @@ static func _merge_resolution(
 	events: Array,
 	addition: Dictionary
 ) -> void:
-	captures.append_array(addition.get("captures", []) as Array)
-	exiles.append_array(addition.get("exiles", []) as Array)
+	_append_unique_indices(captures, addition.get("captures", []) as Array)
+	_append_unique_indices(exiles, addition.get("exiles", []) as Array)
 	events.append_array(addition.get("events", []) as Array)
+
+
+static func _append_unique_indices(target: Array, additions: Array) -> void:
+	for value: Variant in additions:
+		var index: int = int(value)
+		if index not in target:
+			target.append(index)
 
 
 static func _empty_resolution() -> Dictionary:

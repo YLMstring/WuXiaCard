@@ -29,7 +29,11 @@ static func discover(
 	return groups
 
 
-static func resolve_group(state: StateData, group: Dictionary) -> Dictionary:
+static func resolve_group(
+	state: StateData,
+	group: Dictionary,
+	attack_resolver: Callable = Callable()
+) -> Dictionary:
 	var result: Dictionary = {
 		"events": [],
 		"extra_turn_requests": [],
@@ -52,7 +56,8 @@ static func resolve_group(state: StateData, group: Dictionary) -> Dictionary:
 		StringName(group.get("source_instance_id", &"")),
 		int(group.get("source_owner_id", 0)),
 		rule.get("actions", []) as Array,
-		context
+		context,
+		attack_resolver
 	)
 	var events: Array = action_result.get("events", [])
 	events.push_front({

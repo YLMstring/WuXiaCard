@@ -33,6 +33,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 - `test_zixia_integration.gd` — hand/board mutable-value presentation and
   face-down concealment for generic selected-card effects.
+- `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
+  additions, full-hand behavior, non-attack flips, sequential selected-card
+  attacks, and normal-mode concealment.
 
 These are `SceneTree` scripts run with:
 
@@ -71,6 +74,12 @@ Run catalog tests, simulator tests if abilities changed, full suite, then open t
 ### Rules/abilities
 
 Add a failing simulator case first. Verify state plus ordered events. Run simulator, search, integration, then full suite. Play both human and AI paths.
+
+For before-flip effects, separately assert the post-`CARD_BE_ATTACKED` range
+recheck, absence of both flip events when it fails, target relocation after
+`CARD_BEFORE_FLIPPED`, and non-movement cancellation. For selector-driven
+attacks, assert that each complete attack chain precedes revalidation of the
+next snapshot member.
 
 ### Search
 

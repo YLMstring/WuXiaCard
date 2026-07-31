@@ -844,8 +844,8 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 			_present_powers_changed_event(event)
 		elif event_type == &"extra_turn_granted":
 			await _present_extra_turn_event(event)
-		elif event_type == &"card_drawn":
-			await _present_draw_event(event)
+		elif event_type in [&"card_drawn", &"card_added_to_hand"]:
+			await _present_hand_addition_event(event, event_type)
 			drew_card = true
 		elif event_type == &"card_flipped":
 			if drew_card and not waited_after_draw:
@@ -928,7 +928,10 @@ func _present_extra_turn_event(event: Dictionary) -> void:
 	turn_status.modulate = Color.WHITE
 
 
-func _present_draw_event(event: Dictionary) -> void:
+func _present_hand_addition_event(
+	event: Dictionary,
+	event_type: StringName
+) -> void:
 	var owner_id: int = int(event.get("owner_id", 0))
 	var instance_id := StringName(event.get("instance_id", &""))
 	var card_data: Dictionary = _get_logical_hand_card_by_instance(owner_id, instance_id)
@@ -937,7 +940,7 @@ func _present_draw_event(event: Dictionary) -> void:
 		return
 	var card: CardView = _spawn_card_in_slot(target_slot, card_data, owner_id, false)
 	card.set_face_down(owner_id == DuelRules.OPPONENT_OWNER and not testing_mode)
-	_presentation_trace.append(&"card_drawn")
+	_presentation_trace.append(event_type)
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
 
 

@@ -193,6 +193,44 @@ Summon reaction:
 }
 ```
 
+Create a fresh catalog card in a hand:
+
+```gdscript
+{
+    "type": ACTION_ADD_CARD_TO_HAND,
+    "card_id": &"CangSongYingKe3",
+    "recipient": RECIPIENT_SELF,
+}
+```
+
+`recipient` is relative to the current action subject's owner and accepts
+`RECIPIENT_SELF` or `RECIPIENT_OPPONENT`. The action does not draw from a deck.
+It creates a fresh catalog instance with a deterministic unique runtime ID and
+returns `NO_EFFECT` when the destination hand already contains five cards.
+
+Attack with the first three matching board cards, fully resolving each attack
+before revalidating the next snapshot member:
+
+```gdscript
+{
+    "type": ACTION_FOR_EACH_SELECTED_CARD,
+    "selector": {
+        "zones": [CARD_ZONE_BOARD],
+        "conditions": [
+            {"type": CONDITION_SELECTED_CARD_IS_ALLY},
+            {
+                "type": CONDITION_SELECTED_CARD_WEAPON_IS,
+                "weapon": "剑法",
+            },
+        ],
+        "limit": 3,
+    },
+    "actions": [
+        {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+    ],
+}
+```
+
 Move-and-attack activation:
 
 ```gdscript
@@ -278,9 +316,19 @@ Every attack:
 
 1. record exact attacker and target context;
 2. resolve global `CARD_BE_ATTACKED`;
-3. revalidate exact instances, cells, and enemy relationship;
-4. flip only if still valid;
-5. resolve `CARD_AFTER_FLIPPED`.
+3. relocate both exact instances and revalidate the normal attack, including
+   range and power;
+4. if valid, resolve global `CARD_BEFORE_FLIPPED`;
+5. relocate both exact instances again, but do not recheck attack range;
+6. cancel only if a non-movement invalidator now prevents the committed flip;
+7. flip the exact target instance in its current cell;
+8. resolve `CARD_AFTER_FLIPPED`.
+
+If step 3 fails, neither flip trigger is emitted. Once
+`CARD_BEFORE_FLIPPED` begins, movement by itself never cancels the committed
+flip. Removal, source ownership change, or the target already belonging to the
+intended owner still prevents it. Non-attack flips use the same before/after
+events and follow the exact target instance across movement.
 
 Movement is not a summon. Exile is not a flip.
 
