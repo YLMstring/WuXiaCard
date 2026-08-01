@@ -12,7 +12,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const DEFAULT_STATUS: String = "长按奖励卡牌，然后拖至主牌组"
+const DEFAULT_STATUS: String = "长按选择一张卡牌，然后拖至主牌组"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
