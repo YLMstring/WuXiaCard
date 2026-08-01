@@ -62,6 +62,10 @@ static func build_story(summary: Dictionary) -> String:
 	var sect_name: String = "无名门派"
 	if Sects.has_sect(sect_id):
 		sect_name = String(Sects.get_definition(sect_id).get("glyph", sect_name))
+	if sect_name == "无门无派":
+		sect_name = "江湖散人"
+	else:
+		sect_name = sect_name + "弟子"
 	var enemy_names: Array[String] = []
 	var defeated_value: Variant = summary.get("defeated_enemy_ids", [])
 	if typeof(defeated_value) == TYPE_ARRAY:
@@ -79,11 +83,10 @@ static func build_story(summary: Dictionary) -> String:
 	)
 	return (
 		"你立于华山之巅，长风掠过衣袂，回首踏入江湖以来的诸般往事。"
-		+ "你以%s门人的身份仗剑而行，先后战胜%s。" % [sect_name, defeated_text]
+		+ "本是%s，却另有奇遇，以九宫论剑图谱所载的诸般功夫，先后战胜%s。" % [sect_name, defeated_text]
 		+ journey_text
-		+ "如今群雄皆知你的名号，九宫论剑的余音仍在峰峦间回荡。"
-		+ "此后江湖每逢谈及此战，必会记得你曾以一剑定高下，"
-		+ "于华山绝顶写下属于%s的传奇。" % sect_name
+		+ "而今群雄皆已成为身后旧影，九宫论剑之名亦随你的剑锋传遍四海。"
+		+ "自此江湖再论高下，无人能够绕过你的名字。"
 	)
 
 
