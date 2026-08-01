@@ -5,13 +5,13 @@ signal return_requested
 
 const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
-const SCORE_TOP_RATIO: float = 0.21
-const SCORE_HEIGHT_RATIO: float = 0.045
-const SCORE_WIDTH_RATIO: float = 0.62
-const STORY_TOP_RATIO: float = 0.285
+const SCORE_TOP_RATIO: float = 0.018
+const SCORE_HEIGHT_RATIO: float = 0.05
+const SCORE_WIDTH_RATIO: float = 0.3
+const STORY_TOP_RATIO: float = 0.24
 const STORY_BOTTOM_RATIO: float = 0.455
-const STORY_WIDTH_RATIO: float = 0.68
-const MIN_TITLE_SCORE_GAP_RATIO: float = 0.02
+const STORY_WIDTH_RATIO: float = 0.3
+const MIN_TITLE_SCORE_GAP_RATIO: float = 0.009
 
 @onready var main_menu: MainMenuController = $MainMenu
 @onready var score_label: Label = $EndingLayer/Score
