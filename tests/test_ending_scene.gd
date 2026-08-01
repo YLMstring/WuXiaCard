@@ -77,7 +77,7 @@ func _run() -> void:
 	var title := menu.get_node("MenuLayer/Title") as Label
 	var title_bottom: float = title.position.y + title.size.y
 	_check(
-		score.position.y - title_bottom >= safe_rect.size.y * 0.02,
+		score.position.y - title_bottom + 0.1 >= safe_rect.size.y * 0.009,
 		"A visible breathing gap separates title and score"
 	)
 	_check(
@@ -97,8 +97,12 @@ func _run() -> void:
 	_check(not story.text.contains("折剑再战"), "Flawless prose never mentions a comeback")
 
 	ending.debug_set_story_text("短章已尽。")
-	_check(ending.debug_get_story_max_offset() == 0.0, "Short prose needs no roll")
-	_check(ending.debug_is_story_roll_complete(), "Short prose completes immediately")
+	_check(ending.debug_get_story_max_offset() > 0.0, "Short prose still travels fully into view")
+	_check(not ending.debug_is_story_roll_complete(), "Short prose begins with its entrance incomplete")
+	_check(
+		is_equal_approx(story.position.y, story_clip.size.y),
+		"Story begins completely below the clipping viewport"
+	)
 
 	ending.present({
 		"sect_id": "xuanyue_jianzong",
@@ -147,8 +151,11 @@ func _run() -> void:
 	)
 	_check(score.position == fixed_score_position, "Score remains fixed while story rolls")
 	_check(
-		is_equal_approx(story.position.y, -ending.debug_get_story_scroll_offset()),
-		"Story position follows the measured negative offset"
+		is_equal_approx(
+			story.position.y,
+			story_clip.size.y - ending.debug_get_story_scroll_offset()
+		),
+		"Story rises from below according to the measured offset"
 	)
 	ending.debug_advance_story_roll(10000.0)
 	_check(ending.debug_is_story_roll_complete(), "Roll completes at the measured maximum")

@@ -211,11 +211,11 @@ func _recalculate_story_roll() -> void:
 	story_label.position = Vector2.ZERO
 	story_label.size = story_clip.size
 	var rendered_height: float = maxf(
-		story_clip.size.y,
-		story_label.get_minimum_size().y
+		story_label.get_minimum_size().y,
+		float(story_label.get_theme_font_size("font_size"))
 	)
 	story_label.size = Vector2(story_clip.size.x, rendered_height)
-	_story_max_offset = maxf(rendered_height - story_clip.size.y, 0.0)
+	_story_max_offset = rendered_height
 	_story_scroll_offset = clampf(
 		_story_scroll_offset,
 		0.0,
@@ -244,4 +244,7 @@ func _advance_story_roll(delta: float) -> void:
 
 
 func _apply_story_scroll_position() -> void:
-	story_label.position = Vector2(0.0, -_story_scroll_offset)
+	story_label.position = Vector2(
+		0.0,
+		story_clip.size.y - _story_scroll_offset
+	)
