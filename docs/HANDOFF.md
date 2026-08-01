@@ -101,8 +101,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
   selected sect, closes the run, and restores the default deck.
 - The ending instances the production main menu so it shares the exact
   background and animated title. It hides the menu actions, lists the selected
-  sect and every defeated enemy, branches for flawless/comeback prose, and
-  returns to the normal menu on any tap.
+  sect and every defeated enemy, and branches for flawless/comeback prose. Its
+  smaller score stays fixed beneath the title while the prose rolls upward in
+  a clipped clear-sky viewport. Early taps do nothing; after the last line is
+  fully visible, the first tap returns to the normal menu.
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.

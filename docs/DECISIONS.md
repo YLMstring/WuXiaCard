@@ -224,7 +224,11 @@ respectively, in row-major order. The source itself is eligible.
   progress.
 - The ending is the main-menu presentation without its three actions. It lists
   every defeated enemy in order and uses a distinct undefeated passage when the
-  run contains no losses. Tapping anywhere returns to the normal main menu.
+  run contains no losses.
+- Score and prose use only the clear upper painting beneath the title. The
+  smaller score remains fixed; prose rolls upward inside a clipped viewport
+  until no line remains hidden, then stops. Early taps are consumed. The first
+  release after completion returns to the normal main menu.
 
 ## Deck Builder
 

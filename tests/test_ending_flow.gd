@@ -58,7 +58,18 @@ func _run() -> void:
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Final-victory routing restores the default deck")
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "Final-victory routing persists the achievement")
 
-	ending.return_requested.emit()
+	var overflow_fixture: String = ""
+	for index: int in range(20):
+		overflow_fixture += "第%d段江湖往事仍在缓缓展开。\n" % (index + 1)
+	ending.debug_set_story_text(overflow_fixture)
+	var tap := InputEventMouseButton.new()
+	tap.button_index = MOUSE_BUTTON_LEFT
+	tap.pressed = false
+	ending._input(tap)
+	await process_frame
+	_check(flow.debug_get_current_screen() == ending, "Early ending tap cannot skip hidden story text")
+	ending.debug_finish_story_roll()
+	ending._input(tap)
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
 	_check(menu != null, "Ending tap request returns to the normal main menu")

@@ -31,12 +31,16 @@ text = "得分 0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="Story" type="Label" parent="EndingLayer"]
+[node name="StoryClip" type="Control" parent="EndingLayer"]
+layout_mode = 0
+mouse_filter = 2
+clip_contents = true
+
+[node name="Story" type="Label" parent="EndingLayer/StoryClip"]
 layout_mode = 0
 mouse_filter = 2
 text = "你立于华山之巅。"
-clip_text = true
 horizontal_alignment = 1
-vertical_alignment = 1
+vertical_alignment = 0
 autowrap_mode = 3
 language = "zh"

@@ -26,10 +26,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
 - `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
-- `test_ending_scene.gd` — reused menu presentation, responsive safe-area
-  layout, dynamic prose branches, Chinese wrapping, and tap return.
+- `test_ending_scene.gd` — reused menu presentation, compact clear-sky layout,
+  dynamic prose branches, Chinese wrapping, measured clipped roll, early-tap
+  lock, exact final stop, and single post-roll return.
 - `test_ending_flow.gd` — threshold-one final-victory routing, reward bypass,
-  persistent completion, and fresh-journey navigation.
+  persistent completion, early-tap gating, and fresh-journey navigation.
 - `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
 - `test_duel_card_selector.gd` — generic zone ordering, filters, limits,
@@ -102,8 +103,9 @@ opponent concealment.
 
 For ending changes, run `test_ending_profile.gd`, `test_ending_scene.gd`,
 `test_ending_flow.gd`, and `test_main_flow.gd`. Manually verify both flawless
-and loss prose, all enemy names, portrait safe-area wrapping, final reward
-bypass, tap-to-menu, and a fresh sect-selection journey afterward.
+and loss prose, all enemy names, portrait safe-area wrapping, fixed score,
+clipped constant-speed rolling, early-tap rejection, final reward bypass,
+post-roll tap-to-menu, and a fresh sect-selection journey afterward.
 
 ### Android
 

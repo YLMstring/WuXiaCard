@@ -95,8 +95,8 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
 - `ending_controller.gd` / `ending.tscn` — immutable completed-run summary,
-  dynamic sect/enemy prose, and tap-to-menu presentation built on an instance
-  of the production main menu.
+  fixed score plus measured, clipped upward prose roll, and gated tap-to-menu
+  presentation built on an instance of the production main menu.
 - `ink_bloom.gd` — draw summon visual.
 - `attack_vfx.gd` — serialized, clipped playback of the supplied flying-white
   attack bitmap.
@@ -179,7 +179,10 @@ navigation. The playable duel remains `res://main.tscn`.
 `MainFlowController.victories_required` owns the configurable ending threshold
 (15 in production). Ordinary completed duels still route to reward selection;
 the final victory bypasses rewards and passes an immutable summary to
-`ending.tscn`. The ending controller never mutates persistence. Its return
+`ending.tscn`. The ending controller never mutates persistence. It keeps the
+score fixed inside the clear upper painting while the prose label advances at
+a constant speed behind a clipping Control. The roll stops when its last line
+is fully visible; release input is consumed until then. Its single return
 signal restores the normal main menu, where the now-inactive run routes the
 next journey to sect selection.
 
