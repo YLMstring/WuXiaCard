@@ -33,8 +33,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
 - `deck_profile_store.gd` — versioned persistent deck profile, validation/repair,
-  atomic save, tier and namesake unlock expansion, and main-deck/library
-  exchanges.
+  atomic save, tier and namesake unlock expansion, main-deck/library exchanges,
+  completed-duel progression, and per-sect best-score achievements.
 - `deck_rules.gd` — pure glyph-uniqueness, legacy placement repair, two-/three-way
   deck exchange, and owner-specific side-deck derivation.
 - `duel_decks.gd` — saved starting-hand lookup plus opponent-hand and
@@ -94,6 +94,9 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `parchment_chrome.gd` — shared inspector/library scroll body, shadow, border, and rod styling.
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
+- `ending_controller.gd` / `ending.tscn` — immutable completed-run summary,
+  dynamic sect/enemy prose, and tap-to-menu presentation built on an instance
+  of the production main menu.
 - `ink_bloom.gd` — draw summon visual.
 - `attack_vfx.gd` — serialized, clipped playback of the supplied flying-white
   attack bitmap.
@@ -123,6 +126,15 @@ exactly 1,000 entries. Occupied library entries form a compact prefix followed
 by empty entries. A card ID may appear in exactly one of the main deck or
 library. Save data is schema-versioned, validated on load, repaired when
 possible, and replaced with a valid default when necessary.
+
+Schema 7 adds `effective_duel_count`, chronological `defeated_enemy_ids`, and
+global `best_scores_by_sect`. `record_completed_duel_and_save()` is the sole
+production boundary for finished wins/losses. It increments duel history and,
+for a win, either advances progression or constructs the ending summary,
+updates the sect best, closes the run, and restores the default deck in one
+atomic save. Abandon never enters this transaction. Legacy active saves lack
+reconstructable history, so migration closes their run and restores the
+default deck while preserving card/sect unlocks.
 
 Player main-deck IDs must also have five distinct `glyph` values. Legacy saves
 keep the highest-tier namesake in its original slot (earlier deck occurrence
@@ -163,6 +175,13 @@ emulation, which could interfere with duel card dragging.
 The deck builder is a separate scene, `res://scenes/deck_builder.tscn`. It
 emits `back_requested` and deliberately does not know which future scene owns
 navigation. The playable duel remains `res://main.tscn`.
+
+`MainFlowController.victories_required` owns the configurable ending threshold
+(15 in production). Ordinary completed duels still route to reward selection;
+the final victory bypasses rewards and passes an immutable summary to
+`ending.tscn`. The ending controller never mutates persistence. Its return
+signal restores the normal main menu, where the now-inactive run routes the
+next journey to sect selection.
 
 At duel construction, each side deck is derived independently from its owner's
 actual main deck. Every non-`江湖` main card raises a tier threshold for its

@@ -21,9 +21,15 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 
 - `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
 - `test_deck_profile_store.gd` — default profile, validation/repair, atomic persistence, exchanges, unlock ordering, and save-failure rollback.
+- `test_ending_profile.gd` — effective-duel history, atomic completion,
+  scoring, per-sect bests, reset behavior, and legacy migration.
 - `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
 - `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
+- `test_ending_scene.gd` — reused menu presentation, responsive safe-area
+  layout, dynamic prose branches, Chinese wrapping, and tap return.
+- `test_ending_flow.gd` — threshold-one final-victory routing, reward bypass,
+  persistent completion, and fresh-journey navigation.
 - `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
 - `test_duel_card_selector.gd` — generic zone ordering, filters, limits,
@@ -93,6 +99,11 @@ For deck-builder UI changes, also run the profile, library-grid, and
 deck-builder integration suites. Manually verify tap-to-inspect,
 hold-then-drag exchange, swipe scrolling, invalid drops, and normal/testing
 opponent concealment.
+
+For ending changes, run `test_ending_profile.gd`, `test_ending_scene.gd`,
+`test_ending_flow.gd`, and `test_main_flow.gd`. Manually verify both flawless
+and loss prose, all enemy names, portrait safe-area wrapping, final reward
+bypass, tap-to-menu, and a fresh sect-selection journey afterward.
 
 ### Android
 

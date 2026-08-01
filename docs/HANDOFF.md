@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-07-31
+Updated: 2026-08-01
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -10,9 +10,9 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
-The main flow routes the main menu, sect selection, deck builder, duel, and
-reward selection. The deck-building scene persists a five-card main deck and
-exposes a virtualized 1,000-slot collection library.
+The main flow routes the main menu, sect selection, deck builder, duel, reward
+selection, and a completed-run ending. The deck-building scene persists a
+five-card main deck and exposes a virtualized 1,000-slot collection library.
 
 Not yet present: story/dialogue, final content balance, multiplayer, or a
 release-ready Android package.
@@ -23,6 +23,7 @@ release-ready Android package.
 - Known working Summer build: Summer Engine `0.5.54`, engine `4.6.1.stable.mono.custom_build.3e132c1e2`
 - Main scene: `res://main.tscn`
 - Deck builder scene: `res://scenes/deck_builder.tscn`
+- Ending scene: `res://scenes/ending.tscn`
 - Logical viewport: `540×960`; portrait; `canvas_items` stretch
 - Production rules: `scripts/duel_simulator.gd`
 - Card database: `scripts/card_catalog.gd`
@@ -94,6 +95,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
   sect before reward selection. Tier 5 remains the cap through level 15.
+- Completed wins and losses increment schema-7 run history atomically. A final
+  victory at the configurable threshold (15 by default) skips rewards, records
+  `floor(15000 / effective_duel_count)`, preserves the best score for the
+  selected sect, closes the run, and restores the default deck.
+- The ending instances the production main menu so it shares the exact
+  background and animated title. It hides the menu actions, lists the selected
+  sect and every defeated enemy, branches for flawless/comeback prose, and
+  returns to the normal menu on any tap.
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
@@ -122,6 +131,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   non-movement invalidator with explicitly defined semantics.
 - `deck_builder.tscn` emits `back_requested` only. Do not add navigation inside
   its controller; connect it from the future scene router.
+- Pre-schema-7 active runs cannot reconstruct effective-duel/enemy history.
+  Migration deliberately closes those runs and restores the default deck while
+  preserving unlocks; do not silently invent completion history.
 - Deck-builder tests use isolated `user://` paths. Do not point tests at the
   production profile or a developer's saved deck will make them nondeterministic.
 - Repetition state is stored, but no repetition-draw rule is enforced. The only broad loop guard is `max_turns = 200`.

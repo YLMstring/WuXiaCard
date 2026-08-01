@@ -41,7 +41,7 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 6, "Default profile uses schema version 6")
+	_check(int(profile["schema_version"]) == 7, "Default profile uses schema version 7")
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
@@ -306,7 +306,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 6, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 7, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"
@@ -455,14 +455,14 @@ func _run() -> void:
 	legacy_active.erase("level")
 	legacy_active.erase("current_enemy_id")
 	var migrated_active: Dictionary = store.repair_profile(legacy_active)
-	_check(store.is_run_active(migrated_active), "A schema-three active run remains active")
+	_check(not store.is_run_active(migrated_active), "A legacy active run closes when history cannot be reconstructed")
 	_check(
-		store.get_character_level(migrated_active) == 1,
-		"Legacy active runs enter progression at level one"
+		store.get_character_level(migrated_active) == 0,
+		"Legacy active-run migration clears character progression"
 	)
 	_check(
-		store.get_current_enemy_id(migrated_active) in Enemies.get_enemy_ids_for_level(1),
-		"Legacy active runs receive a level-one enemy"
+		store.get_current_enemy_id(migrated_active) == &"",
+		"Legacy active-run migration clears the unreconstructable enemy"
 	)
 	_check(
 		store.get_remembered_enemy_glyphs(migrated_active).is_empty(),

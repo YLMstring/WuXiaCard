@@ -6,6 +6,7 @@ const SECT_SELECTION_SCENE: PackedScene = preload("res://scenes/sect_selection.t
 const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn")
 const REWARD_SELECTION_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
+const ENDING_SCENE: PackedScene = preload("res://scenes/ending.tscn")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
@@ -16,6 +17,9 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 @export var deck_profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = ""
 @export var upcoming_enemy_card_ids: Array[StringName] = []
+@export_range(1, Store.MAX_CHARACTER_LEVEL) var victories_required: int = (
+	Store.DEFAULT_VICTORIES_REQUIRED
+)
 
 var testing_mode: bool = Settings.TESTING_MODE
 var _current_screen: Control = null
@@ -92,6 +96,13 @@ func _show_duel(starting_owner_id: int) -> void:
 	_replace_screen(duel)
 
 
+func _show_ending(summary: Dictionary) -> void:
+	var ending := ENDING_SCENE.instantiate() as Control
+	ending.call("present", summary)
+	ending.connect(&"return_requested", _on_ending_return_requested)
+	_replace_screen(ending)
+
+
 func _replace_screen(next_screen: Control) -> void:
 	if _current_screen != null and is_instance_valid(_current_screen):
 		remove_child(_current_screen)
@@ -156,18 +167,24 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		return
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
-	if outcome == DuelController.OUTCOME_VICTORY:
-		var result: Dictionary = store.advance_after_victory_and_save(profile)
-		if not bool(result.get("ok", false)):
-			push_warning("Victory progression could not be saved")
-			_show_deck_builder()
-			return
-		profile = result.get("profile", profile)
 	var reward_outcome: StringName = (
 		Store.REWARD_VICTORY
 		if outcome == DuelController.OUTCOME_VICTORY
 		else Store.REWARD_DEFEAT
 	)
+	var duel_result: Dictionary = store.record_completed_duel_and_save(
+		profile,
+		reward_outcome,
+		victories_required
+	)
+	if not bool(duel_result.get("ok", false)):
+		push_warning("Completed duel could not be saved")
+		_show_deck_builder()
+		return
+	if bool(duel_result.get("completed", false)):
+		_show_ending(duel_result.get("ending_summary", {}) as Dictionary)
+		return
+	profile = duel_result.get("profile", profile)
 	var offer_result: Dictionary = store.create_reward_offer_and_save(
 		profile,
 		reward_outcome
@@ -184,6 +201,10 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 
 func _on_reward_claimed() -> void:
 	_show_deck_builder()
+
+
+func _on_ending_return_requested() -> void:
+	_show_main_menu()
 
 
 func _on_opponent_card_played(glyph: String) -> void:

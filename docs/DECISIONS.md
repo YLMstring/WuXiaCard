@@ -207,6 +207,25 @@ respectively, in row-major order. The source itself is eligible.
   repairing an existing valid profile never retroactively applies the namesake
   cascade.
 
+## Run Completion and Score
+
+- A run ends after a configurable number of victories; the production value is
+  15.
+- Only completed wins and completed losses are effective duels. Abandoning a
+  duel changes neither score inputs nor defeated-enemy history.
+- Every victory appends the exact current enemy ID in chronological order.
+- Final score is `floor(15000 / effective_duel_count)`. Fifteen straight wins
+  therefore score 1000; losses lower the result.
+- Final victory bypasses reward selection. The ending receives immutable sect,
+  score, duel-count, defeated-enemy, and flawless data.
+- Completion closes the run and restores the default main deck while preserving
+  unlocks and the highest score achieved for each sect.
+- `闭关重修` preserves best scores. `封剑归隐` clears them with all other
+  progress.
+- The ending is the main-menu presentation without its three actions. It lists
+  every defeated enemy in order and uses a distinct undefeated passage when the
+  run contains no losses. Tapping anywhere returns to the normal main menu.
+
 ## Deck Builder
 
 - Deck building is a separate scene at `res://scenes/deck_builder.tscn`; it does not run the duel simulator, scores, AI, combat VFX, or audio.
