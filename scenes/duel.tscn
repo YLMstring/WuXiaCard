@@ -157,10 +157,10 @@ flat = true
 
 [node name="ReplayIcon" type="TextureRect" parent="DuelCanvas/ReplayButton"]
 layout_mode = 0
-offset_left = -5.5
-offset_top = -5.5
-offset_right = 49.5
-offset_bottom = 49.5
+offset_left = -5
+offset_top = -5
+offset_right = 49
+offset_bottom = 49
 mouse_filter = 2
 texture = ExtResource("7_replay")
 expand_mode = 1
