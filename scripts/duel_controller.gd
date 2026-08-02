@@ -1134,7 +1134,6 @@ func _finish_match() -> void:
 	else:
 		_match_outcome = OUTCOME_DEFEAT
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
-	turn_status.modulate = Color("3b211d")
 	if not _is_replaying:
 		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
