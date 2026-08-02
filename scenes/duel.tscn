@@ -153,11 +153,18 @@ offset_right = 44.0
 offset_bottom = 44.0
 focus_mode = 0
 mouse_default_cursor_shape = 2
-icon = ExtResource("7_replay")
 flat = true
-icon_alignment = 1
-expand_icon = true
-icon_max_width = 55
+
+[node name="ReplayIcon" type="TextureRect" parent="DuelCanvas/ReplayButton"]
+layout_mode = 0
+offset_left = -5.5
+offset_top = -5.5
+offset_right = 49.5
+offset_bottom = 49.5
+mouse_filter = 2
+texture = ExtResource("7_replay")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="ScoreOverlay" type="VBoxContainer" parent="DuelCanvas" unique_id=1691405603]
 layout_mode = 0

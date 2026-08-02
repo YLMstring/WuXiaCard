@@ -32,11 +32,18 @@ func _run() -> void:
 	duel.call("_layout_duel")
 
 	var replay_button := duel.get_node_or_null("DuelCanvas/ReplayButton") as Button
+	var replay_icon := duel.get_node_or_null("DuelCanvas/ReplayButton/ReplayIcon") as TextureRect
 	_check(replay_button != null, "Duel scene contains a replay button")
 	if replay_button != null:
 		_check(replay_button.flat and replay_button.text.is_empty(), "Replay control is icon-only and frame-free")
-		_check(replay_button.icon != null and replay_button.icon.resource_path == "res://inkpics/replay.png", "Replay control uses the supplied image")
+		_check(replay_button.icon == null, "Replay button leaves built-in icon rendering unused")
 		_check(replay_button.size.is_equal_approx(Vector2(44.0, 44.0)), "Replay touch target is 44 by 44")
+		_check(replay_icon != null, "Replay button owns a separate visual child")
+		if replay_icon != null:
+			_check(replay_icon.texture != null and replay_icon.texture.resource_path == "res://inkpics/replay.png", "Replay visual uses the supplied image")
+			_check(replay_icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Replay visual cannot intercept button input")
+			_check(replay_icon.size.is_equal_approx(Vector2(55.0, 55.0)), "Replay visual is larger than its touch target")
+			_check(replay_icon.get_rect().get_center().is_equal_approx(replay_button.get_rect().size * 0.5), "Replay visual remains centered on the button")
 		var board := duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control
 		_check(replay_button.position.x + replay_button.size.x <= board.position.x, "Replay control stays left of the board")
 		_check(absf(replay_button.get_rect().get_center().y - board.get_rect().get_center().y) < 1.0, "Replay control is vertically centered on the board")
