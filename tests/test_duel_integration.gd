@@ -1054,6 +1054,18 @@ func _check_aspect_ratio_input_paths() -> void:
 
 		var canvas: Control = aspect_duel.get_node("DuelCanvas") as Control
 		var board_grid: GridContainer = aspect_duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
+		var replay_button: Button = aspect_duel.get_node("DuelCanvas/ReplayButton") as Button
+		_check(
+			replay_button.get_global_rect().end.x <= board_grid.get_global_rect().position.x,
+			"Replay icon stays left of the board on %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			absf(
+				replay_button.get_global_rect().get_center().y
+				- board_grid.get_global_rect().get_center().y
+			) < 1.0,
+			"Replay icon stays vertically centered on %dx%d" % [target_size.x, target_size.y]
+		)
 		var card: Control = _first_card(aspect_duel.get_node("DuelCanvas/PlayerHand"))
 		var target_cell: Control = board_grid.get_child(0) as Control
 		var target_position: Vector2 = target_cell.get_global_rect().get_center()

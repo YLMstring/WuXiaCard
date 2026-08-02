@@ -31,6 +31,9 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
+- `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
+  independent initial/final `DuelState` snapshots, ordered duplicate
+  `DuelAction` entries, the completed outcome, and final status text.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
 - `deck_profile_store.gd` — versioned persistent deck profile, validation/repair,
   atomic save, tier and namesake unlock expansion, main-deck/library exchanges,
@@ -103,6 +106,17 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `extra_turn_vfx.gd` — Meng Huo extra-turn convergence visual.
 
 The controller may choose timing, sound, animation, and labels. It must not independently decide captures, draws, targets, ki costs, or turn ownership.
+
+Completed-duel replay is also owned by `duel_controller.gd`. It rebuilds card
+views from a fresh duplicate of the recorded opening state, then submits every
+recorded action through the same simulator and transition-presentation path.
+Replay never starts AI, records mastery, emits enemy-memory observations, or
+mutates profile/progression data. Normal-mode opponent concealment is reapplied.
+Revealed cards remain inspectable only between fully resolved actions; opening
+the inspector pauses the remaining inter-turn delay. Any stale action restores
+the immutable recorded final snapshot instead of leaving a partial replay.
+Future simulator randomness must be recorded or made deterministic before it
+can be reproduced by this action-log format.
 
 ## Deck-Building Data Flow
 

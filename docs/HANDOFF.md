@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-01
+Updated: 2026-08-02
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,11 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra turns.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+Completed duels can be replayed in memory from the exact initialized state and
+successful action log. Playback reuses the simulator/VFX path with a two-second
+turn cadence, preserves opponent concealment, and permits inspection between
+actions without producing progression side effects.
 
 The main flow routes the main menu, sect selection, deck builder, duel, reward
 selection, and a completed-run ending. The deck-building scene persists a
@@ -30,6 +35,7 @@ release-ready Android package.
 - Persistent deck profile: `scripts/deck_profile_store.gd`
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`
 - Runtime/presentation bridge: `scripts/duel_controller.gd`
+- In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing switch: `scripts/game_settings.gd`, `TESTING_MODE`
 - Android preset: `export_presets.cfg`
@@ -114,6 +120,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Hands are capped at five and always render five fixed physical slots.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
+- After victory or defeat, the black replay icon left of the board reconstructs
+  the exact opening state and replays all successful actions. It is inert while
+  the duel is active or already replaying. The first action is immediate and
+  later actions wait two seconds; inspection pauses that wait. Exit cancels the
+  replay and returns using the original result. Replay does not run AI or alter
+  mastery, enemy memory, profiles, rewards, or progression.
 - ZiXiaGong1–4 use the generic `for_each_selected_card` action. The selector
   supports ordered hand/board snapshots, reusable selected-card conditions,
   optional limits, and source-versus-subject execution context.

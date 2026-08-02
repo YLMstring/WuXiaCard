@@ -28,6 +28,7 @@ const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 const AttackVfxData = preload("res://scripts/attack_vfx.gd")
 const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
+const ReplayRecordData = preload("res://scripts/duel_replay_record.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -53,6 +54,7 @@ const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 @export var opponent_hand_shuffle_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var opponent_search_budget_seconds: float = 10.0
+@export_range(0.0, 10.0, 0.05) var replay_turn_delay: float = 2.0
 @export var invalid_shake_duration: float = 0.18
 @export var placement_haptic_ms: int = 20
 @export var multi_capture_haptic_ms: int = 45
@@ -90,6 +92,12 @@ var _status_before_inspection: String = ""
 var _mastery_eligible_card_ids: Dictionary = {}
 var _mastery_candidate_ids: Array[StringName] = []
 var _mastery_candidate_set: Dictionary = {}
+var _replay_record: ReplayRecordData = ReplayRecordData.new()
+var _is_replaying: bool = false
+var _is_replay_presenting_action: bool = false
+var _replay_generation: int = 0
+var _replay_feedback_tween: Tween = null
+var _replay_delay_remaining: float = 0.0
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -105,6 +113,7 @@ var _mastery_candidate_set: Dictionary = {}
 @onready var exit_button: Button = $DuelCanvas/TopBar/ExitButton
 @onready var opponent_hand: HBoxContainer = $DuelCanvas/OpponentHand
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
+@onready var replay_button: Button = $DuelCanvas/ReplayButton
 @onready var score_overlay: VBoxContainer = $DuelCanvas/ScoreOverlay
 @onready var opponent_score_panel: PanelContainer = $DuelCanvas/ScoreOverlay/OpponentScorePanel
 @onready var player_score_panel: PanelContainer = $DuelCanvas/ScoreOverlay/PlayerScorePanel
@@ -156,12 +165,16 @@ func _ready() -> void:
 		player_side_deck,
 		opponent_side_deck
 	)
+	_replay_record.begin(duel_state)
 	board = duel_state.board
 	_create_hands()
 	_create_placeholder_audio()
 	top_bar.move_child(enemy_seal, 0)
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
+	replay_button.pressed.connect(_on_replay_pressed)
+	replay_button.button_down.connect(_on_replay_button_down)
+	replay_button.button_up.connect(_on_replay_button_up)
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
@@ -176,6 +189,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_replay_generation += 1
 	_cancel_opponent_search()
 
 
@@ -263,6 +277,35 @@ func debug_is_complete() -> bool:
 
 func debug_get_match_outcome() -> StringName:
 	return _match_outcome
+
+
+func debug_is_replay_ready() -> bool:
+	return _replay_record.is_ready()
+
+
+func debug_is_replaying() -> bool:
+	return _is_replaying
+
+
+func debug_get_replay_action_count() -> int:
+	return _replay_record.get_actions().size()
+
+
+func debug_get_replay_initial_decks() -> Dictionary:
+	var initial_state: StateData = _replay_record.get_initial_state()
+	return initial_state.decks.duplicate(true) if initial_state != null else {}
+
+
+func debug_is_replay_waiting() -> bool:
+	return _is_replaying and not _is_replay_presenting_action and _replay_delay_remaining > 0.0
+
+
+func debug_get_replay_delay_remaining() -> float:
+	return _replay_delay_remaining
+
+
+func debug_start_replay() -> bool:
+	return await _start_replay()
 
 
 func get_mastery_candidate_ids() -> Array[StringName]:
@@ -578,7 +621,11 @@ func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 
 
 func _on_card_inspection_requested(card_data: Dictionary) -> void:
-	if _inspection_open or turn_state == TurnState.RESOLVING:
+	if (
+		_inspection_open
+		or turn_state == TurnState.RESOLVING
+		or (_is_replaying and _is_replay_presenting_action)
+	):
 		return
 	_inspection_open = true
 	_board_visible_before_inspection = board_grid.visible
@@ -649,9 +696,11 @@ func _commit_action(
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
-	if owner_id == DuelRules.PLAYER_OWNER and action.action_type == ActionData.TYPE_PLAY:
+	if not _is_replaying:
+		_replay_record.record_action(action)
+	if not _is_replaying and owner_id == DuelRules.PLAYER_OWNER and action.action_type == ActionData.TYPE_PLAY:
 		_record_mastery_candidate(StringName(card.card_data.get("card_id", &"")))
-	if owner_id == DuelRules.OPPONENT_OWNER and action.action_type == ActionData.TYPE_PLAY:
+	if not _is_replaying and owner_id == DuelRules.OPPONENT_OWNER and action.action_type == ActionData.TYPE_PLAY:
 		opponent_card_played.emit(String(card.card_data.get("glyph", "")))
 	duel_state = transition["state"] as StateData
 	board = duel_state.board
@@ -1086,6 +1135,8 @@ func _finish_match() -> void:
 		_match_outcome = OUTCOME_DEFEAT
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	turn_status.modulate = Color("3b211d")
+	if not _is_replaying:
+		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
 
 
@@ -1093,6 +1144,7 @@ func _sync_hand_playability() -> void:
 	for card: CardView in _get_cards_in_hand(player_hand):
 		card.set_playable(
 			not _inspection_open
+			and not _is_replaying
 			and turn_state == TurnState.PLAYER
 			and duel_state != null
 			and duel_state.active_player == DuelRules.PLAYER_OWNER
@@ -1100,6 +1152,7 @@ func _sync_hand_playability() -> void:
 	for card: CardView in _get_cards_in_hand(opponent_hand):
 		card.set_playable(
 			not _inspection_open
+			and not _is_replaying
 			and testing_mode
 			and turn_state == TurnState.OPPONENT
 			and duel_state != null
@@ -1110,8 +1163,11 @@ func _sync_hand_playability() -> void:
 		if board_card == null:
 			continue
 		var can_control_owner: bool = (
+			not _is_replaying
+			and (
 			(board_card.owner_id == DuelRules.PLAYER_OWNER and turn_state == TurnState.PLAYER)
 			or (board_card.owner_id == DuelRules.OPPONENT_OWNER and testing_mode and turn_state == TurnState.OPPONENT)
+			)
 		)
 		board_card.set_playable(
 			not _inspection_open
@@ -1121,7 +1177,7 @@ func _sync_hand_playability() -> void:
 
 
 func _can_manually_drag(card: CardView) -> bool:
-	if _inspection_open or duel_state == null or duel_state.active_player != card.owner_id:
+	if _inspection_open or _is_replaying or duel_state == null or duel_state.active_player != card.owner_id:
 		return false
 	if card.owner_id == DuelRules.PLAYER_OWNER:
 		return turn_state == TurnState.PLAYER
@@ -1462,6 +1518,12 @@ func _layout_duel() -> void:
 	player_hand.size = Vector2(available_hand_width, hand_height)
 	board_grid.position = board_position
 	board_grid.size = Vector2(board_width, board_height)
+	replay_button.size = Vector2(44.0, 44.0)
+	replay_button.position = Vector2(
+		maxf(0.0, board_position.x - replay_button.size.x - 8.0),
+		board_position.y + board_height * 0.5 - replay_button.size.y * 0.5
+	)
+	replay_button.pivot_offset = replay_button.size * 0.5
 	if _inspection_open:
 		card_inspector.set_board_rect(_get_board_rect())
 
@@ -1663,13 +1725,205 @@ func _vibrate(duration_ms: int) -> void:
 		Input.vibrate_handheld(duration_ms)
 
 
+func _on_replay_pressed() -> void:
+	if turn_state != TurnState.COMPLETE or _is_replaying or not _replay_record.is_ready():
+		return
+	_start_replay()
+
+
+func _on_replay_button_down() -> void:
+	if _replay_feedback_tween != null and _replay_feedback_tween.is_valid():
+		_replay_feedback_tween.kill()
+	replay_button.scale = Vector2(0.92, 0.92)
+	replay_button.modulate.a = 0.62
+
+
+func _on_replay_button_up() -> void:
+	_play_replay_button_feedback(Vector2.ONE, 1.0, 0.14, Tween.TRANS_BACK)
+
+
+func _play_replay_button_feedback(
+	target_scale: Vector2,
+	target_alpha: float,
+	duration: float,
+	transition: Tween.TransitionType
+) -> void:
+	if _replay_feedback_tween != null and _replay_feedback_tween.is_valid():
+		_replay_feedback_tween.kill()
+	_replay_feedback_tween = create_tween()
+	_replay_feedback_tween.set_parallel(true)
+	_replay_feedback_tween.set_trans(transition).set_ease(Tween.EASE_OUT)
+	_replay_feedback_tween.tween_property(replay_button, "scale", target_scale, duration)
+	_replay_feedback_tween.tween_property(replay_button, "modulate:a", target_alpha, duration)
+
+
+func _start_replay() -> bool:
+	if (
+		turn_state != TurnState.COMPLETE
+		or _is_replaying
+		or not _replay_record.is_ready()
+	):
+		return false
+	_cancel_opponent_search()
+	_replay_generation += 1
+	var generation: int = _replay_generation
+	_is_replaying = true
+	_is_replay_presenting_action = false
+	var initial_state: StateData = _replay_record.get_initial_state()
+	if initial_state == null:
+		_restore_completed_replay_state("Replay initial state is unavailable")
+		return false
+	_rebuild_views_from_state(initial_state)
+	var actions: Array[ActionData] = _replay_record.get_actions()
+	for action_index: int in range(actions.size()):
+		if generation != _replay_generation or not is_inside_tree():
+			return false
+		var action: ActionData = actions[action_index]
+		if not Simulator.is_action_legal(duel_state, action):
+			_restore_completed_replay_state(
+				"Replay action %d is no longer legal" % action_index
+			)
+			return false
+		var source_card: CardView = _get_card_view_by_instance(action.source_instance_id)
+		if source_card == null:
+			_restore_completed_replay_state(
+				"Replay action %d has no source view" % action_index
+			)
+			return false
+		var owner_id: int = duel_state.active_player
+		_is_replay_presenting_action = true
+		await _commit_action(source_card, action, owner_id, false)
+		_is_replay_presenting_action = false
+		if generation != _replay_generation or not is_inside_tree():
+			return false
+		if action_index < actions.size() - 1:
+			if not await _wait_replay_delay(generation):
+				return false
+	if not Simulator.is_terminal(duel_state):
+		_restore_completed_replay_state("Replay ended before reaching a terminal state")
+		return false
+	_is_replaying = false
+	_is_replay_presenting_action = false
+	turn_state = TurnState.COMPLETE
+	_match_outcome = _replay_record.get_outcome()
+	turn_status.text = _replay_record.get_final_status()
+	turn_status.modulate = Color("3b211d")
+	_sync_hand_playability()
+	_update_score()
+	return true
+
+
+func _wait_replay_delay(generation: int) -> bool:
+	_replay_delay_remaining = replay_turn_delay
+	var previous_ticks: int = Time.get_ticks_usec()
+	while _replay_delay_remaining > 0.0:
+		await get_tree().process_frame
+		if generation != _replay_generation or not is_inside_tree():
+			_replay_delay_remaining = 0.0
+			return false
+		var current_ticks: int = Time.get_ticks_usec()
+		if not _inspection_open:
+			_replay_delay_remaining -= float(current_ticks - previous_ticks) / 1000000.0
+		previous_ticks = current_ticks
+	_replay_delay_remaining = 0.0
+	return true
+
+
+func _restore_completed_replay_state(reason: String) -> void:
+	push_warning(reason)
+	var final_state: StateData = _replay_record.get_final_state()
+	if final_state != null:
+		_rebuild_views_from_state(final_state)
+	_is_replaying = false
+	_is_replay_presenting_action = false
+	_replay_delay_remaining = 0.0
+	turn_state = TurnState.COMPLETE
+	_match_outcome = _replay_record.get_outcome()
+	turn_status.text = _replay_record.get_final_status()
+	turn_status.modulate = Color("3b211d")
+	_sync_hand_playability()
+	_update_score()
+
+
+func _rebuild_views_from_state(source_state: StateData) -> void:
+	duel_state = source_state.duplicate_state() as StateData
+	board = duel_state.board
+	_clear_all_card_views()
+	for owner_id: int in [DuelRules.OPPONENT_OWNER, DuelRules.PLAYER_OWNER]:
+		var hand_container: HBoxContainer = _get_hand_for_owner(owner_id)
+		var hand: Array = duel_state.get_hand(owner_id)
+		for card_index: int in range(mini(hand.size(), hand_container.get_child_count())):
+			var card_data: Dictionary = hand[card_index]
+			var card: CardView = _spawn_card_in_slot(
+				hand_container.get_child(card_index) as PanelContainer,
+				card_data,
+				owner_id,
+				false
+			)
+			card.set_face_down(owner_id == DuelRules.OPPONENT_OWNER and not testing_mode)
+	for cell_index: int in range(mini(board.size(), board_cells.size())):
+		var slot_value: Variant = board[cell_index]
+		if slot_value == null:
+			continue
+		var logical_slot: Dictionary = slot_value
+		var owner_id: int = int(logical_slot.get("owner", 0))
+		var card_data: Dictionary = logical_slot.get("card", {})
+		var card: CardView = _spawn_card_in_slot(
+			board_cells[cell_index],
+			card_data,
+			owner_id,
+			false
+		)
+		card.set_face_down(false)
+		card.z_index = 1
+		board_cards[cell_index] = card
+	_clear_drag_context()
+	_clear_cell_highlights()
+	turn_state = (
+		TurnState.PLAYER
+		if duel_state.active_player == DuelRules.PLAYER_OWNER
+		else TurnState.OPPONENT
+	)
+	_sync_hand_playability()
+	_update_score()
+	_update_turn_status()
+
+
+func _clear_all_card_views() -> void:
+	var observed: Dictionary = {}
+	for hand_container: HBoxContainer in [opponent_hand, player_hand]:
+		for slot: Node in hand_container.get_children():
+			for child: Node in slot.get_children():
+				if child is CardView:
+					observed[child.get_instance_id()] = child
+	for card_value: Variant in board_cards:
+		var card := card_value as CardView
+		if card != null and is_instance_valid(card):
+			observed[card.get_instance_id()] = card
+	for child: Node in drag_layer.get_children():
+		if child is CardView:
+			observed[child.get_instance_id()] = child
+	for card_value: Variant in observed.values():
+		var card := card_value as CardView
+		if card != null and is_instance_valid(card):
+			card.free()
+	board_cards.fill(null)
+
+
 func _on_exit_pressed() -> void:
 	if _return_emitted:
 		return
+	var was_replaying: bool = _is_replaying
 	_return_emitted = true
+	_replay_generation += 1
+	_is_replaying = false
+	_is_replay_presenting_action = false
+	_replay_delay_remaining = 0.0
 	_cancel_opponent_search()
 	var outcome: StringName = (
-		_match_outcome
+		_replay_record.get_outcome()
+		if was_replaying and _replay_record.is_ready()
+		else _match_outcome
 		if turn_state == TurnState.COMPLETE and _match_outcome != &""
 		else OUTCOME_ABANDONED
 	)

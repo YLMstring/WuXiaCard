@@ -19,6 +19,21 @@ These decisions were explicitly established during development and should not be
 - Testing mode lets the player manually control both sides and reveals both hands.
 - Testing mode is a script setting, not an in-game toggle.
 
+## Completed-Duel Replay
+
+- Replay is available only after a duel reaches victory or defeat. Pressing it
+  during a live duel or during playback has no gameplay effect.
+- The first recorded turn starts immediately; later turns begin after a
+  configurable delay that is 2 seconds in production.
+- Replay reuses the authoritative simulator and normal VFX path. It is an
+  in-memory presentation and never changes progression, rewards, mastery, or
+  remembered enemy cards.
+- Normal mode keeps the opponent hand concealed during replay. Revealed cards
+  may be inspected between actions; inspection pauses the remaining delay.
+- Real card play and activation are disabled during replay. The return icon
+  remains active, cancels playback, and reports the original duel outcome.
+- Playback stops on the recorded final board and may be started repeatedly.
+
 ## Turn and Activation Rules
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
