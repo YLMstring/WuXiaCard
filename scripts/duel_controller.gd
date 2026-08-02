@@ -1519,7 +1519,7 @@ func _layout_duel() -> void:
 	board_grid.size = Vector2(board_width, board_height)
 	replay_button.size = Vector2(44.0, 44.0)
 	replay_button.position = Vector2(
-		maxf(0.0, board_position.x - replay_button.size.x),
+		maxf(0.0, board_position.x - replay_button.size.x - 8.0),
 		board_position.y + board_height * 0.5 - replay_button.size.y * 0.5
 	)
 	replay_button.pivot_offset = replay_button.size * 0.5
