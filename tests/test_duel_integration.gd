@@ -642,7 +642,7 @@ func _check_catalog_hands(duel: Node) -> void:
 	for card: Control in opponent_cards:
 		var opponent_card_data: Dictionary = card.get("card_data")
 		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
-	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"jiang_wei", &"fa_zheng"], "Player hand resolves in catalog deck order")
+	_check(player_ids == Decks.get_player_card_ids(TEST_PROFILE_PATH), "Player hand resolves in saved deck order")
 	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
@@ -1541,6 +1541,7 @@ func _count_face_down(cards: Array[Control]) -> int:
 func _instantiate_duel() -> Node:
 	var duel: Node = DUEL_SCENE.instantiate()
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	duel.set("testing_mode", false)
 	duel.set("opponent_hand_shuffle_seed", -1)
 	return duel
 

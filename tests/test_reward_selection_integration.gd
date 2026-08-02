@@ -35,20 +35,21 @@ func _run() -> void:
 		)
 		profile = advance_result.get("profile", profile)
 	_check(store.get_character_tier(profile) == 5, "Reward-scene fixture reaches tier five")
-	profile["pending_reward_card_ids"] = ["CangSongYingKe1"]
+	profile["mastered_card_ids"] = ["CangSongYingKe1"]
+	profile["pending_reward_card_ids"] = ["CangSongYingKe1", "hengsha_duanlu"]
 	_check(
 		store.save_profile(profile),
 		"Single-card reward-scene fixture saves after tier progression"
 	)
 	var reward_ids: Array[StringName] = store.get_pending_reward_ids(profile)
-	_check(reward_ids.size() == 1, "Reward-scene fixture provides one visible choice")
+	_check(reward_ids.size() == 2, "Reward-scene fixture provides two visible choices")
 
 	var enemy: Dictionary = Enemies.get_definition(store.get_current_enemy_id(profile))
 	var reward: Variant = REWARD_SCENE.instantiate()
 	reward.profile_path = SAVE_PATH
 	reward.upcoming_enemy_name = String(enemy["name"])
 	reward.upcoming_enemy_card_ids = _string_names(enemy["deck"])
-	reward.testing_mode = false
+	reward.testing_mode = true
 	reward.set("reward_color_seed", 411)
 	reward.reward_claimed.connect(_on_reward_claimed)
 	reward.back_requested.connect(_on_back_requested)
@@ -63,19 +64,16 @@ func _run() -> void:
 	var second_slot: Variant = grid.debug_get_bound_slot(1)
 	var third_slot: Variant = grid.debug_get_bound_slot(2)
 	_check(
-		[
-			grid.get_display_owner_id(0),
-			grid.get_display_owner_id(1),
-			grid.get_display_owner_id(2),
-		] == [
-			DuelRules.OPPONENT_OWNER,
+		grid.get_display_owner_id(0) == DuelRules.PLAYER_OWNER
+		and grid.get_display_owner_id(1) == DuelRules.OPPONENT_OWNER
+		and grid.get_display_owner_id(2) in [
 			DuelRules.PLAYER_OWNER,
 			DuelRules.OPPONENT_OWNER,
 		],
-		"Fixed reward color seed rolls the expected independent red/blue sequence"
+		"Revealed rewards use mastery colors while the card back keeps a valid random color"
 	)
 	_check(first_slot != null and not first_slot.is_placeholder(), "First reward is revealed")
-	_check(second_slot != null and second_slot.is_placeholder(), "Second position is a card back")
+	_check(second_slot != null and not second_slot.is_placeholder(), "Second reward is revealed")
 	_check(third_slot != null and third_slot.is_placeholder(), "Third position is a card back")
 	var reward_scroll := grid.find_child("Scroll", true, false) as ScrollContainer
 	var scroll_center_x: float = reward_scroll.size.x * 0.5
@@ -101,10 +99,19 @@ func _run() -> void:
 		"Reward triangle uses visibly larger card slots"
 	)
 	_check(
-		second_slot.get_node("CardHost/CardView").is_face_down()
-		and third_slot.get_node("CardHost/CardView").is_face_down(),
-		"Unused reward positions display face-down cards"
+		third_slot.get_node("CardHost/CardView").is_face_down(),
+		"Unused reward position displays a face-down card"
 	)
+	var enemy_hand := reward.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+	var enemy_cards_stay_red: bool = true
+	for enemy_slot: Node in enemy_hand.get_children():
+		var enemy_card := enemy_slot.get_child(0) as CardView
+		enemy_cards_stay_red = (
+			enemy_cards_stay_red
+			and not enemy_card.is_face_down()
+			and enemy_card.owner_id == DuelRules.OPPONENT_OWNER
+		)
+	_check(enemy_cards_stay_red, "Testing-mode revealed enemy hand stays red")
 
 	reward.call("_on_library_inspection_requested", 0, first_slot.card_data)
 	_check(reward.debug_is_inspecting(), "Revealed reward opens normal inspection")
@@ -117,7 +124,7 @@ func _run() -> void:
 	var drag_proxy := reward.get_node("DuelCanvas/DragLayer").get_child(-1) as CardView
 	_check(
 		drag_proxy.owner_id == grid.get_display_owner_id(0),
-		"Reward drag preview preserves the source card's randomized color"
+		"Reward drag preview preserves the source card's mastery color"
 	)
 	reward.call("_on_library_drag_ended", 0, Vector2(-100.0, -100.0))
 	_check(

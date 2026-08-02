@@ -128,13 +128,24 @@ library. Save data is schema-versioned, validated on load, repaired when
 possible, and replaced with a valid default when necessary.
 
 Schema 7 adds `effective_duel_count`, chronological `defeated_enemy_ids`, and
-global `best_scores_by_sect`. `record_completed_duel_and_save()` is the sole
+global `best_scores_by_sect`. Schema 8 adds global, exact-ID
+`mastered_card_ids`; schema-7 saves migrate with empty mastery without closing
+an active run. `record_completed_duel_and_save()` is the sole
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,
 updates the sect best, closes the run, and restores the default deck in one
 atomic save. Abandon never enters this transaction. Legacy active saves lack
 reconstructable history, so migration closes their run and restores the
 default deck while preserving card/sect unlocks.
+
+At duel construction, the controller snapshots the player's five exact
+main-deck IDs. Every successful player hand play whose ID is in that snapshot
+becomes a mastery candidate, including a drawn or freshly created identical
+copy. Abandon and defeat discard candidates; victory merges them into the
+global profile before progression or final run closure. Library cards and
+revealed reward cards use mastery for presentation: mastered is blue and
+unmastered is red. Enemy reveals remain red, while unused reward card backs
+retain their random red/blue decoration.
 
 Player main-deck IDs must also have five distinct `glyph` values. Legacy saves
 keep the highest-tier namesake in its original slot (earlier deck occurrence

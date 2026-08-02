@@ -18,6 +18,7 @@ func _run() -> void:
 	_check(int(profile["effective_duel_count"]) == 0, "New profiles begin with zero effective duels")
 	_check((profile["defeated_enemy_ids"] as Array).is_empty(), "New profiles begin with no defeated enemies")
 	_check((profile["best_scores_by_sect"] as Dictionary).is_empty(), "New profiles begin with no ending achievements")
+	_check((profile["mastered_card_ids"] as Array).is_empty(), "New profiles begin with no card mastery")
 
 	var begin: Dictionary = store.begin_run_and_save(
 		profile,
@@ -27,10 +28,14 @@ func _run() -> void:
 	)
 	_check(bool(begin.get("ok", false)), "Ending fixture begins a run")
 	var active: Dictionary = begin.get("profile", {})
+	active["mastered_card_ids"] = ["fa_zheng"]
+	_check(store.is_profile_valid(active), "Mastery fixture remains a valid active profile")
 	var defeat: Dictionary = store.record_completed_duel_and_save(
 		active,
 		Store.REWARD_DEFEAT,
-		2
+		2,
+		&"",
+		[&"gate_general"]
 	)
 	_check(bool(defeat.get("ok", false)), "A completed defeat saves")
 	_check(not bool(defeat.get("completed", true)), "A defeat never completes the run")
@@ -39,12 +44,23 @@ func _run() -> void:
 	_check((after_defeat["defeated_enemy_ids"] as Array).is_empty(), "Defeat records no defeated enemy")
 	_check(int(after_defeat["level"]) == 1, "Defeat preserves the player level")
 	_check(String(after_defeat["current_enemy_id"]) == "qingfeng_xuedi", "Defeat preserves the rematch enemy")
+	_check(
+		store.get_mastered_card_ids(after_defeat) == [&"fa_zheng"],
+		"Defeat ignores mastery candidates"
+	)
 
 	var ordinary_win: Dictionary = store.record_completed_duel_and_save(
 		after_defeat,
 		Store.REWARD_VICTORY,
 		2,
-		&"tieshan_menren"
+		&"tieshan_menren",
+		[
+			&"gate_general",
+			&"missing_card",
+			&"CangSongYingKe1",
+			&"gate_general",
+			&"CangSongYingKe2",
+		]
 	)
 	_check(bool(ordinary_win.get("ok", false)), "A non-final victory saves")
 	_check(not bool(ordinary_win.get("completed", true)), "First of two victories does not finish")
@@ -54,12 +70,19 @@ func _run() -> void:
 	_check((advanced["defeated_enemy_ids"] as Array) == ["qingfeng_xuedi"], "Victory appends the defeated enemy")
 	_check(int(advanced["level"]) == 2, "Non-final victory advances one level")
 	_check(String(advanced["current_enemy_id"]) == "tieshan_menren", "Non-final victory selects the requested next enemy")
+	_check(
+		store.get_mastered_card_ids(advanced)
+		== [&"fa_zheng", &"gate_general", &"CangSongYingKe2"],
+		"Victory appends valid main-deck mastery candidates in stable order"
+	)
 
 	var unlocked_before: Array = (advanced["unlocked_card_ids"] as Array).duplicate()
 	var final_win: Dictionary = store.record_completed_duel_and_save(
 		advanced,
 		Store.REWARD_VICTORY,
-		2
+		2,
+		&"",
+		[&"meng_huo"]
 	)
 	_check(bool(final_win.get("ok", false)), "The final victory saves")
 	_check(bool(final_win.get("completed", false)), "The configured victory target completes the run")
@@ -74,6 +97,11 @@ func _run() -> void:
 	_check(not bool(completed_profile["run_active"]), "Completion closes the active run")
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Completion restores the default deck")
 	_check(completed_profile["unlocked_card_ids"] == unlocked_before, "Completion preserves card unlocks")
+	_check(
+		store.get_mastered_card_ids(completed_profile)
+		== [&"fa_zheng", &"gate_general", &"CangSongYingKe2", &"meng_huo"],
+		"Final victory records mastery before closing the run"
+	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 5000, "Completion stores the sect's first best score")
 	_check(int(completed_profile["effective_duel_count"]) == 0, "Closed run clears its duel counter")
 	_check((completed_profile["defeated_enemy_ids"] as Array).is_empty(), "Closed run clears its defeated-enemy history")
@@ -123,8 +151,17 @@ func _run() -> void:
 	)
 	var run_reset: Dictionary = store.reset_run_and_save(reset_begin.get("profile", {}))
 	_check(int((run_reset["profile"]["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "Run reset preserves ending achievements")
+	_check(
+		store.get_mastered_card_ids(run_reset.get("profile", {}))
+		== store.get_mastered_card_ids(reset_begin.get("profile", {})),
+		"Run reset preserves card mastery"
+	)
 	var full_reset: Dictionary = store.reset_all_progress_and_save(run_reset.get("profile", {}))
 	_check((full_reset["profile"]["best_scores_by_sect"] as Dictionary).is_empty(), "Full reset clears ending achievements")
+	_check(
+		store.get_mastered_card_ids(full_reset.get("profile", {})).is_empty(),
+		"Full reset clears card mastery"
+	)
 
 	var legacy_active: Dictionary = active.duplicate(true)
 	legacy_active["schema_version"] = 6

@@ -41,7 +41,7 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 7, "Default profile uses schema version 7")
+	_check(int(profile["schema_version"]) == 8, "Default profile uses schema version 8")
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
@@ -49,6 +49,14 @@ func _run() -> void:
 	_check(store.get_current_enemy_id(profile) == &"", "Inactive profiles have no enemy")
 	_check(store.get_remembered_enemy_glyphs(profile).is_empty(), "New profiles remember no enemy cards")
 	_check(store.get_pending_reward_ids(profile).is_empty(), "New profiles have no pending reward")
+	_check(
+		store.get_mastered_card_ids(profile).is_empty(),
+		"New profiles begin with no mastered cards"
+	)
+	_check(
+		not store.is_card_mastered(profile, Store.DEFAULT_MAIN_DECK_IDS[0]),
+		"Default main-deck cards do not begin mastered"
+	)
 	_check(
 		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
 		"Only Xuanyue Jianzong starts unlocked"
@@ -70,6 +78,25 @@ func _run() -> void:
 	_check(
 		store.repair_profile(profile) == profile,
 		"Repairing an existing valid profile does not auto-unlock new sect cards"
+	)
+	var malformed_mastery: Dictionary = profile.duplicate(true)
+	malformed_mastery["mastered_card_ids"] = [
+		String(Store.DEFAULT_MAIN_DECK_IDS[0]),
+		"missing_card",
+		String(Store.DEFAULT_MAIN_DECK_IDS[0]),
+		String(Store.DEFAULT_MAIN_DECK_IDS[1]),
+	]
+	_check(
+		not store.is_profile_valid(malformed_mastery),
+		"Profiles reject unknown or duplicate mastery IDs"
+	)
+	var repaired_mastery: Dictionary = store.repair_profile(malformed_mastery)
+	_check(
+		store.get_mastered_card_ids(repaired_mastery) == [
+			Store.DEFAULT_MAIN_DECK_IDS[0],
+			Store.DEFAULT_MAIN_DECK_IDS[1],
+		],
+		"Mastery repair filters invalid entries in stable order"
 	)
 	var legacy_duplicate: Dictionary = profile.duplicate(true)
 	var duplicate_source_index: int = (
@@ -306,7 +333,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 7, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 8, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
 		"Migration adds only the default sect"
@@ -449,6 +476,39 @@ func _run() -> void:
 	_check(
 		store.get_pending_reward_ids(reward_family_result).is_empty(),
 		"Successful cascading reward claim clears the pending offer"
+	)
+	var schema_seven_active: Dictionary = active_profile.duplicate(true)
+	schema_seven_active["schema_version"] = 7
+	schema_seven_active.erase("mastered_card_ids")
+	schema_seven_active["pending_reward_card_ids"] = ["hengsha_duanlu"]
+	schema_seven_active["effective_duel_count"] = 1
+	schema_seven_active["best_scores_by_sect"] = {"xuanyue_jianzong": 1234}
+	var migrated_schema_seven: Dictionary = store.repair_profile(schema_seven_active)
+	_check(
+		store.is_profile_valid(migrated_schema_seven),
+		"A schema-seven active profile migrates to schema eight"
+	)
+	_check(
+		store.is_run_active(migrated_schema_seven),
+		"Schema-seven migration preserves an active run"
+	)
+	_check(
+		migrated_schema_seven["main_deck"] == schema_seven_active["main_deck"]
+		and migrated_schema_seven["library_slots"] == schema_seven_active["library_slots"]
+		and migrated_schema_seven["unlocked_card_ids"] == schema_seven_active["unlocked_card_ids"],
+		"Schema-seven migration preserves deck placement and unlocks"
+	)
+	_check(
+		migrated_schema_seven["remembered_enemy_glyphs"]
+		== schema_seven_active["remembered_enemy_glyphs"]
+		and store.get_pending_reward_ids(migrated_schema_seven) == [&"hengsha_duanlu"]
+		and int(migrated_schema_seven["effective_duel_count"]) == 1
+		and int(migrated_schema_seven["best_scores_by_sect"]["xuanyue_jianzong"]) == 1234,
+		"Schema-seven migration preserves active-run history and pending reward"
+	)
+	_check(
+		store.get_mastered_card_ids(migrated_schema_seven).is_empty(),
+		"Schema-seven migration starts mastery empty"
 	)
 	var legacy_active: Dictionary = active_profile.duplicate(true)
 	legacy_active["schema_version"] = 3

@@ -99,6 +99,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   victory at the configurable threshold (15 by default) skips rewards, records
   `floor(15000 / effective_duel_count)`, preserves the best score for the
   selected sect, closes the run, and restores the default deck.
+- Schema 8 stores global mastery by exact card ID. A successful player hand
+  play qualifies when that exact ID was in the main deck at duel start; a win
+  commits the candidates, while defeat or abandon commits none. `闭关重修`
+  preserves mastery and `封剑归隐` clears it.
+- Revealed library and reward cards are blue when mastered and red otherwise.
+  Revealed enemy cards stay red; unoccupied reward backs keep random colors.
 - The ending instances the production main menu so it shares the exact
   background and animated title. It hides the menu actions, lists the selected
   sect and every defeated enemy, and branches for flawless/comeback prose. Its

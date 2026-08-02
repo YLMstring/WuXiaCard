@@ -165,6 +165,11 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 	if outcome == DuelController.OUTCOME_ABANDONED:
 		_show_deck_builder()
 		return
+	var mastery_candidate_ids: Array[StringName] = []
+	if outcome == DuelController.OUTCOME_VICTORY:
+		var completed_duel := _current_screen as DuelController
+		if completed_duel != null:
+			mastery_candidate_ids = completed_duel.get_mastery_candidate_ids()
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var reward_outcome: StringName = (
@@ -175,7 +180,9 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 	var duel_result: Dictionary = store.record_completed_duel_and_save(
 		profile,
 		reward_outcome,
-		victories_required
+		victories_required,
+		&"",
+		mastery_candidate_ids
 	)
 	if not bool(duel_result.get("ok", false)):
 		push_warning("Completed duel could not be saved")

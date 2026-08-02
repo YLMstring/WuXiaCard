@@ -20,7 +20,7 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 ## Suites
 
 - `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
-- `test_deck_profile_store.gd` — default profile, validation/repair, atomic persistence, exchanges, unlock ordering, and save-failure rollback.
+- `test_deck_profile_store.gd` — default profile, validation/repair, schema-7-to-8 mastery migration, atomic persistence, exchanges, unlock ordering, and save-failure rollback.
 - `test_ending_profile.gd` — effective-duel history, atomic completion,
   scoring, per-sect bests, reset behavior, and legacy migration.
 - `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
@@ -38,6 +38,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki, draw/removal/movement/extra turns.
 - `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
+- `test_card_mastery.gd` — exact-ID eligibility, successful-play capture,
+  identical-copy qualification, namesake exclusion, and deduplication.
 - `test_zixia_integration.gd` — hand/board mutable-value presentation and
   face-down concealment for generic selected-card effects.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
@@ -100,6 +102,13 @@ For deck-builder UI changes, also run the profile, library-grid, and
 deck-builder integration suites. Manually verify tap-to-inspect,
 hold-then-drag exchange, swipe scrolling, invalid drops, and normal/testing
 opponent concealment.
+
+For mastery changes, run `test_card_mastery.gd`, `test_deck_profile_store.gd`,
+`test_ending_profile.gd`, `test_deck_builder_integration.gd`,
+`test_reward_selection_integration.gd`, `test_main_flow.gd`, and
+`test_ending_flow.gd`. Verify abandon/defeat do not commit, ordinary/final wins
+do commit, run reset preserves, full reset clears, and reward placeholders
+remain random.
 
 For ending changes, run `test_ending_profile.gd`, `test_ending_scene.gd`,
 `test_ending_flow.gd`, and `test_main_flow.gd`. Manually verify both flawless

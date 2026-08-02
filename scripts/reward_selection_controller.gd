@@ -178,8 +178,18 @@ func _roll_reward_display_owners() -> void:
 		random.randomize()
 	else:
 		random.seed = reward_color_seed
+	var mastered_set: Dictionary = {}
+	for card_id: StringName in _profile_store.get_mastered_card_ids(profile):
+		mastered_set[card_id] = true
 	_reward_display_owner_ids.clear()
 	for reward_index: int in range(3):
+		if reward_index < _reward_ids.size():
+			_reward_display_owner_ids.append(
+				DuelRules.PLAYER_OWNER
+				if mastered_set.has(_reward_ids[reward_index])
+				else DuelRules.OPPONENT_OWNER
+			)
+			continue
 		_reward_display_owner_ids.append(
 			DuelRules.PLAYER_OWNER
 			if random.randi_range(0, 1) == 0

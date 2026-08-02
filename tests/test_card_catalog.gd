@@ -60,7 +60,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 34, "Catalog contains all thirty-four current cards")
+	_check(Catalog.get_all_card_ids().size() == 41, "Catalog contains all forty-one current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -73,6 +73,13 @@ func _test_catalog_definitions() -> void:
 		&"YouFenLaiYi2": "res://pics/LKT010_558.png",
 		&"YouFenLaiYi3": "res://pics/LKT010_558.png",
 		&"YouFenLaiYi4": "res://pics/LKT010_558.png",
+		&"SanQinFeng1": "res://pics/LKT010_559.png",
+		&"SanQinFeng2": "res://pics/LKT010_559.png",
+		&"SanQinFeng3": "res://pics/LKT010_559.png",
+		&"ZiXiaGong1": "res://pics/LKT010_495.png",
+		&"ZiXiaGong2": "res://pics/LKT010_495.png",
+		&"ZiXiaGong3": "res://pics/LKT010_496.png",
+		&"ZiXiaGong4": "res://pics/LKT010_496.png",
 		&"gate_general": "res://pics/LKT010_002.png",
 		&"meng_huo": "res://pics/LKT010_003.png",
 		&"fa_zheng": "res://pics/LKT010_005.png",
@@ -121,7 +128,7 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 34, "Catalog IDs are unique")
+	_check(observed_ids.size() == 41, "Catalog IDs are unique")
 
 
 func _test_definition_schema_validation() -> void:

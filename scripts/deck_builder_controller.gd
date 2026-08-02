@@ -26,7 +26,6 @@ const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
 @export var remembered_enemy_glyphs: Array[String] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
-@export var library_color_seed: int = 0
 
 var testing_mode: bool = Settings.TESTING_MODE
 var profile: Dictionary = {}
@@ -70,7 +69,6 @@ func _ready() -> void:
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
-	_roll_library_display_owners()
 	_style_header()
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
@@ -135,26 +133,26 @@ func debug_get_library_display_owner_ids() -> Array[int]:
 	return _library_display_owner_ids.duplicate()
 
 
-func _roll_library_display_owners() -> void:
-	var random := RandomNumberGenerator.new()
-	if library_color_seed == 0:
-		random.randomize()
-	else:
-		random.seed = library_color_seed
+func _refresh_library_display_owners() -> void:
+	var mastered_set: Dictionary = {}
+	for card_id: StringName in _profile_store.get_mastered_card_ids(profile):
+		mastered_set[card_id] = true
 	_library_display_owner_ids.resize(DeckLibraryGrid.TOTAL_SLOTS)
 	_library_display_owner_ids.fill(DuelRules.PLAYER_OWNER)
 	var library_values: Array = profile.get("library_slots", [])
 	for logical_index: int in range(mini(library_values.size(), DeckLibraryGrid.TOTAL_SLOTS)):
-		if String(library_values[logical_index]).is_empty():
+		var card_id := StringName(String(library_values[logical_index]))
+		if card_id == &"":
 			continue
 		_library_display_owner_ids[logical_index] = (
 			DuelRules.PLAYER_OWNER
-			if random.randi_range(0, 1) == 0
+			if mastered_set.has(card_id)
 			else DuelRules.OPPONENT_OWNER
 		)
 
 
 func _refresh_library_grid() -> void:
+	_refresh_library_display_owners()
 	library_grid.set_library_slots(profile["library_slots"], _library_display_owner_ids)
 
 

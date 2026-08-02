@@ -23,6 +23,7 @@ func _run() -> void:
 	var flow: Variant = MAIN_SCENE.instantiate()
 	flow.deck_profile_path = _save_path
 	flow.testing_mode = true
+	flow.victories_required = 15
 	root.add_child(flow)
 	await process_frame
 	await process_frame
@@ -93,6 +94,8 @@ func _run() -> void:
 		played_glyph in store.get_remembered_enemy_glyphs(memory_profile),
 		"Opponent hand play immediately persists its glyph"
 	)
+	var mastery_fixture_id: StringName = store.get_main_deck_ids(memory_profile)[0]
+	duel.call("_record_mastery_candidate", mastery_fixture_id)
 	(duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
@@ -111,15 +114,24 @@ func _run() -> void:
 		played_glyph in builder.remembered_enemy_glyphs,
 		"Returning deck builder receives remembered enemy cards"
 	)
+	_check(
+		not store.is_card_mastered(abandoned_profile, mastery_fixture_id),
+		"Abandoning discards mastery candidates"
+	)
 
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
 	await process_frame
 	duel = flow.debug_get_current_screen() as DuelController
+	duel.call("_record_mastery_candidate", mastery_fixture_id)
 	duel.return_requested.emit(&"victory")
 	await process_frame
 	var reward := flow.debug_get_current_screen() as RewardController
 	_check(reward != null, "Victory opens reward selection")
 	var victorious_profile: Dictionary = store.load_profile()
+	_check(
+		store.is_card_mastered(victorious_profile, mastery_fixture_id),
+		"Winning persists the played main-deck card as globally mastered"
+	)
 	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
 	_check(
 		&"huixue_liuguang" in store.get_unlocked_ids(victorious_profile),
@@ -214,6 +226,10 @@ func _run() -> void:
 		&"hanfeng_liezhen" in Store.new(_save_path).get_unlocked_ids(reset_profile),
 		"Run reset preserves unlocked cards"
 	)
+	_check(
+		Store.new(_save_path).is_card_mastered(reset_profile, mastery_fixture_id),
+		"Run reset preserves global card mastery"
+	)
 
 	var progress_reset_menu_id: int = menu.get_instance_id()
 	var progress_reset_button := menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
@@ -233,6 +249,10 @@ func _run() -> void:
 	_check(
 		fully_reset_profile == Store.new(_save_path).create_default_profile(),
 		"Full progress reset restores the initial profile"
+	)
+	_check(
+		not Store.new(_save_path).is_card_mastered(fully_reset_profile, mastery_fixture_id),
+		"Full progress reset clears global card mastery"
 	)
 
 	flow.queue_free()

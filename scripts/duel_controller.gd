@@ -87,6 +87,9 @@ var _scores_visible_before_inspection: bool = true
 var _match_outcome: StringName = &""
 var _return_emitted: bool = false
 var _status_before_inspection: String = ""
+var _mastery_eligible_card_ids: Dictionary = {}
+var _mastery_candidate_ids: Array[StringName] = []
+var _mastery_candidate_set: Dictionary = {}
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -125,6 +128,7 @@ func _ready() -> void:
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	var player_card_ids: Array[StringName] = Decks.get_player_card_ids(deck_profile_path)
+	_set_mastery_eligible_card_ids(player_card_ids)
 	var player_cards: Array = _create_card_instances(player_card_ids, DuelRules.PLAYER_OWNER, "main")
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
@@ -259,6 +263,10 @@ func debug_is_complete() -> bool:
 
 func debug_get_match_outcome() -> StringName:
 	return _match_outcome
+
+
+func get_mastery_candidate_ids() -> Array[StringName]:
+	return _mastery_candidate_ids.duplicate()
 
 
 func debug_get_simulation_turn_count() -> int:
@@ -641,6 +649,8 @@ func _commit_action(
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
+	if owner_id == DuelRules.PLAYER_OWNER and action.action_type == ActionData.TYPE_PLAY:
+		_record_mastery_candidate(StringName(card.card_data.get("card_id", &"")))
 	if owner_id == DuelRules.OPPONENT_OWNER and action.action_type == ActionData.TYPE_PLAY:
 		opponent_card_played.emit(String(card.card_data.get("glyph", "")))
 	duel_state = transition["state"] as StateData
@@ -882,6 +892,25 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				exiled_card.queue_free()
 			resolved_targets += 1
 	return resolved_targets
+
+
+func _set_mastery_eligible_card_ids(card_ids: Array[StringName]) -> void:
+	_mastery_eligible_card_ids.clear()
+	_mastery_candidate_ids.clear()
+	_mastery_candidate_set.clear()
+	for card_id: StringName in card_ids:
+		_mastery_eligible_card_ids[card_id] = true
+
+
+func _record_mastery_candidate(card_id: StringName) -> void:
+	if (
+		card_id == &""
+		or not _mastery_eligible_card_ids.has(card_id)
+		or _mastery_candidate_set.has(card_id)
+	):
+		return
+	_mastery_candidate_ids.append(card_id)
+	_mastery_candidate_set[card_id] = true
 
 
 func _present_ki_changed_event(event: Dictionary) -> void:

@@ -66,6 +66,7 @@ $testScripts = @(
     "test_card_inspector.gd",
     "test_duel_backdrop.gd",
     "test_duel_outcome.gd",
+	"test_card_mastery.gd",
     "test_enemy_memory.gd",
     "test_reward_profile.gd",
     "test_reward_selection_integration.gd",

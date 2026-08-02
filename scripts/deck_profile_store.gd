@@ -6,11 +6,12 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 
-const SCHEMA_VERSION: int = 7
+const SCHEMA_VERSION: int = 8
+const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
-const DEFAULT_VICTORIES_REQUIRED: int = 1
+const DEFAULT_VICTORIES_REQUIRED: int = 15
 const ENDING_SCORE_POOL: int = 15000
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
 const REWARD_VICTORY: StringName = &"victory"
@@ -77,6 +78,7 @@ func create_default_profile() -> Dictionary:
 		"effective_duel_count": 0,
 		"defeated_enemy_ids": [],
 		"best_scores_by_sect": {},
+		"mastered_card_ids": [],
 		"unlocked_sect_ids": _string_array(DEFAULT_UNLOCKED_SECT_IDS),
 		"unlocked_card_ids": _string_array(unlocked_ids),
 		"main_deck": main_deck,
@@ -146,6 +148,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var effective_duels_value: Variant = profile.get("effective_duel_count", null)
 	var defeated_enemies_value: Variant = profile.get("defeated_enemy_ids", null)
 	var best_scores_value: Variant = profile.get("best_scores_by_sect", null)
+	var mastered_cards_value: Variant = profile.get("mastered_card_ids", null)
 	if (
 		typeof(run_active_value) != TYPE_BOOL
 		or typeof(selected_sect_value) != TYPE_STRING
@@ -156,6 +159,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or typeof(effective_duels_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(defeated_enemies_value) != TYPE_ARRAY
 		or typeof(best_scores_value) != TYPE_DICTIONARY
+		or typeof(mastered_cards_value) != TYPE_ARRAY
 	):
 		return false
 	var run_active: bool = bool(run_active_value)
@@ -246,6 +250,14 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	if not DeckRules.has_unique_glyphs(deck):
 		return false
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var mastered_set: Dictionary = {}
+	for value: Variant in mastered_cards_value as Array:
+		if typeof(value) != TYPE_STRING:
+			return false
+		var mastered_id := StringName(String(value))
+		if mastered_id == &"" or mastered_id not in catalog_ids or mastered_set.has(mastered_id):
+			return false
+		mastered_set[mastered_id] = true
 	var unlocked_set: Dictionary = {}
 	for value: Variant in unlocked:
 		var card_id := StringName(String(value))
@@ -305,13 +317,14 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var effective_duel_count: int = 0
 	var defeated_enemy_ids: Array[StringName] = []
 	var best_scores_by_sect: Dictionary = {}
+	var mastered_card_ids: Array[StringName] = []
 	var schema_version: int = int(profile.get("schema_version", -1))
 	var legacy_active_run: bool = (
-		schema_version < SCHEMA_VERSION
+		schema_version < COMPLETED_RUN_HISTORY_SCHEMA_VERSION
 		and typeof(profile.get("run_active", false)) == TYPE_BOOL
 		and bool(profile.get("run_active", false))
 	)
-	if schema_version >= SCHEMA_VERSION:
+	if schema_version >= COMPLETED_RUN_HISTORY_SCHEMA_VERSION:
 		var raw_run_active: Variant = profile.get("run_active", false)
 		var raw_selected_sect: Variant = profile.get("selected_sect_id", "")
 		if typeof(raw_run_active) == TYPE_BOOL and bool(raw_run_active):
@@ -374,6 +387,17 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				):
 					best_scores_by_sect[String(achievement_sect_id)] = int(raw_score)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	if schema_version >= SCHEMA_VERSION:
+		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
+		if typeof(raw_mastery) == TYPE_ARRAY:
+			for value: Variant in raw_mastery as Array:
+				var mastered_id := StringName(String(value))
+				if (
+					mastered_id != &""
+					and mastered_id in catalog_ids
+					and mastered_id not in mastered_card_ids
+				):
+					mastered_card_ids.append(mastered_id)
 	var unlocked: Array[StringName] = []
 	var raw_unlocked: Variant = profile.get("unlocked_card_ids", null)
 	if typeof(raw_unlocked) == TYPE_ARRAY:
@@ -385,7 +409,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		unlocked = _default_unlocked_ids()
 	if unlocked.size() < MAIN_DECK_CAPACITY:
 		return create_default_profile()
-	if run_active and schema_version >= SCHEMA_VERSION:
+	if run_active and schema_version >= COMPLETED_RUN_HISTORY_SCHEMA_VERSION:
 		var raw_pending_rewards: Variant = profile.get("pending_reward_card_ids", [])
 		if typeof(raw_pending_rewards) == TYPE_ARRAY:
 			for value: Variant in raw_pending_rewards as Array:
@@ -432,6 +456,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"effective_duel_count": effective_duel_count,
 		"defeated_enemy_ids": _string_array(defeated_enemy_ids),
 		"best_scores_by_sect": best_scores_by_sect,
+		"mastered_card_ids": _string_array(mastered_card_ids),
 		"unlocked_sect_ids": _string_array(unlocked_sects),
 		"unlocked_card_ids": _string_array(unlocked),
 		"main_deck": _string_array(deck),
@@ -696,11 +721,25 @@ func get_best_scores_by_sect(profile: Dictionary) -> Dictionary:
 	return (profile["best_scores_by_sect"] as Dictionary).duplicate(true)
 
 
+func get_mastered_card_ids(profile: Dictionary) -> Array[StringName]:
+	var result: Array[StringName] = []
+	if not is_profile_valid(profile):
+		return result
+	for value: Variant in profile["mastered_card_ids"]:
+		result.append(StringName(String(value)))
+	return result
+
+
+func is_card_mastered(profile: Dictionary, card_id: StringName) -> bool:
+	return card_id in get_mastered_card_ids(profile)
+
+
 func record_completed_duel_and_save(
 	profile: Dictionary,
 	outcome: StringName,
 	victories_required: int = DEFAULT_VICTORIES_REQUIRED,
-	enemy_id_override: StringName = &""
+	enemy_id_override: StringName = &"",
+	mastery_candidate_ids: Array = []
 ) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	var failed: Dictionary = {
@@ -735,6 +774,7 @@ func record_completed_duel_and_save(
 			"added_ids": [],
 		}
 
+	_apply_mastery_candidates(candidate, mastery_candidate_ids)
 	var defeated_enemy_id: StringName = get_current_enemy_id(candidate)
 	(candidate["defeated_enemy_ids"] as Array).append(String(defeated_enemy_id))
 	if (candidate["defeated_enemy_ids"] as Array).size() >= victories_required:
@@ -1099,6 +1139,32 @@ func _record_best_score(profile: Dictionary, summary: Dictionary) -> void:
 	if not best_scores.has(sect_id) or score > int(best_scores[sect_id]):
 		best_scores[sect_id] = score
 	profile["best_scores_by_sect"] = best_scores
+
+
+func _apply_mastery_candidates(profile: Dictionary, candidate_ids: Array) -> void:
+	var main_deck_set: Dictionary = {}
+	for value: Variant in profile.get("main_deck", []):
+		main_deck_set[StringName(String(value))] = true
+	var mastered_ids: Array[StringName] = []
+	var mastered_set: Dictionary = {}
+	for value: Variant in profile.get("mastered_card_ids", []):
+		var mastered_id := StringName(String(value))
+		if mastered_id == &"" or mastered_set.has(mastered_id):
+			continue
+		mastered_ids.append(mastered_id)
+		mastered_set[mastered_id] = true
+	for value: Variant in candidate_ids:
+		var card_id := StringName(String(value))
+		if (
+			card_id == &""
+			or not Catalog.has_card(card_id)
+			or not main_deck_set.has(card_id)
+			or mastered_set.has(card_id)
+		):
+			continue
+		mastered_ids.append(card_id)
+		mastered_set[card_id] = true
+	profile["mastered_card_ids"] = _string_array(mastered_ids)
 
 
 func _build_closed_run_profile(profile: Dictionary) -> Dictionary:

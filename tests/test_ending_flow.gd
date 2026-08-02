@@ -44,6 +44,8 @@ func _run() -> void:
 	await process_frame
 	var duel := flow.debug_get_current_screen() as DuelController
 	_check(duel != null, "Final-flow fixture enters the duel")
+	var mastery_fixture_id: StringName = store.get_main_deck_ids(store.load_profile())[0]
+	duel.call("_record_mastery_candidate", mastery_fixture_id)
 	duel.return_requested.emit(DuelController.OUTCOME_VICTORY)
 	await process_frame
 
@@ -53,6 +55,10 @@ func _run() -> void:
 	_check(int(summary.get("score", -1)) == 15000, "Threshold-one final victory displays the formula score")
 	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi"], "Ending receives the defeated enemy history")
 	var completed_profile: Dictionary = store.load_profile()
+	_check(
+		store.is_card_mastered(completed_profile, mastery_fixture_id),
+		"Final victory records mastery before closing the run"
+	)
 	_check(not bool(completed_profile["run_active"]), "Final-victory routing persists a closed run")
 	_check((completed_profile["pending_reward_card_ids"] as Array).is_empty(), "Final victory bypasses reward creation")
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Final-victory routing restores the default deck")

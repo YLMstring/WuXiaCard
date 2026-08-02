@@ -206,6 +206,14 @@ respectively, in row-major order. The source itself is eligible.
 - Unlock expansion and victory progression save atomically. Loading or
   repairing an existing valid profile never retroactively applies the namesake
   cascade.
+- Card mastery is a global exact-ID achievement. The ID must belong to the
+  main deck captured at duel start, and some hand copy of that same ID must be
+  successfully played before a victory. Runtime instance identity does not
+  matter, so drawn or freshly created identical copies qualify; a namesake with
+  another catalog ID does not.
+- Only victory commits mastery. `闭关重修` preserves it and `封剑归隐` clears
+  it. Revealed library/reward cards derive blue/red appearance from mastery;
+  enemy reveals remain red and reward placeholder backs remain random.
 
 ## Run Completion and Score
 

@@ -17,10 +17,22 @@ func _init() -> void:
 
 func _run() -> void:
 	_cleanup()
+	var fixture_store: RefCounted = Store.new(_save_path)
+	var fixture_profile: Dictionary = fixture_store.create_default_profile()
+	var mastered_library_id := StringName(String(fixture_profile["library_slots"][0]))
+	fixture_profile["mastered_card_ids"] = [String(mastered_library_id)]
+	_check(fixture_store.save_profile(fixture_profile), "Mastery color fixture saves")
 	var builder: Variant = BUILDER_SCENE.instantiate()
 	builder.profile_path = _save_path
 	builder.testing_mode = false
-	builder.library_color_seed = 12345
+	var enemy_fixture_ids: Array[StringName] = [
+		&"CangSongYingKe2",
+		&"fire_envoy",
+		&"tiger_general",
+		&"strategist",
+		&"sun_zan",
+	]
+	builder.upcoming_enemy_card_ids = enemy_fixture_ids
 	root.add_child(builder)
 	builder.size = Vector2(540.0, 960.0)
 	await process_frame
@@ -98,17 +110,26 @@ func _run() -> void:
 		"Go-first ink restores on release"
 	)
 	var profile: Dictionary = builder.debug_get_profile()
-	_check(_occupied_count(profile["library_slots"]) == 4, "Production scene starts with four library cards")
-	_check(grid.debug_get_bound_slot(4).is_empty(), "First slot after the full four-card row is empty")
+	var occupied_library_count: int = _occupied_count(profile["library_slots"])
+	_check(occupied_library_count > 0, "Production scene starts with library cards")
+	_check(
+		grid.debug_get_bound_slot(occupied_library_count).is_empty(),
+		"First slot after the occupied library cards is empty"
+	)
 	var display_owner_ids: Array[int] = builder.debug_get_library_display_owner_ids()
-	_check(display_owner_ids.size() == 1000, "Deck-builder entry rolls one stable display color per library slot")
-	for logical_index: int in range(4):
-		var expected_owner: int = display_owner_ids[logical_index]
+	_check(display_owner_ids.size() == 1000, "Deck-builder entry assigns one stable display color per library slot")
+	for logical_index: int in range(occupied_library_count):
+		var card_id := StringName(String(profile["library_slots"][logical_index]))
+		var expected_owner: int = (
+			DuelRules.PLAYER_OWNER
+			if card_id == mastered_library_id
+			else DuelRules.OPPONENT_OWNER
+		)
 		var library_card := grid.debug_get_bound_slot(logical_index).get_node("CardHost/CardView") as CardView
 		_check(
-			expected_owner in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]
+			display_owner_ids[logical_index] == expected_owner
 			and library_card.owner_id == expected_owner,
-			"Occupied library card %d uses its rolled blue-or-red appearance" % logical_index
+			"Occupied library card %d derives blue-or-red appearance from mastery" % logical_index
 		)
 
 	for slot: Node in opponent_hand.get_children():
@@ -117,7 +138,7 @@ func _run() -> void:
 
 	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
 	var tier_totals: Vector2i = builder.debug_get_tier_totals()
-	_check(tier_totals == Vector2i(6, 5), "Default player and enemy tier totals are calculated from catalog data")
+	_check(tier_totals == Vector2i(7, 6), "Player and enemy tier totals are calculated from catalog data")
 	_check(not builder.debug_can_go_first(), "Higher-tier player deck blocks the go-first choice")
 	var blocked_character := go_first.get_node("Characters/Qiang") as TextureRect
 	var blocked_material := blocked_character.material as ShaderMaterial
@@ -135,12 +156,24 @@ func _run() -> void:
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	_check(_back_count == 1 and builder.get_parent() == root, "Back button emits without navigating")
 
-	var old_deck_card: String = String(profile["main_deck"][0])
-	var old_library_card: String = String(profile["library_slots"][0])
-	_check(builder.debug_exchange(0, 0), "Valid library-to-deck exchange succeeds")
+	var exchange_library_index: int = _find_card_at_tier(profile["library_slots"], 1)
+	var exchange_deck_index: int = _find_card_at_tier(profile["main_deck"], 2)
+	_check(exchange_library_index >= 0 and exchange_deck_index >= 0, "Eligibility fixture finds tier-one and tier-two cards")
+	var old_deck_card: String = String(profile["main_deck"][exchange_deck_index])
+	var old_library_card: String = String(profile["library_slots"][exchange_library_index])
+	_check(
+		builder.debug_exchange(exchange_library_index, exchange_deck_index),
+		"Valid library-to-deck exchange succeeds"
+	)
 	var exchanged: Dictionary = builder.debug_get_profile()
-	_check(String(exchanged["main_deck"][0]) == old_library_card, "Library card enters selected main-deck slot")
-	_check(String(exchanged["library_slots"][0]) == old_deck_card, "Displaced card occupies exact library source")
+	_check(
+		String(exchanged["main_deck"][exchange_deck_index]) == old_library_card,
+		"Library card enters selected main-deck slot"
+	)
+	_check(
+		String(exchanged["library_slots"][exchange_library_index]) == old_deck_card,
+		"Displaced card occupies exact library source"
+	)
 	_check(builder.debug_can_go_first(), "Deck exchange immediately refreshes go-first eligibility")
 	go_first.pressed.emit()
 	_check(_duel_requests.back() == DuelRules.PLAYER_OWNER, "Eligible go-first choice requests a player opening turn")
@@ -162,7 +195,7 @@ func _run() -> void:
 	)
 	_check(
 		drag_proxy.owner_id == grid.get_display_owner_id(1),
-		"Library drag preview preserves the source card's rolled color"
+		"Library drag preview preserves the source card's mastery color"
 	)
 	builder.call("_on_library_drag_ended", 1, target_point)
 	var dragged_profile: Dictionary = builder.debug_get_profile()
@@ -197,14 +230,18 @@ func _run() -> void:
 	var testing_builder: Variant = BUILDER_SCENE.instantiate()
 	testing_builder.profile_path = _save_path
 	testing_builder.testing_mode = true
-	testing_builder.library_color_seed = 67890
 	root.add_child(testing_builder)
 	await process_frame
 	var testing_hand: HBoxContainer = testing_builder.get_node("DuelCanvas/OpponentHand") as HBoxContainer
 	var all_revealed: bool = true
 	for slot: Node in testing_hand.get_children():
-		all_revealed = all_revealed and not (slot.get_child(0) as CardView).is_face_down()
-	_check(all_revealed, "Testing mode reveals all opponent cards")
+		var enemy_card := slot.get_child(0) as CardView
+		all_revealed = (
+			all_revealed
+			and not enemy_card.is_face_down()
+			and enemy_card.owner_id == DuelRules.OPPONENT_OWNER
+		)
+	_check(all_revealed, "Testing mode reveals every opponent card in red")
 
 	testing_builder.queue_free()
 	await process_frame
@@ -218,6 +255,16 @@ func _occupied_count(slots: Array) -> int:
 		if not String(value).is_empty():
 			result += 1
 	return result
+
+
+func _find_card_at_tier(card_ids: Array, tier: int) -> int:
+	for index: int in range(card_ids.size()):
+		var card_id := StringName(String(card_ids[index]))
+		if card_id == &"":
+			continue
+		if int(Catalog.get_definition(card_id).get("tier", 0)) == tier:
+			return index
+	return -1
 
 
 func _cleanup() -> void:
