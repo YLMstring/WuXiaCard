@@ -18,6 +18,8 @@ The image contains no characters, title text, people, scenery, or small card det
 
 **Selected direction:** Variant 2, Ink Rupture. Its large single-sword silhouette and dry-brush diagonal remain the clearest and most distinctive at 128×128.
 
+**Mobile-safe revision:** The complete sword, grid, ink stroke, and red accent stay inside the centered inner 68% of the canvas, with disposable lacquer background around them for launcher masks. The blade uses one broad, continuous reflection rather than multiple separated highlights.
+
 All variants use the same visual language as the game: charcoal black, aged parchment, warm antique gold, restrained crimson, and cool steel. They must avoid photographic clutter, excessive ornament, generic crossed-sword heraldry, and details that disappear below 128×128.
 
 ## Deliverables and evaluation
