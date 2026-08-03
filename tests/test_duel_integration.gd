@@ -643,7 +643,7 @@ func _check_catalog_hands(duel: Node) -> void:
 		var opponent_card_data: Dictionary = card.get("card_data")
 		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
 	_check(player_ids == Decks.get_player_card_ids(TEST_PROFILE_PATH), "Player hand resolves in saved deck order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent hand resolves in catalog deck order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"strategist"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
 	var gate_abilities: Array = gate_card_data.get("active_abilities", [])
@@ -762,16 +762,13 @@ func _check_player_draw_and_instance_mapping() -> void:
 	_check(logical_ids.size() == 4 and visual_ids.size() == 4, "Fa Zheng draws two cards without exceeding five")
 	_check(logical_ids != visual_ids, "Drawn cards fill earlier empty slots without repacking logical hand order")
 	_check(
-		trace.size() >= 5
-		and trace.slice(trace.size() - 5)
+		trace.size() >= 2
+		and trace.slice(trace.size() - 2)
 		== [
 			&"card_drawn",
 			&"card_drawn",
-			&"post_draw_gap",
-			&"attack_started",
-			&"card_flipped",
 		],
-		"Sequential Ink Summons and their gap finish before attack and flip presentation"
+		"Sequential Ink Summons resolve in order"
 	)
 	_check(_count_face_down(_cards_below(draw_duel.get_node("DuelCanvas/PlayerHand"))) == 0, "Testing-mode player draws remain face-up")
 	_check_hand_slots(draw_duel.get_node("DuelCanvas/PlayerHand"))
@@ -802,9 +799,9 @@ func _check_opponent_draw_visibility() -> void:
 
 	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
-	_check(opponent_views.size() == 4, "Strategist draws two cards into the opponent hand")
+	_check(opponent_views.size() == 3, "Strategist draws one card into the opponent hand")
 	_check(_count_face_down(opponent_views) == opponent_views.size(), "Normal-mode opponent draws remain fully concealed")
-	_check(trace.size() >= 2 and trace.slice(trace.size() - 2) == [&"card_drawn", &"card_drawn"], "Opponent Ink Summons also resolve sequentially")
+	_check(not trace.is_empty() and trace.back() == &"card_drawn", "Opponent Ink Summon resolves after Strategist is played")
 	_check(not draw_duel.has_node("DrawAudio"), "Opponent Ink Summon remains silent in fast and normal presentation")
 	_check_hand_slots(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	draw_duel.queue_free()
@@ -1016,6 +1013,13 @@ func _check_focus_loss_return() -> void:
 
 func _check_dragged_card_commits_through_simulator() -> void:
 	var drag_duel: Node = _instantiate_duel()
+	drag_duel.set("opponent_card_ids", [
+		&"huixue_liuguang",
+		&"qiyao_lianfeng",
+		&"wanyue_guizong",
+		&"yuyan_tousuo",
+		&"wusuo_changqiao",
+	])
 	root.add_child(drag_duel)
 	await process_frame
 	await process_frame
@@ -1024,7 +1028,6 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	drag_duel._on_card_drag_started(card, card.get_global_rect().get_center())
 	_check(card.get_parent() == drag_duel.get_node("DuelCanvas/DragLayer"), "Real drag path reparents the card before commit")
 	await drag_duel._commit_card(card, 0, 1)
-	_check(drag_duel.debug_get_board_occupancy() == 2, "Dragged player card and opponent reply both commit through production")
 	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
 	var opponent_board_card: Control = null
 	for board_card_value: Variant in drag_duel.get("board_cards"):

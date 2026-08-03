@@ -30,7 +30,7 @@ func _run() -> void:
 		&"fire_envoy",
 		&"tiger_general",
 		&"strategist",
-		&"sun_zan",
+		&"LaiHeQinQuan2",
 	]
 	builder.upcoming_enemy_card_ids = enemy_fixture_ids
 	root.add_child(builder)
@@ -138,7 +138,7 @@ func _run() -> void:
 
 	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
 	var tier_totals: Vector2i = builder.debug_get_tier_totals()
-	_check(tier_totals == Vector2i(7, 6), "Player and enemy tier totals are calculated from catalog data")
+	_check(tier_totals == Vector2i(8, 7), "Player and enemy tier totals are calculated from catalog data")
 	_check(not builder.debug_can_go_first(), "Higher-tier player deck blocks the go-first choice")
 	var blocked_character := go_first.get_node("Characters/Qiang") as TextureRect
 	var blocked_material := blocked_character.material as ShaderMaterial

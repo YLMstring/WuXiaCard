@@ -5,7 +5,6 @@ const Decks = preload("res://scripts/duel_decks.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
-	&"hanfeng_liezhen",
 	&"huixue_liuguang",
 	&"qiyao_lianfeng",
 	&"wanyue_guizong",
@@ -60,7 +59,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 41, "Catalog contains all forty-one current cards")
+	_check(Catalog.get_all_card_ids().size() == 44, "Catalog contains all forty-four current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -82,12 +81,15 @@ func _test_catalog_definitions() -> void:
 		&"ZiXiaGong4": "res://pics/LKT010_496.png",
 		&"gate_general": "res://pics/LKT010_002.png",
 		&"meng_huo": "res://pics/LKT010_003.png",
-		&"fa_zheng": "res://pics/LKT010_005.png",
+		&"fa_zheng": "res://pics/LKT010_002.png",
 		&"fire_envoy": "res://pics/LKT010_007.png",
 		&"tiger_general": "res://pics/LKT010_008.png",
-		&"strategist": "res://pics/LKT010_009.png",
-		&"sun_zan": "res://pics/LKT010_010.png",
-		&"hanfeng_liezhen": "res://pics/LKT010_011.png",
+		&"strategist": "res://pics/LKT010_002.png",
+		&"LaiHeQinQuan1": "res://pics/LKT010_001.png",
+		&"LaiHeQinQuan2": "res://pics/LKT010_001.png",
+		&"LaiHeQinQuan3": "res://pics/LKT010_001.png",
+		&"LaiHeQinQuan4": "res://pics/LKT010_004.png",
+		&"LaiHeQinQuan5": "res://pics/LKT010_004.png",
 		&"huixue_liuguang": "res://pics/LKT010_012.png",
 		&"qiyao_lianfeng": "res://pics/LKT010_013.png",
 		&"wanyue_guizong": "res://pics/LKT010_014.png",
@@ -128,7 +130,7 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 41, "Catalog IDs are unique")
+	_check(observed_ids.size() == 44, "Catalog IDs are unique")
 
 
 func _test_definition_schema_validation() -> void:
@@ -178,7 +180,6 @@ func _test_definition_copy_isolation() -> void:
 
 func _test_new_sect_card_definitions() -> void:
 	var expected_sects: Dictionary = {
-		&"hanfeng_liezhen": "玄岳剑宗",
 		&"huixue_liuguang": "玄岳剑宗",
 		&"qiyao_lianfeng": "玄岳剑宗",
 		&"wanyue_guizong": "玄岳剑宗",
@@ -206,7 +207,7 @@ func _test_new_sect_card_definitions() -> void:
 			observed_new_sect_ids.append(card_id)
 	_check(
 		observed_new_sect_ids == NEW_SECT_CARD_IDS,
-		"Twenty sect cards preserve their approved catalog order"
+		"Nineteen placeholder sect cards preserve their approved catalog order"
 	)
 	for card_id: StringName in NEW_SECT_CARD_IDS:
 		var definition: Dictionary = Catalog.get_definition(card_id)
@@ -221,7 +222,7 @@ func _test_new_sect_card_definitions() -> void:
 		var picture_path := String(definition.get("picture", ""))
 		_check(not observed_pictures.has(picture_path), "%s uses a distinct picture" % card_id)
 		observed_pictures[picture_path] = true
-	_check(observed_pictures.size() == 20, "All twenty sect cards use distinct pictures")
+	_check(observed_pictures.size() == 19, "All nineteen placeholder sect cards use distinct pictures")
 
 
 func _test_ability_declarations() -> void:
@@ -250,7 +251,8 @@ func _test_ability_declarations() -> void:
 		var trigger: Dictionary = (ability.get("triggers", []) as Array)[0]
 		_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED, "%s draws after summon reactions" % card_id)
 		_check(trigger.get("conditions", []) == [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "%s only draws for its own summon" % card_id)
-		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 2}], "%s declares draw two" % card_id)
+		var expected_amount: int = 2 if card_id == &"fa_zheng" else 1
+		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_DRAW_CARDS, "amount": expected_amount}], "%s declares its catalog draw amount" % card_id)
 		var instance: Dictionary = Catalog.create_instance(card_id, 1, StringName("test_%s" % card_id))
 		var active_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
 		_check(active_ability.has("retained_on_flip") and not bool(active_ability["retained_on_flip"]), "%s runtime ability normalizes missing retention to false" % card_id)
@@ -265,7 +267,7 @@ func _test_encounter_decks() -> void:
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
 	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"YouFenLaiYi2", &"fa_zheng"], "Player deck preserves current hand order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"sun_zan"], "Opponent deck preserves current hand order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"strategist"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
 	for suffix: String in ["", ".tmp", ".bak"]:

@@ -5,7 +5,6 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
-	&"hanfeng_liezhen",
 	&"huixue_liuguang",
 	&"qiyao_lianfeng",
 	&"wanyue_guizong",
@@ -383,7 +382,7 @@ func _run() -> void:
 	var begin_result: Dictionary = store.begin_run_and_save(
 		run_start_source,
 		&"HuaShanPai",
-		[&"hanfeng_liezhen"],
+		[&"CangSongYingKe1"],
 		&"qingfeng_xuedi"
 	)
 	_check(bool(begin_result.get("ok", false)), "Beginning a valid run saves atomically")
@@ -429,11 +428,11 @@ func _run() -> void:
 		"Beginning a run records the selected sect"
 	)
 	_check(
-		String(active_profile["library_slots"][0]) == "hanfeng_liezhen",
+		String(active_profile["library_slots"][0]) == "CangSongYingKe1",
 		"Newly unlocked run cards appear at the top of the library"
 	)
 	_check(
-		(begin_result.get("added_ids", []) as Array) == [&"hanfeng_liezhen"],
+		(begin_result.get("added_ids", []) as Array) == [&"CangSongYingKe1"],
 		"Run start reports every newly owned sect card"
 	)
 
@@ -444,7 +443,7 @@ func _run() -> void:
 	var reward_family_begin: Dictionary = store.begin_run_and_save(
 		reward_family_source,
 		&"HuaShanPai",
-		[&"hanfeng_liezhen"],
+		[&"CangSongYingKe1"],
 		&"qingfeng_xuedi"
 	)
 	var reward_family_profile: Dictionary = reward_family_begin.get("profile", {})
@@ -468,10 +467,8 @@ func _run() -> void:
 	)
 	_check(
 		String(reward_family_result["library_slots"][1 + reward_family_before.size()])
-		== "CangSongYingKe1"
-		and String(reward_family_result["library_slots"][2 + reward_family_before.size()])
 		== "CangSongYingKe3",
-		"Reward inheritance appends lower-tier namesakes at the bottom"
+		"Reward inheritance appends only the still-locked lower-tier namesake at the bottom"
 	)
 	_check(
 		store.get_pending_reward_ids(reward_family_result).is_empty(),
@@ -667,7 +664,7 @@ func _run() -> void:
 	_check(failed_save.get("profile", {}) == saved_before_failure, "Save failure rolls back candidate data")
 	var failed_batch: Dictionary = failing_store.unlock_cards_and_save(
 		saved_before_failure,
-		[&"hanfeng_liezhen"]
+		[&"CangSongYingKe1"]
 	)
 	_check(not bool(failed_batch.get("ok", true)), "Batch save failure is reported")
 	_check(failed_batch.get("profile", {}) == saved_before_failure, "Batch save failure rolls back candidate data")

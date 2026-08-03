@@ -146,8 +146,9 @@ func _run() -> void:
 	locked_slot.debug_end_pointer(locked_center)
 	_check(selector.debug_get_selected_sect_id() == &"TaiShanPai", "Holding a locked sect updates selection")
 	_check(
-		selector.debug_get_upper_preview_ids().is_empty(),
-		"A locked sect without cards leaves the preview empty"
+		selector.debug_get_upper_preview_ids()
+		== [&"LaiHeQinQuan5", &"LaiHeQinQuan4", &"LaiHeQinQuan3", &"LaiHeQinQuan2", &"LaiHeQinQuan1"],
+		"A locked sect previews its five highest-tier cards"
 	)
 	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
 	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")

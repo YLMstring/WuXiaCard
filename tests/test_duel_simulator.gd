@@ -970,8 +970,16 @@ func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> v
 
 func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
 	var board: Array = Rules.empty_board()
-	var sun_zan: Dictionary = Catalog.create_instance(&"sun_zan", Rules.OPPONENT_OWNER, &"flip_sun")
-	board[5] = {"card": sun_zan, "owner": Rules.OPPONENT_OWNER}
+	var mover: Dictionary = Rules.make_card(
+		"Mover",
+		"移",
+		[3, 5, 8, 1],
+		[_move_ability()],
+		Rules.OPPONENT_OWNER
+	)
+	mover["instance_id"] = &"flip_mover"
+	mover["ki"] = 1
+	board[5] = {"card": mover, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
@@ -1008,8 +1016,16 @@ func _test_greedy_tie_prefers_play_over_spending_ki() -> void:
 
 func _test_search_can_choose_activate_action() -> void:
 	var board: Array = Rules.empty_board()
-	var sun_zan: Dictionary = Catalog.create_instance(&"sun_zan", Rules.OPPONENT_OWNER, &"search_sun")
-	board[4] = {"card": sun_zan, "owner": Rules.OPPONENT_OWNER}
+	var mover: Dictionary = Rules.make_card(
+		"Mover",
+		"移",
+		[3, 5, 8, 8],
+		[_move_ability()],
+		Rules.OPPONENT_OWNER
+	)
+	mover["instance_id"] = &"search_mover"
+	mover["ki"] = 1
+	board[4] = {"card": mover, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
 	var choice: Action = Search.find_best_action(state, 2, Rules.OPPONENT_OWNER)
 	_check(choice.action_type == Action.TYPE_ACTIVATE, "Deep search considers board activate actions")
@@ -1883,8 +1899,8 @@ func _test_state_copy_is_isolated() -> void:
 	)
 	(player_deck[0] as Dictionary)["glyph"] = "异"
 	(opponent_deck[0] as Dictionary)["glyph"] = "异"
-	_check(String(((original.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary)["glyph"]) == "法", "State constructor deep-copies the player side deck")
-	_check(String(((original.decks[Rules.OPPONENT_OWNER] as Array)[0] as Dictionary)["glyph"]) == "策", "State constructor deep-copies the opponent side deck")
+	_check(String(((original.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary)["glyph"]) == "吐纳术", "State constructor deep-copies the player side deck")
+	_check(String(((original.decks[Rules.OPPONENT_OWNER] as Array)[0] as Dictionary)["glyph"]) == "吐纳术", "State constructor deep-copies the opponent side deck")
 	var copied = original.duplicate_state()
 	copied.board[0] = {"card": Rules.make_card("Copy", "副", [5, 5, 5, 5]), "owner": Rules.PLAYER_OWNER}
 	copied.get_hand(Rules.PLAYER_OWNER).clear()
@@ -1898,7 +1914,7 @@ func _test_state_copy_is_isolated() -> void:
 	_check(original.board[0] == null, "Duplicating state isolates board mutation")
 	_check(original.get_hand(Rules.PLAYER_OWNER).size() == 1, "Duplicating state isolates hand mutation")
 	var original_top: Dictionary = (original.decks[Rules.PLAYER_OWNER] as Array)[0]
-	_check(int((original_top["powers"] as Array)[0]) == 5, "Duplicating state isolates nested side-deck powers")
+	_check(int((original_top["powers"] as Array)[0]) == 1, "Duplicating state isolates nested side-deck powers")
 	var original_abilities: Array = original_top["active_abilities"]
 	var original_triggers: Array = (original_abilities[0] as Dictionary)["triggers"]
 	var original_actions: Array = (original_triggers[0] as Dictionary)["actions"]
