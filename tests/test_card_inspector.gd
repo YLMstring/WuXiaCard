@@ -65,6 +65,7 @@ func _run() -> void:
 	_check(flavor.text == "华山剑法的绝招。", "Flavor text is displayed separately")
 	_check(description.language == "zh" and flavor.language == "zh", "Wrapped inspector text explicitly uses Chinese line-breaking rules")
 	_check(scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED, "Inspector never scrolls horizontally")
+	_check(scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_SHOW_NEVER, "Inspector scrollbar stays hidden while long text remains scrollable")
 
 	inspector.call("present", {
 		"glyph": "",
