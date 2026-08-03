@@ -16,6 +16,8 @@ The image contains no characters, title text, people, scenery, or small card det
 2. **Ink rupture:** stronger black ink bloom and dry-brush energy around the sword's path, while preserving the grid.
 3. **Ember center:** darker outer cells and a more dramatic red center glow, with the sword acting as the brightest element.
 
+**Selected direction:** Variant 2, Ink Rupture. Its large single-sword silhouette and dry-brush diagonal remain the clearest and most distinctive at 128×128.
+
 All variants use the same visual language as the game: charcoal black, aged parchment, warm antique gold, restrained crimson, and cool steel. They must avoid photographic clutter, excessive ornament, generic crossed-sword heraldry, and details that disappear below 128×128.
 
 ## Deliverables and evaluation
