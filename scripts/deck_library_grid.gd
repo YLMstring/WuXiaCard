@@ -50,6 +50,8 @@ var _recycling_frozen: bool = false
 var _pending_refresh: bool = false
 var _manual_mouse_scroll_active: bool = false
 var _manual_mouse_scroll_last: Vector2 = Vector2.ZERO
+var _drag_scroll_locked: bool = false
+var _drag_scroll_offset: int = 0
 var _total_rows: int = TOTAL_ROWS
 var _pooled_rows: int = POOLED_ROWS
 
@@ -162,6 +164,7 @@ func cancel_active_gesture() -> void:
 	for slot: Variant in _slot_pool:
 		slot.cancel_gesture()
 	_manual_mouse_scroll_active = false
+	_set_drag_scroll_locked(false)
 	_recycling_frozen = false
 	if _pending_refresh:
 		_refresh_pool(true)
@@ -393,6 +396,10 @@ func _normalized_display_owner(owner_id: int) -> int:
 
 
 func _on_scroll_changed(_value: float) -> void:
+	if _drag_scroll_locked:
+		if scroll.scroll_vertical != _drag_scroll_offset:
+			scroll.scroll_vertical = _drag_scroll_offset
+		return
 	_refresh_pool()
 
 
@@ -413,6 +420,7 @@ func _input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_EXIT_TREE:
 		_manual_mouse_scroll_active = false
+		_set_drag_scroll_locked(false)
 
 
 func _on_slot_mouse_scroll_started(
@@ -447,6 +455,7 @@ func _on_slot_drag_armed(logical_index: int, data: Dictionary) -> void:
 	if not interaction_enabled:
 		return
 	_recycling_frozen = true
+	_set_drag_scroll_locked(true)
 	drag_armed.emit(logical_index, data)
 
 
@@ -461,11 +470,31 @@ func _on_slot_drag_moved(logical_index: int, pointer_position: Vector2) -> void:
 
 
 func _on_slot_drag_ended(logical_index: int, pointer_position: Vector2) -> void:
+	_set_drag_scroll_locked(false)
 	if interaction_enabled:
 		drag_ended.emit(logical_index, pointer_position)
 	_recycling_frozen = false
 	if _pending_refresh:
 		_refresh_pool(true)
+
+
+func _set_drag_scroll_locked(value: bool) -> void:
+	if value == _drag_scroll_locked:
+		return
+	if value:
+		_drag_scroll_offset = scroll.scroll_vertical
+		_drag_scroll_locked = true
+		_manual_mouse_scroll_active = false
+		scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return
+	if scroll.scroll_vertical != _drag_scroll_offset:
+		scroll.scroll_vertical = _drag_scroll_offset
+	_drag_scroll_locked = false
+	scroll.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+		if interaction_enabled
+		else Control.MOUSE_FILTER_IGNORE
+	)
 
 
 func _style_parchment() -> void:

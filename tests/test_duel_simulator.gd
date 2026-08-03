@@ -32,6 +32,7 @@ func _run() -> void:
 	_test_draw_on_play_handles_empty_deck()
 	_test_turn_passes_to_owner_with_a_legal_move()
 	_test_reopened_cell_keeps_match_alive()
+	_test_full_board_ends_before_next_turn_starts()
 	_test_terminal_requires_both_players_to_be_stuck()
 	_test_greedy_choice_matches_prototype()
 	_test_greedy_ai_values_flip_over_equal_exile()
@@ -657,6 +658,103 @@ func _test_reopened_cell_keeps_match_alive() -> void:
 	_check(not Simulator.is_terminal(next_state), "Reopened cell prevents premature terminal state")
 	var reply_moves: Array = Simulator.get_legal_actions(next_state)
 	_check(reply_moves.size() == 1 and (reply_moves[0] as Object).target_index == 5, "Reopened cell is the opponent's legal reply")
+
+
+func _test_full_board_ends_before_next_turn_starts() -> void:
+	var board: Array = Rules.empty_board()
+	var end_source: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong4",
+		Rules.PLAYER_OWNER,
+		&"full_board_end_source"
+	)
+	var end_target: Dictionary = _make_runtime_card(
+		"End Target",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"full_board_end_target"
+	)
+	var start_source: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong3",
+		Rules.OPPONENT_OWNER,
+		&"full_board_start_source"
+	)
+	board[0] = {"card": end_source, "owner": Rules.PLAYER_OWNER}
+	board[1] = {"card": end_target, "owner": Rules.PLAYER_OWNER}
+	board[2] = {"card": start_source, "owner": Rules.OPPONENT_OWNER}
+	for cell_index: int in range(3, 8):
+		board[cell_index] = {
+			"card": _make_runtime_card(
+				"Filler %d" % cell_index,
+				[9, 9, 9, 9],
+				Rules.PLAYER_OWNER,
+				StringName("full_board_filler_%d" % cell_index)
+			),
+			"owner": Rules.PLAYER_OWNER,
+		}
+	var played: Dictionary = _make_runtime_card(
+		"Ninth",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"full_board_ninth"
+	)
+	var opponent_hand: Dictionary = _make_runtime_card(
+		"Start Target",
+		[2, 2, 2, 2],
+		Rules.OPPONENT_OWNER,
+		&"full_board_start_target"
+	)
+	var state := State.new(board, [played], [opponent_hand], Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var next_state: State = transition.get("state") as State
+	var buffed_end_target: Dictionary = (next_state.board[1] as Dictionary).get("card", {})
+	var untouched_start_target: Dictionary = next_state.get_hand(Rules.OPPONENT_OWNER)[0]
+	_check(
+		buffed_end_target.get("powers", []) == [2, 2, 2, 2],
+		"The current owner's end-turn triggers still resolve after the ninth play"
+	)
+	_check(
+		untouched_start_target.get("powers", []) == [2, 2, 2, 2],
+		"A full board prevents the next owner's start-turn triggers"
+	)
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1,
+		"The completed ninth move advances the counter without starting another turn"
+	)
+	_check(Simulator.is_terminal(next_state), "A board with all nine cells occupied is terminal")
+
+	var swap_ability: Dictionary = {
+		"retained_on_flip": false,
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ADJACENT_ALLY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [{"type": Catalog.ACTION_SWAP_SELF_WITH_TARGET}],
+		},
+	}
+	var activator: Dictionary = _make_runtime_card(
+		"Full Activator",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"full_board_activator",
+		[swap_ability]
+	)
+	activator["ki"] = 1
+	var activation_board: Array = next_state.board.duplicate(true)
+	activation_board[4] = {"card": activator, "owner": Rules.PLAYER_OWNER}
+	var activation_state := State.new(
+		activation_board,
+		[],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	_check(
+		not Simulator.get_legal_actions(activation_state).is_empty(),
+		"The full-board probe has an otherwise legal activate action"
+	)
+	_check(
+		Simulator.is_terminal(activation_state),
+		"A full board ends the duel even when an activate ability is legal"
+	)
 
 
 func _test_terminal_requires_both_players_to_be_stuck() -> void:

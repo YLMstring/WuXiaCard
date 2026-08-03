@@ -113,6 +113,8 @@ static func is_terminal(state: StateData) -> bool:
 		return true
 	if not state.effect_queue.is_empty():
 		return false
+	if _board_is_full(state.board):
+		return true
 	return (
 		get_legal_actions_for_owner(state, Rules.PLAYER_OWNER).is_empty()
 		and get_legal_actions_for_owner(state, Rules.OPPONENT_OWNER).is_empty()
@@ -678,6 +680,10 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 		result["events"],
 		end_result
 	)
+	state.turn_count += 1
+	state.state_version += 1
+	if _board_is_full(state.board):
+		return result
 	var extra_turn_requests: Array = end_result.get("extra_turn_requests", [])
 	var extra_turn_granted: bool = not extra_turn_requests.is_empty()
 	if extra_turn_granted:
@@ -698,8 +704,6 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 				"request_count": source_instance_ids.size(),
 				"source_instance_ids": source_instance_ids,
 			})
-	state.turn_count += 1
-	state.state_version += 1
 	if extra_turn_granted and not get_legal_actions_for_owner(state, moving_owner).is_empty():
 		state.active_player = moving_owner
 	else:
@@ -716,6 +720,15 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 		start_result
 	)
 	return result
+
+
+static func _board_is_full(board: Array) -> bool:
+	if board.size() != 9:
+		return false
+	for slot_value: Variant in board:
+		if slot_value == null:
+			return false
+	return true
 
 
 static func _normalize_runtime_card(

@@ -160,11 +160,31 @@ func _run() -> void:
 	await process_frame
 	first = grid.debug_get_bound_slot(0)
 
+	grid.set_scroll_offset(20.0)
+	var offset_before_card_drag: float = grid.get_scroll_offset()
 	first.debug_begin_pointer(Vector2(10.0, 10.0))
 	first.debug_force_hold_timeout()
-	_check(_armed_count == 1 and first.is_drag_armed(), "Hold arms drag")
+	_check(
+		_armed_count == 1
+		and first.is_drag_armed()
+		and library_scroll.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Hold arms drag and suppresses native library scrolling"
+	)
+	library_scroll.scroll_vertical += 40
+	await process_frame
+	_check(
+		is_equal_approx(grid.get_scroll_offset(), offset_before_card_drag),
+		"An armed card drag keeps the library at its preserved scroll offset"
+	)
 	first.debug_end_pointer(Vector2(10.0, 10.0))
-	_check(_drag_start_count == 0 and _drag_end_count == 1, "Releasing an armed card without movement cancels the frozen drag")
+	_check(
+		_drag_start_count == 0
+		and _drag_end_count == 1
+		and library_scroll.mouse_filter == Control.MOUSE_FILTER_STOP,
+		"Releasing an armed card restores native library scrolling"
+	)
+	grid.set_scroll_offset(0.0)
+	await process_frame
 
 	first.debug_begin_pointer(Vector2(10.0, 10.0))
 	first.debug_force_hold_timeout()
