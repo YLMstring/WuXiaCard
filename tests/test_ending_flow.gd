@@ -21,7 +21,7 @@ func _run() -> void:
 	var default_profile: Dictionary = store.create_default_profile()
 	var begin: Dictionary = store.begin_run_and_save(
 		default_profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
@@ -62,7 +62,7 @@ func _run() -> void:
 	_check(not bool(completed_profile["run_active"]), "Final-victory routing persists a closed run")
 	_check((completed_profile["pending_reward_card_ids"] as Array).is_empty(), "Final victory bypasses reward creation")
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Final-victory routing restores the default deck")
-	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "Final-victory routing persists the achievement")
+	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Final-victory routing persists the achievement")
 
 	var overflow_fixture: String = ""
 	for index: int in range(20):

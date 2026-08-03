@@ -43,7 +43,7 @@ func _run() -> void:
 	(menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
 	await process_frame
 	selector = flow.debug_get_current_screen() as SelectorController
-	_check(selector.debug_select_sect(&"xuanyue_jianzong"), "Selector accepts the default sect")
+	_check(selector.debug_select_sect(&"HuaShanPai"), "Selector accepts the default sect")
 	_check(selector.debug_confirm_selected_sect(), "Confirming a sect starts the run")
 	await process_frame
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
@@ -51,7 +51,7 @@ func _run() -> void:
 	var active_profile: Dictionary = Store.new(_save_path).load_profile()
 	_check(bool(active_profile["run_active"]), "Sect confirmation persists active-run state")
 	_check(
-		String(active_profile["selected_sect_id"]) == "xuanyue_jianzong",
+		String(active_profile["selected_sect_id"]) == "HuaShanPai",
 		"Sect confirmation persists the chosen sect"
 	)
 	var store := Store.new(_save_path)
@@ -101,6 +101,9 @@ func _run() -> void:
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Duel return still goes back to deck building")
 	var abandoned_profile: Dictionary = store.load_profile()
+	var library_before_victory: Array = (
+		abandoned_profile["library_slots"] as Array
+	).duplicate(true)
 	_check(store.get_character_level(abandoned_profile) == 1, "Abandoning a duel does not level up")
 	_check(
 		store.get_current_enemy_id(abandoned_profile) == level_one_enemy_id,
@@ -134,12 +137,12 @@ func _run() -> void:
 	)
 	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
 	_check(
-		&"huixue_liuguang" in store.get_unlocked_ids(victorious_profile),
-		"Crossing into tier two unlocks the selected sect's tier-two card"
+		&"CangSongYingKe2" in store.get_unlocked_ids(victorious_profile),
+		"Crossing into tier two preserves the selected sect's owned tier-two card"
 	)
 	_check(
-		String(victorious_profile["library_slots"][0]) == "huixue_liuguang",
-		"Automatic tier card reaches the library top before reward selection"
+		victorious_profile["library_slots"] == library_before_victory,
+		"A tier crossing with no newly eligible cards preserves library order"
 	)
 	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
@@ -154,8 +157,8 @@ func _run() -> void:
 	for reward_id: StringName in victory_reward_ids:
 		_check(int(Cards.get_definition(reward_id)["tier"]) == 2, "Victory uses the new tier")
 		_check(
-			reward_id != &"huixue_liuguang",
-			"Automatic tier unlock cannot reappear in the victory reward"
+			reward_id not in store.get_unlocked_ids(abandoned_profile),
+			"An already owned card cannot appear in the victory reward"
 		)
 	_check(reward.debug_claim_reward(0), "Victory reward can be claimed")
 	await process_frame
@@ -223,7 +226,7 @@ func _run() -> void:
 		"Run reset restores the default deck"
 	)
 	_check(
-		&"hanfeng_liezhen" in Store.new(_save_path).get_unlocked_ids(reset_profile),
+		victory_reward_ids[0] in Store.new(_save_path).get_unlocked_ids(reset_profile),
 		"Run reset preserves unlocked cards"
 	)
 	_check(

@@ -34,7 +34,7 @@ func _run() -> void:
 	ending.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	ending.size = Vector2(540.0, 960.0)
 	ending.present({
-		"sect_id": "xuanyue_jianzong",
+		"sect_id": "HuaShanPai",
 		"score": 5000,
 		"effective_duel_count": 3,
 		"defeated_enemy_ids": LONG_ENEMY_IDS,
@@ -62,7 +62,7 @@ func _run() -> void:
 		return
 	_check(story_clip.clip_contents, "Story viewport clips every overflowing line")
 	_check(score.text == "得分 5000", "Ending scene displays the final score")
-	_check(story.text.contains("玄岳剑宗"), "Ending prose names the selected sect")
+	_check(story.text.contains("华山派"), "Ending prose names the selected sect")
 	_check(story.text.contains("清风学弟") and story.text.contains("铁山门人"), "Ending prose names every defeated enemy")
 	_check(story.text.find("清风学弟") < story.text.find("铁山门人"), "Defeated enemies remain chronological")
 	_check(story.text.contains("也曾折剑再战"), "A run with losses uses the comeback prose")
@@ -87,7 +87,7 @@ func _run() -> void:
 	)
 
 	ending.present({
-		"sect_id": "xuanyue_jianzong",
+		"sect_id": "HuaShanPai",
 		"score": 1000,
 		"effective_duel_count": 15,
 		"defeated_enemy_ids": ["qingfeng_xuedi"],
@@ -105,7 +105,7 @@ func _run() -> void:
 	)
 
 	ending.present({
-		"sect_id": "xuanyue_jianzong",
+		"sect_id": "HuaShanPai",
 		"score": 5000,
 		"effective_duel_count": 16,
 		"defeated_enemy_ids": LONG_ENEMY_IDS,

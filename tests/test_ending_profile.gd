@@ -22,7 +22,7 @@ func _run() -> void:
 
 	var begin: Dictionary = store.begin_run_and_save(
 		profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
@@ -88,7 +88,7 @@ func _run() -> void:
 	_check(bool(final_win.get("completed", false)), "The configured victory target completes the run")
 	_check(not bool(final_win.get("advanced", true)), "Final victory does not select another enemy")
 	var summary: Dictionary = final_win.get("ending_summary", {})
-	_check(String(summary.get("sect_id", "")) == "xuanyue_jianzong", "Ending summary records the selected sect")
+	_check(String(summary.get("sect_id", "")) == "HuaShanPai", "Ending summary records the selected sect")
 	_check(int(summary.get("effective_duel_count", 0)) == 3, "Ending summary records every effective duel")
 	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi", "tieshan_menren"], "Ending summary preserves defeated enemies chronologically")
 	_check(int(summary.get("score", -1)) == 5000, "Ending score floors 15000 divided by effective duels")
@@ -102,13 +102,13 @@ func _run() -> void:
 		== [&"fa_zheng", &"gate_general", &"CangSongYingKe2", &"meng_huo"],
 		"Final victory records mastery before closing the run"
 	)
-	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 5000, "Completion stores the sect's first best score")
+	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 5000, "Completion stores the sect's first best score")
 	_check(int(completed_profile["effective_duel_count"]) == 0, "Closed run clears its duel counter")
 	_check((completed_profile["defeated_enemy_ids"] as Array).is_empty(), "Closed run clears its defeated-enemy history")
 
 	var flawless_begin: Dictionary = store.begin_run_and_save(
 		completed_profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
@@ -121,11 +121,11 @@ func _run() -> void:
 	_check(bool(flawless_summary.get("flawless", false)), "A victory-only run is flawless")
 	_check(int(flawless_summary.get("score", -1)) == 15000, "One effective duel earns 15000 points")
 	var best_profile: Dictionary = flawless_finish.get("profile", {})
-	_check(int((best_profile["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "A higher score replaces the previous sect best")
+	_check(int((best_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "A higher score replaces the previous sect best")
 
 	var lower_begin: Dictionary = store.begin_run_and_save(
 		best_profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
@@ -141,16 +141,16 @@ func _run() -> void:
 		Store.REWARD_VICTORY,
 		1
 	)
-	_check(int((lower_finish["profile"]["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "A lower result never replaces the sect best")
+	_check(int((lower_finish["profile"]["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "A lower result never replaces the sect best")
 
 	var reset_begin: Dictionary = store.begin_run_and_save(
 		lower_finish.get("profile", {}),
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
 	var run_reset: Dictionary = store.reset_run_and_save(reset_begin.get("profile", {}))
-	_check(int((run_reset["profile"]["best_scores_by_sect"] as Dictionary)["xuanyue_jianzong"]) == 15000, "Run reset preserves ending achievements")
+	_check(int((run_reset["profile"]["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Run reset preserves ending achievements")
 	_check(
 		store.get_mastered_card_ids(run_reset.get("profile", {}))
 		== store.get_mastered_card_ids(reset_begin.get("profile", {})),

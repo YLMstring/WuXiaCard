@@ -109,7 +109,7 @@ func debug_select_sect(sect_id: StringName, inspect: bool = false) -> bool:
 	var data: Dictionary = Sects.get_definition(sect_id)
 	_select_sect(data)
 	if inspect:
-		_open_inspector(data)
+		_open_inspector(_build_sect_inspector_data(data))
 	return true
 
 
@@ -273,7 +273,7 @@ func _spawn_preview_card_back(
 
 func _on_library_inspection_requested(_logical_index: int, data: Dictionary) -> void:
 	_select_sect(data)
-	_open_inspector(data)
+	_open_inspector(_build_sect_inspector_data(data))
 
 
 func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
@@ -288,6 +288,14 @@ func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
 
 func _on_card_inspection_requested(data: Dictionary) -> void:
 	_open_inspector(data)
+
+
+func _build_sect_inspector_data(data: Dictionary) -> Dictionary:
+	var result: Dictionary = data.duplicate(true)
+	var sect_id := StringName(String(result.get("id", "")))
+	var best_scores: Dictionary = _profile_store.get_best_scores_by_sect(profile)
+	result["sect"] = "最高分：%d" % int(best_scores.get(String(sect_id), 0))
+	return result
 
 
 func _open_inspector(data: Dictionary) -> void:

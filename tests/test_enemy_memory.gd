@@ -24,7 +24,7 @@ func _run() -> void:
 	_check(store.save_profile(base_profile), "Enemy-memory fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
 		base_profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		ENEMY_ID
 	)

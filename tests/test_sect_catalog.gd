@@ -28,8 +28,8 @@ func _test_catalog_validation() -> void:
 	_check(validation_errors.is_empty(), "All sect definitions pass validation: %s" % str(validation_errors))
 	_check(
 		Catalog.get_all_sect_ids() == [
-			&"xuanyue_jianzong",
-			&"yanyu_lou",
+			&"HuaShanPai",
+			&"TaiShanPai",
 			&"chisha_men",
 			&"tingchao_gu",
 			&"bailu_shuyuan",
@@ -40,8 +40,8 @@ func _test_catalog_validation() -> void:
 
 func _test_definition_contents() -> void:
 	var expected_metadata: Dictionary = {
-		&"xuanyue_jianzong": ["玄岳剑宗", "res://pics/LKT010_568.png", "北岳玄岭", 5, "剑阵"],
-		&"yanyu_lou": ["烟雨楼", "res://pics/LKT010_002.png", "江南水乡", 4, "暗器"],
+		&"HuaShanPai": ["华山派", "res://pics/LKT010_568.png", "华山", 4, "剑法/心法"],
+		&"TaiShanPai": ["泰山派", "res://pics/LKT010_002.png", "泰山", 5, "重剑/术数"],
 		&"chisha_men": ["赤砂门", "res://pics/LKT010_003.png", "西域赤沙", 3, "刀法"],
 		&"tingchao_gu": ["听潮谷", "res://pics/LKT010_004.png", "东海群岛", 4, "掌法"],
 		&"bailu_shuyuan": ["白鹿书院", "res://pics/LKT010_005.png", "中州鹿鸣山", 2, "奇门"],
@@ -67,7 +67,7 @@ func _test_definition_contents() -> void:
 
 
 func _test_schema_validation() -> void:
-	var valid_fixture: Dictionary = Catalog.get_definition(&"xuanyue_jianzong")
+	var valid_fixture: Dictionary = Catalog.get_definition(&"HuaShanPai")
 	valid_fixture["id"] = &"fixture"
 	_check(Catalog.validate_definition(valid_fixture).is_empty(), "Complete fixture passes validation")
 
@@ -115,10 +115,10 @@ func _test_copy_isolation() -> void:
 	var ids: Array[StringName] = Catalog.get_all_sect_ids()
 	ids.clear()
 	_check(Catalog.get_all_sect_ids().size() == 5, "ID getter returns a defensive copy")
-	var first: Dictionary = Catalog.get_definition(&"xuanyue_jianzong")
+	var first: Dictionary = Catalog.get_definition(&"HuaShanPai")
 	first["glyph"] = "已修改"
-	var second: Dictionary = Catalog.get_definition(&"xuanyue_jianzong")
-	_check(second.get("glyph", "") == "玄岳剑宗", "Definition getter returns a deep defensive copy")
+	var second: Dictionary = Catalog.get_definition(&"HuaShanPai")
+	_check(second.get("glyph", "") == "华山派", "Definition getter returns a deep defensive copy")
 
 
 func _check(condition: bool, message: String) -> void:

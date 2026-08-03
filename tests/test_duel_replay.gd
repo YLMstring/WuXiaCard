@@ -42,7 +42,7 @@ func _run() -> void:
 		if replay_icon != null:
 			_check(replay_icon.texture != null and replay_icon.texture.resource_path == "res://inkpics/replay.png", "Replay visual uses the supplied image")
 			_check(replay_icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Replay visual cannot intercept button input")
-			_check(replay_icon.size.is_equal_approx(Vector2(55.0, 55.0)), "Replay visual is larger than its touch target")
+			_check(replay_icon.size.is_equal_approx(Vector2(54.0, 54.0)), "Replay visual is larger than its touch target")
 			_check(replay_icon.get_rect().get_center().is_equal_approx(replay_button.get_rect().size * 0.5), "Replay visual remains centered on the button")
 		var board := duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control
 		_check(replay_button.position.x + replay_button.size.x <= board.position.x, "Replay control stays left of the board")

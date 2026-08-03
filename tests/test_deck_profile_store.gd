@@ -58,7 +58,7 @@ func _run() -> void:
 		"Default main-deck cards do not begin mastered"
 	)
 	_check(
-		store.get_unlocked_sect_ids(profile) == [&"xuanyue_jianzong"],
+		store.get_unlocked_sect_ids(profile) == [&"HuaShanPai"],
 		"Only Xuanyue Jianzong starts unlocked"
 	)
 	_check((profile["main_deck"] as Array).size() == 5, "Default main deck has five cards")
@@ -335,7 +335,7 @@ func _run() -> void:
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
 	_check(int(migrated["schema_version"]) == 8, "Migration advances the schema version")
 	_check(
-		store.get_unlocked_sect_ids(migrated) == [&"xuanyue_jianzong"],
+		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
 	)
 	_check(migrated["main_deck"] == profile["main_deck"], "Migration preserves main-deck order")
@@ -366,14 +366,14 @@ func _run() -> void:
 	var malformed := {
 		"schema_version": 1,
 		"unlocked_card_ids": ["gate_general", "meng_huo", "jiang_wei", "fa_zheng", "fire_envoy", "tiger_general"],
-		"unlocked_sect_ids": ["missing_sect", "yanyu_lou", "yanyu_lou"],
+		"unlocked_sect_ids": ["missing_sect", "TaiShanPai", "TaiShanPai"],
 		"main_deck": ["gate_general", "gate_general", "missing", "jiang_wei"],
 		"library_slots": ["", "meng_huo", "", "fa_zheng", "fire_envoy", "tiger_general"],
 	}
 	var repaired: Dictionary = store.repair_profile(malformed)
 	_check(store.is_profile_valid(repaired), "Malformed profile repairs to a valid profile")
 	_check(
-		store.get_unlocked_sect_ids(repaired) == [&"xuanyue_jianzong", &"yanyu_lou"],
+		store.get_unlocked_sect_ids(repaired) == [&"HuaShanPai", &"TaiShanPai"],
 		"Repair removes unknown and duplicate sects while restoring the default"
 	)
 	_check(_library_has_no_gaps(repaired["library_slots"]), "Repair leaves no gaps in occupied prefix")
@@ -382,7 +382,7 @@ func _run() -> void:
 	_check(store.save_profile(run_start_source), "Run-state fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
 		run_start_source,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[&"hanfeng_liezhen"],
 		&"qingfeng_xuedi"
 	)
@@ -425,7 +425,7 @@ func _run() -> void:
 	)
 	_check(not bool(invalid_memory.get("ok", true)), "Unknown enemy glyphs cannot be remembered")
 	_check(
-		store.get_selected_sect_id(active_profile) == &"xuanyue_jianzong",
+		store.get_selected_sect_id(active_profile) == &"HuaShanPai",
 		"Beginning a run records the selected sect"
 	)
 	_check(
@@ -443,7 +443,7 @@ func _run() -> void:
 	)
 	var reward_family_begin: Dictionary = store.begin_run_and_save(
 		reward_family_source,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[&"hanfeng_liezhen"],
 		&"qingfeng_xuedi"
 	)
@@ -482,7 +482,7 @@ func _run() -> void:
 	schema_seven_active.erase("mastered_card_ids")
 	schema_seven_active["pending_reward_card_ids"] = ["hengsha_duanlu"]
 	schema_seven_active["effective_duel_count"] = 1
-	schema_seven_active["best_scores_by_sect"] = {"xuanyue_jianzong": 1234}
+	schema_seven_active["best_scores_by_sect"] = {"HuaShanPai": 1234}
 	var migrated_schema_seven: Dictionary = store.repair_profile(schema_seven_active)
 	_check(
 		store.is_profile_valid(migrated_schema_seven),
@@ -503,7 +503,7 @@ func _run() -> void:
 		== schema_seven_active["remembered_enemy_glyphs"]
 		and store.get_pending_reward_ids(migrated_schema_seven) == [&"hengsha_duanlu"]
 		and int(migrated_schema_seven["effective_duel_count"]) == 1
-		and int(migrated_schema_seven["best_scores_by_sect"]["xuanyue_jianzong"]) == 1234,
+		and int(migrated_schema_seven["best_scores_by_sect"]["HuaShanPai"]) == 1234,
 		"Schema-seven migration preserves active-run history and pending reward"
 	)
 	_check(
@@ -561,8 +561,8 @@ func _run() -> void:
 		active_profile
 	)
 	_check(
-		&"huixue_liuguang" in store.get_unlocked_ids(tier_reward_profile),
-		"Level-two progression owns the selected sect's tier-two card"
+		&"CangSongYingKe2" in store.get_unlocked_ids(tier_reward_profile),
+		"Level-two progression preserves an owned selected-sect tier-two card"
 	)
 	var reward_rng := RandomNumberGenerator.new()
 	reward_rng.seed = 2902
@@ -573,7 +573,7 @@ func _run() -> void:
 	)
 	_check(bool(post_tier_reward.get("ok", false)), "Post-tier reward offer saves")
 	_check(
-		&"huixue_liuguang" not in (
+		&"CangSongYingKe2" not in (
 			post_tier_reward.get("reward_ids", []) as Array
 		),
 		"Automatic tier unlock is excluded from the following reward offer"
@@ -582,10 +582,10 @@ func _run() -> void:
 	var progression_profile: Dictionary = active_profile
 	var previous_enemy_id: StringName = first_enemy_id
 	var expected_tier_unlocks: Dictionary = {
-		2: [&"huixue_liuguang"],
-		5: [&"qiyao_lianfeng"],
+		2: [],
+		5: [],
 		8: [],
-		11: [&"wanyue_guizong"],
+		11: [],
 	}
 	for expected_level: int in range(2, 16):
 		var candidate_ids: Array[StringName] = Enemies.get_enemy_ids_for_level(expected_level)
@@ -673,7 +673,7 @@ func _run() -> void:
 	_check(failed_batch.get("profile", {}) == saved_before_failure, "Batch save failure rolls back candidate data")
 	var failed_begin: Dictionary = failing_store.begin_run_and_save(
 		saved_before_failure,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[]
 	)
 	_check(not bool(failed_begin.get("ok", true)), "Run-start save failure is reported")

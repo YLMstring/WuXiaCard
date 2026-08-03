@@ -23,7 +23,7 @@ func _run() -> void:
 	_check(store.save_profile(profile), "Reward-scene fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
 		profile,
-		&"xuanyue_jianzong",
+		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
