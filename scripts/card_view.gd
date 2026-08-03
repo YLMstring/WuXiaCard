@@ -106,7 +106,7 @@ func _refresh_picture() -> void:
 	if face_down:
 		card_picture.visible = false
 		return
-	card_picture.self_modulate = Color(1.0, 1.0, 1.0, 0.70) if Abilities.has_modifier(
+	card_picture.self_modulate = Color(1.0, 1.0, 1.0, 0.30) if Abilities.has_modifier(
 		card_data,
 		Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE
 	) else Color.WHITE
