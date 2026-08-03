@@ -180,7 +180,7 @@ func _test_picture_fade() -> void:
 	card.call("configure", card_data, Rules.OPPONENT_OWNER, false)
 	await process_frame
 	var picture := card.get_node("Overlay/CardPicture") as TextureRect
-	_check(is_equal_approx(picture.self_modulate.a, 0.70), "Weakness fades only the central card picture to 70 percent")
+	_check(is_equal_approx(picture.self_modulate.a, 0.30), "Weakness fades only the central card picture to 30 percent")
 	card_data["active_abilities"].clear()
 	card.call("sync_runtime_data", card_data, Rules.OPPONENT_OWNER)
 	_check(is_equal_approx(picture.self_modulate.a, 1.0), "Removing weakness restores full picture opacity")
