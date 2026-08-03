@@ -7,6 +7,7 @@ const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Selector = preload("res://scripts/duel_card_selector.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
 
@@ -93,6 +94,7 @@ static func execute_activation(
 		"events": events,
 		"attack_requests": action_result.get("attack_requests", []),
 		"extra_turn_requests": action_result.get("extra_turn_requests", []),
+		"flip_prevention_requests": action_result.get("flip_prevention_requests", []),
 		"captures": (
 			(cost_result.get("captures", []) as Array)
 			+ (action_result.get("captures", []) as Array)
@@ -141,6 +143,7 @@ static func execute_actions(
 		result["captures"].append_array(action_result.get("captures", []) as Array)
 		result["exiles"].append_array(action_result.get("exiles", []) as Array)
 		result["extra_turn_requests"].append_array(action_result.get("extra_turn_requests", []) as Array)
+		result["flip_prevention_requests"].append_array(action_result.get("flip_prevention_requests", []) as Array)
 		for request_value: Variant in action_result.get("attack_requests", []):
 			if not request_value is Dictionary:
 				continue
@@ -156,6 +159,9 @@ static func execute_actions(
 			result["exiles"].append_array(resolution.get("exiles", []) as Array)
 			result["extra_turn_requests"].append_array(
 				resolution.get("extra_turn_requests", []) as Array
+			)
+			result["flip_prevention_requests"].append_array(
+				resolution.get("flip_prevention_requests", []) as Array
 			)
 		current_source_cell = int(action_result.get("source_cell", current_source_cell))
 		var action_status := StringName(action_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT))
@@ -287,6 +293,48 @@ static func _execute_action(
 			StringName(declaration.get("card_id", &"")),
 			StringName(declaration.get("recipient", &""))
 		)
+	if action_type == Catalog.ACTION_REVEAL_HAND_CARDS:
+		return _reveal_hand_cards(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			StringName(declaration.get("recipient", &"")),
+			StringName(declaration.get("filter", &""))
+		)
+	if action_type == Catalog.ACTION_ENABLE_FUTURE_DRAW_REVEAL:
+		return _enable_future_draw_reveal(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			StringName(declaration.get("recipient", &""))
+		)
+	if action_type == Catalog.ACTION_GRANT_TRIGGER_CARD_ABILITY:
+		return _grant_trigger_card_ability(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			declaration.get("ability", {}) as Dictionary,
+			context
+		)
+	if action_type == Catalog.ACTION_PREVENT_TRIGGER_FLIP:
+		return _prevent_trigger_flip(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
+	if action_type == Catalog.ACTION_REMOVE_THIS_ABILITY:
+		return _remove_this_ability(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
 	if action_type == Catalog.ACTION_SPEND_KI:
 		return _change_ki(
 			state,
@@ -385,6 +433,9 @@ static func _for_each_selected_card(
 		result["extra_turn_requests"].append_array(
 			nested_result.get("extra_turn_requests", []) as Array
 		)
+		result["flip_prevention_requests"].append_array(
+			nested_result.get("flip_prevention_requests", []) as Array
+		)
 		var nested_status := StringName(
 			nested_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT)
 		)
@@ -422,7 +473,164 @@ static func _draw_cards(
 			"instance_id": StringName(drawn_card.get("instance_id", &"")),
 			"logical_hand_index": hand.size() - 1,
 		})
+		for observer_value: Variant in Revelation.get_future_draw_audiences(state, owner_id):
+			var observer_owner_id: int = int(observer_value)
+			if Revelation.reveal_to(drawn_card, observer_owner_id):
+				events.append({
+					"type": &"card_revealed",
+					"source_cell": source_cell,
+					"owner_id": owner_id,
+					"observer_owner_id": observer_owner_id,
+					"card_id": StringName(drawn_card.get("card_id", &"")),
+					"instance_id": StringName(drawn_card.get("instance_id", &"")),
+					"logical_hand_index": hand.size() - 1,
+				})
 	return _applied(source_cell, events) if actual_count > 0 else _no_effect(source_cell)
+
+
+static func _reveal_hand_cards(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	recipient: StringName,
+	reveal_filter: StringName
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or recipient not in Catalog.KNOWN_RECIPIENTS or reveal_filter not in Catalog.KNOWN_REVEAL_FILTERS:
+		return _no_effect(source_cell)
+	var observer_owner_id: int = int(source.get("owner_id", 0))
+	var hand_owner_id: int = _resolve_recipient_owner(observer_owner_id, recipient)
+	var remembered: Array = Revelation.get_remembered_glyphs(state, observer_owner_id)
+	var events: Array[Dictionary] = []
+	var hand: Array = state.get_hand(hand_owner_id)
+	for hand_index: int in range(hand.size()):
+		var card: Dictionary = hand[hand_index]
+		if reveal_filter == Catalog.REVEAL_FILTER_REMEMBERED and String(card.get("glyph", "")) not in remembered:
+			continue
+		if not Revelation.reveal_to(card, observer_owner_id):
+			continue
+		events.append({
+			"type": &"card_revealed",
+			"source_cell": source_cell,
+			"owner_id": hand_owner_id,
+			"observer_owner_id": observer_owner_id,
+			"card_id": StringName(card.get("card_id", &"")),
+			"instance_id": StringName(card.get("instance_id", &"")),
+			"logical_hand_index": hand_index,
+		})
+	return _applied(source_cell, events) if not events.is_empty() else _no_effect(source_cell)
+
+
+static func _enable_future_draw_reveal(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	recipient: StringName
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or recipient not in Catalog.KNOWN_RECIPIENTS:
+		return _no_effect(source_cell)
+	var observer_owner_id: int = int(source.get("owner_id", 0))
+	var hand_owner_id: int = _resolve_recipient_owner(observer_owner_id, recipient)
+	if not Revelation.enable_future_draw_reveal(state, hand_owner_id, observer_owner_id):
+		return _no_effect(source_cell)
+	return _applied(source_cell)
+
+
+static func _grant_trigger_card_ability(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	ability: Dictionary,
+	context: Dictionary
+) -> Dictionary:
+	if _get_subject(state, source_instance_id, expected_owner).is_empty() or ability.is_empty():
+		return _no_effect(source_cell)
+	var target_cell: int = int(context.get("trigger_cell", -1))
+	var target_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
+	if target_slot.is_empty():
+		return _no_effect(source_cell)
+	var target_card: Dictionary = target_slot.get("card", {})
+	var normalized: Dictionary = Catalog.normalize_ability(ability)
+	var active: Array = target_card.get("active_abilities", [])
+	if normalized in active:
+		return _no_effect(source_cell)
+	if Abilities.is_activate_ability(normalized):
+		Abilities.replace_activate_ability(target_card, normalized)
+	else:
+		active = active.duplicate(true)
+		active.append(normalized)
+		target_card["active_abilities"] = active
+	return _applied(source_cell, [{
+		"type": &"ability_gained",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"target_cell": target_cell,
+		"owner_id": int(target_slot.get("owner", 0)),
+		"instance_id": target_instance_id,
+	}])
+
+
+static func _prevent_trigger_flip(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	if _get_subject(state, source_instance_id, expected_owner).is_empty():
+		return _no_effect(source_cell)
+	var target_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var new_owner_id: int = int(context.get("new_owner_id", 0))
+	if target_instance_id == &"" or new_owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return _no_effect(source_cell)
+	var result: Dictionary = _applied(source_cell)
+	result["flip_prevention_requests"].append({
+		"target_instance_id": target_instance_id,
+		"new_owner_id": new_owner_id,
+		"source_instance_id": source_instance_id,
+		"source_cell": source_cell,
+	})
+	return result
+
+
+static func _remove_this_ability(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty():
+		return _no_effect(source_cell)
+	var card: Dictionary = source.get("card", {})
+	var abilities: Array = card.get("active_abilities", [])
+	var ability_index: int = int(context.get("resolving_ability_index", -1))
+	var snapshot: Dictionary = context.get("resolving_ability_snapshot", {})
+	if ability_index < 0 or ability_index >= abilities.size() or abilities[ability_index] != snapshot:
+		return _no_effect(source_cell)
+	abilities = abilities.duplicate(true)
+	abilities.remove_at(ability_index)
+	card["active_abilities"] = abilities
+	var current_cell: int = _get_location_cell(source)
+	return _applied(current_cell, [{
+		"type": &"ability_lost",
+		"source_cell": current_cell,
+		"target_cell": current_cell,
+		"owner_id": int(source.get("owner_id", 0)),
+		"instance_id": source_instance_id,
+	}])
+
+
+static func _resolve_recipient_owner(source_owner_id: int, recipient: StringName) -> int:
+	if recipient == Catalog.RECIPIENT_OPPONENT:
+		return Rules.OPPONENT_OWNER if source_owner_id == Rules.PLAYER_OWNER else Rules.PLAYER_OWNER
+	return source_owner_id
 
 
 static func _exile_attacked_card(
@@ -931,6 +1139,7 @@ static func _empty_result() -> Dictionary:
 		"events": [],
 		"attack_requests": [],
 		"extra_turn_requests": [],
+		"flip_prevention_requests": [],
 		"captures": [],
 		"exiles": [],
 		"source_cell": -1,

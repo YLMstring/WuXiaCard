@@ -20,6 +20,8 @@ static func build(state: StateData) -> String:
 		"effect_queue": state.effect_queue,
 		"pending_choice": state.pending_choice,
 		"repetition_hashes": state.repetition_hashes,
+		"remembered_glyphs_by_owner": state.remembered_glyphs_by_owner,
+		"future_draw_reveal_audiences": state.future_draw_reveal_audiences,
 	})
 
 

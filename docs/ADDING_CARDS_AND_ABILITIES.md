@@ -332,6 +332,26 @@ events and follow the exact target instance across movement.
 
 Movement is not a summon. Exile is not a flip.
 
+## Revelation, Prevention, and Passive Modifiers
+
+- `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and an `all` or `remembered`
+  filter. It emits `card_revealed` only for newly revealed exact instances.
+- `ACTION_ENABLE_FUTURE_DRAW_REVEAL` stores a duel-state audience independently
+  of the source card. Future successful draws reveal after `card_drawn`.
+- `CONDITION_TRIGGER_CARD_REVEALED_TO_SELF` checks gameplay reveal data, never
+  presentation-only testing visibility.
+- `ACTION_GRANT_TRIGGER_CARD_ABILITY` deep-copies and normalizes its nested
+  `ability`. Structurally identical passive grants are idempotent; a granted
+  activation still replaces existing activations.
+- `ACTION_PREVENT_TRIGGER_FLIP` produces a typed request for the exact trigger
+  instance and intended new owner. All before-flip groups finish before the
+  simulator applies one cancellation.
+- `ACTION_REMOVE_THIS_ABILITY` removes the exact resolving ability by source
+  instance, index, and structural snapshot.
+- Modifier-only abilities are valid. The current
+  `MODIFIER_DEFENDING_POWER_OVERRIDE` changes only defender-side attackability;
+  it does not mutate the four stored powers.
+
 ## Adding a New Primitive
 
 Do not add a `card_id` branch to simulator, search, or controller.

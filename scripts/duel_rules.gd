@@ -1,6 +1,8 @@
 class_name DuelRules
 extends RefCounted
 
+const Abilities = preload("res://scripts/duel_abilities.gd")
+
 const TOP: int = 0
 const RIGHT: int = 1
 const BOTTOM: int = 2
@@ -38,6 +40,7 @@ static func make_card(
 		"powers": powers.duplicate(),
 		"original_owner": original_owner,
 		"active_abilities": active_abilities.duplicate(true),
+		"revealed_to_owner_ids": [original_owner] if original_owner in [PLAYER_OWNER, OPPONENT_OWNER] else [],
 	}
 
 
@@ -117,7 +120,13 @@ static func can_attack_target(
 	var target_powers: Array = target_card.get("powers", [])
 	if source_powers.size() != 4 or target_powers.size() != 4:
 		return false
-	return int(source_powers[direction]) > int(target_powers[OPPOSITE[direction]])
+	var defending_direction: int = OPPOSITE[direction]
+	var defending_power: int = Abilities.get_effective_defending_power(
+		target_card,
+		defending_direction,
+		int(target_powers[defending_direction])
+	)
+	return int(source_powers[direction]) > defending_power
 
 
 static func get_neighbor_index(cell_index: int, direction: int) -> int:

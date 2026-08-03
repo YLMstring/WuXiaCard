@@ -1,6 +1,8 @@
 class_name DuelAbilities
 extends RefCounted
 
+const Catalog = preload("res://scripts/card_catalog.gd")
+
 
 static func is_activate_ability(ability: Dictionary) -> bool:
 	var activation_value: Variant = ability.get("activation", null)
@@ -68,3 +70,33 @@ static func remove_non_retained_abilities(card: Dictionary) -> int:
 			removed_count += 1
 	card["active_abilities"] = retained_abilities
 	return removed_count
+
+
+static func has_modifier(card: Dictionary, modifier_type: StringName) -> bool:
+	for modifier: Dictionary in get_modifiers(card):
+		if StringName(modifier.get("type", &"")) == modifier_type:
+			return true
+	return false
+
+
+static func get_modifiers(card: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		for modifier_value: Variant in (ability_value as Dictionary).get("modifiers", []):
+			if modifier_value is Dictionary:
+				result.append((modifier_value as Dictionary).duplicate(true))
+	return result
+
+
+static func get_effective_defending_power(
+	card: Dictionary,
+	_direction: int,
+	base_power: int
+) -> int:
+	var result: int = base_power
+	for modifier: Dictionary in get_modifiers(card):
+		if StringName(modifier.get("type", &"")) == Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE:
+			result = int(modifier.get("value", result))
+	return result

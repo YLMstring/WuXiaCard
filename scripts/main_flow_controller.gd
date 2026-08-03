@@ -86,10 +86,13 @@ func _show_reward_selection() -> void:
 func _show_duel(starting_owner_id: int) -> void:
 	var duel := DUEL_SCENE.instantiate() as DuelController
 	var enemy: Dictionary = _get_upcoming_enemy()
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
 	duel.deck_profile_path = deck_profile_path
 	duel.starting_owner_id = starting_owner_id
 	duel.opponent_name_text = String(enemy["name"])
 	duel.opponent_card_ids = _enemy_deck_from_details(enemy)
+	duel.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 	duel.testing_mode = testing_mode
 	duel.opponent_card_played.connect(_on_opponent_card_played)
 	duel.return_requested.connect(_on_duel_return_requested)

@@ -14,6 +14,7 @@ const CARD_PICTURE_SCALE: float = 0.8
 const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Abilities = preload("res://scripts/duel_abilities.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -105,6 +106,10 @@ func _refresh_picture() -> void:
 	if face_down:
 		card_picture.visible = false
 		return
+	card_picture.self_modulate = Color(1.0, 1.0, 1.0, 0.70) if Abilities.has_modifier(
+		card_data,
+		Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE
+	) else Color.WHITE
 	var picture_path: String = String(card_data.get("picture", ""))
 	if picture_path.is_empty() or not ResourceLoader.exists(picture_path):
 		card_picture.texture = null

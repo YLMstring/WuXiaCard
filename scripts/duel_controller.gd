@@ -29,6 +29,7 @@ const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 const AttackVfxData = preload("res://scripts/attack_vfx.gd")
 const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 const ReplayRecordData = preload("res://scripts/duel_replay_record.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 
 @export var board_aspect_ratio: float = 0.78
 @export var drag_touch_offset: float = 48.0
@@ -62,6 +63,7 @@ const ReplayRecordData = preload("res://scripts/duel_replay_record.gd")
 @export var starting_owner_id: int = DuelRules.PLAYER_OWNER
 @export var opponent_name_text: String = "对手名字"
 @export var opponent_card_ids: Array[StringName] = []
+@export var remembered_enemy_glyphs: Array[String] = []
 
 var turn_state: TurnState = TurnState.PLAYER
 var testing_mode: bool = Settings.TESTING_MODE
@@ -165,6 +167,9 @@ func _ready() -> void:
 		player_side_deck,
 		opponent_side_deck
 	)
+	duel_state.remembered_glyphs_by_owner = {
+		DuelRules.PLAYER_OWNER: remembered_enemy_glyphs.duplicate(),
+	}
 	_replay_record.begin(duel_state)
 	board = duel_state.board
 	_create_hands()
@@ -509,7 +514,7 @@ func _create_hands() -> void:
 	for card_index: int in range(duel_state.get_hand(DuelRules.OPPONENT_OWNER).size()):
 		var card_data: Dictionary = duel_state.get_hand(DuelRules.OPPONENT_OWNER)[card_index]
 		var opponent_card: CardView = _spawn_card_in_slot(opponent_hand.get_child(card_index) as PanelContainer, card_data, DuelRules.OPPONENT_OWNER, false)
-		opponent_card.set_face_down(not testing_mode)
+		opponent_card.set_face_down(_should_conceal_hand_card(card_data, DuelRules.OPPONENT_OWNER))
 	for card_index: int in range(duel_state.get_hand(DuelRules.PLAYER_OWNER).size()):
 		var card_data: Dictionary = duel_state.get_hand(DuelRules.PLAYER_OWNER)[card_index]
 		_spawn_card_in_slot(player_hand.get_child(card_index) as PanelContainer, card_data, DuelRules.PLAYER_OWNER, false)
@@ -906,6 +911,16 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 		elif event_type in [&"card_drawn", &"card_added_to_hand"]:
 			await _present_hand_addition_event(event, event_type)
 			drew_card = true
+		elif event_type == &"card_revealed":
+			_present_card_revealed_event(event)
+		elif event_type in [&"ability_gained", &"ability_lost"]:
+			var changed_instance_id := StringName(event.get("instance_id", &""))
+			var changed_view: CardView = _get_card_view_by_instance(changed_instance_id)
+			var changed_data: Dictionary = _get_logical_card_by_instance(changed_instance_id)
+			if changed_view != null and not changed_data.is_empty():
+				changed_view.sync_runtime_data(changed_data, changed_view.owner_id)
+				if event_type == &"ability_lost":
+					await changed_view.play_ability_lost(capture_flip_duration * 0.5)
 		elif event_type == &"card_flipped":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
@@ -920,12 +935,6 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 					maxf(capture_flip_duration, 0.02)
 				)
 			resolved_targets += 1
-		elif event_type == &"ability_lost":
-			var changed_card := board_cards[target_cell] as CardView
-			if changed_card != null:
-				await changed_card.play_ability_lost(
-					capture_flip_duration * 0.5
-				)
 		elif event_type == &"card_exiled":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
@@ -1017,9 +1026,45 @@ func _present_hand_addition_event(
 	if card_data.is_empty() or target_slot == null:
 		return
 	var card: CardView = _spawn_card_in_slot(target_slot, card_data, owner_id, false)
-	card.set_face_down(owner_id == DuelRules.OPPONENT_OWNER and not testing_mode)
+	card.set_face_down(_should_conceal_hand_card(card_data, owner_id))
 	_presentation_trace.append(event_type)
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+
+
+func _present_card_revealed_event(event: Dictionary) -> void:
+	var instance_id := StringName(event.get("instance_id", &""))
+	var card: CardView = _get_card_view_by_instance(instance_id)
+	var card_data: Dictionary = _get_logical_card_by_instance(instance_id)
+	if card == null or card_data.is_empty():
+		return
+	card.sync_runtime_data(card_data, int(event.get("owner_id", card.owner_id)))
+	card.set_face_down(false)
+	_presentation_trace.append(&"card_revealed")
+
+
+func _should_conceal_hand_card(card_data: Dictionary, owner_id: int) -> bool:
+	return (
+		owner_id == DuelRules.OPPONENT_OWNER
+		and not testing_mode
+		and not Revelation.is_revealed_to(card_data, DuelRules.PLAYER_OWNER)
+	)
+
+
+func _get_logical_card_by_instance(instance_id: StringName) -> Dictionary:
+	if duel_state == null:
+		return {}
+	for owner_id: int in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+		for card_value: Variant in duel_state.get_hand(owner_id):
+			var card: Dictionary = card_value
+			if StringName(card.get("instance_id", &"")) == instance_id:
+				return card
+	for slot_value: Variant in duel_state.board:
+		if slot_value == null:
+			continue
+		var card: Dictionary = (slot_value as Dictionary).get("card", {})
+		if StringName(card.get("instance_id", &"")) == instance_id:
+			return card
+	return {}
 
 
 func _wait_after_draw_before_board_effect() -> void:
@@ -1859,7 +1904,7 @@ func _rebuild_views_from_state(source_state: StateData) -> void:
 				owner_id,
 				false
 			)
-			card.set_face_down(owner_id == DuelRules.OPPONENT_OWNER and not testing_mode)
+			card.set_face_down(_should_conceal_hand_card(card_data, owner_id))
 	for cell_index: int in range(mini(board.size(), board_cells.size())):
 		var slot_value: Variant = board[cell_index]
 		if slot_value == null:

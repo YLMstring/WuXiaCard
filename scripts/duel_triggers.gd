@@ -4,6 +4,7 @@ extends RefCounted
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
 
@@ -38,6 +39,7 @@ static func resolve_group(
 		"events": [],
 		"extra_turn_requests": [],
 		"attack_requests": [],
+		"flip_prevention_requests": [],
 	}
 	if state == null:
 		return result
@@ -48,6 +50,9 @@ static func resolve_group(
 	var rule: Dictionary = resolved.get("rule", {})
 	var source_cell: int = int(group.get("source_cell", -1))
 	var context: Dictionary = group.get("context", {})
+	context = context.duplicate(true)
+	context["resolving_ability_index"] = int(group.get("ability_index", -1))
+	context["resolving_ability_snapshot"] = group.get("ability_snapshot", {}).duplicate(true)
 	if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
 		return result
 	var action_result: Dictionary = Executor.execute_actions(
@@ -216,6 +221,29 @@ static func _conditions_match(
 		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
 			var source_slot: Dictionary = state.board[source_cell]
 			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_REVEALED_TO_SELF:
+			var revealed_slot: Dictionary = _get_context_card_slot(
+				state,
+				context,
+				"trigger_cell",
+				"trigger_instance_id"
+			)
+			if revealed_slot.is_empty():
+				return false
+			var source_slot: Dictionary = state.board[source_cell]
+			if not Revelation.is_revealed_to(
+				revealed_slot.get("card", {}),
+				int(source_slot.get("owner", 0))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_WAS_ENEMY:
+			var source_slot: Dictionary = state.board[source_cell]
+			var previous_owner: int = int(context.get("trigger_owner_id", 0))
+			if (
+				previous_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or previous_owner == int(source_slot.get("owner", 0))
+			):
 				return false
 		else:
 			return false

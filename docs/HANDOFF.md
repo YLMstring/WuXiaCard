@@ -140,6 +140,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   committed flip; the target instance is followed to its current cell.
 - Runtime ki and all four powers can change permanently in hand or on board.
   Start-owner-turn triggers run on ordinary and granted extra turns.
+- LaiHeQinQuan1–5 now use generic exact-instance revelation, permanent
+  future-draw audiences, flip-prevention requests, granted passive modifiers,
+  and indexed self-removal. LaiHe4/5 use the active-run enemy-memory snapshot;
+  testing-mode visibility is not gameplay revelation.
+- A card carrying `defending_power_override` keeps its stored/displayed powers,
+  but attackability treats its facing edge as the modifier value. CardView fades
+  only its central picture to 70% while that weakness is active.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

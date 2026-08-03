@@ -18,6 +18,8 @@ const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
 const CONDITION_TRIGGER_CARD_IS_SELF: StringName = &"trigger_card_is_self"
 const CONDITION_ATTACKER_CARD_IS_SELF: StringName = &"attacker_card_is_self"
 const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
+const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revealed_to_self"
+const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
 const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not_source"
@@ -34,6 +36,14 @@ const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self
 const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
 const ACTION_ADD_POWERS: StringName = &"add_powers"
 const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
+const ACTION_REVEAL_HAND_CARDS: StringName = &"reveal_hand_cards"
+const ACTION_ENABLE_FUTURE_DRAW_REVEAL: StringName = &"enable_future_draw_reveal"
+const ACTION_GRANT_TRIGGER_CARD_ABILITY: StringName = &"grant_trigger_card_ability"
+const ACTION_PREVENT_TRIGGER_FLIP: StringName = &"prevent_trigger_flip"
+const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
+const REVEAL_FILTER_ALL: StringName = &"all"
+const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
+const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
 const RECIPIENT_SELF: StringName = &"self"
@@ -64,6 +74,8 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_IS_SELF,
 	CONDITION_ATTACKER_CARD_IS_SELF,
 	CONDITION_TURN_OWNER_IS_SELF,
+	CONDITION_TRIGGER_CARD_REVEALED_TO_SELF,
+	CONDITION_TRIGGER_CARD_WAS_ENEMY,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -85,8 +97,15 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_FOR_EACH_SELECTED_CARD,
 	ACTION_ADD_POWERS,
 	ACTION_ADD_CARD_TO_HAND,
+	ACTION_REVEAL_HAND_CARDS,
+	ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+	ACTION_GRANT_TRIGGER_CARD_ABILITY,
+	ACTION_PREVENT_TRIGGER_FLIP,
+	ACTION_REMOVE_THIS_ABILITY,
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
+const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
+const KNOWN_MODIFIERS: Array[StringName] = [MODIFIER_DEFENDING_POWER_OVERRIDE]
 
 const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
@@ -801,7 +820,21 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示所有敌方手牌。",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_REVEAL_HAND_CARDS,
+							"recipient": RECIPIENT_OPPONENT,
+							"filter": REVEAL_FILTER_ALL,
+						}],
+					},
+				],
+			},
+		],
 	},
 	&"LaiHeQinQuan2": {
 		"id": &"LaiHeQinQuan2",
@@ -813,7 +846,40 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示所有敌方手牌。我翻面前，阻止翻面，敌方翻面后或你的回合开始时，失去此效果。",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_REVEAL_HAND_CARDS,
+							"recipient": RECIPIENT_OPPONENT,
+							"filter": REVEAL_FILTER_ALL,
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": CARD_BEFORE_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+					},
+					{
+						"event": CARD_AFTER_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+				],
+			},
+		],
 	},
 	&"LaiHeQinQuan3": {
 		"id": &"LaiHeQinQuan3",
@@ -825,7 +891,52 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示所有敌方手牌以及后续抽到的牌。我翻面前，阻止翻面，敌方翻面后或你的回合开始时，失去此效果。",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [2, 2, 5, 5],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_REVEAL_HAND_CARDS,
+							"recipient": RECIPIENT_OPPONENT,
+							"filter": REVEAL_FILTER_ALL,
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+							"recipient": RECIPIENT_OPPONENT,
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": CARD_BEFORE_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+					},
+					{
+						"event": CARD_AFTER_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+				],
+			},
+		],
 	},
 	&"LaiHeQinQuan4": {
 		"id": &"LaiHeQinQuan4",
@@ -837,7 +948,41 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示敌方手牌中曾经出过的牌。敌方手牌中已揭示的牌进场时，使其获得以下效果：判断是否能被攻击时，所有点数视为一。",
 		"flavor": "泰山派剑法中最高深的绝艺，要旨不在右手剑招，而在左手的算数。左手不住屈指计算，算的是敌人所处方位、武功门派、身形长短、兵刃大小，以及日光所照高低等等，计算极为繁复，一经算准，挺剑击出，无不中的。",
 		"powers": [1, 4, 3, 2],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_REVEAL_HAND_CARDS,
+							"recipient": RECIPIENT_OPPONENT,
+							"filter": REVEAL_FILTER_REMEMBERED,
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+							{"type": CONDITION_TRIGGER_CARD_REVEALED_TO_SELF},
+						],
+						"actions": [{
+							"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+							"ability": {
+								"modifiers": [{
+									"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+									"value": 1,
+								}],
+							},
+						}],
+					},
+				],
+			},
+		],
 	},
 	&"LaiHeQinQuan5": {
 		"id": &"LaiHeQinQuan5",
@@ -849,7 +994,60 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示敌方手牌中曾经出过的牌。敌方手牌中已揭示的牌进场时，使其获得以下效果：判断是否能被攻击时，所有点数视为一。我翻面前，阻止翻面，敌方翻面后或你的回合开始时，失去此效果。",
 		"flavor": "泰山派剑法中最高深的绝艺，要旨不在右手剑招，而在左手的算数。左手不住屈指计算，算的是敌人所处方位、武功门派、身形长短、兵刃大小，以及日光所照高低等等，计算极为繁复，一经算准，挺剑击出，无不中的。",
 		"powers": [2, 5, 4, 3],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{
+							"type": ACTION_REVEAL_HAND_CARDS,
+							"recipient": RECIPIENT_OPPONENT,
+							"filter": REVEAL_FILTER_REMEMBERED,
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+							{"type": CONDITION_TRIGGER_CARD_REVEALED_TO_SELF},
+						],
+						"actions": [{
+							"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+							"ability": {
+								"modifiers": [{
+									"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+									"value": 1,
+								}],
+							},
+						}],
+					},
+				],
+			},
+			{
+				"triggers": [
+					{
+						"event": CARD_BEFORE_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+					},
+					{
+						"event": CARD_AFTER_FLIPPED,
+						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+					{
+						"event": TRIGGER_START_OWNER_TURN,
+						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+					},
+				],
+			},
+		],
 	},
 	&"huixue_liuguang": {
 		"id": &"huixue_liuguang",
@@ -1180,6 +1378,7 @@ static func create_instance(
 		"original_owner": original_owner,
 		"ki": int(definition.get("starting_ki", 0)),
 		"active_abilities": _normalize_abilities(definition["abilities"] as Array),
+		"revealed_to_owner_ids": [original_owner],
 	}
 
 
@@ -1272,11 +1471,35 @@ static func _validate_definition(
 static func _normalize_abilities(raw_abilities: Array) -> Array:
 	var normalized_abilities: Array = []
 	for ability_value: Variant in raw_abilities:
-		var ability: Dictionary = (ability_value as Dictionary).duplicate(true)
-		if not ability.has("retained_on_flip"):
-			ability["retained_on_flip"] = false
-		normalized_abilities.append(ability)
+		normalized_abilities.append(normalize_ability(ability_value as Dictionary))
 	return normalized_abilities
+
+
+static func normalize_ability(raw_ability: Dictionary) -> Dictionary:
+	var ability: Dictionary = raw_ability.duplicate(true)
+	if not ability.has("retained_on_flip"):
+		ability["retained_on_flip"] = false
+	for trigger_value: Variant in ability.get("triggers", []):
+		if not trigger_value is Dictionary:
+			continue
+		_normalize_nested_grants((trigger_value as Dictionary).get("actions", []))
+	if ability.has("activation") and ability["activation"] is Dictionary:
+		_normalize_nested_grants((ability["activation"] as Dictionary).get("actions", []))
+	return ability
+
+
+static func _normalize_nested_grants(actions_value: Variant) -> void:
+	if not actions_value is Array:
+		return
+	for action_value: Variant in actions_value as Array:
+		if not action_value is Dictionary:
+			continue
+		var action: Dictionary = action_value
+		if StringName(action.get("type", &"")) == ACTION_GRANT_TRIGGER_CARD_ABILITY:
+			var granted_value: Variant = action.get("ability", null)
+			if granted_value is Dictionary:
+				action["ability"] = normalize_ability(granted_value as Dictionary)
+		_normalize_nested_grants(action.get("actions", []))
 
 
 static func _validate_ability(
@@ -1287,16 +1510,38 @@ static func _validate_ability(
 	if ability.has("id"):
 		errors.append("Card %s ability must not declare an id" % card_id)
 	for key: Variant in ability.keys():
-		if StringName(key) not in [&"retained_on_flip", &"triggers", &"activation"]:
+		if StringName(key) not in [&"retained_on_flip", &"triggers", &"activation", &"modifiers"]:
 			errors.append("Card %s ability has unsupported field %s" % [card_id, key])
 	if ability.has("retained_on_flip") and typeof(ability["retained_on_flip"]) != TYPE_BOOL:
 		errors.append("Card %s ability has non-Boolean retained_on_flip" % card_id)
-	if not ability.has("triggers") and not ability.has("activation"):
-		errors.append("Card %s ability requires triggers or activation" % card_id)
+	if not ability.has("triggers") and not ability.has("activation") and not ability.has("modifiers"):
+		errors.append("Card %s ability requires triggers, activation, or modifiers" % card_id)
 	if ability.has("triggers"):
 		_validate_triggers(card_id, ability["triggers"], errors)
 	if ability.has("activation"):
 		_validate_activation(card_id, ability["activation"], errors)
+	if ability.has("modifiers"):
+		_validate_modifiers(card_id, ability["modifiers"], errors)
+
+
+static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, errors: Array[String]) -> void:
+	if not modifiers_value is Array or (modifiers_value as Array).is_empty():
+		errors.append("Card %s modifier ability requires a non-empty modifier array" % card_id)
+		return
+	for modifier_value: Variant in modifiers_value as Array:
+		if not modifier_value is Dictionary:
+			errors.append("Card %s has a non-dictionary modifier" % card_id)
+			continue
+		var modifier: Dictionary = modifier_value
+		var modifier_type := StringName(modifier.get("type", &""))
+		if modifier_type not in KNOWN_MODIFIERS:
+			errors.append("Card %s uses unknown modifier %s" % [card_id, modifier_type])
+		var value: Variant = modifier.get("value", null)
+		if typeof(value) != TYPE_INT or int(value) <= 0:
+			errors.append("Card %s modifier %s requires a positive integer value" % [card_id, modifier_type])
+		for key: Variant in modifier.keys():
+			if StringName(key) not in [&"type", &"value"]:
+				errors.append("Card %s modifier %s has unsupported field %s" % [card_id, modifier_type, key])
 
 
 static func _validate_triggers(card_id: StringName, trigger_value: Variant, errors: Array[String]) -> void:
@@ -1463,6 +1708,23 @@ static func _validate_action(
 				"Card %s %s action %s requires a known recipient"
 				% [card_id, context_name, action_type]
 			)
+	if action_type in [ACTION_REVEAL_HAND_CARDS, ACTION_ENABLE_FUTURE_DRAW_REVEAL]:
+		allowed_keys.append(&"recipient")
+		var reveal_recipient := StringName(action.get("recipient", &""))
+		if reveal_recipient not in KNOWN_RECIPIENTS:
+			errors.append("Card %s %s action %s requires a known recipient" % [card_id, context_name, action_type])
+	if action_type == ACTION_REVEAL_HAND_CARDS:
+		allowed_keys.append(&"filter")
+		var reveal_filter := StringName(action.get("filter", &""))
+		if reveal_filter not in KNOWN_REVEAL_FILTERS:
+			errors.append("Card %s %s reveal action requires a known filter" % [card_id, context_name])
+	if action_type == ACTION_GRANT_TRIGGER_CARD_ABILITY:
+		allowed_keys.append(&"ability")
+		var granted_value: Variant = action.get("ability", null)
+		if not granted_value is Dictionary:
+			errors.append("Card %s %s grant action requires an ability Dictionary" % [card_id, context_name])
+		else:
+			_validate_ability(card_id, granted_value as Dictionary, errors)
 	if action.has("on_invalid_context"):
 		if StringName(action.get("on_invalid_context", &"")) != STOP_RULE:
 			errors.append("Card %s %s action %s has invalid on_invalid_context policy" % [card_id, context_name, action_type])

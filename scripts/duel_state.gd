@@ -15,6 +15,8 @@ var active_abilities: Array = []
 var effect_queue: Array = []
 var pending_choice: Dictionary = {}
 var repetition_hashes: Array = []
+var remembered_glyphs_by_owner: Dictionary = {}
+var future_draw_reveal_audiences: Dictionary = {}
 var state_version: int = 0
 
 
@@ -69,5 +71,7 @@ func duplicate_state():
 	copied.effect_queue = effect_queue.duplicate(true)
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
+	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
+	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
 	copied.state_version = state_version
 	return copied

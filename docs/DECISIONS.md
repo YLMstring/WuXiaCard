@@ -296,3 +296,24 @@ respectively, in row-major order. The source itself is eligible.
 - Ignore an incomplete deeper iteration.
 - If depth one cannot complete, worker search fails, or its action becomes invalid, use deterministic greedy fallback.
 - Search can finish early if it proves/solves the position.
+
+## 来鹤清泉 / 岱宗如何
+
+- Revelation is stored per exact runtime instance in
+  `revealed_to_owner_ids`; testing mode and AI perfect information never add to
+  it. A revealed card remains revealed for the duel.
+- LaiHe1 reveals the current enemy hand. LaiHe3 also records a permanent
+  audience for later enemy draws, which survives the source flipping or
+  leaving play. Each successful draw emits `card_drawn` before
+  `card_revealed`.
+- LaiHe4/5 reveal only glyphs remembered from earlier duels against the current
+  enemy. A revealed enemy summon receives a non-retained modifier that makes
+  each defending edge count as 1 without changing its offensive or displayed
+  powers. The granted weakness survives the granting source, but is lost when
+  the affected card flips.
+- LaiHe2/3/5 prevent their own pending flip once per protection window. The
+  protection is removed after any enemy card actually flips or at the start of
+  the source owner's turn. A prevented attempt does not consume it and emits no
+  `CARD_AFTER_FLIPPED` event.
+- Weakened presentation changes only the central artwork alpha to 70%; frame,
+  powers, ki, ownership color, and interaction remain fully opaque.

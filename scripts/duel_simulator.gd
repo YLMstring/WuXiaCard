@@ -412,6 +412,16 @@ static func _resolve_attack_target(
 		result["events"],
 		before_flip_result
 	)
+	if _has_flip_prevention(before_flip_result, attacked_instance_id, attacker_owner):
+		result["events"].append({
+			"type": &"card_flip_prevented",
+			"source_cell": attacker_cell,
+			"target_cell": attacked_cell,
+			"owner_id": attacked_owner,
+			"new_owner_id": attacker_owner,
+			"instance_id": attacked_instance_id,
+		})
+		return result
 	attacker_cell = _find_board_card_cell(
 		state,
 		attacker_instance_id,
@@ -494,6 +504,16 @@ static func resolve_non_attack_flip(
 		result["events"],
 		before_result
 	)
+	if _has_flip_prevention(before_result, target_instance_id, new_owner):
+		result["events"].append({
+			"type": &"card_flip_prevented",
+			"source_cell": -1,
+			"target_cell": target_cell,
+			"owner_id": previous_owner,
+			"new_owner_id": new_owner,
+			"instance_id": target_instance_id,
+		})
+		return result
 	target_cell = _find_board_card_cell(state, target_instance_id)
 	if target_cell < 0:
 		return result
@@ -556,6 +576,9 @@ static func _resolve_trigger_event(
 		result["events"].append_array(group_events)
 		result["extra_turn_requests"].append_array(
 			group_result.get("extra_turn_requests", []) as Array
+		)
+		result["flip_prevention_requests"].append_array(
+			group_result.get("flip_prevention_requests", []) as Array
 		)
 		for request_value: Variant in group_result.get("attack_requests", []):
 			if not request_value is Dictionary:
@@ -713,6 +736,12 @@ static func _normalize_runtime_card(
 		card["ki"] = 0
 	if not card.has("active_abilities"):
 		card["active_abilities"] = []
+	if not card.has("revealed_to_owner_ids"):
+		card["revealed_to_owner_ids"] = [owner_id]
+	elif owner_id not in (card.get("revealed_to_owner_ids", []) as Array):
+		var audiences: Array = (card.get("revealed_to_owner_ids", []) as Array).duplicate()
+		audiences.append(owner_id)
+		card["revealed_to_owner_ids"] = audiences
 
 
 static func _card_instance_at(
@@ -809,7 +838,25 @@ static func _empty_resolution() -> Dictionary:
 		"captures": [],
 		"exiles": [],
 		"events": [],
+		"flip_prevention_requests": [],
 	}
+
+
+static func _has_flip_prevention(
+	resolution: Dictionary,
+	target_instance_id: StringName,
+	new_owner_id: int
+) -> bool:
+	for request_value: Variant in resolution.get("flip_prevention_requests", []):
+		if not request_value is Dictionary:
+			continue
+		var request: Dictionary = request_value
+		if (
+			StringName(request.get("target_instance_id", &"")) == target_instance_id
+			and int(request.get("new_owner_id", 0)) == new_owner_id
+		):
+			return true
+	return false
 
 
 static func _invalid_transition(state: StateData) -> Dictionary:
@@ -819,6 +866,7 @@ static func _invalid_transition(state: StateData) -> Dictionary:
 		"captures": [],
 		"exiles": [],
 		"events": [],
+		"flip_prevention_requests": [],
 	}
 
 
