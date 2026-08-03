@@ -3,7 +3,7 @@ extends RefCounted
 
 const ALL_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
-	&"yanyu_lou",
+	&"TaiShanPai",
 	&"chisha_men",
 	&"tingchao_gu",
 	&"bailu_shuyuan",
@@ -28,18 +28,18 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "华山",
 		"tier": 4,
 		"weapon": "剑法/心法",
-		"description": "华山派擅长强化自己的招式，并在场上发动多次攻击。",
+		"description": "华山派擅长强化自身招式，并在场上发动多次攻击。",
 		"flavor": "华山派正宗功夫以气功为根基，剑法变化繁复，轻灵机巧，恰如春日双燕飞舞柳间，高低左右，回转如意。",
 	},
-	&"yanyu_lou": {
-		"id": &"yanyu_lou",
-		"glyph": "烟雨楼",
+	&"TaiShanPai": {
+		"id": &"TaiShanPai",
+		"glyph": "泰山派",
 		"picture": "res://pics/LKT010_002.png",
-		"sect": "江南水乡",
-		"tier": 4,
-		"weapon": "暗器",
-		"description": "烟雨楼讲究藏锋于柔，以水巷、舟桥与薄雾掩护身形，门人精于细小暗器、情报传递和不留痕迹的牵制。",
-		"flavor": "楼中没有永远点亮的灯，只有雨夜偶尔响起的铜铃。江湖人说，听见第三声时，烟雨楼早已知道你为何而来。",
+		"sect": "泰山",
+		"tier": 5,
+		"weapon": "重剑/术数",
+		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。",
+		"flavor": "泰山剑招以厚重沉稳见长，规矩谨严而又不失迅疾，犹似行云流水。",
 	},
 	&"chisha_men": {
 		"id": &"chisha_men",
