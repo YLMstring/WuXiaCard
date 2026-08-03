@@ -2,7 +2,7 @@ class_name SectCatalog
 extends RefCounted
 
 const ALL_SECT_IDS: Array[StringName] = [
-	&"xuanyue_jianzong",
+	&"HuaShanPai",
 	&"yanyu_lou",
 	&"chisha_men",
 	&"tingchao_gu",
@@ -21,15 +21,15 @@ const _DEFINITION_FIELDS: Array[StringName] = [
 ]
 
 const _SECT_DEFINITIONS: Dictionary = {
-	&"xuanyue_jianzong": {
-		"id": &"xuanyue_jianzong",
-		"glyph": "玄岳剑宗",
+	&"HuaShanPai": {
+		"id": &"HuaShanPai",
+		"glyph": "华山派",
 		"picture": "res://pics/LKT010_568.png",
-		"sect": "北岳玄岭",
-		"tier": 5,
-		"weapon": "剑阵",
-		"description": "玄岳剑宗奉行“众锋同心”，弟子以步法牵引剑势，擅长多人结阵、封锁退路，并在严寒山势中磨炼持久战法。",
-		"flavor": "宗门立于终年积雪的玄岭之巅。每逢朔月，山门百剑齐鸣，传说那是历代剑主仍在风中校正后辈的锋芒。",
+		"sect": "华山",
+		"tier": 4,
+		"weapon": "剑法/心法",
+		"description": "华山派擅长强化自己的招式，并在场上发动多次攻击。",
+		"flavor": "华山派正宗功夫以气功为根基，剑法变化繁复，轻灵机巧，恰如春日双燕飞舞柳间，高低左右，回转如意。",
 	},
 	&"yanyu_lou": {
 		"id": &"yanyu_lou",

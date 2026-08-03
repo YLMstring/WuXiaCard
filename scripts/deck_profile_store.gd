@@ -17,7 +17,7 @@ const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
 const REWARD_VICTORY: StringName = &"victory"
 const REWARD_DEFEAT: StringName = &"defeat"
 const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
-	&"xuanyue_jianzong",
+	&"HuaShanPai",
 ]
 const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
