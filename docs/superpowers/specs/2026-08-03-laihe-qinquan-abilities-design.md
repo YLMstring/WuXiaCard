@@ -226,11 +226,15 @@ A future draw first emits and presents `card_drawn`, then emits
 `card_revealed` when an applicable permanent audience exists. This keeps the
 fixed hand-slot draw flow intact while ensuring the resulting card is visible.
 
-Granted weakness does not change displayed power labels and adds no badge. The
-granting source’s automatic trigger pulse is its only new presentation cue.
-Rebuilding views during replay or scene synchronization derives concealment
-from the card’s reveal audiences, while replay itself preserves the original
-opponent concealment rules.
+Granted weakness does not change displayed power labels and adds no badge. In
+addition to the granting source’s automatic trigger pulse, the affected
+`CardView` renders only its central artwork at 70% opacity while an active
+`MODIFIER_DEFENDING_POWER_OVERRIDE` is present. The frame, ownership color,
+powers, ki bead, and interaction remain fully opaque. Removing the final such
+modifier, including through an ownership flip, restores the artwork to normal
+opacity. Rebuilding views during replay or scene synchronization derives both
+this fade and concealment from runtime card data, while replay itself preserves
+the original opponent concealment rules.
 
 ## No-Effect and Identity Rules
 
@@ -276,8 +280,9 @@ Add simulator tests covering:
 Add controller/integration tests confirming that newly revealed opponent hand
 views become face-up, stay red, and become inspectable; testing-mode-only
 visibility does not satisfy gameplay reveal conditions; future draws reveal
-after occupying their fixed slot; and replay presents the same revelation
-sequence without leaking other concealed cards.
+after occupying their fixed slot; weakened cards fade only their central art to
+70% opacity and restore it after losing the modifier; and replay presents the
+same revelation sequence without leaking other concealed cards.
 
 Run focused catalog, simulator, and integration suites, then the complete test
 runner. Finally play the affected production path at the 540×960 portrait
