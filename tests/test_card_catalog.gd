@@ -5,8 +5,8 @@ const Decks = preload("res://scripts/duel_decks.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
-	&"huixue_liuguang",
-	&"qiyao_lianfeng",
+	&"TaiShan18Pan1",
+	&"WuDaFuJian1",
 	&"wanyue_guizong",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",
@@ -81,17 +81,17 @@ func _test_catalog_definitions() -> void:
 		&"ZiXiaGong4": "res://pics/LKT010_496.png",
 		&"gate_general": "res://pics/LKT010_002.png",
 		&"meng_huo": "res://pics/LKT010_003.png",
-		&"fa_zheng": "res://pics/LKT010_002.png",
+		&"TuNaShu2": "res://pics/LKT010_002.png",
 		&"fire_envoy": "res://pics/LKT010_007.png",
 		&"tiger_general": "res://pics/LKT010_008.png",
-		&"strategist": "res://pics/LKT010_002.png",
+		&"TuNaShu1": "res://pics/LKT010_002.png",
 		&"LaiHeQinQuan1": "res://pics/LKT010_001.png",
 		&"LaiHeQinQuan2": "res://pics/LKT010_001.png",
 		&"LaiHeQinQuan3": "res://pics/LKT010_001.png",
 		&"LaiHeQinQuan4": "res://pics/LKT010_004.png",
 		&"LaiHeQinQuan5": "res://pics/LKT010_004.png",
-		&"huixue_liuguang": "res://pics/LKT010_012.png",
-		&"qiyao_lianfeng": "res://pics/LKT010_013.png",
+		&"TaiShan18Pan1": "res://pics/LKT010_012.png",
+		&"WuDaFuJian1": "res://pics/LKT010_013.png",
 		&"wanyue_guizong": "res://pics/LKT010_014.png",
 		&"yuyan_tousuo": "res://pics/LKT010_015.png",
 		&"wusuo_changqiao": "res://pics/LKT010_016.png",
@@ -180,8 +180,8 @@ func _test_definition_copy_isolation() -> void:
 
 func _test_new_sect_card_definitions() -> void:
 	var expected_sects: Dictionary = {
-		&"huixue_liuguang": "玄岳剑宗",
-		&"qiyao_lianfeng": "玄岳剑宗",
+		&"TaiShan18Pan1": "玄岳剑宗",
+		&"WuDaFuJian1": "玄岳剑宗",
 		&"wanyue_guizong": "玄岳剑宗",
 		&"yuyan_tousuo": "烟雨楼",
 		&"wusuo_changqiao": "烟雨楼",
@@ -239,7 +239,7 @@ func _test_ability_declarations() -> void:
 		_check(StringName(trigger.get("event", &"")) == Catalog.CARD_BE_ATTACKED, "%s reacts before an attack resolves" % card_id)
 		_check(trigger.get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}], "%s only replaces its own attacks" % card_id)
 		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}], "%s exiles the attacked card" % card_id)
-	for card_id: StringName in [&"fa_zheng", &"strategist"]:
+	for card_id: StringName in [&"TuNaShu2", &"TuNaShu1"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])
 		_check(abilities.size() == 1, "%s declares one ability" % card_id)
@@ -251,7 +251,7 @@ func _test_ability_declarations() -> void:
 		var trigger: Dictionary = (ability.get("triggers", []) as Array)[0]
 		_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED, "%s draws after summon reactions" % card_id)
 		_check(trigger.get("conditions", []) == [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "%s only draws for its own summon" % card_id)
-		var expected_amount: int = 2 if card_id == &"fa_zheng" else 1
+		var expected_amount: int = 2 if card_id == &"TuNaShu2" else 1
 		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_DRAW_CARDS, "amount": expected_amount}], "%s declares its catalog draw amount" % card_id)
 		var instance: Dictionary = Catalog.create_instance(card_id, 1, StringName("test_%s" % card_id))
 		var active_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
@@ -266,8 +266,8 @@ func _test_encounter_decks() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
-	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"YouFenLaiYi2", &"fa_zheng"], "Player deck preserves current hand order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"strategist"], "Opponent deck preserves current hand order")
+	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"YouFenLaiYi2", &"TuNaShu2"], "Player deck preserves current hand order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
 	for suffix: String in ["", ".tmp", ".bak"]:
@@ -398,7 +398,7 @@ func _test_activate_ability_declarations() -> void:
 
 
 func _test_activate_ability_replacement() -> void:
-	var card: Dictionary = Catalog.create_instance(&"fa_zheng", 1, &"replacement_fixture")
+	var card: Dictionary = Catalog.create_instance(&"TuNaShu2", 1, &"replacement_fixture")
 	var first_activate: Dictionary = Catalog.get_definition(&"YouFenLaiYi2")["abilities"][0]
 	Abilities.replace_activate_ability(card, first_activate)
 	_check((card.get("active_abilities", []) as Array).size() == 2, "Adding activation preserves unrelated passive ability")

@@ -24,12 +24,12 @@ const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"gate_general",
 	&"meng_huo",
 	&"YouFenLaiYi2",
-	&"fa_zheng",
+	&"TuNaShu2",
 ]
 const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
-	&"huixue_liuguang",
-	&"qiyao_lianfeng",
+	&"TaiShan18Pan1",
+	&"WuDaFuJian1",
 	&"wanyue_guizong",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",

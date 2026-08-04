@@ -553,7 +553,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 		player_hand.append(Rules.make_card("Filler %d" % index, "填", [1, 1, 1, 1]))
 	var player_deck: Array = [
 		Catalog.create_instance(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"side_1_top"),
-		Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_next"),
+		Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"side_1_next"),
 	]
 	var state := State.new(board, player_hand, [], Rules.PLAYER_OWNER, 0, player_deck, [])
 
@@ -589,7 +589,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		Rules.make_card("Second", "二", [1, 1, 1, 1]),
 	]
 	var first_draw: Dictionary = Catalog.create_instance(&"gate_general", Rules.PLAYER_OWNER, &"side_1_gate")
-	var second_draw: Dictionary = Catalog.create_instance(&"strategist", Rules.PLAYER_OWNER, &"side_1_strategist")
+	var second_draw: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"side_1_TuNaShu1")
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER, 0, [first_draw, second_draw], [])
 
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
@@ -597,7 +597,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 	var next_hand: Array = next_state.get_hand(Rules.PLAYER_OWNER)
 	_check(next_hand.size() == 4, "Playing from three cards can draw the full requested two")
 	_check(StringName((next_hand[2] as Dictionary).get("instance_id", &"")) == &"side_1_gate", "First draw removes side-deck index zero first")
-	_check(StringName((next_hand[3] as Dictionary).get("instance_id", &"")) == &"side_1_strategist", "Second draw preserves side-deck order")
+	_check(StringName((next_hand[3] as Dictionary).get("instance_id", &"")) == &"side_1_TuNaShu1", "Second draw preserves side-deck order")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).is_empty(), "Drawing two removes both available side-deck cards")
 	_check(_count_events(transition.get("events", []), &"card_drawn") == 2, "One event is emitted for each actual draw")
 
@@ -1985,7 +1985,7 @@ func _move_ability() -> Dictionary:
 
 func _test_state_copy_is_isolated() -> void:
 	var player_deck: Array = [Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"side_1_0")]
-	var opponent_deck: Array = [Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"side_2_0")]
+	var opponent_deck: Array = [Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"side_2_0")]
 	var original := State.new(
 		Rules.empty_board(),
 		[Rules.make_card("Player", "我", [1, 2, 3, 4])],

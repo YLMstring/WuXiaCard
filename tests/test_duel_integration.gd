@@ -643,7 +643,7 @@ func _check_catalog_hands(duel: Node) -> void:
 		var opponent_card_data: Dictionary = card.get("card_data")
 		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
 	_check(player_ids == Decks.get_player_card_ids(TEST_PROFILE_PATH), "Player hand resolves in saved deck order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"strategist", &"strategist"], "Opponent hand resolves in catalog deck order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
 	var gate_abilities: Array = gate_card_data.get("active_abilities", [])
@@ -794,14 +794,14 @@ func _check_opponent_draw_visibility() -> void:
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Opponent-draw fixture places opponent card one")
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 2, false), "Opponent-draw fixture places player card two")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 6, false), "Opponent-draw fixture places opponent card two")
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 1, false), "Opponent-draw fixture advances to Strategist")
-	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 7, false), "Playing Strategist from a three-card hand commits")
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 1, false), "Opponent-draw fixture advances to TuNaShu1")
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 7, false), "Playing TuNaShu1 from a three-card hand commits")
 
 	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
-	_check(opponent_views.size() == 3, "Strategist draws one card into the opponent hand")
+	_check(opponent_views.size() == 3, "TuNaShu1 draws one card into the opponent hand")
 	_check(_count_face_down(opponent_views) == opponent_views.size(), "Normal-mode opponent draws remain fully concealed")
-	_check(not trace.is_empty() and trace.back() == &"card_drawn", "Opponent Ink Summon resolves after Strategist is played")
+	_check(not trace.is_empty() and trace.back() == &"card_drawn", "Opponent Ink Summon resolves after TuNaShu1 is played")
 	_check(not draw_duel.has_node("DrawAudio"), "Opponent Ink Summon remains silent in fast and normal presentation")
 	_check_hand_slots(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	draw_duel.queue_free()
@@ -1014,8 +1014,8 @@ func _check_focus_loss_return() -> void:
 func _check_dragged_card_commits_through_simulator() -> void:
 	var drag_duel: Node = _instantiate_duel()
 	drag_duel.set("opponent_card_ids", [
-		&"huixue_liuguang",
-		&"qiyao_lianfeng",
+		&"TaiShan18Pan1",
+		&"WuDaFuJian1",
 		&"wanyue_guizong",
 		&"yuyan_tousuo",
 		&"wusuo_changqiao",

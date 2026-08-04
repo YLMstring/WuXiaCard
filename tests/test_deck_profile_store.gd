@@ -5,8 +5,8 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
-	&"huixue_liuguang",
-	&"qiyao_lianfeng",
+	&"TaiShan18Pan1",
+	&"WuDaFuJian1",
 	&"wanyue_guizong",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",

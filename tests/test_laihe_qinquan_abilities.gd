@@ -46,7 +46,7 @@ func _test_catalog_declarations() -> void:
 
 
 func _test_revelation_state_is_clone_safe() -> void:
-	var card: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"known_card")
+	var card: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"known_card")
 	_check(card.get("revealed_to_owner_ids", []) == [Rules.OPPONENT_OWNER], "A card starts revealed to its original owner")
 	var state := State.new(Rules.empty_board(), [], [card], Rules.PLAYER_OWNER)
 	state.remembered_glyphs_by_owner = {Rules.PLAYER_OWNER: ["吐纳术"]}
@@ -61,7 +61,7 @@ func _test_revelation_state_is_clone_safe() -> void:
 
 func _test_reveal_all_and_future_draws() -> void:
 	var enemy_hand: Array = [
-		Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"enemy_a"),
+		Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_a"),
 		Catalog.create_instance(&"fire_envoy", Rules.OPPONENT_OWNER, &"enemy_b"),
 	]
 	var reveal_one: Dictionary = Catalog.create_instance(&"LaiHeQinQuan1", Rules.PLAYER_OWNER, &"laihe_1")
@@ -72,8 +72,8 @@ func _test_reveal_all_and_future_draws() -> void:
 	_check(_event_count(result.get("events", []), &"card_revealed") == 2, "LaiHe1 emits one event per newly revealed card")
 
 	var reveal_three: Dictionary = Catalog.create_instance(&"LaiHeQinQuan3", Rules.PLAYER_OWNER, &"laihe_3")
-	var drawer: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"enemy_drawer")
-	var drawn: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"future_enemy")
+	var drawer: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_drawer")
+	var drawn: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"future_enemy")
 	var state_three := State.new(Rules.empty_board(), [reveal_three], [drawer], Rules.PLAYER_OWNER, 0, [], [drawn])
 	var result_three: Dictionary = Simulator.apply_action(state_three, Action.make_play(0, 4))
 	var next_three: State = result_three["state"] as State
@@ -87,7 +87,7 @@ func _test_reveal_all_and_future_draws() -> void:
 
 
 func _test_remembered_reveal_and_weakness() -> void:
-	var remembered: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"remembered_enemy")
+	var remembered: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"remembered_enemy")
 	var unknown: Dictionary = Catalog.create_instance(&"fire_envoy", Rules.OPPONENT_OWNER, &"unknown_enemy")
 	var source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan4", Rules.PLAYER_OWNER, &"laihe_4")
 	var state := State.new(Rules.empty_board(), [source], [remembered, unknown], Rules.PLAYER_OWNER)
@@ -106,7 +106,7 @@ func _test_remembered_reveal_and_weakness() -> void:
 
 	var first_source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan4", Rules.PLAYER_OWNER, &"grant_one")
 	var second_source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan4", Rules.PLAYER_OWNER, &"grant_two")
-	var duplicate_target: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"duplicate_target")
+	var duplicate_target: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"duplicate_target")
 	duplicate_target["revealed_to_owner_ids"].append(Rules.PLAYER_OWNER)
 	var duplicate_board: Array = Rules.empty_board()
 	duplicate_board[3] = {"card": first_source, "owner": Rules.PLAYER_OWNER}
@@ -170,7 +170,7 @@ func _test_flip_protection() -> void:
 
 
 func _test_picture_fade() -> void:
-	var card_data: Dictionary = Catalog.create_instance(&"strategist", Rules.OPPONENT_OWNER, &"fade_card")
+	var card_data: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"fade_card")
 	card_data["active_abilities"].append({
 		"retained_on_flip": false,
 		"modifiers": [{"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 1}],

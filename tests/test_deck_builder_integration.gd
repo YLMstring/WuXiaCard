@@ -29,7 +29,7 @@ func _run() -> void:
 		&"CangSongYingKe2",
 		&"fire_envoy",
 		&"tiger_general",
-		&"strategist",
+		&"TuNaShu1",
 		&"LaiHeQinQuan2",
 	]
 	builder.upcoming_enemy_card_ids = enemy_fixture_ids
