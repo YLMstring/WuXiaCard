@@ -66,7 +66,7 @@ These primitives must not reference the five implementing card IDs.
 
 ## Proposed card declarations
 
-The snippets below replace only each card's current empty `abilities` array. `ACTION_GRANT_ABILITY_TO_SELF` applies to the current action subject: the original source at top level, or the selected card inside `ACTION_FOR_EACH_SELECTED_CARD`. `ACTION_SWAP_ABILITY_SOURCE_WITH_SELF` swaps that current subject with the original source of the resolving ability.
+The snippets below replace only each card's current empty `abilities` array. `ACTION_GRANT_ABILITY_TO_SELF` applies to the current action subject: the original source at top level, or the selected card inside `ACTION_FOR_EACH_SELECTED_CARD`. `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE` makes the original ability source initiate the established swap with that current action subject.
 
 ### Shared temporary protection value
 
@@ -111,7 +111,7 @@ const TEMPORARY_FLIP_PROTECTION: Dictionary = {
 				],
 				"required_count": 1,
 			},
-			"actions": [{"type": ACTION_SWAP_ABILITY_SOURCE_WITH_SELF}],
+			"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
 		}],
 	}],
 }],
@@ -135,7 +135,7 @@ const TEMPORARY_FLIP_PROTECTION: Dictionary = {
 					],
 					"required_count": 1,
 				},
-				"actions": [{"type": ACTION_SWAP_ABILITY_SOURCE_WITH_SELF}],
+				"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
 			}],
 		}],
 	},
