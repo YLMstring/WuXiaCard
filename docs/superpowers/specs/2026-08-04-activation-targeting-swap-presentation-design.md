@@ -54,8 +54,8 @@ source card will move.
 
 A single `card_moved` event remains an ordinary movement. After target
 selection, the real card view moves from its source to its destination and uses
-the existing movement sound and subtle brush trail. This covers 有凤来仪's
-empty-square move and future committed movement actions.
+the existing movement sound. It creates no movement trail. This covers
+有凤来仪's empty-square move and future committed movement actions.
 
 ### Reciprocal swap detection
 
@@ -76,9 +76,8 @@ preserving their original global rectangles. They travel simultaneously along
 shallow opposing arcs around the midpoint, avoiding a direct visual overlap.
 
 The animation lasts `0.28` seconds, including its eased landing into the
-destination cells. Movement audio plays once. One subtle brush
-trail follows the initiating card only; the second card receives no duplicate
-sound or trail.
+destination cells. Movement audio plays once. Neither card creates a movement
+trail.
 
 After the animation completes, both views are reparented into their logical
 destination cells, their transforms are normalized, and the controller's board
@@ -126,7 +125,7 @@ The controller exposes presentation-only values with these initial defaults:
 - swap travel duration: `0.28` seconds;
 - shallow arc offset: `12%` of the shorter board-cell side;
 - targeting trace: `6` pixels wide on the fixed 540-pixel canvas, using the
-  existing movement-trail teal `Color(0.12, 0.42, 0.38, 0.72)`.
+  ink teal `Color(0.12, 0.42, 0.38, 0.72)`.
 
 Fast test mode sets new waits and movement durations to zero while preserving
 the same final remapping and event order.
@@ -153,9 +152,9 @@ Focused controller tests cover:
   invalid, focus-loss, and cancelled endings;
 - invalid release shakes the anchored card and commits no action;
 - 有凤来仪 empty-square movement starts only after target commitment and keeps
-  its movement sound and trail;
-- 有凤来仪 reciprocal movement produces one swap animation, one sound, and one
-  initiating-card trail;
+  its movement sound without creating a movement trail;
+- 有凤来仪 reciprocal movement produces one swap animation and one sound, with
+  no movement trail;
 - 泰山十八盘 remains in its original square for placement and pulse, swaps, then
   presents its ordinary attack from the new square;
 - both swap card-view identities match the simulator's final board cells;
