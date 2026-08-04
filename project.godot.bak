@@ -13,7 +13,10 @@ config_version=5
 config/name="九宫论剑"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
+boot_splash/bg_color=Color(0.0941176, 0.0470588, 0.027451, 1)
+boot_splash/image="res://icon_android_adaptive_foreground_432.png"
 config/icon="res://icon_128.png"
+boot_splash/minimum_display_time=1200
 
 [display]
 
