@@ -32,6 +32,10 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
+	duel.snap_duration = 0.02
+	duel.ability_trigger_pulse_duration = 0.02
+	duel.swap_duration = 0.02
+	duel.summon_swap_readable_duration = 0.10
 
 	duel.duel_state.active_player = Rules.OPPONENT_OWNER
 	var opponent_instance_id: StringName = duel.debug_get_hand_instance_ids(
@@ -60,13 +64,25 @@ func _run() -> void:
 	)
 	taishan_view.sync_runtime_data(taishan, Rules.PLAYER_OWNER)
 
+	var presentation_started_msec: int = Time.get_ticks_msec()
 	var taishan_played: bool = await duel.debug_commit_move(
 		Rules.PLAYER_OWNER,
 		0,
 		4,
 		false
 	)
+	var presentation_elapsed: float = (
+		float(Time.get_ticks_msec() - presentation_started_msec) / 1000.0
+	)
 	_check(taishan_played, "TaiShan18Pan2 enters through the production controller")
+	_check(
+		presentation_elapsed >= 0.10,
+		"TaiShan remains readable in its original slot before its swap begins"
+	)
+	_check(
+		duel.debug_get_ability_pulse_trace().has(player_instance_id),
+		"TaiShan pulses in its original slot before the movement event"
+	)
 	_check(
 		_instance_at(duel, 5) == player_instance_id
 		and _instance_at(duel, 4) == opponent_instance_id,

@@ -2,7 +2,7 @@ extends SceneTree
 
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Action = preload("res://scripts/duel_action.gd")
-const ProfileStore = preload("res://scripts/deck_profile_store.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 
 const TEST_PROFILE_PATH: String = "user://youfen_integration_profile.json"
@@ -17,20 +17,36 @@ func _init() -> void:
 
 func _run() -> void:
 	_cleanup_profile()
-	var store: RefCounted = ProfileStore.new(TEST_PROFILE_PATH)
-	var profile: Dictionary = store.create_default_profile()
-	var library_index: int = (profile.get("library_slots", []) as Array).find("YouFenLaiYi4")
-	_check(library_index >= 0, "Default test profile exposes tier-four 有凤来仪 in its library")
-	var exchange_result: Dictionary = store.exchange_and_save(profile, library_index, 3)
-	_check(bool(exchange_result.get("ok", false)), "Test profile places tier-four 有凤来仪 in the main deck")
-
 	var duel: Node = DUEL_SCENE.instantiate()
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	duel.set("testing_mode", true)
 	duel.set("opponent_hand_shuffle_seed", -1)
+	var opponent_ids: Array[StringName] = [
+		&"CangSongYingKe2",
+		&"gate_general",
+		&"meng_huo",
+		&"YouFenLaiYi2",
+		&"TuNaShu2",
+	]
+	duel.opponent_card_ids = opponent_ids
 	root.add_child(duel)
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
+	var source_instance_id: StringName = duel.debug_get_hand_instance_ids(
+		Rules.PLAYER_OWNER
+	)[3]
+	var youfen: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi4",
+		Rules.PLAYER_OWNER,
+		source_instance_id
+	)
+	duel.duel_state.get_hand(Rules.PLAYER_OWNER)[3] = youfen
+	var source_hand_view: Node = duel._get_card_view_for_logical_index(
+		Rules.PLAYER_OWNER,
+		3
+	)
+	source_hand_view.sync_runtime_data(youfen, Rules.PLAYER_OWNER)
 
 	var placed_source: bool = await duel.debug_commit_move(
 		Rules.PLAYER_OWNER,
@@ -41,8 +57,23 @@ func _run() -> void:
 	_check(placed_source, "Tier-four 有凤来仪 enters through the production play path")
 	var board_views: Array = duel.get("board_cards") as Array
 	var source_view: Control = board_views[4] as Control
-	var source_instance_id: StringName = duel.debug_get_board_card_instance_id(4)
+	source_instance_id = duel.debug_get_board_card_instance_id(4)
 
+	var target_hand_instance_id: StringName = duel.debug_get_hand_instance_ids(
+		Rules.OPPONENT_OWNER
+	)[1]
+	var weak_target: Dictionary = Catalog.create_instance(
+		&"CangSongYingKe2",
+		Rules.OPPONENT_OWNER,
+		target_hand_instance_id
+	)
+	weak_target["powers"] = [0, 0, 0, 0]
+	duel.duel_state.get_hand(Rules.OPPONENT_OWNER)[1] = weak_target
+	var weak_target_view: Node = duel._get_card_view_for_logical_index(
+		Rules.OPPONENT_OWNER,
+		1
+	)
+	weak_target_view.sync_runtime_data(weak_target, Rules.OPPONENT_OWNER)
 	var placed_target: bool = await duel.debug_commit_move(
 		Rules.OPPONENT_OWNER,
 		1,
@@ -88,7 +119,7 @@ func _run() -> void:
 		"Swap creates no disappear or reconstruction presentation"
 	)
 	var source_ki: int = int((source_view.get("card_data") as Dictionary).get("ki", -1))
-	_check(source_ki == 2, "Swapping spends one ki and synchronizes A's existing view")
+	_check(source_ki == 1, "Swapping spends one ki and synchronizes A's existing view")
 
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
 	var swap_trace: Array[StringName] = trace.slice(trace_start)

@@ -24,6 +24,7 @@ var ki_badge_enabled: bool = true
 var power_numbers_enabled: bool = true
 
 var _dragging: bool = false
+var _drag_follows_pointer: bool = true
 var _pointer_id: int = -2
 var _pointer_offset: Vector2 = Vector2.ZERO
 var _home_parent: Node = null
@@ -202,8 +203,13 @@ func is_being_dragged() -> bool:
 	return _dragging
 
 
+func set_drag_follows_pointer(value: bool) -> void:
+	_drag_follows_pointer = value
+
+
 func finish_drag_state() -> void:
 	_dragging = false
+	_drag_follows_pointer = true
 	_pointer_id = -2
 	_reset_pending_pointer()
 	scale = Vector2.ONE
@@ -438,7 +444,8 @@ func _try_begin_drag(pointer_position: Vector2, pointer_id: int) -> void:
 
 
 func _move_drag(pointer_position: Vector2) -> void:
-	global_position = pointer_position + _pointer_offset
+	if _drag_follows_pointer:
+		global_position = pointer_position + _pointer_offset
 	drag_moved.emit(self, pointer_position)
 
 

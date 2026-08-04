@@ -42,7 +42,12 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var exile_ink_color: Color = Color("6f1118")
 @export var removal_audio_volume_db: float = -4.0
 @export var movement_audio_volume_db: float = -9.0
-@export var movement_trail_duration: float = 0.18
+@export var movement_duration: float = 0.20
+@export var swap_duration: float = 0.28
+@export var swap_arc_ratio: float = 0.12
+@export var summon_swap_readable_duration: float = 0.30
+@export var targeting_trace_width: float = 6.0
+@export var targeting_trace_color: Color = Color(0.12, 0.42, 0.38, 0.72)
 @export var ki_gain_pulse_duration: float = 0.18
 @export var extra_turn_convergence_duration: float = 0.30
 @export var extra_turn_status_duration: float = 0.35
@@ -76,11 +81,15 @@ var _drag_source_zone: StringName = &""
 var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
 var _drag_action_candidates: Array[ActionData] = []
+var _targeting_trace: Line2D = null
+var _targeting_trace_end_global: Vector2 = Vector2.ZERO
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
 var _attack_vfx_trace: Array[Dictionary] = []
 var _ability_pulse_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
+var _movement_presentation_trace: Array[Dictionary] = []
+var _movement_sound_count: int = 0
 var _opponent_search_session: SearchSession = null
 var _opponent_search_started_usec: int = 0
 var _opponent_search_test_limits: Dictionary = {}
@@ -229,7 +238,9 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_bloom_duration = 0.0
 		draw_rise_duration = 0.0
 		draw_post_effect_gap = 0.0
-		movement_trail_duration = 0.0
+		movement_duration = 0.0
+		swap_duration = 0.0
+		summon_swap_readable_duration = 0.0
 		ki_gain_pulse_duration = 0.0
 		extra_turn_convergence_duration = 0.0
 		extra_turn_status_duration = 0.0
@@ -363,6 +374,22 @@ func debug_get_ability_pulse_trace() -> Array[StringName]:
 
 func debug_get_ki_presentation_trace() -> Array[int]:
 	return _ki_presentation_trace.duplicate()
+
+
+func debug_has_targeting_trace() -> bool:
+	return _targeting_trace != null and is_instance_valid(_targeting_trace)
+
+
+func debug_get_targeting_trace_end() -> Vector2:
+	return _targeting_trace_end_global
+
+
+func debug_get_movement_presentation_trace() -> Array[Dictionary]:
+	return _movement_presentation_trace.duplicate(true)
+
+
+func debug_get_movement_sound_count() -> int:
+	return _movement_sound_count
 
 
 func debug_get_active_owner() -> int:
@@ -590,18 +617,24 @@ func _spawn_card_in_slot(slot: PanelContainer, card_data: Dictionary, owner_id: 
 	return card
 
 
-func _on_card_drag_started(card: CardView, _pointer_position: Vector2) -> void:
+func _on_card_drag_started(card: CardView, pointer_position: Vector2) -> void:
 	if not _can_manually_drag(card):
 		card.finish_drag_state()
 		return
 	_drag_source_index = _get_board_cell_for_card(card)
 	_drag_source_zone = ActionData.SOURCE_BOARD if _drag_source_index >= 0 else ActionData.SOURCE_HAND
 	_drag_valid_targets = _get_drag_targets(card)
-	card.reparent(drag_layer, true)
+	if _drag_source_zone == ActionData.SOURCE_BOARD:
+		card.set_drag_follows_pointer(false)
+		_begin_targeting_trace(card, pointer_position)
+	else:
+		card.set_drag_follows_pointer(true)
+		card.reparent(drag_layer, true)
 	_highlight_legal_cells()
 
 
 func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
+	_update_targeting_trace(pointer_position)
 	var target_cell: int = _get_cell_at_position(pointer_position)
 	if target_cell == _hovered_cell:
 		return
@@ -617,6 +650,7 @@ func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	var action: ActionData = _make_drag_action(card, target_cell)
 	if _can_manually_drag(card) and action != null and Simulator.is_action_legal(duel_state, action):
 		card.finish_drag_state()
+		_remove_targeting_trace()
 		await _commit_action(card, action, card.owner_id)
 		_clear_drag_context()
 		return
@@ -693,11 +727,7 @@ func _commit_action(
 		return
 	if not Simulator.is_action_legal(duel_state, action):
 		return
-	var movement_start: Vector2 = Vector2.ZERO
-	var activation_views: Dictionary = {}
-	if action.action_type == ActionData.TYPE_ACTIVATE:
-		movement_start = board_cells[action.source_index].get_global_rect().get_center()
-		activation_views = _capture_board_views()
+	var presentation_started_msec: int = Time.get_ticks_msec()
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
@@ -719,21 +749,9 @@ func _commit_action(
 	card.z_index = 1
 	card.scale = Vector2(0.9, 0.9) if action.action_type == ActionData.TYPE_PLAY else Vector2.ONE
 	card.rotation = 0.0
-	var activation_final_cell: int = action.source_index
 	if action.action_type == ActionData.TYPE_PLAY:
 		card.reparent(board_cells[action.target_index], false)
 		board_cards[action.target_index] = card
-		activation_final_cell = _remap_board_views_from_movements(
-			_capture_board_views(),
-			events,
-			_get_card_instance_id(card)
-		)
-	else:
-		activation_final_cell = _remap_board_views_from_movements(
-			activation_views,
-			events,
-			action.source_instance_id
-		)
 
 	if action.action_type == ActionData.TYPE_PLAY:
 		_play_placement_feedback()
@@ -744,18 +762,14 @@ func _commit_action(
 		await snap_tween.finished
 	else:
 		card.scale = Vector2.ONE
-	if (
-		action.action_type == ActionData.TYPE_ACTIVATE
-		and activation_final_cell >= 0
-		and activation_final_cell != action.source_index
-	):
-		_play_movement_feedback()
-		await _play_movement_trail(
-			movement_start,
-			board_cells[activation_final_cell].get_global_rect().get_center()
-		)
 
-	var resolved_targets: int = await _present_transition_events(events, owner_id)
+	var resolved_targets: int = await _present_transition_events(
+		events,
+		owner_id,
+		action.action_type == ActionData.TYPE_PLAY,
+		_get_card_instance_id(card),
+		presentation_started_msec
+	)
 	_reconcile_board_card_views()
 	if resolved_targets > 1:
 		_vibrate(multi_capture_haptic_ms)
@@ -781,87 +795,316 @@ func _commit_action(
 	await _perform_opponent_turn()
 
 
-func _capture_board_views() -> Dictionary:
-	var captured: Dictionary = {}
-	for cell_index: int in range(board_cards.size()):
-		var card_view := board_cards[cell_index] as CardView
-		if card_view == null or not is_instance_valid(card_view):
-			continue
-		var instance_id: StringName = _get_card_instance_id(card_view)
-		if instance_id == &"":
-			continue
-		captured[instance_id] = {
-			"view": card_view,
-			"cell": cell_index,
-		}
-	return captured
-
-
-func _remap_board_views_from_movements(
-	captured: Dictionary,
+func _movement_group_contains_instance(
 	events: Array,
-	source_instance_id: StringName
+	event_index: int,
+	instance_id: StringName
+) -> bool:
+	if instance_id == &"" or event_index < 0 or event_index >= events.size():
+		return false
+	var first: Dictionary = events[event_index] as Dictionary
+	if StringName(first.get("instance_id", &"")) == instance_id:
+		return true
+	if event_index + 1 >= events.size():
+		return false
+	var second: Dictionary = events[event_index + 1] as Dictionary
+	return (
+		StringName(second.get("type", &"")) == &"card_moved"
+		and StringName(second.get("instance_id", &"")) == instance_id
+		and _movement_events_are_reciprocal(first, second)
+	)
+
+
+func _wait_for_summon_swap_readability(started_msec: int) -> void:
+	if summon_swap_readable_duration <= 0.0 or started_msec <= 0:
+		return
+	var elapsed: float = float(Time.get_ticks_msec() - started_msec) / 1000.0
+	var remaining: float = summon_swap_readable_duration - elapsed
+	if remaining > 0.0:
+		await get_tree().create_timer(remaining).timeout
+
+
+func _present_movement_event_group(
+	events: Array,
+	event_index: int
 ) -> int:
-	var final_cells: Dictionary = {}
-	for instance_value: Variant in captured:
-		var instance_id := StringName(instance_value)
-		var entry: Dictionary = captured[instance_value]
-		final_cells[instance_id] = int(entry.get("cell", -1))
-	for event_value: Variant in events:
-		var event: Dictionary = event_value
-		if StringName(event.get("type", &"")) != &"card_moved":
-			continue
-		var moved_instance_id := StringName(event.get("instance_id", &""))
-		if captured.has(moved_instance_id):
-			final_cells[moved_instance_id] = int(event.get("target_cell", -1))
-	board_cards.fill(null)
-	for instance_value: Variant in captured:
-		var instance_id := StringName(instance_value)
-		var entry: Dictionary = captured[instance_value]
-		var card_view := entry.get("view", null) as CardView
-		var final_cell: int = int(final_cells.get(instance_id, -1))
-		if (
-			card_view == null
-			or not is_instance_valid(card_view)
-			or final_cell < 0
-			or final_cell >= board_cells.size()
-		):
-			continue
-		card_view.reparent(board_cells[final_cell], false)
-		card_view.z_index = 1
-		board_cards[final_cell] = card_view
-	return int(final_cells.get(source_instance_id, -1))
+	var first: Dictionary = events[event_index] as Dictionary
+	_presentation_trace.append(&"card_moved")
+	if event_index + 1 < events.size():
+		var second: Dictionary = events[event_index + 1] as Dictionary
+		if _movement_events_are_reciprocal(first, second):
+			_presentation_trace.append(&"card_moved")
+			await _animate_reciprocal_swap(first, second)
+			return 2
+	await _animate_single_movement(first)
+	return 1
+
+
+func _movement_events_are_reciprocal(first: Dictionary, second: Dictionary) -> bool:
+	return (
+		StringName(first.get("type", &"")) == &"card_moved"
+		and StringName(second.get("type", &"")) == &"card_moved"
+		and int(first.get("source_cell", -1)) == int(second.get("target_cell", -2))
+		and int(first.get("target_cell", -1)) == int(second.get("source_cell", -2))
+		and StringName(first.get("instance_id", &"")) != &""
+		and StringName(second.get("instance_id", &"")) != &""
+	)
+
+
+func _animate_single_movement(event: Dictionary) -> void:
+	var instance_id := StringName(event.get("instance_id", &""))
+	var source_cell: int = int(event.get("source_cell", -1))
+	var target_cell: int = int(event.get("target_cell", -1))
+	var card: CardView = _get_board_card_view_by_instance(instance_id)
+	if not _valid_movement_cells(source_cell, target_cell) or card == null:
+		_apply_movement_mapping_immediate(event)
+		return
+	var start_global: Vector2 = card.global_position
+	var end_global: Vector2 = board_cells[target_cell].get_global_rect().position
+	card.reparent(drag_layer, true)
+	card.z_index = 90
+	_play_movement_feedback()
+	_movement_presentation_trace.append({
+		"kind": &"move",
+		"instance_id": instance_id,
+		"source_cell": source_cell,
+		"target_cell": target_cell,
+		"duration": movement_duration,
+	})
+	if movement_duration > 0.0:
+		var tween: Tween = create_tween()
+		tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(card, "global_position", end_global, movement_duration)
+		await tween.finished
+	else:
+		card.global_position = end_global
+	_finalize_presented_card_move(card, source_cell, target_cell)
+
+
+func _animate_reciprocal_swap(
+	first: Dictionary,
+	second: Dictionary
+) -> void:
+	var first_id := StringName(first.get("instance_id", &""))
+	var second_id := StringName(second.get("instance_id", &""))
+	var first_source: int = int(first.get("source_cell", -1))
+	var first_target: int = int(first.get("target_cell", -1))
+	var second_source: int = int(second.get("source_cell", -1))
+	var second_target: int = int(second.get("target_cell", -1))
+	var first_card: CardView = _get_board_card_view_by_instance(first_id)
+	var second_card: CardView = _get_board_card_view_by_instance(second_id)
+	if (
+		not _valid_movement_cells(first_source, first_target)
+		or not _valid_movement_cells(second_source, second_target)
+		or first_card == null
+		or second_card == null
+	):
+		_apply_movement_mapping_immediate(first)
+		_apply_movement_mapping_immediate(second)
+		return
+
+	var first_start: Vector2 = first_card.global_position
+	var second_start: Vector2 = second_card.global_position
+	var first_end: Vector2 = board_cells[first_target].get_global_rect().position
+	var second_end: Vector2 = board_cells[second_target].get_global_rect().position
+	var direction: Vector2 = first_end - first_start
+	var perpendicular: Vector2 = Vector2(-direction.y, direction.x).normalized()
+	var cell_size: Vector2 = board_cells[first_source].get_global_rect().size
+	var arc_amount: float = minf(cell_size.x, cell_size.y) * swap_arc_ratio
+	var first_control: Vector2 = (first_start + first_end) * 0.5 + perpendicular * arc_amount
+	var second_control: Vector2 = (second_start + second_end) * 0.5 - perpendicular * arc_amount
+
+	first_card.reparent(drag_layer, true)
+	second_card.reparent(drag_layer, true)
+	first_card.z_index = 91
+	second_card.z_index = 90
+	_play_movement_feedback()
+	_movement_presentation_trace.append({
+		"kind": &"swap",
+		"first_instance_id": first_id,
+		"second_instance_id": second_id,
+		"first_source_cell": first_source,
+		"first_target_cell": first_target,
+		"duration": swap_duration,
+		"arc_amount": arc_amount,
+	})
+	if swap_duration > 0.0:
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_method(
+			_set_card_bezier_position.bind(
+				first_card,
+				first_start,
+				first_control,
+				first_end
+			),
+			0.0,
+			1.0,
+			swap_duration
+		)
+		tween.tween_method(
+			_set_card_bezier_position.bind(
+				second_card,
+				second_start,
+				second_control,
+				second_end
+			),
+			0.0,
+			1.0,
+			swap_duration
+		)
+		await tween.finished
+	else:
+		first_card.global_position = first_end
+		second_card.global_position = second_end
+
+	board_cards[first_source] = null
+	board_cards[second_source] = null
+	_finalize_presented_card_move(
+		first_card,
+		first_source,
+		first_target
+	)
+	_finalize_presented_card_move(
+		second_card,
+		second_source,
+		second_target
+	)
+
+
+func _set_card_bezier_position(
+	progress: float,
+	card: CardView,
+	start: Vector2,
+	control: Vector2,
+	end: Vector2
+) -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	var inverse: float = 1.0 - progress
+	card.global_position = (
+		inverse * inverse * start
+		+ 2.0 * inverse * progress * control
+		+ progress * progress * end
+	)
+
+
+func _valid_movement_cells(source_cell: int, target_cell: int) -> bool:
+	return (
+		source_cell >= 0
+		and source_cell < board_cells.size()
+		and target_cell >= 0
+		and target_cell < board_cells.size()
+	)
+
+
+func _apply_movement_mapping_immediate(event: Dictionary) -> void:
+	var instance_id := StringName(event.get("instance_id", &""))
+	var source_cell: int = int(event.get("source_cell", -1))
+	var target_cell: int = int(event.get("target_cell", -1))
+	var card: CardView = _get_board_card_view_by_instance(instance_id)
+	if card == null or not _valid_movement_cells(source_cell, target_cell):
+		return
+	_finalize_presented_card_move(card, source_cell, target_cell)
+
+
+func _finalize_presented_card_move(
+	card: CardView,
+	source_cell: int,
+	target_cell: int
+) -> void:
+	if card == null or not is_instance_valid(card) or not _valid_movement_cells(source_cell, target_cell):
+		return
+	if board_cards[source_cell] == card:
+		board_cards[source_cell] = null
+	card.reparent(board_cells[target_cell], false)
+	card.scale = Vector2.ONE
+	card.rotation = 0.0
+	card.z_index = 1
+	board_cards[target_cell] = card
 
 
 func _reconcile_board_card_views() -> void:
 	if duel_state == null:
 		return
+	var views_by_instance: Dictionary = {}
+	for card_value: Variant in board_cards:
+		var mapped_card := card_value as CardView
+		if mapped_card != null and is_instance_valid(mapped_card):
+			views_by_instance[_get_card_instance_id(mapped_card)] = mapped_card
+	for cell: PanelContainer in board_cells:
+		for child: Node in cell.get_children():
+			var cell_card := child as CardView
+			if cell_card != null and is_instance_valid(cell_card):
+				views_by_instance[_get_card_instance_id(cell_card)] = cell_card
+	for child: Node in drag_layer.get_children():
+		var floating_card := child as CardView
+		if floating_card != null and is_instance_valid(floating_card):
+			views_by_instance[_get_card_instance_id(floating_card)] = floating_card
+	board_cards.fill(null)
 	for cell_index: int in range(mini(board_cards.size(), duel_state.board.size())):
-		var card_view := board_cards[cell_index] as CardView
 		var logical_slot_value: Variant = duel_state.board[cell_index]
-		if card_view == null or logical_slot_value == null:
+		if logical_slot_value == null:
 			continue
 		var logical_slot: Dictionary = logical_slot_value
 		var logical_card: Dictionary = logical_slot.get("card", {})
-		if _get_card_instance_id(card_view) != StringName(logical_card.get("instance_id", &"")):
-			continue
+		var instance_id := StringName(logical_card.get("instance_id", &""))
+		var card_view := views_by_instance.get(instance_id, null) as CardView
+		if card_view == null or not is_instance_valid(card_view):
+			card_view = _spawn_card_in_slot(
+				board_cells[cell_index],
+				logical_card,
+				int(logical_slot.get("owner", DuelRules.PLAYER_OWNER)),
+				false
+			)
+		else:
+			card_view.reparent(board_cells[cell_index], false)
+		card_view.set_face_down(false)
+		card_view.set_playable(false)
+		card_view.scale = Vector2.ONE
+		card_view.rotation = 0.0
+		card_view.z_index = 1
 		card_view.sync_runtime_data(
 			logical_card,
 			int(logical_slot.get("owner", card_view.owner_id))
 		)
+		board_cards[cell_index] = card_view
 
 
-func _present_transition_events(events: Array, fallback_owner: int) -> int:
+func _present_transition_events(
+	events: Array,
+	fallback_owner: int,
+	is_play_action: bool = false,
+	played_instance_id: StringName = &"",
+	presentation_started_msec: int = 0
+) -> int:
 	var resolved_targets: int = 0
 	var last_pulsed_instance_id: StringName = &""
 	var drew_card: bool = false
 	var waited_after_draw: bool = false
-	for event_value: Variant in events:
-		var event: Dictionary = event_value
+	var event_index: int = 0
+	while event_index < events.size():
+		var event: Dictionary = events[event_index] as Dictionary
 		var event_type := StringName(event.get("type", &""))
 		var target_cell: int = int(event.get("target_cell", -1))
-		if event_type in [&"ability_activated", &"card_moved"]:
+		var consumed_events: int = 1
+		if event_type == &"ability_activated":
 			_presentation_trace.append(event_type)
+		elif event_type == &"card_moved":
+			if (
+				is_play_action
+				and _movement_group_contains_instance(
+					events,
+					event_index,
+					played_instance_id
+				)
+			):
+				await _wait_for_summon_swap_readability(presentation_started_msec)
+			consumed_events = await _present_movement_event_group(
+				events,
+				event_index
+			)
 		elif event_type == &"attack_started":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
@@ -954,6 +1197,7 @@ func _present_transition_events(events: Array, fallback_owner: int) -> int:
 				await exiled_card.play_exile(exile_duration, exile_ink_color)
 				exiled_card.queue_free()
 			resolved_targets += 1
+		event_index += consumed_events
 	return resolved_targets
 
 
@@ -1461,10 +1705,70 @@ func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
 
 
 func _clear_drag_context() -> void:
+	_remove_targeting_trace()
 	_drag_source_zone = &""
 	_drag_source_index = -1
 	_drag_valid_targets.clear()
 	_drag_action_candidates.clear()
+
+
+func _begin_targeting_trace(card: CardView, pointer_position: Vector2) -> void:
+	_remove_targeting_trace()
+	_targeting_trace = Line2D.new()
+	_targeting_trace.name = "ActivationTargetingTrace"
+	_targeting_trace.width = targeting_trace_width
+	_targeting_trace.default_color = targeting_trace_color
+	_targeting_trace.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	_targeting_trace.end_cap_mode = Line2D.LINE_CAP_ROUND
+	_targeting_trace.antialiased = true
+	_targeting_trace.z_index = 95
+	var taper := Curve.new()
+	taper.add_point(Vector2(0.0, 0.55))
+	taper.add_point(Vector2(0.22, 1.0))
+	taper.add_point(Vector2(1.0, 0.12))
+	_targeting_trace.width_curve = taper
+	var fade := Gradient.new()
+	fade.set_color(0, targeting_trace_color)
+	fade.set_color(1, Color(
+		targeting_trace_color.r,
+		targeting_trace_color.g,
+		targeting_trace_color.b,
+		targeting_trace_color.a * 0.32
+	))
+	_targeting_trace.gradient = fade
+	drag_layer.add_child(_targeting_trace)
+	var source_center: Vector2 = card.get_global_rect().get_center()
+	var inverse_canvas: Transform2D = drag_layer.get_global_transform_with_canvas().affine_inverse()
+	var source_local: Vector2 = inverse_canvas * source_center
+	var pointer_local: Vector2 = inverse_canvas * pointer_position
+	_targeting_trace.points = PackedVector2Array([
+		source_local,
+		(source_local + pointer_local) * 0.5,
+		pointer_local,
+	])
+	_targeting_trace_end_global = pointer_position
+
+
+func _update_targeting_trace(pointer_position: Vector2) -> void:
+	if _targeting_trace == null or not is_instance_valid(_targeting_trace):
+		return
+	var inverse_canvas: Transform2D = drag_layer.get_global_transform_with_canvas().affine_inverse()
+	var points: PackedVector2Array = _targeting_trace.points
+	if points.size() < 3:
+		return
+	var pointer_local: Vector2 = inverse_canvas * pointer_position
+	var direction: Vector2 = pointer_local - points[0]
+	var perpendicular: Vector2 = Vector2(-direction.y, direction.x).normalized()
+	points[1] = (points[0] + pointer_local) * 0.5 + perpendicular * 2.0
+	points[2] = pointer_local
+	_targeting_trace.points = points
+	_targeting_trace_end_global = pointer_position
+
+
+func _remove_targeting_trace() -> void:
+	if _targeting_trace != null and is_instance_valid(_targeting_trace):
+		_targeting_trace.queue_free()
+	_targeting_trace = null
 
 
 func _has_legal_activate_from(source_cell: int) -> bool:
@@ -1724,30 +2028,6 @@ func _make_movement_whoosh(duration: float) -> AudioStreamWAV:
 	return stream
 
 
-func _play_movement_trail(start_global: Vector2, end_global: Vector2) -> void:
-	var trail := Line2D.new()
-	trail.name = "MovementBrushTrail"
-	trail.width = 10.0
-	trail.default_color = Color(0.12, 0.42, 0.38, 0.72)
-	trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	trail.end_cap_mode = Line2D.LINE_CAP_ROUND
-	var inverse_canvas_transform: Transform2D = drag_layer.get_global_transform_with_canvas().affine_inverse()
-	trail.points = PackedVector2Array([
-		inverse_canvas_transform * start_global,
-		inverse_canvas_transform * end_global,
-	])
-	drag_layer.add_child(trail)
-	if movement_trail_duration <= 0.0:
-		trail.queue_free()
-		return
-	var trail_tween: Tween = create_tween()
-	trail_tween.set_parallel(true)
-	trail_tween.tween_property(trail, "width", 2.0, movement_trail_duration)
-	trail_tween.tween_property(trail, "modulate:a", 0.0, movement_trail_duration)
-	await trail_tween.finished
-	trail.queue_free()
-
-
 func _play_placement_feedback() -> void:
 	if not OS.has_feature("headless"):
 		placement_audio.play()
@@ -1765,6 +2045,7 @@ func _play_removal_feedback() -> void:
 
 
 func _play_movement_feedback() -> void:
+	_movement_sound_count += 1
 	if not OS.has_feature("headless"):
 		movement_audio.play()
 
