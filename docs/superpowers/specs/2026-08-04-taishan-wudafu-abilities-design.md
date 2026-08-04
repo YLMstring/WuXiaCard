@@ -64,6 +64,174 @@ Add generic selected-card actions:
 
 These primitives must not reference the five implementing card IDs.
 
+## Proposed card declarations
+
+The snippets below replace only each card's current empty `abilities` array. `ACTION_GRANT_ABILITY_TO_SELF` applies to the current action subject: the original source at top level, or the selected card inside `ACTION_FOR_EACH_SELECTED_CARD`. `ACTION_SWAP_ABILITY_SOURCE_WITH_SELF` swaps that current subject with the original source of the resolving ability.
+
+### Shared temporary protection value
+
+Each use below contains a fresh duplicate of this declaration after catalog normalization:
+
+```gdscript
+const TEMPORARY_FLIP_PROTECTION: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+		},
+		{
+			"event": CARD_AFTER_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+		{
+			"event": TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
+}
+```
+
+### `TaiShan18Pan2`
+
+```gdscript
+"abilities": [{
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+				"required_count": 1,
+			},
+			"actions": [{"type": ACTION_SWAP_ABILITY_SOURCE_WITH_SELF}],
+		}],
+	}],
+}],
+```
+
+### `TaiShan18Pan3`
+
+```gdscript
+"abilities": [
+	{
+		"triggers": [{
+			"event": TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+						{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+					],
+					"required_count": 1,
+				},
+				"actions": [{"type": ACTION_SWAP_ABILITY_SOURCE_WITH_SELF}],
+			}],
+		}],
+	},
+	TEMPORARY_FLIP_PROTECTION,
+],
+```
+
+### `WuDaFuJian1`
+
+```gdscript
+"abilities": [{
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_GRANT_ABILITY_TO_SELF,
+			"ability": TEMPORARY_FLIP_PROTECTION,
+		}],
+	}],
+}],
+```
+
+Catalog definition retrieval and nested-grant normalization deep-duplicate `TEMPORARY_FLIP_PROTECTION`, so no runtime card mutates the shared constant or another card's granted copy.
+
+### `WuDaFuJian2`
+
+```gdscript
+"abilities": [{
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{
+						"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+						"weapon": "重剑",
+					},
+				],
+			},
+			"actions": [{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": TEMPORARY_FLIP_PROTECTION,
+			}],
+		}],
+	}],
+}],
+```
+
+### `WuDaFuJian3`
+
+```gdscript
+"abilities": [{
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "重剑",
+						},
+					],
+				},
+				"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "重剑",
+						},
+					],
+				},
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": TEMPORARY_FLIP_PROTECTION,
+				}],
+			},
+		],
+	}],
+}],
+```
+
 ## Failure semantics
 
 - A selector count mismatch produces `NO_EFFECT` and runs no nested action.
