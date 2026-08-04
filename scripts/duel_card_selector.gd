@@ -18,6 +18,7 @@ static func snapshot(
 	if source.is_empty():
 		return selected
 	var limit: int = int(selector.get("limit", 0))
+	var required_count: int = int(selector.get("required_count", 0))
 	var observed: Dictionary = {}
 	for zone_value: Variant in selector.get("zones", []):
 		var zone := StringName(zone_value)
@@ -40,8 +41,10 @@ static func snapshot(
 			):
 				continue
 			selected.append(instance_id)
-			if limit > 0 and selected.size() >= limit:
+			if required_count <= 0 and limit > 0 and selected.size() >= limit:
 				return selected
+	if required_count > 0 and selected.size() != required_count:
+		selected.clear()
 	return selected
 
 
@@ -82,11 +85,24 @@ static func conditions_match(
 		if condition_type == Catalog.CONDITION_SELECTED_CARD_IS_ALLY:
 			if int(candidate.get("owner_id", 0)) != int(source.get("owner_id", 0)):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_IS_ENEMY:
+			if int(candidate.get("owner_id", 0)) == int(source.get("owner_id", 0)):
+				return false
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_WEAPON_IS:
 			if String(selected_card.get("weapon", "")) != String(condition.get("weapon", "")):
 				return false
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE:
 			if selected_instance_id == source_instance_id:
+				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE:
+			if (
+				StringName(candidate.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+				or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+				or not _are_adjacent(
+					int(candidate.get("index", -1)),
+					int(source.get("index", -1))
+				)
+			):
 				return false
 		else:
 			return false
@@ -166,3 +182,10 @@ static func _get_zone_candidates(
 				"card": slot.get("card", {}),
 			})
 	return candidates
+
+
+static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
+	for direction: int in range(4):
+		if Rules.get_neighbor_index(first_cell, direction) == second_cell:
+			return true
+	return false

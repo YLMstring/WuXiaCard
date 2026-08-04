@@ -21,8 +21,10 @@ const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
 const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revealed_to_self"
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
+const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
 const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not_source"
+const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_adjacent_to_source"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -39,6 +41,8 @@ const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
 const ACTION_REVEAL_HAND_CARDS: StringName = &"reveal_hand_cards"
 const ACTION_ENABLE_FUTURE_DRAW_REVEAL: StringName = &"enable_future_draw_reveal"
 const ACTION_GRANT_TRIGGER_CARD_ABILITY: StringName = &"grant_trigger_card_ability"
+const ACTION_GRANT_ABILITY_TO_SELF: StringName = &"grant_ability_to_self"
+const ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE: StringName = &"self_swapped_with_ability_source"
 const ACTION_PREVENT_TRIGGER_FLIP: StringName = &"prevent_trigger_flip"
 const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
 const REVEAL_FILTER_ALL: StringName = &"all"
@@ -79,8 +83,10 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
+	CONDITION_SELECTED_CARD_IS_ENEMY,
 	CONDITION_SELECTED_CARD_WEAPON_IS,
 	CONDITION_SELECTED_CARD_IS_NOT_SOURCE,
+	CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -100,6 +106,8 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_REVEAL_HAND_CARDS,
 	ACTION_ENABLE_FUTURE_DRAW_REVEAL,
 	ACTION_GRANT_TRIGGER_CARD_ABILITY,
+	ACTION_GRANT_ABILITY_TO_SELF,
+	ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
 	ACTION_PREVENT_TRIGGER_FLIP,
 	ACTION_REMOVE_THIS_ABILITY,
 ]
@@ -157,6 +165,26 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"gate_general",
 	&"meng_huo",
 ]
+
+const TEMPORARY_FLIP_PROTECTION: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+		},
+		{
+			"event": CARD_AFTER_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+		{
+			"event": TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
+}
 
 const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe1": {
@@ -1075,7 +1103,24 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "泰山派昔年一位名宿所创剑法，他见泰山山门下十八盘处羊肠曲折，五步一转，十步一回，势甚险峻，因而将地势融入剑法之中，与八卦门的八卦游身掌有异曲同工之妙。泰山十八盘越盘越高，越行越险，这路剑招也是越转越狠辣。",
 		"powers": [6, 4, 6, 4],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+							{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						],
+						"required_count": 1,
+					},
+					"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+				}],
+			}],
+		}],
 	},
 	&"TaiShan18Pan3": {
 		"id": &"TaiShan18Pan3",
@@ -1087,7 +1132,27 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山派昔年一位名宿所创剑法，他见泰山山门下十八盘处羊肠曲折，五步一转，十步一回，势甚险峻，因而将地势融入剑法之中，与八卦门的八卦游身掌有异曲同工之妙。泰山十八盘越盘越高，越行越险，这路剑招也是越转越狠辣。",
 		"powers": [6, 4, 6, 4],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_SUMMONED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+							"required_count": 1,
+						},
+						"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+					}],
+				}],
+			},
+			TEMPORARY_FLIP_PROTECTION,
+		],
 	},
 	&"WuDaFuJian1": {
 		"id": &"WuDaFuJian1",
@@ -1099,7 +1164,16 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，使我获得以下效果：我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山有松树极古，相传为秦时所封之“五大夫松”，虬枝斜出，苍翠相掩。泰山派师祖曾由此而悟出一套招数古朴，内藏奇变的剑法。",
 		"powers": [3, 5, 3, 3],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": TEMPORARY_FLIP_PROTECTION,
+				}],
+			}],
+		}],
 	},
 	&"WuDaFuJian2": {
 		"id": &"WuDaFuJian2",
@@ -1111,7 +1185,29 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，使所有友方重剑获得以下效果：我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山有松树极古，相传为秦时所封之“五大夫松”，虬枝斜出，苍翠相掩。泰山派师祖曾由此而悟出一套招数古朴，内藏奇变的剑法。",
 		"powers": [3, 5, 3, 3],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+							{
+								"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+								"weapon": "重剑",
+							},
+						],
+					},
+					"actions": [{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": TEMPORARY_FLIP_PROTECTION,
+					}],
+				}],
+			}],
+		}],
 	},
 	&"WuDaFuJian3": {
 		"id": &"WuDaFuJian3",
@@ -1123,7 +1219,45 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一个友方重剑，抽一张牌，并使所有友方重剑获得以下效果：我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山有松树极古，相传为秦时所封之“五大夫松”，虬枝斜出，苍翠相掩。泰山派师祖曾由此而悟出一套招数古朴，内藏奇变的剑法。",
 		"powers": [3, 5, 3, 3],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [
+					{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+								{
+									"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+									"weapon": "重剑",
+								},
+							],
+						},
+						"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+					},
+					{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+								{
+									"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+									"weapon": "重剑",
+								},
+							],
+						},
+						"actions": [{
+							"type": ACTION_GRANT_ABILITY_TO_SELF,
+							"ability": TEMPORARY_FLIP_PROTECTION,
+						}],
+					},
+				],
+			}],
+		}],
 	},
 	&"wanyue_guizong": {
 		"id": &"wanyue_guizong",
@@ -1547,7 +1681,10 @@ static func _normalize_nested_grants(actions_value: Variant) -> void:
 		if not action_value is Dictionary:
 			continue
 		var action: Dictionary = action_value
-		if StringName(action.get("type", &"")) == ACTION_GRANT_TRIGGER_CARD_ABILITY:
+		if StringName(action.get("type", &"")) in [
+			ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			ACTION_GRANT_ABILITY_TO_SELF,
+		]:
 			var granted_value: Variant = action.get("ability", null)
 			if granted_value is Dictionary:
 				action["ability"] = normalize_ability(granted_value as Dictionary)
@@ -1589,8 +1726,8 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 		if modifier_type not in KNOWN_MODIFIERS:
 			errors.append("Card %s uses unknown modifier %s" % [card_id, modifier_type])
 		var value: Variant = modifier.get("value", null)
-		if typeof(value) != TYPE_INT or int(value) <= 0:
-			errors.append("Card %s modifier %s requires a positive integer value" % [card_id, modifier_type])
+		if typeof(value) != TYPE_INT or int(value) < 0:
+			errors.append("Card %s modifier %s requires a non-negative integer value" % [card_id, modifier_type])
 		for key: Variant in modifier.keys():
 			if StringName(key) not in [&"type", &"value"]:
 				errors.append("Card %s modifier %s has unsupported field %s" % [card_id, modifier_type, key])
@@ -1770,7 +1907,7 @@ static func _validate_action(
 		var reveal_filter := StringName(action.get("filter", &""))
 		if reveal_filter not in KNOWN_REVEAL_FILTERS:
 			errors.append("Card %s %s reveal action requires a known filter" % [card_id, context_name])
-	if action_type == ACTION_GRANT_TRIGGER_CARD_ABILITY:
+	if action_type in [ACTION_GRANT_TRIGGER_CARD_ABILITY, ACTION_GRANT_ABILITY_TO_SELF]:
 		allowed_keys.append(&"ability")
 		var granted_value: Variant = action.get("ability", null)
 		if not granted_value is Dictionary:
@@ -1796,7 +1933,7 @@ static func _validate_selector(
 		return
 	var selector: Dictionary = selector_value
 	for key: Variant in selector.keys():
-		if StringName(key) not in [&"zones", &"conditions", &"limit"]:
+		if StringName(key) not in [&"zones", &"conditions", &"limit", &"required_count"]:
 			errors.append("Card %s %s selector has unsupported field %s" % [card_id, context_name, key])
 	var zones_value: Variant = selector.get("zones", null)
 	if not zones_value is Array or (zones_value as Array).is_empty():
@@ -1831,6 +1968,10 @@ static func _validate_selector(
 		var limit_value: Variant = selector.get("limit", null)
 		if typeof(limit_value) != TYPE_INT or int(limit_value) <= 0:
 			errors.append("Card %s %s selector requires a positive integer limit" % [card_id, context_name])
+	if selector.has("required_count"):
+		var count_value: Variant = selector.get("required_count", null)
+		if typeof(count_value) != TYPE_INT or int(count_value) <= 0:
+			errors.append("Card %s %s selector requires a positive integer required_count" % [card_id, context_name])
 
 
 static func _validate_selector_condition(

@@ -21,6 +21,8 @@ The temporary protection granted by these cards is the established 来鹤清泉 
 
 After this card is summoned, select enemy board cards orthogonally adjacent to it. The effect resolves only when the complete selection contains exactly one card. Swap this card with that selected enemy using the established reserve-and-reappear swap sequence.
 
+The swap action itself does not attack. After the entrance effect resolves, 泰山十八盘 performs the ordinary attack that follows every hand play, using its new square as the attack source. 有凤来仪 remains responsible for explicitly declaring an attack inside its activation.
+
 The selected enemy is revalidated immediately before the swap. If it has moved, left the board, changed ownership, or stopped being adjacent, the swap does nothing. No alternate enemy is selected during resolution.
 
 ### Tier 3
@@ -63,6 +65,10 @@ Add generic selected-card actions:
 - Swap the original ability source with the current selected card, preserving the established swap event sequence.
 
 These primitives must not reference the five implementing card IDs.
+
+The duel controller remaps board-card views from `card_moved` events after both
+activate actions and hand plays, so a summon-triggered swap is presented from
+the same final cells used by the simulator and the following standard attack.
 
 ## Proposed card declarations
 

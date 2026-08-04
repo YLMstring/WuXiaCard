@@ -319,6 +319,22 @@ static func _execute_action(
 			declaration.get("ability", {}) as Dictionary,
 			context
 		)
+	if action_type == Catalog.ACTION_GRANT_ABILITY_TO_SELF:
+		return _grant_ability_to_self(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			declaration.get("ability", {}) as Dictionary
+		)
+	if action_type == Catalog.ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE:
+		return _self_swapped_with_ability_source(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
 	if action_type == Catalog.ACTION_PREVENT_TRIGGER_FLIP:
 		return _prevent_trigger_flip(
 			state,
@@ -554,7 +570,47 @@ static func _grant_trigger_card_ability(
 	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
 	if target_slot.is_empty():
 		return _no_effect(source_cell)
-	var target_card: Dictionary = target_slot.get("card", {})
+	return _grant_ability_to_location(
+		source_cell,
+		source_instance_id,
+		{
+			"zone": Catalog.CARD_ZONE_BOARD,
+			"owner_id": int(target_slot.get("owner", 0)),
+			"index": target_cell,
+			"card": target_slot.get("card", {}),
+		},
+		ability
+	)
+
+
+static func _grant_ability_to_self(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	ability: Dictionary
+) -> Dictionary:
+	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if subject.is_empty() or ability.is_empty():
+		return _no_effect(source_cell)
+	return _grant_ability_to_location(
+		source_cell,
+		source_instance_id,
+		subject,
+		ability
+	)
+
+
+static func _grant_ability_to_location(
+	source_cell: int,
+	source_instance_id: StringName,
+	target: Dictionary,
+	ability: Dictionary
+) -> Dictionary:
+	var target_card: Dictionary = target.get("card", {})
+	var target_instance_id := StringName(target_card.get("instance_id", &""))
+	if target_instance_id == &"":
+		return _no_effect(source_cell)
 	var normalized: Dictionary = Catalog.normalize_ability(ability)
 	var active: Array = target_card.get("active_abilities", [])
 	if normalized in active:
@@ -569,9 +625,11 @@ static func _grant_trigger_card_ability(
 		"type": &"ability_gained",
 		"source_cell": source_cell,
 		"source_instance_id": source_instance_id,
-		"target_cell": target_cell,
-		"owner_id": int(target_slot.get("owner", 0)),
+		"target_cell": _get_location_cell(target),
+		"owner_id": int(target.get("owner_id", 0)),
 		"instance_id": target_instance_id,
+		"zone": StringName(target.get("zone", &"")),
+		"logical_index": int(target.get("index", -1)),
 	}])
 
 
@@ -971,8 +1029,87 @@ static func _swap_self_with_target(
 	var target_owner: int = int(target_slot.get("owner", 0))
 	if target_instance_id == &"":
 		return _no_effect(source_cell)
+	return _swap_board_cards(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner,
+		target_cell,
+		target_instance_id,
+		target_owner
+	)
 
-	var reserved_target: Dictionary = target_slot
+
+static func _self_swapped_with_ability_source(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	var ability_source_instance_id := StringName(
+		context.get("ability_source_instance_id", &"")
+	)
+	var ability_source_owner: int = int(context.get("ability_source_owner_id", 0))
+	var ability_source: Dictionary = _get_subject(
+		state,
+		ability_source_instance_id,
+		ability_source_owner
+	)
+	if (
+		subject.is_empty()
+		or ability_source.is_empty()
+		or source_instance_id == ability_source_instance_id
+		or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+		or StringName(ability_source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+	):
+		return _no_effect(source_cell)
+	var subject_cell: int = int(subject.get("index", -1))
+	var ability_source_cell: int = int(ability_source.get("index", -1))
+	if not _are_adjacent(ability_source_cell, subject_cell):
+		return _no_effect(source_cell)
+	var result: Dictionary = _swap_board_cards(
+		state,
+		ability_source_cell,
+		ability_source_instance_id,
+		ability_source_owner,
+		subject_cell,
+		source_instance_id,
+		expected_owner
+	)
+	if StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED:
+		result["source_cell"] = ability_source_cell
+	return result
+
+
+static func _swap_board_cards(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	target_cell: int,
+	target_instance_id: StringName,
+	target_owner: int
+) -> Dictionary:
+	if (
+		_get_card_slot(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		).is_empty()
+		or _get_card_slot(
+			state,
+			target_cell,
+			target_instance_id,
+			target_owner
+		).is_empty()
+		or not _are_adjacent(source_cell, target_cell)
+	):
+		return _no_effect(source_cell)
+
+	var reserved_target: Dictionary = state.board[target_cell] as Dictionary
 	state.board[target_cell] = null
 	var source_move: Dictionary = _move_card_between_cells(
 		state,

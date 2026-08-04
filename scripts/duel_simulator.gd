@@ -225,15 +225,19 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		)
 		_merge_resolution(captures, exiles, events, after_result)
 
-	if _owned_card_instance_at(
+	var attack_cell: int = _find_board_card_cell(
 		next_state,
-		action.target_index,
 		instance_id,
-		summoning_owner
+		action.target_index
+	)
+	if (
+		attack_cell >= 0
+		and int((next_state.board[attack_cell] as Dictionary).get("owner", 0))
+		== summoning_owner
 	):
 		var attack_result: Dictionary = _resolve_standard_attacks(
 			next_state,
-			action.target_index,
+			attack_cell,
 			instance_id,
 			&"summon_standard_attack"
 		)

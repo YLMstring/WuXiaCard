@@ -723,6 +723,11 @@ func _commit_action(
 	if action.action_type == ActionData.TYPE_PLAY:
 		card.reparent(board_cells[action.target_index], false)
 		board_cards[action.target_index] = card
+		activation_final_cell = _remap_board_views_from_movements(
+			_capture_board_views(),
+			events,
+			_get_card_instance_id(card)
+		)
 	else:
 		activation_final_cell = _remap_board_views_from_movements(
 			activation_views,
