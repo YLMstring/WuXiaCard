@@ -176,3 +176,79 @@ git status --short
 - Runtime ability/ki changes refresh immediately.
 - Face-down cards and library cards remain concealed.
 - No gameplay behavior or unrelated working-tree content changes.
+
+## Follow-up: Infinity Text and Responsive Sizing
+
+### Task 6: Add failing text and geometry tests
+
+**Files**
+
+- Modify: `tests/test_ki_bead_presentation.gd`
+- Modify: `tests/test_duel_integration.gd`
+
+**Steps**
+
+1. Replace the old hidden-label expectations for visible non-numeric beads with
+   a visible `∞` label expectation.
+2. Retain explicit assertions that activation at zero displays numeric `0`,
+   and that hidden beads also hide their labels.
+3. Add table-driven `CardView` sizing checks using 54 px, 96 px, and 130 px
+   shorter sides. Assert bead diameters of 14 px, approximately 19.2 px, and
+   26 px respectively.
+4. Assert the bottom and right margins follow
+   `max(2 px, shorter side × 0.025)`.
+5. Assert font size, outline, rim, radius, shadow, and pivot remain proportional
+   and readable at each representative size.
+6. Resize one live `CardView` from hand size to board size and assert the bead
+   updates without reconfiguration.
+7. Run the focused suite and confirm the new expectations fail before runtime
+   implementation.
+
+### Task 7: Implement responsive bead layout in CardView
+
+**Files**
+
+- Modify: `scripts/card_view.gd`
+- Test: `tests/test_ki_bead_presentation.gd`
+
+**Steps**
+
+1. Add named constants for diameter, margin, font, outline, rim, and shadow
+   ratios/minimums. Keep all bead geometry in `CardView`.
+2. Extend `_on_resized()` to derive bead diameter and bottom-right offsets from
+   the current shorter card side.
+3. Scale label font and outline from bead diameter, retaining readable minimums.
+4. Scale the `StyleBoxFlat` rim, corner radius, shadow size, and shadow offset
+   from the current bead diameter.
+5. Keep the same bottom-right anchors and update the bead pivot after layout.
+6. Render numeric ki when `show_number` is true and `∞` otherwise; every visible
+   bead keeps its label visible.
+7. Do not add hand-, board-, scene-, or controller-specific sizing branches.
+   Existing drag `scale` continues to enlarge the whole card uniformly.
+8. Run the focused suite until all text and geometry checks pass.
+
+### Task 8: Verify integration and visual scale
+
+**Files**
+
+- Test: `tests/test_ki_bead_presentation.gd`
+- Test: `tests/test_duel_integration.gd`
+- Test: `tests/test_laihe_qinquan_abilities.gd`
+- Test: `tests/test_qixin_luochangkong_abilities.gd`
+
+**Steps**
+
+1. Run all focused and adjacent ability suites.
+2. Boot the full project headlessly to catch scene-load or parse errors.
+3. Visually compare representative hand- and board-sized cards at the 540×960
+   reference layout.
+4. Run `git diff --check` and inspect final status, reporting the known stale
+   catalog test separately if it remains unrelated.
+
+**Additional completion criteria**
+
+- Visible non-numeric beads display `∞` instead of hiding their label.
+- Board beads remain near the current 26 px reference size.
+- Hand beads shrink to roughly 20 px while staying readable.
+- Very small cards stop at a 14 px bead.
+- Resizing a live card updates the bead without gameplay/controller changes.
