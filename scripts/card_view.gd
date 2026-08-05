@@ -15,6 +15,7 @@ const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const CenteredGlyphValueClass = preload("res://scripts/centered_glyph_value.gd")
 const LIGHT_KI_BEAD_BACKGROUND: Color = Color("2f7664")
 const LIGHT_KI_BEAD_BORDER: Color = Color("b8dfc9")
 const LIGHT_KI_BEAD_SHADOW: Color = Color(0.03, 0.12, 0.09, 0.45)
@@ -35,8 +36,6 @@ const KI_BEAD_MIN_FONT_SIZE: int = 8
 const KI_BEAD_RIM_RATIO: float = 0.077
 const KI_BEAD_MIN_RIM_SIZE: int = 1
 const KI_BEAD_SHADOW_OFFSET_RATIO: float = 0.038
-const KI_BEAD_TEXT_HORIZONTAL_OFFSET_RATIO: float = 0.04
-const KI_BEAD_MIN_TEXT_HORIZONTAL_OFFSET: float = 0.75
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -65,7 +64,7 @@ var _ki_bead_diameter: float = 26.0
 @onready var bottom_power: Label = $Overlay/BottomPower
 @onready var left_power: Label = $Overlay/LeftPower
 @onready var ki_badge: PanelContainer = $Overlay/KiBadge
-@onready var ki_value: Label = $Overlay/KiBadge/Value
+@onready var ki_value: CenteredGlyphValueClass = $Overlay/KiBadge/Value
 
 
 func _ready() -> void:
@@ -511,8 +510,8 @@ func _layout_ki_badge(short_side: float) -> void:
 		KI_BEAD_MIN_RIM_SIZE,
 		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
 	)
-	ki_value.add_theme_font_size_override("font_size", font_size)
-	ki_value.add_theme_constant_override("outline_size", rim_size)
+	ki_value.set_value_font_size(font_size)
+	ki_value.set_value_outline_size(rim_size)
 	var presentation: Dictionary = Abilities.get_ki_bead_presentation(card_data)
 	_style_ki_badge(StringName(presentation.get("kind", Abilities.KI_BEAD_NONE)))
 
@@ -541,7 +540,9 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 		presentation.get("kind", Abilities.KI_BEAD_NONE)
 	)
 	var show_number: bool = bool(presentation.get("show_number", false))
-	ki_value.text = str(int(presentation.get("value", 0))) if show_number else "化"
+	ki_value.set_value_text(
+		str(int(presentation.get("value", 0))) if show_number else "化"
+	)
 	ki_badge.visible = (
 		ki_badge_enabled
 		and not face_down
@@ -558,10 +559,6 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 		KI_BEAD_MIN_RIM_SIZE,
 		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
 	)
-	var text_horizontal_offset: float = maxf(
-		KI_BEAD_MIN_TEXT_HORIZONTAL_OFFSET,
-		_ki_bead_diameter * KI_BEAD_TEXT_HORIZONTAL_OFFSET_RATIO
-	)
 	bead_style.bg_color = (
 		GOLD_KI_BEAD_BACKGROUND if uses_gold else LIGHT_KI_BEAD_BACKGROUND
 	)
@@ -570,7 +567,7 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 	)
 	bead_style.set_border_width_all(rim_size)
 	bead_style.set_corner_radius_all(roundi(_ki_bead_diameter * 0.5))
-	bead_style.set_content_margin(SIDE_LEFT, float(rim_size) + text_horizontal_offset * 2.0)
+	bead_style.set_content_margin(SIDE_LEFT, float(rim_size))
 	bead_style.set_content_margin(SIDE_RIGHT, float(rim_size))
 	bead_style.set_content_margin(SIDE_TOP, float(rim_size))
 	bead_style.set_content_margin(SIDE_BOTTOM, float(rim_size))
@@ -588,12 +585,8 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 		if bead_kind == Abilities.KI_BEAD_DARK
 		else Color.WHITE
 	)
-	ki_value.add_theme_color_override(
-		"font_color",
-		GOLD_KI_TEXT if uses_gold else LIGHT_KI_TEXT
-	)
-	ki_value.add_theme_color_override(
-		"font_outline_color",
+	ki_value.set_value_colors(
+		GOLD_KI_TEXT if uses_gold else LIGHT_KI_TEXT,
 		GOLD_KI_TEXT_OUTLINE if uses_gold else LIGHT_KI_TEXT_OUTLINE
 	)
 

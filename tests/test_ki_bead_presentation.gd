@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_mixed_runtime_abilities()
 	await _test_card_view_rendering()
 	await _test_card_view_sizing()
+	await _test_exact_value_centering()
 	if _failures == 0:
 		print("KI_BEAD_PRESENTATION_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -157,12 +158,12 @@ func _test_card_view_rendering() -> void:
 	card_view.call("configure", _card(0), 1, false)
 	await process_frame
 	var badge := card_view.get_node("Overlay/KiBadge") as PanelContainer
-	var value := card_view.get_node("Overlay/KiBadge/Value") as Label
+	var value := card_view.get_node("Overlay/KiBadge/Value") as Control
 	_check(not badge.visible, "CardView hides bead for zero ki without a qualifying ability")
 
 	card_view.call("sync_runtime_data", _card(3), 1)
 	_check(
-		badge.visible and value.visible and value.text == "3",
+		badge.visible and value.visible and str(value.get("text")) == "3",
 		"CardView shows positive otherwise-unrepresented ki"
 	)
 	_check(
@@ -172,7 +173,7 @@ func _test_card_view_rendering() -> void:
 
 	card_view.call("sync_runtime_data", _card(0, [_activate_ability()]), 1)
 	_check(
-		badge.visible and value.visible and value.text == "0",
+		badge.visible and value.visible and str(value.get("text")) == "0",
 		"Activate ability keeps a visible zero"
 	)
 	_check(
@@ -187,7 +188,7 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and value.text == "化",
+		badge.visible and value.visible and str(value.get("text")) == "化",
 		"Zero-ki passive trigger shows the current passive marker on its bead"
 	)
 
@@ -197,7 +198,7 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and value.text == "0",
+		badge.visible and value.visible and str(value.get("text")) == "0",
 		"Protected activate card shows zero on its bead"
 	)
 	_check(
@@ -217,7 +218,7 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and value.text == "化",
+		badge.visible and value.visible and str(value.get("text")) == "化",
 		"Protected passive card shows the current passive marker on its gold bead"
 	)
 	await card_view.call("play_ki_gain_pulse", 0.01)
@@ -247,7 +248,7 @@ func _test_card_view_sizing() -> void:
 	root.add_child(card_view)
 	card_view.call("configure", _card(0, [_activate_ability()]), 1, false)
 	var badge := card_view.get_node("Overlay/KiBadge") as PanelContainer
-	var value := card_view.get_node("Overlay/KiBadge/Value") as Label
+	var value := card_view.get_node("Overlay/KiBadge/Value") as Control
 	var cases: Array[Dictionary] = [
 		{"size": Vector2(54.0, 72.0), "diameter": 14.0, "margin": 2.0},
 		{"size": Vector2(96.0, 128.0), "diameter": 19.2, "margin": 2.4},
@@ -260,7 +261,6 @@ func _test_card_view_sizing() -> void:
 		var expected_margin: float = float(test_case["margin"])
 		var expected_font_size: int = maxi(8, roundi(expected_diameter * 0.54))
 		var expected_rim: int = maxi(1, roundi(expected_diameter * 0.077))
-		var expected_text_offset: float = maxf(0.75, expected_diameter * 0.04)
 		var style := badge.get_theme_stylebox("panel") as StyleBoxFlat
 		_check(
 			is_equal_approx(badge.size.x, expected_diameter)
@@ -275,8 +275,8 @@ func _test_card_view_sizing() -> void:
 			% [test_case["size"]]
 		)
 		_check(
-			value.get_theme_font_size("font_size") == expected_font_size
-			and value.get_theme_constant("outline_size") == expected_rim,
+			int(value.get("font_size")) == expected_font_size
+			and int(value.get("outline_size")) == expected_rim,
 			"Ki bead text scales with its diameter at %s" % [test_case["size"]]
 		)
 		_check(
@@ -288,16 +288,13 @@ func _test_card_view_sizing() -> void:
 		)
 		_check(
 			style != null
-			and is_equal_approx(
-				style.get_content_margin(SIDE_LEFT)
-				- style.get_content_margin(SIDE_RIGHT),
-				expected_text_offset * 2.0
-			)
+			and is_equal_approx(style.get_content_margin(SIDE_LEFT), float(expected_rim))
+			and is_equal_approx(style.get_content_margin(SIDE_RIGHT), float(expected_rim))
 			and is_equal_approx(
 				style.get_content_margin(SIDE_TOP),
 				style.get_content_margin(SIDE_BOTTOM)
 			),
-			"Ki bead text receives only the responsive rightward optical correction at %s"
+			"Ki bead keeps equal content margins with no manual text offset at %s"
 			% [test_case["size"]]
 		)
 		_check(
@@ -305,9 +302,63 @@ func _test_card_view_sizing() -> void:
 			"Ki bead pivot follows its resized geometry at %s" % [test_case["size"]]
 		)
 	_check(
-		value.visible and value.text == "0",
+		value.visible and str(value.get("text")) == "0",
 		"Responsive layout does not alter numeric ki presentation"
 	)
+	card_view.queue_free()
+	await process_frame
+
+
+func _test_exact_value_centering() -> void:
+	var card_view: Control = CardScene.instantiate()
+	root.add_child(card_view)
+	card_view.call("configure", _card(0, [_activate_ability()]), 1, false)
+	var value := card_view.get_node("Overlay/KiBadge/Value") as Control
+	var supports_exact_centering: bool = (
+		value.has_method("set_value_text")
+		and value.has_method("debug_get_centered_ink_bounds")
+		and value.has_method("debug_get_glyph_count")
+	)
+	_check(
+		supports_exact_centering,
+		"Ki bead value uses the reusable exact visible-glyph renderer"
+	)
+	if supports_exact_centering:
+		var sizes: Array[Vector2] = [
+			Vector2(54.0, 72.0),
+			Vector2(96.0, 128.0),
+			Vector2(130.0, 173.0),
+		]
+		var values: Array[String] = ["0", "1", "10", "99", "化"]
+		for card_size: Vector2 in sizes:
+			card_view.size = card_size
+			await process_frame
+			for text_value: String in values:
+				value.call("set_value_text", text_value)
+				await process_frame
+				var centered_bounds: Rect2 = value.call("debug_get_centered_ink_bounds") as Rect2
+				_check(
+					centered_bounds.has_area(),
+					"Value %s has visible outline-inclusive glyph bounds at %s"
+					% [text_value, card_size]
+				)
+				_check(
+					centered_bounds.get_center().is_equal_approx(value.size * 0.5),
+					"Value %s visible glyph bounds are exactly centered at %s"
+					% [text_value, card_size]
+				)
+				_check(
+					int(value.call("debug_get_glyph_count")) > 0,
+					"Value %s shapes to valid theme or fallback glyphs" % text_value
+				)
+		value.call("set_value_text", "")
+		await process_frame
+		var empty_bounds: Rect2 = value.call("debug_get_centered_ink_bounds") as Rect2
+		_check(
+			not empty_bounds.has_area()
+			and int(value.call("debug_get_glyph_count")) == 0,
+			"Empty bead text produces no glyph geometry"
+		)
 	card_view.queue_free()
 	await process_frame
 

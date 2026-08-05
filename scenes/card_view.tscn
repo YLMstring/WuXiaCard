@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/card_view.gd" id="1_card"]
 [ext_resource type="Script" path="res://scripts/ink_bloom.gd" id="2_ink_bloom"]
+[ext_resource type="Script" path="res://scripts/centered_glyph_value.gd" id="3_value"]
 
 [node name="CardView" type="PanelContainer"]
 custom_minimum_size = Vector2(54, 72)
@@ -147,13 +148,10 @@ grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 2
 
-[node name="Value" type="Label" parent="Overlay/KiBadge"]
+[node name="Value" type="Control" parent="Overlay/KiBadge"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.91, 1, 0.93, 1)
-theme_override_colors/font_outline_color = Color(0.04, 0.18, 0.14, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 14
+script = ExtResource("3_value")
 text = "1"
-horizontal_alignment = 1
-vertical_alignment = 1
+font_color = Color(0.91, 1, 0.93, 1)
+outline_color = Color(0.04, 0.18, 0.14, 1)
