@@ -53,17 +53,17 @@ Classification is evaluated in this priority order:
 
 | Runtime state | Bead | Number |
 | --- | --- | --- |
-| Has temporary flip protection | Gold | Show only when ki is positive or the card also has an activate ability |
-| Otherwise has an activate ability | Current light bead | Always show, including `0` |
-| Otherwise has a qualifying trigger | Current light bead | Show only when ki is positive |
+| Has temporary flip protection | Gold | Show numeric ki when positive or when the card also has an activate ability; otherwise show `∞` |
+| Otherwise has an activate ability | Current light bead | Always show numeric ki, including `0` |
+| Otherwise has a qualifying trigger | Current light bead | Show numeric ki when positive; otherwise show `∞` |
 | Otherwise has positive ki | Current dark bead | Show ki |
 | Anything else | No bead | No number |
 
 Gold takes priority over light when a card qualifies for both. The presence of
 an activate ability controls zero-number visibility independently of bead
 color. Therefore a protected card with an activate ability displays a gold
-bead with `0`, while a protected passive card at zero ki displays an unnumbered
-gold bead.
+bead with `0`, while a protected passive card at zero ki displays a gold bead
+containing `∞`.
 
 ## Visual Treatment
 
@@ -73,10 +73,31 @@ gold bead.
   dark-gold shadow.
 - **None:** hide the bead.
 
-When a number is not required, the value label is hidden. It is not replaced by
-an empty string, symbol, or placeholder. Ki-gain presentation may brighten the
-bead temporarily but must settle back to the correct current style, including
-gold.
+Every visible bead contains text. When numeric ki is required, the bead displays
+the current numeric value. Otherwise it displays `∞`. A hidden bead displays
+neither the bead nor its label. Ki-gain presentation may brighten the bead
+temporarily but must settle back to the correct current style, including gold.
+
+## Responsive Bead Sizing
+
+The bead scales from the rendered card's current shorter side instead of using
+one fixed pixel size:
+
+```text
+bead diameter = max(14 px, shorter card side × 0.20)
+bottom-right margin = max(2 px, shorter card side × 0.025)
+```
+
+At the reference 540×960 duel layout, board cards are roughly 128–130 px wide
+and therefore keep a bead near 26 px. Hand cards are roughly 98 px wide and use
+a bead near 20 px. Very small card views stop shrinking at 14 px.
+
+The bottom-right margin, font size, outline, border, corner radius, and shadow
+scale from the bead diameter. The bead remains anchored in the same bottom-right
+location. Resizing the same `CardView` automatically recalculates the bead, so
+moving between hand and board needs no controller-specific bead code. Temporary
+drag scale transforms enlarge the complete card uniformly and do not change its
+logical layout size mid-drag.
 
 ## Architecture
 
@@ -89,8 +110,9 @@ returns:
 
 This keeps ability-schema interpretation out of `card_view.gd` and makes the
 classification independently testable. `card_view.gd` consumes the query,
-applies the appropriate style, controls bead and value-label visibility, and
-keeps the existing explicit badge-disable and face-down gates.
+applies the appropriate style and value text, controls bead visibility,
+recalculates bead geometry during its existing resize path, and keeps the
+existing explicit badge-disable and face-down gates.
 
 No per-card bead metadata is added to the catalog. New cards inherit the rules
 from their runtime ability declarations automatically.
@@ -120,6 +142,9 @@ Card-view tests cover:
 
 - light, dark, gold, and hidden styles;
 - value-label visibility and text;
+- `∞` for visible beads that do not display numeric ki;
+- 54 px, 96 px, and 130 px card-size behavior;
+- font, rim, and bottom-right placement scaling with bead diameter;
 - face-down concealment;
 - explicit bead disabling for library use;
 - synchronization after ability and ki changes; and
