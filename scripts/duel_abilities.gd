@@ -51,6 +51,7 @@ static func card_uses_ki(card: Dictionary) -> bool:
 static func get_ki_bead_presentation(card: Dictionary) -> Dictionary:
 	var ki: int = maxi(0, int(card.get("ki", 0)))
 	var has_activation: bool = card_uses_ki(card)
+	var has_ki_threshold: bool = has_ki_threshold_trigger(card)
 	var kind: StringName = KI_BEAD_NONE
 	if has_temporary_flip_protection(card):
 		kind = KI_BEAD_GOLD
@@ -60,7 +61,10 @@ static func get_ki_bead_presentation(card: Dictionary) -> Dictionary:
 		kind = KI_BEAD_DARK
 	return {
 		"kind": kind,
-		"show_number": kind != KI_BEAD_NONE and (ki > 0 or has_activation),
+		"show_number": (
+			kind != KI_BEAD_NONE
+			and (ki > 0 or has_activation or has_ki_threshold)
+		),
 		"value": ki,
 	}
 
@@ -106,6 +110,21 @@ static func has_non_summon_trigger_ability(card: Dictionary) -> bool:
 			if StringName(trigger.get("event", &"")) == &"":
 				continue
 			if not _is_own_summon_only_trigger(trigger):
+				return true
+	return false
+
+
+static func has_ki_threshold_trigger(card: Dictionary) -> bool:
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		for trigger_value: Variant in (ability_value as Dictionary).get("triggers", []):
+			if not trigger_value is Dictionary:
+				continue
+			if _list_has_type(
+				(trigger_value as Dictionary).get("conditions", []),
+				Catalog.CONDITION_KI_AT_LEAST
+			):
 				return true
 	return false
 

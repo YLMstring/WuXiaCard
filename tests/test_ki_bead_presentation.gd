@@ -38,6 +38,9 @@ func _run() -> void:
 
 
 func _test_presentation_priority_table() -> void:
+	var ki_threshold: Array = [
+		{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1},
+	]
 	_expect(_card(0), BEAD_NONE, false, 0, "Zero ki and no ability has no bead")
 	_expect(_card(3), BEAD_DARK, true, 3, "Unrepresented positive ki uses dark bead")
 	_expect(
@@ -61,6 +64,21 @@ func _test_presentation_priority_table() -> void:
 		2,
 		"Passive qualifying trigger displays positive ki"
 	)
+	var threshold_card: Dictionary = _card(
+		0,
+		[_trigger_ability(Catalog.TRIGGER_START_OWNER_TURN, ki_threshold)]
+	)
+	_expect(
+		threshold_card,
+		BEAD_LIGHT,
+		true,
+		0,
+		"Ki-threshold trigger displays numeric zero"
+	)
+	_check(
+		not Abilities.card_uses_ki(threshold_card),
+		"Ki-threshold trigger does not broaden activate-only card_uses_ki"
+	)
 	_expect(
 		_card(0, [Catalog.TEMPORARY_FLIP_PROTECTION]),
 		BEAD_GOLD,
@@ -83,6 +101,16 @@ func _test_presentation_priority_table() -> void:
 		"Protected card displays positive ki on its gold bead"
 	)
 	_expect(
+		_card(0, [
+			Catalog.TEMPORARY_FLIP_PROTECTION,
+			_trigger_ability(Catalog.TRIGGER_START_OWNER_TURN, ki_threshold),
+		]),
+		BEAD_GOLD,
+		true,
+		0,
+		"Ki-threshold trigger displays zero on a gold bead"
+	)
+	_expect(
 		_card(0, [{"modifiers": [{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY}]}]),
 		BEAD_NONE,
 		false,
@@ -93,6 +121,10 @@ func _test_presentation_priority_table() -> void:
 
 func _test_own_summon_trigger_classification() -> void:
 	var self_condition: Array = [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}]
+	var self_and_ki_conditions: Array = [
+		{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF},
+		{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1},
+	]
 	_expect(
 		_card(0, [_trigger_ability(Catalog.TRIGGER_CARD_SUMMONED, self_condition)]),
 		BEAD_NONE,
@@ -106,6 +138,15 @@ func _test_own_summon_trigger_classification() -> void:
 		false,
 		0,
 		"Self card-after-summoned trigger is excluded"
+	)
+	_expect(
+		_card(0, [
+			_trigger_ability(Catalog.TRIGGER_CARD_SUMMONED, self_and_ki_conditions),
+		]),
+		BEAD_NONE,
+		false,
+		0,
+		"Ki threshold does not make an own-summon-only trigger show a bead"
 	)
 	_expect(
 		_card(0, [_trigger_ability(Catalog.TRIGGER_CARD_SUMMONED)]),
@@ -190,6 +231,19 @@ func _test_card_view_rendering() -> void:
 	_check(
 		badge.visible and value.visible and str(value.get("text")) == "化",
 		"Zero-ki passive trigger shows the current passive marker on its bead"
+	)
+
+	card_view.call(
+		"sync_runtime_data",
+		_card(0, [_trigger_ability(
+			Catalog.TRIGGER_END_OWNER_TURN,
+			[{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1}]
+		)]),
+		1
+	)
+	_check(
+		badge.visible and value.visible and str(value.get("text")) == "0",
+		"Zero-ki threshold trigger renders numeric zero instead of the passive marker"
 	)
 
 	card_view.call(
