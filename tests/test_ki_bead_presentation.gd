@@ -188,7 +188,7 @@ func _test_card_view_rendering() -> void:
 	)
 	_check(
 		badge.visible and value.visible and value.text == "化",
-		"Zero-ki passive trigger shows infinity on its bead"
+		"Zero-ki passive trigger shows the current passive marker on its bead"
 	)
 
 	card_view.call(
@@ -218,7 +218,7 @@ func _test_card_view_rendering() -> void:
 	)
 	_check(
 		badge.visible and value.visible and value.text == "化",
-		"Protected passive card shows infinity on its gold bead"
+		"Protected passive card shows the current passive marker on its gold bead"
 	)
 	await card_view.call("play_ki_gain_pulse", 0.01)
 	_check(
@@ -260,6 +260,7 @@ func _test_card_view_sizing() -> void:
 		var expected_margin: float = float(test_case["margin"])
 		var expected_font_size: int = maxi(8, roundi(expected_diameter * 0.54))
 		var expected_rim: int = maxi(1, roundi(expected_diameter * 0.077))
+		var expected_text_offset: float = maxf(0.75, expected_diameter * 0.04)
 		var style := badge.get_theme_stylebox("panel") as StyleBoxFlat
 		_check(
 			is_equal_approx(badge.size.x, expected_diameter)
@@ -284,6 +285,20 @@ func _test_card_view_sizing() -> void:
 			and style.get_corner_radius(CORNER_TOP_LEFT) == roundi(expected_diameter * 0.5)
 			and style.shadow_size == expected_rim,
 			"Ki bead rim, radius, and shadow scale at %s" % [test_case["size"]]
+		)
+		_check(
+			style != null
+			and is_equal_approx(
+				style.get_content_margin(SIDE_LEFT)
+				- style.get_content_margin(SIDE_RIGHT),
+				expected_text_offset * 2.0
+			)
+			and is_equal_approx(
+				style.get_content_margin(SIDE_TOP),
+				style.get_content_margin(SIDE_BOTTOM)
+			),
+			"Ki bead text receives only the responsive rightward optical correction at %s"
+			% [test_case["size"]]
 		)
 		_check(
 			badge.pivot_offset.is_equal_approx(badge.size * 0.5),

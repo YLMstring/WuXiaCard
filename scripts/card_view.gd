@@ -35,6 +35,8 @@ const KI_BEAD_MIN_FONT_SIZE: int = 8
 const KI_BEAD_RIM_RATIO: float = 0.077
 const KI_BEAD_MIN_RIM_SIZE: int = 1
 const KI_BEAD_SHADOW_OFFSET_RATIO: float = 0.038
+const KI_BEAD_TEXT_HORIZONTAL_OFFSET_RATIO: float = 0.04
+const KI_BEAD_MIN_TEXT_HORIZONTAL_OFFSET: float = 0.75
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -556,6 +558,10 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 		KI_BEAD_MIN_RIM_SIZE,
 		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
 	)
+	var text_horizontal_offset: float = maxf(
+		KI_BEAD_MIN_TEXT_HORIZONTAL_OFFSET,
+		_ki_bead_diameter * KI_BEAD_TEXT_HORIZONTAL_OFFSET_RATIO
+	)
 	bead_style.bg_color = (
 		GOLD_KI_BEAD_BACKGROUND if uses_gold else LIGHT_KI_BEAD_BACKGROUND
 	)
@@ -564,6 +570,10 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 	)
 	bead_style.set_border_width_all(rim_size)
 	bead_style.set_corner_radius_all(roundi(_ki_bead_diameter * 0.5))
+	bead_style.set_content_margin(SIDE_LEFT, float(rim_size) + text_horizontal_offset * 2.0)
+	bead_style.set_content_margin(SIDE_RIGHT, float(rim_size))
+	bead_style.set_content_margin(SIDE_TOP, float(rim_size))
+	bead_style.set_content_margin(SIDE_BOTTOM, float(rim_size))
 	bead_style.shadow_color = (
 		GOLD_KI_BEAD_SHADOW if uses_gold else LIGHT_KI_BEAD_SHADOW
 	)

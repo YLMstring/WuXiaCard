@@ -1235,8 +1235,8 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		int(meng_view.card_data.get("ki", -1)) == 0
 		and ki_badge.visible
 		and ki_value.visible
-		and ki_value.text == "∞",
-		"Meng Huo's passive triggers show infinity on a light bead at zero ki"
+		and ki_value.text == "化",
+		"Meng Huo's passive triggers show the current passive marker at zero ki"
 	)
 	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
 	_check(
