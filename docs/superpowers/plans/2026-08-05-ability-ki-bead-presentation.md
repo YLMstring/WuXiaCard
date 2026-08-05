@@ -177,7 +177,7 @@ git status --short
 - Face-down cards and library cards remain concealed.
 - No gameplay behavior or unrelated working-tree content changes.
 
-## Follow-up: Infinity Text and Responsive Sizing
+## Follow-up: Passive Marker and Responsive Sizing
 
 ### Task 6: Add failing text and geometry tests
 
@@ -189,7 +189,7 @@ git status --short
 **Steps**
 
 1. Replace the old hidden-label expectations for visible non-numeric beads with
-   a visible `∞` label expectation.
+   a visible `化` label expectation.
 2. Retain explicit assertions that activation at zero displays numeric `0`,
    and that hidden beads also hide their labels.
 3. Add table-driven `CardView` sizing checks using 54 px, 96 px, and 130 px
@@ -221,7 +221,7 @@ git status --short
 4. Scale the `StyleBoxFlat` rim, corner radius, shadow size, and shadow offset
    from the current bead diameter.
 5. Keep the same bottom-right anchors and update the bead pivot after layout.
-6. Render numeric ki when `show_number` is true and `∞` otherwise; every visible
+6. Render numeric ki when `show_number` is true and `化` otherwise; every visible
    bead keeps its label visible.
 7. Do not add hand-, board-, scene-, or controller-specific sizing branches.
    Existing drag `scale` continues to enlarge the whole card uniformly.
@@ -247,8 +247,101 @@ git status --short
 
 **Additional completion criteria**
 
-- Visible non-numeric beads display `∞` instead of hiding their label.
+- Visible non-numeric beads display `化` instead of hiding their label.
 - Board beads remain near the current 26 px reference size.
 - Hand beads shrink to roughly 20 px while staying readable.
 - Very small cards stop at a 14 px bead.
 - Resizing a live card updates the bead without gameplay/controller changes.
+
+## Follow-up: Exact Visible-Glyph Centering
+
+### Task 9: Add failing glyph-bound centering tests
+
+**Files**
+
+- Modify: `tests/test_ki_bead_presentation.gd`
+- Reference: `scenes/card_view.tscn`
+
+**Steps**
+
+1. Add focused cases for `0`, `1`, `10`, `99`, and `化` at the tiny, hand,
+   and board font/bead sizes already used by the responsive tests.
+2. Require the value renderer to expose read-only debug geometry for its
+   combined visible-ink rectangle after centering.
+3. Assert the outline-inclusive visible-ink rectangle has a nonzero size and
+   its center equals the control center within subpixel tolerance.
+4. Assert multi-digit text is shaped and centered as one combined value.
+5. Assert `化` resolves through the active theme font or one of its fallback
+   font RIDs and produces valid glyph geometry.
+6. Assert empty text draws nothing and yields an empty visible-ink rectangle.
+7. Replace tests of asymmetric content margins with tests that all four bead
+   content margins are equal.
+8. Run the focused suite and confirm these tests fail while the value node is
+   still a normal `Label` using manual compensation.
+
+### Task 10: Implement the reusable glyph-bound value control
+
+**Files**
+
+- Add: `scripts/centered_glyph_value.gd`
+- Modify: `scenes/card_view.tscn`
+- Modify: `scripts/card_view.gd`
+- Test: `tests/test_ki_bead_presentation.gd`
+
+**Steps**
+
+1. Add a typed `CenteredGlyphValue extends Control` with properties for text,
+   font size, outline size, fill color, and outline color.
+2. On theme changes, retrieve the font that the `Label` theme type would use.
+   Use `ThemeDB.fallback_font` only if that lookup produces no valid font.
+3. Shape the complete string once through the primary `TextServer`, passing all
+   RIDs returned by the selected `Font` so fallback glyphs remain available.
+4. Iterate the shaped glyphs in visual order. For each glyph and repeat, combine
+   its shaping offset, pen position, outline-cache glyph offset, and
+   outline-cache glyph size into one visible-ink rectangle.
+5. Preserve the shaped pen advances and offsets so kerning, fallback fonts, and
+   multi-digit strings remain correct.
+6. Cache the shaped glyph draw records and uncentered visible bounds. Free the
+   temporary shaped-text RID after extracting those records.
+7. During drawing, translate the cached bounds so their center equals the
+   control center without rounding. Draw every outline first and then every
+   fill glyph using the same translated baselines.
+8. Invalidate shaping only when text, font, font size, or outline size changes;
+   a control resize only updates the centering translation and redraws.
+9. Replace `Overlay/KiBadge/Value` with the custom control while retaining the
+   same node path and mouse behavior.
+10. Update `CardView`'s typed reference and route text/style changes through the
+    control's public setters.
+11. Remove the horizontal-offset constants and asymmetric content margins.
+    Restore equal rim-sized content margins on all four sides.
+12. Run the focused suite until all existing presentation, responsive sizing,
+    and exact-centering checks pass together.
+
+### Task 11: Verify runtime rendering and regressions
+
+**Files**
+
+- Test: `tests/test_ki_bead_presentation.gd`
+- Test: `tests/test_laihe_qinquan_abilities.gd`
+- Test: `tests/test_qixin_luochangkong_abilities.gd`
+- Test: full project boot
+
+**Steps**
+
+1. Check parse errors in both `centered_glyph_value.gd` and `card_view.gd`.
+2. Run the focused bead suite plus the adjacent LaiHe and QiXin suites.
+3. Boot the full project headlessly.
+4. Run an isolated runtime preview containing actual hand- and board-sized
+   beads for `0`, `10`, and `化`, plus a magnified copy for visual inspection.
+5. Confirm the runtime debugger has no errors. Treat focus warnings from a
+   stripped-down temporary preview as harness-only and remove the harness.
+6. Run `git diff --check` and verify no temporary files or unrelated edits were
+   introduced.
+
+**Additional completion criteria**
+
+- Every bead value is centered from its own outline-inclusive visible glyph
+  bounds with no manual horizontal or vertical offset.
+- Multi-digit values are centered as a single shaped string.
+- `化` uses valid fallback glyph geometry on supported platforms.
+- Hand, board, and minimum-size beads keep their responsive sizes and styles.
