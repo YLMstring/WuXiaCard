@@ -26,6 +26,15 @@ const GOLD_KI_BEAD_BORDER: Color = Color("f1d27a")
 const GOLD_KI_BEAD_SHADOW: Color = Color(0.20, 0.10, 0.02, 0.52)
 const GOLD_KI_TEXT: Color = Color("fff2c2")
 const GOLD_KI_TEXT_OUTLINE: Color = Color("4b2b10")
+const KI_BEAD_DIAMETER_RATIO: float = 0.20
+const KI_BEAD_MIN_DIAMETER: float = 14.0
+const KI_BEAD_MARGIN_RATIO: float = 0.025
+const KI_BEAD_MIN_MARGIN: float = 2.0
+const KI_BEAD_FONT_RATIO: float = 0.54
+const KI_BEAD_MIN_FONT_SIZE: int = 8
+const KI_BEAD_RIM_RATIO: float = 0.077
+const KI_BEAD_MIN_RIM_SIZE: int = 1
+const KI_BEAD_SHADOW_OFFSET_RATIO: float = 0.038
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -43,6 +52,7 @@ var _home_index: int = -1
 var _pointer_pending: bool = false
 var _pending_pointer_id: int = -2
 var _pending_pointer_start: Vector2 = Vector2.ZERO
+var _ki_bead_diameter: float = 26.0
 
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
 @onready var card_picture: TextureRect = $Overlay/CardPicture
@@ -479,7 +489,30 @@ func _on_resized() -> void:
 	var power_size: int = maxi(14, int(short_side * 0.2))
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.add_theme_font_size_override("font_size", power_size)
+	_layout_ki_badge(short_side)
 	_update_title_font_size()
+
+
+func _layout_ki_badge(short_side: float) -> void:
+	_ki_bead_diameter = maxf(KI_BEAD_MIN_DIAMETER, short_side * KI_BEAD_DIAMETER_RATIO)
+	var margin: float = maxf(KI_BEAD_MIN_MARGIN, short_side * KI_BEAD_MARGIN_RATIO)
+	ki_badge.offset_left = -margin - _ki_bead_diameter
+	ki_badge.offset_top = -margin - _ki_bead_diameter
+	ki_badge.offset_right = -margin
+	ki_badge.offset_bottom = -margin
+	ki_badge.pivot_offset = Vector2.ONE * (_ki_bead_diameter * 0.5)
+	var font_size: int = maxi(
+		KI_BEAD_MIN_FONT_SIZE,
+		roundi(_ki_bead_diameter * KI_BEAD_FONT_RATIO)
+	)
+	var rim_size: int = maxi(
+		KI_BEAD_MIN_RIM_SIZE,
+		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
+	)
+	ki_value.add_theme_font_size_override("font_size", font_size)
+	ki_value.add_theme_constant_override("outline_size", rim_size)
+	var presentation: Dictionary = Abilities.get_ki_bead_presentation(card_data)
+	_style_ki_badge(StringName(presentation.get("kind", Abilities.KI_BEAD_NONE)))
 
 
 func _update_title_font_size() -> void:
@@ -505,34 +538,40 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 	var bead_kind: StringName = StringName(
 		presentation.get("kind", Abilities.KI_BEAD_NONE)
 	)
-	ki_value.text = str(int(presentation.get("value", 0)))
+	var show_number: bool = bool(presentation.get("show_number", false))
+	ki_value.text = str(int(presentation.get("value", 0))) if show_number else "∞"
 	ki_badge.visible = (
 		ki_badge_enabled
 		and not face_down
 		and bead_kind != Abilities.KI_BEAD_NONE
 	)
-	ki_value.visible = ki_badge.visible and bool(
-		presentation.get("show_number", false)
-	)
+	ki_value.visible = ki_badge.visible
 	_style_ki_badge(bead_kind)
 
 
 func _style_ki_badge(bead_kind: StringName) -> void:
 	var bead_style := StyleBoxFlat.new()
 	var uses_gold: bool = bead_kind == Abilities.KI_BEAD_GOLD
+	var rim_size: int = maxi(
+		KI_BEAD_MIN_RIM_SIZE,
+		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
+	)
 	bead_style.bg_color = (
 		GOLD_KI_BEAD_BACKGROUND if uses_gold else LIGHT_KI_BEAD_BACKGROUND
 	)
 	bead_style.border_color = (
 		GOLD_KI_BEAD_BORDER if uses_gold else LIGHT_KI_BEAD_BORDER
 	)
-	bead_style.set_border_width_all(2)
-	bead_style.set_corner_radius_all(13)
+	bead_style.set_border_width_all(rim_size)
+	bead_style.set_corner_radius_all(roundi(_ki_bead_diameter * 0.5))
 	bead_style.shadow_color = (
 		GOLD_KI_BEAD_SHADOW if uses_gold else LIGHT_KI_BEAD_SHADOW
 	)
-	bead_style.shadow_size = 2
-	bead_style.shadow_offset = Vector2(0.0, 1.0)
+	bead_style.shadow_size = rim_size
+	bead_style.shadow_offset = Vector2(
+		0.0,
+		maxf(1.0, _ki_bead_diameter * KI_BEAD_SHADOW_OFFSET_RATIO)
+	)
 	ki_badge.add_theme_stylebox_override("panel", bead_style)
 	ki_badge.modulate = (
 		DARK_KI_BEAD_MODULATE

@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_own_summon_trigger_classification()
 	_test_mixed_runtime_abilities()
 	await _test_card_view_rendering()
+	await _test_card_view_sizing()
 	if _failures == 0:
 		print("KI_BEAD_PRESENTATION_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -186,8 +187,8 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and not value.visible,
-		"Zero-ki passive trigger shows an unnumbered bead"
+		badge.visible and value.visible and value.text == "∞",
+		"Zero-ki passive trigger shows infinity on its bead"
 	)
 
 	card_view.call(
@@ -216,8 +217,8 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and not value.visible,
-		"Protected passive card shows an unnumbered gold bead"
+		badge.visible and value.visible and value.text == "∞",
+		"Protected passive card shows infinity on its gold bead"
 	)
 	await card_view.call("play_ki_gain_pulse", 0.01)
 	_check(
@@ -227,10 +228,71 @@ func _test_card_view_rendering() -> void:
 	)
 
 	card_view.call("set_face_down", true)
-	_check(not badge.visible, "Face-down cards conceal the ability bead")
+	_check(
+		not badge.visible and not value.visible,
+		"Face-down cards conceal the ability bead and its label"
+	)
 	card_view.call("set_face_down", false)
 	card_view.call("set_ki_badge_enabled", false)
-	_check(not badge.visible, "Explicit bead disabling remains authoritative")
+	_check(
+		not badge.visible and not value.visible,
+		"Explicit bead disabling remains authoritative"
+	)
+	card_view.queue_free()
+	await process_frame
+
+
+func _test_card_view_sizing() -> void:
+	var card_view: Control = CardScene.instantiate()
+	root.add_child(card_view)
+	card_view.call("configure", _card(0, [_activate_ability()]), 1, false)
+	var badge := card_view.get_node("Overlay/KiBadge") as PanelContainer
+	var value := card_view.get_node("Overlay/KiBadge/Value") as Label
+	var cases: Array[Dictionary] = [
+		{"size": Vector2(54.0, 72.0), "diameter": 14.0, "margin": 2.0},
+		{"size": Vector2(96.0, 128.0), "diameter": 19.2, "margin": 2.4},
+		{"size": Vector2(130.0, 173.0), "diameter": 26.0, "margin": 3.25},
+	]
+	for test_case: Dictionary in cases:
+		card_view.size = test_case["size"] as Vector2
+		await process_frame
+		var expected_diameter: float = float(test_case["diameter"])
+		var expected_margin: float = float(test_case["margin"])
+		var expected_font_size: int = maxi(8, roundi(expected_diameter * 0.54))
+		var expected_rim: int = maxi(1, roundi(expected_diameter * 0.077))
+		var style := badge.get_theme_stylebox("panel") as StyleBoxFlat
+		_check(
+			is_equal_approx(badge.size.x, expected_diameter)
+			and is_equal_approx(badge.size.y, expected_diameter),
+			"Ki bead diameter follows the card's shorter side at %s"
+			% [test_case["size"]]
+		)
+		_check(
+			is_equal_approx(-badge.offset_right, expected_margin)
+			and is_equal_approx(-badge.offset_bottom, expected_margin),
+			"Ki bead keeps its responsive bottom-right margin at %s"
+			% [test_case["size"]]
+		)
+		_check(
+			value.get_theme_font_size("font_size") == expected_font_size
+			and value.get_theme_constant("outline_size") == expected_rim,
+			"Ki bead text scales with its diameter at %s" % [test_case["size"]]
+		)
+		_check(
+			style != null
+			and style.get_border_width(SIDE_LEFT) == expected_rim
+			and style.get_corner_radius(CORNER_TOP_LEFT) == roundi(expected_diameter * 0.5)
+			and style.shadow_size == expected_rim,
+			"Ki bead rim, radius, and shadow scale at %s" % [test_case["size"]]
+		)
+		_check(
+			badge.pivot_offset.is_equal_approx(badge.size * 0.5),
+			"Ki bead pivot follows its resized geometry at %s" % [test_case["size"]]
+		)
+	_check(
+		value.visible and value.text == "0",
+		"Responsive layout does not alter numeric ki presentation"
+	)
 	card_view.queue_free()
 	await process_frame
 
