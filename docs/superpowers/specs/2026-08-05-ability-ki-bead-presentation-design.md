@@ -53,9 +53,9 @@ Classification is evaluated in this priority order:
 
 | Runtime state | Bead | Number |
 | --- | --- | --- |
-| Has temporary flip protection | Gold | Show numeric ki when positive or when the card also has an activate ability; otherwise show `∞` |
+| Has temporary flip protection | Gold | Show numeric ki when positive or when the card also has an activate ability; otherwise show `化` |
 | Otherwise has an activate ability | Current light bead | Always show numeric ki, including `0` |
-| Otherwise has a qualifying trigger | Current light bead | Show numeric ki when positive; otherwise show `∞` |
+| Otherwise has a qualifying trigger | Current light bead | Show numeric ki when positive; otherwise show `化` |
 | Otherwise has positive ki | Current dark bead | Show ki |
 | Anything else | No bead | No number |
 
@@ -63,7 +63,7 @@ Gold takes priority over light when a card qualifies for both. The presence of
 an activate ability controls zero-number visibility independently of bead
 color. Therefore a protected card with an activate ability displays a gold
 bead with `0`, while a protected passive card at zero ki displays a gold bead
-containing `∞`.
+containing `化`.
 
 ## Visual Treatment
 
@@ -74,7 +74,7 @@ containing `∞`.
 - **None:** hide the bead.
 
 Every visible bead contains text. When numeric ki is required, the bead displays
-the current numeric value. Otherwise it displays `∞`. A hidden bead displays
+the current numeric value. Otherwise it displays `化`. A hidden bead displays
 neither the bead nor its label. Ki-gain presentation may brighten the bead
 temporarily but must settle back to the correct current style, including gold.
 
@@ -99,6 +99,29 @@ moving between hand and board needs no controller-specific bead code. Temporary
 drag scale transforms enlarge the complete card uniformly and do not change its
 logical layout size mid-drag.
 
+## Exact Value Centering
+
+Bead text is centered from its actual visible glyph bounds, not from a generic
+`Label` rectangle, the font's line box, or the string's advance width. No
+hard-coded horizontal or vertical compensation is used.
+
+A reusable custom `Control` shapes the complete bead value through Godot's
+`TextServer`. It reads the actual offset and size of every shaped glyph,
+combines those rectangles into one visible-ink rectangle, and expands that
+rectangle by the current outline size. One translation places the combined
+rectangle's center exactly at the control's center before the glyph outlines
+and fills are drawn.
+
+The complete string is centered as one unit. This supports single digits,
+multi-digit ki such as `10` or `99`, the passive marker `化`, and future bead
+values. Shaping selects fallback-font glyphs when needed, including on Android.
+Subpixel drawing positions remain unrounded so odd bead sizes can still center
+exactly.
+
+The shaped glyph list and its bounds are cached. They are recalculated only
+when the text, font, font size, outline size, or control size changes. Empty
+text or an empty shaping result draws nothing safely.
+
 ## Architecture
 
 `duel_abilities.gd` owns a pure presentation query. Given a runtime card, it
@@ -113,6 +136,12 @@ classification independently testable. `card_view.gd` consumes the query,
 applies the appropriate style and value text, controls bead visibility,
 recalculates bead geometry during its existing resize path, and keeps the
 existing explicit badge-disable and face-down gates.
+
+The bead value node uses the reusable glyph-bound text control. `card_view.gd`
+supplies its text, font size, outline size, fill color, and outline color. The
+text control retrieves the same theme font that a normal `Label` would use and
+owns shaping, measurement, caching, and drawing. The bead panel retains equal
+content margins; no centering offsets remain in `card_view.gd`.
 
 No per-card bead metadata is added to the catalog. New cards inherit the rules
 from their runtime ability declarations automatically.
@@ -142,9 +171,13 @@ Card-view tests cover:
 
 - light, dark, gold, and hidden styles;
 - value-label visibility and text;
-- `∞` for visible beads that do not display numeric ki;
+- `化` for visible beads that do not display numeric ki;
 - 54 px, 96 px, and 130 px card-size behavior;
 - font, rim, and bottom-right placement scaling with bead diameter;
+- visible-ink centering for `0`, `1`, `10`, `99`, and `化`;
+- combined-string centering for multi-digit values;
+- outline-inclusive bounds and subpixel placement;
+- fallback-font shaping and empty-text handling;
 - face-down concealment;
 - explicit bead disabling for library use;
 - synchronization after ability and ki changes; and
