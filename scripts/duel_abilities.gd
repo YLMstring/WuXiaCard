@@ -100,3 +100,20 @@ static func get_effective_defending_power(
 		if StringName(modifier.get("type", &"")) == Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE:
 			result = int(modifier.get("value", result))
 	return result
+
+
+static func get_minimum_effective_defending_power(
+	card: Dictionary,
+	fallback_direction: int,
+	fallback_power: int
+) -> int:
+	var powers: Array = card.get("powers", [])
+	if powers.size() != 4:
+		return get_effective_defending_power(card, fallback_direction, fallback_power)
+	var result: int = get_effective_defending_power(card, 0, int(powers[0]))
+	for direction: int in range(1, 4):
+		result = mini(
+			result,
+			get_effective_defending_power(card, direction, int(powers[direction]))
+		)
+	return result

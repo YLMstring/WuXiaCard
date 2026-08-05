@@ -389,7 +389,8 @@ static func _resolve_attack_target(
 		attacker_cell,
 		attacker_instance_id,
 		attacked_cell,
-		attacked_instance_id
+		attacked_instance_id,
+		false
 	):
 		return result
 	attacker_slot = state.board[attacker_cell]
@@ -656,18 +657,26 @@ static func _attack_is_valid(
 	attacker_cell: int,
 	attacker_instance_id: StringName,
 	attacked_cell: int,
-	attacked_instance_id: StringName
+	attacked_instance_id: StringName,
+	include_attack_permissions: bool = true
 ) -> bool:
 	if (
 		not _card_instance_at(state, attacker_cell, attacker_instance_id)
 		or not _card_instance_at(state, attacked_cell, attacked_instance_id)
 	):
 		return false
-	return Rules.can_attack_target(
+	if include_attack_permissions:
+		return Rules.can_attack_target(
+			state.board,
+			attacker_cell,
+			attacked_cell,
+			{"reason": &"attack_resolution"}
+		)
+	return Rules.is_target_in_attack_range(
 		state.board,
 		attacker_cell,
 		attacked_cell,
-		{"reason": &"attack_resolution"}
+		{"reason": &"attack_resolution_recheck"}
 	)
 
 

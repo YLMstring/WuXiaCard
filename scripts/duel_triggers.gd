@@ -194,7 +194,7 @@ static func _conditions_match(
 			if int(source_slot.get("owner", 0)) == int(trigger_slot.get("owner", 0)):
 				return false
 		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IN_RANGE:
-			if not Rules.can_attack_target(
+			if not Rules.is_target_in_attack_range(
 				state.board,
 				source_cell,
 				int(context.get("trigger_cell", -1)),

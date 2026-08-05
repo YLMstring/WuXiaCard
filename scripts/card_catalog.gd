@@ -48,6 +48,8 @@ const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
+const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_ally"
+const MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE: StringName = &"defending_power_uses_minimum_side"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
 const RECIPIENT_SELF: StringName = &"self"
@@ -113,7 +115,11 @@ const KNOWN_ACTIONS: Array[StringName] = [
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
-const KNOWN_MODIFIERS: Array[StringName] = [MODIFIER_DEFENDING_POWER_OVERRIDE]
+const KNOWN_MODIFIERS: Array[StringName] = [
+	MODIFIER_DEFENDING_POWER_OVERRIDE,
+	MODIFIER_ATTACK_REQUIRES_OTHER_ALLY,
+	MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
+]
 
 const ALL_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
@@ -146,6 +152,8 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"WuDaFuJian2",
 	&"WuDaFuJian3",
 	&"QiXinLuoChangKong2",
+	&"QiXinLuoChangKong3",
+	&"QiXinLuoChangKong4",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",
 	&"feixing_ruye",
@@ -182,6 +190,27 @@ const TEMPORARY_FLIP_PROTECTION: Dictionary = {
 			"event": TRIGGER_START_OWNER_TURN,
 			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
+}
+
+const QIXIN_RETAINED_ATTACK_MODIFIERS: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [
+		{"type": MODIFIER_ATTACK_REQUIRES_OTHER_ALLY},
+		{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE},
+	],
+}
+
+const QIXIN_SUMMON_REACTION: Dictionary = {
+	"triggers": [
+		{
+			"event": TRIGGER_CARD_SUMMONED,
+			"conditions": [
+				{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+				{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+			],
+			"actions": [{"type": ACTION_ATTACK_TRIGGER_CARD}],
 		},
 	],
 }
@@ -1269,7 +1298,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "场上没有其它友方时无法攻击。攻击时，防御者的点数视为其最小一侧的点数。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [QIXIN_RETAINED_ATTACK_MODIFIERS],
 	},
 	&"QiXinLuoChangKong3": {
 		"id": &"QiXinLuoChangKong3",
@@ -1281,7 +1310,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "场上没有其它友方时无法攻击。攻击时，防御者的点数视为其最小一侧的点数。对手招式进场时，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
 		"powers": [6, 5, 5, 5],
-		"abilities": [],
+		"abilities": [
+			QIXIN_RETAINED_ATTACK_MODIFIERS,
+			QIXIN_SUMMON_REACTION,
+		],
 	},
 	&"QiXinLuoChangKong4": {
 		"id": &"QiXinLuoChangKong4",
@@ -1293,7 +1325,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "场上没有其它友方时无法攻击。攻击时，防御者的点数视为其最小一侧的点数。对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
 		"powers": [7, 5, 5, 5],
-		"abilities": [],
+		"abilities": [
+			QIXIN_RETAINED_ATTACK_MODIFIERS,
+			QIXIN_SUMMON_REACTION,
+			TEMPORARY_FLIP_PROTECTION,
+		],
 	},
 	&"yuyan_tousuo": {
 		"id": &"yuyan_tousuo",
@@ -1749,11 +1785,14 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 		var modifier_type := StringName(modifier.get("type", &""))
 		if modifier_type not in KNOWN_MODIFIERS:
 			errors.append("Card %s uses unknown modifier %s" % [card_id, modifier_type])
-		var value: Variant = modifier.get("value", null)
-		if typeof(value) != TYPE_INT or int(value) < 0:
-			errors.append("Card %s modifier %s requires a non-negative integer value" % [card_id, modifier_type])
+		var allowed_keys: Array[StringName] = [&"type"]
+		if modifier_type == MODIFIER_DEFENDING_POWER_OVERRIDE:
+			allowed_keys.append(&"value")
+			var value: Variant = modifier.get("value", null)
+			if typeof(value) != TYPE_INT or int(value) < 0:
+				errors.append("Card %s modifier %s requires a non-negative integer value" % [card_id, modifier_type])
 		for key: Variant in modifier.keys():
-			if StringName(key) not in [&"type", &"value"]:
+			if StringName(key) not in allowed_keys:
 				errors.append("Card %s modifier %s has unsupported field %s" % [card_id, modifier_type, key])
 
 

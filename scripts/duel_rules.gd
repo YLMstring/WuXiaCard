@@ -2,6 +2,7 @@ class_name DuelRules
 extends RefCounted
 
 const Abilities = preload("res://scripts/duel_abilities.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 
 const TOP: int = 0
 const RIGHT: int = 1
@@ -97,6 +98,29 @@ static func can_attack_target(
 		board.size() != 9
 		or source_index < 0
 		or source_index >= board.size()
+		or board[source_index] == null
+	):
+		return false
+	var source_slot: Dictionary = board[source_index]
+	var source_card: Dictionary = source_slot.get("card", {})
+	if (
+		Abilities.has_modifier(source_card, Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY)
+		and count_owned(board, int(source_slot.get("owner", 0))) < 2
+	):
+		return false
+	return is_target_in_attack_range(board, source_index, target_index)
+
+
+static func is_target_in_attack_range(
+	board: Array,
+	source_index: int,
+	target_index: int,
+	_context: Dictionary = {}
+) -> bool:
+	if (
+		board.size() != 9
+		or source_index < 0
+		or source_index >= board.size()
 		or target_index < 0
 		or target_index >= board.size()
 		or board[source_index] == null
@@ -121,11 +145,22 @@ static func can_attack_target(
 	if source_powers.size() != 4 or target_powers.size() != 4:
 		return false
 	var defending_direction: int = OPPOSITE[direction]
-	var defending_power: int = Abilities.get_effective_defending_power(
-		target_card,
-		defending_direction,
-		int(target_powers[defending_direction])
-	)
+	var defending_power: int
+	if Abilities.has_modifier(
+		source_card,
+		Catalog.MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE
+	):
+		defending_power = Abilities.get_minimum_effective_defending_power(
+			target_card,
+			defending_direction,
+			int(target_powers[defending_direction])
+		)
+	else:
+		defending_power = Abilities.get_effective_defending_power(
+			target_card,
+			defending_direction,
+			int(target_powers[defending_direction])
+		)
 	return int(source_powers[direction]) > defending_power
 
 
