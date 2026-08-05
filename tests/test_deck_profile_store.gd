@@ -7,7 +7,7 @@ const Cards = preload("res://scripts/card_catalog.gd")
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TaiShan18Pan1",
 	&"WuDaFuJian1",
-	&"wanyue_guizong",
+	&"QiXinLuoChangKong2",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",
 	&"feixing_ruye",
@@ -364,10 +364,10 @@ func _run() -> void:
 
 	var malformed := {
 		"schema_version": 1,
-		"unlocked_card_ids": ["gate_general", "meng_huo", "jiang_wei", "fa_zheng", "fire_envoy", "tiger_general"],
+		"unlocked_card_ids": ["gate_general", "meng_huo", "jiang_wei", "TuNaShu2", "fire_envoy", "tiger_general"],
 		"unlocked_sect_ids": ["missing_sect", "TaiShanPai", "TaiShanPai"],
 		"main_deck": ["gate_general", "gate_general", "missing", "jiang_wei"],
-		"library_slots": ["", "meng_huo", "", "fa_zheng", "fire_envoy", "tiger_general"],
+		"library_slots": ["", "meng_huo", "", "TuNaShu2", "fire_envoy", "tiger_general"],
 	}
 	var repaired: Dictionary = store.repair_profile(malformed)
 	_check(store.is_profile_valid(repaired), "Malformed profile repairs to a valid profile")

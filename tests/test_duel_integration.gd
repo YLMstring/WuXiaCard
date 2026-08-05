@@ -1016,7 +1016,7 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	drag_duel.set("opponent_card_ids", [
 		&"TaiShan18Pan1",
 		&"WuDaFuJian1",
-		&"wanyue_guizong",
+		&"QiXinLuoChangKong2",
 		&"yuyan_tousuo",
 		&"wusuo_changqiao",
 	])

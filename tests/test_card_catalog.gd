@@ -7,7 +7,7 @@ const Abilities = preload("res://scripts/duel_abilities.gd")
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TaiShan18Pan1",
 	&"WuDaFuJian1",
-	&"wanyue_guizong",
+	&"QiXinLuoChangKong2",
 	&"yuyan_tousuo",
 	&"wusuo_changqiao",
 	&"feixing_ruye",
@@ -92,7 +92,7 @@ func _test_catalog_definitions() -> void:
 		&"LaiHeQinQuan5": "res://pics/LKT010_004.png",
 		&"TaiShan18Pan1": "res://pics/LKT010_012.png",
 		&"WuDaFuJian1": "res://pics/LKT010_013.png",
-		&"wanyue_guizong": "res://pics/LKT010_014.png",
+		&"QiXinLuoChangKong2": "res://pics/LKT010_014.png",
 		&"yuyan_tousuo": "res://pics/LKT010_015.png",
 		&"wusuo_changqiao": "res://pics/LKT010_016.png",
 		&"feixing_ruye": "res://pics/LKT010_017.png",
@@ -182,7 +182,7 @@ func _test_new_sect_card_definitions() -> void:
 	var expected_sects: Dictionary = {
 		&"TaiShan18Pan1": "玄岳剑宗",
 		&"WuDaFuJian1": "玄岳剑宗",
-		&"wanyue_guizong": "玄岳剑宗",
+		&"QiXinLuoChangKong2": "玄岳剑宗",
 		&"yuyan_tousuo": "烟雨楼",
 		&"wusuo_changqiao": "烟雨楼",
 		&"feixing_ruye": "烟雨楼",
