@@ -11,6 +11,7 @@ const BEAD_GOLD: StringName = &"gold"
 const LIGHT_BEAD_BACKGROUND: Color = Color("2f7664")
 const GOLD_BEAD_BACKGROUND: Color = Color("9a6a20")
 const DARK_BEAD_MODULATE: Color = Color(0.55, 0.62, 0.59, 0.72)
+const PASSIVE_MARKER_FONT_SCALE: float = 0.8
 
 var _checks: int = 0
 var _failures: int = 0
@@ -309,6 +310,7 @@ func _test_card_view_sizing() -> void:
 		{"size": Vector2(130.0, 173.0), "diameter": 26.0, "margin": 3.25},
 	]
 	for test_case: Dictionary in cases:
+		card_view.call("sync_runtime_data", _card(0, [_activate_ability()]), 1)
 		card_view.size = test_case["size"] as Vector2
 		await process_frame
 		var expected_diameter: float = float(test_case["diameter"])
@@ -355,8 +357,29 @@ func _test_card_view_sizing() -> void:
 			badge.pivot_offset.is_equal_approx(badge.size * 0.5),
 			"Ki bead pivot follows its resized geometry at %s" % [test_case["size"]]
 		)
+		card_view.call(
+			"sync_runtime_data",
+			_card(0, [_trigger_ability(Catalog.TRIGGER_END_OWNER_TURN)]),
+			1
+		)
+		await process_frame
+		_check(
+			str(value.get("text")) == "化"
+			and int(value.get("font_size")) == roundi(
+				float(expected_font_size) * PASSIVE_MARKER_FONT_SCALE
+			),
+			"Passive marker uses 80 percent of numeric font size at %s"
+			% [test_case["size"]]
+		)
+	card_view.call("sync_runtime_data", _card(0, [_activate_ability()]), 1)
+	await process_frame
 	_check(
-		value.visible and str(value.get("text")) == "0",
+		value.visible
+		and str(value.get("text")) == "0"
+		and int(value.get("font_size")) == maxi(
+			8,
+			roundi(float(cases[-1]["diameter"]) * 0.54)
+		),
 		"Responsive layout does not alter numeric ki presentation"
 	)
 	card_view.queue_free()

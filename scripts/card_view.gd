@@ -33,6 +33,8 @@ const KI_BEAD_MARGIN_RATIO: float = 0.025
 const KI_BEAD_MIN_MARGIN: float = 2.0
 const KI_BEAD_FONT_RATIO: float = 0.54
 const KI_BEAD_MIN_FONT_SIZE: int = 8
+const KI_BEAD_PASSIVE_MARKER: String = "化"
+const KI_BEAD_PASSIVE_MARKER_FONT_SCALE: float = 0.8
 const KI_BEAD_RIM_RATIO: float = 0.077
 const KI_BEAD_MIN_RIM_SIZE: int = 1
 const KI_BEAD_SHADOW_OFFSET_RATIO: float = 0.038
@@ -502,15 +504,11 @@ func _layout_ki_badge(short_side: float) -> void:
 	ki_badge.offset_right = -margin
 	ki_badge.offset_bottom = -margin
 	ki_badge.pivot_offset = Vector2.ONE * (_ki_bead_diameter * 0.5)
-	var font_size: int = maxi(
-		KI_BEAD_MIN_FONT_SIZE,
-		roundi(_ki_bead_diameter * KI_BEAD_FONT_RATIO)
-	)
 	var rim_size: int = maxi(
 		KI_BEAD_MIN_RIM_SIZE,
 		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
 	)
-	ki_value.set_value_font_size(font_size)
+	_update_ki_value_font_size(str(ki_value.text))
 	ki_value.set_value_outline_size(rim_size)
 	var presentation: Dictionary = Abilities.get_ki_bead_presentation(card_data)
 	_style_ki_badge(StringName(presentation.get("kind", Abilities.KI_BEAD_NONE)))
@@ -540,9 +538,13 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 		presentation.get("kind", Abilities.KI_BEAD_NONE)
 	)
 	var show_number: bool = bool(presentation.get("show_number", false))
-	ki_value.set_value_text(
-		str(int(presentation.get("value", 0))) if show_number else "化"
+	var value_text: String = (
+		str(int(presentation.get("value", 0)))
+		if show_number
+		else KI_BEAD_PASSIVE_MARKER
 	)
+	ki_value.set_value_text(value_text)
+	_update_ki_value_font_size(value_text)
 	ki_badge.visible = (
 		ki_badge_enabled
 		and not face_down
@@ -550,6 +552,19 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 	)
 	ki_value.visible = ki_badge.visible
 	_style_ki_badge(bead_kind)
+
+
+func _update_ki_value_font_size(value_text: String) -> void:
+	var numeric_font_size: int = maxi(
+		KI_BEAD_MIN_FONT_SIZE,
+		roundi(_ki_bead_diameter * KI_BEAD_FONT_RATIO)
+	)
+	var value_scale: float = (
+		KI_BEAD_PASSIVE_MARKER_FONT_SCALE
+		if value_text == KI_BEAD_PASSIVE_MARKER
+		else 1.0
+	)
+	ki_value.set_value_font_size(maxi(1, roundi(float(numeric_font_size) * value_scale)))
 
 
 func _style_ki_badge(bead_kind: StringName) -> void:
