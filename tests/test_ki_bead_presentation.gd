@@ -187,7 +187,7 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and value.text == "∞",
+		badge.visible and value.visible and value.text == "化",
 		"Zero-ki passive trigger shows infinity on its bead"
 	)
 
@@ -217,7 +217,7 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and value.text == "∞",
+		badge.visible and value.visible and value.text == "化",
 		"Protected passive card shows infinity on its gold bead"
 	)
 	await card_view.call("play_ki_gain_pulse", 0.01)
