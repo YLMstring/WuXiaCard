@@ -317,6 +317,7 @@ func _test_exact_value_centering() -> void:
 	var supports_exact_centering: bool = (
 		value.has_method("set_value_text")
 		and value.has_method("debug_get_centered_ink_bounds")
+		and value.has_method("debug_get_centered_ink_centroid")
 		and value.has_method("debug_get_glyph_count")
 	)
 	_check(
@@ -337,14 +338,17 @@ func _test_exact_value_centering() -> void:
 				value.call("set_value_text", text_value)
 				await process_frame
 				var centered_bounds: Rect2 = value.call("debug_get_centered_ink_bounds") as Rect2
+				var centered_centroid: Vector2 = value.call(
+					"debug_get_centered_ink_centroid"
+				) as Vector2
 				_check(
 					centered_bounds.has_area(),
 					"Value %s has visible outline-inclusive glyph bounds at %s"
 					% [text_value, card_size]
 				)
 				_check(
-					centered_bounds.get_center().is_equal_approx(value.size * 0.5),
-					"Value %s visible glyph bounds are exactly centered at %s"
+					centered_centroid.is_equal_approx(value.size * 0.5),
+					"Value %s visible ink centroid is exactly centered at %s"
 					% [text_value, card_size]
 				)
 				_check(
