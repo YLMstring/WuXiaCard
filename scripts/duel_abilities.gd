@@ -3,6 +3,11 @@ extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
 
+const KI_BEAD_NONE: StringName = &"none"
+const KI_BEAD_DARK: StringName = &"dark"
+const KI_BEAD_LIGHT: StringName = &"light"
+const KI_BEAD_GOLD: StringName = &"gold"
+
 
 static func is_activate_ability(ability: Dictionary) -> bool:
 	var activation_value: Variant = ability.get("activation", null)
@@ -41,6 +46,111 @@ static func get_activation(card: Dictionary, activation_index: int = 0) -> Dicti
 
 static func card_uses_ki(card: Dictionary) -> bool:
 	return not get_activate_abilities(card).is_empty()
+
+
+static func get_ki_bead_presentation(card: Dictionary) -> Dictionary:
+	var ki: int = maxi(0, int(card.get("ki", 0)))
+	var has_activation: bool = card_uses_ki(card)
+	var kind: StringName = KI_BEAD_NONE
+	if has_temporary_flip_protection(card):
+		kind = KI_BEAD_GOLD
+	elif has_activation or has_non_summon_trigger_ability(card):
+		kind = KI_BEAD_LIGHT
+	elif ki > 0:
+		kind = KI_BEAD_DARK
+	return {
+		"kind": kind,
+		"show_number": kind != KI_BEAD_NONE and (ki > 0 or has_activation),
+		"value": ki,
+	}
+
+
+static func has_temporary_flip_protection(card: Dictionary) -> bool:
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		var triggers: Array = ability.get("triggers", [])
+		if (
+			_has_trigger_semantics(
+				triggers,
+				Catalog.CARD_BEFORE_FLIPPED,
+				Catalog.CONDITION_TRIGGER_CARD_IS_SELF,
+				Catalog.ACTION_PREVENT_TRIGGER_FLIP
+			)
+			and _has_trigger_semantics(
+				triggers,
+				Catalog.CARD_AFTER_FLIPPED,
+				Catalog.CONDITION_TRIGGER_CARD_WAS_ENEMY,
+				Catalog.ACTION_REMOVE_THIS_ABILITY
+			)
+			and _has_trigger_semantics(
+				triggers,
+				Catalog.TRIGGER_START_OWNER_TURN,
+				Catalog.CONDITION_TURN_OWNER_IS_SELF,
+				Catalog.ACTION_REMOVE_THIS_ABILITY
+			)
+		):
+			return true
+	return false
+
+
+static func has_non_summon_trigger_ability(card: Dictionary) -> bool:
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		for trigger_value: Variant in (ability_value as Dictionary).get("triggers", []):
+			if not trigger_value is Dictionary:
+				continue
+			var trigger: Dictionary = trigger_value
+			if StringName(trigger.get("event", &"")) == &"":
+				continue
+			if not _is_own_summon_only_trigger(trigger):
+				return true
+	return false
+
+
+static func _is_own_summon_only_trigger(trigger: Dictionary) -> bool:
+	var event_type: StringName = StringName(trigger.get("event", &""))
+	if event_type not in [
+		Catalog.TRIGGER_CARD_SUMMONED,
+		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+	]:
+		return false
+	return _list_has_type(
+		trigger.get("conditions", []),
+		Catalog.CONDITION_TRIGGER_CARD_IS_SELF
+	)
+
+
+static func _has_trigger_semantics(
+	triggers: Array,
+	event_type: StringName,
+	condition_type: StringName,
+	action_type: StringName
+) -> bool:
+	for trigger_value: Variant in triggers:
+		if not trigger_value is Dictionary:
+			continue
+		var trigger: Dictionary = trigger_value
+		if StringName(trigger.get("event", &"")) != event_type:
+			continue
+		if (
+			_list_has_type(trigger.get("conditions", []), condition_type)
+			and _list_has_type(trigger.get("actions", []), action_type)
+		):
+			return true
+	return false
+
+
+static func _list_has_type(values: Array, expected_type: StringName) -> bool:
+	for value: Variant in values:
+		if (
+			value is Dictionary
+			and StringName((value as Dictionary).get("type", &"")) == expected_type
+		):
+			return true
+	return false
 
 
 static func replace_activate_ability(card: Dictionary, new_ability: Dictionary) -> void:

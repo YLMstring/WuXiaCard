@@ -15,6 +15,17 @@ const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const LIGHT_KI_BEAD_BACKGROUND: Color = Color("2f7664")
+const LIGHT_KI_BEAD_BORDER: Color = Color("b8dfc9")
+const LIGHT_KI_BEAD_SHADOW: Color = Color(0.03, 0.12, 0.09, 0.45)
+const LIGHT_KI_TEXT: Color = Color(0.91, 1.0, 0.93, 1.0)
+const LIGHT_KI_TEXT_OUTLINE: Color = Color(0.04, 0.18, 0.14, 1.0)
+const DARK_KI_BEAD_MODULATE: Color = Color(0.55, 0.62, 0.59, 0.72)
+const GOLD_KI_BEAD_BACKGROUND: Color = Color("9a6a20")
+const GOLD_KI_BEAD_BORDER: Color = Color("f1d27a")
+const GOLD_KI_BEAD_SHADOW: Color = Color(0.20, 0.10, 0.02, 0.52)
+const GOLD_KI_TEXT: Color = Color("fff2c2")
+const GOLD_KI_TEXT_OUTLINE: Color = Color("4b2b10")
 
 var card_data: Dictionary = {}
 var owner_id: int = 0
@@ -50,7 +61,7 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
 	resized.connect(_on_resized)
 	_on_resized()
-	_style_ki_badge()
+	_refresh_face_content()
 	_apply_owner_style()
 
 
@@ -92,11 +103,7 @@ func _refresh_face_content() -> void:
 	left_power.text = str(powers[DuelRules.LEFT])
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.visible = power_numbers_enabled and not face_down
-	var ki: int = int(card_data.get("ki", 0))
-	var has_ki_ability: bool = Abilities.card_uses_ki(card_data)
-	ki_value.text = str(ki)
-	ki_badge.visible = ki_badge_enabled and not face_down and (ki > 0 or has_ki_ability)
-	ki_badge.modulate = Color.WHITE if ki > 0 else Color(0.55, 0.62, 0.59, 0.72)
+	_apply_ki_bead_presentation(Abilities.get_ki_bead_presentation(card_data))
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else ""
 	_refresh_picture()
 	_update_title_font_size()
@@ -154,12 +161,19 @@ func play_ki_gain_pulse(duration: float) -> void:
 	if not ki_badge.visible or duration <= 0.0:
 		return
 	ki_badge.pivot_offset = ki_badge.size * 0.5
+	var presentation: Dictionary = Abilities.get_ki_bead_presentation(card_data)
+	var bead_kind: StringName = StringName(presentation.get("kind", Abilities.KI_BEAD_NONE))
 	var resting_modulate: Color = ki_badge.modulate
+	var pulse_modulate: Color = (
+		Color(1.0, 0.90, 0.52, 1.0)
+		if bead_kind == Abilities.KI_BEAD_GOLD
+		else Color(0.65, 1.0, 0.72, 1.0)
+	)
 	var pulse_tween: Tween = create_tween()
 	pulse_tween.set_parallel(true)
 	pulse_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	pulse_tween.tween_property(ki_badge, "scale", Vector2(1.22, 1.22), duration * 0.45)
-	pulse_tween.tween_property(ki_badge, "modulate", Color(0.65, 1.0, 0.72, 1.0), duration * 0.45)
+	pulse_tween.tween_property(ki_badge, "modulate", pulse_modulate, duration * 0.45)
 	await pulse_tween.finished
 	var settle_tween: Tween = create_tween()
 	settle_tween.set_parallel(true)
@@ -169,6 +183,7 @@ func play_ki_gain_pulse(duration: float) -> void:
 	await settle_tween.finished
 	ki_badge.scale = Vector2.ONE
 	ki_badge.modulate = resting_modulate
+	_refresh_face_content()
 
 
 func set_card_owner(new_owner_id: int) -> void:
@@ -486,16 +501,52 @@ func _update_cursor() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_DRAG if playable else Control.CURSOR_ARROW
 
 
-func _style_ki_badge() -> void:
+func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
+	var bead_kind: StringName = StringName(
+		presentation.get("kind", Abilities.KI_BEAD_NONE)
+	)
+	ki_value.text = str(int(presentation.get("value", 0)))
+	ki_badge.visible = (
+		ki_badge_enabled
+		and not face_down
+		and bead_kind != Abilities.KI_BEAD_NONE
+	)
+	ki_value.visible = ki_badge.visible and bool(
+		presentation.get("show_number", false)
+	)
+	_style_ki_badge(bead_kind)
+
+
+func _style_ki_badge(bead_kind: StringName) -> void:
 	var bead_style := StyleBoxFlat.new()
-	bead_style.bg_color = Color("2f7664")
-	bead_style.border_color = Color("b8dfc9")
+	var uses_gold: bool = bead_kind == Abilities.KI_BEAD_GOLD
+	bead_style.bg_color = (
+		GOLD_KI_BEAD_BACKGROUND if uses_gold else LIGHT_KI_BEAD_BACKGROUND
+	)
+	bead_style.border_color = (
+		GOLD_KI_BEAD_BORDER if uses_gold else LIGHT_KI_BEAD_BORDER
+	)
 	bead_style.set_border_width_all(2)
 	bead_style.set_corner_radius_all(13)
-	bead_style.shadow_color = Color(0.03, 0.12, 0.09, 0.45)
+	bead_style.shadow_color = (
+		GOLD_KI_BEAD_SHADOW if uses_gold else LIGHT_KI_BEAD_SHADOW
+	)
 	bead_style.shadow_size = 2
 	bead_style.shadow_offset = Vector2(0.0, 1.0)
 	ki_badge.add_theme_stylebox_override("panel", bead_style)
+	ki_badge.modulate = (
+		DARK_KI_BEAD_MODULATE
+		if bead_kind == Abilities.KI_BEAD_DARK
+		else Color.WHITE
+	)
+	ki_value.add_theme_color_override(
+		"font_color",
+		GOLD_KI_TEXT if uses_gold else LIGHT_KI_TEXT
+	)
+	ki_value.add_theme_color_override(
+		"font_outline_color",
+		GOLD_KI_TEXT_OUTLINE if uses_gold else LIGHT_KI_TEXT_OUTLINE
+	)
 
 
 func _apply_owner_style() -> void:

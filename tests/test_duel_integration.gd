@@ -1231,7 +1231,13 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Label
-	_check(int(meng_view.card_data.get("ki", -1)) == 0 and not ki_badge.visible and ki_value.text == "0", "End-turn spend hides Meng Huo's zero-ki bead because he has no activate ability")
+	_check(
+		int(meng_view.card_data.get("ki", -1)) == 0
+		and ki_badge.visible
+		and not ki_value.visible
+		and ki_value.text == "0",
+		"Meng Huo's passive triggers keep an unnumbered light bead at zero ki"
+	)
 	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
 	_check(
 		duel.debug_get_ability_pulse_trace().count(meng_instance_id) == 1,
