@@ -47,23 +47,34 @@ those triggers is not own-summon-only. Static modifiers do not earn the light
 bead. A trigger ability consisting exclusively of own-summon-only triggers does
 not earn the light bead.
 
+### Ki-threshold trigger
+
+A card has a ki-threshold trigger when any condition on any of its runtime
+triggers has type `CONDITION_KI_AT_LEAST`. This is a presentation-only
+classification: it makes an existing visible bead display numeric ki, including
+`0`, but does not make an otherwise hidden trigger eligible for a bead.
+
+In particular, an own-summon-only trigger remains excluded even if it contains
+`CONDITION_KI_AT_LEAST`. `card_uses_ki()` remains activate-only and is not
+broadened by this presentation rule.
+
 ## Presentation Rules
 
 Classification is evaluated in this priority order:
 
 | Runtime state | Bead | Number |
 | --- | --- | --- |
-| Has temporary flip protection | Gold | Show numeric ki when positive or when the card also has an activate ability; otherwise show `化` |
+| Has temporary flip protection | Gold | Show numeric ki when positive, when the card also has an activate ability, or when it has a ki-threshold trigger; otherwise show `化` |
 | Otherwise has an activate ability | Current light bead | Always show numeric ki, including `0` |
-| Otherwise has a qualifying trigger | Current light bead | Show numeric ki when positive; otherwise show `化` |
+| Otherwise has a qualifying trigger | Current light bead | Show numeric ki when positive or when it has a ki-threshold trigger; otherwise show `化` |
 | Otherwise has positive ki | Current dark bead | Show ki |
 | Anything else | No bead | No number |
 
-Gold takes priority over light when a card qualifies for both. The presence of
-an activate ability controls zero-number visibility independently of bead
-color. Therefore a protected card with an activate ability displays a gold
-bead with `0`, while a protected passive card at zero ki displays a gold bead
-containing `化`.
+Gold takes priority over light when a card qualifies for both. Activate
+abilities and ki-threshold triggers control zero-number visibility independently
+of bead color. Therefore a protected card with either classification displays a
+gold bead with `0`, while a protected passive card without either classification
+at zero ki displays a gold bead containing `化`.
 
 ## Visual Treatment
 
@@ -101,16 +112,17 @@ logical layout size mid-drag.
 
 ## Exact Value Centering
 
-Bead text is centered from its actual visible glyph bounds, not from a generic
-`Label` rectangle, the font's line box, or the string's advance width. No
-hard-coded horizontal or vertical compensation is used.
+Bead text is optically centered from the alpha-weighted centroid of its actual
+rendered ink, not from a generic `Label` rectangle, the font's line box, the
+string's advance width, or the glyph's rectangular bounds. No hard-coded
+horizontal or vertical compensation is used.
 
 A reusable custom `Control` shapes the complete bead value through Godot's
-`TextServer`. It reads the actual offset and size of every shaped glyph,
-combines those rectangles into one visible-ink rectangle, and expands that
-rectangle by the current outline size. One translation places the combined
-rectangle's center exactly at the control's center before the glyph outlines
-and fills are drawn.
+`TextServer`. It reads each shaped glyph's cached bitmap, calculates the
+alpha-weighted centroid of the combined fill, and places that centroid at the
+control's center. The cropped fill and outline glyph textures are cached and
+drawn with linear subpixel placement, avoiding the whole-pixel snapping of the
+direct font draw path.
 
 The complete string is centered as one unit. This supports single digits,
 multi-digit ki such as `10` or `99`, the passive marker `化`, and future bead
@@ -161,6 +173,8 @@ Pure query tests cover:
 - every row of the presentation table;
 - gold-over-light precedence;
 - activate ability zero display;
+- ki-threshold trigger zero display without broadening `card_uses_ki()`;
+- own-summon-only exclusion even when such a trigger has a ki threshold;
 - passive trigger zero-number suppression;
 - positive ki without a qualifying ability;
 - exact own-summon-only exclusion;
