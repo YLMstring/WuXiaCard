@@ -539,7 +539,7 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 		presentation.get("kind", Abilities.KI_BEAD_NONE)
 	)
 	var show_number: bool = bool(presentation.get("show_number", false))
-	ki_value.text = str(int(presentation.get("value", 0))) if show_number else "∞"
+	ki_value.text = str(int(presentation.get("value", 0))) if show_number else "化"
 	ki_badge.visible = (
 		ki_badge_enabled
 		and not face_down
