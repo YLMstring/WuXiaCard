@@ -27,9 +27,10 @@ parameterless modifiers:
 `MODIFIER_ATTACK_REQUIRES_OTHER_ALLY` prevents the card from performing any
 attack unless another board card currently has the same owner. The check
 applies to ordinary summon attacks, reaction attacks, activated attacks, and
-future effects that request an attack. It is evaluated whenever attack
-validity is checked, including the existing post-`CARD_BE_ATTACKED` recheck.
-If the other ally disappears during that event, the attack emits no flip.
+future effects that request an attack. It is evaluated only when an attack
+is initially declared. It is deliberately excluded from the existing
+post-`CARD_BE_ATTACKED` recheck. Once the attack has begun, losing the other
+ally during that event does not cancel the attack.
 
 `MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE` changes only combat comparison.
 When this card attacks, the defender's value is the minimum of its four
@@ -108,6 +109,10 @@ The rules layer separates attack range from attack permission:
 - `DuelRules.can_attack_target()` first checks continuous permission rules,
   including `attack_requires_other_ally`, and then delegates to the range
   query.
+- The post-`CARD_BE_ATTACKED` validity check uses the range query directly,
+  plus its existing exact attacker and target identity checks. It does not
+  call `can_attack_target()` and therefore does not repeat the other-ally
+  requirement.
 
 This separation lets the tier-three reaction trigger and pulse while the card
 is alone, as approved, while its resulting attack request produces no
@@ -130,9 +135,11 @@ presentation behavior.
 
 Malformed cards, missing power arrays, invalid cells, non-adjacent targets,
 and missing owners continue to make the attack illegal without changing
-state. If movement or another effect invalidates an already-declared attack,
-the existing second validity check stops the flip. These outcomes are normal
-no-effect combat results, not `INVALID_CONTEXT` action results.
+state. If movement takes the exact target out of the exact attacker's range,
+or either exact card leaves the board, the existing second validity check
+stops the flip. Losing the attacker's other ally does not stop an attack that
+has already entered `CARD_BE_ATTACKED`. These outcomes are normal no-effect
+combat results, not `INVALID_CONTEXT` action results.
 
 ## Tests
 
@@ -141,6 +148,8 @@ Add a focused simulator suite covering:
 - all three catalog declarations and catalog validation;
 - every attack source failing while the card is alone;
 - an additional ally enabling attacks;
+- the enabling ally disappearing during `CARD_BE_ATTACKED` without canceling
+  the already-declared attack;
 - current effective side powers being reduced to their minimum for defense;
 - no mutation of stored defender powers;
 - modifier retention across a flip and ally evaluation against the new owner;
