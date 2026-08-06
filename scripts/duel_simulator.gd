@@ -261,6 +261,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
 	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_attack_request(next_state, request)
+	var flip_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_flip_request(next_state, request)
 	var activation_result: Dictionary = Executor.execute_activation(
 		next_state,
 		action.source_index,
@@ -268,7 +270,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		activation,
 		action.target_kind,
 		action.target_index,
-		attack_resolver
+		attack_resolver,
+		flip_resolver
 	)
 	if not bool(activation_result.get("valid", false)):
 		return _invalid_transition(state)
@@ -300,6 +303,7 @@ static func _resolve_standard_attacks(
 	var result: Dictionary = _empty_resolution()
 	if not _card_instance_at(state, source_cell, source_instance_id):
 		return result
+	var attacker_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0))
 	var target_cells: Array[int] = Rules.get_would_flip_indices(state.board, source_cell)
 	for target_cell: int in target_cells:
 		if not _card_instance_at(state, source_cell, source_instance_id):
@@ -322,6 +326,24 @@ static func _resolve_standard_attacks(
 			result["events"],
 			target_result
 		)
+		result["attack_flips"].append_array(
+			target_result.get("attack_flips", []) as Array
+		)
+	var after_attack: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		{
+			"attacker_instance_id": source_instance_id,
+			"attacker_owner_id": attacker_owner,
+			"attack_flips": result["attack_flips"].duplicate(true),
+		}
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		after_attack
+	)
 	return result
 
 
@@ -448,6 +470,9 @@ static func _resolve_attack_target(
 		== attacker_owner
 	):
 		return result
+	var flipped_previous_owner: int = int(
+		(state.board[attacked_cell] as Dictionary).get("owner", 0)
+	)
 	var flip_events: Array[Dictionary] = Executor.resolve_normal_flip(
 		state,
 		attacker_cell,
@@ -459,6 +484,10 @@ static func _resolve_attack_target(
 	if flip_events.is_empty():
 		return result
 	result["captures"].append(attacked_cell)
+	result["attack_flips"].append({
+		"instance_id": attacked_instance_id,
+		"previous_owner_id": flipped_previous_owner,
+	})
 	result["events"].append_array(flip_events)
 	before_flip_context["attacker_cell"] = attacker_cell
 	before_flip_context["attacked_cell"] = attacked_cell
@@ -564,11 +593,14 @@ static func _resolve_trigger_event(
 	var groups: Array[Dictionary] = Triggers.discover(state, event_id, context)
 	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_attack_request(state, request)
+	var flip_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_flip_request(state, request)
 	for group: Dictionary in groups:
 		var group_result: Dictionary = Triggers.resolve_group(
 			state,
 			group,
-			attack_resolver
+			attack_resolver,
+			flip_resolver
 		)
 		var group_events: Array = group_result.get("events", [])
 		_append_unique_indices(
@@ -597,7 +629,26 @@ static func _resolve_trigger_event(
 				result["events"],
 				request_result
 			)
+		for request_value: Variant in group_result.get("flip_requests", []):
+			if not request_value is Dictionary:
+				continue
+			var flip_request_result: Dictionary = _resolve_flip_request(state, request_value)
+			_merge_resolution(
+				result["captures"],
+				result["exiles"],
+				result["events"],
+				flip_request_result
+			)
 	return result
+
+
+static func _resolve_flip_request(state: StateData, request: Dictionary) -> Dictionary:
+	return resolve_non_attack_flip(
+		state,
+		StringName(request.get("target_instance_id", &"")),
+		int(request.get("new_owner_id", 0)),
+		StringName(request.get("reason", &"ability_non_attack_flip"))
+	)
 
 
 static func _record_direct_resolution_events(result: Dictionary, events: Array) -> void:
@@ -642,7 +693,8 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 		int(request.get("target_owner_id", 0))
 	):
 		return _empty_resolution()
-	return _resolve_attack_target(
+	var attacker_owner: int = int(request.get("source_owner_id", 0))
+	var result: Dictionary = _resolve_attack_target(
 		state,
 		source_cell,
 		source_instance_id,
@@ -650,6 +702,22 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 		target_instance_id,
 		StringName(request.get("reason", &"ability_targeted_attack"))
 	)
+	var after_attack: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		{
+			"attacker_instance_id": source_instance_id,
+			"attacker_owner_id": attacker_owner,
+			"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
+		}
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		after_attack
+	)
+	return result
 
 
 static func _attack_is_valid(
@@ -865,6 +933,7 @@ static func _empty_resolution() -> Dictionary:
 		"exiles": [],
 		"events": [],
 		"flip_prevention_requests": [],
+		"attack_flips": [],
 	}
 
 

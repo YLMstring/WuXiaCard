@@ -104,6 +104,9 @@ static func conditions_match(
 				)
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES:
+			if not _is_surrounded_by_source_allies(state, candidate, source):
+				return false
 		else:
 			return false
 	return true
@@ -189,3 +192,30 @@ static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
 		if Rules.get_neighbor_index(first_cell, direction) == second_cell:
 			return true
 	return false
+
+
+static func _is_surrounded_by_source_allies(
+	state: StateData,
+	candidate: Dictionary,
+	source: Dictionary
+) -> bool:
+	if (
+		StringName(candidate.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+		or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+	):
+		return false
+	var candidate_cell: int = int(candidate.get("index", -1))
+	var source_owner: int = int(source.get("owner_id", 0))
+	var neighbor_count: int = 0
+	for direction: int in range(4):
+		var neighbor_cell: int = Rules.get_neighbor_index(candidate_cell, direction)
+		if neighbor_cell < 0:
+			continue
+		neighbor_count += 1
+		var neighbor_value: Variant = state.board[neighbor_cell]
+		if (
+			neighbor_value == null
+			or int((neighbor_value as Dictionary).get("owner", 0)) != source_owner
+		):
+			return false
+	return neighbor_count > 0

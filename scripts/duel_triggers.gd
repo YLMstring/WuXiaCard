@@ -33,12 +33,14 @@ static func discover(
 static func resolve_group(
 	state: StateData,
 	group: Dictionary,
-	attack_resolver: Callable = Callable()
+	attack_resolver: Callable = Callable(),
+	flip_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = {
 		"events": [],
 		"extra_turn_requests": [],
 		"attack_requests": [],
+		"flip_requests": [],
 		"flip_prevention_requests": [],
 	}
 	if state == null:
@@ -62,7 +64,8 @@ static func resolve_group(
 		int(group.get("source_owner_id", 0)),
 		rule.get("actions", []) as Array,
 		context,
-		attack_resolver
+		attack_resolver,
+		flip_resolver
 	)
 	var events: Array = action_result.get("events", [])
 	events.push_front({
@@ -245,9 +248,71 @@ static func _conditions_match(
 				or previous_owner == int(source_slot.get("owner", 0))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_ATTACKER_CARD_IS_ENEMY:
+			var source_slot: Dictionary = state.board[source_cell]
+			var attacker_owner: int = int(context.get("attacker_owner_id", 0))
+			if (
+				attacker_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or attacker_owner == int(source_slot.get("owner", 0))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE:
+			if not _attack_flipped_ally_in_range(
+				state,
+				source_cell,
+				context.get("attack_flips", []) as Array
+			):
+				return false
 		else:
 			return false
 	return true
+
+
+static func _attack_flipped_ally_in_range(
+	state: StateData,
+	source_cell: int,
+	attack_flips: Array
+) -> bool:
+	if source_cell < 0 or source_cell >= state.board.size():
+		return false
+	var source_value: Variant = state.board[source_cell]
+	if source_value == null:
+		return false
+	var source_owner: int = int((source_value as Dictionary).get("owner", 0))
+	for record_value: Variant in attack_flips:
+		if not record_value is Dictionary:
+			continue
+		var record: Dictionary = record_value
+		if int(record.get("previous_owner_id", 0)) != source_owner:
+			continue
+		var target_cell: int = _find_board_cell(
+			state,
+			StringName(record.get("instance_id", &""))
+		)
+		if (
+			target_cell >= 0
+			and Rules.is_target_in_attack_range(
+				state.board,
+				source_cell,
+				target_cell,
+				{"reason": &"after_attack_reaction"}
+			)
+		):
+			return true
+	return false
+
+
+static func _find_board_cell(state: StateData, instance_id: StringName) -> int:
+	if instance_id == &"":
+		return -1
+	for cell: int in range(state.board.size()):
+		var slot_value: Variant = state.board[cell]
+		if slot_value == null:
+			continue
+		var card: Dictionary = (slot_value as Dictionary).get("card", {})
+		if StringName(card.get("instance_id", &"")) == instance_id:
+			return cell
+	return -1
 
 
 static func _get_context_card_slot(

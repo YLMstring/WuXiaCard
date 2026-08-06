@@ -7,6 +7,7 @@ const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
+const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
@@ -20,11 +21,14 @@ const CONDITION_ATTACKER_CARD_IS_SELF: StringName = &"attacker_card_is_self"
 const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
 const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revealed_to_self"
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
+const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
+const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
 const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not_source"
 const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_adjacent_to_source"
+const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card_surrounded_by_allies"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -45,6 +49,9 @@ const ACTION_GRANT_ABILITY_TO_SELF: StringName = &"grant_ability_to_self"
 const ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE: StringName = &"self_swapped_with_ability_source"
 const ACTION_PREVENT_TRIGGER_FLIP: StringName = &"prevent_trigger_flip"
 const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
+const ACTION_FLIP_SELF: StringName = &"flip_self"
+const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
+const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
@@ -67,6 +74,7 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
+	TRIGGER_CARD_AFTER_ATTACK,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
@@ -82,6 +90,8 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TURN_OWNER_IS_SELF,
 	CONDITION_TRIGGER_CARD_REVEALED_TO_SELF,
 	CONDITION_TRIGGER_CARD_WAS_ENEMY,
+	CONDITION_ATTACKER_CARD_IS_ENEMY,
+	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -89,6 +99,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_WEAPON_IS,
 	CONDITION_SELECTED_CARD_IS_NOT_SOURCE,
 	CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+	CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -112,6 +123,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
 	ACTION_PREVENT_TRIGGER_FLIP,
 	ACTION_REMOVE_THIS_ABILITY,
+	ACTION_FLIP_SELF,
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -155,7 +167,10 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"QiXinLuoChangKong3",
 	&"QiXinLuoChangKong4",
 	&"TianChangZhang3",
+	&"TianChangZhang4",
 	&"HenShanJianZhen2",
+	&"HenShanJianZhen3",
+	&"HenShanJianZhen4",
 	&"JinZhenDuJie1",
 	&"qianji_tingyu",
 	&"hengsha_duanlu",
@@ -213,6 +228,42 @@ const QIXIN_SUMMON_REACTION: Dictionary = {
 			"actions": [{"type": ACTION_ATTACK_TRIGGER_CARD}],
 		},
 	],
+}
+
+const HENGSHAN_COUNTERATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_ENEMY},
+			{"type": CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE},
+		],
+		"actions": [
+			{"type": ACTION_REMOVE_THIS_ABILITY},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
+	}],
+}
+
+const TIANCHANG_SUMMON_POWER: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+			},
+			"actions": [{
+				"type": ACTION_ADD_POWERS,
+				"amount": 1,
+				"target": ACTION_TARGET_ABILITY_SOURCE,
+			}],
+		}],
+	}],
 }
 
 const _CARD_DEFINITIONS: Dictionary = {
@@ -1341,7 +1392,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一个相邻敌方，我的点数加一。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [TIANCHANG_SUMMON_POWER],
 	},
 	&"TianChangZhang4": {
 		"id": &"TianChangZhang4",
@@ -1353,7 +1404,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一个相邻敌方，我的点数加一。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [
+			TIANCHANG_SUMMON_POWER,
+			HENGSHAN_COUNTERATTACK,
+		],
 	},
 	&"HenShanJianZhen2": {
 		"id": &"HenShanJianZhen2",
@@ -1365,7 +1419,33 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合结束时，使我和所有相邻友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [5, 7, 5, 7],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [
+					{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": HENGSHAN_COUNTERATTACK,
+					},
+					{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+								{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+						},
+						"actions": [{
+							"type": ACTION_GRANT_ABILITY_TO_SELF,
+							"ability": HENGSHAN_COUNTERATTACK,
+						}],
+					},
+				],
+			}],
+		}],
 	},
 	&"HenShanJianZhen3": {
 		"id": &"HenShanJianZhen3",
@@ -1377,7 +1457,23 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [5, 7, 5, 7],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+					},
+					"actions": [{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": HENGSHAN_COUNTERATTACK,
+					}],
+				}],
+			}],
+		}],
 	},
 	&"HenShanJianZhen4": {
 		"id": &"HenShanJianZhen4",
@@ -1389,7 +1485,45 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，使所有被友方包围的敌方翻面。回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [5, 7, 5, 7],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_SUMMONED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+								{"type": CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES},
+							],
+						},
+						"actions": [{
+							"type": ACTION_FLIP_SELF,
+							"new_owner": OWNER_ABILITY_SOURCE,
+						}],
+					}],
+				}],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_END_OWNER_TURN,
+					"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+						},
+						"actions": [{
+							"type": ACTION_GRANT_ABILITY_TO_SELF,
+							"ability": HENGSHAN_COUNTERATTACK,
+						}],
+					}],
+				}],
+			},
+		],
 	},
 	&"JinZhenDuJie1": {
 		"id": &"JinZhenDuJie1",
@@ -1952,6 +2086,20 @@ static func _validate_action(
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_ADD_POWERS and action.has("target"):
+		allowed_keys.append(&"target")
+		if StringName(action.get("target", &"")) != ACTION_TARGET_ABILITY_SOURCE:
+			errors.append(
+				"Card %s %s action %s requires a known target"
+				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_FLIP_SELF:
+		allowed_keys.append(&"new_owner")
+		if StringName(action.get("new_owner", &"")) != OWNER_ABILITY_SOURCE:
+			errors.append(
+				"Card %s %s action %s requires a known new_owner"
+				% [card_id, context_name, action_type]
+			)
 	if action_type == ACTION_FOR_EACH_SELECTED_CARD:
 		allowed_keys.append(&"selector")
 		allowed_keys.append(&"actions")
