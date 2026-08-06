@@ -29,7 +29,7 @@ func _test_unique_glyphs() -> void:
 			&"gate_general",
 			&"meng_huo",
 			&"YouFenLaiYi2",
-			&"fa_zheng",
+			&"TuNaShu2",
 		]),
 		"Distinct glyphs are accepted"
 	)
@@ -48,7 +48,7 @@ func _test_exchanges() -> void:
 		"gate_general",
 		"meng_huo",
 		"YouFenLaiYi2",
-		"fa_zheng",
+		"TuNaShu2",
 	]
 	var library: Array = ["fire_envoy", "CangSongYingKe1", "YouFenLaiYi3"]
 	var normal: Dictionary = Rules.build_player_exchange(main, library, 0, 1)
@@ -77,7 +77,7 @@ func _test_repair() -> void:
 		"gate_general",
 		"meng_huo",
 		"YouFenLaiYi2",
-		"fa_zheng",
+		"TuNaShu2",
 		"fire_envoy",
 	]
 	var repaired: Dictionary = Rules.repair_player_placement(
@@ -89,14 +89,14 @@ func _test_repair() -> void:
 			"meng_huo",
 			"YouFenLaiYi2",
 		],
-		["fa_zheng", "fire_envoy"],
+		["TuNaShu2", "fire_envoy"],
 		5,
 		1000
 	)
 	_check(bool(repaired.get("ok", false)), "Legacy duplicate-glyph deck is repairable")
 	var deck: Array = repaired["main_deck"]
 	_check(deck[2] == &"CangSongYingKe2", "Highest-tier namesake stays in its original slot")
-	_check(deck[0] == &"fa_zheng", "First stable library filler occupies the vacancy")
+	_check(deck[0] == &"TuNaShu2", "First stable library filler occupies the vacancy")
 	_check(Rules.has_unique_glyphs(deck), "Repaired deck has unique glyphs")
 	var library: Array = repaired["library_cards"]
 	_check(library.back() == &"CangSongYingKe1", "Removed lower namesake moves to library bottom")

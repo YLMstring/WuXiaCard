@@ -548,7 +548,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 		"card": Rules.make_card("Guard", "守", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
 		"owner": Rules.OPPONENT_OWNER,
 	}
-	var player_hand: Array = [Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"main_1_fa")]
+	var player_hand: Array = [Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"main_1_fa")]
 	for index: int in range(4):
 		player_hand.append(Rules.make_card("Filler %d" % index, "填", [1, 1, 1, 1]))
 	var player_deck: Array = [
@@ -584,7 +584,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 
 func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 	var player_hand: Array = [
-		Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"main_1_fa"),
+		Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"main_1_fa"),
 		Rules.make_card("First", "一", [1, 1, 1, 1]),
 		Rules.make_card("Second", "二", [1, 1, 1, 1]),
 	]
@@ -603,7 +603,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 
 	var partial_state := State.new(
 		Rules.empty_board(),
-		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"partial_fa")],
+		[Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"partial_fa")],
 		[],
 		Rules.PLAYER_OWNER,
 		0,
@@ -617,7 +617,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 func _test_draw_on_play_handles_empty_deck() -> void:
 	var state := State.new(
 		Rules.empty_board(),
-		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"empty_fa")],
+		[Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"empty_fa")],
 		[],
 		Rules.PLAYER_OWNER
 	)
@@ -773,7 +773,7 @@ func _test_terminal_requires_both_players_to_be_stuck() -> void:
 		[],
 		Rules.PLAYER_OWNER,
 		0,
-		[Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"unused_side_card")],
+		[Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"unused_side_card")],
 		[]
 	)
 	_check(Simulator.is_terminal(no_hands), "Match is terminal when neither player can move")
@@ -1984,7 +1984,7 @@ func _move_ability() -> Dictionary:
 
 
 func _test_state_copy_is_isolated() -> void:
-	var player_deck: Array = [Catalog.create_instance(&"fa_zheng", Rules.PLAYER_OWNER, &"side_1_0")]
+	var player_deck: Array = [Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"side_1_0")]
 	var opponent_deck: Array = [Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"side_2_0")]
 	var original := State.new(
 		Rules.empty_board(),

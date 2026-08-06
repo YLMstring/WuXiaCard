@@ -28,7 +28,7 @@ func _run() -> void:
 	)
 	_check(bool(begin.get("ok", false)), "Ending fixture begins a run")
 	var active: Dictionary = begin.get("profile", {})
-	active["mastered_card_ids"] = ["fa_zheng"]
+	active["mastered_card_ids"] = ["TuNaShu2"]
 	_check(store.is_profile_valid(active), "Mastery fixture remains a valid active profile")
 	var defeat: Dictionary = store.record_completed_duel_and_save(
 		active,
@@ -45,7 +45,7 @@ func _run() -> void:
 	_check(int(after_defeat["level"]) == 1, "Defeat preserves the player level")
 	_check(String(after_defeat["current_enemy_id"]) == "qingfeng_xuedi", "Defeat preserves the rematch enemy")
 	_check(
-		store.get_mastered_card_ids(after_defeat) == [&"fa_zheng"],
+		store.get_mastered_card_ids(after_defeat) == [&"TuNaShu2"],
 		"Defeat ignores mastery candidates"
 	)
 
@@ -72,7 +72,7 @@ func _run() -> void:
 	_check(String(advanced["current_enemy_id"]) == "tieshan_menren", "Non-final victory selects the requested next enemy")
 	_check(
 		store.get_mastered_card_ids(advanced)
-		== [&"fa_zheng", &"gate_general", &"CangSongYingKe2"],
+		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2"],
 		"Victory appends valid main-deck mastery candidates in stable order"
 	)
 
@@ -99,7 +99,7 @@ func _run() -> void:
 	_check(completed_profile["unlocked_card_ids"] == unlocked_before, "Completion preserves card unlocks")
 	_check(
 		store.get_mastered_card_ids(completed_profile)
-		== [&"fa_zheng", &"gate_general", &"CangSongYingKe2", &"meng_huo"],
+		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2", &"meng_huo"],
 		"Final victory records mastery before closing the run"
 	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 5000, "Completion stores the sect's first best score")
@@ -168,7 +168,7 @@ func _run() -> void:
 	legacy_active.erase("effective_duel_count")
 	legacy_active.erase("defeated_enemy_ids")
 	legacy_active.erase("best_scores_by_sect")
-	legacy_active["main_deck"] = ["gate_general", "meng_huo", "jiang_wei", "fa_zheng", "fire_envoy"]
+	legacy_active["main_deck"] = ["gate_general", "meng_huo", "jiang_wei", "TuNaShu2", "fire_envoy"]
 	var migrated: Dictionary = store.repair_profile(legacy_active)
 	_check(store.is_profile_valid(migrated), "A legacy active profile migrates to the new schema")
 	_check(not bool(migrated["run_active"]), "Legacy migration closes an unreconstructable active run")

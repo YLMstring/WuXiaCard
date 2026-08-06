@@ -1017,8 +1017,8 @@ func _check_dragged_card_commits_through_simulator() -> void:
 		&"TaiShan18Pan1",
 		&"WuDaFuJian1",
 		&"QiXinLuoChangKong2",
-		&"yuyan_tousuo",
-		&"wusuo_changqiao",
+		&"TianChangZhang3",
+		&"HenShanJianZhen2",
 	])
 	root.add_child(drag_duel)
 	await process_frame
@@ -1236,7 +1236,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 		and ki_badge.visible
 		and ki_value.visible
 		and ki_value.text == "化",
-		"Meng Huo's passive triggers show the current passive marker at zero ki"
+		"Meng Huo's passive triggers show infinity on a light bead at zero ki"
 	)
 	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
 	_check(

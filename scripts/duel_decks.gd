@@ -10,8 +10,8 @@ const OPPONENT_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
 	&"fire_envoy",
 	&"tiger_general",
-	&"strategist",
-	&"strategist",
+	&"TuNaShu1",
+	&"TuNaShu1",
 ]
 
 
