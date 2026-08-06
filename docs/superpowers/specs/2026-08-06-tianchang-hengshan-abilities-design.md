@@ -107,6 +107,133 @@ Selection snapshots the matching exact instances and revalidates each card
 before granting. An identical unused counterattack already present on a card
 causes the grant to do nothing for that card rather than adding another copy.
 
+The three catalog declarations are:
+
+~~~gdscript
+&"HenShanJianZhen2": {
+	"id": &"HenShanJianZhen2",
+	"glyph": "恒山剑阵",
+	"picture": "res://pics/LKT010_350.png",
+	"sect": "恒山派",
+	"tier": 2,
+	"weapon": "剑阵",
+	"description": "回合结束时，使我和所有相邻友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+	"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
+	"powers": [5, 7, 5, 7],
+	"abilities": [{
+		"triggers": [{
+			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [
+				{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": HENGSHAN_COUNTERATTACK,
+				},
+				{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+							{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+							{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						],
+					},
+					"actions": [{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": HENGSHAN_COUNTERATTACK,
+					}],
+				},
+			],
+		}],
+	}],
+},
+
+&"HenShanJianZhen3": {
+	"id": &"HenShanJianZhen3",
+	"glyph": "恒山剑阵",
+	"picture": "res://pics/LKT010_350.png",
+	"sect": "恒山派",
+	"tier": 3,
+	"weapon": "剑阵",
+	"description": "回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+	"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
+	"powers": [5, 7, 5, 7],
+	"abilities": [{
+		"triggers": [{
+			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					],
+				},
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": HENGSHAN_COUNTERATTACK,
+				}],
+			}],
+		}],
+	}],
+},
+
+&"HenShanJianZhen4": {
+	"id": &"HenShanJianZhen4",
+	"glyph": "恒山剑阵",
+	"picture": "res://pics/LKT010_350.png",
+	"sect": "恒山派",
+	"tier": 4,
+	"weapon": "剑阵",
+	"description": "进场后，使所有被友方包围的敌方翻面。回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+	"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
+	"powers": [5, 7, 5, 7],
+	"abilities": [
+		{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+							{"type": CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES},
+						],
+					},
+					"actions": [{
+						"type": ACTION_FLIP_SELF,
+						"new_owner": OWNER_ABILITY_SOURCE,
+					}],
+				}],
+			}],
+		},
+		{
+			"triggers": [{
+				"event": TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						],
+					},
+					"actions": [{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": HENGSHAN_COUNTERATTACK,
+					}],
+				}],
+			}],
+		},
+	],
+},
+~~~
+
 ### 恒山剑阵4 enclosure flip
 
 After HenShanJianZhen4 is summoned, and before its ordinary attack, it
@@ -143,8 +270,7 @@ ALL_CARD_IDS. Add and validate:
   CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE;
 - selector condition CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES;
 - action target ACTION_TARGET_ABILITY_SOURCE for ACTION_ADD_POWERS; and
-- a generic non-attack flip action whose new owner is the ability source's
-  owner.
+- action ACTION_FLIP_SELF with new-owner reference OWNER_ABILITY_SOURCE.
 
 Only ACTION_ADD_POWERS accepts its optional target field. Omitting it keeps
 the current behavior of affecting the action's current subject. The new flip
