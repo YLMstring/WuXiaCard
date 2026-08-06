@@ -331,7 +331,6 @@ func play_exile(duration: float, ink_color: Color) -> void:
 
 
 func play_ability_lost(animation_duration: float) -> void:
-	remove_next_non_retained_ability()
 	if animation_duration <= 0.0:
 		return
 	var loss_tween: Tween = create_tween()

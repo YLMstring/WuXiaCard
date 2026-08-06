@@ -266,6 +266,12 @@ func _test_card_view_rendering() -> void:
 		_style_background(badge).is_equal_approx(LIGHT_BEAD_BACKGROUND),
 		"Losing protection immediately restores the remaining light bead"
 	)
+	await card_view.call("play_ability_lost", 0.0)
+	_check(
+		(card_view.get("card_data").get("active_abilities", []) as Array).size() == 1
+		and badge.visible,
+		"Ability-loss presentation does not mutate already-synchronized card data"
+	)
 
 	card_view.call(
 		"sync_runtime_data",
