@@ -57,7 +57,7 @@ func _run() -> void:
 	var expected_sect_ids: Array[StringName] = [
 		&"HuaShanPai",
 		&"TaiShanPai",
-		&"chisha_men",
+		&"HengShanPai",
 		&"tingchao_gu",
 		&"bailu_shuyuan",
 	]
@@ -161,10 +161,10 @@ func _run() -> void:
 	locked_slot.debug_end_pointer(locked_center)
 	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 2, "A repeated locked hold restarts one pulse")
 
-	_check(selector.debug_select_sect(&"chisha_men"), "Debug selection accepts a known sect")
+	_check(selector.debug_select_sect(&"HengShanPai"), "Debug selection accepts a known sect")
 	_check(
 		selector.debug_get_lower_preview_ids().slice(0, 2)
-		== _expected_preview_ids(&"chisha_men", true).slice(0, 2),
+		== _expected_preview_ids(&"HengShanPai", true).slice(0, 2),
 		"Equal-tier preview ties retain CardCatalog order"
 	)
 

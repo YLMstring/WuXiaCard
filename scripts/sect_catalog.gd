@@ -4,7 +4,7 @@ extends RefCounted
 const ALL_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
 	&"TaiShanPai",
-	&"chisha_men",
+	&"HengShanPai",
 	&"tingchao_gu",
 	&"bailu_shuyuan",
 ]
@@ -41,15 +41,15 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。",
 		"flavor": "泰山剑招以厚重沉稳见长，规矩谨严而又不失迅疾，犹似行云流水。",
 	},
-	&"chisha_men": {
-		"id": &"chisha_men",
+	&"HengShanPai": {
+		"id": &"HengShanPai",
 		"glyph": "赤砂门",
 		"picture": "res://pics/LKT010_003.png",
 		"sect": "西域赤沙",
-		"tier": 3,
-		"weapon": "刀法",
-		"description": "赤砂门崇尚直取胜机，刀法借旋风与流沙之势不断变向，重视体魄、耐渴训练和在恶劣地形中的迅猛突袭。",
-		"flavor": "门中弟子入门时要独自穿过一片红色沙海。归来者把第一捧赤砂封入刀柄，以提醒自己绝不畏惧无路可走。",
+		"tier": 4,
+		"weapon": "轻剑/剑阵",
+		"description": "恒山派擅长保护友方，防守反击。",
+		"flavor": "恒山剑法破绽极少，若言守御之严，仅逊于武当派的太极剑法，但偶尔忽出攻招，却又在太极剑法之上。",
 	},
 	&"tingchao_gu": {
 		"id": &"tingchao_gu",
