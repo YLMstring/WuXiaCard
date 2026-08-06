@@ -10,7 +10,7 @@ const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"QiXinLuoChangKong2",
 	&"TianChangZhang3",
 	&"HenShanJianZhen2",
-	&"feixing_ruye",
+	&"JinZhenDuJie1",
 	&"qianji_tingyu",
 	&"hengsha_duanlu",
 	&"chilian_huifeng",
