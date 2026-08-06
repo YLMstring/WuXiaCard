@@ -81,6 +81,8 @@ $testScripts = @(
 	"test_taishan_wudafu_integration.gd",
 	"test_qixin_luochangkong_abilities.gd",
 	"test_tianchang_hengshan_abilities.gd",
+	"test_jinzhen_wanhua_abilities.gd",
+	"test_jinzhen_wanhua_integration.gd",
 	"test_ki_bead_presentation.gd",
     "test_youfen_integration.gd",
     "test_zixia_integration.gd",

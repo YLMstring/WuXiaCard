@@ -1191,9 +1191,9 @@ func _check_manual_activate_move() -> void:
 	_check(duel.debug_get_board_card_instance_id(5) == youfen_instance, "Controller preserves the moving card view identity")
 	var moved_card: CardView = (duel.get("board_cards") as Array)[5] as CardView
 	var ki_badge := moved_card.get_node("Overlay/KiBadge") as PanelContainer
-	var ki_value := moved_card.get_node("Overlay/KiBadge/Value") as Label
+	var ki_value := moved_card.get_node("Overlay/KiBadge/Value") as Control
 	_check(int(moved_card.card_data.get("ki", -1)) == 0, "Controller synchronizes spent ki into the card view")
-	_check(ki_badge.visible and ki_value.text == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
+	_check(ki_badge.visible and String(ki_value.get("text")) == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(trace.has(&"ability_activated") and trace.has(&"ki_changed") and trace.has(&"card_moved"), "Controller presents the canonical activation events")
 	_check(
@@ -1230,13 +1230,13 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
 	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
-	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Label
+	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Control
 	_check(
 		int(meng_view.card_data.get("ki", -1)) == 0
 		and ki_badge.visible
 		and ki_value.visible
-		and ki_value.text == "化",
-		"Meng Huo's passive triggers show infinity on a light bead at zero ki"
+		and String(ki_value.get("text")) == "0",
+		"Meng Huo's ki-gated passive trigger shows zero on a light bead at zero ki"
 	)
 	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
 	_check(

@@ -3,6 +3,8 @@ extends SceneTree
 const SECT_SCENE: PackedScene = preload("res://scenes/sect_selection.tscn")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -147,7 +149,7 @@ func _run() -> void:
 	_check(selector.debug_get_selected_sect_id() == &"TaiShanPai", "Holding a locked sect updates selection")
 	_check(
 		selector.debug_get_upper_preview_ids()
-		== [&"LaiHeQinQuan5", &"LaiHeQinQuan4", &"LaiHeQinQuan3", &"LaiHeQinQuan2", &"LaiHeQinQuan1"],
+		== _expected_preview_ids(&"TaiShanPai", false),
 		"A locked sect previews its five highest-tier cards"
 	)
 	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
@@ -162,7 +164,7 @@ func _run() -> void:
 	_check(selector.debug_select_sect(&"chisha_men"), "Debug selection accepts a known sect")
 	_check(
 		selector.debug_get_lower_preview_ids().slice(0, 2)
-		== [&"MianLiCangZhen2", &"chilian_huifeng"],
+		== _expected_preview_ids(&"chisha_men", true).slice(0, 2),
 		"Equal-tier preview ties retain CardCatalog order"
 	)
 
@@ -242,6 +244,33 @@ func _occupied_hand_slots(hand: HBoxContainer) -> int:
 	for slot: Node in hand.get_children():
 		if slot.get_child_count() > 0:
 			result += 1
+	return result
+
+
+func _expected_preview_ids(sect_id: StringName, ascending: bool) -> Array[StringName]:
+	var result: Array[StringName] = []
+	var sect_glyph: String = String(Sects.get_definition(sect_id).get("glyph", ""))
+	var ranked: Array[Dictionary] = []
+	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	for catalog_index: int in range(catalog_ids.size()):
+		var card_id: StringName = catalog_ids[catalog_index]
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		if String(definition.get("sect", "")) != sect_glyph:
+			continue
+		ranked.append({
+			"id": card_id,
+			"tier": int(definition.get("tier", 0)),
+			"catalog_index": catalog_index,
+		})
+	ranked.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_tier: int = int(left["tier"])
+		var right_tier: int = int(right["tier"])
+		if left_tier == right_tier:
+			return int(left["catalog_index"]) < int(right["catalog_index"])
+		return left_tier < right_tier if ascending else left_tier > right_tier
+	)
+	for index: int in range(mini(5, ranked.size())):
+		result.append(StringName(String(ranked[index]["id"])))
 	return result
 
 

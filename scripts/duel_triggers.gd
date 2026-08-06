@@ -34,13 +34,15 @@ static func resolve_group(
 	state: StateData,
 	group: Dictionary,
 	attack_resolver: Callable = Callable(),
-	flip_resolver: Callable = Callable()
+	flip_resolver: Callable = Callable(),
+	summon_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = {
 		"events": [],
 		"extra_turn_requests": [],
 		"attack_requests": [],
 		"flip_requests": [],
+		"summon_requests": [],
 		"flip_prevention_requests": [],
 	}
 	if state == null:
@@ -65,7 +67,8 @@ static func resolve_group(
 		rule.get("actions", []) as Array,
 		context,
 		attack_resolver,
-		flip_resolver
+		flip_resolver,
+		summon_resolver
 	)
 	var events: Array = action_result.get("events", [])
 	events.push_front({
@@ -262,6 +265,18 @@ static func _conditions_match(
 				source_cell,
 				context.get("attack_flips", []) as Array
 			):
+				return false
+		elif condition_type == Catalog.CONDITION_ATTACKED_CARD_IS_SELF:
+			if (
+				StringName(card.get("instance_id", &""))
+				!= StringName(context.get("attacked_instance_id", &""))
+				or source_cell != int(context.get("attacked_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_OWNER_DID_NOT_WIN:
+			var source_slot: Dictionary = state.board[source_cell]
+			var winning_owner_ids: Array = context.get("winning_owner_ids", [])
+			if int(source_slot.get("owner", 0)) in winning_owner_ids:
 				return false
 		else:
 			return false

@@ -270,6 +270,19 @@ concealment. It does not imply that any side-deck card was removed.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 
+`card_summoned` presents an ability-created board instance. The simulator then
+resolves the same global summoned/after-summoned phases and standard attack used
+by ordinary play. `card_returned_to_hand` atomically replaces a board instance
+with a fresh catalog hand instance; the controller fades the old view before
+presenting the new one. `card_exiled.self_removal` selects the same fade path,
+while an external exile retains the ink-slash presentation.
+
+After end-owner-turn rules, a full board creates a `before_duel_end` attempt
+with an immutable winner snapshot. All groups discovered for that attempt
+resolve even if an early removal opens a cell. The simulator only reports a
+terminal full board after those groups finish; an opened board continues into
+the already-determined extra/next-turn flow.
+
 Action execution preserves an immutable ability-source identity and a current
 action subject. Root actions use the source as subject. A
 `for_each_selected_card` wrapper snapshots matching instance IDs, revalidates

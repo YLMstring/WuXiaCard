@@ -50,6 +50,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.
+- `test_jinzhen_wanhua_abilities.gd` — fresh returns, full-hand exile,
+  revalidation, generated summon/attack ordering, retention, and pre-terminal
+  board reopening.
+- `test_jinzhen_wanhua_integration.gd` — generated board views plus return and
+  self-removal fade ordering through the production controller.
 
 These are `SceneTree` scripts run with:
 

@@ -63,12 +63,7 @@ func _run() -> void:
 	var fourth: Variant = grid.debug_get_bound_slot(3)
 	var fifth: Variant = grid.debug_get_bound_slot(4)
 	var first_empty_index: int = _occupied_count(profile["library_slots"])
-	var first_empty: Variant = grid.debug_get_bound_slot(first_empty_index)
 	_check(first != null and not first.is_empty(), "First logical slot displays a card")
-	_check(
-		first_empty != null and first_empty.is_empty(),
-		"First slot after the occupied library cards displays an empty placeholder"
-	)
 	_check(
 		(first.get_node("CardHost/CardView") as CardView).owner_id == DuelRules.OPPONENT_OWNER,
 		"Explicit opponent display owner renders a red library card"
@@ -104,7 +99,14 @@ func _run() -> void:
 		"Cards below move down with the expanded virtual row"
 	)
 
-	var color_probe: Variant = first_empty
+	var first_empty_row: int = floori(float(first_empty_index) / 4.0)
+	grid.set_scroll_offset(grid.debug_get_row_height() * float(first_empty_row))
+	await process_frame
+	var color_probe: Variant = grid.debug_get_bound_slot(first_empty_index)
+	_check(
+		color_probe != null and color_probe.is_empty(),
+		"First slot after the occupied library cards displays an empty placeholder"
+	)
 	var color_data: Dictionary = first.card_data.duplicate(true)
 	var tier_colors := {
 		1: Color("66717a"),

@@ -107,6 +107,9 @@ static func conditions_match(
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES:
 			if not _is_surrounded_by_source_allies(state, candidate, source):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF:
+			if int(selected_card.get("original_owner", 0)) != int(source.get("owner_id", 0)):
+				return false
 		else:
 			return false
 	return true

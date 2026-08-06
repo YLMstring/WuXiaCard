@@ -112,25 +112,38 @@ func _run() -> void:
 	var profile: Dictionary = builder.debug_get_profile()
 	var occupied_library_count: int = _occupied_count(profile["library_slots"])
 	_check(occupied_library_count > 0, "Production scene starts with library cards")
+	var first_empty_row: int = floori(float(occupied_library_count) / 4.0)
+	grid.set_scroll_offset(grid.debug_get_row_height() * float(first_empty_row))
+	await process_frame
+	var first_empty_slot: Variant = grid.debug_get_bound_slot(occupied_library_count)
 	_check(
-		grid.debug_get_bound_slot(occupied_library_count).is_empty(),
+		first_empty_slot != null and first_empty_slot.is_empty(),
 		"First slot after the occupied library cards is empty"
 	)
 	var display_owner_ids: Array[int] = builder.debug_get_library_display_owner_ids()
 	_check(display_owner_ids.size() == 1000, "Deck-builder entry assigns one stable display color per library slot")
+	var visible_row: int = -1
 	for logical_index: int in range(occupied_library_count):
+		var logical_row: int = floori(float(logical_index) / 4.0)
+		if logical_row != visible_row:
+			visible_row = logical_row
+			grid.set_scroll_offset(grid.debug_get_row_height() * float(logical_row))
+			await process_frame
 		var card_id := StringName(String(profile["library_slots"][logical_index]))
 		var expected_owner: int = (
 			DuelRules.PLAYER_OWNER
 			if card_id == mastered_library_id
 			else DuelRules.OPPONENT_OWNER
 		)
-		var library_card := grid.debug_get_bound_slot(logical_index).get_node("CardHost/CardView") as CardView
+		var bound_slot: Variant = grid.debug_get_bound_slot(logical_index)
+		var library_card := bound_slot.get_node("CardHost/CardView") as CardView
 		_check(
 			display_owner_ids[logical_index] == expected_owner
 			and library_card.owner_id == expected_owner,
 			"Occupied library card %d derives blue-or-red appearance from mastery" % logical_index
 		)
+	grid.set_scroll_offset(0.0)
+	await process_frame
 
 	for slot: Node in opponent_hand.get_children():
 		var card: CardView = slot.get_child(0) as CardView

@@ -147,6 +147,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - A card carrying `defending_power_override` keeps its stored/displayed powers,
   but attackability treats its facing edge as the modifier value. CardView fades
   only its central picture to 70% while that weakness is active.
+- JinZhenDuJie2–4 use a row-major board selector to return the first enemy that
+  originally belonged to the source owner as a fresh catalog hand instance;
+  a full hand exiles it instead. Tiers 3–4 also carry the existing one-use
+  complete-attack counter.
+- WanHuaJian1–3 resolve a retained pre-terminal nonwinner self-exile. Tiers 2–3
+  can create a fresh exact-ID copy in the lowest-index adjacent empty cell when
+  attacked; the copy completes summon triggers and a standard attack before
+  the original attack resumes. Tier 2 retains this copy trigger on flip, tier 3
+  does not. Self-removal and returns fade; external exile keeps its ink effect.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

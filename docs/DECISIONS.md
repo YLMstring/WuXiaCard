@@ -191,6 +191,29 @@ respectively, in row-major order. The source itself is eligible.
   valid attack target.
 - Multiple sources resolve in normal row-major passive-trigger order.
 
+### JinZhenDuJie2–4
+
+- After summon, select the first row-major enemy board instance whose
+  `original_owner` is the source's current owner.
+- Track the exact instance across board movement and recheck only the declared
+  ownership conditions immediately before returning it.
+- Replace it with a fresh catalog instance in the source owner's hand. A full
+  hand exiles the old instance instead.
+- Tiers 3–4 also use the existing one-use after-complete-attack counter.
+
+### WanHuaJian1–3
+
+- Before a full board becomes terminal, every nonwinning on-board WanHua exiles
+  itself using one shared winner snapshot. A tie treats both owners as not
+  winning. If removals open the board, the duel continues normally.
+- Tiers 2–3 create a fresh exact-ID copy in the lowest-index adjacent empty
+  cell when attacked. It resolves summoned, after-summoned, and standard-attack
+  phases before the incoming attack resumes.
+- Tier 2 retains the copy trigger on flip; tier 3 loses it. The ending trigger
+  is retained on every tier.
+- Self-exile and successful return fade without the external exile feedback;
+  removal caused by another card keeps the existing ink-slash animation.
+
 ## Deck Semantics
 
 - “Main deck” currently means the five cards forming the starting hand. Those cards are not also waiting to be drawn.

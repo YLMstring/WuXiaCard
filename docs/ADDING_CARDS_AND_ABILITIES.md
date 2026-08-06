@@ -332,6 +332,19 @@ events and follow the exact target instance across movement.
 
 Movement is not a summon. Exile is not a flip.
 
+Ability-created summons use
+`ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY`. The simulator chooses the
+lowest-index orthogonally adjacent empty cell, creates a unique catalog
+instance for the source's current owner, resolves both summon trigger phases,
+then performs its standard attack. `TRIGGER_BEFORE_DUEL_END` runs only during a
+full-board end attempt and receives an immutable `winning_owner_ids` snapshot.
+
+`ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND` is intended inside a selected-card
+wrapper. It revalidates the wrapper's declared conditions, follows the exact
+instance across board movement, and creates a fresh hand instance; a full hand
+uses normal external exile instead. `ACTION_EXILE_SELF` removes only an on-board
+source and marks its event for fade presentation.
+
 ## Revelation, Prevention, and Passive Modifiers
 
 - `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and an `all` or `remembered`

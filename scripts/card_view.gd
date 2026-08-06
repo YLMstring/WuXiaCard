@@ -330,6 +330,16 @@ func play_exile(duration: float, ink_color: Color) -> void:
 	await exile_tween.finished
 
 
+func play_fade_out(duration: float) -> void:
+	if duration <= 0.0:
+		modulate.a = 0.0
+		return
+	var fade_tween: Tween = create_tween()
+	fade_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	fade_tween.tween_property(self, "modulate:a", 0.0, duration)
+	await fade_tween.finished
+
+
 func play_ability_lost(animation_duration: float) -> void:
 	if animation_duration <= 0.0:
 		return

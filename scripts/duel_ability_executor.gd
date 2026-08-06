@@ -46,7 +46,8 @@ static func execute_activation(
 	target_kind: StringName,
 	target_index: int,
 	attack_resolver: Callable = Callable(),
-	flip_resolver: Callable = Callable()
+	flip_resolver: Callable = Callable(),
+	summon_resolver: Callable = Callable()
 ) -> Dictionary:
 	var empty_result: Dictionary = _empty_result()
 	empty_result["valid"] = false
@@ -78,7 +79,8 @@ static func execute_activation(
 		costs,
 		context,
 		attack_resolver,
-		flip_resolver
+		flip_resolver,
+		summon_resolver
 	)
 	events.append_array(cost_result.get("events", []) as Array)
 	var action_result: Dictionary = execute_actions(
@@ -89,7 +91,8 @@ static func execute_activation(
 		activation.get("actions", []) as Array,
 		context,
 		attack_resolver,
-		flip_resolver
+		flip_resolver,
+		summon_resolver
 	)
 	events.append_array(action_result.get("events", []) as Array)
 	return {
@@ -97,6 +100,7 @@ static func execute_activation(
 		"events": events,
 		"attack_requests": action_result.get("attack_requests", []),
 		"flip_requests": action_result.get("flip_requests", []),
+		"summon_requests": action_result.get("summon_requests", []),
 		"extra_turn_requests": action_result.get("extra_turn_requests", []),
 		"flip_prevention_requests": action_result.get("flip_prevention_requests", []),
 		"captures": (
@@ -120,7 +124,8 @@ static func execute_actions(
 	actions: Array,
 	context: Dictionary,
 	attack_resolver: Callable = Callable(),
-	flip_resolver: Callable = Callable()
+	flip_resolver: Callable = Callable(),
+	summon_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = _empty_result()
 	result["source_cell"] = source_cell
@@ -143,7 +148,8 @@ static func execute_actions(
 			declaration,
 			action_context,
 			attack_resolver,
-			flip_resolver
+			flip_resolver,
+			summon_resolver
 		)
 		result["events"].append_array(action_result.get("events", []) as Array)
 		result["captures"].append_array(action_result.get("captures", []) as Array)
@@ -187,6 +193,27 @@ static func execute_actions(
 			)
 			result["flip_prevention_requests"].append_array(
 				flip_resolution.get("flip_prevention_requests", []) as Array
+			)
+		for request_value: Variant in action_result.get("summon_requests", []):
+			if not request_value is Dictionary:
+				continue
+			if not summon_resolver.is_valid():
+				result["summon_requests"].append(request_value)
+				continue
+			var summon_resolution_value: Variant = summon_resolver.call(
+				request_value as Dictionary
+			)
+			if not summon_resolution_value is Dictionary:
+				continue
+			var summon_resolution: Dictionary = summon_resolution_value
+			result["events"].append_array(summon_resolution.get("events", []) as Array)
+			result["captures"].append_array(summon_resolution.get("captures", []) as Array)
+			result["exiles"].append_array(summon_resolution.get("exiles", []) as Array)
+			result["extra_turn_requests"].append_array(
+				summon_resolution.get("extra_turn_requests", []) as Array
+			)
+			result["flip_prevention_requests"].append_array(
+				summon_resolution.get("flip_prevention_requests", []) as Array
 			)
 		current_source_cell = int(action_result.get("source_cell", current_source_cell))
 		var action_status := StringName(action_result.get("result", Catalog.ACTION_RESULT_NO_EFFECT))
@@ -258,7 +285,8 @@ static func _execute_action(
 	declaration: Dictionary,
 	context: Dictionary,
 	attack_resolver: Callable,
-	flip_resolver: Callable
+	flip_resolver: Callable,
+	summon_resolver: Callable
 ) -> Dictionary:
 	var action_type := StringName(declaration.get("type", &""))
 	if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
@@ -268,7 +296,8 @@ static func _execute_action(
 			declaration,
 			context,
 			attack_resolver,
-			flip_resolver
+			flip_resolver,
+			summon_resolver
 		)
 	if action_type == Catalog.ACTION_DRAW_CARDS:
 		return _draw_cards(
@@ -392,6 +421,28 @@ static func _execute_action(
 			StringName(declaration.get("new_owner", &"")),
 			context
 		)
+	if action_type == Catalog.ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND:
+		return _return_self_to_ability_source_hand(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
+	if action_type == Catalog.ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY:
+		return _request_fresh_copy_summon(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		)
+	if action_type == Catalog.ACTION_EXILE_SELF:
+		return _exile_self(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner
+		)
 	if action_type == Catalog.ACTION_SPEND_KI:
 		return _change_ki(
 			state,
@@ -447,7 +498,8 @@ static func _for_each_selected_card(
 	declaration: Dictionary,
 	context: Dictionary,
 	attack_resolver: Callable,
-	flip_resolver: Callable
+	flip_resolver: Callable,
+	summon_resolver: Callable
 ) -> Dictionary:
 	var result: Dictionary = _empty_result()
 	result["source_cell"] = source_cell
@@ -473,15 +525,18 @@ static func _for_each_selected_card(
 			if StringName(selected.get("zone", &"")) == Catalog.CARD_ZONE_BOARD
 			else -1
 		)
+		var nested_context: Dictionary = context.duplicate(true)
+		nested_context["selected_card_conditions"] = conditions.duplicate(true)
 		var nested_result: Dictionary = execute_actions(
 			state,
 			selected_cell,
 			selected_instance_id,
 			int(selected.get("owner_id", 0)),
 			declaration.get("actions", []) as Array,
-			context,
+			nested_context,
 			attack_resolver,
-			flip_resolver
+			flip_resolver,
+			summon_resolver
 		)
 		result["events"].append_array(nested_result.get("events", []) as Array)
 		result["captures"].append_array(nested_result.get("captures", []) as Array)
@@ -491,6 +546,9 @@ static func _for_each_selected_card(
 		)
 		result["flip_requests"].append_array(
 			nested_result.get("flip_requests", []) as Array
+		)
+		result["summon_requests"].append_array(
+			nested_result.get("summon_requests", []) as Array
 		)
 		result["extra_turn_requests"].append_array(
 			nested_result.get("extra_turn_requests", []) as Array
@@ -967,6 +1025,159 @@ static func _append_card_instance_id(
 		instance_ids.append(instance_id)
 
 
+static func _return_self_to_ability_source_hand(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var ability_source_instance_id := StringName(
+		context.get("ability_source_instance_id", &"")
+	)
+	var selected_conditions: Array = context.get("selected_card_conditions", [])
+	var subject: Dictionary = Selector.revalidate(
+		state,
+		source_instance_id,
+		ability_source_instance_id,
+		selected_conditions
+	)
+	var ability_source: Dictionary = Selector.locate_card(
+		state,
+		ability_source_instance_id
+	)
+	if (
+		subject.is_empty()
+		or ability_source.is_empty()
+		or int(subject.get("owner_id", 0)) != expected_owner
+		or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+		or int(ability_source.get("owner_id", 0))
+		!= int(context.get("ability_source_owner_id", 0))
+	):
+		return _no_effect(source_cell)
+	var target_cell: int = int(subject.get("index", -1))
+	var source_current_cell: int = _get_location_cell(ability_source)
+	var recipient_owner: int = int(ability_source.get("owner_id", 0))
+	var hand: Array = state.get_hand(recipient_owner)
+	if hand.size() >= MAX_HAND_SIZE:
+		return _exile_board_subject(
+			state,
+			subject,
+			source_current_cell,
+			ability_source_instance_id,
+			false
+		)
+	var old_card: Dictionary = subject.get("card", {})
+	var card_id := StringName(old_card.get("card_id", &""))
+	if not Catalog.has_card(card_id):
+		return _no_effect(source_cell)
+	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
+	state.board[target_cell] = null
+	var returned_card: Dictionary = Catalog.create_instance(
+		card_id,
+		recipient_owner,
+		new_instance_id
+	)
+	hand.append(returned_card)
+	return _applied(source_current_cell, [{
+		"type": &"card_returned_to_hand",
+		"source_cell": source_current_cell,
+		"source_instance_id": ability_source_instance_id,
+		"target_cell": target_cell,
+		"old_instance_id": source_instance_id,
+		"owner_id": recipient_owner,
+		"card_id": card_id,
+		"instance_id": new_instance_id,
+		"logical_hand_index": hand.size() - 1,
+		"card": returned_card.duplicate(true),
+	}])
+
+
+static func _request_fresh_copy_summon(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	var current_cell: int = int(source.get("index", -1))
+	var empty_neighbors: Array[int] = []
+	for direction: int in range(4):
+		var neighbor_cell: int = Rules.get_neighbor_index(current_cell, direction)
+		if neighbor_cell >= 0 and state.board[neighbor_cell] == null:
+			empty_neighbors.append(neighbor_cell)
+	if empty_neighbors.is_empty():
+		return _no_effect(current_cell)
+	empty_neighbors.sort()
+	var card_id := StringName((source.get("card", {}) as Dictionary).get("card_id", &""))
+	if not Catalog.has_card(card_id):
+		return _no_effect(current_cell)
+	var result: Dictionary = _applied(current_cell)
+	result["summon_requests"].append({
+		"source_cell": current_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": int(source.get("owner_id", 0)),
+		"target_cell": empty_neighbors[0],
+		"card_id": card_id,
+		"instance_id": _make_generated_instance_id(state, card_id),
+		"reason": &"ability_fresh_copy",
+	})
+	return result
+
+
+static func _exile_self(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int
+) -> Dictionary:
+	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	return _exile_board_subject(
+		state,
+		subject,
+		int(subject.get("index", source_cell)),
+		source_instance_id,
+		true
+	)
+
+
+static func _exile_board_subject(
+	state: StateData,
+	subject: Dictionary,
+	source_cell: int,
+	source_instance_id: StringName,
+	self_removal: bool
+) -> Dictionary:
+	var target_cell: int = int(subject.get("index", -1))
+	if target_cell < 0 or target_cell >= state.board.size():
+		return _no_effect(source_cell)
+	var target_card: Dictionary = subject.get("card", {})
+	var target_instance_id := StringName(target_card.get("instance_id", &""))
+	if target_instance_id == &"" or state.board[target_cell] == null:
+		return _no_effect(source_cell)
+	var original_owner: int = int(target_card.get("original_owner", 0))
+	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		original_owner = int(subject.get("owner_id", 0))
+	if not state.removed_cards.has(original_owner):
+		state.removed_cards[original_owner] = []
+	(state.removed_cards[original_owner] as Array).append(target_card)
+	state.board[target_cell] = null
+	return _applied(source_cell, [{
+		"type": &"card_exiled",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"target_cell": target_cell,
+		"owner_id": int(subject.get("owner_id", 0)),
+		"original_owner": original_owner,
+		"instance_id": target_instance_id,
+		"self_removal": self_removal,
+	}])
+
+
 static func _spend_all_ki(
 	state: StateData,
 	source_cell: int,
@@ -1357,6 +1568,7 @@ static func _empty_result() -> Dictionary:
 		"events": [],
 		"attack_requests": [],
 		"flip_requests": [],
+		"summon_requests": [],
 		"extra_turn_requests": [],
 		"flip_prevention_requests": [],
 		"captures": [],

@@ -13,6 +13,7 @@ const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
+const TRIGGER_BEFORE_DUEL_END: StringName = &"before_duel_end"
 const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
 const CONDITION_TRIGGER_CARD_IS_ENEMY: StringName = &"trigger_card_is_enemy"
 const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
@@ -23,12 +24,15 @@ const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revea
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
+const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
+const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
 const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not_source"
 const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_adjacent_to_source"
 const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card_surrounded_by_allies"
+const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -50,6 +54,9 @@ const ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE: StringName = &"self_swapped_with_
 const ACTION_PREVENT_TRIGGER_FLIP: StringName = &"prevent_trigger_flip"
 const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
 const ACTION_FLIP_SELF: StringName = &"flip_self"
+const ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND: StringName = &"return_self_to_ability_source_hand"
+const ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY: StringName = &"summon_fresh_copy_in_first_adjacent_empty"
+const ACTION_EXILE_SELF: StringName = &"exile_self"
 const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const REVEAL_FILTER_ALL: StringName = &"all"
@@ -80,6 +87,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_AFTER_FLIPPED,
 	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
+	TRIGGER_BEFORE_DUEL_END,
 ]
 const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_KI_AT_LEAST,
@@ -92,6 +100,8 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_WAS_ENEMY,
 	CONDITION_ATTACKER_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
+	CONDITION_ATTACKED_CARD_IS_SELF,
+	CONDITION_OWNER_DID_NOT_WIN,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -100,6 +110,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_NOT_SOURCE,
 	CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES,
+	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -124,6 +135,9 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_PREVENT_TRIGGER_FLIP,
 	ACTION_REMOVE_THIS_ABILITY,
 	ACTION_FLIP_SELF,
+	ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND,
+	ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY,
+	ACTION_EXILE_SELF,
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -172,7 +186,12 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"HenShanJianZhen3",
 	&"HenShanJianZhen4",
 	&"JinZhenDuJie1",
+	&"JinZhenDuJie2",
+	&"JinZhenDuJie3",
+	&"JinZhenDuJie4",
 	&"WanHuaJian1",
+	&"WanHuaJian2",
+	&"WanHuaJian3",
 	&"MianLiCangZhen2",
 	&"chilian_huifeng",
 	&"shahai_zhuri",
@@ -241,6 +260,49 @@ const HENGSHAN_COUNTERATTACK: Dictionary = {
 			{"type": ACTION_REMOVE_THIS_ABILITY},
 			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 		],
+	}],
+}
+
+const JINZHEN_RETURN: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{"type": CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},
+				],
+				"limit": 1,
+			},
+			"actions": [{"type": ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND}],
+		}],
+	}],
+}
+
+const WANHUA_COPY_TRIGGER: Dictionary = {
+	"event": CARD_BE_ATTACKED,
+	"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+	"actions": [{"type": ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY}],
+}
+
+const WANHUA_COPY_RETAINED: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [WANHUA_COPY_TRIGGER],
+}
+
+const WANHUA_COPY: Dictionary = {
+	"triggers": [WANHUA_COPY_TRIGGER],
+}
+
+const WANHUA_ENDING: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": TRIGGER_BEFORE_DUEL_END,
+		"conditions": [{"type": CONDITION_OWNER_DID_NOT_WIN}],
+		"actions": [{"type": ACTION_EXILE_SELF}],
 	}],
 }
 
@@ -1547,7 +1609,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。",
 		"flavor": "恒山剑法中的招式，圆转绵密，长于守御，破绽极少。",
 		"powers": [6, 6, 3, 3],
-		"abilities": [],
+		"abilities": [JINZHEN_RETURN],
 	},
 	&"JinZhenDuJie3": {
 		"id": &"JinZhenDuJie3",
@@ -1559,7 +1621,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山剑法中的招式，圆转绵密，长于守御，破绽极少。",
 		"powers": [6, 6, 3, 3],
-		"abilities": [],
+		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"JinZhenDuJie4": {
 		"id": &"JinZhenDuJie4",
@@ -1571,7 +1633,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山剑法中的招式，圆转绵密，长于守御，破绽极少。",
 		"powers": [7, 7, 3, 4],
-		"abilities": [],
+		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"WanHuaJian1": {
 		"id": &"WanHuaJian1",
@@ -1583,7 +1645,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：对局结束前，若你没赢，将我移除。",
 		"flavor": "恒山派的精妙剑法，黑夜之中，唯有星月微光，长剑飞舞。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [],
+		"abilities": [WANHUA_ENDING],
 	},
 	&"WanHuaJian2": {
 		"id": &"WanHuaJian2",
@@ -1595,7 +1657,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：被攻击时，在首个相邻空格生成一个我的复制。锁定：对局结束前，若你没赢，将我移除。",
 		"flavor": "恒山派的精妙剑法，黑夜之中，唯有星月微光，长剑飞舞。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [],
+		"abilities": [WANHUA_COPY_RETAINED, WANHUA_ENDING],
 	},
 	&"WanHuaJian3": {
 		"id": &"WanHuaJian3",
@@ -1607,7 +1669,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "被攻击时，在首个相邻空格生成一个我的复制。锁定：对局结束前，若你没赢，将我移除。",
 		"flavor": "恒山派的精妙剑法，黑夜之中，唯有星月微光，长剑飞舞。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [],
+		"abilities": [WANHUA_COPY, WANHUA_ENDING],
 	},
 	&"MianLiCangZhen2": {
 		"id": &"MianLiCangZhen2",

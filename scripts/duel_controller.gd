@@ -40,6 +40,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var exile_duration: float = 0.22
 @export var exile_step_delay: float = 0.10
 @export var exile_ink_color: Color = Color("6f1118")
+@export var card_fade_duration: float = 0.18
 @export var removal_audio_volume_db: float = -4.0
 @export var movement_audio_volume_db: float = -9.0
 @export var movement_duration: float = 0.20
@@ -235,6 +236,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		ability_trigger_pulse_duration = 0.0
 		exile_duration = 0.0
 		exile_step_delay = 0.0
+		card_fade_duration = 0.0
 		draw_bloom_duration = 0.0
 		draw_rise_duration = 0.0
 		draw_post_effect_gap = 0.0
@@ -1159,6 +1161,10 @@ func _present_transition_events(
 		elif event_type in [&"card_drawn", &"card_added_to_hand"]:
 			await _present_hand_addition_event(event, event_type)
 			drew_card = true
+		elif event_type == &"card_summoned":
+			await _present_generated_summon_event(event)
+		elif event_type == &"card_returned_to_hand":
+			await _present_card_returned_to_hand_event(event)
 		elif event_type == &"card_revealed":
 			_present_card_revealed_event(event)
 		elif event_type in [&"ability_gained", &"ability_lost"]:
@@ -1188,13 +1194,18 @@ func _present_transition_events(
 				await _wait_after_draw_before_board_effect()
 				waited_after_draw = true
 			_presentation_trace.append(&"card_exiled")
-			if exile_step_delay > 0.0:
+			var self_removal: bool = bool(event.get("self_removal", false))
+			if not self_removal and exile_step_delay > 0.0:
 				await get_tree().create_timer(exile_step_delay).timeout
 			var exiled_card := board_cards[target_cell] as CardView
 			board_cards[target_cell] = null
 			if exiled_card != null:
-				_play_removal_feedback()
-				await exiled_card.play_exile(exile_duration, exile_ink_color)
+				if self_removal:
+					_presentation_trace.append(&"card_self_faded")
+					await exiled_card.play_fade_out(card_fade_duration)
+				else:
+					_play_removal_feedback()
+					await exiled_card.play_exile(exile_duration, exile_ink_color)
 				exiled_card.queue_free()
 			resolved_targets += 1
 		event_index += consumed_events
@@ -1278,6 +1289,47 @@ func _present_hand_addition_event(
 	card.set_face_down(_should_conceal_hand_card(card_data, owner_id))
 	_presentation_trace.append(event_type)
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+
+
+func _present_generated_summon_event(event: Dictionary) -> void:
+	var target_cell: int = int(event.get("target_cell", -1))
+	if target_cell < 0 or target_cell >= board_cells.size():
+		return
+	var card_data: Dictionary = event.get("card", {})
+	var owner_id: int = int(event.get("owner_id", 0))
+	if card_data.is_empty() or board_cards[target_cell] != null:
+		return
+	var card: CardView = _spawn_card_in_slot(
+		board_cells[target_cell],
+		card_data,
+		owner_id,
+		false
+	)
+	card.set_face_down(false)
+	card.z_index = 1
+	board_cards[target_cell] = card
+	_presentation_trace.append(&"card_summoned")
+	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+
+
+func _present_card_returned_to_hand_event(event: Dictionary) -> void:
+	var target_cell: int = int(event.get("target_cell", -1))
+	var old_instance_id := StringName(event.get("old_instance_id", &""))
+	var returning_view: CardView = null
+	if (
+		target_cell >= 0
+		and target_cell < board_cards.size()
+		and board_cards[target_cell] != null
+		and _get_card_instance_id(board_cards[target_cell] as CardView) == old_instance_id
+	):
+		returning_view = board_cards[target_cell] as CardView
+		board_cards[target_cell] = null
+	if returning_view != null:
+		_presentation_trace.append(&"card_return_faded")
+		await returning_view.play_fade_out(card_fade_duration)
+		returning_view.queue_free()
+	_presentation_trace.append(&"card_returned_to_hand")
+	await _present_hand_addition_event(event, &"card_added_to_hand")
 
 
 func _present_card_revealed_event(event: Dictionary) -> void:
