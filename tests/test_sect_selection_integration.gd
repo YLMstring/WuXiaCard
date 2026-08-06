@@ -162,7 +162,7 @@ func _run() -> void:
 	_check(selector.debug_select_sect(&"chisha_men"), "Debug selection accepts a known sect")
 	_check(
 		selector.debug_get_lower_preview_ids().slice(0, 2)
-		== [&"hengsha_duanlu", &"chilian_huifeng"],
+		== [&"MianLiCangZhen2", &"chilian_huifeng"],
 		"Equal-tier preview ties retain CardCatalog order"
 	)
 

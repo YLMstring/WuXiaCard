@@ -11,8 +11,8 @@ const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TianChangZhang3",
 	&"HenShanJianZhen2",
 	&"JinZhenDuJie1",
-	&"qianji_tingyu",
-	&"hengsha_duanlu",
+	&"WanHuaJian1",
+	&"MianLiCangZhen2",
 	&"chilian_huifeng",
 	&"shahai_zhuri",
 	&"damo_guzhan",
@@ -178,16 +178,16 @@ func _run() -> void:
 
 	var batch_result: Dictionary = store.unlock_cards_and_save(
 		unlocked,
-		[&"hengsha_duanlu", &"chilian_huifeng"]
+		[&"MianLiCangZhen2", &"chilian_huifeng"]
 	)
 	_check(bool(batch_result.get("ok", false)), "An ordered card batch saves")
 	var batch_profile: Dictionary = batch_result.get("profile", {})
 	_check(
-		(batch_result.get("added_ids", []) as Array) == [&"hengsha_duanlu", &"chilian_huifeng"],
+		(batch_result.get("added_ids", []) as Array) == [&"MianLiCangZhen2", &"chilian_huifeng"],
 		"Batch result reports added IDs in input order"
 	)
 	_check(
-		String(batch_profile["library_slots"][0]) == "hengsha_duanlu"
+		String(batch_profile["library_slots"][0]) == "MianLiCangZhen2"
 		and String(batch_profile["library_slots"][1]) == "chilian_huifeng",
 		"Batch cards enter the library top without reversing"
 	)
@@ -197,7 +197,7 @@ func _run() -> void:
 	)
 	var partial_batch: Dictionary = store.unlock_cards_and_save(
 		batch_profile,
-		[&"hengsha_duanlu", &"shahai_zhuri"]
+		[&"MianLiCangZhen2", &"shahai_zhuri"]
 	)
 	_check(bool(partial_batch.get("ok", false)), "A partially owned batch succeeds")
 	var partial_profile: Dictionary = partial_batch.get("profile", {})
@@ -207,16 +207,16 @@ func _run() -> void:
 	)
 	_check(
 		String(partial_profile["library_slots"][0]) == "shahai_zhuri"
-		and String(partial_profile["library_slots"][1]) == "hengsha_duanlu",
+		and String(partial_profile["library_slots"][1]) == "MianLiCangZhen2",
 		"Only newly unlocked cards are inserted ahead of existing cards"
 	)
 	_check(
-		partial_profile["unlocked_card_ids"].count("hengsha_duanlu") == 1,
+		partial_profile["unlocked_card_ids"].count("MianLiCangZhen2") == 1,
 		"Batch unlock never duplicates ownership"
 	)
 	var no_op_batch: Dictionary = store.unlock_cards_and_save(
 		partial_profile,
-		[&"hengsha_duanlu", &"missing_card"]
+		[&"MianLiCangZhen2", &"missing_card"]
 	)
 	_check(bool(no_op_batch.get("ok", false)), "An empty filtered batch is a successful no-op")
 	_check(no_op_batch.get("profile", {}) == partial_profile, "A no-op batch preserves the exact profile")
@@ -477,7 +477,7 @@ func _run() -> void:
 	var schema_seven_active: Dictionary = active_profile.duplicate(true)
 	schema_seven_active["schema_version"] = 7
 	schema_seven_active.erase("mastered_card_ids")
-	schema_seven_active["pending_reward_card_ids"] = ["hengsha_duanlu"]
+	schema_seven_active["pending_reward_card_ids"] = ["MianLiCangZhen2"]
 	schema_seven_active["effective_duel_count"] = 1
 	schema_seven_active["best_scores_by_sect"] = {"HuaShanPai": 1234}
 	var migrated_schema_seven: Dictionary = store.repair_profile(schema_seven_active)
@@ -498,7 +498,7 @@ func _run() -> void:
 	_check(
 		migrated_schema_seven["remembered_enemy_glyphs"]
 		== schema_seven_active["remembered_enemy_glyphs"]
-		and store.get_pending_reward_ids(migrated_schema_seven) == [&"hengsha_duanlu"]
+		and store.get_pending_reward_ids(migrated_schema_seven) == [&"MianLiCangZhen2"]
 		and int(migrated_schema_seven["effective_duel_count"]) == 1
 		and int(migrated_schema_seven["best_scores_by_sect"]["HuaShanPai"]) == 1234,
 		"Schema-seven migration preserves active-run history and pending reward"

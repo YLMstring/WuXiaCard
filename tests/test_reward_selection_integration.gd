@@ -36,7 +36,7 @@ func _run() -> void:
 		profile = advance_result.get("profile", profile)
 	_check(store.get_character_tier(profile) == 5, "Reward-scene fixture reaches tier five")
 	profile["mastered_card_ids"] = ["CangSongYingKe1"]
-	profile["pending_reward_card_ids"] = ["CangSongYingKe1", "hengsha_duanlu"]
+	profile["pending_reward_card_ids"] = ["CangSongYingKe1", "MianLiCangZhen2"]
 	_check(
 		store.save_profile(profile),
 		"Single-card reward-scene fixture saves after tier progression"
