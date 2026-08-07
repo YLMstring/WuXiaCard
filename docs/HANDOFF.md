@@ -156,6 +156,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   attacked; the copy completes summon triggers and a standard attack before
   the original attack resumes. Tier 2 retains this copy trigger on flip, tier 3
   does not. Self-removal and returns fade; external exile keeps its ink effect.
+- MianLiCangZhen3 resummons an enemy it personally flipped when that exact card
+  originally belonged to its current owner. The old instance leaves without
+  exile, then a fresh catalog instance enters its current cell, resolves both
+  summon phases, and performs a standard attack. Its old view fades before the
+  existing ink-summon presentation. The card is intentionally not default-locked.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

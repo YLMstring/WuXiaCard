@@ -55,6 +55,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   board reopening.
 - `test_jinzhen_wanhua_integration.gd` — generated board views plus return and
   self-removal fade ordering through the production controller.
+- `test_mianli_cangzhen3.gd` — trigger ownership, fresh in-place identity,
+  movement following, no-effect handling, full summon/attack ordering, and
+  flip-loss behavior.
+- `test_mianli_cangzhen3_integration.gd` — production-controller old-view fade
+  before fresh ink summon and final simulator/view identity synchronization.
 
 These are `SceneTree` scripts run with:
 

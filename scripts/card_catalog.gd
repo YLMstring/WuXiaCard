@@ -26,6 +26,7 @@ const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
+const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
@@ -57,6 +58,7 @@ const ACTION_FLIP_SELF: StringName = &"flip_self"
 const ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND: StringName = &"return_self_to_ability_source_hand"
 const ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY: StringName = &"summon_fresh_copy_in_first_adjacent_empty"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
+const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_card_in_place"
 const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const REVEAL_FILTER_ALL: StringName = &"all"
@@ -102,6 +104,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 	CONDITION_ATTACKED_CARD_IS_SELF,
 	CONDITION_OWNER_DID_NOT_WIN,
+	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -138,6 +141,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND,
 	ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY,
 	ACTION_EXILE_SELF,
+	ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE,
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -193,6 +197,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"WanHuaJian2",
 	&"WanHuaJian3",
 	&"MianLiCangZhen2",
+	&"MianLiCangZhen3",
 	&"chilian_huifeng",
 	&"shahai_zhuri",
 	&"damo_guzhan",
@@ -260,6 +265,17 @@ const HENGSHAN_COUNTERATTACK: Dictionary = {
 			{"type": ACTION_REMOVE_THIS_ABILITY},
 			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 		],
+	}],
+}
+
+const MIANLI_RESUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF},
+		],
+		"actions": [{"type": ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE}],
 	}],
 }
 
@@ -1693,7 +1709,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我将敌方翻面后，若其最初是友方，使其重新进场。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派武功的根本要诀，于极平凡的招式之中暗蓄锋芒，便如是暗藏钢针的一团棉絮。旁人倘若不加触犯，棉絮轻柔温软，于人无忤，但若猛力紧捏，棉絮中所藏钢针便刺入手掌。",
 		"powers": [4, 3, 7, 7],
-		"abilities": [HENGSHAN_COUNTERATTACK],
+		"abilities": [MIANLI_RESUMMON, HENGSHAN_COUNTERATTACK],
 	},
 	&"chilian_huifeng": {
 		"id": &"chilian_huifeng",

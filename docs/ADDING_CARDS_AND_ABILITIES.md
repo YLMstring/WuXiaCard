@@ -345,6 +345,13 @@ instance across board movement, and creates a fresh hand instance; a full hand
 uses normal external exile instead. `ACTION_EXILE_SELF` removes only an on-board
 source and marks its event for fade presentation.
 
+`ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE` is intended for a trigger context. It
+follows `trigger_instance_id` across movement, removes the old board instance
+without exile, and creates a fresh exact-ID instance in its current cell for
+the ability source's current owner. The fresh instance completes normal
+summoned, after-summoned, and standard-attack phases. A missing or already
+removed trigger instance returns `NO_EFFECT`.
+
 ## Revelation, Prevention, and Passive Modifiers
 
 - `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and an `all` or `remembered`

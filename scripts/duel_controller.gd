@@ -1163,6 +1163,8 @@ func _present_transition_events(
 			drew_card = true
 		elif event_type == &"card_summoned":
 			await _present_generated_summon_event(event)
+		elif event_type == &"card_departed_for_resummon":
+			await _present_card_departed_for_resummon_event(event)
 		elif event_type == &"card_returned_to_hand":
 			await _present_card_returned_to_hand_event(event)
 		elif event_type == &"card_revealed":
@@ -1310,6 +1312,20 @@ func _present_generated_summon_event(event: Dictionary) -> void:
 	board_cards[target_cell] = card
 	_presentation_trace.append(&"card_summoned")
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+
+
+func _present_card_departed_for_resummon_event(event: Dictionary) -> void:
+	var target_cell: int = int(event.get("target_cell", -1))
+	var old_instance_id := StringName(event.get("old_instance_id", &""))
+	if target_cell < 0 or target_cell >= board_cards.size():
+		return
+	var old_view := board_cards[target_cell] as CardView
+	if old_view == null or _get_card_instance_id(old_view) != old_instance_id:
+		return
+	board_cards[target_cell] = null
+	_presentation_trace.append(&"card_resummon_faded")
+	await old_view.play_fade_out(card_fade_duration)
+	old_view.queue_free()
 
 
 func _present_card_returned_to_hand_event(event: Dictionary) -> void:

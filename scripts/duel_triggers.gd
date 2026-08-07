@@ -3,6 +3,7 @@ extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Selector = preload("res://scripts/duel_card_selector.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const StateData = preload("res://scripts/duel_state.gd")
@@ -277,6 +278,18 @@ static func _conditions_match(
 			var source_slot: Dictionary = state.board[source_cell]
 			var winning_owner_ids: Array = context.get("winning_owner_ids", [])
 			if int(source_slot.get("owner", 0)) in winning_owner_ids:
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF:
+			var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
+			var trigger_location: Dictionary = Selector.locate_card(state, trigger_instance_id)
+			if (
+				trigger_location.is_empty()
+				or StringName(trigger_location.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+			):
+				return false
+			var trigger_card: Dictionary = trigger_location.get("card", {})
+			var source_slot: Dictionary = state.board[source_cell]
+			if int(trigger_card.get("original_owner", 0)) != int(source_slot.get("owner", 0)):
 				return false
 		else:
 			return false

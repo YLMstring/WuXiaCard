@@ -214,6 +214,22 @@ respectively, in row-major order. The source itself is eligible.
 - Self-exile and successful return fade without the external exile feedback;
   removal caused by another card keeps the existing ink-slash animation.
 
+### MianLiCangZhen3
+
+- After this card itself flips an enemy, it resummons that exact target only
+  when the target's `original_owner` is this card's current owner.
+- Follow the target across movement. If it has already left the board, do
+  nothing; otherwise replace it in its current cell with a fresh exact-ID
+  catalog instance owned currently and originally by the source owner.
+- The fresh instance resolves global summoned triggers, its own after-summoned
+  triggers, and then a standard attack if it still belongs to that owner.
+- The old instance is not exiled. Its board view fades before the fresh
+  instance uses the existing ink-summon effect.
+- Resummon and the existing one-use HengShan counterattack are both lost when
+  MianLiCangZhen3 flips.
+- MianLiCangZhen3 is listed in the catalog but deliberately omitted from
+  `DEFAULT_LOCKED_IDS`.
+
 ## Deck Semantics
 
 - “Main deck” currently means the five cards forming the starting hand. Those cards are not also waiting to be drawn.

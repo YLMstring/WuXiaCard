@@ -687,12 +687,15 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	var target_cell: int = int(request.get("target_cell", -1))
 	var card_id := StringName(request.get("card_id", &""))
 	var instance_id := StringName(request.get("instance_id", &""))
+	var requires_adjacent_source: bool = bool(
+		request.get("requires_adjacent_source", true)
+	)
 	if (
 		not _owned_card_instance_at(state, source_cell, source_instance_id, source_owner)
 		or target_cell < 0
 		or target_cell >= state.board.size()
 		or state.board[target_cell] != null
-		or not _are_adjacent(source_cell, target_cell)
+		or requires_adjacent_source and not _are_adjacent(source_cell, target_cell)
 		or not Catalog.has_card(card_id)
 		or instance_id == &""
 	):

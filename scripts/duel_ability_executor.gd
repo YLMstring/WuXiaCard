@@ -443,6 +443,14 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner
 		)
+	if action_type == Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE:
+		return _request_trigger_card_resummon(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context
+		)
 	if action_type == Catalog.ACTION_SPEND_KI:
 		return _change_ki(
 			state,
@@ -1123,6 +1131,59 @@ static func _request_fresh_copy_summon(
 		"card_id": card_id,
 		"instance_id": _make_generated_instance_id(state, card_id),
 		"reason": &"ability_fresh_copy",
+	})
+	return result
+
+
+static func _request_trigger_card_resummon(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if source.is_empty() or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var trigger: Dictionary = Selector.locate_card(state, trigger_instance_id)
+	if (
+		trigger.is_empty()
+		or StringName(trigger.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+	):
+		return _no_effect(int(source.get("index", source_cell)))
+	var trigger_card: Dictionary = trigger.get("card", {})
+	var card_id := StringName(trigger_card.get("card_id", &""))
+	if not Catalog.has_card(card_id):
+		return _no_effect(int(source.get("index", source_cell)))
+	var target_cell: int = int(trigger.get("index", -1))
+	if target_cell < 0 or target_cell >= state.board.size():
+		return _no_effect(int(source.get("index", source_cell)))
+	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
+	if new_instance_id == &"":
+		return _no_effect(int(source.get("index", source_cell)))
+	var source_current_cell: int = int(source.get("index", source_cell))
+	var source_owner: int = int(source.get("owner_id", expected_owner))
+	state.board[target_cell] = null
+	var result: Dictionary = _applied(source_current_cell, [{
+		"type": &"card_departed_for_resummon",
+		"source_cell": source_current_cell,
+		"source_instance_id": source_instance_id,
+		"target_cell": target_cell,
+		"owner_id": source_owner,
+		"old_instance_id": trigger_instance_id,
+		"card_id": card_id,
+	}])
+	result["summon_requests"].append({
+		"source_cell": source_current_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": source_owner,
+		"target_cell": target_cell,
+		"card_id": card_id,
+		"instance_id": new_instance_id,
+		"old_instance_id": trigger_instance_id,
+		"requires_adjacent_source": false,
+		"reason": &"ability_resummon_in_place",
 	})
 	return result
 
