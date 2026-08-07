@@ -30,7 +30,7 @@ func _test_catalog_validation() -> void:
 		Catalog.get_all_sect_ids() == [
 			&"HuaShanPai",
 			&"TaiShanPai",
-			&"chisha_men",
+			&"HengShanPai",
 			&"tingchao_gu",
 			&"bailu_shuyuan",
 		],
@@ -42,7 +42,7 @@ func _test_definition_contents() -> void:
 	var expected_metadata: Dictionary = {
 		&"HuaShanPai": ["华山派", "res://pics/LKT010_568.png", "华山", 4, "剑法/心法"],
 		&"TaiShanPai": ["泰山派", "res://pics/LKT010_002.png", "泰山", 5, "重剑/术数"],
-		&"chisha_men": ["赤砂门", "res://pics/LKT010_003.png", "西域赤沙", 3, "刀法"],
+		&"HengShanPai": ["赤砂门", "res://pics/LKT010_003.png", "西域赤沙", 3, "刀法"],
 		&"tingchao_gu": ["听潮谷", "res://pics/LKT010_004.png", "东海群岛", 4, "掌法"],
 		&"bailu_shuyuan": ["白鹿书院", "res://pics/LKT010_005.png", "中州鹿鸣山", 2, "奇门"],
 	}
