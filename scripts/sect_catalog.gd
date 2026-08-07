@@ -34,7 +34,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 	&"TaiShanPai": {
 		"id": &"TaiShanPai",
 		"glyph": "泰山派",
-		"picture": "res://pics/LKT010_002.png",
+		"picture": "res://pics/LKT010_553.png",
 		"sect": "泰山",
 		"tier": 5,
 		"weapon": "重剑/术数",
@@ -44,7 +44,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 	&"HengShanPai": {
 		"id": &"HengShanPai",
 		"glyph": "恒山派",
-		"picture": "res://pics/LKT010_003.png",
+		"picture": "res://pics/LKT010_491.png",
 		"sect": "恒山",
 		"tier": 4,
 		"weapon": "轻剑/剑阵",
