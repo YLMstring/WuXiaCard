@@ -43,9 +43,9 @@ const _SECT_DEFINITIONS: Dictionary = {
 	},
 	&"HengShanPai": {
 		"id": &"HengShanPai",
-		"glyph": "赤砂门",
+		"glyph": "恒山派",
 		"picture": "res://pics/LKT010_003.png",
-		"sect": "西域赤沙",
+		"sect": "恒山",
 		"tier": 4,
 		"weapon": "轻剑/剑阵",
 		"description": "恒山派擅长保护友方，防守反击。",
