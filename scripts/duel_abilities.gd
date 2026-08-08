@@ -132,6 +132,7 @@ static func has_ki_threshold_trigger(card: Dictionary) -> bool:
 static func _is_own_summon_only_trigger(trigger: Dictionary) -> bool:
 	var event_type: StringName = StringName(trigger.get("event", &""))
 	if event_type not in [
+		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
 		Catalog.TRIGGER_CARD_SUMMONED,
 		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
 	]:
@@ -198,7 +199,79 @@ static func remove_non_retained_abilities(card: Dictionary) -> int:
 		else:
 			removed_count += 1
 	card["active_abilities"] = retained_abilities
+	card.erase("temporary_suppression_batches")
 	return removed_count
+
+
+static func temporarily_remove_non_retained_abilities(
+	card: Dictionary,
+	current_turn: int
+) -> Array[Dictionary]:
+	var retained_abilities: Array = []
+	var removed_entries: Array[Dictionary] = []
+	var active_abilities: Array = card.get("active_abilities", [])
+	for ability_index: int in range(active_abilities.size()):
+		var ability_value: Variant = active_abilities[ability_index]
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		if bool(ability.get("retained_on_flip", false)):
+			retained_abilities.append(ability.duplicate(true))
+		else:
+			removed_entries.append({
+				"index": ability_index,
+				"ability": ability.duplicate(true),
+			})
+	if removed_entries.is_empty():
+		return removed_entries
+	card["active_abilities"] = retained_abilities
+	var batches: Array = card.get("temporary_suppression_batches", [])
+	batches.append({
+		"expires_after_turn": current_turn,
+		"entries": removed_entries.duplicate(true),
+	})
+	card["temporary_suppression_batches"] = batches
+	return removed_entries
+
+
+static func restore_temporarily_removed_abilities(
+	card: Dictionary,
+	completed_turn: int
+) -> Array[Dictionary]:
+	var batches: Array = card.get("temporary_suppression_batches", [])
+	if batches.is_empty():
+		return []
+	var restored: Array[Dictionary] = []
+	var remaining_batches: Array = []
+	for batch_index: int in range(batches.size() - 1, -1, -1):
+		var batch_value: Variant = batches[batch_index]
+		if not batch_value is Dictionary:
+			continue
+		var batch: Dictionary = batch_value
+		if int(batch.get("expires_after_turn", completed_turn)) > completed_turn:
+			remaining_batches.push_front(batch.duplicate(true))
+			continue
+		var entries: Array = batch.get("entries", [])
+		entries.sort_custom(func(first: Variant, second: Variant) -> bool:
+			return int((first as Dictionary).get("index", 0)) < int((second as Dictionary).get("index", 0))
+		)
+		var active_abilities: Array = card.get("active_abilities", [])
+		for entry_value: Variant in entries:
+			if not entry_value is Dictionary:
+				continue
+			var entry: Dictionary = entry_value
+			var ability_value: Variant = entry.get("ability", null)
+			if not ability_value is Dictionary:
+				continue
+			var insert_index: int = clampi(int(entry.get("index", active_abilities.size())), 0, active_abilities.size())
+			active_abilities.insert(insert_index, (ability_value as Dictionary).duplicate(true))
+			restored.append((ability_value as Dictionary).duplicate(true))
+		card["active_abilities"] = active_abilities
+	if remaining_batches.is_empty():
+		card.erase("temporary_suppression_batches")
+	else:
+		card["temporary_suppression_batches"] = remaining_batches
+	return restored
 
 
 static func has_modifier(card: Dictionary, modifier_type: StringName) -> bool:

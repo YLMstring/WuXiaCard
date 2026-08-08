@@ -9,7 +9,8 @@ const StateData = preload("res://scripts/duel_state.gd")
 static func snapshot(
 	state: StateData,
 	selector: Dictionary,
-	source_instance_id: StringName
+	source_instance_id: StringName,
+	context: Dictionary = {}
 ) -> Array[StringName]:
 	var selected: Array[StringName] = []
 	if state == null or source_instance_id == &"":
@@ -37,7 +38,8 @@ static func snapshot(
 				state,
 				candidate,
 				source_instance_id,
-				selector.get("conditions", [])
+				selector.get("conditions", []),
+				context
 			):
 				continue
 			selected.append(instance_id)
@@ -52,12 +54,13 @@ static func revalidate(
 	state: StateData,
 	instance_id: StringName,
 	source_instance_id: StringName,
-	conditions: Array
+	conditions: Array,
+	context: Dictionary = {}
 ) -> Dictionary:
 	var candidate: Dictionary = locate_card(state, instance_id)
 	if candidate.is_empty():
 		return {}
-	if not conditions_match(state, candidate, source_instance_id, conditions):
+	if not conditions_match(state, candidate, source_instance_id, conditions, context):
 		return {}
 	return candidate
 
@@ -66,7 +69,8 @@ static func conditions_match(
 	state: StateData,
 	candidate: Dictionary,
 	source_instance_id: StringName,
-	conditions: Array
+	conditions: Array,
+	context: Dictionary = {}
 ) -> bool:
 	if state == null or candidate.is_empty():
 		return false
@@ -110,9 +114,31 @@ static func conditions_match(
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF:
 			if int(selected_card.get("original_owner", 0)) != int(source.get("owner_id", 0)):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK:
+			if not _attack_flip_contains(
+				context.get("attack_flips", []) as Array,
+				selected_instance_id,
+				int(source.get("owner_id", 0))
+			):
+				return false
 		else:
 			return false
 	return true
+
+
+static func _attack_flip_contains(
+	attack_flips: Array,
+	instance_id: StringName,
+	source_owner: int
+) -> bool:
+	for record_value: Variant in attack_flips:
+		if (
+			record_value is Dictionary
+			and StringName((record_value as Dictionary).get("instance_id", &"")) == instance_id
+			and int((record_value as Dictionary).get("previous_owner_id", 0)) != source_owner
+		):
+			return true
+	return false
 
 
 static func locate_card(state: StateData, instance_id: StringName) -> Dictionary:

@@ -207,6 +207,15 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"trigger_owner_id": summoning_owner,
 		"summon_reason": &"hand_play",
 	}
+	var before_summon_result: Dictionary = _resolve_trigger_event(
+		next_state,
+		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+		summon_context
+	)
+	var placement_events: Array = events.duplicate()
+	events.clear()
+	_merge_resolution(captures, exiles, events, before_summon_result)
+	events.append_array(placement_events)
 	var summon_result: Dictionary = _resolve_trigger_event(
 		next_state,
 		Catalog.TRIGGER_CARD_SUMMONED,
@@ -265,6 +274,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		return _resolve_flip_request(next_state, request)
 	var summon_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_summon_request(next_state, request)
+	var before_move_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_before_move_request(next_state, request)
 	var activation_result: Dictionary = Executor.execute_activation(
 		next_state,
 		action.source_index,
@@ -274,7 +285,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		action.target_index,
 		attack_resolver,
 		flip_resolver,
-		summon_resolver
+		summon_resolver,
+		before_move_resolver
 	)
 	if not bool(activation_result.get("valid", false)):
 		return _invalid_transition(state)
@@ -341,6 +353,7 @@ static func _resolve_standard_attacks(
 		state,
 		Catalog.TRIGGER_CARD_AFTER_ATTACK,
 		{
+			"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
 			"attacker_instance_id": source_instance_id,
 			"attacker_owner_id": attacker_owner,
 			"attack_flips": result["attack_flips"].duplicate(true),
@@ -605,13 +618,16 @@ static func _resolve_trigger_event(
 		return _resolve_flip_request(state, request)
 	var summon_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_summon_request(state, request)
+	var before_move_resolver: Callable = func(request: Dictionary) -> Dictionary:
+		return _resolve_before_move_request(state, request)
 	for group: Dictionary in groups:
 		var group_result: Dictionary = Triggers.resolve_group(
 			state,
 			group,
 			attack_resolver,
 			flip_resolver,
-			summon_resolver
+			summon_resolver,
+			before_move_resolver
 		)
 		var group_events: Array = group_result.get("events", [])
 		_append_unique_indices(
@@ -675,6 +691,17 @@ static func _resolve_flip_request(state: StateData, request: Dictionary) -> Dict
 	)
 
 
+static func _resolve_before_move_request(
+	state: StateData,
+	request: Dictionary
+) -> Dictionary:
+	return _resolve_trigger_event(
+		state,
+		Catalog.CARD_BEFORE_MOVED,
+		request
+	)
+
+
 static func _resolve_summon_request(state: StateData, request: Dictionary) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
 	var source_instance_id := StringName(request.get("source_instance_id", &""))
@@ -726,6 +753,20 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"trigger_owner_id": source_owner,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
 	}
+	var before_summon_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+		summon_context
+	)
+	var summon_events: Array = result["events"].duplicate()
+	result["events"].clear()
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		before_summon_result
+	)
+	result["events"].append_array(summon_events)
 	var summon_result: Dictionary = _resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_CARD_SUMMONED,
@@ -824,6 +865,7 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 		state,
 		Catalog.TRIGGER_CARD_AFTER_ATTACK,
 		{
+			"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
 			"attacker_instance_id": source_instance_id,
 			"attacker_owner_id": attacker_owner,
 			"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
@@ -879,6 +921,16 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 		result["events"],
 		end_result
 	)
+	var restore_result: Dictionary = _restore_temporary_abilities(
+		state,
+		state.turn_count
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		restore_result
+	)
 	state.turn_count += 1
 	state.state_version += 1
 	if _board_is_full(state.board):
@@ -931,6 +983,75 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 		start_result
 	)
 	return result
+
+
+static func _restore_temporary_abilities(
+	state: StateData,
+	completed_turn: int
+) -> Dictionary:
+	var result: Dictionary = _empty_resolution()
+	for cell: int in range(state.board.size()):
+		var slot_value: Variant = state.board[cell]
+		if not slot_value is Dictionary:
+			continue
+		var slot: Dictionary = slot_value
+		_append_restored_ability_events(
+			result["events"],
+			slot.get("card", {}),
+			int(slot.get("owner", 0)),
+			Catalog.CARD_ZONE_BOARD,
+			cell,
+			completed_turn
+		)
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		for zone_entry: Array in [
+			[Catalog.CARD_ZONE_HAND, state.hands],
+			[&"deck", state.decks],
+			[&"discard", state.discard_piles],
+			[&"removed", state.removed_cards],
+		]:
+			var zone_id: StringName = StringName(zone_entry[0])
+			var zone_map: Dictionary = zone_entry[1] as Dictionary
+			var cards: Array = zone_map.get(owner_id, [])
+			for card_index: int in range(cards.size()):
+				_append_restored_ability_events(
+					result["events"],
+					cards[card_index],
+					owner_id,
+					zone_id,
+					card_index,
+					completed_turn
+				)
+	return result
+
+
+static func _append_restored_ability_events(
+	events: Array,
+	card_value: Variant,
+	owner_id: int,
+	zone: StringName,
+	logical_index: int,
+	completed_turn: int
+) -> void:
+	if not card_value is Dictionary:
+		return
+	var card: Dictionary = card_value
+	var restored: Array[Dictionary] = Abilities.restore_temporarily_removed_abilities(
+		card,
+		completed_turn
+	)
+	var cell: int = logical_index if zone == Catalog.CARD_ZONE_BOARD else -1
+	for _ability: Dictionary in restored:
+		events.append({
+			"type": &"ability_gained",
+			"source_cell": cell,
+			"target_cell": cell,
+			"owner_id": owner_id,
+			"instance_id": StringName(card.get("instance_id", &"")),
+			"zone": zone,
+			"logical_index": logical_index,
+			"temporary": true,
+		})
 
 
 static func _board_is_full(board: Array) -> bool:

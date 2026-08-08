@@ -161,6 +161,16 @@ The creator has made several direct UI and localization edits. Preserve those ed
   exile, then a fresh catalog instance enters its current cell, resolves both
   summon phases, and performs a standard attack. Its old view fades before the
   existing ink-summon presentation. The card is intentionally not default-locked.
+- YunWu13Shi2–3 use the exact-card `TRIGGER_CARD_BEFORE_SUMMONED` phase to
+  suppress every enemy's current non-retained abilities until turn end. Tier 3
+  then uses the ordinary adjacent exact-instance swap after summoning.
+- YiJianLuo9Yan2–3 select the sole exact enemy directly flipped by the completed
+  attack and swap only while it remains adjacent. Tier 3 attacks from its new
+  square; failed selection or swap stops that follow-up.
+- TianZhuYunQi2–4 react to an adjacent enemy summon by moving to the
+  lowest-index adjacent empty cell. Tiers 3–4 draw only after a successful
+  move. Tier 4 also suppresses adjacent enemies during `CARD_BEFORE_MOVED`,
+  regardless of what effect initiated either movement or swap leg.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

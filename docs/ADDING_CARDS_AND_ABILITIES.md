@@ -305,12 +305,14 @@ act. `TRIGGER_END_OWNER_TURN` still resolves before this choice.
 
 Normal summon:
 
-1. place and emit `card_placed`;
-2. resolve global `TRIGGER_CARD_SUMMONED`;
-3. if the exact summoned instance remains in its cell, resolve its current
+1. place the exact instance logically;
+2. resolve that instance's `TRIGGER_CARD_BEFORE_SUMMONED` rules;
+3. emit `card_placed`, then resolve global `TRIGGER_CARD_SUMMONED`;
+4. if the exact summoned instance remains on the board, resolve its current
    `TRIGGER_CARD_AFTER_SUMMONED` rules for its current owner;
-4. standard attack only if it still belongs to the summoning owner;
-5. finish the turn.
+5. standard attack only if it still belongs to the summoning owner;
+6. resolve end-turn rules, restore turn-scoped ability suppressions, and finish
+   the turn.
 
 Every attack:
 
@@ -331,6 +333,18 @@ intended owner still prevents it. Non-attack flips use the same before/after
 events and follow the exact target instance across movement.
 
 Movement is not a summon. Exile is not a flip.
+
+Every actual move first resolves the catalog boundary `CARD_BEFORE_MOVED` for
+the exact moving instance. The requested move then rechecks source identity and
+its destination. Both legs of every swap use this boundary, and every swap is
+orthogonally adjacent at resolution. A failed swap returns `NO_EFFECT`; a rule
+that must stop afterward declares `on_invalid_context = STOP_RULE`.
+
+`ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES` stores each removed ability
+on that exact card until the current turn ends. Retained abilities are never
+removed. A later grant is immediately active; a later suppression may remove it
+in a new batch. Flipping the card clears every stored non-retained batch, so
+those abilities never return.
 
 Ability-created summons use
 `ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY`. The simulator chooses the

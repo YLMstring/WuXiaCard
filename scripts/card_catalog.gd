@@ -6,9 +6,11 @@ const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
+const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
+const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
@@ -27,6 +29,9 @@ const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
+const CONDITION_MOVING_CARD_IS_SELF: StringName = &"moving_card_is_self"
+const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
+const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
@@ -34,6 +39,7 @@ const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not
 const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_adjacent_to_source"
 const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card_surrounded_by_allies"
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
+const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -59,6 +65,8 @@ const ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND: StringName = &"return_self_to_a
 const ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY: StringName = &"summon_fresh_copy_in_first_adjacent_empty"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
 const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_card_in_place"
+const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
+const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
 const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const REVEAL_FILTER_ALL: StringName = &"all"
@@ -82,9 +90,11 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
+	TRIGGER_CARD_BEFORE_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
 	TRIGGER_CARD_AFTER_ATTACK,
 	CARD_BE_ATTACKED,
+	CARD_BEFORE_MOVED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
 	TRIGGER_START_OWNER_TURN,
@@ -105,6 +115,9 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ATTACKED_CARD_IS_SELF,
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
+	CONDITION_MOVING_CARD_IS_SELF,
+	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
+	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -114,6 +127,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES,
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
+	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -142,6 +156,8 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY,
 	ACTION_EXILE_SELF,
 	ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE,
+	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 ]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -1726,7 +1742,20 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "这一套“百变千幻衡山云雾十三式”乃衡山派上代一位走江湖变戏法卖艺为生的高手所创。那走江湖变戏法，仗的是声东击西，虚虚实实，幻人耳目。到得晚年，他武功愈高，变戏法的技能也是日增，竟然将内家功夫使用到戏法之中，街头观众一见，无不称赏，后来更是一变，反将变戏法的本领渗入了武功，五花八门，层出不穷。",
 		"powers": [6, 6, 5, 4],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_BEFORE_SUMMONED,
+				"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+					},
+					"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+				}],
+			}],
+		}],
 	},
 	&"YunWu13Shi3": {
 		"id": &"YunWu13Shi3",
@@ -1738,7 +1767,40 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，使所有敌方失去效果，直到当前回合结束。进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "这一套“百变千幻衡山云雾十三式”乃衡山派上代一位走江湖变戏法卖艺为生的高手所创。那走江湖变戏法，仗的是声东击西，虚虚实实，幻人耳目。到得晚年，他武功愈高，变戏法的技能也是日增，竟然将内家功夫使用到戏法之中，街头观众一见，无不称赏，后来更是一变，反将变戏法的本领渗入了武功，五花八门，层出不穷。",
 		"powers": [6, 6, 5, 4],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_BEFORE_SUMMONED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+						},
+						"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+					}],
+				}],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_SUMMONED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+							"required_count": 1,
+						},
+						"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+					}],
+				}],
+			},
+		],
 	},
 	&"YiJianLuo9Yan1": {
 		"id": &"YiJianLuo9Yan1",
@@ -1762,7 +1824,24 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
 		"powers": [6, 7, 6, 2],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_ATTACK,
+				"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK},
+							{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						],
+						"required_count": 1,
+					},
+					"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+				}],
+			}],
+		}],
 	},
 	&"YiJianLuo9Yan3": {
 		"id": &"YiJianLuo9Yan3",
@@ -1774,7 +1853,28 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置，然后发起攻击。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
 		"powers": [6, 7, 6, 2],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_AFTER_ATTACK,
+				"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+				"actions": [
+					{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+							"required_count": 1,
+						},
+						"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+						"on_invalid_context": STOP_RULE,
+					},
+					{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+				],
+			}],
+		}],
 	},
 	&"TianZhuYunQi2": {
 		"id": &"TianZhuYunQi2",
@@ -1786,7 +1886,17 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "敌方在相邻进场时，我向首个相邻空格移动。",
 		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
 		"powers": [1, 1, 6, 1],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_SUMMONED,
+				"conditions": [
+					{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+					{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+					{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+				],
+				"actions": [{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}],
+			}],
+		}],
 	},
 	&"TianZhuYunQi3": {
 		"id": &"TianZhuYunQi3",
@@ -1798,7 +1908,20 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "敌方在相邻进场时，我向首个相邻空格移动，抽一张牌。",
 		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
 		"powers": [1, 1, 6, 1],
-		"abilities": [],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_CARD_SUMMONED,
+				"conditions": [
+					{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+					{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+					{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+				],
+				"actions": [
+					{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
+					{"type": ACTION_DRAW_CARDS, "amount": 1},
+				],
+			}],
+		}],
 	},
 	&"TianZhuYunQi4": {
 		"id": &"TianZhuYunQi4",
@@ -1810,7 +1933,39 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "敌方在相邻进场时，我向首个相邻空格移动，抽一张牌。我移动前，所有相邻敌方失去效果，直到当前回合结束。",
 		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
 		"powers": [1, 1, 6, 1],
-		"abilities": [],
+		"abilities": [
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_SUMMONED,
+					"conditions": [
+						{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+						{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+						{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
+						{"type": ACTION_DRAW_CARDS, "amount": 1},
+					],
+				}],
+			},
+			{
+				"triggers": [{
+					"event": CARD_BEFORE_MOVED,
+					"conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+						},
+						"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+					}],
+				}],
+			},
+		],
 	},
 	&"dielang_tuizhou": {
 		"id": &"dielang_tuizhou",

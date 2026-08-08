@@ -17,7 +17,10 @@ static func discover(
 	var groups: Array[Dictionary] = []
 	if state == null or event_id not in Catalog.KNOWN_TRIGGER_EVENTS:
 		return groups
-	if event_id == Catalog.TRIGGER_CARD_AFTER_SUMMONED:
+	if event_id in [
+		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+	]:
 		_discover_from_cell(
 			state,
 			event_id,
@@ -36,7 +39,8 @@ static func resolve_group(
 	group: Dictionary,
 	attack_resolver: Callable = Callable(),
 	flip_resolver: Callable = Callable(),
-	summon_resolver: Callable = Callable()
+	summon_resolver: Callable = Callable(),
+	before_move_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = {
 		"events": [],
@@ -69,7 +73,8 @@ static func resolve_group(
 		context,
 		attack_resolver,
 		flip_resolver,
-		summon_resolver
+		summon_resolver,
+		before_move_resolver
 	)
 	var events: Array = action_result.get("events", [])
 	events.push_front({
@@ -288,12 +293,42 @@ static func _conditions_match(
 			):
 				return false
 			var trigger_card: Dictionary = trigger_location.get("card", {})
-			var source_slot: Dictionary = state.board[source_cell]
-			if int(trigger_card.get("original_owner", 0)) != int(source_slot.get("owner", 0)):
+			var original_owner_source_slot: Dictionary = state.board[source_cell]
+			if (
+				int(trigger_card.get("original_owner", 0))
+				!= int(original_owner_source_slot.get("owner", 0))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_MOVING_CARD_IS_SELF:
+			if (
+				StringName(card.get("instance_id", &""))
+				!= StringName(context.get("moving_instance_id", &""))
+				or source_cell != int(context.get("moving_source_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE:
+			if not _are_adjacent(source_cell, int(context.get("trigger_cell", -1))):
+				return false
+		elif condition_type == Catalog.CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL:
+			if not _has_adjacent_empty_cell(state, source_cell):
 				return false
 		else:
 			return false
 	return true
+
+
+static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
+	for direction: int in range(4):
+		if Rules.get_neighbor_index(first_cell, direction) == second_cell:
+			return true
+	return false
+
+
+static func _has_adjacent_empty_cell(state: StateData, source_cell: int) -> bool:
+	for cell: int in range(state.board.size()):
+		if state.board[cell] == null and _are_adjacent(source_cell, cell):
+			return true
+	return false
 
 
 static func _attack_flipped_ally_in_range(

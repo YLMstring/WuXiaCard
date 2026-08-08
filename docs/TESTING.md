@@ -50,6 +50,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.
+- `test_hengshan_three_families.gd` — before-summon suppression and restoration,
+  exact attack-flip swaps, failed-swap attack cancellation, movement-triggered
+  suppression, lowest-index movement/draw, retention, and flip cleanup.
 - `test_jinzhen_wanhua_abilities.gd` — fresh returns, full-hand exile,
   revalidation, generated summon/attack ordering, retention, and pre-terminal
   board reopening.

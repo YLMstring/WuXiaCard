@@ -356,3 +356,21 @@ respectively, in row-major order. The source itself is eligible.
   `CARD_AFTER_FLIPPED` event.
 - Weakened presentation changes only the central artwork alpha to 70%; frame,
   powers, ki, ownership color, and interaction remain fully opaque.
+
+## 云雾十三式 / 一剑落九雁 / 天柱云气
+
+- “失去效果直到当前回合结束” removes every currently active non-retained
+  ability from the exact card instance. Retained abilities are never removed.
+  Later grants remain active unless a later suppression removes them.
+- Suppressed abilities restore after end-owner-turn triggers. If the card flips
+  first, all stored non-retained abilities are erased permanently.
+- YunWu suppression resolves in `TRIGGER_CARD_BEFORE_SUMMONED`, before global
+  summon reactions. Tier 3's later swap remains an ordinary adjacent swap.
+- YiJian uses the exact direct flip records from the completed standard attack.
+  The sole matching card must still be on the board and adjacent. A failed tier
+  3 swap stops its follow-up attack; a successful one attacks from the new cell.
+- Every swap is orthogonally adjacent at resolution. Both conceptual movement
+  legs emit `CARD_BEFORE_MOVED` and revalidate immediately before mutation.
+- TianZhu moves to the lowest row-major adjacent empty cell. Tiers 3–4 draw only
+  after that movement succeeds. Tier 4's before-move suppression triggers for
+  movement initiated by any card or effect.

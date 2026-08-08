@@ -49,10 +49,11 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
-- `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, and ki-use detection.
+- `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
 - `duel_ability_executor.gd` — generic costs and actions: draw, fresh catalog
   card creation in either relative hand, exile, immediately serviced attack
-  requests, ki, movement, ordered swaps, extra-turn requests, normal flip, and
+  requests, ki, movement with a shared before-move boundary, ordered swaps,
+  turn-scoped ability suppression, extra-turn requests, normal flip, and
   invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. Implemented rules cover adjacent empty, allied, and enemy board cells.
 - `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
@@ -62,7 +63,23 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
 
-For a normal hand play, the simulator places the card and emits `card_placed`, resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then resolves the exact summoned card's retained `TRIGGER_CARD_AFTER_SUMMONED` rules. Its standard attack follows only if the exact instance remains in its summoned cell under the summoning owner. Board movement emits neither summon event.
+For a normal hand play, the simulator places the exact instance logically,
+resolves that card's `TRIGGER_CARD_BEFORE_SUMMONED` rules, emits `card_placed`,
+resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then
+resolves the exact summoned card's current `TRIGGER_CARD_AFTER_SUMMONED` rules.
+Its standard attack follows only if the exact instance remains on the board
+under the summoning owner. Board movement emits neither summon event.
+
+Every successful movement—including both conceptual legs of a swap—resolves
+`CARD_BEFORE_MOVED` for the exact moving instance before mutating board cells,
+then revalidates source identity and destination legality. Swaps additionally
+revalidate adjacency and the exact partner immediately before movement.
+
+Temporary ability suppression removes only current non-retained abilities and
+stores them on the exact runtime card instance. End-owner-turn triggers resolve
+first; then every batch expiring on that turn restores in stable order. A flip
+clears all stored non-retained batches permanently, while retained abilities and
+abilities granted after an earlier suppression remain active.
 
 Every initially valid attack first emits the presentation-only `attack_started`
 transition event, then emits `CARD_BE_ATTACKED`, resolves eligible rules in
@@ -299,6 +316,10 @@ as subject. Nested attack requests are serviced immediately, so one selected
 card's complete attack and trigger chain mutates state before the next selected
 instance is revalidated. Mutable ki and powers can therefore be changed
 consistently in hands or on the board without card-specific simulator branches.
+Selector snapshots may also consume immutable trigger context, such as the exact
+instances directly flipped by the current completed attack. After nested swaps,
+the wrapper relocates the immutable ability source before any outer follow-up
+action.
 
 ## Extension Boundary
 
