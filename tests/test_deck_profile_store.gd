@@ -11,9 +11,9 @@ const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TianChangZhang3",
 	&"HenShanJianZhen2",
 	&"MianLiCangZhen2",
-	&"chilian_huifeng",
-	&"shahai_zhuri",
-	&"damo_guzhan",
+	&"YunWu13Shi2",
+	&"YiJianLuo9Yan1",
+	&"TianZhuYunQi2",
 	&"dielang_tuizhou",
 	&"huichao_tingjin",
 	&"canghai_sandie",
@@ -176,17 +176,17 @@ func _run() -> void:
 
 	var batch_result: Dictionary = store.unlock_cards_and_save(
 		unlocked,
-		[&"MianLiCangZhen2", &"chilian_huifeng"]
+		[&"MianLiCangZhen2", &"YunWu13Shi2"]
 	)
 	_check(bool(batch_result.get("ok", false)), "An ordered card batch saves")
 	var batch_profile: Dictionary = batch_result.get("profile", {})
 	_check(
-		(batch_result.get("added_ids", []) as Array) == [&"MianLiCangZhen2", &"chilian_huifeng"],
+		(batch_result.get("added_ids", []) as Array) == [&"MianLiCangZhen2", &"YunWu13Shi2"],
 		"Batch result reports added IDs in input order"
 	)
 	_check(
 		String(batch_profile["library_slots"][0]) == "MianLiCangZhen2"
-		and String(batch_profile["library_slots"][1]) == "chilian_huifeng",
+		and String(batch_profile["library_slots"][1]) == "YunWu13Shi2",
 		"Batch cards enter the library top without reversing"
 	)
 	_check(
@@ -195,16 +195,16 @@ func _run() -> void:
 	)
 	var partial_batch: Dictionary = store.unlock_cards_and_save(
 		batch_profile,
-		[&"MianLiCangZhen2", &"shahai_zhuri"]
+		[&"MianLiCangZhen2", &"YiJianLuo9Yan1"]
 	)
 	_check(bool(partial_batch.get("ok", false)), "A partially owned batch succeeds")
 	var partial_profile: Dictionary = partial_batch.get("profile", {})
 	_check(
-		(partial_batch.get("added_ids", []) as Array) == [&"shahai_zhuri"],
+		(partial_batch.get("added_ids", []) as Array) == [&"YiJianLuo9Yan1"],
 		"Only the missing card is reported from a partial batch"
 	)
 	_check(
-		String(partial_profile["library_slots"][0]) == "shahai_zhuri"
+		String(partial_profile["library_slots"][0]) == "YiJianLuo9Yan1"
 		and String(partial_profile["library_slots"][1]) == "MianLiCangZhen2",
 		"Only newly unlocked cards are inserted ahead of existing cards"
 	)
