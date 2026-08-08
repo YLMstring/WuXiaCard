@@ -63,12 +63,14 @@
 
 - 事件 `TRIGGER_CARD_BEFORE_SUMMONED`；
 - 事件 `CARD_BEFORE_MOVED`；
-- 条件“移动牌是自己”；
-- 条件“触发进场牌与来源相邻”；
-- 条件“来源存在相邻空格”；
-- 选择条件“所选精确实例被本次攻击翻面”；
-- action“暂时移除自身非保留 ability 到当前回合结束”；
-- action“自身移动到最低棋盘索引的相邻空格”。
+- 条件 `CONDITION_MOVING_CARD_IS_SELF`；
+- 条件 `CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE`；
+- 条件 `CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL`；
+- 选择条件 `CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK`；
+- action `ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES`；
+- action `ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY`。
+
+所有目录中的事件、条件、动作、selector 字段和值都使用上述英文常量；中文只用于本文解释和玩家可见的卡牌文本。
 
 `for_each_selected_card` 接收当前事件上下文，使选择器能够根据 `attack_flips` 选择精确实例。选择和重验证都跟踪 `instance_id`。选择器的 `required_count` 继续决定整组是否执行。
 
@@ -81,10 +83,20 @@
 ### 云雾十三式2
 
 ```gdscript
-TRIGGER_CARD_BEFORE_SUMMONED
-条件：触发牌是自己
-动作：依棋盘顺序选择所有敌方棋盘牌
-     -> 暂时移除所选牌的全部非保留 ability，直到当前回合结束
+{
+	"event": TRIGGER_CARD_BEFORE_SUMMONED,
+	"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+	"actions": [{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_BOARD],
+			"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+		},
+		"actions": [{
+			"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+		}],
+	}],
+}
 ```
 
 ### 云雾十三式3
@@ -92,10 +104,22 @@ TRIGGER_CARD_BEFORE_SUMMONED
 拥有云雾十三式2的进场前 ability，并额外拥有：
 
 ```gdscript
-TRIGGER_CARD_AFTER_SUMMONED
-条件：触发牌是自己
-动作：选择相邻敌方棋盘牌，required_count = 1
-     -> 所选牌与能力来源交换位置
+{
+	"event": TRIGGER_CARD_AFTER_SUMMONED,
+	"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+	"actions": [{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+				{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+			],
+			"required_count": 1,
+		},
+		"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+	}],
+}
 ```
 
 若相邻敌方不是恰好一张，或在动作重验证时不再相邻，则不交换。
@@ -107,10 +131,21 @@ TRIGGER_CARD_AFTER_SUMMONED
 ### 一剑落九雁2
 
 ```gdscript
-TRIGGER_CARD_AFTER_ATTACK
-条件：攻击者是自己
-动作：从本次攻击真正翻面的精确实例中选择，required_count = 1
-     -> 所选牌与能力来源交换位置
+{
+	"event": TRIGGER_CARD_AFTER_ATTACK,
+	"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+	"actions": [{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_BOARD],
+			"conditions": [{
+				"type": CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
+			}],
+			"required_count": 1,
+		},
+		"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+	}],
+}
 ```
 
 只统计当前攻击者这一次攻击直接造成的成功翻面，不把翻面触发后由其他牌发起的独立攻击合并进来。目标移动后仍跟踪精确实例，但交换时必须仍与能力来源相邻；目标离场、被新实例替换或不再相邻时，交换失败。
@@ -120,20 +155,26 @@ TRIGGER_CARD_AFTER_ATTACK
 与二阶使用相同选择和交换，随后追加：
 
 ```gdscript
--> 能力来源从交换后的新位置发起标准攻击
+{"type": ACTION_STANDARD_ATTACK_WITH_SELF}
 ```
 
-选择或交换 action 声明 `on_invalid_context = STOP_RULE`。交换失败时不会继续攻击。新标准攻击是独立完整攻击，也会正常产生自己的攻击后事件。
+选择 wrapper 声明 `"on_invalid_context": STOP_RULE`。交换 action 失败时 wrapper 返回无效果并停止外层规则，因此不会继续攻击。新标准攻击是独立完整攻击，也会正常产生自己的攻击后事件。
 
 ### 天柱云气2
 
 ```gdscript
-TRIGGER_CARD_SUMMONED
-条件：
-- 触发牌是敌方；
-- 触发牌与自己相邻；
-- 自己当前存在相邻空格。
-动作：自身移动到最低棋盘索引的相邻空格
+{
+	"event": TRIGGER_CARD_SUMMONED,
+	"conditions": [
+		{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+		{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+	],
+	"actions": [{
+		"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
+		"on_invalid_context": STOP_RULE,
+	}],
+}
 ```
 
 移动 action 失败时整条剩余动作停止。
@@ -143,7 +184,7 @@ TRIGGER_CARD_SUMMONED
 在二阶移动成功后追加：
 
 ```gdscript
--> 抽一张牌
+{"type": ACTION_DRAW_CARDS, "amount": 1}
 ```
 
 若没有空格或移动失败，不抽牌。
@@ -153,10 +194,23 @@ TRIGGER_CARD_SUMMONED
 拥有三阶进场反应，并额外拥有独立的移动前 ability：
 
 ```gdscript
-CARD_BEFORE_MOVED
-条件：移动牌是自己
-动作：依棋盘顺序选择移动前位置的所有相邻敌方
-     -> 暂时移除所选牌的全部非保留 ability，直到当前回合结束
+{
+	"event": CARD_BEFORE_MOVED,
+	"conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+	"actions": [{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+				{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+			],
+		},
+		"actions": [{
+			"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+		}],
+	}],
+}
 ```
 
 该 ability 不限于天柱云气自己发起的移动。任何其他卡牌或能力令它移动，包括交换中的任一实际移动，都会触发。
