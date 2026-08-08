@@ -222,8 +222,8 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"TianZhuYunQi2",
 	&"TianZhuYunQi3",
 	&"TianZhuYunQi4",
-	&"dielang_tuizhou",
-	&"huichao_tingjin",
+	&"JianFaQinYin1",
+	&"YanHuiZhuRong3",
 	&"canghai_sandie",
 	&"haitian_yizhang",
 	&"zhujian_cangfeng",
@@ -375,7 +375,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [3, 7, 7, 4],
+		"powers": [3, 8, 8, 4],
 		"abilities": [],
 	},
 	&"CangSongYingKe2": {
@@ -387,7 +387,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [3, 7, 7, 4],
+		"powers": [3, 8, 8, 4],
 		"abilities": [
 			{
 				"triggers": [
@@ -414,7 +414,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，耗内力以获取一张我的复制。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [3, 7, 7, 4],
+		"powers": [3, 8, 8, 4],
 		"abilities": [
 			{
 				"triggers": [
@@ -456,7 +456,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，耗内力以获取一张我的复制。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
-		"powers": [4, 8, 7, 5],
+		"powers": [4, 9, 8, 5],
 		"abilities": [
 			{
 				"triggers": [
@@ -498,7 +498,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [6, 5, 6, 6],
+		"powers": [7, 5, 7, 7],
 		"starting_ki": 1,
 		"abilities": [
 			{
@@ -526,7 +526,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [6, 5, 6, 6],
+		"powers": [7, 5, 7, 7],
 		"starting_ki": 2,
 		"abilities": [
 			{
@@ -568,7 +568,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。锁定，指定：与一个相邻敌方交换位置，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [6, 6, 6, 6],
+		"powers": [7, 6, 7, 7],
 		"starting_ki": 2,
 		"abilities": [
 			{
@@ -624,7 +624,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "回合开始时，耗内力以令场上首一个友方剑法发起攻击。",
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
-		"powers": [7, 2, 4, 7],
+		"powers": [8, 2, 4, 8],
 		"abilities": [
 			{
 				"triggers": [
@@ -668,7 +668,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "回合开始时，耗内力以令场上首两个友方剑法发起攻击。",
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
-		"powers": [7, 2, 4, 7],
+		"powers": [8, 2, 4, 8],
 		"starting_ki": 1,
 		"abilities": [
 			{
@@ -713,7 +713,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "回合开始时，耗内力以令场上首三个友方剑法发起攻击。",
 		"flavor": "岳不群的得意之作，据说第二剑比第一剑的劲道狠，第三剑又胜过了第二剑。",
-		"powers": [7, 3, 4, 7],
+		"powers": [8, 3, 4, 8],
 		"starting_ki": 1,
 		"abilities": [
 			{
@@ -1269,7 +1269,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "",
 		"flavor": "泰山派昔年一位名宿所创剑法，他见泰山山门下十八盘处羊肠曲折，五步一转，十步一回，势甚险峻，因而将地势融入剑法之中，与八卦门的八卦游身掌有异曲同工之妙。泰山十八盘越盘越高，越行越险，这路剑招也是越转越狠辣。",
-		"powers": [6, 4, 6, 4],
+		"powers": [7, 4, 7, 4],
 		"abilities": [],
 	},
 	&"TaiShan18Pan2": {
@@ -1281,7 +1281,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "泰山派昔年一位名宿所创剑法，他见泰山山门下十八盘处羊肠曲折，五步一转，十步一回，势甚险峻，因而将地势融入剑法之中，与八卦门的八卦游身掌有异曲同工之妙。泰山十八盘越盘越高，越行越险，这路剑招也是越转越狠辣。",
-		"powers": [6, 4, 6, 4],
+		"powers": [7, 4, 7, 4],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_AFTER_SUMMONED,
@@ -1310,7 +1310,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山派昔年一位名宿所创剑法，他见泰山山门下十八盘处羊肠曲折，五步一转，十步一回，势甚险峻，因而将地势融入剑法之中，与八卦门的八卦游身掌有异曲同工之妙。泰山十八盘越盘越高，越行越险，这路剑招也是越转越狠辣。",
-		"powers": [6, 4, 6, 4],
+		"powers": [7, 4, 7, 4],
 		"abilities": [
 			{
 				"triggers": [{
@@ -1447,7 +1447,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "锁定：场上没有其它友方时无法攻击。锁定：攻击时，防御者的点数视为其最小一侧的点数。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
-		"powers": [5, 5, 5, 5],
+		"powers": [6, 6, 5, 6],
 		"abilities": [QIXIN_RETAINED_ATTACK_MODIFIERS],
 	},
 	&"QiXinLuoChangKong3": {
@@ -1459,7 +1459,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "锁定：场上没有其它友方时无法攻击。锁定：防御者的点数视为其最小一侧的点数。对手招式进场时，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
-		"powers": [6, 5, 5, 5],
+		"powers": [6, 6, 6, 6],
 		"abilities": [
 			QIXIN_RETAINED_ATTACK_MODIFIERS,
 			QIXIN_SUMMON_REACTION,
@@ -1490,7 +1490,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "掌法",
 		"description": "进场后，每有一个相邻敌方，我的点数加一。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
-		"powers": [6, 6, 6, 6],
+		"powers": [7, 6, 7, 6],
 		"abilities": [TIANCHANG_SUMMON_POWER],
 	},
 	&"TianChangZhang4": {
@@ -1502,7 +1502,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "掌法",
 		"description": "进场后，每有一个相邻敌方，我的点数加一。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
-		"powers": [6, 6, 6, 6],
+		"powers": [7, 6, 7, 6],
 		"abilities": [
 			TIANCHANG_SUMMON_POWER,
 			HENGSHAN_COUNTERATTACK,
@@ -1517,7 +1517,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑阵",
 		"description": "回合结束时，使我和所有相邻友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
-		"powers": [5, 7, 5, 7],
+		"powers": [6, 7, 6, 7],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_END_OWNER_TURN,
@@ -1555,7 +1555,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑阵",
 		"description": "回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
-		"powers": [5, 7, 5, 7],
+		"powers": [6, 7, 6, 7],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_END_OWNER_TURN,
@@ -1583,7 +1583,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑阵",
 		"description": "进场后，使所有被友方包围的敌方翻面。回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
-		"powers": [5, 7, 5, 7],
+		"powers": [6, 7, 6, 7],
 		"abilities": [
 			{
 				"triggers": [{
@@ -1633,7 +1633,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [6, 6, 3, 3],
+		"powers": [7, 7, 3, 3],
 		"abilities": [],
 	},
 	&"JinZhenDuJie2": {
@@ -1645,7 +1645,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [6, 6, 3, 3],
+		"powers": [7, 7, 3, 3],
 		"abilities": [JINZHEN_RETURN],
 	},
 	&"JinZhenDuJie3": {
@@ -1657,7 +1657,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [6, 6, 3, 3],
+		"powers": [7, 7, 3, 3],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"JinZhenDuJie4": {
@@ -1669,7 +1669,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [7, 7, 3, 4],
+		"powers": [8, 8, 4, 4],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"WanHuaJian1": {
@@ -1691,7 +1691,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 2,
 		"weapon": "轻剑",
-		"description": "锁定：被攻击时，在首个相邻空格生成一个我的复制。锁定：对局结束前，若你没赢，将我移除。",
+		"description": "锁定：被攻击时，在首个相邻空格生成我的复制。锁定：对局结束前，若你没赢，将我移除。",
 		"flavor": "恒山派的精妙剑法，黑夜之中，唯有星月微光，长剑飞舞。",
 		"powers": [4, 4, 4, 4],
 		"abilities": [WANHUA_COPY_RETAINED, WANHUA_ENDING],
@@ -1703,7 +1703,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 3,
 		"weapon": "轻剑",
-		"description": "被攻击时，在首个相邻空格生成一个我的复制。锁定：对局结束前，若你没赢，将我移除。",
+		"description": "被攻击时，在首个相邻空格生成我的复制。锁定：对局结束前，若你没赢，将我移除。",
 		"flavor": "恒山派的精妙剑法，黑夜之中，唯有星月微光，长剑飞舞。",
 		"powers": [4, 4, 4, 4],
 		"abilities": [WANHUA_COPY, WANHUA_ENDING],
@@ -1717,7 +1717,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派武功的根本要诀，于极平凡的招式之中暗蓄锋芒，便如是暗藏钢针的一团棉絮。旁人倘若不加触犯，棉絮轻柔温软，于人无忤，但若猛力紧捏，棉絮中所藏钢针便刺入手掌。",
-		"powers": [4, 3, 7, 7],
+		"powers": [4, 2, 8, 8],
 		"abilities": [HENGSHAN_COUNTERATTACK],
 	},
 	&"MianLiCangZhen3": {
@@ -1729,7 +1729,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "我将敌方翻面后，若其最初是友方，使其重新进场。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派武功的根本要诀，于极平凡的招式之中暗蓄锋芒，便如是暗藏钢针的一团棉絮。旁人倘若不加触犯，棉絮轻柔温软，于人无忤，但若猛力紧捏，棉絮中所藏钢针便刺入手掌。",
-		"powers": [4, 3, 7, 7],
+		"powers": [4, 2, 8, 8],
 		"abilities": [MIANLI_RESUMMON, HENGSHAN_COUNTERATTACK],
 	},
 	&"YunWu13Shi2": {
@@ -1741,7 +1741,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "这一套“百变千幻衡山云雾十三式”乃衡山派上代一位走江湖变戏法卖艺为生的高手所创。那走江湖变戏法，仗的是声东击西，虚虚实实，幻人耳目。到得晚年，他武功愈高，变戏法的技能也是日增，竟然将内家功夫使用到戏法之中，街头观众一见，无不称赏，后来更是一变，反将变戏法的本领渗入了武功，五花八门，层出不穷。",
-		"powers": [6, 6, 5, 4],
+		"powers": [7, 6, 5, 4],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_BEFORE_SUMMONED,
@@ -1766,7 +1766,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场前，使所有敌方失去效果，直到当前回合结束。进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "这一套“百变千幻衡山云雾十三式”乃衡山派上代一位走江湖变戏法卖艺为生的高手所创。那走江湖变戏法，仗的是声东击西，虚虚实实，幻人耳目。到得晚年，他武功愈高，变戏法的技能也是日增，竟然将内家功夫使用到戏法之中，街头观众一见，无不称赏，后来更是一变，反将变戏法的本领渗入了武功，五花八门，层出不穷。",
-		"powers": [6, 6, 5, 4],
+		"powers": [7, 6, 5, 4],
 		"abilities": [
 			{
 				"triggers": [{
@@ -1811,7 +1811,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 7, 6, 2],
+		"powers": [6, 8, 6, 2],
 		"abilities": [],
 	},
 	&"YiJianLuo9Yan2": {
@@ -1823,7 +1823,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 7, 6, 2],
+		"powers": [6, 8, 6, 2],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_AFTER_ATTACK,
@@ -1852,7 +1852,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置，然后发起攻击。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 7, 6, 2],
+		"powers": [6, 8, 6, 2],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_AFTER_ATTACK,
@@ -1967,28 +1967,67 @@ const _CARD_DEFINITIONS: Dictionary = {
 			},
 		],
 	},
-	&"dielang_tuizhou": {
-		"id": &"dielang_tuizhou",
-		"glyph": "叠浪推舟",
-		"picture": "res://pics/LKT010_023.png",
-		"sect": "听潮谷",
+	&"JianFaQinYin1": {
+		"id": &"JianFaQinYin1",
+		"glyph": "剑发琴音",
+		"picture": "res://pics/LKT010_556.png",
+		"sect": "衡山派",
 		"tier": 1,
-		"weapon": "掌法",
-		"description": "连续送出轻重不同的掌劲，后劲推前劲，如叠浪托舟而行。",
-		"flavor": "谷中孩童学会走路后，先要学会在小舟上站稳，才会正式拜师。",
-		"powers": [5, 3, 6, 4],
+		"weapon": "轻剑",
+		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。",
+		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
+		"powers": [4, 5, 6, 7],
 		"abilities": [],
 	},
-	&"huichao_tingjin": {
-		"id": &"huichao_tingjin",
-		"glyph": "回潮听劲",
-		"picture": "res://pics/LKT010_024.png",
-		"sect": "听潮谷",
+	&"JianFaQinYin2": {
+		"id": &"JianFaQinYin2",
+		"glyph": "剑发琴音",
+		"picture": "res://pics/LKT010_556.png",
+		"sect": "衡山派",
 		"tier": 2,
-		"weapon": "掌法",
-		"description": "以掌心感知来力方向，先顺势卸劲，再借回潮之势反送回去。",
-		"flavor": "听潮谷的练功石没有一块完整，裂纹却都朝向海面。",
-		"powers": [4, 6, 3, 7],
+		"weapon": "轻剑",
+		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。指定：移动至一个相邻空格，然后进行一个额外回合。",
+		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
+		"powers": [4, 5, 6, 7],
+		"starting_ki": 1,
+		"abilities": [],
+	},
+	&"JianFaQinYin3": {
+		"id": &"JianFaQinYin3",
+		"glyph": "剑发琴音",
+		"picture": "res://pics/LKT010_556.png",
+		"sect": "衡山派",
+		"tier": 3,
+		"weapon": "轻剑",
+		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，所有相邻敌方失去效果，直到当前回合结束。指定：移动至一个相邻空格，然后进行一个额外回合。",
+		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
+		"powers": [4, 5, 6, 7],
+		"starting_ki": 1,
+		"abilities": [],
+	},
+	&"YanHuiZhuRong3": {
+		"id": &"YanHuiZhuRong3",
+		"glyph": "雁回祝融",
+		"picture": "res://pics/LKT010_474.png",
+		"sect": "衡山派",
+		"tier": 3,
+		"weapon": "轻剑",
+		"description": "我翻面前，若手牌中有轻剑牌，我移回手牌，然后在相同位置打出最左侧的轻剑牌。",
+		"flavor": "衡山五神剑中最为精深的招式，将祝融剑法数十招中的精奥之处融会简化而入一招，一招之中有攻有守，威力之强，为衡山剑法之冠。",
+		"powers": [4, 3, 3, 3],
+		"abilities": [],
+	},
+	&"YanHuiZhuRong4": {
+		"id": &"YanHuiZhuRong4",
+		"glyph": "雁回祝融",
+		"picture": "res://pics/LKT010_474.png",
+		"sect": "衡山派",
+		"tier": 4,
+		"weapon": "轻剑",
+		"description": "我翻面前，若手牌中有轻剑牌，我移回手牌，然后在相同位置打出最左侧的轻剑牌。指定：选择一个友方，将其移回手牌，然后在相同位置生成我的复制。",
+		"flavor": "衡山五神剑中最为精深的招式，将祝融剑法数十招中的精奥之处融会简化而入一招，一招之中有攻有守，威力之强，为衡山剑法之冠。",
+		"powers": [4, 3, 3, 3],
+		"starting_ki": 1,
 		"abilities": [],
 	},
 	&"canghai_sandie": {
