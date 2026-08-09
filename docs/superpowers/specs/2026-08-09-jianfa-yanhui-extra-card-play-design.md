@@ -60,9 +60,13 @@ const CARD_REF_SELECTED_CARD := &"selected_card"
 const CARD_SPEC_FRESH_COPY := &"fresh_copy"
 const CELL_REF_INITIAL_CARD_CELL := &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY := &"first_adjacent_empty"
+
+const OWNER_CARD_CURRENT := &"card_current_owner"
 ```
 
-`ACTION_RETURN_CARD_TO_HAND`接受卡牌引用。返回手牌遵守现有规则：返回的是目录新副本；若手牌已满，该实例改为移除。
+`ACTION_RETURN_CARD_TO_HAND`接受卡牌引用和 `recipient`。接收者可以是
+`OWNER_ABILITY_SOURCE` 或 `OWNER_CARD_CURRENT`。返回手牌遵守现有规则：返回的
+是目录新副本；若接收者手牌已满，该实例改为移除。
 
 `ACTION_SUMMON_CARD`接受两个声明对象：
 
@@ -127,6 +131,7 @@ const CELL_REF_FIRST_ADJACENT_EMPTY := &"first_adjacent_empty"
 		{
 			"type": ACTION_RETURN_CARD_TO_HAND,
 			"card": CARD_REF_ABILITY_SOURCE,
+			"recipient": OWNER_ABILITY_SOURCE,
 		},
 		{
 			"type": ACTION_SUMMON_CARD,
@@ -158,6 +163,7 @@ const CELL_REF_FIRST_ADJACENT_EMPTY := &"first_adjacent_empty"
 		{
 			"type": ACTION_RETURN_CARD_TO_HAND,
 			"card": CARD_REF_SELECTED_CARD,
+			"recipient": OWNER_ABILITY_SOURCE,
 		},
 		{
 			"type": ACTION_SUMMON_CARD,
@@ -196,6 +202,23 @@ const CELL_REF_FIRST_ADJACENT_EMPTY := &"first_adjacent_empty"
 
 既有行为不变：按棋盘格顺序选择首个相邻空格，新副本完整进场并攻击；没有合法空格时为 `NO_EFFECT`。
 
+## 金针渡劫迁移
+
+删除专用动作 `ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND`。金针渡劫的所选卡
+回手改为：
+
+```gdscript
+{
+	"type": ACTION_RETURN_CARD_TO_HAND,
+	"card": CARD_REF_SELECTED_CARD,
+	"recipient": OWNER_ABILITY_SOURCE,
+}
+```
+
+既有行为不变：被选中的精确实例离开当前区域，并以目录新副本进入能力来源
+当前持有者的手牌；该手牌已满时改为移除。动作名称和参数均不依赖金针渡劫、
+敌我关系或卡牌原持有者。
+
 ## 数据流和表现
 
 - 执行器返回额外出牌请求、返回手牌、移除、召唤、移动和能力事件；模拟器决定额度和回合边界。
@@ -227,5 +250,6 @@ const CELL_REF_FIRST_ADJACENT_EMPTY := &"first_adjacent_empty"
 - 雁回祝融最左轻剑、满手移除、原翻面取消、新卡正常进场攻击；
 - 雁回祝融4排除自身、回手/满手移除和源复制；
 - 万花剑法迁移后行为与事件顺序保持不变；
+- 金针渡劫迁移后回手接收者、满手移除及事件顺序保持不变；
 - 金珠节点不再参与额外出牌表现，棋盘描边和提示仍按顺序完成；
 - 全量测试通过后，在生产场景的测试模式中实际走查一次剑发琴音指定额外出牌、一次雁回祝融替换及一次孟获额外出牌，并检查控制台和调试器。
