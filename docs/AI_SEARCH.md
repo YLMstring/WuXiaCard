@@ -17,7 +17,10 @@ A deterministic greedy action is computed before deep search and serves as fallb
 - search returns no usable action;
 - the chosen action is no longer legal when presentation is ready to apply it.
 
-The deadline is a maximum. A solved/terminal result may return early. Search follows `state.active_player`, so extra turns do not automatically alternate owners.
+The deadline is a maximum. A solved/terminal result may return early. Search
+follows `state.active_player`, so a granted extra card play keeps the same owner
+and exposes only legal hand plays. The controller starts a fresh search session
+with the full configured budget for every AI extra-play opportunity.
 
 The controller logs:
 
@@ -61,7 +64,7 @@ Any new asynchronous UI must preserve these rules.
 
 ## Why a Small Board Can Still Be Slow
 
-The branching factor includes every hand-card/cell pairing plus activations. Draw effects increase hand options; movement reopens positions; extra turns break simple alternation; removal can extend the match; and identical-looking card copies remain distinct runtime instances. The search repeatedly duplicates Dictionary-heavy states and processes full event-producing rules.
+The branching factor includes every hand-card/cell pairing plus activations. Draw effects increase hand options; movement reopens positions; extra card plays break simple alternation; removal can extend the match; and identical-looking card copies remain distinct runtime instances. The search repeatedly duplicates Dictionary-heavy states and processes full event-producing rules.
 
 Even moderate branching compounds exponentially. A 3×3 board does not imply a tiny game tree when hands, decks, effects, and repeated movement exist.
 
@@ -82,7 +85,9 @@ When implementing it:
 
 1. preserve one rules semantics contract;
 2. compare compact transitions against `DuelSimulator` on generated states;
-3. encode every mutable field, including effect retention, ki, deck order, extra-turn state, and pending choices;
+3. encode every mutable field, including effect retention, ki, deck order,
+   owner-turn serial, extra-card-play allowance, end-boundary state, and pending
+   choices;
 4. keep the existing simulator as an oracle until parity tests are broad;
 5. benchmark nodes/second and search depth, not just allocation size.
 

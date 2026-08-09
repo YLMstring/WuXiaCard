@@ -35,7 +35,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
 - `test_duel_card_selector.gd` — generic zone ordering, filters, limits,
   movement-tolerant snapshots, and condition revalidation.
-- `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki, draw/removal/movement/extra turns.
+- `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
+  draw/removal/movement, extra-card-play allowances, and turn boundaries.
 - `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 - `test_duel_replay_record.gd` — independent initial/final state snapshots,
@@ -53,6 +54,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_hengshan_three_families.gd` — before-summon suppression and restoration,
   exact attack-flip swaps, failed-swap attack cancellation, movement-triggered
   suppression, lowest-index movement/draw, retention, and flip cleanup.
+- `test_jianfa_yanhui_abilities.gd` — lowest-index entry movement,
+  activation-only movement plus extra-card-play restrictions, turn-scoped
+  suppression, exact leftmost replacement, and other-ally fresh-copy activation.
+- `test_jianfa_yanhui_integration.gd` — production-scene exact hand-view reuse,
+  return-before-summon ordering, and simulator/view identity synchronization.
 - `test_jinzhen_wanhua_abilities.gd` — fresh returns, full-hand exile,
   revalidation, generated summon/attack ordering, retention, and pre-terminal
   board reopening.
@@ -160,6 +166,7 @@ Existing editor diagnostics can include stale Summer authentication/setup messag
 - Test retained and lost abilities across flips.
 - Test terminal and no-legal-action states.
 - Test event order where presentation depends on it.
-- Seed deck shuffles when exact order matters.
+- Disable or seed both starting-hand and side-deck shuffles when exact order
+  matters.
 - Do not test rules through controller-only shortcuts.
 - Keep AI tests deterministic and use explicit deadlines/limits.

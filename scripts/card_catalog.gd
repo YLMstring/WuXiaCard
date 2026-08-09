@@ -5,12 +5,14 @@ const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
+const TARGET_OTHER_ALLY_BOARD: StringName = &"other_ally_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
+const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
@@ -32,6 +34,7 @@ const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card
 const CONDITION_MOVING_CARD_IS_SELF: StringName = &"moving_card_is_self"
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
+const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
@@ -46,7 +49,7 @@ const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
 const ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
-const ACTION_REQUEST_EXTRA_TURN: StringName = &"request_extra_turn"
+const ACTION_GRANT_EXTRA_CARD_PLAY: StringName = &"grant_extra_card_play"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
@@ -61,14 +64,21 @@ const ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE: StringName = &"self_swapped_with_
 const ACTION_PREVENT_TRIGGER_FLIP: StringName = &"prevent_trigger_flip"
 const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
 const ACTION_FLIP_SELF: StringName = &"flip_self"
-const ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND: StringName = &"return_self_to_ability_source_hand"
-const ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY: StringName = &"summon_fresh_copy_in_first_adjacent_empty"
+const ACTION_RETURN_CARD_TO_HAND: StringName = &"return_card_to_hand"
+const ACTION_SUMMON_CARD: StringName = &"summon_card"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
 const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_card_in_place"
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
 const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
+const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
 const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
+const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
+const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
+const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
+const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
+const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
+const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
@@ -87,6 +97,7 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 	TARGET_ADJACENT_EMPTY_BOARD,
 	TARGET_ADJACENT_ALLY_BOARD,
 	TARGET_ADJACENT_ENEMY_BOARD,
+	TARGET_OTHER_ALLY_BOARD,
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
@@ -95,6 +106,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_AFTER_ATTACK,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_MOVED,
+	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
 	TRIGGER_START_OWNER_TURN,
@@ -118,6 +130,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_MOVING_CARD_IS_SELF,
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
+	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -137,7 +150,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
 	ACTION_SPEND_ALL_KI,
-	ACTION_REQUEST_EXTRA_TURN,
+	ACTION_GRANT_EXTRA_CARD_PLAY,
 	ACTION_MOVE_SELF_TO_TARGET,
 	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
@@ -152,13 +165,16 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_PREVENT_TRIGGER_FLIP,
 	ACTION_REMOVE_THIS_ABILITY,
 	ACTION_FLIP_SELF,
-	ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND,
-	ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY,
+	ACTION_RETURN_CARD_TO_HAND,
+	ACTION_SUMMON_CARD,
 	ACTION_EXILE_SELF,
 	ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE,
 	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
 	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
+	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 ]
+const KNOWN_CARD_REFERENCES: Array[StringName] = [CARD_REF_ABILITY_SOURCE, CARD_REF_SELECTED_CARD]
+const KNOWN_OWNER_REFERENCES: Array[StringName] = [OWNER_ABILITY_SOURCE, OWNER_CARD_CURRENT]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
 const KNOWN_MODIFIERS: Array[StringName] = [
@@ -223,7 +239,10 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"TianZhuYunQi3",
 	&"TianZhuYunQi4",
 	&"JianFaQinYin1",
+	&"JianFaQinYin2",
+	&"JianFaQinYin3",
 	&"YanHuiZhuRong3",
+	&"YanHuiZhuRong4",
 	&"canghai_sandie",
 	&"haitian_yizhang",
 	&"zhujian_cangfeng",
@@ -314,7 +333,11 @@ const JINZHEN_RETURN: Dictionary = {
 				],
 				"limit": 1,
 			},
-			"actions": [{"type": ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND}],
+			"actions": [{
+				"type": ACTION_RETURN_CARD_TO_HAND,
+				"card": CARD_REF_SELECTED_CARD,
+				"recipient": OWNER_ABILITY_SOURCE,
+			}],
 		}],
 	}],
 }
@@ -322,7 +345,17 @@ const JINZHEN_RETURN: Dictionary = {
 const WANHUA_COPY_TRIGGER: Dictionary = {
 	"event": CARD_BE_ATTACKED,
 	"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
-	"actions": [{"type": ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY}],
+	"actions": [{
+		"type": ACTION_SUMMON_CARD,
+		"card": {
+			"type": CARD_SPEC_FRESH_COPY,
+			"of": CARD_REF_ABILITY_SOURCE,
+		},
+		"cell": {
+			"type": CELL_REF_FIRST_ADJACENT_EMPTY,
+			"card": CARD_REF_ABILITY_SOURCE,
+		},
+	}],
 }
 
 const WANHUA_COPY_RETAINED: Dictionary = {
@@ -361,6 +394,81 @@ const TIANCHANG_SUMMON_POWER: Dictionary = {
 				"amount": 1,
 				"target": ACTION_TARGET_ABILITY_SOURCE,
 			}],
+		}],
+	}],
+}
+
+const JIANFA_ENTRY_MOVE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY},
+		],
+		"actions": [{"type": ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY}],
+	}],
+}
+
+const JIANFA_ACTIVATION: Dictionary = {
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ADJACENT_EMPTY_BOARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{"type": ACTION_MOVE_SELF_TO_TARGET, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+		],
+	},
+}
+
+const JIANFA_MOVE_SUPPRESSION: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_MOVED,
+		"conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+			},
+			"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+		}],
+	}],
+}
+
+const YANHUI_FLIP_REPLACEMENT: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{
+					"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+					"weapon": "轻剑",
+				}],
+				"limit": 1,
+				"required_count": 1,
+			},
+			"actions": [
+				{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"recipient": OWNER_ABILITY_SOURCE,
+				},
+				{
+					"type": ACTION_SUMMON_CARD,
+					"card": CARD_REF_SELECTED_CARD,
+					"cell": {
+						"type": CELL_REF_INITIAL_CARD_CELL,
+						"card": CARD_REF_ABILITY_SOURCE,
+					},
+				},
+			],
 		}],
 	}],
 }
@@ -1977,7 +2085,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。",
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 5, 6, 7],
-		"abilities": [],
+		"abilities": [JIANFA_ENTRY_MOVE],
 	},
 	&"JianFaQinYin2": {
 		"id": &"JianFaQinYin2",
@@ -1990,7 +2098,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 5, 6, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [JIANFA_ENTRY_MOVE, JIANFA_ACTIVATION],
 	},
 	&"JianFaQinYin3": {
 		"id": &"JianFaQinYin3",
@@ -2003,7 +2111,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 5, 6, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [JIANFA_ENTRY_MOVE, JIANFA_MOVE_SUPPRESSION, JIANFA_ACTIVATION],
 	},
 	&"YanHuiZhuRong3": {
 		"id": &"YanHuiZhuRong3",
@@ -2015,7 +2123,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，若手牌中有轻剑牌，我移回手牌，然后在相同位置打出最左侧的轻剑牌。",
 		"flavor": "衡山五神剑中最为精深的招式，将祝融剑法数十招中的精奥之处融会简化而入一招，一招之中有攻有守，威力之强，为衡山剑法之冠。",
 		"powers": [4, 3, 3, 3],
-		"abilities": [],
+		"abilities": [YANHUI_FLIP_REPLACEMENT],
 	},
 	&"YanHuiZhuRong4": {
 		"id": &"YanHuiZhuRong4",
@@ -2028,7 +2136,34 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "衡山五神剑中最为精深的招式，将祝融剑法数十招中的精奥之处融会简化而入一招，一招之中有攻有守，威力之强，为衡山剑法之冠。",
 		"powers": [4, 3, 3, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			YANHUI_FLIP_REPLACEMENT,
+			{
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_OTHER_ALLY_BOARD,
+					"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+					"actions": [
+						{
+							"type": ACTION_RETURN_CARD_TO_HAND,
+							"card": CARD_REF_SELECTED_CARD,
+							"recipient": OWNER_ABILITY_SOURCE,
+						},
+						{
+							"type": ACTION_SUMMON_CARD,
+							"card": {
+								"type": CARD_SPEC_FRESH_COPY,
+								"of": CARD_REF_ABILITY_SOURCE,
+							},
+							"cell": {
+								"type": CELL_REF_INITIAL_CARD_CELL,
+								"card": CARD_REF_SELECTED_CARD,
+							},
+						},
+					],
+				},
+			},
+		],
 	},
 	&"canghai_sandie": {
 		"id": &"canghai_sandie",
@@ -2159,7 +2294,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						],
 						"actions": [
 							{"type": ACTION_SPEND_ALL_KI},
-							{"type": ACTION_REQUEST_EXTRA_TURN},
+							{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 						],
 					},
 				],
@@ -2490,7 +2625,7 @@ static func _validate_action(
 	if is_cost and action_type != ACTION_SPEND_KI:
 		errors.append("Card %s activation uses unsupported cost action %s" % [card_id, action_type])
 	var allowed_keys: Array[StringName] = [&"type", &"on_invalid_context"]
-	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_ADD_POWERS]:
+	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_ADD_POWERS, ACTION_GRANT_EXTRA_CARD_PLAY]:
 		allowed_keys.append(&"amount")
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
@@ -2553,6 +2688,18 @@ static func _validate_action(
 				"Card %s %s action %s requires a known recipient"
 				% [card_id, context_name, action_type]
 			)
+	if action_type == ACTION_RETURN_CARD_TO_HAND:
+		allowed_keys.append(&"card")
+		allowed_keys.append(&"recipient")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append("Card %s %s return action requires a known card reference" % [card_id, context_name])
+		if StringName(action.get("recipient", &"")) not in KNOWN_OWNER_REFERENCES:
+			errors.append("Card %s %s return action requires a known recipient" % [card_id, context_name])
+	if action_type == ACTION_SUMMON_CARD:
+		allowed_keys.append(&"card")
+		allowed_keys.append(&"cell")
+		_validate_summon_card_spec(card_id, context_name, action.get("card", null), errors)
+		_validate_summon_cell_spec(card_id, context_name, action.get("cell", null), errors)
 	if action_type in [ACTION_REVEAL_HAND_CARDS, ACTION_ENABLE_FUTURE_DRAW_REVEAL]:
 		allowed_keys.append(&"recipient")
 		var reveal_recipient := StringName(action.get("recipient", &""))
@@ -2576,6 +2723,48 @@ static func _validate_action(
 	for key: Variant in action.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s action %s has unsupported field %s" % [card_id, context_name, action_type, key])
+
+
+static func _validate_summon_card_spec(
+	card_id: StringName,
+	context_name: String,
+	value: Variant,
+	errors: Array[String]
+) -> void:
+	if typeof(value) in [TYPE_STRING, TYPE_STRING_NAME]:
+		if StringName(value) not in KNOWN_CARD_REFERENCES:
+			errors.append("Card %s %s summon action requires a known card reference" % [card_id, context_name])
+		return
+	if not value is Dictionary:
+		errors.append("Card %s %s summon action requires a card specification" % [card_id, context_name])
+		return
+	var spec: Dictionary = value
+	if StringName(spec.get("type", &"")) != CARD_SPEC_FRESH_COPY:
+		errors.append("Card %s %s summon action uses an unknown card specification" % [card_id, context_name])
+	if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
+		errors.append("Card %s %s fresh-copy summon requires a known card reference" % [card_id, context_name])
+	for key: Variant in spec.keys():
+		if StringName(key) not in [&"type", &"of"]:
+			errors.append("Card %s %s summon card specification has unsupported field %s" % [card_id, context_name, key])
+
+
+static func _validate_summon_cell_spec(
+	card_id: StringName,
+	context_name: String,
+	value: Variant,
+	errors: Array[String]
+) -> void:
+	if not value is Dictionary:
+		errors.append("Card %s %s summon action requires a cell specification" % [card_id, context_name])
+		return
+	var spec: Dictionary = value
+	if StringName(spec.get("type", &"")) not in [CELL_REF_INITIAL_CARD_CELL, CELL_REF_FIRST_ADJACENT_EMPTY]:
+		errors.append("Card %s %s summon action uses an unknown cell specification" % [card_id, context_name])
+	if StringName(spec.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+		errors.append("Card %s %s summon cell requires a known card reference" % [card_id, context_name])
+	for key: Variant in spec.keys():
+		if StringName(key) not in [&"type", &"card"]:
+			errors.append("Card %s %s summon cell specification has unsupported field %s" % [card_id, context_name, key])
 
 
 static func _validate_selector(

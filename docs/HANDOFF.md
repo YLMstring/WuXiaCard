@@ -1,12 +1,12 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-02
+Updated: 2026-08-09
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
 ## Current Product
 
-Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra turns.
+Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
@@ -82,6 +82,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Runtime card identity is `instance_id`, not a hand child index.
 - Main deck means the five-card starting hand. Player main-deck glyphs must be
   unique; enemy decks may repeat glyphs and exact IDs.
+- Both five-card starting hands are independently shuffled when a duel begins.
+  A zero seed randomizes production; explicit seeds keep tests deterministic.
 - The side deck is a separate shuffled draw pile derived independently for each
   owner. Non-`江湖` main cards set same-sect tier ceilings over the full catalog.
   The highest-tier card per glyph survives (catalog order breaks ties);
@@ -139,7 +141,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   Once `CARD_BEFORE_FLIPPED` starts, movement alone no longer cancels the
   committed flip; the target instance is followed to its current cell.
 - Runtime ki and all four powers can change permanently in hand or on board.
-  Start-owner-turn triggers run on ordinary and granted extra turns.
+  Extra-card-play grants stack and permit hand plays only. They do not repeat
+  start-owner-turn or end-owner-turn triggers; those boundaries run once per
+  owner turn, and temporary turn-scoped effects restore only when it closes.
 - LaiHeQinQuan1–5 now use generic exact-instance revelation, permanent
   future-draw audiences, flip-prevention requests, granted passive modifiers,
   and indexed self-removal. LaiHe4/5 use the active-run enemy-memory snapshot;
@@ -147,15 +151,17 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - A card carrying `defending_power_override` keeps its stored/displayed powers,
   but attackability treats its facing edge as the modifier value. CardView fades
   only its central picture to 70% while that weakness is active.
-- JinZhenDuJie2–4 use a row-major board selector to return the first enemy that
-  originally belonged to the source owner as a fresh catalog hand instance;
-  a full hand exiles it instead. Tiers 3–4 also carry the existing one-use
-  complete-attack counter.
+- JinZhenDuJie2–4 use a row-major board selector plus generic
+  `ACTION_RETURN_CARD_TO_HAND` to return the first enemy that originally
+  belonged to the source owner as a fresh catalog hand instance; a full hand
+  exiles it instead. Tiers 3–4 also carry the existing one-use complete-attack
+  counter.
 - WanHuaJian1–3 resolve a retained pre-terminal nonwinner self-exile. Tiers 2–3
-  can create a fresh exact-ID copy in the lowest-index adjacent empty cell when
-  attacked; the copy completes summon triggers and a standard attack before
-  the original attack resumes. Tier 2 retains this copy trigger on flip, tier 3
-  does not. Self-removal and returns fade; external exile keeps its ink effect.
+  use generic `ACTION_SUMMON_CARD` to create a fresh exact-ID copy in the
+  lowest-index adjacent empty cell when attacked; the copy completes summon
+  triggers and a standard attack before the original attack resumes. Tier 2
+  retains this copy trigger on flip, tier 3 does not. Self-removal and returns
+  fade; external exile keeps its ink effect.
 - MianLiCangZhen3 resummons an enemy it personally flipped when that exact card
   originally belonged to its current owner. The old instance leaves without
   exile, then a fresh catalog instance enters its current cell, resolves both
@@ -171,6 +177,16 @@ The creator has made several direct UI and localization edits. Preserve those ed
   lowest-index adjacent empty cell. Tiers 3–4 draw only after a successful
   move. Tier 4 also suppresses adjacent enemies during `CARD_BEFORE_MOVED`,
   regardless of what effect initiated either movement or swap leg.
+- JianFaQinYin1–3 move after summoning into the lowest row-major empty cell
+  lying exactly between themselves and an enemy on the same row or column.
+  Tiers 2–3 can spend one ki to move to an adjacent empty cell and gain one
+  extra hand-card play. Tier 3 reacts on `CARD_AFTER_MOVED`, suppressing all
+  adjacent enemies' non-retained abilities through the full owner turn.
+- YanHuiZhuRong3–4 replace their pending flip when the current hand contains a
+  light sword: the source returns first (or is removed if the hand is full),
+  then the exact leftmost matching hand instance is summoned into its original
+  cell. Tier 4 can instead target another ally, return it, and summon a fresh
+  source copy into that ally's original cell.
 
 See `docs/DECISIONS.md` for ability-specific behavior.
 

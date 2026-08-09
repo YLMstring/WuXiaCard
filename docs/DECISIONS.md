@@ -74,8 +74,9 @@ These decisions were explicitly established during development and should not be
   itself.
 - The original ability source remains distinct from the selected action
   subject.
-- Owner-turn start triggers resolve after active-owner selection, including
-  extra turns, and before that owner can act.
+- Owner-turn start triggers resolve after active-owner selection and before
+  that owner can act. Granted extra card plays remain inside the same owner
+  turn and do not repeat start- or end-owner-turn triggers.
 
 ## Attack Presentation
 
@@ -133,14 +134,17 @@ The action/target model should also support future non-movement activations with
 
 - Whenever Meng Huo is the source of an attack that actually flips a card, that Meng Huo gains one ki.
 - Exiling/removing a target does not count.
-- At the end of its owner's turn, an eligible Meng Huo spends all its ki to request an extra turn.
-- If multiple Meng Huos request it together, all eligible Meng Huos spend their ki but only one extra turn is granted.
-- Extra-turn chains are allowed if a later turn earns ki again.
-- The extra turn is granted only when the owner has a legal action.
+- At the end of its owner's turn, an eligible Meng Huo spends all its ki to
+  request one extra card play.
+- If multiple Meng Huos request it together, all eligible Meng Huos spend their
+  ki but only one extra card play is granted.
+- The grant permits a hand play only, not an activation. If no legal hand play
+  remains, it expires and the owner turn closes.
+- Extra-card-play grants from ordinary actions stack. End-owner-turn requests
+  are resolved once and cannot retrigger from the granted play.
 - Ownership flip removes this passive ability, but retained ki remains.
-- The extra-turn visual uses converging golden beads and a board-outline pulse;
-  its former source-card pulse is replaced by the generic pre-trigger pulse. It
-  adds no new sound.
+- The presentation uses only a short gold board-outline pulse and the
+  `额外出牌` status. Golden convergence beads are deliberately omitted.
 
 ### CangSongYingKe2
 
@@ -244,6 +248,8 @@ respectively, in row-major order. The source itself is eligible.
   unlocks. Duplicate glyphs collapse to the highest-tier candidate; equal-tier
   ties keep the earliest catalog entry. Final order is catalog order before
   each side shuffles independently.
+- Both five-card starting hands also shuffle independently when the duel
+  begins. Tests may disable or seed each shuffle separately.
 - A zero RNG seed means nondeterministic setup; a nonzero seed supports deterministic tests.
 - The player's main deck is persisted in a versioned profile and is read by new duel scenes.
 - The collection library has 1,000 logical positions. Unlocked cards occupy a compact prefix; all remaining positions are empty slots.
@@ -370,7 +376,29 @@ respectively, in row-major order. The source itself is eligible.
   The sole matching card must still be on the board and adjacent. A failed tier
   3 swap stops its follow-up attack; a successful one attacks from the new cell.
 - Every swap is orthogonally adjacent at resolution. Both conceptual movement
-  legs emit `CARD_BEFORE_MOVED` and revalidate immediately before mutation.
+  legs emit `CARD_BEFORE_MOVED`, revalidate immediately before mutation, then
+  emit `CARD_AFTER_MOVED` after the successful mutation.
 - TianZhu moves to the lowest row-major adjacent empty cell. Tiers 3–4 draw only
   after that movement succeeds. Tier 4's before-move suppression triggers for
   movement initiated by any card or effect.
+
+## 剑发琴音 / 雁回祝融
+
+- JianFa entry movement chooses the lowest row-major empty cell lying exactly
+  between the source and an enemy on the same row or column.
+- JianFa tiers 2–3 spend one ki to move to an adjacent empty cell, then grant
+  one additional hand-card play. Multiple ordinary grants stack. The extra
+  play stays in the current owner turn, accepts no activation, and does not
+  repeat turn boundaries.
+- JianFa tier 3 suppresses adjacent enemies after any successful movement of
+  itself. The suppression remains through granted plays and restores only when
+  that owner turn finally closes.
+- YanHui's before-flip rule requires exactly one leftmost light-sword hand
+  selection. YanHui returns first; a full hand removes it. The exact selected
+  hand instance is then summoned into YanHui's original cell, so there is no
+  reservation zone and no duplicate view.
+- YanHui tier 4 activation cannot target itself. It returns another allied
+  board card and summons a fresh YanHui copy into that ally's original cell.
+- Generic `ACTION_RETURN_CARD_TO_HAND` resolves an exact card reference and
+  declared recipient; generic `ACTION_SUMMON_CARD` accepts either an exact
+  selected instance or a fresh-copy specification plus a declared cell rule.

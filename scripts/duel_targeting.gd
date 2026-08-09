@@ -19,6 +19,16 @@ static func get_valid_targets(
 	var target_rule := StringName(activation.get("target_rule", &""))
 	if target_rule not in Catalog.KNOWN_TARGET_RULES:
 		return targets
+	if target_rule == Catalog.TARGET_OTHER_ALLY_BOARD:
+		for target_cell: int in range(state.board.size()):
+			if target_cell == source_cell:
+				continue
+			if _matches_target_rule(state, owner_id, target_cell, target_rule):
+				targets.append({
+					"kind": ActionData.TARGET_BOARD_CELL,
+					"index": target_cell,
+				})
+		return targets
 	for direction: int in range(4):
 		var target_cell: int = Rules.get_neighbor_index(source_cell, direction)
 		if _matches_target_rule(state, owner_id, target_cell, target_rule):
@@ -65,6 +75,8 @@ static func _matches_target_rule(
 		return false
 	var target_owner: int = int((target_slot_value as Dictionary).get("owner", 0))
 	if target_rule == Catalog.TARGET_ADJACENT_ALLY_BOARD:
+		return target_owner == owner_id
+	if target_rule == Catalog.TARGET_OTHER_ALLY_BOARD:
 		return target_owner == owner_id
 	if target_rule == Catalog.TARGET_ADJACENT_ENEMY_BOARD:
 		return target_owner != owner_id

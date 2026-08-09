@@ -421,13 +421,14 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 	_check(
 		next_state.active_player == Rules.PLAYER_OWNER
 		and (next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("powers", [])
-		== [3, 3, 3, 3],
-		"ZiXiaGong start-turn effect resolves when Meng Huo grants an extra turn"
+		== [2, 2, 2, 2],
+		"Extra card play does not repeat ZiXiaGong's start-turn effect"
 	)
 	var event_types: Array[StringName] = _event_types(transition.get("events", []))
 	_check(
-		event_types.find(&"extra_turn_granted") < event_types.rfind(&"powers_changed"),
-		"Extra-turn grant is announced before the granted turn's start effects"
+		event_types.has(&"extra_card_play_granted")
+		and not event_types.has(&"powers_changed"),
+		"Extra-card-play grant is announced without a new start-turn resolution"
 	)
 
 
@@ -1513,9 +1514,9 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 			&"ki_changed",
 			&"ability_triggered",
 			&"ki_changed",
-			&"extra_turn_granted",
+			&"extra_card_play_granted",
 		],
-		"Meng Huo cues each passive rule before gaining and spending ki"
+		"Meng Huo cues each passive rule before gaining, spending, and granting a play"
 	)
 	var gain_event: Dictionary = events[4]
 	var spend_event: Dictionary = events[6]
@@ -1523,7 +1524,8 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
 	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI, "Gain event identifies its generic action")
 	_check(StringName(spend_event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI, "Spend event identifies its generic action")
-	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra turn retains the acting owner without adding a turn count")
+	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra card play retains the acting owner after one action")
+	_check(next_state.extra_card_plays_remaining == 1, "Meng Huo grants exactly one pending card play")
 	_check(int((((next_state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Final simulator state stores the drained ki")
 
 
@@ -1560,7 +1562,7 @@ func _test_meng_huo_multiple_flips_gain_in_order() -> void:
 		"Multi-target attacks emit one cue in canonical attack order"
 	)
 	_check(gained_values == [1, 2, 3, 4], "Meng Huo gains one ki immediately after each actual flip")
-	_check(_count_events(events, &"extra_turn_granted") == 1, "Any amount of gained ki grants one extra turn")
+	_check(_count_events(events, &"extra_card_play_granted") == 1, "Any amount of gained ki grants one extra card play")
 
 
 func _test_meng_huo_exile_grants_no_ki() -> void:
@@ -1575,7 +1577,7 @@ func _test_meng_huo_exile_grants_no_ki() -> void:
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var events: Array = transition.get("events", [])
 	_check(_count_events(events, &"card_exiled") == 1, "Fixture replaces Meng Huo's flip with exile")
-	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_turn_granted") == 0, "Exile grants no ki or extra turn")
+	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_card_play_granted") == 0, "Exile grants no ki or extra card play")
 
 
 func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
@@ -1599,10 +1601,10 @@ func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
 		if StringName(event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI:
 			drain_cells.append(int(event.get("source_cell", -1)))
 	_check(drain_cells == [0, 8], "Multiple Meng Huos drain in row-major order")
-	_check(_count_events(events, &"extra_turn_granted") == 1, "Multiple request tokens coalesce into one extra turn")
-	var extra_event: Dictionary = _first_event(events, &"extra_turn_granted")
+	_check(_count_events(events, &"extra_card_play_granted") == 1, "Multiple Meng Huo requests coalesce into one extra card play")
+	var extra_event: Dictionary = _first_event(events, &"extra_card_play_granted")
 	_check(int(extra_event.get("request_count", 0)) == 2, "Coalesced event records both valid requests")
-	_check((transition["state"] as State).active_player == Rules.PLAYER_OWNER, "Coalesced extra turn retains the acting owner once")
+	_check((transition["state"] as State).extra_card_plays_remaining == 1, "Coalesced requests grant one pending play")
 
 
 func _test_meng_huo_extra_turn_can_chain() -> void:
@@ -1618,11 +1620,15 @@ func _test_meng_huo_extra_turn_can_chain() -> void:
 	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
 	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var first_state: State = first_transition["state"] as State
-	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_turn_granted") == 1, "First Meng Huo grants the first extra turn")
+	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First Meng Huo grants an extra card play")
 	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 3))
 	var second_state: State = second_transition["state"] as State
-	_check(second_state.active_player == Rules.PLAYER_OWNER and _count_events(second_transition.get("events", []), &"extra_turn_granted") == 1, "New ki gained during an extra turn grants another extra turn")
-	_check(second_state.turn_count == 2, "Chained extra-turn actions each increment turn count once")
+	_check(
+		_count_events(second_transition.get("events", []), &"extra_card_play_granted") == 0
+		and second_state.extra_card_plays_remaining == 0,
+		"Extra card play does not repeat the end-turn grant"
+	)
+	_check(second_state.turn_count == 2, "The original play and extra play each increment action count once")
 
 
 func _test_flipped_meng_huo_loses_ability_but_keeps_ki() -> void:
@@ -1655,8 +1661,8 @@ func _test_unusable_extra_turn_expires() -> void:
 	)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
-	_check(_count_events(transition.get("events", []), &"extra_turn_granted") == 1, "Successful flip still grants the extra-turn event")
-	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra turn expires when its owner has no legal action")
+	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "Successful flip still announces the extra-card-play grant")
+	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
 
 
 func _test_retained_after_summon_draws_for_new_owner() -> void:

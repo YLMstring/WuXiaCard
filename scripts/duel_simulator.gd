@@ -28,6 +28,8 @@ static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Arra
 		for cell_index: int in range(9):
 			if Rules.can_place(state.board, cell_index):
 				actions.append(ActionData.make_play(hand_index, cell_index, instance_id))
+	if owner_id == state.active_player and state.extra_card_plays_remaining > 0:
+		return actions
 	for source_cell: int in range(state.board.size()):
 		var source_slot_value: Variant = state.board[source_cell]
 		if (
@@ -72,6 +74,8 @@ static func is_action_legal(state: StateData, action: ActionData) -> bool:
 	if action.action_type == ActionData.TYPE_PLAY:
 		return _is_play_action_legal(state, action)
 	if action.action_type == ActionData.TYPE_ACTIVATE:
+		if state.extra_card_plays_remaining > 0:
+			return false
 		return _is_activate_action_legal(state, action)
 	return false
 
@@ -183,6 +187,9 @@ static func _is_activate_action_legal(state: StateData, action: ActionData) -> b
 static func _apply_play_action(state: StateData, action: ActionData) -> Dictionary:
 	var next_state: StateData = state.duplicate_state()
 	var summoning_owner: int = next_state.active_player
+	if next_state.extra_card_plays_remaining > 0:
+		next_state.extra_card_plays_remaining -= 1
+	var extra_card_play_requests: Array = []
 	var hand: Array = next_state.get_hand(summoning_owner)
 	var card: Dictionary = (hand[action.source_index] as Dictionary).duplicate(true)
 	hand.remove_at(action.source_index)
@@ -212,6 +219,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
 		summon_context
 	)
+	_append_extra_card_play_requests(extra_card_play_requests, before_summon_result)
 	var placement_events: Array = events.duplicate()
 	events.clear()
 	_merge_resolution(captures, exiles, events, before_summon_result)
@@ -221,6 +229,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		Catalog.TRIGGER_CARD_SUMMONED,
 		summon_context
 	)
+	_append_extra_card_play_requests(extra_card_play_requests, summon_result)
 	_merge_resolution(captures, exiles, events, summon_result)
 
 	if _card_instance_at(next_state, action.target_index, instance_id):
@@ -232,6 +241,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 			Catalog.TRIGGER_CARD_AFTER_SUMMONED,
 			after_context
 		)
+		_append_extra_card_play_requests(extra_card_play_requests, after_result)
 		_merge_resolution(captures, exiles, events, after_result)
 
 	var attack_cell: int = _find_board_card_cell(
@@ -250,8 +260,13 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 			instance_id,
 			&"summon_standard_attack"
 		)
+		_append_extra_card_play_requests(extra_card_play_requests, attack_result)
 		_merge_resolution(captures, exiles, events, attack_result)
-	var finish_result: Dictionary = _finish_turn(next_state, summoning_owner)
+	var finish_result: Dictionary = _finish_action(
+		next_state,
+		summoning_owner,
+		extra_card_play_requests
+	)
 	_merge_resolution(captures, exiles, events, finish_result)
 	return {
 		"valid": true,
@@ -293,17 +308,25 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	var captures: Array = activation_result.get("captures", [])
 	var exiles: Array = activation_result.get("exiles", [])
 	var events: Array[Dictionary] = activation_result.get("events", [])
+	var extra_card_play_requests: Array = []
+	_append_extra_card_play_requests(extra_card_play_requests, activation_result)
 	for request_value: Variant in activation_result.get("attack_requests", []):
 		if not request_value is Dictionary:
 			continue
 		var request_result: Dictionary = _resolve_attack_request(next_state, request_value)
+		_append_extra_card_play_requests(extra_card_play_requests, request_result)
 		_merge_resolution(captures, exiles, events, request_result)
 	for request_value: Variant in activation_result.get("summon_requests", []):
 		if not request_value is Dictionary:
 			continue
 		var summon_result: Dictionary = _resolve_summon_request(next_state, request_value)
+		_append_extra_card_play_requests(extra_card_play_requests, summon_result)
 		_merge_resolution(captures, exiles, events, summon_result)
-	var finish_result: Dictionary = _finish_turn(next_state, moving_owner)
+	var finish_result: Dictionary = _finish_action(
+		next_state,
+		moving_owner,
+		extra_card_play_requests
+	)
 	_merge_resolution(captures, exiles, events, finish_result)
 	return {
 		"valid": true,
@@ -695,9 +718,12 @@ static func _resolve_before_move_request(
 	state: StateData,
 	request: Dictionary
 ) -> Dictionary:
+	var event_id := StringName(
+		request.get("movement_event", Catalog.CARD_BEFORE_MOVED)
+	)
 	return _resolve_trigger_event(
 		state,
-		Catalog.CARD_BEFORE_MOVED,
+		event_id,
 		request
 	)
 
@@ -717,21 +743,41 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	var requires_adjacent_source: bool = bool(
 		request.get("requires_adjacent_source", true)
 	)
+	var requires_source: bool = bool(request.get("requires_source", true))
+	var existing_hand_instance_id := StringName(
+		request.get("existing_hand_instance_id", &"")
+	)
+	var existing_hand_index: int = -1
+	if existing_hand_instance_id != &"":
+		var source_hand: Array = state.get_hand(source_owner)
+		for hand_index: int in range(source_hand.size()):
+			var hand_card: Dictionary = source_hand[hand_index]
+			if StringName(hand_card.get("instance_id", &"")) == existing_hand_instance_id:
+				existing_hand_index = hand_index
+				break
 	if (
-		not _owned_card_instance_at(state, source_cell, source_instance_id, source_owner)
+		requires_source
+		and not _owned_card_instance_at(state, source_cell, source_instance_id, source_owner)
 		or target_cell < 0
 		or target_cell >= state.board.size()
 		or state.board[target_cell] != null
-		or requires_adjacent_source and not _are_adjacent(source_cell, target_cell)
+		or requires_adjacent_source
+		and (
+			not _owned_card_instance_at(state, source_cell, source_instance_id, source_owner)
+			or not _are_adjacent(source_cell, target_cell)
+		)
 		or not Catalog.has_card(card_id)
 		or instance_id == &""
+		or existing_hand_instance_id != &"" and existing_hand_index < 0
 	):
 		return result
-	var summoned_card: Dictionary = Catalog.create_instance(
-		card_id,
-		source_owner,
-		instance_id
-	)
+	var summoned_card: Dictionary
+	if existing_hand_index >= 0:
+		var source_hand: Array = state.get_hand(source_owner)
+		summoned_card = source_hand[existing_hand_index]
+		source_hand.remove_at(existing_hand_index)
+	else:
+		summoned_card = Catalog.create_instance(card_id, source_owner, instance_id)
 	state.board[target_cell] = {
 		"card": summoned_card,
 		"owner": source_owner,
@@ -745,6 +791,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"card_id": card_id,
 		"instance_id": instance_id,
 		"card": summoned_card.duplicate(true),
+		"from_hand_instance_id": existing_hand_instance_id,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
 	})
 	var summon_context: Dictionary = {
@@ -908,31 +955,42 @@ static func _attack_is_valid(
 	)
 
 
-static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
+static func _finish_action(
+	state: StateData,
+	moving_owner: int,
+	action_requests: Array = []
+) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
-	var end_result: Dictionary = _resolve_trigger_event(
-		state,
-		Catalog.TRIGGER_END_OWNER_TURN,
-		{"turn_owner_id": moving_owner}
-	)
-	_merge_resolution(
-		result["captures"],
-		result["exiles"],
-		result["events"],
-		end_result
-	)
-	var restore_result: Dictionary = _restore_temporary_abilities(
-		state,
-		state.turn_count
-	)
-	_merge_resolution(
-		result["captures"],
-		result["exiles"],
-		result["events"],
-		restore_result
-	)
 	state.turn_count += 1
 	state.state_version += 1
+	_apply_extra_card_play_requests(state, moving_owner, action_requests, result, false)
+	if state.extra_card_plays_remaining > 0 and _owner_has_legal_hand_play(state, moving_owner):
+		state.active_player = moving_owner
+		return result
+	state.extra_card_plays_remaining = 0
+
+	if not state.end_turn_triggers_resolved:
+		var end_result: Dictionary = _resolve_trigger_event(
+			state,
+			Catalog.TRIGGER_END_OWNER_TURN,
+			{"turn_owner_id": moving_owner}
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			end_result
+		)
+		state.end_turn_triggers_resolved = true
+		_apply_extra_card_play_requests(
+			state,
+			moving_owner,
+			end_result.get("extra_turn_requests", []) as Array,
+			result,
+			true
+		)
+
+	var board_remained_full: bool = false
 	if _board_is_full(state.board):
 		var before_end_result: Dictionary = _resolve_trigger_event(
 			state,
@@ -945,32 +1003,27 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 			result["events"],
 			before_end_result
 		)
-		if _board_is_full(state.board):
-			return result
-	var extra_turn_requests: Array = end_result.get("extra_turn_requests", [])
-	var extra_turn_granted: bool = not extra_turn_requests.is_empty()
-	if extra_turn_granted:
-		var source_instance_ids: Array[StringName] = []
-		for request_value: Variant in extra_turn_requests:
-			if not request_value is Dictionary:
-				continue
-			var request: Dictionary = request_value
-			if int(request.get("owner_id", 0)) == moving_owner:
-				source_instance_ids.append(
-					StringName(request.get("source_instance_id", &""))
-				)
-		extra_turn_granted = not source_instance_ids.is_empty()
-		if extra_turn_granted:
-			result["events"].append({
-				"type": &"extra_turn_granted",
-				"owner_id": moving_owner,
-				"request_count": source_instance_ids.size(),
-				"source_instance_ids": source_instance_ids,
-			})
-	if extra_turn_granted and not get_legal_actions_for_owner(state, moving_owner).is_empty():
+		board_remained_full = _board_is_full(state.board)
+	if state.extra_card_plays_remaining > 0 and _owner_has_legal_hand_play(state, moving_owner):
 		state.active_player = moving_owner
-	else:
-		state.active_player = _get_next_active_owner(state, moving_owner)
+		return result
+	state.extra_card_plays_remaining = 0
+
+	var restore_result: Dictionary = _restore_temporary_abilities(
+		state,
+		state.owner_turn_serial
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		restore_result
+	)
+	state.owner_turn_serial += 1
+	state.end_turn_triggers_resolved = false
+	if board_remained_full:
+		return result
+	state.active_player = _get_next_active_owner(state, moving_owner)
 	var start_result: Dictionary = _resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_START_OWNER_TURN,
@@ -983,6 +1036,53 @@ static func _finish_turn(state: StateData, moving_owner: int) -> Dictionary:
 		start_result
 	)
 	return result
+
+
+static func _append_extra_card_play_requests(target: Array, resolution: Dictionary) -> void:
+	target.append_array(resolution.get("extra_turn_requests", []) as Array)
+
+
+static func _apply_extra_card_play_requests(
+	state: StateData,
+	moving_owner: int,
+	requests: Array,
+	result: Dictionary,
+	coalesce: bool
+) -> void:
+	var source_instance_ids: Array[StringName] = []
+	var granted_amount: int = 0
+	for request_value: Variant in requests:
+		if not request_value is Dictionary:
+			continue
+		var request: Dictionary = request_value
+		if int(request.get("owner_id", 0)) != moving_owner:
+			continue
+		var amount: int = maxi(int(request.get("amount", 1)), 0)
+		if amount <= 0:
+			continue
+		granted_amount += amount
+		source_instance_ids.append(StringName(request.get("source_instance_id", &"")))
+	if source_instance_ids.is_empty():
+		return
+	if coalesce:
+		granted_amount = 1
+	state.extra_card_plays_remaining += granted_amount
+	result["events"].append({
+		"type": &"extra_card_play_granted",
+		"owner_id": moving_owner,
+		"amount": granted_amount,
+		"request_count": source_instance_ids.size(),
+		"source_instance_ids": source_instance_ids,
+	})
+
+
+static func _owner_has_legal_hand_play(state: StateData, owner_id: int) -> bool:
+	if state.get_hand(owner_id).is_empty():
+		return false
+	for cell_index: int in range(state.board.size()):
+		if Rules.can_place(state.board, cell_index):
+			return true
+	return false
 
 
 static func _restore_temporary_abilities(

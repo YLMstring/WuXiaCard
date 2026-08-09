@@ -173,8 +173,10 @@ state and transitions.
    from the source's new exact cell.
 5. Declare tier 2–3 adjacent-empty activations: spend one ki, move with
    `STOP_RULE`, then grant exactly one extra card play.
-6. Give tier 3 the same all-source before-move temporary suppression declaration
-   already used by 天柱云气4.
+6. Register generic `CARD_AFTER_MOVED` dispatch after a successful exact move.
+   Give tier 3 an all-source after-move suppression declaration that reads the
+   new position's adjacent enemies. Keep 天柱云气4 on `CARD_BEFORE_MOVED` so it
+   continues to read the old position's adjacent enemies.
 
 ## Task 8: Implement 雁回祝融 declarations
 

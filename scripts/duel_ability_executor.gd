@@ -65,6 +65,12 @@ static func execute_activation(
 		"target_kind": target_kind,
 		"target_index": target_index,
 	}
+	if target_kind == &"board_cell" and target_index >= 0 and target_index < state.board.size():
+		var target_value: Variant = state.board[target_index]
+		if target_value is Dictionary:
+			context["selected_card_instance_id"] = StringName(
+				((target_value as Dictionary).get("card", {}) as Dictionary).get("instance_id", &"")
+			)
 	var events: Array[Dictionary] = [{
 		"type": &"ability_activated",
 		"source_cell": source_cell,
@@ -139,6 +145,21 @@ static func execute_actions(
 	if not action_context.has("ability_source_instance_id"):
 		action_context["ability_source_instance_id"] = source_instance_id
 		action_context["ability_source_owner_id"] = expected_owner
+	if not action_context.has("card_reference_snapshots"):
+		action_context["card_reference_snapshots"] = {}
+	var reference_snapshots: Dictionary = action_context["card_reference_snapshots"] as Dictionary
+	if not reference_snapshots.has(Catalog.CARD_REF_ABILITY_SOURCE):
+		reference_snapshots[Catalog.CARD_REF_ABILITY_SOURCE] = _snapshot_card_reference(
+			state,
+			StringName(action_context.get("ability_source_instance_id", source_instance_id))
+		)
+	if not reference_snapshots.has(Catalog.CARD_REF_SELECTED_CARD):
+		var selected_instance_id := StringName(action_context.get("selected_card_instance_id", &""))
+		if selected_instance_id != &"":
+			reference_snapshots[Catalog.CARD_REF_SELECTED_CARD] = _snapshot_card_reference(
+				state,
+				selected_instance_id
+			)
 	var current_source_cell: int = source_cell
 	for action_value: Variant in actions:
 		if not action_value is Dictionary:
@@ -444,20 +465,20 @@ static func _execute_action(
 			StringName(declaration.get("new_owner", &"")),
 			context
 		)
-	if action_type == Catalog.ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND:
-		return _return_self_to_ability_source_hand(
+	if action_type == Catalog.ACTION_RETURN_CARD_TO_HAND:
+		return _return_card_to_hand(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner,
+			StringName(declaration.get("card", &"")),
+			StringName(declaration.get("recipient", &"")),
 			context
 		)
-	if action_type == Catalog.ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY:
-		return _request_fresh_copy_summon(
+	if action_type == Catalog.ACTION_SUMMON_CARD:
+		return _request_summon_card(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner
+			declaration,
+			context
 		)
 	if action_type == Catalog.ACTION_EXILE_SELF:
 		return _exile_self(
@@ -490,12 +511,13 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner
 		)
-	if action_type == Catalog.ACTION_REQUEST_EXTRA_TURN:
-		return _request_extra_turn(
+	if action_type == Catalog.ACTION_GRANT_EXTRA_CARD_PLAY:
+		return _grant_extra_card_play(
 			state,
 			source_cell,
 			source_instance_id,
-			expected_owner
+			expected_owner,
+			int(declaration.get("amount", 0))
 		)
 	if action_type == Catalog.ACTION_MOVE_SELF_TO_TARGET:
 		return _move_self(
@@ -504,6 +526,14 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner,
 			context,
+			before_move_resolver
+		)
+	if action_type == Catalog.ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY:
+		return _move_self_to_first_empty_between_enemy(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
 			before_move_resolver
 		)
 	if action_type == Catalog.ACTION_SWAP_SELF_WITH_TARGET:
@@ -563,6 +593,16 @@ static func _for_each_selected_card(
 		)
 		var nested_context: Dictionary = context.duplicate(true)
 		nested_context["selected_card_conditions"] = conditions.duplicate(true)
+		nested_context["selected_card_instance_id"] = selected_instance_id
+		var nested_snapshots: Dictionary = nested_context.get(
+			"card_reference_snapshots",
+			{}
+		) as Dictionary
+		nested_snapshots[Catalog.CARD_REF_SELECTED_CARD] = _snapshot_card_reference(
+			state,
+			selected_instance_id
+		)
+		nested_context["card_reference_snapshots"] = nested_snapshots
 		var nested_result: Dictionary = execute_actions(
 			state,
 			selected_cell,
@@ -621,7 +661,7 @@ static func _temporarily_remove_non_retained_abilities(
 		return _no_effect(source_cell)
 	var card: Dictionary = subject.get("card", {})
 	var removed_entries: Array[Dictionary] = (
-		Abilities.temporarily_remove_non_retained_abilities(card, state.turn_count)
+		Abilities.temporarily_remove_non_retained_abilities(card, state.owner_turn_serial)
 	)
 	if removed_entries.is_empty():
 		return _no_effect(source_cell)
@@ -1099,47 +1139,53 @@ static func _append_card_instance_id(
 		instance_ids.append(instance_id)
 
 
-static func _return_self_to_ability_source_hand(
+static func _return_card_to_hand(
 	state: StateData,
 	source_cell: int,
-	source_instance_id: StringName,
-	expected_owner: int,
+	card_reference: StringName,
+	recipient_reference: StringName,
 	context: Dictionary
 ) -> Dictionary:
-	var ability_source_instance_id := StringName(
-		context.get("ability_source_instance_id", &"")
-	)
-	var selected_conditions: Array = context.get("selected_card_conditions", [])
-	var subject: Dictionary = Selector.revalidate(
-		state,
-		source_instance_id,
-		ability_source_instance_id,
-		selected_conditions
-	)
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var instance_id := StringName(snapshot.get("instance_id", &""))
+	var subject: Dictionary = Selector.locate_card(state, instance_id)
+	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	if card_reference == Catalog.CARD_REF_SELECTED_CARD:
+		var selected_conditions: Array = context.get("selected_card_conditions", [])
+		var ability_source_instance_id := StringName(context.get("ability_source_instance_id", &""))
+		subject = Selector.revalidate(
+			state,
+			instance_id,
+			ability_source_instance_id,
+			selected_conditions,
+			context
+		)
+		if subject.is_empty():
+			return _no_effect(source_cell)
+	var target_cell: int = int(subject.get("index", -1))
 	var ability_source: Dictionary = Selector.locate_card(
 		state,
-		ability_source_instance_id
+		StringName(context.get("ability_source_instance_id", &""))
 	)
-	if (
-		subject.is_empty()
-		or ability_source.is_empty()
-		or int(subject.get("owner_id", 0)) != expected_owner
-		or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
-		or int(ability_source.get("owner_id", 0))
-		!= int(context.get("ability_source_owner_id", 0))
-	):
-		return _no_effect(source_cell)
-	var target_cell: int = int(subject.get("index", -1))
 	var source_current_cell: int = _get_location_cell(ability_source)
-	var recipient_owner: int = int(ability_source.get("owner_id", 0))
+	if source_current_cell < 0:
+		source_current_cell = int(
+			(_get_reference_snapshot(context, Catalog.CARD_REF_ABILITY_SOURCE)).get("index", source_cell)
+		)
+	var recipient_owner: int = int(subject.get("owner_id", 0))
+	if recipient_reference == Catalog.OWNER_ABILITY_SOURCE:
+		recipient_owner = int(context.get("ability_source_owner_id", 0))
+	elif recipient_reference != Catalog.OWNER_CARD_CURRENT:
+		return _no_effect(source_cell)
 	var hand: Array = state.get_hand(recipient_owner)
 	if hand.size() >= MAX_HAND_SIZE:
 		return _exile_board_subject(
 			state,
 			subject,
 			source_current_cell,
-			ability_source_instance_id,
-			false
+			StringName(context.get("ability_source_instance_id", &"")),
+			card_reference == Catalog.CARD_REF_ABILITY_SOURCE
 		)
 	var old_card: Dictionary = subject.get("card", {})
 	var card_id := StringName(old_card.get("card_id", &""))
@@ -1156,9 +1202,9 @@ static func _return_self_to_ability_source_hand(
 	return _applied(source_current_cell, [{
 		"type": &"card_returned_to_hand",
 		"source_cell": source_current_cell,
-		"source_instance_id": ability_source_instance_id,
+		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
 		"target_cell": target_cell,
-		"old_instance_id": source_instance_id,
+		"old_instance_id": instance_id,
 		"owner_id": recipient_owner,
 		"card_id": card_id,
 		"instance_id": new_instance_id,
@@ -1167,35 +1213,87 @@ static func _return_self_to_ability_source_hand(
 	}])
 
 
-static func _request_fresh_copy_summon(
+static func _request_summon_card(
 	state: StateData,
 	source_cell: int,
-	source_instance_id: StringName,
-	expected_owner: int
+	declaration: Dictionary,
+	context: Dictionary
 ) -> Dictionary:
-	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty() or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+	var source_snapshot: Dictionary = _get_reference_snapshot(
+		context,
+		Catalog.CARD_REF_ABILITY_SOURCE
+	)
+	var source_instance_id := StringName(source_snapshot.get("instance_id", &""))
+	var source_owner: int = int(context.get("ability_source_owner_id", 0))
+	var source_location: Dictionary = Selector.locate_card(state, source_instance_id)
+	var current_source_cell: int = _get_location_cell(source_location)
+	var card_spec: Variant = declaration.get("card", null)
+	var card_id: StringName = &""
+	var existing_instance_id: StringName = &""
+	if typeof(card_spec) in [TYPE_STRING, TYPE_STRING_NAME]:
+		var card_reference := StringName(card_spec)
+		var card_snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+		existing_instance_id = StringName(card_snapshot.get("instance_id", &""))
+		var existing_location: Dictionary = Selector.locate_card(state, existing_instance_id)
+		if (
+			existing_location.is_empty()
+			or StringName(existing_location.get("zone", &"")) != Catalog.CARD_ZONE_HAND
+		):
+			return _no_effect(source_cell)
+		card_id = StringName((existing_location.get("card", {}) as Dictionary).get("card_id", &""))
+		source_owner = int(existing_location.get("owner_id", source_owner))
+	elif card_spec is Dictionary:
+		var fresh_spec: Dictionary = card_spec
+		if StringName(fresh_spec.get("type", &"")) != Catalog.CARD_SPEC_FRESH_COPY:
+			return _no_effect(source_cell)
+		var copied_snapshot: Dictionary = _get_reference_snapshot(
+			context,
+			StringName(fresh_spec.get("of", &""))
+		)
+		card_id = StringName(copied_snapshot.get("card_id", &""))
+	else:
 		return _no_effect(source_cell)
-	var current_cell: int = int(source.get("index", -1))
-	var empty_neighbors: Array[int] = []
-	for direction: int in range(4):
-		var neighbor_cell: int = Rules.get_neighbor_index(current_cell, direction)
-		if neighbor_cell >= 0 and state.board[neighbor_cell] == null:
-			empty_neighbors.append(neighbor_cell)
-	if empty_neighbors.is_empty():
-		return _no_effect(current_cell)
-	empty_neighbors.sort()
-	var card_id := StringName((source.get("card", {}) as Dictionary).get("card_id", &""))
 	if not Catalog.has_card(card_id):
-		return _no_effect(current_cell)
-	var result: Dictionary = _applied(current_cell)
+		return _no_effect(source_cell)
+	var cell_spec_value: Variant = declaration.get("cell", null)
+	if not cell_spec_value is Dictionary:
+		return _no_effect(source_cell)
+	var cell_spec: Dictionary = cell_spec_value
+	var anchor_reference := StringName(cell_spec.get("card", &""))
+	var anchor_snapshot: Dictionary = _get_reference_snapshot(context, anchor_reference)
+	var target_cell: int = -1
+	var requires_adjacent_source: bool = false
+	if StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_INITIAL_CARD_CELL:
+		target_cell = int(anchor_snapshot.get("index", -1))
+	elif StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_FIRST_ADJACENT_EMPTY:
+		var anchor_location: Dictionary = Selector.locate_card(
+			state,
+			StringName(anchor_snapshot.get("instance_id", &""))
+		)
+		var anchor_cell: int = _get_location_cell(anchor_location)
+		var empty_neighbors: Array[int] = []
+		for direction: int in range(4):
+			var neighbor_cell: int = Rules.get_neighbor_index(anchor_cell, direction)
+			if neighbor_cell >= 0 and state.board[neighbor_cell] == null:
+				empty_neighbors.append(neighbor_cell)
+		if empty_neighbors.is_empty():
+			return _no_effect(source_cell)
+		empty_neighbors.sort()
+		target_cell = empty_neighbors[0]
+		requires_adjacent_source = anchor_reference == Catalog.CARD_REF_ABILITY_SOURCE
+	if target_cell < 0 or target_cell >= state.board.size() or state.board[target_cell] != null:
+		return _no_effect(source_cell)
+	var result: Dictionary = _applied(current_source_cell if current_source_cell >= 0 else source_cell)
 	result["summon_requests"].append({
-		"source_cell": current_cell,
+		"source_cell": current_source_cell if current_source_cell >= 0 else int(source_snapshot.get("index", source_cell)),
 		"source_instance_id": source_instance_id,
-		"source_owner_id": int(source.get("owner_id", 0)),
-		"target_cell": empty_neighbors[0],
+		"source_owner_id": source_owner,
+		"target_cell": target_cell,
 		"card_id": card_id,
-		"instance_id": _make_generated_instance_id(state, card_id),
+		"instance_id": existing_instance_id if existing_instance_id != &"" else _make_generated_instance_id(state, card_id),
+		"existing_hand_instance_id": existing_instance_id,
+		"requires_source": requires_adjacent_source,
+		"requires_adjacent_source": requires_adjacent_source,
 		"reason": &"ability_fresh_copy",
 	})
 	return result
@@ -1332,20 +1430,22 @@ static func _spend_all_ki(
 	)])
 
 
-static func _request_extra_turn(
+static func _grant_extra_card_play(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
-	expected_owner: int
+	expected_owner: int,
+	amount: int
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty():
+	if source.is_empty() or amount <= 0:
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
 	result["extra_turn_requests"].append({
 		"owner_id": int(source.get("owner_id", 0)),
 		"source_cell": _get_location_cell(source),
 		"source_instance_id": source_instance_id,
+		"amount": amount,
 	})
 	return result
 
@@ -1402,6 +1502,39 @@ static func _move_self_to_first_adjacent_empty(
 				state,
 				current_cell,
 				target_cell,
+				source_instance_id,
+				expected_owner,
+				before_move_resolver
+			)
+	return _no_effect(source_cell)
+
+
+static func _move_self_to_first_empty_between_enemy(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	before_move_resolver: Callable = Callable()
+) -> Dictionary:
+	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	if StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	var current_cell: int = int(subject.get("index", -1))
+	for middle_cell: int in range(state.board.size()):
+		if state.board[middle_cell] != null:
+			continue
+		for direction: int in range(4):
+			if Rules.get_neighbor_index(current_cell, direction) != middle_cell:
+				continue
+			var far_cell: int = Rules.get_neighbor_index(middle_cell, direction)
+			if far_cell < 0 or state.board[far_cell] == null:
+				continue
+			if int((state.board[far_cell] as Dictionary).get("owner", 0)) == expected_owner:
+				continue
+			return _move_card_between_cells(
+				state,
+				current_cell,
+				middle_cell,
 				source_instance_id,
 				expected_owner,
 				before_move_resolver
@@ -1554,7 +1687,8 @@ static func _swap_board_cards(
 		target_cell,
 		source_instance_id,
 		expected_owner,
-		Callable()
+		before_move_resolver,
+		false
 	)
 	var source_events: Array = (source_before.get("events", []) as Array).duplicate()
 	source_events.append_array(source_move.get("events", []) as Array)
@@ -1597,16 +1731,20 @@ static func _move_card_between_cells(
 	target_cell: int,
 	instance_id: StringName,
 	expected_owner: int,
-	before_move_resolver: Callable = Callable()
+	before_move_resolver: Callable = Callable(),
+	resolve_before: bool = true
 ) -> Dictionary:
-	var before_result: Dictionary = _resolve_before_move(
-		state,
-		source_cell,
-		target_cell,
-		instance_id,
-		expected_owner,
-		before_move_resolver
-	)
+	var before_result: Dictionary = _no_effect(source_cell)
+	if resolve_before:
+		before_result = _resolve_movement_event(
+			state,
+			Catalog.CARD_BEFORE_MOVED,
+			source_cell,
+			target_cell,
+			instance_id,
+			expected_owner,
+			before_move_resolver
+		)
 	var source_slot: Dictionary = _get_card_slot(
 		state,
 		source_cell,
@@ -1633,22 +1771,61 @@ static func _move_card_between_cells(
 		"owner_id": int(source_slot.get("owner", 0)),
 		"instance_id": instance_id,
 	})
+	var after_result: Dictionary = _resolve_movement_event(
+		state,
+		Catalog.CARD_AFTER_MOVED,
+		target_cell,
+		target_cell,
+		instance_id,
+		expected_owner,
+		before_move_resolver,
+		source_cell
+	)
+	result["events"].append_array(after_result.get("events", []) as Array)
+	result["captures"].append_array(after_result.get("captures", []) as Array)
+	result["exiles"].append_array(after_result.get("exiles", []) as Array)
+	result["extra_turn_requests"].append_array(
+		after_result.get("extra_turn_requests", []) as Array
+	)
 	return result
 
 
 static func _resolve_before_move(
-	_state: StateData,
+	state: StateData,
 	source_cell: int,
 	target_cell: int,
 	instance_id: StringName,
 	expected_owner: int,
 	before_move_resolver: Callable
 ) -> Dictionary:
+	return _resolve_movement_event(
+		state,
+		Catalog.CARD_BEFORE_MOVED,
+		source_cell,
+		target_cell,
+		instance_id,
+		expected_owner,
+		before_move_resolver
+	)
+
+
+static func _resolve_movement_event(
+	_state: StateData,
+	event_id: StringName,
+	source_cell: int,
+	target_cell: int,
+	instance_id: StringName,
+	expected_owner: int,
+	movement_resolver: Callable,
+	origin_cell: int = -1
+) -> Dictionary:
 	var result: Dictionary = _no_effect(source_cell)
-	if not before_move_resolver.is_valid():
+	if not movement_resolver.is_valid():
 		return result
-	var resolution_value: Variant = before_move_resolver.call({
+	var resolution_value: Variant = movement_resolver.call({
+		"movement_event": event_id,
 		"moving_source_cell": source_cell,
+		"moving_origin_cell": origin_cell if origin_cell >= 0 else source_cell,
 		"moving_target_cell": target_cell,
 		"moving_instance_id": instance_id,
 		"moving_owner_id": expected_owner,
@@ -1773,6 +1950,32 @@ static func _get_subject(
 	):
 		return {}
 	return subject
+
+
+static func _snapshot_card_reference(
+	state: StateData,
+	instance_id: StringName
+) -> Dictionary:
+	var location: Dictionary = Selector.locate_card(state, instance_id)
+	if location.is_empty():
+		return {}
+	var card: Dictionary = location.get("card", {})
+	return {
+		"instance_id": instance_id,
+		"card_id": StringName(card.get("card_id", &"")),
+		"owner_id": int(location.get("owner_id", 0)),
+		"zone": StringName(location.get("zone", &"")),
+		"index": int(location.get("index", -1)),
+	}
+
+
+static func _get_reference_snapshot(
+	context: Dictionary,
+	card_reference: StringName
+) -> Dictionary:
+	var snapshots: Dictionary = context.get("card_reference_snapshots", {})
+	var snapshot_value: Variant = snapshots.get(card_reference, {})
+	return snapshot_value as Dictionary if snapshot_value is Dictionary else {}
 
 
 static func _get_location_cell(location: Dictionary) -> int:

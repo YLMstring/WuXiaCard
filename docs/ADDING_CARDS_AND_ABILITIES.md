@@ -290,7 +290,7 @@ Meng Huo:
             ],
             "actions": [
                 {"type": ACTION_SPEND_ALL_KI},
-                {"type": ACTION_REQUEST_EXTRA_TURN},
+                {"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
             ],
         },
     ],
@@ -300,8 +300,9 @@ Meng Huo:
 ## Resolution Timing
 
 `TRIGGER_START_OWNER_TURN` resolves after the simulator chooses the next active
-owner, including an owner receiving an extra turn, and before that owner may
-act. `TRIGGER_END_OWNER_TURN` still resolves before this choice.
+owner and before that owner may act. Extra-card-play grants remain inside the
+same owner turn, permit hand plays only, and do not repeat either owner-turn
+boundary. `TRIGGER_END_OWNER_TURN` resolves once before any end-trigger grant.
 
 Normal summon:
 
@@ -311,8 +312,10 @@ Normal summon:
 4. if the exact summoned instance remains on the board, resolve its current
    `TRIGGER_CARD_AFTER_SUMMONED` rules for its current owner;
 5. standard attack only if it still belongs to the summoning owner;
-6. resolve end-turn rules, restore turn-scoped ability suppressions, and finish
-   the turn.
+6. consume or grant any extra-card-play allowance; while a legal allowance
+   remains, keep the same owner active without resolving turn boundaries;
+7. resolve end-turn rules once, service a possible coalesced end-trigger grant,
+   then restore turn-scoped suppressions and finish the owner turn.
 
 Every attack:
 
@@ -338,7 +341,9 @@ Every actual move first resolves the catalog boundary `CARD_BEFORE_MOVED` for
 the exact moving instance. The requested move then rechecks source identity and
 its destination. Both legs of every swap use this boundary, and every swap is
 orthogonally adjacent at resolution. A failed swap returns `NO_EFFECT`; a rule
-that must stop afterward declares `on_invalid_context = STOP_RULE`.
+that must stop afterward declares `on_invalid_context = STOP_RULE`. A
+successful mutation then resolves `CARD_AFTER_MOVED` for the exact moving
+instance.
 
 `ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES` stores each removed ability
 on that exact card until the current turn ends. Retained abilities are never
@@ -346,18 +351,23 @@ removed. A later grant is immediately active; a later suppression may remove it
 in a new batch. Flipping the card clears every stored non-retained batch, so
 those abilities never return.
 
-Ability-created summons use
-`ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY`. The simulator chooses the
-lowest-index orthogonally adjacent empty cell, creates a unique catalog
-instance for the source's current owner, resolves both summon trigger phases,
-then performs its standard attack. `TRIGGER_BEFORE_DUEL_END` runs only during a
-full-board end attempt and receives an immutable `winning_owner_ids` snapshot.
+Ability-created summons use generic `ACTION_SUMMON_CARD`. Its `card` spec is
+either an exact reference such as `CARD_REF_SELECTED_CARD`, or a
+`CARD_SPEC_FRESH_COPY` of another card reference. Its `cell` spec may refer to
+an exact card's initial cell or the lowest-index adjacent empty cell. Exact hand
+instances leave that hand; fresh specifications create a unique catalog
+instance. Every successful summon resolves both summon trigger phases and a
+standard attack.
 
-`ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND` is intended inside a selected-card
-wrapper. It revalidates the wrapper's declared conditions, follows the exact
-instance across board movement, and creates a fresh hand instance; a full hand
-uses normal external exile instead. `ACTION_EXILE_SELF` removes only an on-board
-source and marks its event for fade presentation.
+`ACTION_RETURN_CARD_TO_HAND` accepts an exact card reference and owner-relative
+recipient. It follows the instance across board movement and creates a fresh
+catalog hand instance for that recipient; a full hand uses normal external
+exile instead. Selected-card wrappers still revalidate their declared
+conditions immediately before the action. `ACTION_EXILE_SELF` removes only an
+on-board source and marks its event for fade presentation.
+
+`TRIGGER_BEFORE_DUEL_END` runs only during a full-board end attempt and receives
+an immutable `winning_owner_ids` snapshot.
 
 `ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE` is intended for a trigger context. It
 follows `trigger_instance_id` across movement, removes the old board instance
@@ -417,7 +427,7 @@ For every new ability, consider:
 - multiple simultaneous triggers;
 - action invalid-context policy;
 - cumulative activation costs;
-- extra turns and active-player changes;
+- extra card plays, stacked allowances, and active-player changes;
 - terminal state reached mid-resolution;
 - AI clone/search behavior;
 - face-down information leakage;

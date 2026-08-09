@@ -43,7 +43,9 @@ static func snapshot(
 			):
 				continue
 			selected.append(instance_id)
-			if required_count <= 0 and limit > 0 and selected.size() >= limit:
+			if limit > 0 and selected.size() >= limit:
+				if required_count > 0 and selected.size() != required_count:
+					selected.clear()
 				return selected
 	if required_count > 0 and selected.size() != required_count:
 		selected.clear()

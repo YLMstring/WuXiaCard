@@ -258,7 +258,7 @@ static func _ordered_transitions(
 		priority += (transition.get("captures", []) as Array).size() * 10_000
 		priority += (transition.get("exiles", []) as Array).size() * 8_000
 		for event_value: Variant in transition.get("events", []):
-			if StringName((event_value as Dictionary).get("type", &"")) == &"extra_turn_granted":
+			if StringName((event_value as Dictionary).get("type", &"")) == &"extra_card_play_granted":
 				priority += 5_000
 		if action.action_type == ActionData.TYPE_ACTIVATE:
 			priority += 500

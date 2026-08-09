@@ -1211,22 +1211,21 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	await process_frame
 	duel.debug_set_fast_mode(true)
 	var extra_turn_vfx: Control = duel.get_node_or_null("DuelCanvas/ExtraTurnVfx") as Control
-	_check(extra_turn_vfx != null, "Duel scene contains the reusable extra-turn VFX overlay")
+	_check(extra_turn_vfx != null, "Duel scene contains the reusable extra-card-play VFX overlay")
 	if extra_turn_vfx != null:
-		_check(extra_turn_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Extra-turn VFX never intercepts input")
+		_check(extra_turn_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Extra-card-play VFX never intercepts input")
 		_check(
-			extra_turn_vfx.has_method("play_convergence")
-			and extra_turn_vfx.has_method("debug_get_last_bead_count")
+			extra_turn_vfx.has_method("play_pulse")
 			and extra_turn_vfx.has_method("debug_get_pulse_count")
 			and extra_turn_vfx.has_method("debug_is_clean"),
-			"Extra-turn overlay exposes reusable playback and cleanup diagnostics"
+			"Extra-card-play overlay exposes bead-free playback and cleanup diagnostics"
 		)
 	var player_opened: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 8, false)
 	var opponent_targeted: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 5, false)
 	var meng_played: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 4, false)
 	_check(player_opened and opponent_targeted and meng_played, "Meng Huo presentation fixture uses three production actions")
-	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Meng Huo's extra turn returns control to the same player")
-	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-turn grant does not add a simulation turn by itself")
+	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Meng Huo's extra card play keeps control with the same player")
+	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-card-play grant does not add an action by itself")
 	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
 	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
@@ -1249,47 +1248,23 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	_check(
 		presentation_trace.has(&"attack_started")
 		and presentation_trace.has(&"card_flipped")
-		and presentation_trace.has(&"extra_turn_granted"),
-		"Attack, capture, and extra-turn feedback use the ordered event presenter"
+		and presentation_trace.has(&"extra_card_play_granted"),
+		"Attack, capture, and extra-card-play feedback use the ordered event presenter"
 	)
-	if extra_turn_vfx != null and extra_turn_vfx.has_method("debug_get_last_bead_count"):
-		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 1, "One granting Meng Huo produces one convergence bead")
-		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 1, "One granted extra turn produces one board pulse")
-		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Fast-mode extra-turn playback leaves no temporary visuals")
-		var board_cards: Array = duel.get("board_cards") as Array
-		var second_source: CardView = board_cards[8] as CardView
+	if extra_turn_vfx != null and extra_turn_vfx.has_method("debug_get_pulse_count"):
+		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 1, "One granted extra card play produces one board pulse")
+		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Fast-mode playback leaves no temporary visuals")
 		await extra_turn_vfx.call(
-			"play_convergence",
-			[meng_view, meng_view],
+			"play_pulse",
 			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
-			0.0,
 			0.0,
 			Color("e3b84f")
 		)
-		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 1, "Duplicate granting sources are deduplicated")
-		await extra_turn_vfx.call(
-			"play_convergence",
-			[meng_view, second_source],
-			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
-			0.0,
-			0.0,
-			Color("e3b84f")
-		)
-		_check(int(extra_turn_vfx.call("debug_get_last_bead_count")) == 2, "Multiple valid sources produce concurrent convergence beads")
-		var pulses_before_missing: int = int(extra_turn_vfx.call("debug_get_pulse_count"))
-		await extra_turn_vfx.call(
-			"play_convergence",
-			[],
-			(duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as Control).get_global_rect(),
-			0.0,
-			0.0,
-			Color("e3b84f")
-		)
-		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == pulses_before_missing + 1, "Missing source views still produce the board pulse")
-		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Repeated and source-less playback cleans up completely")
-	_check((duel.get_node("DuelCanvas/TurnStatus") as Label).text == "你的回合 · 拖动卡牌", "Normal player status returns after extra-turn feedback")
-	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(duel.get_node("DuelCanvas/PlayerHand")), "Player hand is enabled for the granted extra turn")
-	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra turn")
+		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 2, "Manual replay produces another board pulse without beads")
+		_check(bool(extra_turn_vfx.call("debug_is_clean")), "Repeated playback cleans up completely")
+	_check((duel.get_node("DuelCanvas/TurnStatus") as Label).text == "你的回合 · 拖动卡牌", "Normal player status returns after extra-card-play feedback")
+	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(duel.get_node("DuelCanvas/PlayerHand")), "Player hand is enabled for the granted extra card play")
+	_check(_count_playable(_cards_below(duel.get_node("DuelCanvas/OpponentHand"))) == 0, "Opponent hand remains disabled during the player's extra card play")
 	duel.queue_free()
 	await process_frame
 
@@ -1336,13 +1311,13 @@ func _check_opponent_tiger_exile() -> void:
 	await process_frame
 	await process_frame
 	exile_duel.debug_set_fast_mode(true)
-	var target_placed: bool = await exile_duel.debug_commit_move(1, 0, 4, false)
+	var target_placed: bool = await exile_duel.debug_commit_move(1, 1, 4, false)
 	var tiger_placed: bool = await exile_duel.debug_commit_move(2, 2, 5, false)
 	_check(target_placed and tiger_placed, "Scripted Tiger General exile uses production move commits")
 	await process_frame
-	_check(exile_duel.debug_get_board_occupancy() == 1, "Tiger General removes Xu Shu instead of flipping it")
+	_check(exile_duel.debug_get_board_occupancy() == 1, "Tiger General removes the weaker-facing target instead of flipping it")
 	_check(exile_duel.has_method("debug_has_board_card_view") and not bool(exile_duel.call("debug_has_board_card_view", 4)), "Tiger General exile clears the target card view")
-	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 1)) == 1, "Xu Shu enters the player's removed zone")
+	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 1)) == 1, "The target enters the player's removed zone")
 	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 4)), "Tiger General's cleared cell is reusable")
 	var tiger_scores: Vector2i = exile_duel.debug_get_scores()
 	_check(tiger_scores == Vector2i(0, 1), "Tiger General exile awards no point for the removed target")
@@ -1563,6 +1538,7 @@ func _instantiate_duel() -> Node:
 	var duel: Node = DUEL_SCENE.instantiate()
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
 	duel.set("testing_mode", false)
+	duel.set("player_hand_shuffle_seed", -1)
 	duel.set("opponent_hand_shuffle_seed", -1)
 	return duel
 

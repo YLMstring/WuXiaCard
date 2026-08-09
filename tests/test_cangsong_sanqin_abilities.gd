@@ -170,7 +170,7 @@ func _test_cangsong_copies_before_attack_flip() -> void:
 	var copied_card: Dictionary = copied_hand[0]
 	var flipped_card: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
 	_check(
-		copied_card.get("powers", []) == [3, 7, 7, 4]
+		copied_card.get("powers", []) == [3, 8, 8, 4]
 		and int(copied_card.get("ki", -1)) == 0
 		and (copied_card.get("active_abilities", []) as Array).size() == 1
 		and int(flipped_card.get("ki", -1)) == 0

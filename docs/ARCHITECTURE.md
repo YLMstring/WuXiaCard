@@ -29,7 +29,10 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 
 ### Data
 
-- `duel_state.gd` — pure mutable simulation data: board, hands, decks, discard/removed zones, active player, turn count, queued-effect scaffolding, and state version.
+- `duel_state.gd` — pure mutable simulation data: board, hands, decks,
+  discard/removed zones, active player, turn count, owner-turn serial,
+  remaining extra card plays, end-boundary state, queued-effect scaffolding,
+  and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
   independent initial/final `DuelState` snapshots, ordered duplicate
@@ -50,12 +53,13 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
-- `duel_ability_executor.gd` — generic costs and actions: draw, fresh catalog
-  card creation in either relative hand, exile, immediately serviced attack
-  requests, ki, movement with a shared before-move boundary, ordered swaps,
-  turn-scoped ability suppression, extra-turn requests, normal flip, and
-  invalid-context policy.
-- `duel_targeting.gd` — generic target discovery/validation. Implemented rules cover adjacent empty, allied, and enemy board cells.
+- `duel_ability_executor.gd` — generic costs and actions: draw, exact/fresh
+  card return and summon requests, exile, immediately serviced attack requests,
+  ki, movement with shared before/after boundaries, ordered swaps, turn-scoped
+  ability suppression, extra-card-play grants, normal flip, and invalid-context
+  policy.
+- `duel_targeting.gd` — generic target discovery/validation. Implemented rules
+  cover adjacent empty, allied, enemy, and other-allied board cards.
 - `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
   snapshots, source-relative selected-card conditions, and current-state
   revalidation.
@@ -73,13 +77,15 @@ under the summoning owner. Board movement emits neither summon event.
 Every successful movement—including both conceptual legs of a swap—resolves
 `CARD_BEFORE_MOVED` for the exact moving instance before mutating board cells,
 then revalidates source identity and destination legality. Swaps additionally
-revalidate adjacency and the exact partner immediately before movement.
+revalidate adjacency and the exact partner immediately before movement. After
+each successful mutation, `CARD_AFTER_MOVED` resolves for that exact instance.
 
 Temporary ability suppression removes only current non-retained abilities and
 stores them on the exact runtime card instance. End-owner-turn triggers resolve
-first; then every batch expiring on that turn restores in stable order. A flip
-clears all stored non-retained batches permanently, while retained abilities and
-abilities granted after an earlier suppression remain active.
+once; then every batch expiring on that owner-turn serial restores in stable
+order after all granted extra card plays finish. A flip clears all stored
+non-retained batches permanently, while retained abilities and abilities
+granted after an earlier suppression remain active.
 
 Every initially valid attack first emits the presentation-only `attack_started`
 transition event, then emits `CARD_BE_ATTACKED`, resolves eligible rules in
@@ -120,7 +126,8 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `ink_bloom.gd` — draw summon visual.
 - `attack_vfx.gd` — serialized, clipped playback of the supplied flying-white
   attack bitmap.
-- `extra_turn_vfx.gd` — Meng Huo extra-turn convergence visual.
+- `extra_turn_vfx.gd` — bead-free extra-card-play board-outline pulse. The file
+  name is retained to avoid scene-path churn.
 
 The controller may choose timing, sound, animation, and labels. It must not independently decide captures, draws, targets, ki costs, or turn ownership.
 
@@ -264,7 +271,7 @@ Effects and triggers communicate presentation needs through dictionaries such as
 - `powers_changed`
 - `ability_triggered`
 - `attack_started`
-- extra-turn events emitted during turn resolution
+- `extra_card_play_granted`
 
 `attack_started` contains stable source/target cells, instance IDs, owners, and
 the attack reason. It is emitted after initial attack validation and before

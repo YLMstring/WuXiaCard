@@ -50,14 +50,14 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var targeting_trace_width: float = 6.0
 @export var targeting_trace_color: Color = Color(0.12, 0.42, 0.38, 0.72)
 @export var ki_gain_pulse_duration: float = 0.18
-@export var extra_turn_convergence_duration: float = 0.30
-@export var extra_turn_status_duration: float = 0.35
-@export var extra_turn_effect_color: Color = Color("e3b84f")
+@export var extra_card_play_status_duration: float = 0.35
+@export var extra_card_play_effect_color: Color = Color("e3b84f")
 @export var draw_bloom_duration: float = 0.12
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
 @export var draw_ink_color: Color = Color("211824")
 @export var side_deck_shuffle_seed: int = 0
+@export var player_hand_shuffle_seed: int = 0
 @export var opponent_hand_shuffle_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var opponent_search_budget_seconds: float = 10.0
@@ -150,11 +150,12 @@ func _ready() -> void:
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	var player_card_ids: Array[StringName] = Decks.get_player_card_ids(deck_profile_path)
 	_set_mastery_eligible_card_ids(player_card_ids)
+	_shuffle_hand_ids(player_card_ids, player_hand_shuffle_seed)
 	var player_cards: Array = _create_card_instances(player_card_ids, DuelRules.PLAYER_OWNER, "main")
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
-	_shuffle_opponent_hand_ids(effective_opponent_ids)
+	_shuffle_hand_ids(effective_opponent_ids, opponent_hand_shuffle_seed)
 	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
 	var player_side_deck: Array = _create_card_instances(
 		Decks.get_side_deck_card_ids(player_card_ids),
@@ -244,8 +245,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		swap_duration = 0.0
 		summon_swap_readable_duration = 0.0
 		ki_gain_pulse_duration = 0.0
-		extra_turn_convergence_duration = 0.0
-		extra_turn_status_duration = 0.0
+		extra_card_play_status_duration = 0.0
 		opponent_think_delay = 0.0
 		opponent_search_budget_seconds = 0.0
 		_opponent_search_test_limits = {"max_depth": 1}
@@ -567,14 +567,14 @@ func _shuffle_side_decks(player_deck: Array, opponent_deck: Array) -> void:
 	_shuffle_with_rng(opponent_deck, random)
 
 
-func _shuffle_opponent_hand_ids(card_ids: Array[StringName]) -> void:
-	if opponent_hand_shuffle_seed < 0:
+func _shuffle_hand_ids(card_ids: Array[StringName], shuffle_seed: int) -> void:
+	if shuffle_seed < 0:
 		return
 	var random := RandomNumberGenerator.new()
-	if opponent_hand_shuffle_seed == 0:
+	if shuffle_seed == 0:
 		random.randomize()
 	else:
-		random.seed = opponent_hand_shuffle_seed
+		random.seed = shuffle_seed
 	_shuffle_with_rng(card_ids, random)
 
 
@@ -1156,8 +1156,8 @@ func _present_transition_events(
 			await _present_ki_changed_event(event)
 		elif event_type == &"powers_changed":
 			_present_powers_changed_event(event)
-		elif event_type == &"extra_turn_granted":
-			await _present_extra_turn_event(event)
+		elif event_type == &"extra_card_play_granted":
+			await _present_extra_card_play_event(event)
 		elif event_type in [&"card_drawn", &"card_added_to_hand"]:
 			await _present_hand_addition_event(event, event_type)
 			drew_card = true
@@ -1258,21 +1258,14 @@ func _present_powers_changed_event(event: Dictionary) -> void:
 		card.set_runtime_powers(powers_value as Array)
 
 
-func _present_extra_turn_event(event: Dictionary) -> void:
-	_presentation_trace.append(&"extra_turn_granted")
-	turn_status.text = "额外回合"
-	turn_status.modulate = extra_turn_effect_color
-	var source_controls: Array[Control] = []
-	for source_value: Variant in event.get("source_instance_ids", []):
-		var source_card: CardView = _get_board_card_view_by_instance(StringName(source_value))
-		if source_card != null:
-			source_controls.append(source_card)
-	await extra_turn_vfx.play_convergence(
-		source_controls,
+func _present_extra_card_play_event(_event: Dictionary) -> void:
+	_presentation_trace.append(&"extra_card_play_granted")
+	turn_status.text = "额外出牌"
+	turn_status.modulate = extra_card_play_effect_color
+	await extra_turn_vfx.play_pulse(
 		board_grid.get_global_rect(),
-		extra_turn_convergence_duration,
-		extra_turn_status_duration,
-		extra_turn_effect_color
+		extra_card_play_status_duration,
+		extra_card_play_effect_color
 	)
 	turn_status.modulate = Color.WHITE
 
@@ -1301,12 +1294,20 @@ func _present_generated_summon_event(event: Dictionary) -> void:
 	var owner_id: int = int(event.get("owner_id", 0))
 	if card_data.is_empty() or board_cards[target_cell] != null:
 		return
-	var card: CardView = _spawn_card_in_slot(
-		board_cells[target_cell],
-		card_data,
-		owner_id,
-		false
-	)
+	var from_hand_instance_id := StringName(event.get("from_hand_instance_id", &""))
+	var card: CardView = null
+	if from_hand_instance_id != &"":
+		card = _get_card_view_by_instance(from_hand_instance_id)
+	if card != null:
+		card.reparent(board_cells[target_cell], false)
+		card.sync_runtime_data(card_data, owner_id)
+	else:
+		card = _spawn_card_in_slot(
+			board_cells[target_cell],
+			card_data,
+			owner_id,
+			false
+		)
 	card.set_face_down(false)
 	card.z_index = 1
 	board_cards[target_cell] = card

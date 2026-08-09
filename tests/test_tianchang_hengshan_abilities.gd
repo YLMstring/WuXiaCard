@@ -101,7 +101,7 @@ func _test_tianchang_power_from_adjacent_enemies() -> void:
 	)
 	var next_state: State = transition.get("state") as State
 	var runtime: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
-	_check(runtime.get("powers", []) == [8, 8, 8, 8], "Two adjacent enemies add two to every side")
+	_check(runtime.get("powers", []) == [9, 8, 9, 8], "Two adjacent enemies add two to every side")
 	_check(
 		_event_count(transition.get("events", []), &"powers_changed") == 2,
 		"The selector applies one power increase per adjacent enemy"

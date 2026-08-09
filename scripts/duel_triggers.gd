@@ -312,6 +312,9 @@ static func _conditions_match(
 		elif condition_type == Catalog.CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL:
 			if not _has_adjacent_empty_cell(state, source_cell):
 				return false
+		elif condition_type == Catalog.CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY:
+			if not _has_empty_between_enemy(state, source_cell):
+				return false
 		else:
 			return false
 	return true
@@ -327,6 +330,25 @@ static func _are_adjacent(first_cell: int, second_cell: int) -> bool:
 static func _has_adjacent_empty_cell(state: StateData, source_cell: int) -> bool:
 	for cell: int in range(state.board.size()):
 		if state.board[cell] == null and _are_adjacent(source_cell, cell):
+			return true
+	return false
+
+
+static func _has_empty_between_enemy(state: StateData, source_cell: int) -> bool:
+	if source_cell < 0 or source_cell >= state.board.size():
+		return false
+	var source_value: Variant = state.board[source_cell]
+	if source_value == null:
+		return false
+	var source_owner: int = int((source_value as Dictionary).get("owner", 0))
+	for direction: int in range(4):
+		var middle_cell: int = Rules.get_neighbor_index(source_cell, direction)
+		if middle_cell < 0 or state.board[middle_cell] != null:
+			continue
+		var far_cell: int = Rules.get_neighbor_index(middle_cell, direction)
+		if far_cell < 0 or state.board[far_cell] == null:
+			continue
+		if int((state.board[far_cell] as Dictionary).get("owner", 0)) != source_owner:
 			return true
 	return false
 

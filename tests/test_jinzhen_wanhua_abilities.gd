@@ -42,8 +42,8 @@ func _test_vocabulary_and_declarations() -> void:
 	_check(Catalog.CONDITION_ATTACKED_CARD_IS_SELF in Catalog.KNOWN_TRIGGER_CONDITIONS, "Attacked-self condition is registered")
 	_check(Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF in Catalog.KNOWN_SELECTOR_CONDITIONS, "Original-owner selector condition is registered")
 	for action_type: StringName in [
-		Catalog.ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND,
-		Catalog.ACTION_SUMMON_FRESH_COPY_IN_FIRST_ADJACENT_EMPTY,
+		Catalog.ACTION_RETURN_CARD_TO_HAND,
+		Catalog.ACTION_SUMMON_CARD,
 		Catalog.ACTION_EXILE_SELF,
 	]:
 		_check(action_type in Catalog.KNOWN_ACTIONS, "%s action is registered" % action_type)
@@ -115,10 +115,15 @@ func _test_jinzhen_follows_board_movement_and_revalidates_conditions() -> void:
 		0,
 		&"moving_target",
 		Rules.OPPONENT_OWNER,
-		[{"type": Catalog.ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND}],
+		[{
+			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+			"card": Catalog.CARD_REF_SELECTED_CARD,
+			"recipient": Catalog.OWNER_ABILITY_SOURCE,
+		}],
 		{
 			"ability_source_instance_id": &"moving_source",
 			"ability_source_owner_id": Rules.PLAYER_OWNER,
+			"selected_card_instance_id": &"moving_target",
 			"selected_card_conditions": [
 				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
 				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},
@@ -138,10 +143,15 @@ func _test_jinzhen_follows_board_movement_and_revalidates_conditions() -> void:
 		2,
 		&"changed_target",
 		Rules.PLAYER_OWNER,
-		[{"type": Catalog.ACTION_RETURN_SELF_TO_ABILITY_SOURCE_HAND}],
+		[{
+			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+			"card": Catalog.CARD_REF_SELECTED_CARD,
+			"recipient": Catalog.OWNER_ABILITY_SOURCE,
+		}],
 		{
 			"ability_source_instance_id": &"changed_source",
 			"ability_source_owner_id": Rules.PLAYER_OWNER,
+			"selected_card_instance_id": &"changed_target",
 			"selected_card_conditions": [
 				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
 				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},

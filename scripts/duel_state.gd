@@ -10,6 +10,9 @@ var discard_piles: Dictionary = {}
 var removed_cards: Dictionary = {}
 var active_player: int = Rules.PLAYER_OWNER
 var turn_count: int = 0
+var owner_turn_serial: int = 0
+var extra_card_plays_remaining: int = 0
+var end_turn_triggers_resolved: bool = false
 var max_turns: int = 200
 var active_abilities: Array = []
 var effect_queue: Array = []
@@ -73,5 +76,8 @@ func duplicate_state():
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
 	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
 	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
+	copied.owner_turn_serial = owner_turn_serial
+	copied.extra_card_plays_remaining = extra_card_plays_remaining
+	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
 	return copied
