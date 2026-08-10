@@ -39,7 +39,7 @@ const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"TianZhuYunQi2",
 	&"JianFaQinYin1",
 	&"YanHuiZhuRong3",
-	&"canghai_sandie",
+	&"WanYueChaoZong1",
 	&"haitian_yizhang",
 	&"zhujian_cangfeng",
 	&"luming_wenlu",
