@@ -44,6 +44,8 @@ const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_a
 const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card_surrounded_by_allies"
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
 const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
+const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
+const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -86,6 +88,7 @@ const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
 const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_ally"
 const MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE: StringName = &"defending_power_uses_minimum_side"
+const MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO: StringName = &"orthogonal_attack_range_two"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
 const RECIPIENT_SELF: StringName = &"self"
@@ -134,6 +137,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
+	CONDITION_ATTACK_IS_NOT_REPEAT,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -144,6 +148,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES,
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
 	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
+	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -189,6 +194,7 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_DEFENDING_POWER_OVERRIDE,
 	MODIFIER_ATTACK_REQUIRES_OTHER_ALLY,
 	MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
+	MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -578,6 +584,90 @@ const YANHUI_FLIP_REPLACEMENT: Dictionary = {
 				},
 			],
 		}],
+	}],
+}
+
+const YINYANG_REPEAT_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_ATTACK_IS_NOT_REPEAT},
+		],
+		"actions": [{
+			"type": ACTION_STANDARD_ATTACK_WITH_SELF,
+			"repeat_attack": true,
+		}],
+	}],
+}
+
+const YINYANG_RANGE_THREE: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": false,
+	}],
+}
+
+const YINYANG_RANGE_FOUR: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": true,
+	}],
+}
+
+const YINYANG_ZHANGLI_THREE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "掌法",
+						},
+					],
+				},
+				"actions": [
+					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_REPEAT_ATTACK},
+					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_RANGE_THREE},
+				],
+			},
+		],
+	}],
+}
+
+const YINYANG_ZHANGLI_FOUR: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "掌法",
+						},
+					],
+				},
+				"actions": [
+					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_REPEAT_ATTACK},
+					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_RANGE_FOUR},
+				],
+			},
+		],
 	}],
 }
 
@@ -1074,6 +1164,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"zones": [CARD_ZONE_HAND],
 									"conditions": [
 										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
 									],
 								},
 								"actions": [
@@ -1116,6 +1207,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"zones": [CARD_ZONE_HAND],
 									"conditions": [
 										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+										{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
 									],
 								},
 								"actions": [
@@ -1141,6 +1233,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"conditions": [
 										{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 										{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+										{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
 									],
 									"limit": 2,
 								},
@@ -2391,7 +2484,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：进场时，将我移除，抽一张牌，手牌中的掌法获得以下效果：我可以攻击直线上相隔一个空位的敌方。攻击后，再次发起攻击（不触发本效果）。",
 		"flavor": "孝感乐厚的成名功夫，双掌掌力不同，一阴一阳，阳掌先出，阴力却先行着体。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [YINYANG_ZHANGLI_THREE],
 	},
 	&"YinYangZhang4": {
 		"id": &"YinYangZhang4",
@@ -2403,7 +2496,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：进场时，将我移除，抽一张牌，手牌中的掌法获得以下效果：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。攻击后，再次发起攻击（不触发本效果）。",
 		"flavor": "孝感乐厚的成名功夫，双掌掌力不同，一阴一阳，阳掌先出，阴力却先行着体。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [YINYANG_ZHANGLI_FOUR],
 	},
 	&"HanBinZhenQi3": {
 		"id": &"HanBinZhenQi3",
@@ -2735,6 +2828,20 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 			var value: Variant = modifier.get("value", null)
 			if typeof(value) != TYPE_INT or int(value) < 0:
 				errors.append("Card %s modifier %s requires a non-negative integer value" % [card_id, modifier_type])
+		if modifier_type == MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO:
+			allowed_keys.append(&"allow_intervening_ally")
+			if typeof(modifier.get("allow_intervening_ally", null)) != TYPE_BOOL:
+				errors.append(
+					"Card %s modifier %s requires a Boolean allow_intervening_ally"
+					% [card_id, modifier_type]
+				)
+		if modifier_type == MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO:
+			allowed_keys.append(&"allow_intervening_ally")
+			if typeof(modifier.get("allow_intervening_ally", null)) != TYPE_BOOL:
+				errors.append(
+					"Card %s modifier %s requires a Boolean allow_intervening_ally"
+					% [card_id, modifier_type]
+				)
 		for key: Variant in modifier.keys():
 			if StringName(key) not in allowed_keys:
 				errors.append("Card %s modifier %s has unsupported field %s" % [card_id, modifier_type, key])
@@ -2860,6 +2967,13 @@ static func _validate_action(
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_STANDARD_ATTACK_WITH_SELF:
+		allowed_keys.append(&"repeat_attack")
+		if action.has("repeat_attack") and typeof(action.get("repeat_attack")) != TYPE_BOOL:
+			errors.append(
+				"Card %s %s action %s requires a Boolean repeat_attack"
+				% [card_id, context_name, action_type]
+			)
 	if action_type == ACTION_CHANGE_POWERS:
 		allowed_keys.append(&"amount")
 		allowed_keys.append(&"card")
@@ -2884,7 +2998,8 @@ static func _validate_action(
 	if action_type == ACTION_FOR_EACH_SELECTED_CARD:
 		allowed_keys.append(&"selector")
 		allowed_keys.append(&"actions")
-		_validate_selector(card_id, context_name, action.get("selector", null), errors)
+		var selector_value: Variant = action.get("selector", null)
+		_validate_selector(card_id, context_name, selector_value, errors)
 		var nested_actions_value: Variant = action.get("actions", null)
 		if not nested_actions_value is Array or (nested_actions_value as Array).is_empty():
 			errors.append("Card %s %s selection action requires a non-empty actions array" % [card_id, context_name])
@@ -2899,6 +3014,21 @@ static func _validate_action(
 					nested_value as Dictionary,
 					false,
 					errors
+				)
+			if (
+				_actions_change_selected_card_powers(nested_actions_value as Array)
+				and not _selector_has_condition(
+					selector_value,
+					CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE
+				)
+			):
+				errors.append(
+					"Card %s %s selected-card power changes require %s"
+					% [
+						card_id,
+						context_name,
+						CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
+					]
 				)
 	if action_type == ACTION_ADD_CARD_TO_HAND:
 		allowed_keys.append(&"card_id")
@@ -2960,6 +3090,42 @@ static func _validate_action(
 	for key: Variant in action.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s action %s has unsupported field %s" % [card_id, context_name, action_type, key])
+
+
+static func _actions_change_selected_card_powers(actions: Array) -> bool:
+	for action_value: Variant in actions:
+		if not action_value is Dictionary:
+			continue
+		var action: Dictionary = action_value
+		var action_type := StringName(action.get("type", &""))
+		if (
+			action_type == ACTION_CHANGE_POWERS
+			and StringName(action.get("card", &"")) == CARD_REF_SELECTED_CARD
+		):
+			return true
+		if (
+			action_type == ACTION_FOR_EACH_SELECTED_CARD
+			and action.get("actions", null) is Array
+			and _actions_change_selected_card_powers(action.get("actions", []) as Array)
+		):
+			return true
+	return false
+
+
+static func _selector_has_condition(
+	selector_value: Variant,
+	expected_condition: StringName
+) -> bool:
+	if not selector_value is Dictionary:
+		return false
+	for condition_value: Variant in (selector_value as Dictionary).get("conditions", []):
+		if (
+			condition_value is Dictionary
+			and StringName((condition_value as Dictionary).get("type", &""))
+			== expected_condition
+		):
+			return true
+	return false
 
 
 static func _validate_power_change_amount(

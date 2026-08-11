@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-09
+Updated: 2026-08-11
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -151,6 +151,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   and decay at owner-turn start. Tiers 2–4 also strengthen adjacent allied
   summons by `+1/+1/+2`. DaSongYangZhang1–4 strengthen adjacent allied summons
   by `+1/+1/+1/+2`; tiers 2–4 weaken adjacent enemy summons by `-1/-2/-2`.
+- YinYangZhang3–4 now hide their four `-1` powers, can be attacked by any
+  nonnegative facing power, and cannot be selected by power-changing effects.
+  After summoning they exile themselves, draw, then grant both the existing
+  and newly drawn allied hand palms a nonrecursive repeat attack plus a
+  distance-two orthogonal attack. Tier 3 passes only one empty cell; tier 4
+  also passes one allied card. All grants are exact-instance, idempotent, and
+  non-retained on flip.
 - One top-level power action emits one transition-only batch. Every visible
   target in that batch keeps its previous powers for one shared roughly
   0.12-second pause, then all update and animate simultaneously for about

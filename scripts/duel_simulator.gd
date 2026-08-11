@@ -341,7 +341,8 @@ static func _resolve_standard_attacks(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
-	reason: StringName
+	reason: StringName,
+	repeat_attack: bool = false
 ) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
 	if not _card_instance_at(state, source_cell, source_instance_id):
@@ -380,6 +381,7 @@ static func _resolve_standard_attacks(
 			"attacker_instance_id": source_instance_id,
 			"attacker_owner_id": attacker_owner,
 			"attack_flips": result["attack_flips"].duplicate(true),
+			"repeat_attack": repeat_attack,
 		}
 	)
 	_merge_resolution(
@@ -886,7 +888,8 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 			state,
 			source_cell,
 			source_instance_id,
-			StringName(request.get("reason", &"ability_standard_attack"))
+			StringName(request.get("reason", &"ability_standard_attack")),
+			bool(request.get("repeat_attack", false))
 		)
 	if mode != &"targeted":
 		return _empty_resolution()
@@ -916,6 +919,7 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 			"attacker_instance_id": source_instance_id,
 			"attacker_owner_id": attacker_owner,
 			"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
+			"repeat_attack": bool(request.get("repeat_attack", false)),
 		}
 	)
 	_merge_resolution(

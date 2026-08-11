@@ -292,6 +292,21 @@ static func get_modifiers(card: Dictionary) -> Array[Dictionary]:
 	return result
 
 
+static func can_attack_at_orthogonal_distance_two(card: Dictionary) -> bool:
+	return has_modifier(card, Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO)
+
+
+static func allows_intervening_ally_at_orthogonal_distance_two(card: Dictionary) -> bool:
+	for modifier: Dictionary in get_modifiers(card):
+		if (
+			StringName(modifier.get("type", &""))
+			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
+			and bool(modifier.get("allow_intervening_ally", false))
+		):
+			return true
+	return false
+
+
 static func get_effective_defending_power(
 	card: Dictionary,
 	_direction: int,

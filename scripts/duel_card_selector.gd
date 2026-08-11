@@ -15,7 +15,7 @@ static func snapshot(
 	var selected: Array[StringName] = []
 	if state == null or source_instance_id == &"":
 		return selected
-	var source: Dictionary = locate_card(state, source_instance_id)
+	var source: Dictionary = _resolve_source(state, source_instance_id, context)
 	if source.is_empty():
 		return selected
 	var limit: int = int(selector.get("limit", 0))
@@ -80,7 +80,7 @@ static func conditions_match(
 	var selected_instance_id := StringName(selected_card.get("instance_id", &""))
 	if selected_instance_id == &"":
 		return false
-	var source: Dictionary = locate_card(state, source_instance_id)
+	var source: Dictionary = _resolve_source(state, source_instance_id, context)
 	if source.is_empty():
 		return false
 	for condition_value: Variant in conditions:
@@ -123,9 +123,46 @@ static func conditions_match(
 				int(source.get("owner_id", 0))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE:
+			if not Rules.can_change_powers(selected_card):
+				return false
 		else:
 			return false
 	return true
+
+
+static func _resolve_source(
+	state: StateData,
+	source_instance_id: StringName,
+	context: Dictionary
+) -> Dictionary:
+	var live_source: Dictionary = locate_card(state, source_instance_id)
+	if not live_source.is_empty():
+		return live_source
+	var snapshots_value: Variant = context.get("card_reference_snapshots", {})
+	if not snapshots_value is Dictionary:
+		return {}
+	var snapshot_value: Variant = (snapshots_value as Dictionary).get(
+		Catalog.CARD_REF_ABILITY_SOURCE,
+		{}
+	)
+	if not snapshot_value is Dictionary:
+		return {}
+	var source_snapshot: Dictionary = snapshot_value
+	if StringName(source_snapshot.get("instance_id", &"")) != source_instance_id:
+		return {}
+	var owner_id: int = int(source_snapshot.get("owner_id", 0))
+	if owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return {}
+	return {
+		"zone": &"",
+		"owner_id": owner_id,
+		"index": -1,
+		"card": {
+			"instance_id": source_instance_id,
+			"card_id": StringName(source_snapshot.get("card_id", &"")),
+		},
+	}
 
 
 static func _attack_flip_contains(

@@ -350,7 +350,8 @@ static func _execute_action(
 			source_cell,
 			source_instance_id,
 			expected_owner,
-			int(declaration.get("amount", 0))
+			int(declaration.get("amount", 0)),
+			context
 		)
 	if action_type == Catalog.ACTION_EXILE_ATTACKED_CARD:
 		return _exile_attacked_card(
@@ -565,7 +566,8 @@ static func _execute_action(
 			state,
 			source_cell,
 			source_instance_id,
-			expected_owner
+			expected_owner,
+			bool(declaration.get("repeat_attack", false))
 		)
 	return _no_effect(source_cell)
 
@@ -702,12 +704,24 @@ static func _draw_cards(
 	source_cell: int,
 	source_instance_id: StringName,
 	expected_owner: int,
-	requested_count: int
+	requested_count: int,
+	context: Dictionary
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty() or requested_count <= 0:
-		return _no_effect(source_cell)
 	var owner_id: int = int(source.get("owner_id", 0))
+	if source.is_empty():
+		var snapshot: Dictionary = _get_reference_snapshot(
+			context,
+			Catalog.CARD_REF_ABILITY_SOURCE
+		)
+		if (
+			StringName(snapshot.get("instance_id", &"")) != source_instance_id
+			or int(snapshot.get("owner_id", 0)) != expected_owner
+		):
+			return _no_effect(source_cell)
+		owner_id = expected_owner
+	if requested_count <= 0:
+		return _no_effect(source_cell)
 	var hand: Array = state.get_hand(owner_id)
 	var deck: Array = state.decks.get(owner_id, [])
 	var actual_count: int = mini(requested_count, mini(MAX_HAND_SIZE - hand.size(), deck.size()))
@@ -1041,10 +1055,12 @@ static func _change_powers(
 	var target: Dictionary = _get_subject(state, target_instance_id, expected_owner)
 	if target.is_empty():
 		return _no_effect(source_cell)
+	var card: Dictionary = target.get("card", {})
+	if not Rules.can_change_powers(card):
+		return _no_effect(source_cell)
 	var amount: int = _resolve_power_change_amount(state, target, amount_value, context)
 	if amount == 0:
 		return _no_effect(source_cell)
-	var card: Dictionary = target.get("card", {})
 	var previous_powers: Array = (card.get("powers", []) as Array).duplicate()
 	if previous_powers.size() != 4:
 		return _no_effect(source_cell)
@@ -1987,7 +2003,8 @@ static func _request_standard_attack(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
-	expected_owner: int
+	expected_owner: int,
+	repeat_attack: bool = false
 ) -> Dictionary:
 	var source_slot: Dictionary = _get_card_slot(
 		state,
@@ -2004,6 +2021,7 @@ static func _request_standard_attack(
 		"source_instance_id": source_instance_id,
 		"source_owner_id": int(source_slot.get("owner", 0)),
 		"reason": &"activated_ability",
+		"repeat_attack": repeat_attack,
 	})
 	return result
 

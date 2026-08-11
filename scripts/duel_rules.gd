@@ -85,6 +85,10 @@ static func get_would_flip_indices(board: Array, source_index: int) -> Array[int
 		var neighbor_index: int = get_neighbor_index(source_index, direction)
 		if can_attack_target(board, source_index, neighbor_index):
 			targets.append(neighbor_index)
+		if neighbor_index >= 0:
+			var distance_two_index: int = get_neighbor_index(neighbor_index, direction)
+			if can_attack_target(board, source_index, distance_two_index):
+				targets.append(distance_two_index)
 	return targets
 
 
@@ -128,9 +132,19 @@ static func is_target_in_attack_range(
 	):
 		return false
 	var direction: int = -1
+	var distance: int = 0
 	for candidate_direction: int in range(DIRECTIONS.size()):
-		if get_neighbor_index(source_index, candidate_direction) == target_index:
+		var neighbor_index: int = get_neighbor_index(source_index, candidate_direction)
+		if neighbor_index == target_index:
 			direction = candidate_direction
+			distance = 1
+			break
+		if (
+			neighbor_index >= 0
+			and get_neighbor_index(neighbor_index, candidate_direction) == target_index
+		):
+			direction = candidate_direction
+			distance = 2
 			break
 	if direction < 0:
 		return false
@@ -139,6 +153,18 @@ static func is_target_in_attack_range(
 	if int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0)):
 		return false
 	var source_card: Dictionary = source_slot.get("card", {})
+	if distance == 2:
+		if not Abilities.can_attack_at_orthogonal_distance_two(source_card):
+			return false
+		var intervening_index: int = get_neighbor_index(source_index, direction)
+		var intervening_value: Variant = board[intervening_index]
+		if intervening_value != null:
+			var intervening_slot: Dictionary = intervening_value
+			if (
+				int(intervening_slot.get("owner", 0)) != int(source_slot.get("owner", 0))
+				or not Abilities.allows_intervening_ally_at_orthogonal_distance_two(source_card)
+			):
+				return false
 	var target_card: Dictionary = target_slot.get("card", {})
 	var source_powers: Array = source_card.get("powers", [])
 	var target_powers: Array = target_card.get("powers", [])
@@ -162,6 +188,15 @@ static func is_target_in_attack_range(
 			int(target_powers[defending_direction])
 		)
 	return int(source_powers[direction]) > defending_power
+
+
+static func has_special_negative_powers(card: Dictionary) -> bool:
+	var powers: Array = card.get("powers", [])
+	return powers.size() == 4 and powers == [-1, -1, -1, -1]
+
+
+static func can_change_powers(card: Dictionary) -> bool:
+	return not has_special_negative_powers(card)
 
 
 static func get_neighbor_index(cell_index: int, direction: int) -> int:

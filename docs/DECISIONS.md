@@ -431,3 +431,24 @@ respectively, in row-major order. The source itself is eligible.
 - Generic `ACTION_RETURN_CARD_TO_HAND` resolves an exact card reference and
   declared recipient; generic `ACTION_SUMMON_CARD` accepts either an exact
   selected instance or a fresh-copy specification plus a declared cell rule.
+
+## 阴阳掌力
+
+- The special power rule applies only when all four stored powers are exactly
+  `[-1, -1, -1, -1]`. Those numbers are hidden, any nonnegative attacker edge
+  defeats the corresponding `-1`, and signed power-change actions cannot
+  affect or select that card. Limited selectors filter it before counting the
+  limit.
+- YinYang resolves its own exile, then one draw, then grants every allied palm
+  currently in hand. A palm drawn by that action is included. Empty decks and
+  hands without palms simply produce no draw/grant events.
+- Tier 3 palms may attack an orthogonal enemy two cells away only through one
+  empty cell. Tier 4 also permits one intervening current ally; an enemy always
+  blocks. Ordinary adjacent attacks remain unchanged.
+- The granted repeat begins one new complete standard attack after the first
+  completes. That attack re-reads the current cell, owner, and legal targets,
+  and still fires other after-attack abilities. A `repeat_attack` context flag
+  prevents only the same YinYang grant from recursively scheduling a third.
+- Exact duplicate grants are idempotent. Tier 4 range is the effective
+  superset if both tiers were granted. All YinYang grants are non-retained and
+  disappear on flip.

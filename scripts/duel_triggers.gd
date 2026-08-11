@@ -243,6 +243,9 @@ static func _conditions_match(
 				or source_cell != int(context.get("attacker_cell", -1))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_ATTACK_IS_NOT_REPEAT:
+			if bool(context.get("repeat_attack", false)):
+				return false
 		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
 			var source_slot: Dictionary = state.board[source_cell]
 			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):

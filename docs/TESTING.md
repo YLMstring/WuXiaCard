@@ -55,6 +55,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   shared pre-change pause and duration, old/final four-side values,
   repeated-instance visual coalescing, gain/loss styling, and hidden-card
   no-wait concealment.
+- `test_yinyang_zhangli_abilities.gd` — four-side `-1` presentation and
+  immunity, limited-selector skipping, tiered distance-two attacks,
+  exile/draw/grant ordering, newly drawn palm inclusion, nonrecursive repeat
+  attacks, duplicate-grant handling, and flip cleanup.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.

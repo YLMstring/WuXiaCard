@@ -114,8 +114,13 @@ func _refresh_face_content() -> void:
 	right_power.text = str(powers[DuelRules.RIGHT])
 	bottom_power.text = str(powers[DuelRules.BOTTOM])
 	left_power.text = str(powers[DuelRules.LEFT])
+	var show_power_numbers: bool = (
+		power_numbers_enabled
+		and not face_down
+		and not DuelRules.has_special_negative_powers(card_data)
+	)
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
-		power_label.visible = power_numbers_enabled and not face_down
+		power_label.visible = show_power_numbers
 	_apply_ki_bead_presentation(Abilities.get_ki_bead_presentation(card_data))
 	art_placeholder.text = CARD_BACK_GLYPH if face_down else ""
 	_refresh_picture()
