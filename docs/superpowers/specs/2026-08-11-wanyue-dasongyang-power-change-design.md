@@ -1,0 +1,292 @@
+# 万岳朝宗、大嵩阳神掌与点数变化系统设计
+
+## 目标与范围
+
+实装 `WanYueChaoZong1`–`WanYueChaoZong4` 与
+`DaSongYangZhang1`–`DaSongYangZhang4` 的现有目录描述，并将当前只能增加
+正整数的点数动作统一为可表达正负变化、动态变化量和全零移除的通用规则。
+
+人类操作、测试模式、贪心后备、深度 AI 与回放必须继续共享
+`DuelSimulator` 的同一条权威规则路径。目录、模拟器与搜索代码不得按卡牌 ID
+分支；动画只消费模拟器产生的纯数据事件。
+
+本次不调整八张卡的基础点数、描述、图片、门派、阶级或武器，不引入音效、
+屏幕震动、墨点特效、临时点数或新的玩家选择流程。
+
+## 已批准的卡牌规则
+
+### 万岳朝宗
+
+- 一至四阶进场后，按它当前所属方的当前手牌数量，使自身四边点数各增加相同
+  数值。
+- 计数发生在万岳已经离开手牌、所有 `TRIGGER_CARD_SUMMONED` 场上响应均结算
+  完毕、轮到万岳自身 `TRIGGER_CARD_AFTER_SUMMONED` 时。因此从五张手牌正常打出
+  万岳且期间没有其他手牌变化时，计数为四。
+- 每次其当前所属方的正常回合开始时，自身四边点数各减一。额外出牌不建立
+  新的所属方回合，也不重复触发这次减点。
+- 一阶只有上述自身增点与回合开始减点。
+- 二阶、三阶额外使在其正交相邻空格进场的友方四边点数各加一。
+- 四阶把相邻进场友方的增量改为二。
+
+### 大嵩阳神掌
+
+- 一阶使在其正交相邻空格进场的友方四边点数各加一。
+- 二阶使相邻进场友方各加一，并使相邻进场敌方各减一。
+- 三阶使相邻进场友方各加一，并使相邻进场敌方各减二。
+- 四阶使相邻进场友方各加二，并使相邻进场敌方各减二。
+
+“相邻”只指 3×3 棋盘上的正交相邻格。移动与交换不是进场，不触发这些
+能力。上述能力均不声明 `retained_on_flip`，因此卡牌翻面时按现行规则失去能力；
+已经写入运行时卡牌的点数变化不会因翻面恢复或转移。
+
+## 通用目录词汇
+
+新增以下通用词汇：
+
+```gdscript
+const CONDITION_TRIGGER_CARD_IS_ALLY: StringName = &"trigger_card_is_ally"
+const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
+
+const ACTION_CHANGE_POWERS: StringName = &"change_powers"
+const VALUE_CARD_COUNT: StringName = &"card_count"
+```
+
+`ACTION_CHANGE_POWERS` 的声明形状为：
+
+```gdscript
+{
+    "type": ACTION_CHANGE_POWERS,
+    "card": CARD_REF_ABILITY_SOURCE,
+    "amount": -1,
+}
+```
+
+或使用动态数值：
+
+```gdscript
+{
+    "type": ACTION_CHANGE_POWERS,
+    "card": CARD_REF_ABILITY_SOURCE,
+    "amount": {
+        "type": VALUE_CARD_COUNT,
+        "zone": CARD_ZONE_HAND,
+        "owner": OWNER_ABILITY_SOURCE,
+    },
+}
+```
+
+本次支持的 `card` 引用至少包括能力来源、触发卡牌与现有选择器中的当前卡牌
+语义。`VALUE_CARD_COUNT` 在动作实际执行时读取指定拥有者指定区域的当前卡牌数，
+不在触发发现时提前快照。
+
+目录校验必须：
+
+- 接受 `ACTION_CHANGE_POWERS` 的非零正负整数字面量；
+- 接受字段完整且引用合法的 `VALUE_CARD_COUNT`；
+- 拒绝零字面量、未知卡牌引用、未知区域、未知拥有者和值类型；
+- 递归校验选择器内部的点数变化动作；
+- 在现有声明全部迁移后删除 `ACTION_ADD_POWERS`，避免两条功能重叠的规则路径。
+
+动态变化量在执行时算出为零属于 `NO_EFFECT`，不修改状态，也不产生空动画。
+
+## 卡牌声明
+
+万岳朝宗的共用自身能力采用：
+
+```gdscript
+const WANYUE_SELF_POWER: Dictionary = {
+    "triggers": [
+        {
+            "event": TRIGGER_CARD_AFTER_SUMMONED,
+            "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+            "actions": [{
+                "type": ACTION_CHANGE_POWERS,
+                "card": CARD_REF_ABILITY_SOURCE,
+                "amount": {
+                    "type": VALUE_CARD_COUNT,
+                    "zone": CARD_ZONE_HAND,
+                    "owner": OWNER_ABILITY_SOURCE,
+                },
+            }],
+        },
+        {
+            "event": TRIGGER_START_OWNER_TURN,
+            "conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+            "actions": [{
+                "type": ACTION_CHANGE_POWERS,
+                "card": CARD_REF_ABILITY_SOURCE,
+                "amount": -1,
+            }],
+        },
+    ],
+}
+```
+
+相邻友方增点采用全局进场触发：
+
+```gdscript
+{
+    "event": TRIGGER_CARD_SUMMONED,
+    "conditions": [
+        {"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+        {"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+    ],
+    "actions": [{
+        "type": ACTION_CHANGE_POWERS,
+        "card": CARD_REF_TRIGGER_CARD,
+        "amount": 1,
+    }],
+}
+```
+
+敌方减点使用现有 `CONDITION_TRIGGER_CARD_IS_ENEMY` 与同一个触发卡牌引用，只改变
+`amount` 为对应的负数。各阶通过组合共用能力声明表达，不在执行器中识别卡牌 ID。
+
+## 点数变化与全零移除
+
+`ACTION_CHANGE_POWERS` 对目标运行时实例的四个当前点数同时应用同一个变化量：
+
+- 正向变化不设上限。
+- 负向变化对四边分别计算 `max(0, 当前点数 + amount)`，运行时变化不会产生负数。
+- 只有负向变化实际结算后四边全部为零，才立即移除该卡。
+- 手牌和场上卡牌遵循完全相同的点数下限与全零移除规则。
+- 被移除实例进入其 `original_owner` 的 removed zone，沿用现有唯一实例身份和外部
+  移除数据流。
+- 正向变化不会因为目标原本四边全零而触发移除。
+- 缺失、所有权不符或格式无效的精确实例引用产生 `NO_EFFECT`，不阻断同组后续
+  规则，除非目录显式采用已有的停止策略。
+
+点数动作需要同时保留能力来源与目标实例身份。若负向变化的能力来源就是被减至
+全零的目标实例，移除事件标记为自行移除，使用既有渐隐表现；否则标记为外部移除，
+使用既有放逐表现。这个判断不因目标位于手牌或棋盘而改变。
+
+一次致死减点必须先产生 `powers_changed`，再产生 `card_exiled`。控制器必须等待
+点数变化动画完成后才呈现渐隐或放逐，使玩家先看清四边归零。
+
+## 进场与终局时序
+
+普通手牌进场继续使用现有顺序：
+
+1. 精确手牌实例先逻辑进入目标格。
+2. 场上触发来源按棋盘格 `0..8` 顺序响应 `TRIGGER_CARD_SUMMONED`。
+3. 若进场实例仍存在，结算它当前持有的 `TRIGGER_CARD_AFTER_SUMMONED`。
+4. 若它仍在棋盘且仍属于打出者，执行通常攻击。
+5. 结算剩余行动、额外出牌与回合边界。
+
+因此，新进场卡若在第 2 步被大嵩阳神掌减至四边全零，会立即移除，不再执行自身
+进场后能力，也不进行通常攻击。已经发现的其他进场响应仍按稳定顺序继续；它们若
+引用已经消失的触发实例，则正常得到 `NO_EFFECT`。
+
+多张万岳朝宗或大嵩阳神掌同时响应时，严格按现有棋盘格顺序逐张结算并逐次发出
+事件。后一个来源必须针对当前状态重新验证触发卡仍然存在、阵营关系与相邻关系。
+
+移除可能令原本满格的棋盘重新出现空位。模拟器只能在完整进场、触发、移除与攻击
+链结束后的现有终局检查点判定胜负，不能因为棋盘曾短暂填满而提前结束对局。
+
+## 运行时数据、事件与 AI
+
+点数只写入运行时卡牌字典，不修改目录定义。搜索状态复制必须深拷贝四向点数数组；
+规范状态键继续包含变化后的四向点数、卡牌所在区域及 removed zone 内容。
+
+每次实际点数变化发出一个确定性的 `powers_changed` 事件，至少包含：
+
+```gdscript
+{
+    "type": &"powers_changed",
+    "instance_id": target_instance_id,
+    "owner_id": current_owner,
+    "previous_powers": previous_powers,
+    "powers": resulting_powers,
+    "change_amount": resolved_amount,
+    "change_reason": ACTION_CHANGE_POWERS,
+    "ability_source_instance_id": ability_source_instance_id,
+    "zone": target_zone,
+    "logical_index": target_index,
+}
+```
+
+事件必须足以让表现层区分增加、减少以及自行/外部致死，但不得包含 Node、Tween 或
+卡牌视图引用。攻击比较、合法行动、局面评估、贪心后备与深度搜索均直接读取变化后
+的运行时点数。回放记录动作而非动画状态，并通过同一模拟器重建相同事件顺序。
+
+全零移除继续进入现有 removed zone，因此终局评分、状态键、搜索复制和回放无需建立
+第二套“点数死亡”区域。
+
+## 表现设计
+
+`CardView` 提供约 0.25 秒的统一点数变化动画，适用于手牌和棋盘中的已揭示卡牌：
+
+- 四个数字保持原位，不平移、不扭动。
+- 四边数字围绕各自中心同步轻微缩放；加点为轻微放大，减点为轻微收缩。
+- 动画过程中四边结果值同时更新，然后所有数字恢复正常尺寸。
+- 卡框同步短暂泛光；增加使用克制的暖金绿色，减少使用暗红色。
+- 不新增音效、墨点、屏幕震动或顺时针逐边播放。
+- 多张卡连续变化时，控制器遵循事件顺序逐张等待动画，保证每次变化可读。
+- 致死减点先完整显示四边归零，再播放既有渐隐或放逐。
+
+对正常模式下未揭示的敌方手牌，控制器仍同步其运行时数据，但不得显示数字、卡名、
+动画细节或其他可推断元数据。固定五手牌物理槽不因手牌全零移除而重排或缩放。
+
+若对应视图已因更早事件消失，表现事件可安全跳过；逻辑状态不回滚。回放与实时对局
+使用相同的事件呈现路径。
+
+## 失败与边界行为
+
+- 动态手牌计数为零：`NO_EFFECT`，不发出 `powers_changed`。
+- 减点后至少一边大于零：卡牌保留，四边分别显示截断后的结果。
+- 手牌被移除：精确实例离开逻辑手牌并进入 removed zone；五个物理槽保持固定。
+- 场上被移除：原格立即成为可用空格，后续触发与攻击读取更新后的棋盘。
+- 能力来源先被移除或翻面并失去能力：尚未接受的规则组按现有稳定上下文重验证，
+  不产生新的点数变化。
+- 触发卡被前一个来源减死：后续来源不得再次修改或重复移除同一实例。
+- 所有权翻转：此前点数永久保留，非保留能力照常丢失；之后的友敌判断使用当前拥有者。
+- 重复卡牌：全部通过 `instance_id` 区分，不按卡牌 ID 或视觉顺序定位。
+
+## 验证范围
+
+实现遵循先测试后规则、最后表现的顺序。至少覆盖：
+
+### 目录与通用规则
+
+- `ACTION_CHANGE_POWERS` 接受非零正负整数与合法 `VALUE_CARD_COUNT`。
+- 未知卡牌引用、区域、拥有者和值来源被拒绝。
+- 旧 `ACTION_ADD_POWERS` 声明全部迁移并删除旧词汇。
+- 正向变化不封顶；负向变化对四边分别最低为零。
+- 动态零变化不产生事件。
+- 场上与手牌全零都进入原始拥有者的 removed zone。
+- `powers_changed` 严格先于 `card_exiled`。
+- 自身致死标记渐隐，外部致死标记放逐。
+
+### 八张卡
+
+- 万岳进场按离手后、场上进场响应完成时的当前手牌数一次性增点。
+- 万岳各阶的自身减点与相邻友方增点数值正确。
+- 正常所属方回合开始触发减点，额外出牌不重复触发。
+- 大嵩阳神掌各阶对友方/敌方、相邻/不相邻目标的 `+1`、`+2`、`-1`、
+  `-2` 全覆盖。
+- 多张响应来源按棋盘格顺序结算并针对当前状态重验证。
+- 翻面后能力丢失但既有点数变化保留。
+
+### 时序、搜索与表现
+
+- 新进场卡在全局响应阶段被减死后不执行自身进场后能力或通常攻击。
+- 减死进场卡重新产生空格时不会错误触发满棋盘终局。
+- 深度搜索克隆与状态键区分不同运行时点数和 removed zone 状态。
+- 点数变化动画约 0.25 秒，数字位置不变、四边同步缩放并同时更新。
+- 加减使用不同框光；全零时等待点数动画后再呈现正确移除效果。
+- 未揭示敌方手牌不会因点数事件泄漏信息。
+- 手牌移除后五个固定物理槽保持不变。
+
+完整验证运行 `powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1`，并在
+540×960 纵向视口实际走查己方与敌方进场增减点、手牌全零移除、场上全零移除、
+通常攻击取消及回放。
+
+## 当前基线说明
+
+设计写入前的完整基线中，除以下既有目录同步问题外，其余 41 个套件通过：
+
+- `test_card_catalog.gd` 仍断言旧卡牌总数并报告目录 ID 唯一性失败。
+- `test_sect_catalog.gd` 仍断言旧的嵩山派名称、图片、地区、声望与专长。
+
+实现阶段应把这些断言同步到当前生产目录，但不得回滚当前嵩山卡牌或门派资料，也不应
+把它们误归因于本次点数系统改动。
