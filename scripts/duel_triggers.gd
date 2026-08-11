@@ -61,6 +61,8 @@ static func resolve_group(
 	var context: Dictionary = group.get("context", {})
 	context = context.duplicate(true)
 	context["resolving_ability_index"] = int(group.get("ability_index", -1))
+	context["resolving_trigger_index"] = int(group.get("trigger_index", -1))
+	context["resolving_event_id"] = StringName(group.get("event_id", &""))
 	context["resolving_ability_snapshot"] = group.get("ability_snapshot", {}).duplicate(true)
 	if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
 		return result
@@ -193,7 +195,10 @@ static func _conditions_match(
 		if condition_type == Catalog.CONDITION_KI_AT_LEAST:
 			if int(card.get("ki", 0)) < int(condition.get("amount", 0)):
 				return false
-		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY:
+		elif condition_type in [
+			Catalog.CONDITION_TRIGGER_CARD_IS_ALLY,
+			Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY,
+		]:
 			var trigger_slot: Dictionary = _get_context_card_slot(
 				state,
 				context,
@@ -203,7 +208,15 @@ static func _conditions_match(
 			if trigger_slot.is_empty():
 				return false
 			var source_slot: Dictionary = state.board[source_cell]
-			if int(source_slot.get("owner", 0)) == int(trigger_slot.get("owner", 0)):
+			var owners_match: bool = (
+				int(source_slot.get("owner", 0)) == int(trigger_slot.get("owner", 0))
+			)
+			if (
+				condition_type == Catalog.CONDITION_TRIGGER_CARD_IS_ALLY
+				and not owners_match
+				or condition_type == Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY
+				and owners_match
+			):
 				return false
 		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_IN_RANGE:
 			if not Rules.is_target_in_attack_range(

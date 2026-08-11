@@ -48,6 +48,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   identical-copy qualification, namesake exclusion, and deduplication.
 - `test_zixia_integration.gd` — hand/board mutable-value presentation and
   face-down concealment for generic selected-card effects.
+- `test_wanyue_dasongyang_abilities.gd` — signed literals, dynamic hand count,
+  zero-floor removal, original-owner zones, batch metadata, all eight card
+  declarations, summon timing, and lethal global reactions.
+- `test_power_change_integration.gd` — parallel visible batch starts, one
+  shared duration, repeated-instance visual coalescing, final four-side values,
+  gain/loss styling, and hidden-card no-wait concealment.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.

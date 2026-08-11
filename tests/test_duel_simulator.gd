@@ -164,7 +164,11 @@ func _test_generic_selection_wrapper_modifies_hand_and_board() -> void:
 				},
 				"actions": [
 					{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
-					{"type": Catalog.ACTION_ADD_POWERS, "amount": 1},
+					{
+						"type": Catalog.ACTION_CHANGE_POWERS,
+						"amount": 1,
+						"card": Catalog.CARD_REF_SELECTED_CARD,
+					},
 				],
 			},
 		],

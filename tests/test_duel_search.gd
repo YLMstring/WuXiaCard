@@ -107,6 +107,18 @@ func _test_action_and_state_keys() -> void:
 		!= copied_powers,
 		"Search-state copies do not alias mutable runtime power arrays"
 	)
+	copied = state.duplicate_state()
+	var removed_card: Dictionary = (copied.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).duplicate(true)
+	copied.get_hand(Rules.PLAYER_OWNER).remove_at(0)
+	(copied.removed_cards[Rules.PLAYER_OWNER] as Array).append(removed_card)
+	_check(
+		StateKey.build(state) != StateKey.build(copied),
+		"Exact-card power death and original-owner removal participate in the state key"
+	)
+	_check(
+		(state.removed_cards[Rules.PLAYER_OWNER] as Array).is_empty(),
+		"Search-state copies do not alias removed zones"
+	)
 	var first_order: Dictionary = {"alpha": 1, "beta": 2}
 	var second_order: Dictionary = {}
 	second_order["beta"] = 2

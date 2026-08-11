@@ -78,6 +78,33 @@ These decisions were explicitly established during development and should not be
   that owner can act. Granted extra card plays remain inside the same owner
   turn and do not repeat start- or end-owner-turn triggers.
 
+## Signed Power Changes
+
+- `ACTION_CHANGE_POWERS` is the only generic stored-power mutation action. It
+  requires an explicit exact-card reference and either a nonzero signed integer
+  or the validated `VALUE_CARD_COUNT` hand-count value.
+- Positive changes have no ceiling. Negative changes floor top, right, bottom,
+  and left independently at zero.
+- A card reduced to four zeros is removed immediately from its current hand or
+  board location and appended to its `original_owner` removed zone. The logical
+  order is `powers_changed` then `card_exiled`; only an exact source-target
+  identity match uses self-fade presentation.
+- One top-level action creates one transition-only power batch. Logical events
+  are never discarded, while presentation coalesces repeated exact-instance
+  changes and starts all visible cards together. Full-zero removals wait for
+  that one batch barrier. Hidden cards update without animation or delay.
+
+## 万岳朝宗 / 大嵩阳神掌
+
+- Every WanYue tier gains one per current-owner hand card after its own summon,
+  after it has left the hand and after global summon reactions. It loses one at
+  the start of each owner turn; granted extra card plays do not repeat decay.
+- WanYue tiers 2–3 grant an adjacent allied summon `+1`; tier 4 grants `+2`.
+- DaSongYang tiers 1–4 grant adjacent allied summons `+1`, `+1`, `+1`, and
+  `+2`. Tiers 2–4 reduce adjacent enemy summons by `-1`, `-2`, and `-2`.
+- Movement and swaps are not summons. If global reactions remove the summoned
+  exact instance, its after-summon rules and standard attack do not run.
+
 ## Attack Presentation
 
 - Every attack uses one serialized reveal of `res://inkpics/attack.png` before

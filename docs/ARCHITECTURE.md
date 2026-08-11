@@ -55,9 +55,10 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
 - `duel_ability_executor.gd` — generic costs and actions: draw, exact/fresh
   card return and summon requests, exile, immediately serviced attack requests,
-  ki, movement with shared before/after boundaries, ordered swaps, turn-scoped
-  ability suppression, extra-card-play grants, normal flip, and invalid-context
-  policy.
+  ki, signed exact-card power changes with dynamic values and zero-power
+  removal, movement with shared before/after boundaries, ordered swaps,
+  turn-scoped ability suppression, extra-card-play grants, normal flip, and
+  invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. Implemented rules
   cover adjacent empty, allied, enemy, and other-allied board cards.
 - `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
@@ -113,7 +114,10 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 
 ### Presentation
 
-- `duel_controller.gd` — creates the encounter, translates drag gestures into actions, calls the simulator, and presents transition events sequentially.
+- `duel_controller.gd` — creates the encounter, translates drag gestures into
+  actions, calls the simulator, and presents transition events. Logical event
+  order stays sequential; visible power changes sharing one transition batch
+  animate in parallel behind one barrier.
 - `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand slots, library-to-hand exchange, inspection, and the navigation-neutral `back_requested` signal.
 - `deck_library_grid.gd` / `deck_library_grid.tscn` — four-column, 1,000-slot virtualized and scrollable library surface.
 - `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.
@@ -294,6 +298,15 @@ concealment. It does not imply that any side-deck card was removed.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 
+`powers_changed` carries the exact target instance/location, earliest logical
+`previous_powers`, resulting `powers`, resolved signed `amount`, and ability
+source. A top-level action also stamps its directly caused power/removal events
+with `power_change_batch_id`. This identifier exists only in transition data;
+it is never stored in `DuelState`, replay Tween state, or search keys. The
+controller visually coalesces repeated changes to one exact instance, starts
+every visible card in the batch together, waits once, then resumes the original
+flat event order. Face-down cards synchronize silently and create no empty wait.
+
 `card_summoned` presents an ability-created board instance. The simulator then
 resolves the same global summoned/after-summoned phases and standard attack used
 by ordinary play. `card_returned_to_hand` atomically replaces a board instance
@@ -323,6 +336,12 @@ as subject. Nested attack requests are serviced immediately, so one selected
 card's complete attack and trigger chain mutates state before the next selected
 instance is revalidated. Mutable ki and powers can therefore be changed
 consistently in hands or on the board without card-specific simulator branches.
+`ACTION_CHANGE_POWERS` resolves an explicit ability-source, selected-card, or
+trigger-card reference immediately before mutation. Its signed literal or
+supported dynamic value changes all four stored sides; subtraction floors each
+side independently at zero. Four zeros after subtraction move the exact card
+from hand or board to its original owner's removed zone after `powers_changed`
+and before `card_exiled` presentation.
 Selector snapshots may also consume immutable trigger context, such as the exact
 instances directly flipped by the current completed attack. After nested swaps,
 the wrapper relocates the immutable ability source before any outer follow-up

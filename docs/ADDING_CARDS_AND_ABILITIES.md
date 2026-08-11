@@ -160,6 +160,36 @@ movement or a zone change remains valid unless a condition becomes false.
 Inside the wrapper, the selected card is the action subject while the original
 ability source remains available to source-relative conditions.
 
+Signed power change with an explicit exact target:
+
+```gdscript
+{
+    "type": ACTION_CHANGE_POWERS,
+    "amount": -2,
+    "card": CARD_REF_TRIGGER_CARD,
+}
+```
+
+The supported dynamic form currently counts cards in one owner's hand:
+
+```gdscript
+{
+    "type": ACTION_CHANGE_POWERS,
+    "amount": {
+        "type": VALUE_CARD_COUNT,
+        "zone": CARD_ZONE_HAND,
+        "owner": OWNER_ABILITY_SOURCE,
+    },
+    "card": CARD_REF_ABILITY_SOURCE,
+}
+```
+
+The action accepts ability-source, selected-card, and trigger-card references.
+Literal amounts must be nonzero signed integers. A dynamic count resolving to
+zero is `NO_EFFECT`. Subtraction floors each side at zero; four zeros remove the
+exact instance to its original owner's removed zone after emitting the power
+event. Do not encode arithmetic or named-card behavior in the executor.
+
 Draw after summon reactions:
 
 ```gdscript
@@ -375,6 +405,11 @@ without exile, and creates a fresh exact-ID instance in its current cell for
 the ability source's current owner. The fresh instance completes normal
 summoned, after-summoned, and standard-attack phases. A missing or already
 removed trigger instance returns `NO_EFFECT`.
+
+Power-change batches are transition presentation metadata. One top-level action
+shares a batch across every nested selected card; different top-level actions
+and trigger sources stay ordered as separate batches. Do not store a batch ID
+in `DuelState`, catalog definitions, or a replay record.
 
 ## Revelation, Prevention, and Passive Modifiers
 

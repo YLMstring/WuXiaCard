@@ -141,9 +141,20 @@ The creator has made several direct UI and localization edits. Preserve those ed
   Once `CARD_BEFORE_FLIPPED` starts, movement alone no longer cancels the
   committed flip; the target instance is followed to its current cell.
 - Runtime ki and all four powers can change permanently in hand or on board.
+  `ACTION_CHANGE_POWERS` accepts explicit exact-card references plus signed
+  literals or a current-owner hand count. Subtraction floors each side at zero;
+  four zeros move the card to its original owner's removed zone.
   Extra-card-play grants stack and permit hand plays only. They do not repeat
   start-owner-turn or end-owner-turn triggers; those boundaries run once per
   owner turn, and temporary turn-scoped effects restore only when it closes.
+- WanYueChaoZong1–4 now gain current-hand-count power after their own summon
+  and decay at owner-turn start. Tiers 2–4 also strengthen adjacent allied
+  summons by `+1/+1/+2`. DaSongYangZhang1–4 strengthen adjacent allied summons
+  by `+1/+1/+1/+2`; tiers 2–4 weaken adjacent enemy summons by `-1/-2/-2`.
+- One top-level power action emits one transition-only batch. Every visible
+  target in that batch animates simultaneously for about 0.25 seconds; repeated
+  exact-instance changes visually coalesce, zero-power removals wait behind the
+  shared barrier, and concealed hand changes add no animation delay or leak.
 - LaiHeQinQuan1–5 now use generic exact-instance revelation, permanent
   future-draw audiences, flip-prevention requests, granted passive modifiers,
   and indexed self-removal. LaiHe4/5 use the active-run enemy-memory snapshot;

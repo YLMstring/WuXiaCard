@@ -19,6 +19,7 @@ const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const TRIGGER_BEFORE_DUEL_END: StringName = &"before_duel_end"
 const CONDITION_KI_AT_LEAST: StringName = &"ki_at_least"
+const CONDITION_TRIGGER_CARD_IS_ALLY: StringName = &"trigger_card_is_ally"
 const CONDITION_TRIGGER_CARD_IS_ENEMY: StringName = &"trigger_card_is_enemy"
 const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
 const CONDITION_TRIGGER_CARD_IS_SELF: StringName = &"trigger_card_is_self"
@@ -54,7 +55,7 @@ const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
 const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
-const ACTION_ADD_POWERS: StringName = &"add_powers"
+const ACTION_CHANGE_POWERS: StringName = &"change_powers"
 const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
 const ACTION_REVEAL_HAND_CARDS: StringName = &"reveal_hand_cards"
 const ACTION_ENABLE_FUTURE_DRAW_REVEAL: StringName = &"enable_future_draw_reveal"
@@ -71,14 +72,15 @@ const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_car
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
 const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
 const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
-const ACTION_TARGET_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
+const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
+const VALUE_CARD_COUNT: StringName = &"card_count"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
@@ -115,6 +117,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 ]
 const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_KI_AT_LEAST,
+	CONDITION_TRIGGER_CARD_IS_ALLY,
 	CONDITION_TRIGGER_CARD_IS_ENEMY,
 	CONDITION_TRIGGER_CARD_IN_RANGE,
 	CONDITION_TRIGGER_CARD_IS_SELF,
@@ -155,7 +158,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
 	ACTION_FOR_EACH_SELECTED_CARD,
-	ACTION_ADD_POWERS,
+	ACTION_CHANGE_POWERS,
 	ACTION_ADD_CARD_TO_HAND,
 	ACTION_REVEAL_HAND_CARDS,
 	ACTION_ENABLE_FUTURE_DRAW_REVEAL,
@@ -173,8 +176,13 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 ]
-const KNOWN_CARD_REFERENCES: Array[StringName] = [CARD_REF_ABILITY_SOURCE, CARD_REF_SELECTED_CARD]
+const KNOWN_CARD_REFERENCES: Array[StringName] = [
+	CARD_REF_ABILITY_SOURCE,
+	CARD_REF_SELECTED_CARD,
+	CARD_REF_TRIGGER_CARD,
+]
 const KNOWN_OWNER_REFERENCES: Array[StringName] = [OWNER_ABILITY_SOURCE, OWNER_CARD_CURRENT]
+const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
 const KNOWN_MODIFIERS: Array[StringName] = [
@@ -399,10 +407,101 @@ const TIANCHANG_SUMMON_POWER: Dictionary = {
 				],
 			},
 			"actions": [{
-				"type": ACTION_ADD_POWERS,
+				"type": ACTION_CHANGE_POWERS,
 				"amount": 1,
-				"target": ACTION_TARGET_ABILITY_SOURCE,
+				"card": CARD_REF_ABILITY_SOURCE,
 			}],
+		}],
+	}],
+}
+
+const WANYUE_SELF_POWER: Dictionary = {
+	"triggers": [
+		{
+			"event": TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": {
+					"type": VALUE_CARD_COUNT,
+					"zone": CARD_ZONE_HAND,
+					"owner": OWNER_ABILITY_SOURCE,
+				},
+				"card": CARD_REF_ABILITY_SOURCE,
+			}],
+		},
+		{
+			"event": TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_ABILITY_SOURCE,
+			}],
+		},
+	],
+}
+
+const WANYUE_ADJACENT_ALLY_POWER: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+
+const WANYUE_ADJACENT_ALLY_POWER_TWO: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": 2,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+
+const DASONGYANG_ADJACENT_ALLY_POWER: Dictionary = WANYUE_ADJACENT_ALLY_POWER
+
+const DASONGYANG_ADJACENT_ALLY_POWER_TWO: Dictionary = WANYUE_ADJACENT_ALLY_POWER_TWO
+
+const DASONGYANG_ADJACENT_ENEMY_POWER: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": -1,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+
+const DASONGYANG_ADJACENT_ENEMY_POWER_TWO: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": -2,
+			"card": CARD_REF_TRIGGER_CARD,
 		}],
 	}],
 }
@@ -978,7 +1077,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 									],
 								},
 								"actions": [
-									{"type": ACTION_ADD_POWERS, "amount": 1},
+									{
+										"type": ACTION_CHANGE_POWERS,
+										"amount": 1,
+										"card": CARD_REF_SELECTED_CARD,
+									},
 								],
 							},
 						],
@@ -1016,7 +1119,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 									],
 								},
 								"actions": [
-									{"type": ACTION_ADD_POWERS, "amount": 1},
+									{
+										"type": ACTION_CHANGE_POWERS,
+										"amount": 1,
+										"card": CARD_REF_SELECTED_CARD,
+									},
 								],
 							},
 						],
@@ -1038,7 +1145,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"limit": 2,
 								},
 								"actions": [
-									{"type": ACTION_ADD_POWERS, "amount": 1},
+									{
+										"type": ACTION_CHANGE_POWERS,
+										"amount": 1,
+										"card": CARD_REF_SELECTED_CARD,
+									},
 								],
 							},
 						],
@@ -2184,7 +2295,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一张手牌，我点数加一。回合开始时，我点数减一。",
 		"flavor": "嫡系正宗的嵩山剑法，举剑过顶，弯腰躬身，端严雄伟。",
 		"powers": [4, 3, 3, 4],
-		"abilities": [],
+		"abilities": [WANYUE_SELF_POWER],
 	},
 	&"WanYueChaoZong2": {
 		"id": &"WanYueChaoZong2",
@@ -2196,7 +2307,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一张手牌，我点数加一。回合开始时，我点数减一。友方在相邻空格进场时，使其点数加一。",
 		"flavor": "嫡系正宗的嵩山剑法，举剑过顶，弯腰躬身，端严雄伟。",
 		"powers": [4, 3, 3, 4],
-		"abilities": [],
+		"abilities": [WANYUE_SELF_POWER, WANYUE_ADJACENT_ALLY_POWER],
 	},
 	&"WanYueChaoZong3": {
 		"id": &"WanYueChaoZong3",
@@ -2208,7 +2319,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一张手牌，我点数加一。回合开始时，我点数减一。友方在相邻空格进场时，使其点数加一。",
 		"flavor": "嫡系正宗的嵩山剑法，举剑过顶，弯腰躬身，端严雄伟。",
 		"powers": [5, 4, 4, 5],
-		"abilities": [],
+		"abilities": [WANYUE_SELF_POWER, WANYUE_ADJACENT_ALLY_POWER],
 	},
 	&"WanYueChaoZong4": {
 		"id": &"WanYueChaoZong4",
@@ -2220,7 +2331,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，每有一张手牌，我点数加一。回合开始时，我点数减一。友方在相邻空格进场时，使其点数加二。",
 		"flavor": "嫡系正宗的嵩山剑法，举剑过顶，弯腰躬身，端严雄伟。",
 		"powers": [5, 4, 4, 5],
-		"abilities": [],
+		"abilities": [WANYUE_SELF_POWER, WANYUE_ADJACENT_ALLY_POWER_TWO],
 	},
 	&"DaSongYangZhang1": {
 		"id": &"DaSongYangZhang1",
@@ -2232,7 +2343,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，使其点数加一。",
 		"flavor": "嵩山派掌法，一掌出手，全身犹如渊停岳峙，气度凝重。",
 		"powers": [7, 7, 3, 4],
-		"abilities": [],
+		"abilities": [DASONGYANG_ADJACENT_ALLY_POWER],
 	},
 	&"DaSongYangZhang2": {
 		"id": &"DaSongYangZhang2",
@@ -2244,7 +2355,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，使其点数加一。敌方在相邻空格进场时，使其点数减一。",
 		"flavor": "嵩山派掌法，一掌出手，全身犹如渊停岳峙，气度凝重。",
 		"powers": [7, 7, 3, 4],
-		"abilities": [],
+		"abilities": [DASONGYANG_ADJACENT_ALLY_POWER, DASONGYANG_ADJACENT_ENEMY_POWER],
 	},
 	&"DaSongYangZhang3": {
 		"id": &"DaSongYangZhang3",
@@ -2256,7 +2367,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，使其点数加一。敌方在相邻空格进场时，使其点数减二。",
 		"flavor": "嵩山派掌法，一掌出手，全身犹如渊停岳峙，气度凝重。",
 		"powers": [7, 7, 3, 4],
-		"abilities": [],
+		"abilities": [DASONGYANG_ADJACENT_ALLY_POWER, DASONGYANG_ADJACENT_ENEMY_POWER_TWO],
 	},
 	&"DaSongYangZhang4": {
 		"id": &"DaSongYangZhang4",
@@ -2268,7 +2379,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，使其点数加二。敌方在相邻空格进场时，使其点数减二。",
 		"flavor": "嵩山派掌法，一掌出手，全身犹如渊停岳峙，气度凝重。",
 		"powers": [7, 7, 3, 4],
-		"abilities": [],
+		"abilities": [DASONGYANG_ADJACENT_ALLY_POWER_TWO, DASONGYANG_ADJACENT_ENEMY_POWER_TWO],
 	},
 	&"YinYangZhang3": {
 		"id": &"YinYangZhang3",
@@ -2744,16 +2855,23 @@ static func _validate_action(
 	if is_cost and action_type != ACTION_SPEND_KI:
 		errors.append("Card %s activation uses unsupported cost action %s" % [card_id, action_type])
 	var allowed_keys: Array[StringName] = [&"type", &"on_invalid_context"]
-	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_ADD_POWERS, ACTION_GRANT_EXTRA_CARD_PLAY]:
+	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY]:
 		allowed_keys.append(&"amount")
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
-	if action_type == ACTION_ADD_POWERS and action.has("target"):
-		allowed_keys.append(&"target")
-		if StringName(action.get("target", &"")) != ACTION_TARGET_ABILITY_SOURCE:
+	if action_type == ACTION_CHANGE_POWERS:
+		allowed_keys.append(&"amount")
+		allowed_keys.append(&"card")
+		_validate_power_change_amount(
+			card_id,
+			context_name,
+			action.get("amount", null),
+			errors
+		)
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
-				"Card %s %s action %s requires a known target"
+				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
 	if action_type == ACTION_FLIP_SELF:
@@ -2842,6 +2960,49 @@ static func _validate_action(
 	for key: Variant in action.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s action %s has unsupported field %s" % [card_id, context_name, action_type, key])
+
+
+static func _validate_power_change_amount(
+	card_id: StringName,
+	context_name: String,
+	value: Variant,
+	errors: Array[String]
+) -> void:
+	if typeof(value) == TYPE_INT:
+		if int(value) == 0:
+			errors.append(
+				"Card %s %s action %s requires a nonzero integer amount"
+				% [card_id, context_name, ACTION_CHANGE_POWERS]
+			)
+		return
+	if not value is Dictionary:
+		errors.append(
+			"Card %s %s action %s requires a signed integer or value specification"
+			% [card_id, context_name, ACTION_CHANGE_POWERS]
+		)
+		return
+	var spec: Dictionary = value
+	if StringName(spec.get("type", &"")) != VALUE_CARD_COUNT:
+		errors.append(
+			"Card %s %s power amount uses an unknown value type"
+			% [card_id, context_name]
+		)
+	if StringName(spec.get("zone", &"")) != CARD_ZONE_HAND:
+		errors.append(
+			"Card %s %s card-count value requires the hand zone"
+			% [card_id, context_name]
+		)
+	if StringName(spec.get("owner", &"")) not in KNOWN_OWNER_REFERENCES:
+		errors.append(
+			"Card %s %s card-count value requires a known owner reference"
+			% [card_id, context_name]
+		)
+	for key: Variant in spec.keys():
+		if StringName(key) not in [&"type", &"zone", &"owner"]:
+			errors.append(
+				"Card %s %s power amount has unsupported field %s"
+				% [card_id, context_name, key]
+			)
 
 
 static func _validate_summon_card_spec(

@@ -52,6 +52,11 @@ Legal actions have canonical keys and deterministic ordering. Equal results use 
 
 The transposition table is capped at 50,000 entries. `DuelStateKey.build_compact()` currently returns a length plus forward/reverse hashes derived from a canonical serialization. This saves key memory but is not a compact state implementation and has a theoretical collision risk.
 
+Runtime power arrays and every owner's removed zone are part of canonical
+state. A zero-power removal therefore produces a distinct search state and
+deep copies do not alias either structure. `power_change_batch_id` is excluded
+because it belongs to transition presentation, not gameplay state.
+
 ## Concurrency Contract
 
 - Search receives a deep state copy.

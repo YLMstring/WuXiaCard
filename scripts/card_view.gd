@@ -158,6 +158,60 @@ func set_runtime_powers(value: Array) -> void:
 	_refresh_face_content()
 
 
+func play_power_change(
+	previous_powers: Array,
+	resulting_powers: Array,
+	amount: int,
+	duration: float,
+	glow_color: Color
+) -> void:
+	if previous_powers.size() != 4 or resulting_powers.size() != 4:
+		return
+	set_runtime_powers(previous_powers)
+	if face_down or duration <= 0.0:
+		set_runtime_powers(resulting_powers)
+		return
+	set_runtime_powers(resulting_powers)
+	var half_duration: float = duration * 0.5
+	var pulse_scale: Vector2 = (
+		Vector2(1.10, 1.10) if amount > 0 else Vector2(0.90, 0.90)
+	)
+	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
+		power_label.pivot_offset = power_label.size * 0.5
+		power_label.scale = Vector2.ONE
+		var label_tween: Tween = create_tween()
+		label_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		label_tween.tween_property(power_label, "scale", pulse_scale, half_duration)
+		label_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		label_tween.tween_property(power_label, "scale", Vector2.ONE, half_duration)
+	var panel_style := get_theme_stylebox("panel") as StyleBoxFlat
+	if panel_style != null:
+		var animated_style := panel_style.duplicate() as StyleBoxFlat
+		add_theme_stylebox_override("panel", animated_style)
+		var resting_border: Color = animated_style.border_color
+		var resting_shadow: Color = animated_style.shadow_color
+		var style_tween: Tween = create_tween()
+		style_tween.set_parallel(true)
+		style_tween.tween_property(animated_style, "border_color", glow_color, half_duration)
+		style_tween.tween_property(
+			animated_style,
+			"shadow_color",
+			Color(glow_color.r, glow_color.g, glow_color.b, 0.58),
+			half_duration
+		)
+		style_tween.chain().tween_property(
+			animated_style,
+			"border_color",
+			resting_border,
+			half_duration
+		)
+		style_tween.parallel().tween_property(
+			animated_style,
+			"shadow_color",
+			resting_shadow,
+			half_duration
+		)
+		style_tween.chain().tween_callback(_apply_owner_style)
 func set_ki_badge_enabled(value: bool) -> void:
 	ki_badge_enabled = value
 	if is_node_ready():

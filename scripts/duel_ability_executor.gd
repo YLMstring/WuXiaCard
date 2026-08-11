@@ -160,8 +160,16 @@ static func execute_actions(
 				state,
 				selected_instance_id
 			)
+	if not reference_snapshots.has(Catalog.CARD_REF_TRIGGER_CARD):
+		var trigger_instance_id := StringName(action_context.get("trigger_instance_id", &""))
+		if trigger_instance_id != &"":
+			reference_snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_card_reference(
+				state,
+				trigger_instance_id
+			)
 	var current_source_cell: int = source_cell
-	for action_value: Variant in actions:
+	for action_index: int in range(actions.size()):
+		var action_value: Variant = actions[action_index]
 		if not action_value is Dictionary:
 			continue
 		var declaration: Dictionary = action_value
@@ -177,6 +185,15 @@ static func execute_actions(
 			summon_resolver,
 			before_move_resolver
 		)
+		if not bool(action_context.get("defer_power_change_batch", false)):
+			_assign_power_change_batch(
+				action_result.get("events", []) as Array,
+				_make_power_change_batch_id(
+					source_instance_id,
+					action_context,
+					action_index
+				)
+			)
 		result["events"].append_array(action_result.get("events", []) as Array)
 		result["captures"].append_array(action_result.get("captures", []) as Array)
 		result["exiles"].append_array(action_result.get("exiles", []) as Array)
@@ -367,18 +384,16 @@ static func _execute_action(
 			int(declaration.get("amount", 0)),
 			action_type
 		)
-	if action_type == Catalog.ACTION_ADD_POWERS:
-		var power_instance_id: StringName = source_instance_id
-		var power_owner: int = expected_owner
-		if StringName(declaration.get("target", &"")) == Catalog.ACTION_TARGET_ABILITY_SOURCE:
-			power_instance_id = StringName(context.get("ability_source_instance_id", &""))
-			power_owner = int(context.get("ability_source_owner_id", 0))
-		return _add_powers(
+	if action_type == Catalog.ACTION_CHANGE_POWERS:
+		var power_reference := StringName(declaration.get("card", &""))
+		var power_snapshot: Dictionary = _get_reference_snapshot(context, power_reference)
+		return _change_powers(
 			state,
 			source_cell,
-			power_instance_id,
-			power_owner,
-			int(declaration.get("amount", 0))
+			StringName(power_snapshot.get("instance_id", &"")),
+			int(power_snapshot.get("owner_id", 0)),
+			declaration.get("amount", null),
+			context
 		)
 	if action_type == Catalog.ACTION_ADD_CARD_TO_HAND:
 		return _add_card_to_hand(
@@ -592,6 +607,7 @@ static func _for_each_selected_card(
 			else -1
 		)
 		var nested_context: Dictionary = context.duplicate(true)
+		nested_context["defer_power_change_batch"] = true
 		nested_context["selected_card_conditions"] = conditions.duplicate(true)
 		nested_context["selected_card_instance_id"] = selected_instance_id
 		var nested_snapshots: Dictionary = nested_context.get(
@@ -1014,37 +1030,147 @@ static func _change_ki(
 	)])
 
 
-static func _add_powers(
+static func _change_powers(
 	state: StateData,
 	source_cell: int,
-	source_instance_id: StringName,
+	target_instance_id: StringName,
 	expected_owner: int,
-	amount: int
+	amount_value: Variant,
+	context: Dictionary
 ) -> Dictionary:
-	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty() or amount <= 0:
+	var target: Dictionary = _get_subject(state, target_instance_id, expected_owner)
+	if target.is_empty():
 		return _no_effect(source_cell)
-	var card: Dictionary = source.get("card", {})
+	var amount: int = _resolve_power_change_amount(state, target, amount_value, context)
+	if amount == 0:
+		return _no_effect(source_cell)
+	var card: Dictionary = target.get("card", {})
 	var previous_powers: Array = (card.get("powers", []) as Array).duplicate()
 	if previous_powers.size() != 4:
 		return _no_effect(source_cell)
 	var resulting_powers: Array = previous_powers.duplicate()
 	for power_index: int in range(resulting_powers.size()):
-		resulting_powers[power_index] = int(resulting_powers[power_index]) + amount
+		resulting_powers[power_index] = maxi(
+			0,
+			int(resulting_powers[power_index]) + amount
+		)
 	card["powers"] = resulting_powers
-	var current_cell: int = _get_location_cell(source)
-	return _applied(source_cell, [{
+	var current_cell: int = _get_location_cell(target)
+	var events: Array = [{
 		"type": &"powers_changed",
-		"source_cell": current_cell,
+		"source_cell": source_cell,
 		"target_cell": current_cell,
-		"owner_id": int(source.get("owner_id", 0)),
-		"instance_id": source_instance_id,
+		"owner_id": int(target.get("owner_id", 0)),
+		"instance_id": target_instance_id,
+		"ability_source_instance_id": StringName(
+			context.get("ability_source_instance_id", &"")
+		),
 		"previous_powers": previous_powers,
 		"powers": resulting_powers.duplicate(),
-		"change_reason": Catalog.ACTION_ADD_POWERS,
-		"zone": StringName(source.get("zone", &"")),
-		"logical_index": int(source.get("index", -1)),
-	}])
+		"amount": amount,
+		"change_reason": Catalog.ACTION_CHANGE_POWERS,
+		"zone": StringName(target.get("zone", &"")),
+		"logical_index": int(target.get("index", -1)),
+	}]
+	if amount < 0 and resulting_powers == [0, 0, 0, 0]:
+		var exile_event: Dictionary = _remove_powerless_subject(
+			state,
+			target,
+			source_cell,
+			StringName(context.get("ability_source_instance_id", &""))
+		)
+		if not exile_event.is_empty():
+			events.append(exile_event)
+	return _applied(source_cell, events)
+
+
+static func _resolve_power_change_amount(
+	state: StateData,
+	target: Dictionary,
+	value: Variant,
+	context: Dictionary
+) -> int:
+	if typeof(value) == TYPE_INT:
+		return int(value)
+	if not value is Dictionary:
+		return 0
+	var spec: Dictionary = value
+	if (
+		StringName(spec.get("type", &"")) != Catalog.VALUE_CARD_COUNT
+		or StringName(spec.get("zone", &"")) != Catalog.CARD_ZONE_HAND
+	):
+		return 0
+	var owner_id: int = 0
+	var owner_reference := StringName(spec.get("owner", &""))
+	if owner_reference == Catalog.OWNER_ABILITY_SOURCE:
+		var ability_source: Dictionary = Selector.locate_card(
+			state,
+			StringName(context.get("ability_source_instance_id", &""))
+		)
+		owner_id = int(ability_source.get("owner_id", 0))
+	elif owner_reference == Catalog.OWNER_CARD_CURRENT:
+		owner_id = int(target.get("owner_id", 0))
+	if owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return 0
+	var count: int = 0
+	for card_value: Variant in state.get_hand(owner_id):
+		if card_value is Dictionary:
+			count += 1
+	return count
+
+
+static func _remove_powerless_subject(
+	state: StateData,
+	subject: Dictionary,
+	source_cell: int,
+	ability_source_instance_id: StringName
+) -> Dictionary:
+	var zone := StringName(subject.get("zone", &""))
+	var logical_index: int = int(subject.get("index", -1))
+	var card: Dictionary = subject.get("card", {})
+	var instance_id := StringName(card.get("instance_id", &""))
+	var current_owner: int = int(subject.get("owner_id", 0))
+	if instance_id == &"":
+		return {}
+	if zone == Catalog.CARD_ZONE_BOARD:
+		if (
+			logical_index < 0
+			or logical_index >= state.board.size()
+			or state.board[logical_index] == null
+		):
+			return {}
+		state.board[logical_index] = null
+	elif zone == Catalog.CARD_ZONE_HAND:
+		var hand: Array = state.get_hand(current_owner)
+		if (
+			logical_index < 0
+			or logical_index >= hand.size()
+			or not hand[logical_index] is Dictionary
+			or StringName((hand[logical_index] as Dictionary).get("instance_id", &""))
+			!= instance_id
+		):
+			return {}
+		hand.remove_at(logical_index)
+	else:
+		return {}
+	var original_owner: int = int(card.get("original_owner", 0))
+	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		original_owner = current_owner
+	if not state.removed_cards.has(original_owner):
+		state.removed_cards[original_owner] = []
+	(state.removed_cards[original_owner] as Array).append(card)
+	return {
+		"type": &"card_exiled",
+		"source_cell": source_cell,
+		"source_instance_id": ability_source_instance_id,
+		"target_cell": logical_index if zone == Catalog.CARD_ZONE_BOARD else -1,
+		"owner_id": current_owner,
+		"original_owner": original_owner,
+		"instance_id": instance_id,
+		"self_removal": ability_source_instance_id == instance_id,
+		"zone": zone,
+		"logical_index": logical_index,
+	}
 
 
 static func _add_card_to_hand(
@@ -1982,6 +2108,43 @@ static func _get_location_cell(location: Dictionary) -> int:
 	if StringName(location.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
 		return -1
 	return int(location.get("index", -1))
+
+
+static func _make_power_change_batch_id(
+	source_instance_id: StringName,
+	context: Dictionary,
+	action_index: int
+) -> StringName:
+	return StringName(
+		"%s|%s|%d|%d|%d"
+		% [
+			String(source_instance_id),
+			String(context.get("resolving_event_id", &"direct")),
+			int(context.get("resolving_ability_index", -1)),
+			int(context.get("resolving_trigger_index", -1)),
+			action_index,
+		]
+	)
+
+
+static func _assign_power_change_batch(events: Array, batch_id: StringName) -> void:
+	var has_power_change: bool = false
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &""))
+			== &"powers_changed"
+		):
+			has_power_change = true
+			break
+	if not has_power_change:
+		return
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if StringName(event.get("type", &"")) in [&"powers_changed", &"card_exiled"]:
+			event["power_change_batch_id"] = batch_id
 
 
 static func _are_adjacent(first_cell: int, second_cell: int) -> bool:

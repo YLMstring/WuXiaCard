@@ -50,6 +50,9 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var targeting_trace_width: float = 6.0
 @export var targeting_trace_color: Color = Color(0.12, 0.42, 0.38, 0.72)
 @export var ki_gain_pulse_duration: float = 0.18
+@export var power_change_duration: float = 0.25
+@export var power_gain_glow_color: Color = Color("b6b84f")
+@export var power_loss_glow_color: Color = Color("6f1f28")
 @export var extra_card_play_status_duration: float = 0.35
 @export var extra_card_play_effect_color: Color = Color("e3b84f")
 @export var draw_bloom_duration: float = 0.12
@@ -89,6 +92,7 @@ var _presentation_trace: Array[StringName] = []
 var _attack_vfx_trace: Array[Dictionary] = []
 var _ability_pulse_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
+var _power_change_presentation_trace: Array[Dictionary] = []
 var _movement_presentation_trace: Array[Dictionary] = []
 var _movement_sound_count: int = 0
 var _opponent_search_session: SearchSession = null
@@ -245,6 +249,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		swap_duration = 0.0
 		summon_swap_readable_duration = 0.0
 		ki_gain_pulse_duration = 0.0
+		power_change_duration = 0.0
 		extra_card_play_status_duration = 0.0
 		opponent_think_delay = 0.0
 		opponent_search_budget_seconds = 0.0
@@ -376,6 +381,10 @@ func debug_get_ability_pulse_trace() -> Array[StringName]:
 
 func debug_get_ki_presentation_trace() -> Array[int]:
 	return _ki_presentation_trace.duplicate()
+
+
+func debug_get_power_change_presentation_trace() -> Array[Dictionary]:
+	return _power_change_presentation_trace.duplicate(true)
 
 
 func debug_has_targeting_trace() -> bool:
@@ -1086,7 +1095,11 @@ func _present_transition_events(
 	var drew_card: bool = false
 	var waited_after_draw: bool = false
 	var event_index: int = 0
+	var consumed_power_event_indices: Dictionary = {}
 	while event_index < events.size():
+		if consumed_power_event_indices.has(event_index):
+			event_index += 1
+			continue
 		var event: Dictionary = events[event_index] as Dictionary
 		var event_type := StringName(event.get("type", &""))
 		var target_cell: int = int(event.get("target_cell", -1))
@@ -1155,7 +1168,18 @@ func _present_transition_events(
 		elif event_type == &"ki_changed":
 			await _present_ki_changed_event(event)
 		elif event_type == &"powers_changed":
-			_present_powers_changed_event(event)
+			var batch_id := StringName(event.get("power_change_batch_id", &""))
+			if batch_id == &"":
+				_present_powers_changed_event(event)
+			else:
+				var batch_indices: Array[int] = await _present_power_change_batch(
+					events,
+					event_index,
+					batch_id
+				)
+				for batch_index: int in batch_indices:
+					if batch_index != event_index:
+						consumed_power_event_indices[batch_index] = true
 		elif event_type == &"extra_card_play_granted":
 			await _present_extra_card_play_event(event)
 		elif event_type in [&"card_drawn", &"card_added_to_hand"]:
@@ -1199,8 +1223,15 @@ func _present_transition_events(
 			var self_removal: bool = bool(event.get("self_removal", false))
 			if not self_removal and exile_step_delay > 0.0:
 				await get_tree().create_timer(exile_step_delay).timeout
-			var exiled_card := board_cards[target_cell] as CardView
-			board_cards[target_cell] = null
+			var exiled_instance_id := StringName(event.get("instance_id", &""))
+			var exiled_card: CardView = _get_card_view_by_instance(exiled_instance_id)
+			if target_cell >= 0 and target_cell < board_cards.size():
+				var board_card := board_cards[target_cell] as CardView
+				if (
+					board_card != null
+					and _get_card_instance_id(board_card) == exiled_instance_id
+				):
+					board_cards[target_cell] = null
 			if exiled_card != null:
 				if self_removal:
 					_presentation_trace.append(&"card_self_faded")
@@ -1256,6 +1287,79 @@ func _present_powers_changed_event(event: Dictionary) -> void:
 	var powers_value: Variant = event.get("powers", [])
 	if powers_value is Array:
 		card.set_runtime_powers(powers_value as Array)
+
+
+func _present_power_change_batch(
+	events: Array,
+	start_index: int,
+	batch_id: StringName
+) -> Array[int]:
+	var batch_indices: Array[int] = []
+	var grouped: Dictionary = {}
+	for event_index: int in range(start_index, events.size()):
+		var event_value: Variant = events[event_index]
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) != &"powers_changed"
+			or StringName(event.get("power_change_batch_id", &"")) != batch_id
+		):
+			continue
+		batch_indices.append(event_index)
+		_presentation_trace.append(&"powers_changed")
+		var instance_id := StringName(event.get("instance_id", &""))
+		if instance_id == &"":
+			continue
+		if not grouped.has(instance_id):
+			grouped[instance_id] = {
+				"previous_powers": (event.get("previous_powers", []) as Array).duplicate(),
+				"powers": (event.get("powers", []) as Array).duplicate(),
+			}
+		else:
+			var aggregate: Dictionary = grouped[instance_id]
+			aggregate["powers"] = (event.get("powers", []) as Array).duplicate()
+	var visible_count: int = 0
+	var started_msec: int = Time.get_ticks_msec()
+	for instance_value: Variant in grouped.keys():
+		var instance_id := StringName(instance_value)
+		var aggregate: Dictionary = grouped[instance_id]
+		var previous_powers: Array = aggregate.get("previous_powers", [])
+		var resulting_powers: Array = aggregate.get("powers", [])
+		var card: CardView = _get_card_view_by_instance(instance_id)
+		if card == null:
+			continue
+		var amount: int = _power_total(resulting_powers) - _power_total(previous_powers)
+		if card.is_face_down():
+			card.set_runtime_powers(resulting_powers)
+			continue
+		visible_count += 1
+		_power_change_presentation_trace.append({
+			"batch_id": batch_id,
+			"instance_id": instance_id,
+			"started_msec": started_msec,
+			"previous_powers": previous_powers.duplicate(),
+			"powers": resulting_powers.duplicate(),
+			"amount": amount,
+			"glow_color": power_gain_glow_color if amount > 0 else power_loss_glow_color,
+		})
+		card.play_power_change(
+			previous_powers,
+			resulting_powers,
+			amount,
+			power_change_duration,
+			power_gain_glow_color if amount > 0 else power_loss_glow_color
+		)
+	if visible_count > 0 and power_change_duration > 0.0:
+		await get_tree().create_timer(power_change_duration).timeout
+	return batch_indices
+
+
+func _power_total(powers: Array) -> int:
+	var total: int = 0
+	for value: Variant in powers:
+		total += int(value)
+	return total
 
 
 func _present_extra_card_play_event(_event: Dictionary) -> void:

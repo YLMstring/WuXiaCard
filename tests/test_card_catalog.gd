@@ -59,7 +59,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 67, "Catalog contains all sixty-seven current cards")
+	_check(Catalog.get_all_card_ids().size() == 76, "Catalog contains all seventy-six current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -84,7 +84,7 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 67, "Catalog IDs are unique")
+	_check(observed_ids.size() == 76, "Catalog IDs are unique")
 
 
 func _test_definition_schema_validation() -> void:
