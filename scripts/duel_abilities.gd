@@ -203,6 +203,71 @@ static func remove_non_retained_abilities(card: Dictionary) -> int:
 	return removed_count
 
 
+static func get_deferred_self_after_flip_abilities(card: Dictionary) -> Array[Dictionary]:
+	var deferred: Array[Dictionary] = []
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		if (
+			not bool(ability.get("retained_on_flip", false))
+			and is_isolated_self_after_flip_ability(ability)
+		):
+			deferred.append(ability.duplicate(true))
+	return deferred
+
+
+static func remove_non_retained_abilities_before_after_flip(card: Dictionary) -> int:
+	var retained_abilities: Array = []
+	var removed_count: int = 0
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		if (
+			bool(ability.get("retained_on_flip", false))
+			or is_isolated_self_after_flip_ability(ability)
+		):
+			retained_abilities.append(ability)
+		else:
+			removed_count += 1
+	card["active_abilities"] = retained_abilities
+	card.erase("temporary_suppression_batches")
+	return removed_count
+
+
+static func remove_deferred_self_after_flip_abilities(
+	card: Dictionary,
+	deferred_snapshots: Array[Dictionary]
+) -> int:
+	var active_abilities: Array = card.get("active_abilities", [])
+	var removed_count: int = 0
+	for snapshot: Dictionary in deferred_snapshots:
+		for ability_index: int in range(active_abilities.size()):
+			var ability_value: Variant = active_abilities[ability_index]
+			if ability_value is Dictionary and (ability_value as Dictionary) == snapshot:
+				active_abilities.remove_at(ability_index)
+				removed_count += 1
+				break
+	card["active_abilities"] = active_abilities
+	return removed_count
+
+
+static func is_isolated_self_after_flip_ability(ability: Dictionary) -> bool:
+	if ability.has("activation") or ability.has("modifiers"):
+		return false
+	var triggers: Array = ability.get("triggers", [])
+	if triggers.size() != 1 or not triggers[0] is Dictionary:
+		return false
+	var trigger: Dictionary = triggers[0]
+	if StringName(trigger.get("event", &"")) != Catalog.CARD_AFTER_FLIPPED:
+		return false
+	return _list_has_type(
+		trigger.get("conditions", []),
+		Catalog.CONDITION_TRIGGER_CARD_IS_SELF
+	)
+
+
 static func temporarily_remove_non_retained_abilities(
 	card: Dictionary,
 	current_turn: int

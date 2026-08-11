@@ -452,3 +452,34 @@ respectively, in row-major order. The source itself is eligible.
 - Exact duplicate grants are idempotent. Tier 4 range is the effective
   superset if both tiers were granted. All YinYang grants are non-retained and
   disappear on flip.
+
+## 寒冰真气 / 天外玉龙 / 翻面清理
+
+- Enemy-hand activations use the opponent's logical hand index only to commit
+  an exact `instance_id` snapshot. Costs and later actions reuse that snapshot,
+  so a source flip during payment cannot retarget the effect.
+- Active targeting may choose a four-`-1` YinYang card. The activation still
+  spends ki and reveals it, while its power-change action has no effect.
+  Automatic limited selectors reject YinYang before counting their limit.
+- HanBin tier 4's transition from positive ki to zero emits the ki change and
+  resolves its self-flip before the activation's weaken/reveal actions. The
+  observer remains the source owner captured before paying the cost.
+- HanBin's self-after-flip grant is an isolated, non-retained ability entry. It
+  grants a separate owner-turn-start ability; it does not use
+  `retained_on_flip`. The granted rule weakens HanBin and the leftmost two legal
+  allied hand cards in one shared power-change batch. A later flip removes it
+  permanently and never recreates it.
+- Every successful flip first changes ownership. Old non-retained entries other
+  than isolated self-after-flip entries are removed next. `CARD_AFTER_FLIPPED`
+  then resolves, after which the old isolated entries are removed. Newly
+  granted abilities are not part of that final cleanup. A self-after-flip
+  trigger must never share its ability entry with other triggers, an
+  activation, or modifiers.
+- TianWai swaps only with the exact adjacent allied summon that caused its
+  trigger. A successful swap moves TianWai into the trigger card's old cell,
+  then TianWai performs the follow-up attack there. A failed swap stops the
+  attack. Tier 3's preceding `+1` is optional for flow: YinYang ignores it but
+  the swap and attack continue.
+- Simultaneous TianWai sources are discovered in stable row-major order. Each
+  later source revalidates the exact trigger instance and adjacency after all
+  earlier swaps and attacks.

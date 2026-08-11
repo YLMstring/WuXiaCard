@@ -2,6 +2,8 @@ extends SceneTree
 
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Action = preload("res://scripts/duel_action.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 
 const TEST_PROFILE_PATH: String = "user://activation_targeting_presentation.json"
@@ -40,6 +42,7 @@ func _run() -> void:
 
 	duel.queue_free()
 	await process_frame
+	await _check_enemy_hand_activation_target()
 	_cleanup_test_profile()
 	if _failures == 0:
 		print("ACTIVATION_TARGETING_SWAP_PRESENTATION_PASSED checks=%d" % _checks)
@@ -211,6 +214,92 @@ func _check_committed_move_and_swap_presentation(duel: Node) -> void:
 		duel.drag_layer.get_node_or_null("MovementBrushTrail") == null,
 		"Committed movement creates no brush trail"
 	)
+
+
+func _check_enemy_hand_activation_target() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	duel.set("testing_mode", true)
+	duel.set("opponent_hand_shuffle_seed", -1)
+	var opponent_ids: Array[StringName] = [
+		&"gate_general",
+		&"meng_huo",
+		&"YouFenLaiYi2",
+		&"TuNaShu2",
+		&"CangSongYingKe2",
+	]
+	duel.opponent_card_ids = opponent_ids
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var player_instance_id: StringName = duel.debug_get_hand_instance_ids(
+		Rules.PLAYER_OWNER
+	)[0]
+	var hanbin: Dictionary = Catalog.create_instance(
+		&"HanBinZhenQi3",
+		Rules.PLAYER_OWNER,
+		player_instance_id
+	)
+	duel.duel_state.get_hand(Rules.PLAYER_OWNER)[0] = hanbin
+	var hanbin_hand_view: Node = duel._get_card_view_for_logical_index(
+		Rules.PLAYER_OWNER,
+		0
+	)
+	hanbin_hand_view.sync_runtime_data(hanbin, Rules.PLAYER_OWNER)
+	_check(
+		await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false),
+		"HanBin enters the board for enemy-hand targeting presentation"
+	)
+	_check(
+		await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false),
+		"The opponent returns control while retaining hand targets"
+	)
+	var source_view: Control = duel.board_cards[4]
+	var target_view: Control = duel._get_card_view_for_logical_index(
+		Rules.OPPONENT_OWNER,
+		0
+	)
+	var pointer_start: Vector2 = source_view.get_global_rect().get_center()
+	var pointer_target: Vector2 = target_view.get_global_rect().get_center()
+	source_view._try_begin_drag(pointer_start, -1)
+	source_view._move_drag(pointer_target)
+	var target_index: int = duel._get_enemy_hand_target_at_position(pointer_target)
+	var preview: Action = duel._make_drag_action(source_view, -1, target_index)
+	_check(
+		target_index == 0
+		and preview != null
+		and preview.target_kind == Action.TARGET_HAND_SLOT
+		and preview.target_index == 0,
+		"A board activation drag maps the fixed enemy hand slot to its logical target"
+	)
+	source_view._try_end_drag(Vector2(-100.0, -100.0), -1)
+	await process_frame
+	var target_instance_id: StringName = duel.debug_get_hand_instance_ids(
+		Rules.OPPONENT_OWNER
+	)[0]
+	var activated: bool = await duel.debug_commit_activate(
+		Rules.PLAYER_OWNER,
+		4,
+		0,
+		false,
+		0,
+		Action.TARGET_HAND_SLOT
+	)
+	var runtime_target: Dictionary = {}
+	for card_value: Variant in duel.duel_state.get_hand(Rules.OPPONENT_OWNER):
+		var card: Dictionary = card_value
+		if StringName(card.get("instance_id", &"")) == target_instance_id:
+			runtime_target = card
+			break
+	_check(
+		activated
+		and Revelation.is_revealed_to(runtime_target, Rules.PLAYER_OWNER)
+		and &"card_revealed" in duel.debug_get_presentation_trace(),
+		"Enemy-hand activation commits through the controller and presents the reveal"
+	)
+	duel.queue_free()
+	await process_frame
 
 
 func _cleanup_test_profile() -> void:

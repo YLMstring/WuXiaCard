@@ -6,6 +6,7 @@ const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TARGET_OTHER_ALLY_BOARD: StringName = &"other_ally_board"
+const TARGET_ENEMY_HAND_CARD: StringName = &"enemy_hand_card"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
@@ -15,6 +16,7 @@ const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
+const CARD_KI_CHANGED: StringName = &"card_ki_changed"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const TRIGGER_BEFORE_DUEL_END: StringName = &"before_duel_end"
@@ -36,6 +38,8 @@ const CONDITION_MOVING_CARD_IS_SELF: StringName = &"moving_card_is_self"
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
+const CONDITION_KI_CHANGED_CARD_IS_SELF: StringName = &"ki_changed_card_is_self"
+const CONDITION_KI_REACHED_ZERO: StringName = &"ki_reached_zero"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
@@ -74,6 +78,8 @@ const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_car
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
 const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
 const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
+const ACTION_REVEAL_CARD: StringName = &"reveal_card"
+const ACTION_SWAP_SELF_WITH_TRIGGER_CARD: StringName = &"swap_self_with_trigger_card"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
@@ -82,6 +88,7 @@ const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
+const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
 const VALUE_CARD_COUNT: StringName = &"card_count"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
@@ -103,6 +110,7 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 	TARGET_ADJACENT_ALLY_BOARD,
 	TARGET_ADJACENT_ENEMY_BOARD,
 	TARGET_OTHER_ALLY_BOARD,
+	TARGET_ENEMY_HAND_CARD,
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
@@ -114,6 +122,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
+	CARD_KI_CHANGED,
 	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
 	TRIGGER_BEFORE_DUEL_END,
@@ -137,6 +146,8 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
+	CONDITION_KI_CHANGED_CARD_IS_SELF,
+	CONDITION_KI_REACHED_ZERO,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
@@ -180,13 +191,19 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
 	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
+	ACTION_REVEAL_CARD,
+	ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
 	CARD_REF_SELECTED_CARD,
 	CARD_REF_TRIGGER_CARD,
 ]
-const KNOWN_OWNER_REFERENCES: Array[StringName] = [OWNER_ABILITY_SOURCE, OWNER_CARD_CURRENT]
+const KNOWN_OWNER_REFERENCES: Array[StringName] = [
+	OWNER_ABILITY_SOURCE,
+	OWNER_CARD_CURRENT,
+	OWNER_OPPONENT_OF_ABILITY_SOURCE,
+]
 const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -275,6 +292,124 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"gate_general",
 	&"meng_huo",
 ]
+
+const HANBIN_POWER_BATCH: StringName = &"hanbin_frozen_turn"
+
+const HANBIN_FROZEN_TURN: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_START_OWNER_TURN,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"power_change_batch_group": HANBIN_POWER_BATCH,
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+					],
+					"limit": 2,
+				},
+				"actions": [{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": -1,
+					"card": CARD_REF_SELECTED_CARD,
+				}],
+				"power_change_batch_group": HANBIN_POWER_BATCH,
+			},
+		],
+	}],
+}
+
+const HANBIN_ACTIVATION: Dictionary = {
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ENEMY_HAND_CARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_SELECTED_CARD,
+			},
+			{
+				"type": ACTION_REVEAL_CARD,
+				"card": CARD_REF_SELECTED_CARD,
+				"observer": OWNER_ABILITY_SOURCE,
+			},
+		],
+	},
+}
+
+const HANBIN_AFTER_FLIP_GRANT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_GRANT_ABILITY_TO_SELF,
+			"ability": HANBIN_FROZEN_TURN,
+		}],
+	}],
+}
+
+const HANBIN_LAST_KI_FLIP: Dictionary = {
+	"triggers": [{
+		"event": CARD_KI_CHANGED,
+		"conditions": [
+			{"type": CONDITION_KI_CHANGED_CARD_IS_SELF},
+			{"type": CONDITION_KI_REACHED_ZERO},
+		],
+		"actions": [{
+			"type": ACTION_FLIP_SELF,
+			"new_owner": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+		}],
+	}],
+}
+
+const TIANWAI_SWAP_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [
+			{
+				"type": ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
+	}],
+}
+
+const TIANWAI_POWER_SWAP_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": CARD_REF_TRIGGER_CARD,
+			},
+			{
+				"type": ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
+	}],
+}
 
 const TEMPORARY_FLIP_PROTECTION: Dictionary = {
 	"triggers": [
@@ -2509,7 +2644,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "左冷禅修炼十余年的至阴至寒功夫，所发寒气远胜冰雪，可将对手全身冻结为冰。",
 		"powers": [2, 1, 1, 2],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [HANBIN_ACTIVATION, HANBIN_AFTER_FLIP_GRANT],
 	},
 	&"HanBinZhenQi4": {
 		"id": &"HanBinZhenQi4",
@@ -2522,7 +2657,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "左冷禅修炼十余年的至阴至寒功夫，所发寒气远胜冰雪，可将对手全身冻结为冰。",
 		"powers": [2, 1, 1, 2],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			HANBIN_LAST_KI_FLIP,
+			HANBIN_ACTIVATION,
+			HANBIN_AFTER_FLIP_GRANT,
+		],
 	},
 	&"TianWaiYuLong2": {
 		"id": &"TianWaiYuLong2",
@@ -2534,7 +2673,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，我与其交换位置，然后发起攻击。",
 		"flavor": "嵩山派正宗剑法，奔腾矫夭，气势雄浑，但见长剑自半空中横过，剑身似曲似直，时弯时进，便如一件活物一般。",
 		"powers": [3, 3, 7, 7],
-		"abilities": [],
+		"abilities": [TIANWAI_SWAP_ATTACK],
 	},
 	&"TianWaiYuLong3": {
 		"id": &"TianWaiYuLong3",
@@ -2546,7 +2685,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方在相邻空格进场时，使其点数加一。友方在相邻空格进场时，我与其交换位置，然后发起攻击。",
 		"flavor": "嵩山派正宗剑法，奔腾矫夭，气势雄浑，但见长剑自半空中横过，剑身似曲似直，时弯时进，便如一件活物一般。",
 		"powers": [3, 4, 7, 8],
-		"abilities": [],
+		"abilities": [TIANWAI_POWER_SWAP_ATTACK],
 	},
 	&"zhishang_shanhe": {
 		"id": &"zhishang_shanhe",
@@ -2808,6 +2947,35 @@ static func _validate_ability(
 		_validate_activation(card_id, ability["activation"], errors)
 	if ability.has("modifiers"):
 		_validate_modifiers(card_id, ability["modifiers"], errors)
+	if _ability_has_self_after_flip_trigger(ability):
+		var triggers_value: Variant = ability.get("triggers", [])
+		if (
+			not triggers_value is Array
+			or (triggers_value as Array).size() != 1
+			or ability.has("activation")
+			or ability.has("modifiers")
+		):
+			errors.append(
+				"Card %s self-after-flip ability must be an isolated trigger entry"
+				% card_id
+			)
+
+
+static func _ability_has_self_after_flip_trigger(ability: Dictionary) -> bool:
+	for trigger_value: Variant in ability.get("triggers", []):
+		if not trigger_value is Dictionary:
+			continue
+		var trigger: Dictionary = trigger_value
+		if StringName(trigger.get("event", &"")) != CARD_AFTER_FLIPPED:
+			continue
+		for condition_value: Variant in trigger.get("conditions", []):
+			if (
+				condition_value is Dictionary
+				and StringName((condition_value as Dictionary).get("type", &""))
+				== CONDITION_TRIGGER_CARD_IS_SELF
+			):
+				return true
+	return false
 
 
 static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, errors: Array[String]) -> void:
@@ -2988,9 +3156,24 @@ static func _validate_action(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
+	if action_type in [ACTION_CHANGE_POWERS, ACTION_FOR_EACH_SELECTED_CARD]:
+		if action.has("power_change_batch_group"):
+			allowed_keys.append(&"power_change_batch_group")
+			var batch_group_value: Variant = action.get("power_change_batch_group", null)
+			if (
+				typeof(batch_group_value) not in [TYPE_STRING, TYPE_STRING_NAME]
+				or String(batch_group_value).is_empty()
+			):
+				errors.append(
+					"Card %s %s action %s requires a non-empty power_change_batch_group"
+					% [card_id, context_name, action_type]
+				)
 	if action_type == ACTION_FLIP_SELF:
 		allowed_keys.append(&"new_owner")
-		if StringName(action.get("new_owner", &"")) != OWNER_ABILITY_SOURCE:
+		if StringName(action.get("new_owner", &"")) not in [
+			OWNER_ABILITY_SOURCE,
+			OWNER_OPPONENT_OF_ABILITY_SOURCE,
+		]:
 			errors.append(
 				"Card %s %s action %s requires a known new_owner"
 				% [card_id, context_name, action_type]
@@ -3077,6 +3260,13 @@ static func _validate_action(
 		var reveal_filter := StringName(action.get("filter", &""))
 		if reveal_filter not in KNOWN_REVEAL_FILTERS:
 			errors.append("Card %s %s reveal action requires a known filter" % [card_id, context_name])
+	if action_type == ACTION_REVEAL_CARD:
+		allowed_keys.append(&"card")
+		allowed_keys.append(&"observer")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append("Card %s %s reveal-card action requires a known card reference" % [card_id, context_name])
+		if StringName(action.get("observer", &"")) not in KNOWN_OWNER_REFERENCES:
+			errors.append("Card %s %s reveal-card action requires a known observer" % [card_id, context_name])
 	if action_type in [ACTION_GRANT_TRIGGER_CARD_ABILITY, ACTION_GRANT_ABILITY_TO_SELF]:
 		allowed_keys.append(&"ability")
 		var granted_value: Variant = action.get("ability", null)

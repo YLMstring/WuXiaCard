@@ -40,7 +40,8 @@ static func resolve_group(
 	attack_resolver: Callable = Callable(),
 	flip_resolver: Callable = Callable(),
 	summon_resolver: Callable = Callable(),
-	before_move_resolver: Callable = Callable()
+	before_move_resolver: Callable = Callable(),
+	event_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = {
 		"events": [],
@@ -76,7 +77,8 @@ static func resolve_group(
 		attack_resolver,
 		flip_resolver,
 		summon_resolver,
-		before_move_resolver
+		before_move_resolver,
+		event_resolver
 	)
 	var events: Array = action_result.get("events", [])
 	events.push_front({
@@ -234,6 +236,19 @@ static func _conditions_match(
 				StringName(card.get("instance_id", &""))
 				!= StringName(context.get("trigger_instance_id", &""))
 				or source_cell != int(context.get("trigger_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF:
+			if (
+				StringName(card.get("instance_id", &""))
+				!= StringName(context.get("trigger_instance_id", &""))
+				or source_cell != int(context.get("trigger_cell", -1))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_KI_REACHED_ZERO:
+			if (
+				int(context.get("previous_ki", 0)) <= 0
+				or int(context.get("ki", -1)) != 0
 			):
 				return false
 		elif condition_type == Catalog.CONDITION_ATTACKER_CARD_IS_SELF:

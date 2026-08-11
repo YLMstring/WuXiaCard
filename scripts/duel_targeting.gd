@@ -19,6 +19,20 @@ static func get_valid_targets(
 	var target_rule := StringName(activation.get("target_rule", &""))
 	if target_rule not in Catalog.KNOWN_TARGET_RULES:
 		return targets
+	if target_rule == Catalog.TARGET_ENEMY_HAND_CARD:
+		var opponent_id: int = (
+			Rules.OPPONENT_OWNER
+			if owner_id == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+		var opponent_hand: Array = state.get_hand(opponent_id)
+		for hand_index: int in range(opponent_hand.size()):
+			if opponent_hand[hand_index] is Dictionary:
+				targets.append({
+					"kind": ActionData.TARGET_HAND_SLOT,
+					"index": hand_index,
+				})
+		return targets
 	if target_rule == Catalog.TARGET_OTHER_ALLY_BOARD:
 		for target_cell: int in range(state.board.size()):
 			if target_cell == source_cell:

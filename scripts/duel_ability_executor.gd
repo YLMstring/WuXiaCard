@@ -48,7 +48,8 @@ static func execute_activation(
 	attack_resolver: Callable = Callable(),
 	flip_resolver: Callable = Callable(),
 	summon_resolver: Callable = Callable(),
-	before_move_resolver: Callable = Callable()
+	before_move_resolver: Callable = Callable(),
+	event_resolver: Callable = Callable()
 ) -> Dictionary:
 	var empty_result: Dictionary = _empty_result()
 	empty_result["valid"] = false
@@ -64,13 +65,39 @@ static func execute_activation(
 	var context: Dictionary = {
 		"target_kind": target_kind,
 		"target_index": target_index,
+		"ability_source_instance_id": source_instance_id,
+		"ability_source_owner_id": owner_id,
+		"card_reference_snapshots": {},
 	}
+	var snapshots: Dictionary = context["card_reference_snapshots"] as Dictionary
+	snapshots[Catalog.CARD_REF_ABILITY_SOURCE] = _snapshot_card_reference(
+		state,
+		source_instance_id
+	)
 	if target_kind == &"board_cell" and target_index >= 0 and target_index < state.board.size():
 		var target_value: Variant = state.board[target_index]
 		if target_value is Dictionary:
 			context["selected_card_instance_id"] = StringName(
 				((target_value as Dictionary).get("card", {}) as Dictionary).get("instance_id", &"")
 			)
+	elif target_kind == &"hand_slot":
+		var opponent_owner: int = (
+			Rules.OPPONENT_OWNER
+			if owner_id == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+		var opponent_hand: Array = state.get_hand(opponent_owner)
+		if target_index >= 0 and target_index < opponent_hand.size():
+			var target_card: Dictionary = opponent_hand[target_index]
+			context["selected_card_instance_id"] = StringName(
+				target_card.get("instance_id", &"")
+			)
+	var selected_instance_id := StringName(context.get("selected_card_instance_id", &""))
+	if selected_instance_id != &"":
+		snapshots[Catalog.CARD_REF_SELECTED_CARD] = _snapshot_card_reference(
+			state,
+			selected_instance_id
+		)
 	var events: Array[Dictionary] = [{
 		"type": &"ability_activated",
 		"source_cell": source_cell,
@@ -88,7 +115,8 @@ static func execute_activation(
 		attack_resolver,
 		flip_resolver,
 		summon_resolver,
-		before_move_resolver
+		before_move_resolver,
+		event_resolver
 	)
 	events.append_array(cost_result.get("events", []) as Array)
 	var action_result: Dictionary = execute_actions(
@@ -101,7 +129,8 @@ static func execute_activation(
 		attack_resolver,
 		flip_resolver,
 		summon_resolver,
-		before_move_resolver
+		before_move_resolver,
+		event_resolver
 	)
 	events.append_array(action_result.get("events", []) as Array)
 	return {
@@ -135,7 +164,8 @@ static func execute_actions(
 	attack_resolver: Callable = Callable(),
 	flip_resolver: Callable = Callable(),
 	summon_resolver: Callable = Callable(),
-	before_move_resolver: Callable = Callable()
+	before_move_resolver: Callable = Callable(),
+	event_resolver: Callable = Callable()
 ) -> Dictionary:
 	var result: Dictionary = _empty_result()
 	result["source_cell"] = source_cell
@@ -183,7 +213,8 @@ static func execute_actions(
 			attack_resolver,
 			flip_resolver,
 			summon_resolver,
-			before_move_resolver
+			before_move_resolver,
+			event_resolver
 		)
 		if not bool(action_context.get("defer_power_change_batch", false)):
 			_assign_power_change_batch(
@@ -191,7 +222,8 @@ static func execute_actions(
 				_make_power_change_batch_id(
 					source_instance_id,
 					action_context,
-					action_index
+					action_index,
+					StringName(declaration.get("power_change_batch_group", &""))
 				)
 			)
 		result["events"].append_array(action_result.get("events", []) as Array)
@@ -199,6 +231,38 @@ static func execute_actions(
 		result["exiles"].append_array(action_result.get("exiles", []) as Array)
 		result["extra_turn_requests"].append_array(action_result.get("extra_turn_requests", []) as Array)
 		result["flip_prevention_requests"].append_array(action_result.get("flip_prevention_requests", []) as Array)
+		if event_resolver.is_valid():
+			for event_value: Variant in action_result.get("events", []):
+				if (
+					not event_value is Dictionary
+					or StringName((event_value as Dictionary).get("type", &""))
+					!= &"ki_changed"
+				):
+					continue
+				var ki_event: Dictionary = event_value
+				var resolution_value: Variant = event_resolver.call(
+					Catalog.CARD_KI_CHANGED,
+					{
+						"trigger_cell": int(ki_event.get("target_cell", -1)),
+						"trigger_instance_id": StringName(ki_event.get("instance_id", &"")),
+						"trigger_owner_id": int(ki_event.get("owner_id", 0)),
+						"previous_ki": int(ki_event.get("previous_ki", 0)),
+						"ki": int(ki_event.get("ki", 0)),
+						"change_reason": StringName(ki_event.get("change_reason", &"")),
+					}
+				)
+				if not resolution_value is Dictionary:
+					continue
+				var event_resolution: Dictionary = resolution_value
+				result["events"].append_array(event_resolution.get("events", []) as Array)
+				result["captures"].append_array(event_resolution.get("captures", []) as Array)
+				result["exiles"].append_array(event_resolution.get("exiles", []) as Array)
+				result["extra_turn_requests"].append_array(
+					event_resolution.get("extra_turn_requests", []) as Array
+				)
+				result["flip_prevention_requests"].append_array(
+					event_resolution.get("flip_prevention_requests", []) as Array
+				)
 		for request_value: Variant in action_result.get("attack_requests", []):
 			if not request_value is Dictionary:
 				continue
@@ -308,7 +372,9 @@ static func resolve_normal_flip(
 		"owner_id": new_owner,
 		"instance_id": target_instance_id,
 	})
-	var removed_count: int = Abilities.remove_non_retained_abilities(target_card)
+	var removed_count: int = Abilities.remove_non_retained_abilities_before_after_flip(
+		target_card
+	)
 	for _removed_index: int in range(removed_count):
 		events.append({
 			"type": &"ability_lost",
@@ -330,7 +396,8 @@ static func _execute_action(
 	attack_resolver: Callable,
 	flip_resolver: Callable,
 	summon_resolver: Callable,
-	before_move_resolver: Callable
+	before_move_resolver: Callable,
+	event_resolver: Callable
 ) -> Dictionary:
 	var action_type := StringName(declaration.get("type", &""))
 	if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
@@ -342,7 +409,8 @@ static func _execute_action(
 			attack_resolver,
 			flip_resolver,
 			summon_resolver,
-			before_move_resolver
+			before_move_resolver,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_DRAW_CARDS:
 		return _draw_cards(
@@ -414,6 +482,14 @@ static func _execute_action(
 			StringName(declaration.get("recipient", &"")),
 			StringName(declaration.get("filter", &""))
 		)
+	if action_type == Catalog.ACTION_REVEAL_CARD:
+		return _reveal_card(
+			state,
+			source_cell,
+			StringName(declaration.get("card", &"")),
+			StringName(declaration.get("observer", &"")),
+			context
+		)
 	if action_type == Catalog.ACTION_ENABLE_FUTURE_DRAW_REVEAL:
 		return _enable_future_draw_reveal(
 			state,
@@ -441,6 +517,15 @@ static func _execute_action(
 		)
 	if action_type == Catalog.ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE:
 		return _self_swapped_with_ability_source(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			context,
+			before_move_resolver
+		)
+	if action_type == Catalog.ACTION_SWAP_SELF_WITH_TRIGGER_CARD:
+		return _swap_self_with_trigger_card(
 			state,
 			source_cell,
 			source_instance_id,
@@ -580,7 +665,8 @@ static func _for_each_selected_card(
 	attack_resolver: Callable,
 	flip_resolver: Callable,
 	summon_resolver: Callable,
-	before_move_resolver: Callable
+	before_move_resolver: Callable,
+	event_resolver: Callable
 ) -> Dictionary:
 	var result: Dictionary = _empty_result()
 	result["source_cell"] = source_cell
@@ -631,7 +717,8 @@ static func _for_each_selected_card(
 			attack_resolver,
 			flip_resolver,
 			summon_resolver,
-			before_move_resolver
+			before_move_resolver,
+			event_resolver
 		)
 		result["events"].append_array(nested_result.get("events", []) as Array)
 		result["captures"].append_array(nested_result.get("captures", []) as Array)
@@ -786,6 +873,45 @@ static func _reveal_hand_cards(
 	return _applied(source_cell, events) if not events.is_empty() else _no_effect(source_cell)
 
 
+static func _reveal_card(
+	state: StateData,
+	source_cell: int,
+	card_reference: StringName,
+	observer_reference: StringName,
+	context: Dictionary
+) -> Dictionary:
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var instance_id := StringName(snapshot.get("instance_id", &""))
+	var expected_owner: int = int(snapshot.get("owner_id", 0))
+	var target: Dictionary = _get_subject(state, instance_id, expected_owner)
+	if target.is_empty():
+		return _no_effect(source_cell)
+	var observer_owner_id: int = _resolve_owner_reference(
+		observer_reference,
+		context,
+		target
+	)
+	var card: Dictionary = target.get("card", {})
+	if not Revelation.reveal_to(card, observer_owner_id):
+		return _no_effect(source_cell)
+	var logical_index: int = int(target.get("index", -1))
+	return _applied(source_cell, [{
+		"type": &"card_revealed",
+		"source_cell": source_cell,
+		"owner_id": int(target.get("owner_id", 0)),
+		"observer_owner_id": observer_owner_id,
+		"card_id": StringName(card.get("card_id", &"")),
+		"instance_id": instance_id,
+		"zone": StringName(target.get("zone", &"")),
+		"logical_hand_index": (
+			logical_index
+			if StringName(target.get("zone", &"")) == Catalog.CARD_ZONE_HAND
+			else -1
+		),
+		"target_cell": _get_location_cell(target),
+	}])
+
+
 static func _enable_future_draw_reveal(
 	state: StateData,
 	source_cell: int,
@@ -937,6 +1063,25 @@ static func _resolve_recipient_owner(source_owner_id: int, recipient: StringName
 	if recipient == Catalog.RECIPIENT_OPPONENT:
 		return Rules.OPPONENT_OWNER if source_owner_id == Rules.PLAYER_OWNER else Rules.PLAYER_OWNER
 	return source_owner_id
+
+
+static func _resolve_owner_reference(
+	reference: StringName,
+	context: Dictionary,
+	card_location: Dictionary = {}
+) -> int:
+	var source_owner: int = int(context.get("ability_source_owner_id", 0))
+	if reference == Catalog.OWNER_ABILITY_SOURCE:
+		return source_owner
+	if reference == Catalog.OWNER_OPPONENT_OF_ABILITY_SOURCE:
+		return (
+			Rules.OPPONENT_OWNER
+			if source_owner == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+	if reference == Catalog.OWNER_CARD_CURRENT:
+		return int(card_location.get("owner_id", 0))
+	return 0
 
 
 static func _exile_attacked_card(
@@ -1772,6 +1917,42 @@ static func _self_swapped_with_ability_source(
 	return result
 
 
+static func _swap_self_with_trigger_card(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	context: Dictionary,
+	before_move_resolver: Callable = Callable()
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var trigger_owner: int = int(context.get("trigger_owner_id", 0))
+	var trigger: Dictionary = _get_subject(state, trigger_instance_id, trigger_owner)
+	if (
+		source.is_empty()
+		or trigger.is_empty()
+		or source_instance_id == trigger_instance_id
+		or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+		or StringName(trigger.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+	):
+		return _no_effect(source_cell)
+	var current_source_cell: int = int(source.get("index", -1))
+	var trigger_cell: int = int(trigger.get("index", -1))
+	if not _are_adjacent(current_source_cell, trigger_cell):
+		return _no_effect(source_cell)
+	return _swap_board_cards(
+		state,
+		current_source_cell,
+		source_instance_id,
+		expected_owner,
+		trigger_cell,
+		trigger_instance_id,
+		trigger_owner,
+		before_move_resolver
+	)
+
+
 static func _swap_board_cards(
 	state: StateData,
 	source_cell: int,
@@ -2035,27 +2216,20 @@ static func _request_flip_self(
 	context: Dictionary
 ) -> Dictionary:
 	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	var ability_source_instance_id := StringName(
-		context.get("ability_source_instance_id", &"")
-	)
 	var ability_source_owner: int = int(context.get("ability_source_owner_id", 0))
-	var ability_source: Dictionary = _get_subject(
-		state,
-		ability_source_instance_id,
-		ability_source_owner
-	)
+	var new_owner: int = _resolve_owner_reference(new_owner_reference, context)
 	if (
 		subject.is_empty()
-		or ability_source.is_empty()
 		or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
-		or new_owner_reference != Catalog.OWNER_ABILITY_SOURCE
-		or int(subject.get("owner_id", 0)) == ability_source_owner
+		or ability_source_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+		or new_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+		or int(subject.get("owner_id", 0)) == new_owner
 	):
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
 	result["flip_requests"].append({
 		"target_instance_id": source_instance_id,
-		"new_owner_id": ability_source_owner,
+		"new_owner_id": new_owner,
 		"reason": &"ability_non_attack_flip",
 	})
 	return result
@@ -2131,16 +2305,17 @@ static func _get_location_cell(location: Dictionary) -> int:
 static func _make_power_change_batch_id(
 	source_instance_id: StringName,
 	context: Dictionary,
-	action_index: int
+	action_index: int,
+	batch_group: StringName = &""
 ) -> StringName:
 	return StringName(
-		"%s|%s|%d|%d|%d"
+		"%s|%s|%d|%d|%s"
 		% [
 			String(source_instance_id),
 			String(context.get("resolving_event_id", &"direct")),
 			int(context.get("resolving_ability_index", -1)),
 			int(context.get("resolving_trigger_index", -1)),
-			action_index,
+			String(batch_group) if batch_group != &"" else str(action_index),
 		]
 	)
 

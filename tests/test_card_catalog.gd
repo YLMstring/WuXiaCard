@@ -384,6 +384,20 @@ func _test_trigger_ability_schema() -> void:
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": &"unknown"}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_SPEND_ALL_KI, "extra": true}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1, "on_invalid_context": &"unknown"}]}]},
+		{
+			"triggers": [
+				{
+					"event": Catalog.CARD_AFTER_FLIPPED,
+					"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+				},
+				{
+					"event": Catalog.TRIGGER_END_OWNER_TURN,
+					"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+					"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+				},
+			],
+		},
 	]
 	for invalid_ability: Dictionary in invalid_abilities:
 		_check(not Catalog.validate_ability(invalid_ability).is_empty(), "Malformed trigger ability fails validation: %s" % str(invalid_ability))

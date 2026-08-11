@@ -158,6 +158,23 @@ The creator has made several direct UI and localization edits. Preserve those ed
   distance-two orthogonal attack. Tier 3 passes only one empty cell; tier 4
   also passes one allied card. All grants are exact-instance, idempotent, and
   non-retained on flip.
+- HanBinZhenQi3–4 now target an exact enemy hand instance, weaken it, and
+  reveal it to the activating owner. An actively chosen YinYang card remains a
+  legal target but ignores the power loss. Tier 4 flips immediately when its
+  last ki is spent, then finishes resolving the locked target. After flipping,
+  HanBin gains a non-retained owner-turn-start decay that weakens itself and
+  the leftmost two legal allied hand cards in one presentation batch; automatic
+  selection skips YinYang.
+- Flip cleanup is staged globally: ownership changes first, ordinary old
+  non-retained abilities are lost, isolated old self-`CARD_AFTER_FLIPPED`
+  entries resolve, and those isolated old entries are then lost. Abilities
+  granted during that event survive. Catalog validation forbids combining a
+  self-after-flip trigger with another trigger, activation, or modifier in the
+  same ability entry.
+- TianWaiYuLong2–3 react to an adjacent allied summon by swapping with that
+  exact trigger card and attacking from the new cell. Tier 3 first attempts to
+  add one power to the trigger card; YinYang ignores only that change. Multiple
+  TianWai sources resolve row-major and revalidate after prior swaps.
 - One top-level power action emits one transition-only batch. Every visible
   target in that batch keeps its previous powers for one shared roughly
   0.12-second pause, then all update and animate simultaneously for about

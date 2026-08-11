@@ -291,6 +291,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		return _resolve_summon_request(next_state, request)
 	var before_move_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_before_move_request(next_state, request)
+	var event_resolver: Callable = func(event_id: StringName, context: Dictionary) -> Dictionary:
+		return _resolve_trigger_event(next_state, event_id, context)
 	var activation_result: Dictionary = Executor.execute_activation(
 		next_state,
 		action.source_index,
@@ -301,7 +303,8 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		attack_resolver,
 		flip_resolver,
 		summon_resolver,
-		before_move_resolver
+		before_move_resolver,
+		event_resolver
 	)
 	if not bool(activation_result.get("valid", false)):
 		return _invalid_transition(state)
@@ -519,6 +522,13 @@ static func _resolve_attack_target(
 	var flipped_previous_owner: int = int(
 		(state.board[attacked_cell] as Dictionary).get("owner", 0)
 	)
+	var flipped_card: Dictionary = (state.board[attacked_cell] as Dictionary).get(
+		"card",
+		{}
+	)
+	var deferred_after_flip: Array[Dictionary] = (
+		Abilities.get_deferred_self_after_flip_abilities(flipped_card)
+	)
 	var flip_events: Array[Dictionary] = Executor.resolve_normal_flip(
 		state,
 		attacker_cell,
@@ -548,6 +558,14 @@ static func _resolve_attack_target(
 		result["exiles"],
 		result["events"],
 		after_result
+	)
+	_append_deferred_after_flip_cleanup_events(
+		state,
+		result["events"],
+		attacker_cell,
+		attacked_instance_id,
+		attacker_owner,
+		deferred_after_flip
 	)
 	return result
 
@@ -602,6 +620,10 @@ static func resolve_non_attack_flip(
 	target_slot = state.board[target_cell]
 	if int(target_slot.get("owner", 0)) == new_owner:
 		return result
+	var flipped_card: Dictionary = (state.board[target_cell] as Dictionary).get("card", {})
+	var deferred_after_flip: Array[Dictionary] = (
+		Abilities.get_deferred_self_after_flip_abilities(flipped_card)
+	)
 	var flip_events: Array[Dictionary] = Executor.resolve_normal_flip(
 		state,
 		-1,
@@ -626,7 +648,44 @@ static func resolve_non_attack_flip(
 		result["events"],
 		after_result
 	)
+	_append_deferred_after_flip_cleanup_events(
+		state,
+		result["events"],
+		-1,
+		target_instance_id,
+		new_owner,
+		deferred_after_flip
+	)
 	return result
+
+
+static func _append_deferred_after_flip_cleanup_events(
+	state: StateData,
+	events: Array,
+	source_cell: int,
+	target_instance_id: StringName,
+	new_owner: int,
+	deferred_snapshots: Array[Dictionary]
+) -> void:
+	if deferred_snapshots.is_empty():
+		return
+	var target_cell: int = _find_board_card_cell(state, target_instance_id)
+	if target_cell < 0:
+		return
+	var target_slot: Dictionary = state.board[target_cell]
+	var target_card: Dictionary = target_slot.get("card", {})
+	var removed_count: int = Abilities.remove_deferred_self_after_flip_abilities(
+		target_card,
+		deferred_snapshots
+	)
+	for _removed_index: int in range(removed_count):
+		events.append({
+			"type": &"ability_lost",
+			"source_cell": source_cell,
+			"target_cell": target_cell,
+			"owner_id": new_owner,
+			"instance_id": target_instance_id,
+		})
 
 
 static func _resolve_trigger_event(
@@ -645,6 +704,8 @@ static func _resolve_trigger_event(
 		return _resolve_summon_request(state, request)
 	var before_move_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_before_move_request(state, request)
+	var event_resolver: Callable = func(nested_event_id: StringName, nested_context: Dictionary) -> Dictionary:
+		return _resolve_trigger_event(state, nested_event_id, nested_context)
 	for group: Dictionary in groups:
 		var group_result: Dictionary = Triggers.resolve_group(
 			state,
@@ -652,7 +713,8 @@ static func _resolve_trigger_event(
 			attack_resolver,
 			flip_resolver,
 			summon_resolver,
-			before_move_resolver
+			before_move_resolver,
+			event_resolver
 		)
 		var group_events: Array = group_result.get("events", [])
 		_append_unique_indices(

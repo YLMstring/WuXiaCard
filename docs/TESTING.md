@@ -59,6 +59,14 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   immunity, limited-selector skipping, tiered distance-two attacks,
   exile/draw/grant ordering, newly drawn palm inclusion, nonrecursive repeat
   attacks, duplicate-grant handling, and flip cleanup.
+- `test_hanbin_tianwai_abilities.gd` — enemy-hand target snapshots, active
+  YinYang no-effect/reveal behavior, last-ki flip ordering, staged
+  self-after-flip cleanup, automatic YinYang skipping, shared power batches,
+  permanent granted-ability loss, trigger-card swaps, tier-3 power changes,
+  and multi-source row-major revalidation.
+- `test_activation_targeting_swap_presentation.gd` — anchored board activation
+  traces, fixed enemy-hand-slot hit testing, logical hand target commits,
+  exact-card reveal presentation, and ordinary move/swap view identity.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.

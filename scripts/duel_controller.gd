@@ -82,6 +82,7 @@ var duel_state: StateData = null
 var board_cells: Array[PanelContainer] = []
 var board_cards: Array = []
 var _hovered_cell: int = -1
+var _hovered_hand_target: int = -1
 var _drag_source_zone: StringName = &""
 var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
@@ -513,9 +514,10 @@ func debug_commit_move(
 func debug_commit_activate(
 	owner_id: int,
 	source_cell: int,
-	target_cell: int,
+	target_index: int,
 	continue_automatically: bool = false,
-	activation_index: int = 0
+	activation_index: int = 0,
+	target_kind: StringName = ActionData.TARGET_BOARD_CELL
 ) -> bool:
 	if _inspection_open or duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
 		return false
@@ -526,8 +528,8 @@ func debug_commit_activate(
 	var action: ActionData = ActionData.make_activate(
 		source_cell,
 		_get_card_instance_id(card),
-		ActionData.TARGET_BOARD_CELL,
-		target_cell,
+		target_kind,
+		target_index,
 		activation_index
 	)
 	if not Simulator.is_action_legal(duel_state, action):
@@ -649,18 +651,23 @@ func _on_card_drag_started(card: CardView, pointer_position: Vector2) -> void:
 func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
 	_update_targeting_trace(pointer_position)
 	var target_cell: int = _get_cell_at_position(pointer_position)
-	if target_cell == _hovered_cell:
+	var target_hand_index: int = _get_enemy_hand_target_at_position(pointer_position)
+	if target_cell == _hovered_cell and target_hand_index == _hovered_hand_target:
 		return
 	_hovered_cell = target_cell
+	_hovered_hand_target = target_hand_index
 	_highlight_legal_cells()
 	if target_cell in _drag_valid_targets:
 		_set_cell_style(target_cell, "hover")
+	elif _has_drag_hand_candidate(target_hand_index):
+		_set_hand_target_style(target_hand_index, "hover")
 
 
 func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	var target_cell: int = _get_cell_at_position(pointer_position)
+	var target_hand_index: int = _get_enemy_hand_target_at_position(pointer_position)
 	_clear_cell_highlights()
-	var action: ActionData = _make_drag_action(card, target_cell)
+	var action: ActionData = _make_drag_action(card, target_cell, target_hand_index)
 	if _can_manually_drag(card) and action != null and Simulator.is_action_legal(duel_state, action):
 		card.finish_drag_state()
 		_remove_targeting_trace()
@@ -1849,6 +1856,53 @@ func _get_cell_at_position(pointer_position: Vector2) -> int:
 	return -1
 
 
+func _get_enemy_hand_target_at_position(pointer_position: Vector2) -> int:
+	var source_owner: int = _get_drag_source_owner()
+	if source_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+		return -1
+	var target_owner: int = (
+		DuelRules.OPPONENT_OWNER
+		if source_owner == DuelRules.PLAYER_OWNER
+		else DuelRules.PLAYER_OWNER
+	)
+	var container: HBoxContainer = _get_hand_for_owner(target_owner)
+	for slot_value: Node in container.get_children():
+		var slot := slot_value as PanelContainer
+		if slot == null or not slot.get_global_rect().has_point(pointer_position):
+			continue
+		var cards: Array[CardView] = _get_cards_in_slot(slot)
+		if cards.is_empty():
+			return -1
+		return _get_logical_hand_index(
+			target_owner,
+			_get_card_instance_id(cards[0])
+		)
+	return -1
+
+
+func _get_drag_source_owner() -> int:
+	if (
+		_drag_source_zone != ActionData.SOURCE_BOARD
+		or _drag_source_index < 0
+		or _drag_source_index >= board.size()
+		or board[_drag_source_index] == null
+	):
+		return 0
+	return int((board[_drag_source_index] as Dictionary).get("owner", 0))
+
+
+func _has_drag_hand_candidate(target_hand_index: int) -> bool:
+	if target_hand_index < 0:
+		return false
+	for action: ActionData in _drag_action_candidates:
+		if (
+			action.target_kind == ActionData.TARGET_HAND_SLOT
+			and action.target_index == target_hand_index
+		):
+			return true
+	return false
+
+
 func _get_board_cell_for_card(card: CardView) -> int:
 	for cell_index: int in range(board_cards.size()):
 		if board_cards[cell_index] == card:
@@ -1872,19 +1926,25 @@ func _get_drag_targets(card: CardView) -> Array[int]:
 			action.action_type == ActionData.TYPE_ACTIVATE
 			and action.source_index == source_cell
 			and action.source_instance_id == _get_card_instance_id(card)
-			and action.target_kind == ActionData.TARGET_BOARD_CELL
 		):
 			_drag_action_candidates.append(action)
-			if action.target_index not in targets:
+			if (
+				action.target_kind == ActionData.TARGET_BOARD_CELL
+				and action.target_index not in targets
+			):
 				targets.append(action.target_index)
 	return targets
 
 
-func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
-	if target_cell not in _drag_valid_targets:
-		return null
+func _make_drag_action(
+	card: CardView,
+	target_cell: int,
+	target_hand_index: int = -1
+) -> ActionData:
 	var instance_id: StringName = _get_card_instance_id(card)
 	if _drag_source_zone == ActionData.SOURCE_HAND:
+		if target_cell not in _drag_valid_targets:
+			return null
 		return ActionData.make_play(
 			_get_logical_hand_index(card.owner_id, instance_id),
 			target_cell,
@@ -1895,6 +1955,8 @@ func _make_drag_action(card: CardView, target_cell: int) -> ActionData:
 			if (
 				action.target_kind == ActionData.TARGET_BOARD_CELL
 				and action.target_index == target_cell
+				or action.target_kind == ActionData.TARGET_HAND_SLOT
+				and action.target_index == target_hand_index
 			):
 				return action.duplicate_action()
 	return null
@@ -1904,6 +1966,7 @@ func _clear_drag_context() -> void:
 	_remove_targeting_trace()
 	_drag_source_zone = &""
 	_drag_source_index = -1
+	_hovered_hand_target = -1
 	_drag_valid_targets.clear()
 	_drag_action_candidates.clear()
 
@@ -1982,12 +2045,64 @@ func _highlight_legal_cells() -> void:
 			_set_cell_style(cell_index, "legal")
 		else:
 			_set_cell_style(cell_index, "normal")
+	_highlight_legal_hand_targets()
+
+
+func _highlight_legal_hand_targets() -> void:
+	_clear_hand_target_highlights()
+	for action: ActionData in _drag_action_candidates:
+		if action.target_kind == ActionData.TARGET_HAND_SLOT:
+			_set_hand_target_style(action.target_index, "legal")
+
+
+func _clear_hand_target_highlights() -> void:
+	for container: HBoxContainer in [opponent_hand, player_hand]:
+		for slot_value: Node in container.get_children():
+			var slot := slot_value as PanelContainer
+			if slot != null:
+				_set_hand_slot_style(slot, "normal")
+
+
+func _set_hand_target_style(logical_index: int, mode: String) -> void:
+	var source_owner: int = _get_drag_source_owner()
+	if source_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+		return
+	var target_owner: int = (
+		DuelRules.OPPONENT_OWNER
+		if source_owner == DuelRules.PLAYER_OWNER
+		else DuelRules.PLAYER_OWNER
+	)
+	var card: CardView = _get_card_view_for_logical_index(target_owner, logical_index)
+	if card == null:
+		return
+	var slot := card.get_parent() as PanelContainer
+	if slot != null:
+		_set_hand_slot_style(slot, mode)
+
+
+func _set_hand_slot_style(slot: PanelContainer, mode: String) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 1.0, 1.0, 0.06)
+	style.border_color = Color(1.0, 1.0, 1.0, 0.10)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(5)
+	if mode == "legal":
+		style.bg_color = Color(0.18, 0.72, 0.68, 0.28)
+		style.border_color = Color("45b9ad")
+		style.set_border_width_all(3)
+	elif mode == "hover":
+		style.bg_color = Color(0.25, 0.86, 0.78, 0.52)
+		style.border_color = Color("75e0d2")
+		style.set_border_width_all(4)
+	slot.add_theme_stylebox_override("panel", style)
 
 
 func _clear_cell_highlights() -> void:
 	_hovered_cell = -1
+	_hovered_hand_target = -1
 	for cell_index: int in range(board_cells.size()):
 		_set_cell_style(cell_index, "normal")
+	_clear_hand_target_highlights()
 
 
 func _set_cell_style(cell_index: int, mode: String) -> void:
