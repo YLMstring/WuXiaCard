@@ -91,8 +91,10 @@ These decisions were explicitly established during development and should not be
   identity match uses self-fade presentation.
 - One top-level action creates one transition-only power batch. Logical events
   are never discarded, while presentation coalesces repeated exact-instance
-  changes and starts all visible cards together. Full-zero removals wait for
-  that one batch barrier. Hidden cards update without animation or delay.
+  changes. All visible cards hold their previous powers for one shared roughly
+  0.12-second pause, then update and animate together for roughly 0.25 seconds.
+  Full-zero removals wait for both shared barriers. Hidden cards update without
+  animation or delay.
 
 ## 万岳朝宗 / 大嵩阳神掌
 

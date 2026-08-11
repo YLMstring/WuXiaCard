@@ -304,8 +304,10 @@ source. A top-level action also stamps its directly caused power/removal events
 with `power_change_batch_id`. This identifier exists only in transition data;
 it is never stored in `DuelState`, replay Tween state, or search keys. The
 controller visually coalesces repeated changes to one exact instance, starts
-every visible card in the batch together, waits once, then resumes the original
-flat event order. Face-down cards synchronize silently and create no empty wait.
+every visible card in the batch from its old powers, waits once for a shared
+pre-change pause, then updates and animates every visible target together before
+resuming the original flat event order. Face-down cards synchronize silently and
+create no empty wait.
 
 `card_summoned` presents an ability-created board instance. The simulator then
 resolves the same global summoned/after-summoned phases and standard attack used

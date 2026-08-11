@@ -52,8 +52,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   zero-floor removal, original-owner zones, batch metadata, all eight card
   declarations, summon timing, and lethal global reactions.
 - `test_power_change_integration.gd` — parallel visible batch starts, one
-  shared duration, repeated-instance visual coalescing, final four-side values,
-  gain/loss styling, and hidden-card no-wait concealment.
+  shared pre-change pause and duration, old/final four-side values,
+  repeated-instance visual coalescing, gain/loss styling, and hidden-card
+  no-wait concealment.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.

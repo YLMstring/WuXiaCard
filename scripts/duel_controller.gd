@@ -50,6 +50,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var targeting_trace_width: float = 6.0
 @export var targeting_trace_color: Color = Color(0.12, 0.42, 0.38, 0.72)
 @export var ki_gain_pulse_duration: float = 0.18
+@export var power_change_pre_delay: float = 0.12
 @export var power_change_duration: float = 0.25
 @export var power_gain_glow_color: Color = Color("b6b84f")
 @export var power_loss_glow_color: Color = Color("6f1f28")
@@ -249,6 +250,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		swap_duration = 0.0
 		summon_swap_readable_duration = 0.0
 		ki_gain_pulse_duration = 0.0
+		power_change_pre_delay = 0.0
 		power_change_duration = 0.0
 		extra_card_play_status_duration = 0.0
 		opponent_think_delay = 0.0
@@ -1319,8 +1321,7 @@ func _present_power_change_batch(
 		else:
 			var aggregate: Dictionary = grouped[instance_id]
 			aggregate["powers"] = (event.get("powers", []) as Array).duplicate()
-	var visible_count: int = 0
-	var started_msec: int = Time.get_ticks_msec()
+	var visible_changes: Array[Dictionary] = []
 	for instance_value: Variant in grouped.keys():
 		var instance_id := StringName(instance_value)
 		var aggregate: Dictionary = grouped[instance_id]
@@ -1333,7 +1334,29 @@ func _present_power_change_batch(
 		if card.is_face_down():
 			card.set_runtime_powers(resulting_powers)
 			continue
-		visible_count += 1
+		card.set_runtime_powers(previous_powers)
+		visible_changes.append({
+			"instance_id": instance_id,
+			"previous_powers": previous_powers.duplicate(),
+			"powers": resulting_powers.duplicate(),
+			"amount": amount,
+		})
+	if not visible_changes.is_empty() and power_change_pre_delay > 0.0:
+		await get_tree().create_timer(power_change_pre_delay).timeout
+	var started_msec: int = Time.get_ticks_msec()
+	var animated_count: int = 0
+	for change: Dictionary in visible_changes:
+		var instance_id := StringName(change.get("instance_id", &""))
+		var card: CardView = _get_card_view_by_instance(instance_id)
+		if card == null:
+			continue
+		var previous_powers: Array = change.get("previous_powers", [])
+		var resulting_powers: Array = change.get("powers", [])
+		if card.is_face_down():
+			card.set_runtime_powers(resulting_powers)
+			continue
+		var amount: int = int(change.get("amount", 0))
+		animated_count += 1
 		_power_change_presentation_trace.append({
 			"batch_id": batch_id,
 			"instance_id": instance_id,
@@ -1350,7 +1373,7 @@ func _present_power_change_batch(
 			power_change_duration,
 			power_gain_glow_color if amount > 0 else power_loss_glow_color
 		)
-	if visible_count > 0 and power_change_duration > 0.0:
+	if animated_count > 0 and power_change_duration > 0.0:
 		await get_tree().create_timer(power_change_duration).timeout
 	return batch_indices
 

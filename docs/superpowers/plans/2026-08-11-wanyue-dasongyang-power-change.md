@@ -216,7 +216,9 @@ play continue through the same simulator state and transitions.
 1. Add a `CardView` power-change animation taking previous powers, final powers,
    signed direction, duration, and frame-glow color. Keep all four labels at
    fixed positions and animate only centered scale plus frame modulation.
-2. Use approximately 0.25 seconds. Positive changes pulse slightly larger with
+2. Keep every visible target at its previous powers for one shared approximately
+   0.12-second pre-delay, then use approximately 0.25 seconds for the animation.
+   Positive changes pulse slightly larger with
    restrained warm gold-green glow; negative changes pulse slightly smaller
    with dark red glow. Update all four displayed results together.
 3. In `_present_transition_events`, detect the first event of a power batch,
@@ -224,19 +226,22 @@ play continue through the same simulator state and transitions.
    `instance_id`.
 4. For a repeated exact instance, use the earliest `previous_powers` and latest
    `powers`; still append every original event to debug/presentation traces.
-5. Start every visible card animation before awaiting a single batch barrier.
-   Batch duration must remain approximately 0.25 seconds regardless of one,
-   two, or many affected cards.
+5. Await one shared visible pre-delay, then start every visible card animation
+   in the same frame before awaiting a single animation barrier. Total batch
+   duration must remain approximately 0.37 seconds regardless of one, two, or
+   many affected cards.
 6. Mark grouped power events consumed, then continue through the original flat
    event order. Directly caused `card_exiled` events therefore run only after
    the shared power barrier and remain ordered among themselves.
 7. Update face-down hand view data without playing or waiting for an animation.
-   If a batch has no visible card, do not create an empty 0.25-second delay.
+   If a batch has no visible card, do not create an empty pre-delay or animation
+   delay.
 8. Guard against missing/freed views, inspection state, replay exit, and zero-
    duration test configuration without changing simulator state.
-9. Assert fixed label positions, simultaneous start timestamps, one shared wait,
-   final values, distinct add/subtract glow, repeated-instance coalescing, and
-   full-zero animation-before-exile behavior.
+9. Assert that old values remain visible through the shared pre-delay, plus fixed
+   label positions, simultaneous start timestamps, one shared wait, final values,
+   distinct add/subtract glow, repeated-instance coalescing, and full-zero
+   animation-before-exile behavior.
 
 ## Task 9: Update durable documentation
 

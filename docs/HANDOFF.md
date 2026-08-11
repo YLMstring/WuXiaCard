@@ -152,9 +152,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   summons by `+1/+1/+2`. DaSongYangZhang1–4 strengthen adjacent allied summons
   by `+1/+1/+1/+2`; tiers 2–4 weaken adjacent enemy summons by `-1/-2/-2`.
 - One top-level power action emits one transition-only batch. Every visible
-  target in that batch animates simultaneously for about 0.25 seconds; repeated
-  exact-instance changes visually coalesce, zero-power removals wait behind the
-  shared barrier, and concealed hand changes add no animation delay or leak.
+  target in that batch keeps its previous powers for one shared roughly
+  0.12-second pause, then all update and animate simultaneously for about
+  0.25 seconds. Repeated exact-instance changes visually coalesce, zero-power
+  removals wait behind both shared barriers, and concealed hand changes add no
+  animation delay or leak.
 - LaiHeQinQuan1–5 now use generic exact-instance revelation, permanent
   future-draw audiences, flip-prevention requests, granted passive modifiers,
   and indexed self-removal. LaiHe4/5 use the active-run enemy-memory snapshot;

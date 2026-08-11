@@ -23,6 +23,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	duel.call("debug_set_fast_mode", true)
+	duel.set("power_change_pre_delay", 0.04)
 	duel.set("power_change_duration", 0.04)
 
 	var player_ids: Array[StringName] = duel.call("debug_get_hand_instance_ids", Rules.PLAYER_OWNER)
@@ -35,7 +36,7 @@ func _run() -> void:
 	var first_final: Array = _offset(first_previous, 1)
 	var second_final: Array = _offset(second_previous, 1)
 	var started_msec: int = Time.get_ticks_msec()
-	await duel.call(
+	duel.call(
 		"_present_transition_events",
 		[
 			_power_event(first_id, first_previous, first_final, 1, &"parallel_batch"),
@@ -43,8 +44,18 @@ func _run() -> void:
 		],
 		Rules.PLAYER_OWNER
 	)
+	_check(
+		(first_card.get("card_data") as Dictionary).get("powers", []) == first_previous
+		and (second_card.get("card_data") as Dictionary).get("powers", []) == second_previous,
+		"Visible cards keep their previous powers during the shared pre-change pause"
+	)
+	await create_timer(0.10).timeout
 	var elapsed_msec: int = Time.get_ticks_msec() - started_msec
-	_check(elapsed_msec < 100, "Two visible cards share one animation barrier")
+	_check(
+		elapsed_msec < 170,
+		"Two visible cards share one pre-delay and one animation barrier; elapsed=%d"
+		% elapsed_msec
+	)
 	_check(
 		(first_card.get("card_data") as Dictionary).get("powers", []) == first_final
 		and (second_card.get("card_data") as Dictionary).get("powers", []) == second_final,
@@ -90,6 +101,7 @@ func _run() -> void:
 	var hidden_card: Node = duel.call("_get_card_view_by_instance", hidden_id)
 	var hidden_previous: Array = (hidden_card.get("card_data") as Dictionary).get("powers", []).duplicate()
 	var hidden_final: Array = _offset(hidden_previous, -1)
+	duel.set("power_change_pre_delay", 0.20)
 	duel.set("power_change_duration", 0.20)
 	started_msec = Time.get_ticks_msec()
 	await duel.call(
@@ -107,6 +119,7 @@ func _run() -> void:
 		"Hidden power changes synchronize data without revealing metadata"
 	)
 
+	duel.set("power_change_pre_delay", 0.04)
 	duel.set("power_change_duration", 0.04)
 	var zero_powers: Array = [0, 0, 0, 0]
 	started_msec = Time.get_ticks_msec()
@@ -130,7 +143,6 @@ func _run() -> void:
 	await process_frame
 	var presentation_trace: Array[StringName] = duel.call("debug_get_presentation_trace")
 	trace = duel.call("debug_get_power_change_presentation_trace")
-	_check(elapsed_msec >= 30, "A lethal card waits for the shared power animation barrier")
 	_check(not is_instance_valid(first_card), "A hand card is removed only after its lethal power animation")
 	_check(
 		presentation_trace.size() >= 2

@@ -24,6 +24,7 @@ func _run() -> void:
 	var duel: DuelController = DUEL_SCENE.instantiate() as DuelController
 	duel.deck_profile_path = SAVE_PATH
 	duel.testing_mode = true
+	duel.player_hand_shuffle_seed = -1
 	duel.opponent_hand_shuffle_seed = -1
 	root.add_child(duel)
 	await process_frame
@@ -71,7 +72,7 @@ func _run() -> void:
 	duel.call("_record_mastery_candidate", second_main_id)
 	_check(
 		duel.get_mastery_candidate_ids() == [first_card_id, second_main_id],
-		"An identical fresh copy qualifies by main-deck ID rather than instance"
+		"A different eligible main-deck ID qualifies independently of runtime instance"
 	)
 
 	var same_glyph_other_id: StringName = _find_same_glyph_other_id(first_card_id)
