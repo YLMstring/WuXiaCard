@@ -59,7 +59,7 @@ func _run() -> void:
 		&"TaiShanPai",
 		&"HengShanPai",
 		&"tingchao_gu",
-		&"bailu_shuyuan",
+		&"SongShanPai",
 	]
 	for index: int in range(expected_sect_ids.size()):
 		var entry: Dictionary = grid.library_slots[index]

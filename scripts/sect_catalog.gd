@@ -6,7 +6,7 @@ const ALL_SECT_IDS: Array[StringName] = [
 	&"TaiShanPai",
 	&"HengShanPai",
 	&"tingchao_gu",
-	&"bailu_shuyuan",
+	&"SongShanPai",
 ]
 
 const _DEFINITION_FIELDS: Array[StringName] = [
@@ -61,15 +61,15 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"description": "衡山派擅长解除对手的防御，用巧妙的移动和攻击来逆转局势。",
 		"flavor": "衡山剑法灵动难测，变幻无方，一招既占先机，后招绵绵而至，再强的高手也难以抵御。",
 	},
-	&"bailu_shuyuan": {
-		"id": &"bailu_shuyuan",
-		"glyph": "白鹿书院",
-		"picture": "res://pics/LKT010_005.png",
-		"sect": "中州鹿鸣山",
-		"tier": 2,
-		"weapon": "奇门",
-		"description": "白鹿书院主张先明理而后用武，将机关、阵图与经义融为奇门之术。门人正面武力不盛，却擅长准备、推演和改变战场条件。",
-		"flavor": "书院藏书楼前常有白鹿出没，从不畏人。院中旧规写道：“能胜一局者可学术，能止一战者方可传道。”",
+	&"SongShanPai": {
+		"id": &"SongShanPai",
+		"glyph": "嵩山派",
+		"picture": "res://pics/LKT010_476.png",
+		"sect": "嵩山",
+		"tier": 4,
+		"weapon": "剑法/掌法/心法",
+		"description": "嵩山派擅长使用场上的卡牌配合形成点数差距，压制对手。",
+		"flavor": "嵩山派武功乃堂堂之阵，正正之师，剑法气象森严，便似千军万马奔驰而来，长枪大戟，黄沙千里。",
 	},
 }
 
