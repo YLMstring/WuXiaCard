@@ -122,10 +122,11 @@ const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY := &"selected_card_is_previo
 `OWNER_ABILITY_SOURCE` / `OWNER_OPPONENT_OF_ABILITY_SOURCE`，并把候选精确实例与
 `previous_hand_play_by_owner` 中对应记录比较。它不返回别的目标，也不改变历史。
 
-现有 `ACTION_DRAW_CARDS` 新增可选的 `card` 与 `recipient` 字段。两者必须一起声明：
-`card` 接受现有精确卡牌引用；`recipient` 接受现有所有者引用。抽牌接收者由该卡牌引用的
-结算快照解析，因此目标先被现有 `ACTION_EXILE_SELF` 移除后仍能按其移除前当前所有者
-抽牌。不声明这两个字段时，保持现有“由当前动作主体的拥有者抽牌”语义。
+`ACTION_DRAW_CARDS` 保持现有简写声明，默认只写 `amount`，并由当前动作主体的所有者
+抽牌。动作主体已被同组前置动作移除时，使用当前结算上下文预先捕获的所有者快照；在
+`ACTION_FOR_EACH_SELECTED_CARD` 内，当前动作主体就是该次迭代选中的精确卡牌。因此本
+设计不为 `ACTION_DRAW_CARDS` 增加字段；只有确实要改变默认接收者的其他特殊能力，才应
+显式声明额外内容。
 
 `ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION` 的 `recipient` 使用现有
 `RECIPIENT_SELF` / `RECIPIENT_OPPONENT`，`amount` 必须为正整数。当前三张牌只声明给对手
@@ -156,12 +157,7 @@ const DUGU_NO_FORM: Dictionary = {
 				},
 				"actions": [
 					{"type": ACTION_EXILE_SELF},
-					{
-						"type": ACTION_DRAW_CARDS,
-						"amount": 1,
-						"card": CARD_REF_SELECTED_CARD,
-						"recipient": OWNER_CARD_CURRENT,
-					},
+					{"type": ACTION_DRAW_CARDS, "amount": 1},
 				],
 			},
 		],
@@ -187,12 +183,7 @@ const DUGU_ANTICIPATE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{
-				"type": ACTION_DRAW_CARDS,
-				"amount": 1,
-				"card": CARD_REF_ABILITY_SOURCE,
-				"recipient": OWNER_CARD_CURRENT,
-			},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
@@ -231,7 +222,7 @@ const DUGU_ANTICIPATE: Dictionary = {
 }
 ```
 
-`ACTION_DRAW_CARDS` 通过显式卡牌引用读取移除前所有者快照；
+`ACTION_DRAW_CARDS` 通过当前动作主体上下文读取移除前所有者快照；
 `ACTION_GRANT_EXTRA_CARD_PLAY` 也必须在能力来源已被前一动作移除后，依靠进场前捕获的
 能力来源所有者快照继续结算。不能通过调换目录动作顺序规避来源离场。
 
@@ -253,12 +244,7 @@ const DUGU_BREAK_ALL: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{
-				"type": ACTION_DRAW_CARDS,
-				"amount": 1,
-				"card": CARD_REF_ABILITY_SOURCE,
-				"recipient": OWNER_CARD_CURRENT,
-			},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{
 				"type": ACTION_REVEAL_HAND_CARDS,
 				"recipient": RECIPIENT_OPPONENT,
@@ -339,7 +325,7 @@ const DUGU_BREAK_ALL: Dictionary = {
 ### 目录与状态
 
 - 三张卡具有非空且完全匹配本设计的 declaration；
-- 新历史条件、抽牌字段和独立压制动作通过目录校验，未知值/字段被拒绝；
+- 新历史条件和独立压制动作通过目录校验，未知值/字段被拒绝；
 - `DuelState.duplicate_state()` 深复制历史与待压制层；
 - `DuelStateKey` 区分不同历史目标和不同剩余层数。
 
