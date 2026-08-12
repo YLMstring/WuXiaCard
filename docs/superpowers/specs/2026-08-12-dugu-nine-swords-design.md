@@ -102,25 +102,34 @@ var pending_non_retained_suppression_by_owner: Dictionary = {
 
 ## 通用目录词汇
 
-新增稳定词汇：
+不新增“移除自身与相邻牌并抽牌”或“返回上一张手牌出牌”这类组合动作。新增词汇只描述
+通用选择关系、所有者解析和独立状态变更：
 
 ```gdscript
-const ACTION_EXILE_SELF_AND_ADJACENT_WITH_DRAW := &"exile_self_and_adjacent_with_draw"
-const ACTION_RETURN_PREVIOUS_HAND_PLAY := &"return_previous_hand_play"
 const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION := &"add_pending_non_retained_suppression"
 
-const HAND_PLAY_OWNER_ABILITY_SOURCE := &"ability_source"
-const HAND_PLAY_OWNER_OPPONENT_OF_ABILITY_SOURCE := &"opponent_of_ability_source"
+const SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR := &"source_then_row_major"
+const CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT := &"selected_card_is_source_or_adjacent"
+const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY := &"selected_card_is_previous_hand_play"
 ```
 
-`ACTION_EXILE_SELF_AND_ADJACENT_WITH_DRAW` 是一个原子规则动作：它在执行开始时快照自身和
-相邻精确实例，固定自身优先、其余按格编号升序；随后每个目标执行“移除后立即由移除前
-当前拥有者抽一张”。它避免在目录中加入针对棋盘邻接、动态当前拥有者抽牌和中途重验的
-卡牌专属组合分支。
+`ACTION_FOR_EACH_SELECTED_CARD` 的 selector 新增可选 `order`。当前新增的
+`SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR` 只改变匹配结果的顺序：来源牌若匹配则最先，其余
+棋盘牌保持格编号升序。选择仍在 wrapper 开始时一次性快照精确实例，之后逐张重验条件。
 
-`ACTION_RETURN_PREVIOUS_HAND_PLAY` 从当前能力上下文的
-`previous_hand_play_by_owner` 读取指定玩家的旧记录，跟踪精确实例并调用现有返回手牌
-语义。其 `played_by` 字段只接受上述两个历史玩家引用。
+`CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT` 匹配能力来源自身或与其正交相邻的棋盘
+牌。若能力来源已被同一个 wrapper 的较早目标移除，条件使用
+`CARD_REF_ABILITY_SOURCE` 在 wrapper 开始时捕获的原始 `zone/index` 继续重验，不把来源
+离场误判为所有剩余目标失效；候选牌本身仍必须是快照中的同一实例且仍在棋盘。
+
+`CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY` 的 `played_by` 字段接受现有
+`OWNER_ABILITY_SOURCE` / `OWNER_OPPONENT_OF_ABILITY_SOURCE`，并把候选精确实例与
+`previous_hand_play_by_owner` 中对应记录比较。它不返回别的目标，也不改变历史。
+
+现有 `ACTION_DRAW_CARDS` 新增可选的 `card` 与 `recipient` 字段。两者必须一起声明：
+`card` 接受现有精确卡牌引用；`recipient` 接受现有所有者引用。抽牌接收者由该卡牌引用的
+结算快照解析，因此目标先被现有 `ACTION_EXILE_SELF` 移除后仍能按其移除前当前所有者
+抽牌。不声明这两个字段时，保持现有“由当前动作主体的拥有者抽牌”语义。
 
 `ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION` 的 `recipient` 使用现有
 `RECIPIENT_SELF` / `RECIPIENT_OPPONENT`，`amount` 必须为正整数。当前三张牌只声明给对手
@@ -139,7 +148,23 @@ const DUGU_NO_FORM: Dictionary = {
 		"event": TRIGGER_CARD_BEFORE_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [{
-			"type": ACTION_EXILE_SELF_AND_ADJACENT_WITH_DRAW,
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [{
+					"type": CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT,
+				}],
+				"order": SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR,
+			},
+			"actions": [
+				{"type": ACTION_EXILE_SELF},
+				{
+					"type": ACTION_DRAW_CARDS,
+					"amount": 1,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_CARD_CURRENT,
+				},
+			],
 		}],
 	}],
 }
@@ -163,14 +188,43 @@ const DUGU_ANTICIPATE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{
-				"type": ACTION_RETURN_PREVIOUS_HAND_PLAY,
-				"played_by": HAND_PLAY_OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				"type": ACTION_DRAW_CARDS,
+				"amount": 1,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"recipient": OWNER_CARD_CURRENT,
 			},
 			{
-				"type": ACTION_RETURN_PREVIOUS_HAND_PLAY,
-				"played_by": HAND_PLAY_OWNER_ABILITY_SOURCE,
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+						"played_by": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+					}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+						"played_by": OWNER_ABILITY_SOURCE,
+					}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_ABILITY_SOURCE,
+				}],
 			},
 			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 		],
@@ -178,9 +232,9 @@ const DUGU_ANTICIPATE: Dictionary = {
 }
 ```
 
-`ACTION_DRAW_CARDS` 和 `ACTION_GRANT_EXTRA_CARD_PLAY` 必须能够在能力来源已被前一动作移除
-后，依靠进场前捕获的能力来源所有者快照继续结算。若现有实现只接受仍在场来源，应将该
-通用执行路径扩展为读取 `CARD_REF_ABILITY_SOURCE` 快照，不能调换目录动作顺序。
+`ACTION_DRAW_CARDS` 通过显式卡牌引用读取移除前所有者快照；
+`ACTION_GRANT_EXTRA_CARD_PLAY` 也必须在能力来源已被前一动作移除后，依靠进场前捕获的
+能力来源所有者快照继续结算。不能通过调换目录动作顺序规避来源离场。
 
 卡牌定义：
 
@@ -200,7 +254,12 @@ const DUGU_BREAK_ALL: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_DRAW_CARDS,
+				"amount": 1,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"recipient": OWNER_CARD_CURRENT,
+			},
 			{
 				"type": ACTION_REVEAL_HAND_CARDS,
 				"recipient": RECIPIENT_OPPONENT,
@@ -281,13 +340,14 @@ const DUGU_BREAK_ALL: Dictionary = {
 ### 目录与状态
 
 - 三张卡具有非空且完全匹配本设计的 declaration；
-- 新动作、历史玩家引用和字段通过目录校验，未知值/字段被拒绝；
+- 新选择器顺序、条件、抽牌字段和独立压制动作通过目录校验，未知值/字段被拒绝；
 - `DuelState.duplicate_state()` 深复制历史与待压制层；
 - `DuelStateKey` 区分不同历史目标和不同剩余层数。
 
 ### 无招胜有招
 
 - 自身先移除，相邻格按编号升序；
+- 来源移除后，相邻条件仍以来源初始格重验，但不会改选后来移动进来的牌；
 - 每次 `card_exiled` 后立即跟随对应拥有者的 `card_drawn`；
 - 翻面相邻牌按当前拥有者抽牌、按原始拥有者进入移除区；
 - 满手、空牌库、目标提前离场均不阻断后续；
