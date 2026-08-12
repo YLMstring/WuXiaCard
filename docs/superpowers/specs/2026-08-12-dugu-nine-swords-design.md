@@ -102,25 +102,21 @@ var pending_non_retained_suppression_by_owner: Dictionary = {
 
 ## 通用目录词汇
 
-不新增“移除自身与相邻牌并抽牌”或“返回上一张手牌出牌”这类组合动作。新增词汇只描述
-通用选择关系、所有者解析和独立状态变更：
+不新增“移除自身与相邻牌并抽牌”或“返回上一张手牌出牌”这类组合动作。无招胜有招直接
+组合现有动作和现有相邻条件；新增词汇只描述历史选择关系和独立状态变更：
 
 ```gdscript
 const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION := &"add_pending_non_retained_suppression"
 
-const SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR := &"source_then_row_major"
-const CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT := &"selected_card_is_source_or_adjacent"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY := &"selected_card_is_previous_hand_play"
 ```
 
-`ACTION_FOR_EACH_SELECTED_CARD` 的 selector 新增可选 `order`。当前新增的
-`SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR` 只改变匹配结果的顺序：来源牌若匹配则最先，其余
-棋盘牌保持格编号升序。选择仍在 wrapper 开始时一次性快照精确实例，之后逐张重验条件。
-
-`CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT` 匹配能力来源自身或与其正交相邻的棋盘
-牌。若能力来源已被同一个 wrapper 的较早目标移除，条件使用
-`CARD_REF_ABILITY_SOURCE` 在 wrapper 开始时捕获的原始 `zone/index` 继续重验，不把来源
-离场误判为所有剩余目标失效；候选牌本身仍必须是快照中的同一实例且仍在棋盘。
+无招胜有招先在 wrapper 外用现有 `ACTION_EXILE_SELF` 和 `ACTION_DRAW_CARDS` 处理自身，
+再由现有 `ACTION_FOR_EACH_SELECTED_CARD` 和
+`CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 选择相邻牌。棋盘候选本来就按格编号升序
+扫描，不新增排序类型。来源此时虽已离场，现有条件仍应从 `CARD_REF_ABILITY_SOURCE` 的
+动作上下文快照读取其初始 `zone/index`；这是对现有精确来源快照解析的补全，不是新条件。
+候选牌仍须是 selector 开始时快照的同一实例且仍在棋盘。
 
 `CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY` 的 `played_by` 字段接受现有
 `OWNER_ABILITY_SOURCE` / `OWNER_OPPONENT_OF_ABILITY_SOURCE`，并把候选精确实例与
@@ -147,25 +143,28 @@ const DUGU_NO_FORM: Dictionary = {
 	"triggers": [{
 		"event": TRIGGER_CARD_BEFORE_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-		"actions": [{
-			"type": ACTION_FOR_EACH_SELECTED_CARD,
-			"selector": {
-				"zones": [CARD_ZONE_BOARD],
-				"conditions": [{
-					"type": CONDITION_SELECTED_CARD_IS_SOURCE_OR_ADJACENT,
-				}],
-				"order": SELECTOR_ORDER_SOURCE_THEN_ROW_MAJOR,
-			},
-			"actions": [
-				{"type": ACTION_EXILE_SELF},
-				{
-					"type": ACTION_DRAW_CARDS,
-					"amount": 1,
-					"card": CARD_REF_SELECTED_CARD,
-					"recipient": OWNER_CARD_CURRENT,
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+					}],
 				},
-			],
-		}],
+				"actions": [
+					{"type": ACTION_EXILE_SELF},
+					{
+						"type": ACTION_DRAW_CARDS,
+						"amount": 1,
+						"card": CARD_REF_SELECTED_CARD,
+						"recipient": OWNER_CARD_CURRENT,
+					},
+				],
+			},
+		],
 	}],
 }
 ```
@@ -340,14 +339,14 @@ const DUGU_BREAK_ALL: Dictionary = {
 ### 目录与状态
 
 - 三张卡具有非空且完全匹配本设计的 declaration；
-- 新选择器顺序、条件、抽牌字段和独立压制动作通过目录校验，未知值/字段被拒绝；
+- 新历史条件、抽牌字段和独立压制动作通过目录校验，未知值/字段被拒绝；
 - `DuelState.duplicate_state()` 深复制历史与待压制层；
 - `DuelStateKey` 区分不同历史目标和不同剩余层数。
 
 ### 无招胜有招
 
 - 自身先移除，相邻格按编号升序；
-- 来源移除后，相邻条件仍以来源初始格重验，但不会改选后来移动进来的牌；
+- 来源移除后，现有相邻条件仍以来源初始格重验，但不会改选后来移动进来的牌；
 - 每次 `card_exiled` 后立即跟随对应拥有者的 `card_drawn`；
 - 翻面相邻牌按当前拥有者抽牌、按原始拥有者进入移除区；
 - 满手、空牌库、目标提前离场均不阻断后续；
