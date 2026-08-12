@@ -483,3 +483,18 @@ respectively, in row-major order. The source itself is eligible.
 - Simultaneous TianWai sources are discovered in stable row-major order. Each
   later source revalidates the exact trigger instance and adjacency after all
   earlier swaps and attacks.
+
+## 独孤九剑
+
+- No Form handles its source with ordinary `ACTION_EXILE_SELF` and
+  `ACTION_DRAW_CARDS`, then uses the existing adjacent-card selector for exact
+  row-major targets. Every removal is followed immediately by the default draw
+  for that action subject's pre-removal current owner.
+- Each owner records the exact most recent successful hand play. Anticipate
+  reads a frozen pre-action copy, so it never selects itself. A target returns
+  to the owner who originally played that hand action even after a flip; full
+  recipient hands exile it and missing targets do not stop later actions.
+- Break All queues persistent per-owner layers. Heart methods neither trigger
+  nor consume them. Each later non-heart hand play consumes at most one layer
+  before its own before-summon ability discovery, permanently removing every
+  non-retained ability while preserving `retained_on_flip` entries.

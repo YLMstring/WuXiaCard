@@ -49,6 +49,7 @@ const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
 const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
+const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
@@ -80,6 +81,7 @@ const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_firs
 const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
 const ACTION_REVEAL_CARD: StringName = &"reveal_card"
 const ACTION_SWAP_SELF_WITH_TRIGGER_CARD: StringName = &"swap_self_with_trigger_card"
+const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_non_retained_suppression"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
@@ -160,6 +162,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
 	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
+	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -193,6 +196,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 	ACTION_REVEAL_CARD,
 	ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
+	ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
@@ -803,6 +807,95 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_REPEAT_ATTACK},
 					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_RANGE_FOUR},
 				],
+			},
+		],
+	}],
+}
+
+const DUGU_NO_FORM: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+					}],
+				},
+				"actions": [
+					{"type": ACTION_EXILE_SELF},
+					{"type": ACTION_DRAW_CARDS, "amount": 1},
+				],
+			},
+		],
+	}],
+}
+
+const DUGU_ANTICIPATE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+						"played_by": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+					}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+						"played_by": OWNER_ABILITY_SOURCE,
+					}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_ABILITY_SOURCE,
+				}],
+			},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+		],
+	}],
+}
+
+const DUGU_BREAK_ALL: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_REVEAL_HAND_CARDS,
+				"recipient": RECIPIENT_OPPONENT,
+				"filter": REVEAL_FILTER_ALL,
+			},
+			{
+				"type": ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
+				"recipient": RECIPIENT_OPPONENT,
+				"amount": 1,
 			},
 		],
 	}],
@@ -2699,7 +2792,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，将自己和相邻牌移除。每以此法移除一张牌，其当前拥有者抽一张牌。",
 		"flavor": "令狐冲于独孤九剑中领悟的剑理，剑上无招，敌人便没法可破，无招胜有招，乃剑法之极诣。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [DUGU_NO_FORM],
 	},
 	&"DuGu9Jian2": {
 		"id": &"DuGu9Jian2",
@@ -2711,7 +2804,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，将我移除，抽一张牌。将对手上一张从手牌中打出的牌从场上移回其手牌，将你上一张从手牌中打出的牌从场上移回你的手牌，然后额外出一张牌。",
 		"flavor": "独孤九剑的精要所在，任何人一招之出，必定有若干朕兆。你料到他要出什么招，却抢在他头里。敌人手还没提起，你长剑已指向他要害，他再快也没你快。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [DUGU_ANTICIPATE],
 	},
 	&"DuGu9Jian3": {
 		"id": &"DuGu9Jian3",
@@ -2723,7 +2816,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，将我移除，抽一张牌。揭示所有敌方手牌，对手下一张从手牌中打出的非心法牌失去效果。",
 		"flavor": "独孤九剑，有进无退！招招都是进攻，攻敌之不得不守，自己当然不用守了。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [DUGU_BREAK_ALL],
 	},
 	&"gate_general": {
 		"id": &"gate_general",
@@ -3161,6 +3254,14 @@ static func _validate_action(
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION:
+		allowed_keys.append(&"recipient")
+		allowed_keys.append(&"amount")
+		if StringName(action.get("recipient", &"")) not in KNOWN_RECIPIENTS:
+			errors.append("Card %s %s suppression action requires a known recipient" % [card_id, context_name])
+		var suppression_amount: Variant = action.get("amount", null)
+		if typeof(suppression_amount) != TYPE_INT or int(suppression_amount) <= 0:
+			errors.append("Card %s %s suppression action requires a positive integer amount" % [card_id, context_name])
 	if action_type == ACTION_STANDARD_ATTACK_WITH_SELF:
 		allowed_keys.append(&"repeat_attack")
 		if action.has("repeat_attack") and typeof(action.get("repeat_attack")) != TYPE_BOOL:
@@ -3497,6 +3598,13 @@ static func _validate_selector_condition(
 		var weapon_value: Variant = condition.get("weapon", null)
 		if typeof(weapon_value) != TYPE_STRING or String(weapon_value).is_empty():
 			errors.append("Card %s %s selector weapon condition requires a non-empty String weapon" % [card_id, context_name])
+	if condition_type == CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY:
+		allowed_keys.append(&"played_by")
+		if StringName(condition.get("played_by", &"")) not in [
+			OWNER_ABILITY_SOURCE,
+			OWNER_OPPONENT_OF_ABILITY_SOURCE,
+		]:
+			errors.append("Card %s %s previous-play condition requires a relative owner" % [card_id, context_name])
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s selector condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])

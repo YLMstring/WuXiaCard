@@ -177,6 +177,12 @@ static func execute_actions(
 		action_context["ability_source_owner_id"] = expected_owner
 	if not action_context.has("card_reference_snapshots"):
 		action_context["card_reference_snapshots"] = {}
+	var action_subject_snapshot: Dictionary = _snapshot_card_reference(
+		state,
+		source_instance_id
+	)
+	if not action_subject_snapshot.is_empty():
+		action_context["action_subject_snapshot"] = action_subject_snapshot
 	var reference_snapshots: Dictionary = action_context["card_reference_snapshots"] as Dictionary
 	if not reference_snapshots.has(Catalog.CARD_REF_ABILITY_SOURCE):
 		reference_snapshots[Catalog.CARD_REF_ABILITY_SOURCE] = _snapshot_card_reference(
@@ -480,7 +486,8 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner,
 			StringName(declaration.get("recipient", &"")),
-			StringName(declaration.get("filter", &""))
+			StringName(declaration.get("filter", &"")),
+			context
 		)
 	if action_type == Catalog.ACTION_REVEAL_CARD:
 		return _reveal_card(
@@ -618,7 +625,18 @@ static func _execute_action(
 			source_cell,
 			source_instance_id,
 			expected_owner,
-			int(declaration.get("amount", 0))
+			int(declaration.get("amount", 0)),
+			context
+		)
+	if action_type == Catalog.ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION:
+		return _add_pending_non_retained_suppression(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			StringName(declaration.get("recipient", &"")),
+			int(declaration.get("amount", 0)),
+			context
 		)
 	if action_type == Catalog.ACTION_MOVE_SELF_TO_TARGET:
 		return _move_self(
@@ -797,10 +815,7 @@ static func _draw_cards(
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	var owner_id: int = int(source.get("owner_id", 0))
 	if source.is_empty():
-		var snapshot: Dictionary = _get_reference_snapshot(
-			context,
-			Catalog.CARD_REF_ABILITY_SOURCE
-		)
+		var snapshot: Dictionary = _get_action_subject_snapshot(context)
 		if (
 			StringName(snapshot.get("instance_id", &"")) != source_instance_id
 			or int(snapshot.get("owner_id", 0)) != expected_owner
@@ -845,12 +860,21 @@ static func _reveal_hand_cards(
 	source_instance_id: StringName,
 	expected_owner: int,
 	recipient: StringName,
-	reveal_filter: StringName
+	reveal_filter: StringName,
+	context: Dictionary
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty() or recipient not in Catalog.KNOWN_RECIPIENTS or reveal_filter not in Catalog.KNOWN_REVEAL_FILTERS:
-		return _no_effect(source_cell)
 	var observer_owner_id: int = int(source.get("owner_id", 0))
+	if source.is_empty():
+		var snapshot: Dictionary = _get_action_subject_snapshot(context)
+		if (
+			StringName(snapshot.get("instance_id", &"")) != source_instance_id
+			or int(snapshot.get("owner_id", 0)) != expected_owner
+		):
+			return _no_effect(source_cell)
+		observer_owner_id = expected_owner
+	if recipient not in Catalog.KNOWN_RECIPIENTS or reveal_filter not in Catalog.KNOWN_REVEAL_FILTERS:
+		return _no_effect(source_cell)
 	var hand_owner_id: int = _resolve_recipient_owner(observer_owner_id, recipient)
 	var remembered: Array = Revelation.get_remembered_glyphs(state, observer_owner_id)
 	var events: Array[Dictionary] = []
@@ -1461,10 +1485,10 @@ static func _return_card_to_hand(
 			(_get_reference_snapshot(context, Catalog.CARD_REF_ABILITY_SOURCE)).get("index", source_cell)
 		)
 	var recipient_owner: int = int(subject.get("owner_id", 0))
-	if recipient_reference == Catalog.OWNER_ABILITY_SOURCE:
-		recipient_owner = int(context.get("ability_source_owner_id", 0))
-	elif recipient_reference != Catalog.OWNER_CARD_CURRENT:
-		return _no_effect(source_cell)
+	if recipient_reference != Catalog.OWNER_CARD_CURRENT:
+		recipient_owner = _resolve_owner_reference(recipient_reference, context, subject)
+		if recipient_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+			return _no_effect(source_cell)
 	var hand: Array = state.get_hand(recipient_owner)
 	if hand.size() >= MAX_HAND_SIZE:
 		return _exile_board_subject(
@@ -1722,19 +1746,68 @@ static func _grant_extra_card_play(
 	source_cell: int,
 	source_instance_id: StringName,
 	expected_owner: int,
-	amount: int
+	amount: int,
+	context: Dictionary
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty() or amount <= 0:
+	var owner_id: int = int(source.get("owner_id", 0))
+	var current_cell: int = _get_location_cell(source)
+	if source.is_empty():
+		var snapshot: Dictionary = _get_action_subject_snapshot(context)
+		if (
+			StringName(snapshot.get("instance_id", &"")) != source_instance_id
+			or int(snapshot.get("owner_id", 0)) != expected_owner
+		):
+			return _no_effect(source_cell)
+		owner_id = expected_owner
+		current_cell = int(snapshot.get("index", source_cell))
+	if amount <= 0:
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
 	result["extra_turn_requests"].append({
-		"owner_id": int(source.get("owner_id", 0)),
-		"source_cell": _get_location_cell(source),
+		"owner_id": owner_id,
+		"source_cell": current_cell,
 		"source_instance_id": source_instance_id,
 		"amount": amount,
 	})
 	return result
+
+
+static func _add_pending_non_retained_suppression(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	recipient: StringName,
+	amount: int,
+	context: Dictionary
+) -> Dictionary:
+	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
+	var source_owner: int = int(source.get("owner_id", 0))
+	if source.is_empty():
+		var snapshot: Dictionary = _get_action_subject_snapshot(context)
+		if (
+			StringName(snapshot.get("instance_id", &"")) != source_instance_id
+			or int(snapshot.get("owner_id", 0)) != expected_owner
+		):
+			return _no_effect(source_cell)
+		source_owner = expected_owner
+	if recipient not in Catalog.KNOWN_RECIPIENTS or amount <= 0:
+		return _no_effect(source_cell)
+	var recipient_owner: int = _resolve_recipient_owner(source_owner, recipient)
+	var previous_count: int = int(
+		state.pending_non_retained_suppression_by_owner.get(recipient_owner, 0)
+	)
+	var pending_count: int = previous_count + amount
+	state.pending_non_retained_suppression_by_owner[recipient_owner] = pending_count
+	return _applied(source_cell, [{
+		"type": &"non_retained_suppression_added",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"owner_id": recipient_owner,
+		"amount": amount,
+		"pending_count": pending_count,
+	}])
 
 
 static func _move_self(
@@ -2293,6 +2366,11 @@ static func _get_reference_snapshot(
 ) -> Dictionary:
 	var snapshots: Dictionary = context.get("card_reference_snapshots", {})
 	var snapshot_value: Variant = snapshots.get(card_reference, {})
+	return snapshot_value as Dictionary if snapshot_value is Dictionary else {}
+
+
+static func _get_action_subject_snapshot(context: Dictionary) -> Dictionary:
+	var snapshot_value: Variant = context.get("action_subject_snapshot", {})
 	return snapshot_value as Dictionary if snapshot_value is Dictionary else {}
 
 

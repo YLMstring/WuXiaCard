@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -175,6 +175,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   exact trigger card and attacking from the new cell. Tier 3 first attempts to
   add one power to the trigger card; YinYang ignores only that change. Multiple
   TianWai sources resolve row-major and revalidate after prior swaps.
+- DuGu9Jian1–3 now implement their complete before-summon rules. No Form
+  exiles itself, then its snapshotted orthogonal neighbors row-major, drawing
+  immediately for each removed card's pre-removal current owner. Anticipate
+  returns each player's exact previous successful hand play as a fresh catalog
+  instance to its original player, then grants an extra hand play. Break All
+  reveals the opponent hand and queues persistent suppression layers; each
+  later non-heart hand play consumes one layer before its own before-summon
+  discovery and permanently loses only non-retained abilities.
 - One top-level power action emits one transition-only batch. Every visible
   target in that batch keeps its previous powers for one shared roughly
   0.12-second pause, then all update and animate simultaneously for about

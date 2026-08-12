@@ -187,6 +187,9 @@ static func _is_activate_action_legal(state: StateData, action: ActionData) -> b
 static func _apply_play_action(state: StateData, action: ActionData) -> Dictionary:
 	var next_state: StateData = state.duplicate_state()
 	var summoning_owner: int = next_state.active_player
+	var previous_hand_play_by_owner: Dictionary = (
+		next_state.last_hand_play_by_owner.duplicate(true)
+	)
 	if next_state.extra_card_plays_remaining > 0:
 		next_state.extra_card_plays_remaining -= 1
 	var extra_card_play_requests: Array = []
@@ -206,6 +209,13 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"owner_id": summoning_owner,
 		"instance_id": instance_id,
 	}]
+	var suppression_events: Array[Dictionary] = _consume_pending_hand_play_suppression(
+		next_state,
+		card,
+		summoning_owner,
+		action.target_index,
+		instance_id
+	)
 	var captures: Array[int] = []
 	var exiles: Array[int] = []
 	var summon_context: Dictionary = {
@@ -213,6 +223,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"trigger_instance_id": instance_id,
 		"trigger_owner_id": summoning_owner,
 		"summon_reason": &"hand_play",
+		"previous_hand_play_by_owner": previous_hand_play_by_owner,
 	}
 	var before_summon_result: Dictionary = _resolve_trigger_event(
 		next_state,
@@ -222,6 +233,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	_append_extra_card_play_requests(extra_card_play_requests, before_summon_result)
 	var placement_events: Array = events.duplicate()
 	events.clear()
+	events.append_array(suppression_events)
 	_merge_resolution(captures, exiles, events, before_summon_result)
 	events.append_array(placement_events)
 	var summon_result: Dictionary = _resolve_trigger_event(
@@ -262,6 +274,11 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		)
 		_append_extra_card_play_requests(extra_card_play_requests, attack_result)
 		_merge_resolution(captures, exiles, events, attack_result)
+	next_state.last_hand_play_by_owner[summoning_owner] = {
+		"played_by_owner_id": summoning_owner,
+		"card_id": StringName(card.get("card_id", &"")),
+		"instance_id": instance_id,
+	}
 	var finish_result: Dictionary = _finish_action(
 		next_state,
 		summoning_owner,
@@ -275,6 +292,46 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"exiles": exiles,
 		"events": events,
 	}
+
+
+static func _consume_pending_hand_play_suppression(
+	state: StateData,
+	card: Dictionary,
+	owner_id: int,
+	cell: int,
+	instance_id: StringName
+) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	if String(card.get("weapon", "")) == "心法":
+		return events
+	var pending_count: int = int(
+		state.pending_non_retained_suppression_by_owner.get(owner_id, 0)
+	)
+	if pending_count <= 0:
+		return events
+	pending_count -= 1
+	state.pending_non_retained_suppression_by_owner[owner_id] = pending_count
+	events.append({
+		"type": &"non_retained_suppression_consumed",
+		"source_cell": cell,
+		"target_cell": cell,
+		"owner_id": owner_id,
+		"instance_id": instance_id,
+		"pending_count": pending_count,
+	})
+	var removed_count: int = Abilities.remove_non_retained_abilities(card)
+	for _removed_index: int in range(removed_count):
+		events.append({
+			"type": &"ability_lost",
+			"source_cell": cell,
+			"target_cell": cell,
+			"owner_id": owner_id,
+			"instance_id": instance_id,
+			"zone": Catalog.CARD_ZONE_BOARD,
+			"logical_index": cell,
+			"permanent": true,
+		})
+	return events
 
 
 static func _apply_activate_action(state: StateData, action: ActionData) -> Dictionary:

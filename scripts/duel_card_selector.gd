@@ -126,6 +126,25 @@ static func conditions_match(
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE:
 			if not Rules.can_change_powers(selected_card):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY:
+			var played_by_owner: int = _resolve_relative_owner(
+				StringName(condition.get("played_by", &"")),
+				int(source.get("owner_id", 0))
+			)
+			var previous_by_owner: Dictionary = context.get(
+				"previous_hand_play_by_owner",
+				{}
+			)
+			var record_value: Variant = previous_by_owner.get(played_by_owner, {})
+			if (
+				played_by_owner == 0
+				or not record_value is Dictionary
+				or int((record_value as Dictionary).get("played_by_owner_id", 0))
+				!= played_by_owner
+				or StringName((record_value as Dictionary).get("instance_id", &""))
+				!= selected_instance_id
+			):
+				return false
 		else:
 			return false
 	return true
@@ -155,14 +174,26 @@ static func _resolve_source(
 	if owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
 		return {}
 	return {
-		"zone": &"",
+		"zone": StringName(source_snapshot.get("zone", &"")),
 		"owner_id": owner_id,
-		"index": -1,
+		"index": int(source_snapshot.get("index", -1)),
 		"card": {
 			"instance_id": source_instance_id,
 			"card_id": StringName(source_snapshot.get("card_id", &"")),
 		},
 	}
+
+
+static func _resolve_relative_owner(owner_reference: StringName, source_owner: int) -> int:
+	if owner_reference == Catalog.OWNER_ABILITY_SOURCE:
+		return source_owner
+	if owner_reference == Catalog.OWNER_OPPONENT_OF_ABILITY_SOURCE:
+		return (
+			Rules.OPPONENT_OWNER
+			if source_owner == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+	return 0
 
 
 static func _attack_flip_contains(

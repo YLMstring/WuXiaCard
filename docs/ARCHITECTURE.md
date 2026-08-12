@@ -32,7 +32,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks,
   discard/removed zones, active player, turn count, owner-turn serial,
   remaining extra card plays, end-boundary state, queued-effect scaffolding,
-  and state version.
+  last successful hand plays, persistent pending suppression counts, and state
+  version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
   independent initial/final `DuelState` snapshots, ordered duplicate
@@ -57,18 +58,20 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
   card return and summon requests, exile, immediately serviced attack requests,
   ki, signed exact-card power changes with dynamic values and zero-power
   removal, movement with shared before/after boundaries, ordered swaps,
-  turn-scoped ability suppression, extra-card-play grants, normal flip, and
-  invalid-context policy.
+  turn-scoped ability suppression, persistent pending suppression grants,
+  extra-card-play grants, normal flip, and invalid-context policy.
 - `duel_targeting.gd` — generic target discovery/validation. Implemented rules
   cover adjacent empty, allied, enemy, and other-allied board cards.
 - `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
-  snapshots, source-relative selected-card conditions, and current-state
-  revalidation.
+  snapshots, source-relative and previous-hand-play conditions, and
+  current-state revalidation.
 - `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
 
 For a normal hand play, the simulator places the exact instance logically,
+freezes both owners' previous successful hand-play records, consumes at most
+one applicable pending non-heart suppression layer,
 resolves that card's `TRIGGER_CARD_BEFORE_SUMMONED` rules, emits `card_placed`,
 resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then
 resolves the exact summoned card's current `TRIGGER_CARD_AFTER_SUMMONED` rules.

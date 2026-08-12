@@ -160,6 +160,13 @@ movement or a zone change remains valid unless a condition becomes false.
 Inside the wrapper, the selected card is the action subject while the original
 ability source remains available to source-relative conditions.
 
+Actions that default to the current subject, such as `ACTION_DRAW_CARDS`, keep
+that subject's owner/location snapshot for the duration of one action list.
+This permits the concise sequence `ACTION_EXILE_SELF` followed by
+`ACTION_DRAW_CARDS`: after removal, the draw still belongs to the subject's
+pre-removal current owner. Add explicit recipient fields only to actions whose
+rule intentionally differs from that default.
+
 Signed power change with an explicit exact target:
 
 ```gdscript

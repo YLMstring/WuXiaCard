@@ -25,6 +25,8 @@ static func build(state: StateData) -> String:
 		"repetition_hashes": state.repetition_hashes,
 		"remembered_glyphs_by_owner": state.remembered_glyphs_by_owner,
 		"future_draw_reveal_audiences": state.future_draw_reveal_audiences,
+		"last_hand_play_by_owner": state.last_hand_play_by_owner,
+		"pending_non_retained_suppression_by_owner": state.pending_non_retained_suppression_by_owner,
 	})
 
 

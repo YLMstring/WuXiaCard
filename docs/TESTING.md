@@ -64,6 +64,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   self-after-flip cleanup, automatic YinYang skipping, shared power batches,
   permanent granted-ability loss, trigger-card swaps, tier-3 power changes,
   and multi-source row-major revalidation.
+- `test_dugu_nine_swords_abilities.gd` — exact declarations, state-copy/key
+  coverage, source/adjacent exile-draw order and ownership, previous-play
+  return order/full-hand fallback, reveal events, heart-method skipping,
+  retained-ability survival, permanent suppression, and queued layers.
 - `test_activation_targeting_swap_presentation.gd` — anchored board activation
   traces, fixed enemy-hand-slot hit testing, logical hand target commits,
   exact-card reveal presentation, and ordinary move/swap view identity.
