@@ -23,7 +23,6 @@ const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"YinYangZhang3",
 	&"HanBinZhenQi3",
 	&"TianWaiYuLong2",
-	&"zhishang_shanhe",
 ]
 
 var _failures: int = 0
