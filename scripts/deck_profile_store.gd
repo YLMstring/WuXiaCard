@@ -44,7 +44,6 @@ const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"YinYangZhang3",
 	&"HanBinZhenQi3",
 	&"TianWaiYuLong2",
-	&"DuGu9Jian1",
 ]
 
 var save_path: String
