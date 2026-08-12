@@ -2025,7 +2025,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "重剑",
 		"description": "锁定：场上没有其它友方时无法攻击。锁定：防御者的点数视为其最小一侧的点数。对手招式进场时，若在我的攻击范围内，我对其发起攻击。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
 		"flavor": "泰山派剑法的精要所在。单只这一剑，便罩住对方胸口的膻中、神藏、灵墟、神封、步廊、幽门、通谷七处大穴，不论闪向何处，总有一穴会让剑尖刺中。须得轻功高强，立即倒纵出丈许之外，方可避过。",
-		"powers": [7, 5, 5, 5],
+		"powers": [7, 6, 6, 6],
 		"abilities": [
 			QIXIN_RETAINED_ATTACK_MODIFIERS,
 			QIXIN_SUMMON_REACTION,
