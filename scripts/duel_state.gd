@@ -22,6 +22,7 @@ var remembered_glyphs_by_owner: Dictionary = {}
 var future_draw_reveal_audiences: Dictionary = {}
 var last_hand_play_by_owner: Dictionary = {}
 var pending_non_retained_suppression_by_owner: Dictionary = {}
+var enabled_effect_gates_by_owner: Dictionary = {}
 var state_version: int = 0
 
 
@@ -59,6 +60,10 @@ func _init(
 		Rules.PLAYER_OWNER: 0,
 		Rules.OPPONENT_OWNER: 0,
 	}
+	enabled_effect_gates_by_owner = {
+		Rules.PLAYER_OWNER: [],
+		Rules.OPPONENT_OWNER: [Rules.EFFECT_GATE_SELF_CASTRATION],
+	}
 	active_player = new_active_player
 	turn_count = new_turn_count
 
@@ -88,8 +93,13 @@ func duplicate_state():
 	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
 	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
 	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
+	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_turn_serial = owner_turn_serial
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
 	return copied
+
+
+func get_enabled_effect_gates(owner_id: int) -> Array:
+	return enabled_effect_gates_by_owner.get(owner_id, []) as Array

@@ -332,12 +332,17 @@ func _test_break_all_suppresses_next_non_heart() -> void:
 		"Break All adds one persistent suppression layer"
 	)
 	_check(
-		Revelation.is_revealed_to(
+		not Revelation.is_revealed_to(
 			prepared.get_hand(Rules.OPPONENT_OWNER)[0],
 			Rules.PLAYER_OWNER
 		),
-		"Break All reveals the current opponent hand"
+		"Break All does not reveal the opponent hand"
 	)
+	var extra_play: Dictionary = Simulator.apply_action(
+		prepared,
+		Action.make_play(0, 8, &"break_draw")
+	)
+	prepared = extra_play.get("state") as State
 	var second: Dictionary = Simulator.apply_action(
 		prepared,
 		Action.make_play(0, 0, &"suppressed")

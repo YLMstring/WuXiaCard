@@ -319,8 +319,8 @@ with a fresh catalog hand instance; the controller fades the old view before
 presenting the new one. `card_exiled.self_removal` selects the same fade path,
 while an external exile retains the ink-slash presentation.
 
-`ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE` follows the trigger card's exact
-instance across movement, removes that old instance without exile, and submits
+`ACTION_RESUMMON_CARD_IN_PLACE` follows the exact instance named by its `card`
+reference across movement, removes that old instance without exile, and submits
 a non-adjacent in-place summon request for a fresh exact-ID catalog instance.
 It emits `card_departed_for_resummon` before the ordinary `card_summoned`
 event. The controller fades and frees the old board view first, then reuses the

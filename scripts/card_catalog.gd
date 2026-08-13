@@ -1,6 +1,11 @@
 class_name CardCatalog
 extends RefCounted
 
+const EFFECT_GATE_SELF_CASTRATION: StringName = &"self_castration"
+const KNOWN_EFFECT_GATES: Array[StringName] = [
+	EFFECT_GATE_SELF_CASTRATION,
+]
+
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
 const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
@@ -31,6 +36,7 @@ const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revea
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
+const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
@@ -47,6 +53,7 @@ const CONDITION_SELECTED_CARD_IS_NOT_SOURCE: StringName = &"selected_card_is_not
 const CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE: StringName = &"selected_card_adjacent_to_source"
 const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card_surrounded_by_allies"
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
+const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY: StringName = &"selected_card_original_owner_is_enemy"
 const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
@@ -75,7 +82,7 @@ const ACTION_FLIP_SELF: StringName = &"flip_self"
 const ACTION_RETURN_CARD_TO_HAND: StringName = &"return_card_to_hand"
 const ACTION_SUMMON_CARD: StringName = &"summon_card"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
-const ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE: StringName = &"resummon_trigger_card_in_place"
+const ACTION_RESUMMON_CARD_IN_PLACE: StringName = &"resummon_card_in_place"
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
 const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
 const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
@@ -98,6 +105,7 @@ const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override
 const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_ally"
 const MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE: StringName = &"defending_power_uses_minimum_side"
 const MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO: StringName = &"orthogonal_attack_range_two"
+const MODIFIER_ENEMY_ATTACKS_ALL: StringName = &"enemy_attacks_all"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
 const RECIPIENT_SELF: StringName = &"self"
@@ -141,6 +149,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_WAS_ENEMY,
 	CONDITION_ATTACKER_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
+	CONDITION_ATTACK_FLIPPED_ENEMY,
 	CONDITION_ATTACKED_CARD_IS_SELF,
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
@@ -160,6 +169,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES,
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
+	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY,
 	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
 	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
@@ -190,7 +200,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_RETURN_CARD_TO_HAND,
 	ACTION_SUMMON_CARD,
 	ACTION_EXILE_SELF,
-	ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE,
+	ACTION_RESUMMON_CARD_IN_PLACE,
 	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
 	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
@@ -216,6 +226,7 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_ATTACK_REQUIRES_OTHER_ALLY,
 	MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
 	MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+	MODIFIER_ENEMY_ATTACKS_ALL,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -483,7 +494,10 @@ const MIANLI_RESUMMON: Dictionary = {
 			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
 			{"type": CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF},
 		],
-		"actions": [{"type": ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE}],
+		"actions": [{
+			"type": ACTION_RESUMMON_CARD_IN_PLACE,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
 	}],
 }
 
@@ -901,6 +915,108 @@ const DUGU_BREAK_ALL: Dictionary = {
 				"type": ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
 				"recipient": RECIPIENT_OPPONENT,
 				"amount": 1,
+			},
+		],
+	}],
+}
+
+const KUIHUA_RETURN_TO_HAND: Dictionary = {
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_RETURN_CARD_TO_HAND,
+			"card": CARD_REF_ABILITY_SOURCE,
+			"recipient": OWNER_CARD_CURRENT,
+		}],
+	}],
+}
+
+const KUIHUA_MINIMUM_DEFENSE_RETAINED: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
+}
+
+const KUIHUA_INDISCRIMINATE_ATTACK: Dictionary = {
+	"modifiers": [{"type": MODIFIER_ENEMY_ATTACKS_ALL}],
+}
+
+const KUIHUA2_GAIN_INDISCRIMINATE_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_GRANT_ABILITY_TO_SELF,
+			"ability": KUIHUA_INDISCRIMINATE_ATTACK,
+		}],
+	}],
+}
+
+const KUIHUA3_SWAP_SINGLE_ADJACENT_ENEMY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+				"required_count": 1,
+			},
+			"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+		}],
+	}],
+}
+
+const KUIHUA3_RESUMMON_AFTER_ENEMY_FLIP: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_ATTACK_FLIPPED_ENEMY},
+		],
+		"actions": [{
+			"type": ACTION_RESUMMON_CARD_IN_PLACE,
+			"card": CARD_REF_ABILITY_SOURCE,
+		}],
+	}],
+}
+
+const KUIHUA4_DRAW_EXILE_AND_COPY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY},
+					],
+				},
+				"actions": [
+					{
+						"type": ACTION_EXILE_SELF,
+						"on_invalid_context": STOP_RULE,
+					},
+					{
+						"type": ACTION_SUMMON_CARD,
+						"card": {
+							"type": CARD_SPEC_FRESH_COPY,
+							"of": CARD_REF_ABILITY_SOURCE,
+						},
+						"cell": {
+							"type": CELL_REF_INITIAL_CARD_CELL,
+							"card": CARD_REF_SELECTED_CARD,
+						},
+					},
+				],
 			},
 		],
 	}],
@@ -2860,6 +2976,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "需自宫。回合结束时，额外出一张牌。",
 		"flavor": "东方不败从《葵花宝典》中领悟的人生妙谛，天人化生，万物滋长。",
 		"powers": [-1, -1, -1, -1],
+		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
 		"abilities": [
 			{
 				"triggers": [
@@ -2886,7 +3003,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "需自宫。被攻击时，移回手牌。锁定：防御者的点数视为其最小一侧的点数。我攻击后，获得以下效果：敌方攻击时不分敌我。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
 		"powers": [6, 4, 6, 4],
-		"abilities": [],
+		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
+		"abilities": [
+			KUIHUA_RETURN_TO_HAND,
+			KUIHUA_MINIMUM_DEFENSE_RETAINED,
+			KUIHUA2_GAIN_INDISCRIMINATE_ATTACK,
+		],
 	},
 	&"KuiHua3": {
 		"id": &"KuiHua3",
@@ -2898,7 +3020,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "需自宫。被攻击时，移回手牌。进场后，若只有一个相邻敌方，与其交换位置。我攻击后，若本次攻击中有敌方被翻面，我重新进场。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
 		"powers": [4, 6, 4, 6],
-		"abilities": [],
+		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
+		"abilities": [
+			KUIHUA_RETURN_TO_HAND,
+			KUIHUA3_SWAP_SINGLE_ADJACENT_ENEMY,
+			KUIHUA3_RESUMMON_AFTER_ENEMY_FLIP,
+		],
 	},
 	&"KuiHua4": {
 		"id": &"KuiHua4",
@@ -2910,7 +3037,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "需自宫。被攻击时，移回手牌。进场后，抽一张牌，将所有最初是敌方的友方移除，并在相同位置生成我的复制。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
+		"abilities": [
+			KUIHUA_RETURN_TO_HAND,
+			KUIHUA4_DRAW_EXILE_AND_COPY,
+		],
 	},
 	&"KuiHua0": {
 		"id": &"KuiHua0",
@@ -2922,6 +3053,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "解锁我之后，自动激活所有需自宫牌的效果（无需携带）。",
 		"flavor": "辟邪剑谱的第一道法诀，武林称雄，挥剑自宫。",
 		"powers": [-1, -1, -1, -1],
+		"unlocks_effect_gate": EFFECT_GATE_SELF_CASTRATION,
 		"abilities": [],
 	},
 }
@@ -2958,6 +3090,7 @@ static func create_instance(
 		"description": String(definition["description"]),
 		"flavor": String(definition["flavor"]),
 		"powers": (definition["powers"] as Array).duplicate(),
+		"effect_gate": StringName(definition.get("effect_gate", &"")),
 		"original_owner": original_owner,
 		"ki": int(definition.get("starting_ki", 0)),
 		"active_abilities": _normalize_abilities(definition["abilities"] as Array),
@@ -3036,6 +3169,15 @@ static func _validate_definition(
 			errors.append("Card %s has a non-integer power" % card_id)
 	if definition.has("effects"):
 		errors.append("Card %s still declares retired effects data" % card_id)
+	for gate_field: StringName in [&"effect_gate", &"unlocks_effect_gate"]:
+		if not definition.has(gate_field):
+			continue
+		var gate_value: Variant = definition.get(gate_field, null)
+		if typeof(gate_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			errors.append("Card %s requires a String effect gate in %s" % [card_id, gate_field])
+			continue
+		if StringName(gate_value) not in KNOWN_EFFECT_GATES:
+			errors.append("Card %s uses unknown effect gate %s" % [card_id, gate_value])
 	var abilities_value: Variant = definition.get("abilities", null)
 	var starting_ki: Variant = definition.get("starting_ki", 0)
 	if typeof(starting_ki) != TYPE_INT or int(starting_ki) < 0:
@@ -3419,6 +3561,13 @@ static func _validate_action(
 		allowed_keys.append(&"cell")
 		_validate_summon_card_spec(card_id, context_name, action.get("card", null), errors)
 		_validate_summon_cell_spec(card_id, context_name, action.get("cell", null), errors)
+	if action_type == ACTION_RESUMMON_CARD_IN_PLACE:
+		allowed_keys.append(&"card")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s resummon action requires a known card reference"
+				% [card_id, context_name]
+			)
 	if action_type in [ACTION_REVEAL_HAND_CARDS, ACTION_ENABLE_FUTURE_DRAW_REVEAL]:
 		allowed_keys.append(&"recipient")
 		var reveal_recipient := StringName(action.get("recipient", &""))

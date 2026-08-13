@@ -14,12 +14,27 @@ static func is_activate_ability(ability: Dictionary) -> bool:
 	return activation_value is Dictionary and not (activation_value as Dictionary).is_empty()
 
 
+static func card_effects_enabled(
+	card: Dictionary,
+	enabled_effect_gates: Variant = null
+) -> bool:
+	var gate := StringName(card.get("effect_gate", &""))
+	if gate == &"" or enabled_effect_gates == null:
+		return true
+	return enabled_effect_gates is Array and gate in (enabled_effect_gates as Array)
+
+
 static func get_activate_ability(card: Dictionary) -> Dictionary:
 	return get_activate_ability_at(card, 0)
 
 
-static func get_activate_abilities(card: Dictionary) -> Array[Dictionary]:
+static func get_activate_abilities(
+	card: Dictionary,
+	enabled_effect_gates: Variant = null
+) -> Array[Dictionary]:
 	var activate_abilities: Array[Dictionary] = []
+	if not card_effects_enabled(card, enabled_effect_gates):
+		return activate_abilities
 	var active_abilities: Array = card.get("active_abilities", [])
 	for ability_value: Variant in active_abilities:
 		if not ability_value is Dictionary:
@@ -30,15 +45,23 @@ static func get_activate_abilities(card: Dictionary) -> Array[Dictionary]:
 	return activate_abilities
 
 
-static func get_activate_ability_at(card: Dictionary, activation_index: int) -> Dictionary:
-	var activate_abilities: Array[Dictionary] = get_activate_abilities(card)
+static func get_activate_ability_at(
+	card: Dictionary,
+	activation_index: int,
+	enabled_effect_gates: Variant = null
+) -> Dictionary:
+	var activate_abilities: Array[Dictionary] = get_activate_abilities(card, enabled_effect_gates)
 	if activation_index < 0 or activation_index >= activate_abilities.size():
 		return {}
 	return activate_abilities[activation_index]
 
 
-static func get_activation(card: Dictionary, activation_index: int = 0) -> Dictionary:
-	var ability: Dictionary = get_activate_ability_at(card, activation_index)
+static func get_activation(
+	card: Dictionary,
+	activation_index: int = 0,
+	enabled_effect_gates: Variant = null
+) -> Dictionary:
+	var ability: Dictionary = get_activate_ability_at(card, activation_index, enabled_effect_gates)
 	if ability.is_empty():
 		return {}
 	return ability.get("activation", {}) as Dictionary
@@ -339,15 +362,24 @@ static func restore_temporarily_removed_abilities(
 	return restored
 
 
-static func has_modifier(card: Dictionary, modifier_type: StringName) -> bool:
-	for modifier: Dictionary in get_modifiers(card):
+static func has_modifier(
+	card: Dictionary,
+	modifier_type: StringName,
+	enabled_effect_gates: Variant = null
+) -> bool:
+	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
 		if StringName(modifier.get("type", &"")) == modifier_type:
 			return true
 	return false
 
 
-static func get_modifiers(card: Dictionary) -> Array[Dictionary]:
+static func get_modifiers(
+	card: Dictionary,
+	enabled_effect_gates: Variant = null
+) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	if not card_effects_enabled(card, enabled_effect_gates):
+		return result
 	for ability_value: Variant in card.get("active_abilities", []):
 		if not ability_value is Dictionary:
 			continue
@@ -361,8 +393,26 @@ static func can_attack_at_orthogonal_distance_two(card: Dictionary) -> bool:
 	return has_modifier(card, Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO)
 
 
+static func can_attack_at_orthogonal_distance_two_with_gates(
+	card: Dictionary,
+	enabled_effect_gates: Variant
+) -> bool:
+	return has_modifier(
+		card,
+		Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		enabled_effect_gates
+	)
+
+
 static func allows_intervening_ally_at_orthogonal_distance_two(card: Dictionary) -> bool:
-	for modifier: Dictionary in get_modifiers(card):
+	return allows_intervening_ally_at_orthogonal_distance_two_with_gates(card, null)
+
+
+static func allows_intervening_ally_at_orthogonal_distance_two_with_gates(
+	card: Dictionary,
+	enabled_effect_gates: Variant
+) -> bool:
+	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
 		if (
 			StringName(modifier.get("type", &""))
 			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
@@ -375,10 +425,11 @@ static func allows_intervening_ally_at_orthogonal_distance_two(card: Dictionary)
 static func get_effective_defending_power(
 	card: Dictionary,
 	_direction: int,
-	base_power: int
+	base_power: int,
+	enabled_effect_gates: Variant = null
 ) -> int:
 	var result: int = base_power
-	for modifier: Dictionary in get_modifiers(card):
+	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
 		if StringName(modifier.get("type", &"")) == Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE:
 			result = int(modifier.get("value", result))
 	return result
@@ -387,15 +438,31 @@ static func get_effective_defending_power(
 static func get_minimum_effective_defending_power(
 	card: Dictionary,
 	fallback_direction: int,
-	fallback_power: int
+	fallback_power: int,
+	enabled_effect_gates: Variant = null
 ) -> int:
 	var powers: Array = card.get("powers", [])
 	if powers.size() != 4:
-		return get_effective_defending_power(card, fallback_direction, fallback_power)
-	var result: int = get_effective_defending_power(card, 0, int(powers[0]))
+		return get_effective_defending_power(
+			card,
+			fallback_direction,
+			fallback_power,
+			enabled_effect_gates
+		)
+	var result: int = get_effective_defending_power(
+		card,
+		0,
+		int(powers[0]),
+		enabled_effect_gates
+	)
 	for direction: int in range(1, 4):
 		result = mini(
 			result,
-			get_effective_defending_power(card, direction, int(powers[direction]))
+			get_effective_defending_power(
+				card,
+				direction,
+				int(powers[direction]),
+				enabled_effect_gates
+			)
 		)
 	return result

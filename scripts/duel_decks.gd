@@ -3,6 +3,7 @@ extends RefCounted
 
 const ProfileStore = preload("res://scripts/deck_profile_store.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 
 const PLAYER_CARD_IDS: Array[StringName] = ProfileStore.DEFAULT_MAIN_DECK_IDS
 
@@ -18,6 +19,23 @@ const OPPONENT_CARD_IDS: Array[StringName] = [
 static func get_player_card_ids(profile_path: String = ProfileStore.DEFAULT_SAVE_PATH) -> Array[StringName]:
 	var store: RefCounted = ProfileStore.new(profile_path)
 	return store.get_main_deck_ids(store.load_profile())
+
+
+static func get_player_enabled_effect_gates(
+	profile_path: String = ProfileStore.DEFAULT_SAVE_PATH
+) -> Array[StringName]:
+	var store: RefCounted = ProfileStore.new(profile_path)
+	var profile: Dictionary = store.load_profile()
+	var result: Array[StringName] = []
+	for card_id: StringName in store.get_unlocked_ids(profile):
+		if not Catalog.has_card(card_id):
+			continue
+		var gate := StringName(
+			Catalog.get_definition(card_id).get("unlocks_effect_gate", &"")
+		)
+		if gate != &"" and gate not in result:
+			result.append(gate)
+	return result
 
 
 static func get_opponent_card_ids() -> Array[StringName]:

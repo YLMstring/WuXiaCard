@@ -58,7 +58,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 78, "Catalog contains all seventy-eight current cards")
+	_check(Catalog.get_all_card_ids().size() == 82, "Catalog contains all eighty-two current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -83,7 +83,10 @@ func _test_catalog_definitions() -> void:
 			powers_are_integers = powers_are_integers and typeof(power) == TYPE_INT
 		_check(powers_are_integers, "Card %s powers are integers" % card_id)
 		observed_ids[card_id] = true
-	_check(observed_ids.size() == 78, "Catalog IDs are unique")
+	_check(
+		observed_ids.size() == Catalog.get_all_card_ids().size(),
+		"Catalog IDs are unique"
+	)
 
 
 func _test_definition_schema_validation() -> void:
@@ -345,26 +348,34 @@ func _test_activate_ability_replacement() -> void:
 func _test_trigger_ability_schema() -> void:
 	var definition: Dictionary = Catalog.get_definition(&"KuiHua1")
 	var abilities: Array = definition.get("abilities", [])
-	_check(abilities.size() == 1, "Meng Huo declares one ability")
+	_check(abilities.size() == 1, "KuiHua1 declares one ability")
 	var ability: Dictionary = abilities[0]
-	_check(not ability.has("id"), "Meng Huo ability is identity-free")
-	_check(not ability.has("retained_on_flip"), "Battle momentum uses default non-retention")
+	_check(not ability.has("id"), "KuiHua1 ability is identity-free")
+	_check(not ability.has("retained_on_flip"), "KuiHua1 uses default non-retention")
 	var triggers: Array = ability.get("triggers", [])
-	_check(triggers.size() == 2, "Battle momentum declares two trigger rules")
-	_check(StringName((triggers[0] as Dictionary).get("event", &"")) == Catalog.CARD_AFTER_FLIPPED, "First rule reacts after flips")
-	_check((triggers[0] as Dictionary).get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}], "First rule requires Meng Huo as attacker")
-	_check(StringName((triggers[1] as Dictionary).get("event", &"")) == Catalog.TRIGGER_END_OWNER_TURN, "Second rule reacts at end of turn")
+	_check(triggers.size() == 1, "KuiHua1 declares one trigger rule")
 	_check(
-		(triggers[1] as Dictionary).get("conditions", []) == [
+		StringName((triggers[0] as Dictionary).get("event", &""))
+		== Catalog.TRIGGER_END_OWNER_TURN,
+		"KuiHua1 reacts at end of its owner's turn"
+	)
+	_check(
+		(triggers[0] as Dictionary).get("conditions", []) == [
 			{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF},
-			{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1},
 		],
-		"Meng Huo uses the shared typed conditions array"
+		"KuiHua1 uses the shared typed turn-owner condition"
+	)
+	_check(
+		(triggers[0] as Dictionary).get("actions", []) == [{
+			"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY,
+			"amount": 1,
+		}],
+		"KuiHua1 grants one extra card play"
 	)
 	var instance: Dictionary = Catalog.create_instance(&"KuiHua1", 1, &"trigger_meng")
-	_check(int(instance.get("ki", -1)) == 0, "Meng Huo starts with zero ki")
+	_check(int(instance.get("ki", -1)) == 0, "KuiHua1 starts with zero ki")
 	var runtime_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
-	_check(runtime_ability.has("retained_on_flip") and not bool(runtime_ability["retained_on_flip"]), "Battle momentum normalizes to non-retained")
+	_check(runtime_ability.has("retained_on_flip") and not bool(runtime_ability["retained_on_flip"]), "KuiHua1 normalizes to non-retained")
 	_check(Catalog.validate_ability(ability, &"KuiHua1_fixture").is_empty(), "Approved trigger schema passes validation")
 
 	var invalid_abilities: Array[Dictionary] = [

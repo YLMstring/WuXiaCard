@@ -116,6 +116,9 @@ static func conditions_match(
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF:
 			if int(selected_card.get("original_owner", 0)) != int(source.get("owner_id", 0)):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY:
+			if int(selected_card.get("original_owner", 0)) == int(source.get("owner_id", 0)):
+				return false
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK:
 			if not _attack_flip_contains(
 				context.get("attack_flips", []) as Array,

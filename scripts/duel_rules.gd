@@ -11,6 +11,7 @@ const LEFT: int = 3
 
 const PLAYER_OWNER: int = 1
 const OPPONENT_OWNER: int = 2
+const EFFECT_GATE_SELF_CASTRATION: StringName = &"self_castration"
 
 const DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, -1),
@@ -76,18 +77,22 @@ static func resolve_captures(board: Array, placed_index: int) -> Array[int]:
 	return captured
 
 
-static func get_would_flip_indices(board: Array, source_index: int) -> Array[int]:
+static func get_would_flip_indices(
+	board: Array,
+	source_index: int,
+	context: Dictionary = {}
+) -> Array[int]:
 	var targets: Array[int] = []
 	if source_index < 0 or source_index >= board.size() or board[source_index] == null:
 		return targets
 
 	for direction: int in range(4):
 		var neighbor_index: int = get_neighbor_index(source_index, direction)
-		if can_attack_target(board, source_index, neighbor_index):
+		if can_attack_target(board, source_index, neighbor_index, context):
 			targets.append(neighbor_index)
 		if neighbor_index >= 0:
 			var distance_two_index: int = get_neighbor_index(neighbor_index, direction)
-			if can_attack_target(board, source_index, distance_two_index):
+			if can_attack_target(board, source_index, distance_two_index, context):
 				targets.append(distance_two_index)
 	return targets
 
@@ -96,7 +101,7 @@ static func can_attack_target(
 	board: Array,
 	source_index: int,
 	target_index: int,
-	_context: Dictionary = {}
+	context: Dictionary = {}
 ) -> bool:
 	if (
 		board.size() != 9
@@ -107,19 +112,27 @@ static func can_attack_target(
 		return false
 	var source_slot: Dictionary = board[source_index]
 	var source_card: Dictionary = source_slot.get("card", {})
+	var source_gates: Array = _get_effect_gates(
+		context,
+		int(source_slot.get("owner", 0))
+	)
 	if (
-		Abilities.has_modifier(source_card, Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY)
+		Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY,
+			source_gates
+		)
 		and count_owned(board, int(source_slot.get("owner", 0))) < 2
 	):
 		return false
-	return is_target_in_attack_range(board, source_index, target_index)
+	return is_target_in_attack_range(board, source_index, target_index, context)
 
 
 static func is_target_in_attack_range(
 	board: Array,
 	source_index: int,
 	target_index: int,
-	_context: Dictionary = {}
+	context: Dictionary = {}
 ) -> bool:
 	if (
 		board.size() != 9
@@ -150,11 +163,21 @@ static func is_target_in_attack_range(
 		return false
 	var source_slot: Dictionary = board[source_index]
 	var target_slot: Dictionary = board[target_index]
-	if int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0)):
+	if (
+		int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0))
+		and not bool(context.get("allow_allied_targets", false))
+	):
 		return false
 	var source_card: Dictionary = source_slot.get("card", {})
+	var source_gates: Array = _get_effect_gates(
+		context,
+		int(source_slot.get("owner", 0))
+	)
 	if distance == 2:
-		if not Abilities.can_attack_at_orthogonal_distance_two(source_card):
+		if not Abilities.can_attack_at_orthogonal_distance_two_with_gates(
+			source_card,
+			source_gates
+		):
 			return false
 		var intervening_index: int = get_neighbor_index(source_index, direction)
 		var intervening_value: Variant = board[intervening_index]
@@ -162,10 +185,17 @@ static func is_target_in_attack_range(
 			var intervening_slot: Dictionary = intervening_value
 			if (
 				int(intervening_slot.get("owner", 0)) != int(source_slot.get("owner", 0))
-				or not Abilities.allows_intervening_ally_at_orthogonal_distance_two(source_card)
+				or not Abilities.allows_intervening_ally_at_orthogonal_distance_two_with_gates(
+					source_card,
+					source_gates
+				)
 			):
 				return false
 	var target_card: Dictionary = target_slot.get("card", {})
+	var target_gates: Array = _get_effect_gates(
+		context,
+		int(target_slot.get("owner", 0))
+	)
 	var source_powers: Array = source_card.get("powers", [])
 	var target_powers: Array = target_card.get("powers", [])
 	if source_powers.size() != 4 or target_powers.size() != 4:
@@ -174,20 +204,30 @@ static func is_target_in_attack_range(
 	var defending_power: int
 	if Abilities.has_modifier(
 		source_card,
-		Catalog.MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE
+		Catalog.MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
+		source_gates
 	):
 		defending_power = Abilities.get_minimum_effective_defending_power(
 			target_card,
 			defending_direction,
-			int(target_powers[defending_direction])
+			int(target_powers[defending_direction]),
+			target_gates
 		)
 	else:
 		defending_power = Abilities.get_effective_defending_power(
 			target_card,
 			defending_direction,
-			int(target_powers[defending_direction])
+			int(target_powers[defending_direction]),
+			target_gates
 		)
 	return int(source_powers[direction]) > defending_power
+
+
+static func _get_effect_gates(context: Dictionary, owner_id: int) -> Array:
+	var by_owner_value: Variant = context.get("enabled_effect_gates_by_owner", null)
+	if not by_owner_value is Dictionary:
+		return []
+	return (by_owner_value as Dictionary).get(owner_id, []) as Array
 
 
 static func has_special_negative_powers(card: Dictionary) -> bool:

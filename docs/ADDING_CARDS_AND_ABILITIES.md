@@ -406,12 +406,13 @@ on-board source and marks its event for fade presentation.
 `TRIGGER_BEFORE_DUEL_END` runs only during a full-board end attempt and receives
 an immutable `winning_owner_ids` snapshot.
 
-`ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE` is intended for a trigger context. It
-follows `trigger_instance_id` across movement, removes the old board instance
-without exile, and creates a fresh exact-ID instance in its current cell for
-the ability source's current owner. The fresh instance completes normal
-summoned, after-summoned, and standard-attack phases. A missing or already
-removed trigger instance returns `NO_EFFECT`.
+`ACTION_RESUMMON_CARD_IN_PLACE` accepts a `card` reference such as
+`CARD_REF_TRIGGER_CARD` or `CARD_REF_ABILITY_SOURCE`. It follows that exact
+instance across movement, removes the old board instance without exile, and
+creates a fresh exact-ID instance in its current cell for the ability source's
+current owner. The fresh instance completes normal summoned, after-summoned,
+and standard-attack phases. A missing or already removed instance returns
+`NO_EFFECT`.
 
 Power-change batches are transition presentation metadata. One top-level action
 shares a batch across every nested selected card; different top-level actions

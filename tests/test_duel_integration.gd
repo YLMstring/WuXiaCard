@@ -752,9 +752,19 @@ func _check_player_draw_and_instance_mapping() -> void:
 
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 0, false), "Draw fixture places the first player card")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Draw fixture places the first opponent card")
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 6, false), "Draw fixture places the second player card")
+	var youfen_index: int = _logical_hand_index_for_card_id(
+		draw_duel,
+		Rules.PLAYER_OWNER,
+		&"YouFenLaiYi2"
+	)
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, youfen_index, 6, false), "Draw fixture places the second player card")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 1, false), "Draw fixture places a future flip target")
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 2, 4, false), "Playing Fa Zheng from a three-card hand commits")
+	var tuna_two_index: int = _logical_hand_index_for_card_id(
+		draw_duel,
+		Rules.PLAYER_OWNER,
+		&"TuNaShu2"
+	)
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, tuna_two_index, 4, false), "Playing TuNaShu2 from a three-card hand commits")
 
 	var logical_ids: Array[StringName] = draw_duel.debug_get_hand_instance_ids(Rules.PLAYER_OWNER)
 	var visual_ids: Array[StringName] = draw_duel.debug_get_hand_view_instance_ids(Rules.PLAYER_OWNER)
@@ -794,8 +804,18 @@ func _check_opponent_draw_visibility() -> void:
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 8, false), "Opponent-draw fixture places opponent card one")
 	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 2, false), "Opponent-draw fixture places player card two")
 	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 6, false), "Opponent-draw fixture places opponent card two")
-	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 1, false), "Opponent-draw fixture advances to TuNaShu1")
-	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, 1, 7, false), "Playing TuNaShu1 from a three-card hand commits")
+	var player_youfen_index: int = _logical_hand_index_for_card_id(
+		draw_duel,
+		Rules.PLAYER_OWNER,
+		&"YouFenLaiYi2"
+	)
+	_check(await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, player_youfen_index, 1, false), "Opponent-draw fixture advances to TuNaShu1")
+	var opponent_tuna_index: int = _logical_hand_index_for_card_id(
+		draw_duel,
+		Rules.OPPONENT_OWNER,
+		&"TuNaShu1"
+	)
+	_check(await draw_duel.debug_commit_move(Rules.OPPONENT_OWNER, opponent_tuna_index, 7, false), "Playing TuNaShu1 from a three-card hand commits")
 
 	var opponent_views: Array[Control] = _cards_below(draw_duel.get_node("DuelCanvas/OpponentHand"))
 	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
@@ -1222,34 +1242,33 @@ func _check_KuiHua1_extra_turn_presentation() -> void:
 		)
 	var player_opened: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 8, false)
 	var opponent_targeted: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 5, false)
+	var ki_trace_before: Array[int] = duel.debug_get_ki_presentation_trace()
 	var meng_played: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 4, false)
-	_check(player_opened and opponent_targeted and meng_played, "Meng Huo presentation fixture uses three production actions")
-	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Meng Huo's extra card play keeps control with the same player")
+	_check(player_opened and opponent_targeted and meng_played, "KuiHua1 presentation fixture uses three production actions")
+	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "KuiHua1's extra card play keeps control with the same player")
 	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-card-play grant does not add an action by itself")
 	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
-	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"KuiHua1", "Meng Huo remains mapped to his production board view")
+	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"KuiHua1", "KuiHua1 remains mapped to its production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Control
 	_check(
 		int(meng_view.card_data.get("ki", -1)) == 0
 		and ki_badge.visible
 		and ki_value.visible
-		and String(ki_value.get("text")) == "0",
-		"Meng Huo's ki-gated passive trigger shows zero on a light bead at zero ki"
+		and String(ki_value.get("text")) == "化",
+		"KuiHua1's non-ki passive displays the passive marker on a light bead"
 	)
 	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
 	_check(
 		duel.debug_get_ability_pulse_trace().count(meng_instance_id) == 1,
-		"Meng Huo's consecutive gain and end-turn triggers produce one generic card pulse"
+		"KuiHua1's end-turn trigger produces one generic card pulse"
 	)
 	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
-	_check(ki_trace.slice(ki_trace.size() - 2) == [1, 0], "Controller presents gained ki before the end-turn drain")
+	_check(ki_trace == ki_trace_before, "KuiHua1 presentation emits no ki changes")
 	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(
-		presentation_trace.has(&"attack_started")
-		and presentation_trace.has(&"card_flipped")
-		and presentation_trace.has(&"extra_card_play_granted"),
-		"Attack, capture, and extra-card-play feedback use the ordered event presenter"
+		presentation_trace.has(&"extra_card_play_granted"),
+		"KuiHua1's extra-card-play feedback uses the ordered event presenter"
 	)
 	if extra_turn_vfx != null and extra_turn_vfx.has_method("debug_get_pulse_count"):
 		_check(int(extra_turn_vfx.call("debug_get_pulse_count")) == 1, "One granted extra card play produces one board pulse")
@@ -1532,6 +1551,25 @@ func _count_face_down(cards: Array[Control]) -> int:
 		if card.has_method("is_face_down") and bool(card.call("is_face_down")):
 			count += 1
 	return count
+
+
+func _logical_hand_index_for_card_id(
+	duel: Node,
+	owner_id: int,
+	card_id: StringName
+) -> int:
+	var state: Variant = duel.get("duel_state")
+	if state == null or not state.has_method("get_hand"):
+		return -1
+	var hand: Array = state.get_hand(owner_id)
+	for index: int in range(hand.size()):
+		var card_value: Variant = hand[index]
+		if (
+			card_value is Dictionary
+			and StringName((card_value as Dictionary).get("card_id", &"")) == card_id
+		):
+			return index
+	return -1
 
 
 func _instantiate_duel() -> Node:

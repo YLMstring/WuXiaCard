@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -180,9 +180,24 @@ The creator has made several direct UI and localization edits. Preserve those ed
   immediately for each removed card's pre-removal current owner. Anticipate
   returns each player's exact previous successful hand play as a fresh catalog
   instance to its original player, then grants an extra hand play. Break All
-  reveals the opponent hand and queues persistent suppression layers; each
+  queues persistent suppression layers without revealing the opponent hand; each
   later non-heart hand play consumes one layer before its own before-summon
   discovery and permanently loses only non-retained abilities.
+- KuiHua1–4 share the card-level `self_castration` effect gate. Enemy effects
+  are always enabled; player effects are enabled from the profile only when
+  KuiHua0 is unlocked, and new profiles currently unlock KuiHua0–4. KuiHua1
+  grants one extra hand play at owner-turn end. KuiHua2 returns when a real
+  attack starts against it, attacks against the defender's minimum side, and
+  after a real attack makes enemy standard attacks target both sides; attacked
+  old allies flip to the modifier source's current owner. KuiHua3 swaps with
+  its sole adjacent enemy after summon and re-enters as a fresh full summon
+  only after its completed attack flipped an enemy. KuiHua4 draws, exiles every
+  current ally originally owned by the enemy to that original owner's removed
+  zone, and creates fully entering fresh copies in their former cells.
+- `TRIGGER_CARD_AFTER_ATTACK` now fires only when at least one target passed the
+  initial attack legality/power check and emitted `attack_started`. If a later
+  reaction moves or removes the target, the completed attack still receives
+  its after-attack event; a zero-target or insufficient-power attempt does not.
 - One top-level power action emits one transition-only batch. Every visible
   target in that batch keeps its previous powers for one shared roughly
   0.12-second pause, then all update and animate simultaneously for about

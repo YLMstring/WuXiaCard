@@ -2,6 +2,7 @@ class_name DuelTriggers
 extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Selector = preload("res://scripts/duel_card_selector.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -105,6 +106,11 @@ static func _discover_from_cell(
 		return
 	var slot: Dictionary = slot_value
 	var card: Dictionary = slot.get("card", {})
+	if not Abilities.card_effects_enabled(
+		card,
+		state.get_enabled_effect_gates(int(slot.get("owner", 0)))
+	):
+		return
 	var instance_id := StringName(card.get("instance_id", &""))
 	var active_abilities: Array = card.get("active_abilities", [])
 	for ability_index: int in range(active_abilities.size()):
@@ -151,6 +157,11 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 	if int(slot.get("owner", 0)) != int(group.get("source_owner_id", 0)):
 		return {}
 	var card: Dictionary = slot.get("card", {})
+	if not Abilities.card_effects_enabled(
+		card,
+		state.get_enabled_effect_gates(int(slot.get("owner", 0)))
+	):
+		return {}
 	if (
 		StringName(card.get("instance_id", &""))
 		!= StringName(group.get("source_instance_id", &""))
@@ -302,6 +313,19 @@ static func _conditions_match(
 				source_cell,
 				context.get("attack_flips", []) as Array
 			):
+				return false
+		elif condition_type == Catalog.CONDITION_ATTACK_FLIPPED_ENEMY:
+			var attacker_owner: int = int(context.get("attacker_owner_id", 0))
+			var flipped_enemy: bool = false
+			for record_value: Variant in context.get("attack_flips", []):
+				if (
+					record_value is Dictionary
+					and int((record_value as Dictionary).get("previous_owner_id", 0))
+					!= attacker_owner
+				):
+					flipped_enemy = true
+					break
+			if not flipped_enemy:
 				return false
 		elif condition_type == Catalog.CONDITION_ATTACKED_CARD_IS_SELF:
 			if (

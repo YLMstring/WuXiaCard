@@ -165,6 +165,110 @@ const EFFECT_GATE_SELF_CASTRATION: StringName = &"self_castration"
 - `ACTION_GRANT_ABILITY_TO_SELF`
 - `MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE`
 
+本次实装采用的完整声明如下（省略卡牌元数据）：
+
+```gdscript
+const KUIHUA_RETURN_TO_HAND := {
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_RETURN_CARD_TO_HAND,
+			"card": CARD_REF_ABILITY_SOURCE,
+			"recipient": OWNER_CARD_CURRENT,
+		}],
+	}],
+}
+
+const KUIHUA_INDISCRIMINATE_ATTACK := {
+	"modifiers": [{"type": MODIFIER_ENEMY_ATTACKS_ALL}],
+}
+
+const KUIHUA2_ABILITIES := [
+	KUIHUA_RETURN_TO_HAND,
+	{
+		"retained_on_flip": true,
+		"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
+	},
+	{
+		"triggers": [{
+			"event": TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": KUIHUA_INDISCRIMINATE_ATTACK,
+			}],
+		}],
+	},
+]
+
+const KUIHUA3_ABILITIES := [
+	KUIHUA_RETURN_TO_HAND,
+	{
+		"triggers": [{
+			"event": TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+						{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+					],
+					"required_count": 1,
+				},
+				"actions": [{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+			}],
+		}],
+	},
+	{
+		"triggers": [{
+			"event": TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [
+				{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+				{"type": CONDITION_ATTACK_FLIPPED_ENEMY},
+			],
+			"actions": [{
+				"type": ACTION_RESUMMON_CARD_IN_PLACE,
+				"card": CARD_REF_ABILITY_SOURCE,
+			}],
+		}],
+	},
+]
+
+const KUIHUA4_ABILITIES := [
+	KUIHUA_RETURN_TO_HAND,
+	{
+		"triggers": [{
+			"event": TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [
+				{"type": ACTION_DRAW_CARDS, "amount": 1},
+				{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+							{"type": CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY},
+						],
+					},
+					"actions": [
+						{"type": ACTION_EXILE_SELF, "on_invalid_context": STOP_RULE},
+						{
+							"type": ACTION_SUMMON_CARD,
+							"card": {"type": CARD_SPEC_FRESH_COPY, "of": CARD_REF_ABILITY_SOURCE},
+							"cell": {"type": CELL_REF_INITIAL_CARD_CELL, "card": CARD_REF_SELECTED_CARD},
+						},
+					],
+				},
+			],
+		}],
+	},
+]
+```
+
 现有 `ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE` 泛化为接受卡牌引用的
 `ACTION_RESUMMON_CARD_IN_PLACE`：
 

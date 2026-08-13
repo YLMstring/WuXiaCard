@@ -351,9 +351,12 @@ static func resolve_normal_flip(
 	source_instance_id: StringName,
 	target_cell: int,
 	target_instance_id: StringName,
-	new_owner: int
+	new_owner: int,
+	expected_source_owner: int = 0
 ) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
+	if expected_source_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		expected_source_owner = new_owner
 	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
 	if target_slot.is_empty():
 		return events
@@ -363,7 +366,7 @@ static func resolve_normal_flip(
 			state,
 			source_cell,
 			source_instance_id,
-			new_owner
+			expected_source_owner
 		).is_empty()
 	):
 		return events
@@ -595,12 +598,13 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner
 		)
-	if action_type == Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE:
-		return _request_trigger_card_resummon(
+	if action_type == Catalog.ACTION_RESUMMON_CARD_IN_PLACE:
+		return _request_card_resummon(
 			state,
 			source_cell,
 			source_instance_id,
 			expected_owner,
+			StringName(declaration.get("card", &"")),
 			context
 		)
 	if action_type == Catalog.ACTION_SPEND_KI:
@@ -1610,28 +1614,30 @@ static func _request_summon_card(
 	return result
 
 
-static func _request_trigger_card_resummon(
+static func _request_card_resummon(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
 	expected_owner: int,
+	card_reference: StringName,
 	context: Dictionary
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	if source.is_empty() or StringName(source.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
 		return _no_effect(source_cell)
-	var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
-	var trigger: Dictionary = Selector.locate_card(state, trigger_instance_id)
+	var target_snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var target_instance_id := StringName(target_snapshot.get("instance_id", &""))
+	var target: Dictionary = Selector.locate_card(state, target_instance_id)
 	if (
-		trigger.is_empty()
-		or StringName(trigger.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+		target.is_empty()
+		or StringName(target.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
 	):
 		return _no_effect(int(source.get("index", source_cell)))
-	var trigger_card: Dictionary = trigger.get("card", {})
-	var card_id := StringName(trigger_card.get("card_id", &""))
+	var target_card: Dictionary = target.get("card", {})
+	var card_id := StringName(target_card.get("card_id", &""))
 	if not Catalog.has_card(card_id):
 		return _no_effect(int(source.get("index", source_cell)))
-	var target_cell: int = int(trigger.get("index", -1))
+	var target_cell: int = int(target.get("index", -1))
 	if target_cell < 0 or target_cell >= state.board.size():
 		return _no_effect(int(source.get("index", source_cell)))
 	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
@@ -1646,7 +1652,7 @@ static func _request_trigger_card_resummon(
 		"source_instance_id": source_instance_id,
 		"target_cell": target_cell,
 		"owner_id": source_owner,
-		"old_instance_id": trigger_instance_id,
+		"old_instance_id": target_instance_id,
 		"card_id": card_id,
 	}])
 	result["summon_requests"].append({
@@ -1656,7 +1662,8 @@ static func _request_trigger_card_resummon(
 		"target_cell": target_cell,
 		"card_id": card_id,
 		"instance_id": new_instance_id,
-		"old_instance_id": trigger_instance_id,
+		"old_instance_id": target_instance_id,
+		"requires_source": false,
 		"requires_adjacent_source": false,
 		"reason": &"ability_resummon_in_place",
 	})

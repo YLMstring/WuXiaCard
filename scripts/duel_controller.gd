@@ -184,6 +184,9 @@ func _ready() -> void:
 		player_side_deck,
 		opponent_side_deck
 	)
+	duel_state.enabled_effect_gates_by_owner[DuelRules.PLAYER_OWNER] = (
+		Decks.get_player_enabled_effect_gates(deck_profile_path)
+	)
 	duel_state.remembered_glyphs_by_owner = {
 		DuelRules.PLAYER_OWNER: remembered_enemy_glyphs.duplicate(),
 	}
@@ -522,7 +525,11 @@ func debug_commit_activate(
 	if _inspection_open or duel_state == null or duel_state.active_player != owner_id or not debug_has_board_card_view(source_cell):
 		return false
 	var card := board_cards[source_cell] as CardView
-	var activation: Dictionary = Abilities.get_activation(card.card_data, activation_index)
+	var activation: Dictionary = Abilities.get_activation(
+		card.card_data,
+		activation_index,
+		duel_state.get_enabled_effect_gates(owner_id)
+	)
 	if activation.is_empty():
 		return false
 	var action: ActionData = ActionData.make_activate(

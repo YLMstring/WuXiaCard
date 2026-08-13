@@ -40,7 +40,7 @@ func _test_vocabulary_and_declaration() -> void:
 		"Trigger-card original-owner condition is registered"
 	)
 	_check(
-		Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE in Catalog.KNOWN_ACTIONS,
+		Catalog.ACTION_RESUMMON_CARD_IN_PLACE in Catalog.KNOWN_ACTIONS,
 		"In-place resummon action is registered"
 	)
 	_check(&"MianLiCangZhen3" in Catalog.get_all_card_ids(), "MianLi tier three is registered")
@@ -63,7 +63,10 @@ func _test_vocabulary_and_declaration() -> void:
 		)
 		_check(
 			trigger.get("actions", [])
-			== [{"type": Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE}],
+			== [{
+				"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
 			"Resummon uses the generic in-place action"
 		)
 	_check(Catalog.validate_catalog().is_empty(), "Complete catalog validates")
@@ -169,7 +172,10 @@ func _test_resummon_request_follows_exact_instance() -> void:
 		4,
 		&"moving_source",
 		Rules.PLAYER_OWNER,
-		[{"type": Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE}],
+		[{
+			"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}],
 		{"trigger_cell": 1, "trigger_instance_id": &"moving_target"},
 		Callable(),
 		Callable(),
@@ -191,7 +197,10 @@ func _test_resummon_skips_a_missing_instance() -> void:
 		4,
 		&"missing_source",
 		Rules.PLAYER_OWNER,
-		[{"type": Catalog.ACTION_RESUMMON_TRIGGER_CARD_IN_PLACE}],
+		[{
+			"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}],
 		{"trigger_cell": 1, "trigger_instance_id": &"missing_target"}
 	)
 	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT, "Missing trigger instance returns no effect")

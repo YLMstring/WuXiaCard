@@ -312,13 +312,13 @@ func _test_repeat_attack_is_nonrecursive() -> void:
 	var next_state: State = transition.get("state") as State
 	var runtime: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
 	_check(
-		int(runtime.get("ki", 0)) == 2,
-		"Other after-attack abilities resolve for the original and repeated attacks exactly once each"
+		int(runtime.get("ki", 0)) == 1,
+		"After-attack abilities resolve only for the original attack that had a valid target"
 	)
 	_check(
 		_count_events(transition.get("events", []), &"card_flipped") == 1
-		and _count_events(transition.get("events", []), &"ki_changed") == 2,
-		"The repeat launches one new full attack and does not recurse into a third"
+		and _count_events(transition.get("events", []), &"ki_changed") == 1,
+		"A repeat with no remaining legal target has no attack-after effects"
 	)
 
 

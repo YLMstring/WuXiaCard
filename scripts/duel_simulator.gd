@@ -39,7 +39,10 @@ static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Arra
 			continue
 		var source_card: Dictionary = (source_slot_value as Dictionary).get("card", {})
 		var source_instance_id := StringName(source_card.get("instance_id", &""))
-		var activate_abilities: Array[Dictionary] = Abilities.get_activate_abilities(source_card)
+		var activate_abilities: Array[Dictionary] = Abilities.get_activate_abilities(
+			source_card,
+			state.get_enabled_effect_gates(owner_id)
+		)
 		for activation_index: int in range(activate_abilities.size()):
 			var activation: Dictionary = activate_abilities[activation_index].get(
 				"activation",
@@ -164,7 +167,11 @@ static func _is_activate_action_legal(state: StateData, action: ActionData) -> b
 	var card: Dictionary = (source_slot_value as Dictionary).get("card", {})
 	if not _matches_instance(card, action.source_instance_id):
 		return false
-	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
+	var activation: Dictionary = Abilities.get_activation(
+		card,
+		action.activation_index,
+		state.get_enabled_effect_gates(state.active_player)
+	)
 	if activation.is_empty():
 		return false
 	if not Executor.can_pay_costs(
@@ -339,7 +346,11 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 	var moving_owner: int = next_state.active_player
 	var source_slot: Dictionary = next_state.board[action.source_index]
 	var card: Dictionary = source_slot.get("card", {})
-	var activation: Dictionary = Abilities.get_activation(card, action.activation_index)
+	var activation: Dictionary = Abilities.get_activation(
+		card,
+		action.activation_index,
+		next_state.get_enabled_effect_gates(moving_owner)
+	)
 	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_attack_request(next_state, request)
 	var flip_resolver: Callable = func(request: Dictionary) -> Dictionary:
@@ -408,7 +419,16 @@ static func _resolve_standard_attacks(
 	if not _card_instance_at(state, source_cell, source_instance_id):
 		return result
 	var attacker_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0))
-	var target_cells: Array[int] = Rules.get_would_flip_indices(state.board, source_cell)
+	var attack_policy: Dictionary = _get_standard_attack_policy(state, attacker_owner)
+	var rules_context: Dictionary = {
+		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+	}
+	rules_context.merge(attack_policy, true)
+	var target_cells: Array[int] = Rules.get_would_flip_indices(
+		state.board,
+		source_cell,
+		rules_context
+	)
 	for target_cell: int in target_cells:
 		if not _card_instance_at(state, source_cell, source_instance_id):
 			break
@@ -422,7 +442,8 @@ static func _resolve_standard_attacks(
 			source_instance_id,
 			target_cell,
 			StringName(target_card.get("instance_id", &"")),
-			reason
+			reason,
+			attack_policy
 		)
 		_merge_resolution(
 			result["captures"],
@@ -433,23 +454,24 @@ static func _resolve_standard_attacks(
 		result["attack_flips"].append_array(
 			target_result.get("attack_flips", []) as Array
 		)
-	var after_attack: Dictionary = _resolve_trigger_event(
-		state,
-		Catalog.TRIGGER_CARD_AFTER_ATTACK,
-		{
-			"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
-			"attacker_instance_id": source_instance_id,
-			"attacker_owner_id": attacker_owner,
-			"attack_flips": result["attack_flips"].duplicate(true),
-			"repeat_attack": repeat_attack,
-		}
-	)
-	_merge_resolution(
-		result["captures"],
-		result["exiles"],
-		result["events"],
-		after_attack
-	)
+	if _events_have_type(result["events"], &"attack_started"):
+		var after_attack: Dictionary = _resolve_trigger_event(
+			state,
+			Catalog.TRIGGER_CARD_AFTER_ATTACK,
+			{
+				"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
+				"attacker_instance_id": source_instance_id,
+				"attacker_owner_id": attacker_owner,
+				"attack_flips": result["attack_flips"].duplicate(true),
+				"repeat_attack": repeat_attack,
+			}
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			after_attack
+		)
 	return result
 
 
@@ -459,7 +481,8 @@ static func _resolve_attack_target(
 	attacker_instance_id: StringName,
 	attacked_cell: int,
 	attacked_instance_id: StringName,
-	reason: StringName
+	reason: StringName,
+	attack_policy: Dictionary = {}
 ) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
 	if not _attack_is_valid(
@@ -467,7 +490,9 @@ static func _resolve_attack_target(
 		attacker_cell,
 		attacker_instance_id,
 		attacked_cell,
-		attacked_instance_id
+		attacked_instance_id,
+		true,
+		attack_policy
 	):
 		return result
 	var attacker_slot: Dictionary = state.board[attacker_cell]
@@ -518,7 +543,8 @@ static func _resolve_attack_target(
 		attacker_instance_id,
 		attacked_cell,
 		attacked_instance_id,
-		false
+		false,
+		attack_policy
 	):
 		return result
 	attacker_slot = state.board[attacker_cell]
@@ -526,6 +552,11 @@ static func _resolve_attack_target(
 	var attacked_owner: int = int(
 		(state.board[attacked_cell] as Dictionary).get("owner", 0)
 	)
+	var captured_owner: int = attacker_owner
+	if attacked_owner == attacker_owner:
+		captured_owner = int(attack_policy.get("capture_owner_id", attacker_owner))
+	if captured_owner == attacked_owner:
+		return result
 	var before_flip_context: Dictionary = attack_context.duplicate(true)
 	before_flip_context["attacker_cell"] = attacker_cell
 	before_flip_context["attacker_owner_id"] = attacker_owner
@@ -534,7 +565,7 @@ static func _resolve_attack_target(
 	before_flip_context["trigger_cell"] = attacked_cell
 	before_flip_context["trigger_instance_id"] = attacked_instance_id
 	before_flip_context["trigger_owner_id"] = attacked_owner
-	before_flip_context["new_owner_id"] = attacker_owner
+	before_flip_context["new_owner_id"] = captured_owner
 	before_flip_context["flip_reason"] = reason
 	var before_flip_result: Dictionary = _resolve_trigger_event(
 		state,
@@ -547,13 +578,13 @@ static func _resolve_attack_target(
 		result["events"],
 		before_flip_result
 	)
-	if _has_flip_prevention(before_flip_result, attacked_instance_id, attacker_owner):
+	if _has_flip_prevention(before_flip_result, attacked_instance_id, captured_owner):
 		result["events"].append({
 			"type": &"card_flip_prevented",
 			"source_cell": attacker_cell,
 			"target_cell": attacked_cell,
 			"owner_id": attacked_owner,
-			"new_owner_id": attacker_owner,
+			"new_owner_id": captured_owner,
 			"instance_id": attacked_instance_id,
 		})
 		return result
@@ -573,7 +604,7 @@ static func _resolve_attack_target(
 		or int((state.board[attacker_cell] as Dictionary).get("owner", 0))
 		!= attacker_owner
 		or int((state.board[attacked_cell] as Dictionary).get("owner", 0))
-		== attacker_owner
+		== captured_owner
 	):
 		return result
 	var flipped_previous_owner: int = int(
@@ -592,6 +623,7 @@ static func _resolve_attack_target(
 		attacker_instance_id,
 		attacked_cell,
 		attacked_instance_id,
+		captured_owner,
 		attacker_owner
 	)
 	if flip_events.is_empty():
@@ -621,7 +653,7 @@ static func _resolve_attack_target(
 		result["events"],
 		attacker_cell,
 		attacked_instance_id,
-		attacker_owner,
+		captured_owner,
 		deferred_after_flip
 	)
 	return result
@@ -1030,24 +1062,35 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 		target_instance_id,
 		StringName(request.get("reason", &"ability_targeted_attack"))
 	)
-	var after_attack: Dictionary = _resolve_trigger_event(
-		state,
-		Catalog.TRIGGER_CARD_AFTER_ATTACK,
-		{
-			"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
-			"attacker_instance_id": source_instance_id,
-			"attacker_owner_id": attacker_owner,
-			"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
-			"repeat_attack": bool(request.get("repeat_attack", false)),
-		}
-	)
-	_merge_resolution(
-		result["captures"],
-		result["exiles"],
-		result["events"],
-		after_attack
-	)
+	if _events_have_type(result["events"], &"attack_started"):
+		var after_attack: Dictionary = _resolve_trigger_event(
+			state,
+			Catalog.TRIGGER_CARD_AFTER_ATTACK,
+			{
+				"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
+				"attacker_instance_id": source_instance_id,
+				"attacker_owner_id": attacker_owner,
+				"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
+				"repeat_attack": bool(request.get("repeat_attack", false)),
+			}
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			after_attack
+		)
 	return result
+
+
+static func _events_have_type(events: Array, event_type: StringName) -> bool:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return true
+	return false
 
 
 static func _attack_is_valid(
@@ -1056,7 +1099,8 @@ static func _attack_is_valid(
 	attacker_instance_id: StringName,
 	attacked_cell: int,
 	attacked_instance_id: StringName,
-	include_attack_permissions: bool = true
+	include_attack_permissions: bool = true,
+	attack_policy: Dictionary = {}
 ) -> bool:
 	if (
 		not _card_instance_at(state, attacker_cell, attacker_instance_id)
@@ -1064,18 +1108,49 @@ static func _attack_is_valid(
 	):
 		return false
 	if include_attack_permissions:
+		var permission_context: Dictionary = {
+			"reason": &"attack_resolution",
+			"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+		}
+		permission_context.merge(attack_policy, true)
 		return Rules.can_attack_target(
 			state.board,
 			attacker_cell,
 			attacked_cell,
-			{"reason": &"attack_resolution"}
+			permission_context
 		)
+	var range_context: Dictionary = {
+		"reason": &"attack_resolution_recheck",
+		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+	}
+	range_context.merge(attack_policy, true)
 	return Rules.is_target_in_attack_range(
 		state.board,
 		attacker_cell,
 		attacked_cell,
-		{"reason": &"attack_resolution_recheck"}
+		range_context
 	)
+
+
+static func _get_standard_attack_policy(state: StateData, attacker_owner: int) -> Dictionary:
+	for slot_value: Variant in state.board:
+		if slot_value == null:
+			continue
+		var slot: Dictionary = slot_value
+		var source_owner: int = int(slot.get("owner", 0))
+		if source_owner == attacker_owner:
+			continue
+		var card: Dictionary = slot.get("card", {})
+		if Abilities.has_modifier(
+			card,
+			Catalog.MODIFIER_ENEMY_ATTACKS_ALL,
+			state.get_enabled_effect_gates(source_owner)
+		):
+			return {
+				"allow_allied_targets": true,
+				"capture_owner_id": source_owner,
+			}
+	return {}
 
 
 static func _finish_action(

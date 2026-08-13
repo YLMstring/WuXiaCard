@@ -52,10 +52,7 @@ func _run() -> void:
 	_test_summon_reaction_conditions_and_ability_loss()
 	_test_summon_reactions_use_board_order_and_stop_after_flip()
 	_test_summon_reaction_exile_and_successful_flip_trigger()
-	_test_KuiHua1_flip_gain_and_extra_turn()
-	_test_KuiHua1_multiple_flips_gain_in_order()
-	_test_KuiHua1_exile_grants_no_ki()
-	_test_multiple_KuiHua1s_drain_for_one_extra_turn()
+	_test_KuiHua1_end_turn_extra_play()
 	_test_KuiHua1_extra_turn_can_chain()
 	_test_flipped_KuiHua1_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
@@ -420,6 +417,9 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
@@ -811,6 +811,9 @@ func _test_activate_action_generation_and_resolution() -> void:
 	var youfen: Dictionary = Catalog.create_instance(&"YouFenLaiYi2", Rules.PLAYER_OWNER, &"board_youfen")
 	board[4] = {"card": youfen, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var actions: Array = Simulator.get_legal_actions(state)
 	_check(actions.size() == 4, "Center move-and-attack card generates four orthogonal activate targets")
 	var target_order: Array[int] = []
@@ -1144,12 +1147,15 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
 	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var groups: Array[Dictionary] = Triggers.discover(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	_check(groups.size() == 2, "End-turn discovery finds both eligible Meng Huos")
+	_check(groups.size() == 2, "End-turn discovery finds both eligible KuiHua1 cards")
 	_check(int(groups[0].get("source_cell", -1)) == 0 and int(groups[1].get("source_cell", -1)) == 8, "End-turn discovery uses row-major board order")
 	var copied: State = state.duplicate_state()
 	var events: Array = []
@@ -1158,14 +1164,14 @@ func _test_trigger_groups_resolve_atomically() -> void:
 		var group_result: Dictionary = Triggers.resolve_group(copied, group)
 		events.append_array(group_result.get("events", []) as Array)
 		requests.append_array(group_result.get("extra_turn_requests", []) as Array)
-	_check(events.size() == 4 and requests.size() == 2, "Each valid rule emits its trigger cue, drains ki, and preserves its request")
+	_check(events.size() == 2 and requests.size() == 2, "Each valid rule emits its trigger cue and preserves its request")
 	_check(
 		int((events[0] as Dictionary).get("source_cell", -1)) == 0
-			and int((events[2] as Dictionary).get("source_cell", -1)) == 8,
+			and int((events[1] as Dictionary).get("source_cell", -1)) == 8,
 		"Trigger cues preserve row-major group order"
 	)
-	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "First matched rule spends all ki")
-	_check(int((((copied.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Second matched rule spends all ki")
+	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "First matched rule leaves ki unchanged")
+	_check(int((((copied.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 3, "Second matched rule leaves ki unchanged")
 	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "Trigger resolution leaves its source state untouched")
 
 	var stale_state: State = state.duplicate_state()
@@ -1175,8 +1181,8 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	var stale_events: Array = []
 	for group: Dictionary in groups:
 		stale_events.append_array((Triggers.resolve_group(stale_state, group)).get("events", []) as Array)
-	_check(stale_events.size() == 2, "Stale instance group is ignored while the other trigger cue and action still resolve")
-	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot spend replacement-card ki")
+	_check(stale_events.size() == 1, "Stale instance group is ignored while the other trigger cue still resolves")
+	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot affect a replacement card")
 
 
 func _test_passive_trigger_event_semantics() -> void:
@@ -1493,44 +1499,30 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 	_check(int((((momentum_next.board[4] as Dictionary)["card"] as Dictionary).get("ki", 0))) == 1, "Reaction source retains gained ki")
 
 
-func _test_KuiHua1_flip_gain_and_extra_turn() -> void:
-	var board: Array = Rules.empty_board()
-	board[5] = {
-		"card": Rules.make_card("Guard", "守", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
-		"owner": Rules.OPPONENT_OWNER,
-	}
+func _test_KuiHua1_end_turn_extra_play() -> void:
 	var hand: Array = [
 		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"momentum_meng"),
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
-	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+	var state := State.new(Rules.empty_board(), hand, [], Rules.PLAYER_OWNER)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	var event_types: Array[StringName] = _event_types(events)
 	_check(
-		event_types
-		== [
+		event_types == [
 			&"card_placed",
-			&"attack_started",
-			&"card_flipped",
 			&"ability_triggered",
-			&"ki_changed",
-			&"ability_triggered",
-			&"ki_changed",
 			&"extra_card_play_granted",
 		],
-		"Meng Huo cues each passive rule before gaining, spending, and granting a play"
+		"KuiHua1 cues its end-turn rule before granting an extra play"
 	)
-	var gain_event: Dictionary = events[4]
-	var spend_event: Dictionary = events[6]
-	_check(int(gain_event.get("previous_ki", -1)) == 0 and int(gain_event.get("ki", -1)) == 1, "Successful flip gains exactly one ki")
-	_check(int(spend_event.get("previous_ki", -1)) == 1 and int(spend_event.get("ki", -1)) == 0, "End turn spends all gained ki")
-	_check(StringName(gain_event.get("change_reason", &"")) == Catalog.ACTION_GAIN_KI, "Gain event identifies its generic action")
-	_check(StringName(spend_event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI, "Spend event identifies its generic action")
 	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra card play retains the acting owner after one action")
-	_check(next_state.extra_card_plays_remaining == 1, "Meng Huo grants exactly one pending card play")
-	_check(int((((next_state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Final simulator state stores the drained ki")
+	_check(next_state.extra_card_plays_remaining == 1, "KuiHua1 grants exactly one pending card play")
+	_check(_count_events(events, &"ki_changed") == 0, "KuiHua1 no longer uses ki")
 
 
 func _test_KuiHua1_multiple_flips_gain_in_order() -> void:
@@ -1622,9 +1614,12 @@ func _test_KuiHua1_extra_turn_can_chain() -> void:
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
 	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var first_state: State = first_transition["state"] as State
-	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First Meng Huo grants an extra card play")
+	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First KuiHua1 grants an extra card play")
 	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 3))
 	var second_state: State = second_transition["state"] as State
 	_check(
@@ -1645,9 +1640,9 @@ func _test_flipped_KuiHua1_loses_ability_but_keeps_ki() -> void:
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped: Dictionary = (next_state.board[5] as Dictionary)["card"]
-	_check(int(flipped.get("ki", -1)) == 3, "Flipped Meng Huo keeps accumulated ki")
-	_check((flipped.get("active_abilities", []) as Array).is_empty(), "Flipped Meng Huo loses battle momentum")
-	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "Battle momentum loss emits the standard loss event")
+	_check(int(flipped.get("ki", -1)) == 3, "Flipped KuiHua1 keeps accumulated ki")
+	_check((flipped.get("active_abilities", []) as Array).is_empty(), "Flipped KuiHua1 loses its extra-play ability")
+	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "KuiHua1 ability loss emits the standard loss event")
 
 
 func _test_unusable_extra_turn_expires() -> void:
@@ -1663,9 +1658,12 @@ func _test_unusable_extra_turn_expires() -> void:
 		opponent_hand,
 		Rules.PLAYER_OWNER
 	)
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
-	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "Successful flip still announces the extra-card-play grant")
+	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "End turn still announces the unusable extra-card-play grant")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
 
 
