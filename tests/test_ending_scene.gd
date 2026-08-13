@@ -63,8 +63,14 @@ func _run() -> void:
 	_check(story_clip.clip_contents, "Story viewport clips every overflowing line")
 	_check(score.text == "得分 5000", "Ending scene displays the final score")
 	_check(story.text.contains("华山派"), "Ending prose names the selected sect")
-	_check(story.text.contains("清风学弟") and story.text.contains("铁山门人"), "Ending prose names every defeated enemy")
-	_check(story.text.find("清风学弟") < story.text.find("铁山门人"), "Defeated enemies remain chronological")
+	_check(
+		story.text.contains("少镖头·林平之") and story.text.contains("小师妹·岳灵珊"),
+		"Ending prose names every defeated enemy"
+	)
+	_check(
+		story.text.find("少镖头·林平之") < story.text.find("小师妹·岳灵珊"),
+		"Defeated enemies remain chronological"
+	)
 	_check(story.text.contains("也曾折剑再战"), "A run with losses uses the comeback prose")
 	_check(story.language == "zh", "Ending prose opts into Chinese line breaking")
 	_check(story.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART, "Ending prose uses smart wrapping")

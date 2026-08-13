@@ -155,7 +155,10 @@ func _ready() -> void:
 	_create_board_cells()
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
-	var player_card_ids: Array[StringName] = Decks.get_player_card_ids(deck_profile_path)
+	var player_card_ids: Array[StringName] = Decks.get_player_card_ids(
+		deck_profile_path,
+		testing_mode
+	)
 	_set_mastery_eligible_card_ids(player_card_ids)
 	_shuffle_hand_ids(player_card_ids, player_hand_shuffle_seed)
 	var player_cards: Array = _create_card_instances(player_card_ids, DuelRules.PLAYER_OWNER, "main")
@@ -186,7 +189,7 @@ func _ready() -> void:
 		opponent_side_deck
 	)
 	duel_state.enabled_effect_gates_by_owner[DuelRules.PLAYER_OWNER] = (
-		Decks.get_player_enabled_effect_gates(deck_profile_path)
+		Decks.get_player_enabled_effect_gates(deck_profile_path, testing_mode)
 	)
 	duel_state.enabled_effect_gates_by_owner[DuelRules.OPPONENT_OWNER] = (
 		[DuelRules.EFFECT_GATE_SELF_CASTRATION]

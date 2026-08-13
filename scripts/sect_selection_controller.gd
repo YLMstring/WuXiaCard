@@ -16,6 +16,7 @@ const LOCKED_STATUS: String = "该门派尚未解锁"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "江湖门派"
+@export var testing_mode: bool = false
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
 
@@ -375,7 +376,10 @@ func _complete_selected_sect() -> bool:
 	var result: Dictionary = _profile_store.begin_run_and_save(
 		profile,
 		_selected_sect_id,
-		_get_tier_one_ids(_selected_sect_id)
+		_get_tier_one_ids(_selected_sect_id),
+		&"",
+		null,
+		testing_mode
 	)
 	if not bool(result.get("ok", false)):
 		status_label.text = "保存失败"

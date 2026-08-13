@@ -22,6 +22,13 @@ const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"HanBinZhenQi3",
 	&"TianWaiYuLong2",
 ]
+const LEGACY_MAIN_DECK_IDS: Array[StringName] = [
+	&"CangSongYingKe2",
+	&"gate_general",
+	&"KuiHua1",
+	&"YouFenLaiYi2",
+	&"TuNaShu2",
+]
 
 var _checks: int = 0
 var _failures: int = 0
@@ -57,9 +64,16 @@ func _run() -> void:
 		store.get_unlocked_sect_ids(profile) == [&"HuaShanPai"],
 		"Only Xuanyue Jianzong starts unlocked"
 	)
-	_check((profile["main_deck"] as Array).size() == 5, "Default main deck has five cards")
+	_check(
+		store.get_unlocked_ids(profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Normal profiles initially unlock only Taizu Changquan and tier-one Tuna"
+	)
+	_check(
+		store.get_main_deck_ids(profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"The inactive initial deck contains the two base cards"
+	)
 	_check((profile["library_slots"] as Array).size() == 1000, "Default library has 1000 slots")
-	var expected_library_count: int = (profile["unlocked_card_ids"] as Array).size() - 5
+	var expected_library_count: int = 0
 	_check(
 		_occupied_count(profile["library_slots"]) == expected_library_count,
 		"Default library contains every unlocked card outside the main deck"
@@ -75,6 +89,19 @@ func _run() -> void:
 		store.repair_profile(profile) == profile,
 		"Repairing an existing valid profile does not auto-unlock new sect cards"
 	)
+	var normal_profile: Dictionary = profile.duplicate(true)
+	profile = store.create_testing_profile(profile)
+	_check(store.is_profile_valid(profile), "Testing profile expansion is valid")
+	_check(
+		store.get_unlocked_ids(profile).size() == Cards.get_all_card_ids().size(),
+		"Testing profile expansion unlocks every card"
+	)
+	_check(
+		normal_profile == store.load_profile(),
+		"Testing profile expansion does not mutate the persisted normal profile"
+	)
+	profile = _legacy_collection_profile(store)
+	_check(store.save_profile(profile), "Legacy collection fixture saves")
 	var malformed_mastery: Dictionary = profile.duplicate(true)
 	malformed_mastery["mastered_card_ids"] = [
 		String(Store.DEFAULT_MAIN_DECK_IDS[0]),
@@ -376,11 +403,14 @@ func _run() -> void:
 
 	var run_start_source: Dictionary = store.create_default_profile()
 	_check(store.save_profile(run_start_source), "Run-state fixture saves")
+	var start_rng := RandomNumberGenerator.new()
+	start_rng.seed = 3108
 	var begin_result: Dictionary = store.begin_run_and_save(
 		run_start_source,
 		&"HuaShanPai",
 		[&"CangSongYingKe1"],
-		&"qingfeng_xuedi"
+		&"qingfeng_xuedi",
+		start_rng
 	)
 	_check(bool(begin_result.get("ok", false)), "Beginning a valid run saves atomically")
 	var active_profile: Dictionary = begin_result.get("profile", {})
@@ -424,14 +454,23 @@ func _run() -> void:
 		store.get_selected_sect_id(active_profile) == &"HuaShanPai",
 		"Beginning a run records the selected sect"
 	)
+	var starting_deck: Array[StringName] = store.get_main_deck_ids(active_profile)
+	_check(starting_deck.size() == 5, "Run start creates a complete five-card deck")
 	_check(
-		String(active_profile["library_slots"][0]) == "CangSongYingKe1",
-		"Newly unlocked run cards appear at the top of the library"
+		starting_deck.slice(0, 2) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Run start keeps the two base cards first"
 	)
-	_check(
-		(begin_result.get("added_ids", []) as Array) == [&"CangSongYingKe1"],
-		"Run start reports every newly owned sect card"
-	)
+	var random_start_ids: Array[StringName] = starting_deck.slice(2)
+	_check(random_start_ids.size() == 3, "Run start adds exactly three random cards")
+	for random_id: StringName in random_start_ids:
+		var definition: Dictionary = Cards.get_definition(random_id)
+		_check(int(definition.get("tier", 0)) == 1, "%s is a tier-one random unlock" % random_id)
+		_check(String(definition.get("sect", "")) != "华山", "%s is outside the selected sect" % random_id)
+	var unlocked_after_start: Array[StringName] = store.get_unlocked_ids(active_profile)
+	for card_id: StringName in Cards.get_all_card_ids():
+		var definition: Dictionary = Cards.get_definition(card_id)
+		if String(definition.get("sect", "")) == "华山" and int(definition.get("tier", 0)) == 1:
+			_check(card_id in unlocked_after_start, "%s selected-sect tier one starts unlocked" % card_id)
 
 	var reward_family_source: Dictionary = _profile_with_locked_cards(
 		store,
@@ -522,7 +561,8 @@ func _run() -> void:
 		store.get_remembered_enemy_glyphs(migrated_active).is_empty(),
 		"Legacy active runs begin with no remembered cards"
 	)
-	var active_unlocked: Array = (active_profile["unlocked_card_ids"] as Array).duplicate()
+	var retained_sects: Array = (active_profile["unlocked_sect_ids"] as Array).duplicate()
+	var retained_mastery: Array = (active_profile["mastered_card_ids"] as Array).duplicate()
 	var exchange_for_reset: Dictionary = store.exchange_and_save(active_profile, 0, 0)
 	_check(bool(exchange_for_reset.get("ok", false)), "Run fixture can change its main deck")
 	var changed_profile: Dictionary = exchange_for_reset.get("profile", {})
@@ -533,18 +573,33 @@ func _run() -> void:
 	_check(store.get_selected_sect_id(reset_profile) == &"", "Run reset clears the selected sect")
 	_check(
 		store.get_main_deck_ids(reset_profile) == Store.DEFAULT_MAIN_DECK_IDS,
-		"Run reset restores the default main deck"
+		"Run reset restores the two-card inactive deck"
 	)
 	_check(
-		reset_profile["unlocked_card_ids"] == active_unlocked,
-		"Run reset preserves card unlocks"
+		store.get_unlocked_ids(reset_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Run reset clears card unlocks except the two base cards"
 	)
 	_check(
-		reset_profile["unlocked_sect_ids"] == active_profile["unlocked_sect_ids"],
+		reset_profile["unlocked_sect_ids"] == retained_sects,
 		"Run reset preserves sect unlocks"
 	)
+	_check(reset_profile["mastered_card_ids"] == retained_mastery, "Run reset preserves mastery")
 	_check(store.get_character_level(reset_profile) == 0, "Run reset clears character level")
 	_check(store.get_current_enemy_id(reset_profile) == &"", "Run reset clears the enemy")
+	var declared_sect_profile: Dictionary = reset_profile.duplicate(true)
+	Store._unlock_declared_sect(declared_sect_profile, {"sect_id": &"TaiShanPai"})
+	_check(
+		&"TaiShanPai" in store.get_unlocked_sect_ids(declared_sect_profile),
+		"Defeating an enemy with a sect declaration unlocks that sect"
+	)
+	Store._unlock_declared_sect(declared_sect_profile, {"sect_id": &"TaiShanPai"})
+	_check(
+		(declared_sect_profile["unlocked_sect_ids"] as Array).count("TaiShanPai") == 1,
+		"Repeated enemy sect unlocks are idempotent"
+	)
+	var no_sect_profile: Dictionary = reset_profile.duplicate(true)
+	Store._unlock_declared_sect(no_sect_profile, {})
+	_check(no_sect_profile == reset_profile, "Enemies without a sect declaration unlock nothing")
 
 	var tier_reward_advance: Dictionary = store.advance_after_victory_and_save(
 		active_profile,
@@ -575,13 +630,18 @@ func _run() -> void:
 
 	var progression_profile: Dictionary = active_profile
 	var previous_enemy_id: StringName = first_enemy_id
-	var expected_tier_unlocks: Dictionary = {
-		2: [],
-		5: [],
-		8: [],
-		11: [],
-	}
 	for expected_level: int in range(2, 16):
+		var expected_added_ids: Array = []
+		if Store.tier_for_level(expected_level) > Store.tier_for_level(expected_level - 1):
+			var before_ids: Array[StringName] = store.get_unlocked_ids(progression_profile)
+			for card_id: StringName in Cards.get_all_card_ids():
+				var definition: Dictionary = Cards.get_definition(card_id)
+				if (
+					String(definition.get("sect", "")) == "华山派"
+					and int(definition.get("tier", 0)) == Store.tier_for_level(expected_level)
+					and card_id not in before_ids
+				):
+					expected_added_ids.append(card_id)
 		var candidate_ids: Array[StringName] = Enemies.get_enemy_ids_for_level(expected_level)
 		var advance_result: Dictionary = store.advance_after_victory_and_save(
 			progression_profile,
@@ -604,10 +664,10 @@ func _run() -> void:
 			store.get_remembered_enemy_glyphs(progression_profile).is_empty(),
 			"Changing to level %d clears remembered enemy cards" % expected_level
 		)
-		var expected_added_ids: Array = expected_tier_unlocks.get(expected_level, [])
 		_check(
 			(advance_result.get("added_ids", []) as Array) == expected_added_ids,
-			"Level %d reports only its exact-tier sect unlocks" % expected_level
+			"Level %d reports only its exact-tier sect unlocks: actual=%s expected=%s"
+			% [expected_level, str(advance_result.get("added_ids", [])), str(expected_added_ids)]
 		)
 		for unlocked_id: StringName in expected_added_ids:
 			_check(
@@ -713,7 +773,7 @@ func _profile_with_locked_cards(
 	store: RefCounted,
 	card_ids: Array[StringName]
 ) -> Dictionary:
-	var profile: Dictionary = store.create_default_profile()
+	var profile: Dictionary = _legacy_collection_profile(store)
 	var unlocked: Array = (profile["unlocked_card_ids"] as Array).duplicate()
 	var occupied: Array = _occupied_values(profile["library_slots"])
 	for card_id: StringName in card_ids:
@@ -728,6 +788,32 @@ func _profile_with_locked_cards(
 		"Locked-card fixture remains valid for %s" % str(card_ids)
 	)
 	return profile
+
+
+func _legacy_collection_profile(store: RefCounted) -> Dictionary:
+	var profile: Dictionary = store.create_default_profile()
+	var unlocked: Array[StringName] = []
+	for card_id: StringName in Cards.get_all_card_ids():
+		if card_id not in Store.DEFAULT_LOCKED_IDS:
+			unlocked.append(card_id)
+	var library: Array = []
+	for card_id: StringName in unlocked:
+		if card_id not in LEGACY_MAIN_DECK_IDS:
+			library.append(String(card_id))
+	profile["unlocked_card_ids"] = _strings(unlocked)
+	profile["main_deck"] = _strings(LEGACY_MAIN_DECK_IDS)
+	while library.size() < Store.LIBRARY_CAPACITY:
+		library.append("")
+	profile["library_slots"] = library
+	_check(store.is_profile_valid(profile), "Legacy collection fixture is valid")
+	return profile
+
+
+func _strings(values: Array) -> Array:
+	var result: Array = []
+	for value: Variant in values:
+		result.append(String(value))
+	return result
 
 
 func _library_has_no_gaps(slots: Array) -> bool:

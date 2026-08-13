@@ -23,10 +23,22 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 var testing_mode: bool = Settings.TESTING_MODE
 var _current_screen: Control = null
+var _normal_deck_profile_path: String = ""
 
 
 func _ready() -> void:
+	if testing_mode:
+		_prepare_testing_profile()
 	_show_main_menu()
+
+
+func _exit_tree() -> void:
+	if not testing_mode or _normal_deck_profile_path.is_empty():
+		return
+	for suffix: String in ["", ".tmp", ".bak"]:
+		var path: String = deck_profile_path + suffix
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func debug_get_current_screen() -> Control:
@@ -47,6 +59,7 @@ func _show_sect_selection() -> void:
 	var selector := SECT_SELECTION_SCENE.instantiate() as SelectorController
 	var enemy: Dictionary = _get_upcoming_enemy()
 	selector.profile_path = deck_profile_path
+	selector.testing_mode = testing_mode
 	selector.upcoming_enemy_name = String(enemy["name"])
 	selector.deck_builder_requested.connect(_on_deck_builder_requested)
 	selector.back_requested.connect(_on_return_to_menu_requested)
@@ -138,6 +151,7 @@ func _on_run_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_run_and_save(profile)
+	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
 		if bool(result.get("ok", false))
@@ -149,6 +163,7 @@ func _on_progress_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_all_progress_and_save(profile)
+	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
 		if bool(result.get("ok", false))
@@ -162,6 +177,17 @@ func _finish_reset_on_current_menu(notice: String) -> void:
 		menu.show_notice(notice)
 		return
 	_show_main_menu(notice)
+
+
+func _restore_testing_unlocks(store: RefCounted, result: Dictionary) -> Dictionary:
+	if not testing_mode or not bool(result.get("ok", false)):
+		return result
+	var expanded: Dictionary = store.create_testing_profile(
+		result.get("profile", {}) as Dictionary
+	)
+	if expanded.is_empty() or not store.save_profile(expanded):
+		return {"ok": false, "profile": result.get("profile", {})}
+	return {"ok": true, "profile": expanded}
 
 
 func _on_deck_builder_requested() -> void:
@@ -259,3 +285,14 @@ func _enemy_deck_from_details(enemy: Dictionary) -> Array[StringName]:
 	for value: Variant in enemy.get("deck", []):
 		result.append(StringName(String(value)))
 	return result
+
+
+func _prepare_testing_profile() -> void:
+	_normal_deck_profile_path = deck_profile_path
+	var normal_store := Store.new(_normal_deck_profile_path)
+	var source: Dictionary = normal_store.load_profile_read_only()
+	deck_profile_path = _normal_deck_profile_path + ".testing"
+	var testing_store := Store.new(deck_profile_path)
+	var testing_profile: Dictionary = testing_store.create_testing_profile(source)
+	if testing_profile.is_empty() or not testing_store.save_profile(testing_profile):
+		push_warning("Testing profile could not be prepared")

@@ -2,6 +2,7 @@ class_name EnemyCatalog
 extends RefCounted
 
 const Cards = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 const ALL_ENEMY_IDS: Array[StringName] = [
 	&"qingfeng_xuedi",
@@ -24,16 +25,11 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"hanyue_nvxia",
 	&"zhenyue_shi",
 	&"wuying_ke",
-	&"jiange_suzhu",
 	&"tingchao_zhuren",
 	&"chisha_menzhu",
-	&"yanyu_louzhu",
 	&"bailu_shanzhang",
-	&"xuanyue_jianshou",
 	&"tianmen_yishi",
-	&"guhai_kuangdao",
 	&"wulin_sanren",
-	&"jiugong_lunjianzhe",
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
@@ -176,6 +172,13 @@ static func _validate_definition(
 		and typeof(definition.get("self_castration_enabled")) != TYPE_BOOL
 	):
 		errors.append("Enemy %s requires a Boolean self_castration_enabled" % enemy_id)
+	if definition.has("sect_id"):
+		var sect_id_value: Variant = definition.get("sect_id")
+		if (
+			typeof(sect_id_value) != TYPE_STRING_NAME
+			or not Sects.has_sect(sect_id_value as StringName)
+		):
+			errors.append("Enemy %s requires a known StringName sect_id" % enemy_id)
 	var deck_value: Variant = definition.get("deck", null)
 	if typeof(deck_value) != TYPE_ARRAY:
 		errors.append("Enemy %s requires an Array deck" % enemy_id)

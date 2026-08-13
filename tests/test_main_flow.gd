@@ -27,6 +27,12 @@ func _run() -> void:
 	root.add_child(flow)
 	await process_frame
 	await process_frame
+	var runtime_save_path: String = String(flow.deck_profile_path)
+	_check(runtime_save_path != _save_path, "Testing mode uses an isolated profile path")
+	_check(
+		not FileAccess.file_exists(_save_path),
+		"Preparing testing mode does not create or modify the normal profile"
+	)
 
 	var menu := flow.debug_get_current_screen() as MenuController
 	_check(menu != null, "Main scene starts at the main menu")
@@ -48,13 +54,13 @@ func _run() -> void:
 	await process_frame
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Sect confirmation enters deck building")
-	var active_profile: Dictionary = Store.new(_save_path).load_profile()
+	var active_profile: Dictionary = Store.new(runtime_save_path).load_profile()
 	_check(bool(active_profile["run_active"]), "Sect confirmation persists active-run state")
 	_check(
 		String(active_profile["selected_sect_id"]) == "HuaShanPai",
 		"Sect confirmation persists the chosen sect"
 	)
-	var store := Store.new(_save_path)
+	var store := Store.new(runtime_save_path)
 	_check(store.get_character_level(active_profile) == 1, "Sect confirmation starts level one")
 	var level_one_enemy_id: StringName = store.get_current_enemy_id(active_profile)
 	var level_one_enemy: Dictionary = Enemies.get_definition(level_one_enemy_id)
@@ -83,9 +89,11 @@ func _run() -> void:
 		"Duel receives the same saved enemy"
 	)
 	_check(
-		Cards.EFFECT_GATE_SELF_CASTRATION
-		not in duel.duel_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER),
-		"Both level-one Lin Pingzhi encounters disable enemy self-castration effects"
+		(
+			Cards.EFFECT_GATE_SELF_CASTRATION
+			in duel.duel_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER)
+		) == Enemies.is_self_castration_enabled(level_one_enemy_id),
+		"The duel applies the selected enemy's self-castration declaration"
 	)
 	var opponent_hand := duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
 	var played_card := opponent_hand.get_child(0).get_child(0) as CardView
@@ -133,8 +141,8 @@ func _run() -> void:
 	duel.call("_record_mastery_candidate", mastery_fixture_id)
 	duel.return_requested.emit(&"victory")
 	await process_frame
-	var reward := flow.debug_get_current_screen() as RewardController
-	_check(reward != null, "Victory opens reward selection")
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Testing-mode victory skips an empty reward pool")
 	var victorious_profile: Dictionary = store.load_profile()
 	_check(
 		store.is_card_mastered(victorious_profile, mastery_fixture_id),
@@ -152,26 +160,14 @@ func _run() -> void:
 	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)
 	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
-	_check(reward.upcoming_enemy_name == String(level_two_enemy["name"]), "Reward scene previews the new enemy")
+	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Deck builder previews the new enemy")
 	_check(
 		store.get_remembered_enemy_glyphs(victorious_profile).is_empty(),
 		"New enemy starts with no remembered cards"
 	)
-	var victory_reward_ids: Array[StringName] = store.get_pending_reward_ids(victorious_profile)
-	_check(not victory_reward_ids.is_empty(), "Victory persists a reward offer")
-	for reward_id: StringName in victory_reward_ids:
-		_check(int(Cards.get_definition(reward_id)["tier"]) == 2, "Victory uses the new tier")
-		_check(
-			reward_id not in store.get_unlocked_ids(abandoned_profile),
-			"An already owned card cannot appear in the victory reward"
-		)
-	_check(reward.debug_claim_reward(0), "Victory reward can be claimed")
-	await process_frame
-	builder = flow.debug_get_current_screen() as DeckBuilderController
-	_check(builder != null, "Claiming a victory reward enters deck building")
 	_check(
-		victory_reward_ids[0] in store.get_unlocked_ids(store.load_profile()),
-		"Claimed victory reward is unlocked"
+		store.get_pending_reward_ids(victorious_profile).is_empty(),
+		"Testing-mode victory has no reward because every card is unlocked"
 	)
 
 	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
@@ -179,36 +175,23 @@ func _run() -> void:
 	duel = flow.debug_get_current_screen() as DuelController
 	duel.return_requested.emit(&"defeat")
 	await process_frame
-	reward = flow.debug_get_current_screen() as RewardController
-	_check(reward != null, "Defeat opens reward selection")
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Testing-mode defeat skips an empty reward pool")
 	var defeated_profile: Dictionary = store.load_profile()
 	_check(store.get_character_level(defeated_profile) == 2, "Defeat does not level up")
 	_check(
 		store.get_current_enemy_id(defeated_profile) == level_two_enemy_id,
 		"Defeat preserves the rematch enemy"
 	)
-	var defeat_reward_ids: Array[StringName] = store.get_pending_reward_ids(defeated_profile)
-	_check(not defeat_reward_ids.is_empty(), "Defeat persists a lower-tier offer")
-	for reward_id: StringName in defeat_reward_ids:
-		_check(int(Cards.get_definition(reward_id)["tier"]) < 2, "Defeat uses a lower tier")
-
-	(reward.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
-	await process_frame
-	menu = flow.debug_get_current_screen() as MenuController
-	_check(menu != null, "Reward return icon goes to the main menu")
-	(menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
-	await process_frame
-	reward = flow.debug_get_current_screen() as RewardController
 	_check(
-		reward != null and reward.debug_get_reward_ids() == defeat_reward_ids,
-		"Journey resumes the exact pending reward"
+		store.get_pending_reward_ids(defeated_profile).is_empty(),
+		"Testing-mode defeat has no reward because every card is unlocked"
 	)
-	_check(reward.debug_claim_reward(0), "Resumed defeat reward can be claimed")
-	await process_frame
-	builder = flow.debug_get_current_screen() as DeckBuilderController
+
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	await process_frame
 	menu = flow.debug_get_current_screen() as MenuController
+	_check(menu != null, "Deck-builder return icon goes to the main menu")
 	var run_reset_menu_id: int = menu.get_instance_id()
 	var run_reset_button := menu.get_node("MenuLayer/Actions/RunResetButton") as Button
 	for press_index: int in range(5):
@@ -224,18 +207,19 @@ func _run() -> void:
 		(menu.get_node("MenuLayer/Notice") as Label).text.is_empty(),
 		"Successful run reset clears the countdown notice"
 	)
-	var reset_profile: Dictionary = Store.new(_save_path).load_profile()
+	var reset_profile: Dictionary = Store.new(runtime_save_path).load_profile()
 	_check(not bool(reset_profile["run_active"]), "Run reset clears active state")
 	_check(
-		Store.new(_save_path).get_main_deck_ids(reset_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		Store.new(runtime_save_path).get_main_deck_ids(reset_profile).size() == 5,
 		"Run reset restores the default deck"
 	)
 	_check(
-		victory_reward_ids[0] in Store.new(_save_path).get_unlocked_ids(reset_profile),
-		"Run reset preserves unlocked cards"
+		Store.new(runtime_save_path).get_unlocked_ids(reset_profile).size()
+		== Cards.get_all_card_ids().size(),
+		"Testing-mode run reset restores temporary full-card access"
 	)
 	_check(
-		Store.new(_save_path).is_card_mastered(reset_profile, mastery_fixture_id),
+		Store.new(runtime_save_path).is_card_mastered(reset_profile, mastery_fixture_id),
 		"Run reset preserves global card mastery"
 	)
 
@@ -253,13 +237,14 @@ func _run() -> void:
 		(menu.get_node("MenuLayer/Notice") as Label).text.is_empty(),
 		"Successful full reset clears the countdown notice"
 	)
-	var fully_reset_profile: Dictionary = Store.new(_save_path).load_profile()
+	var fully_reset_profile: Dictionary = Store.new(runtime_save_path).load_profile()
 	_check(
-		fully_reset_profile == Store.new(_save_path).create_default_profile(),
-		"Full progress reset restores the initial profile"
+		Store.new(runtime_save_path).get_unlocked_ids(fully_reset_profile).size()
+		== Cards.get_all_card_ids().size(),
+		"Testing-mode full reset restores temporary full-card access"
 	)
 	_check(
-		not Store.new(_save_path).is_card_mastered(fully_reset_profile, mastery_fixture_id),
+		not Store.new(runtime_save_path).is_card_mastered(fully_reset_profile, mastery_fixture_id),
 		"Full progress reset clears global card mastery"
 	)
 

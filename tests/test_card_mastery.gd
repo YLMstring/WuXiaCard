@@ -18,7 +18,7 @@ func _init() -> void:
 func _run() -> void:
 	_cleanup()
 	var store: RefCounted = Store.new(SAVE_PATH)
-	var profile: Dictionary = store.create_default_profile()
+	var profile: Dictionary = store.create_testing_profile(store.create_default_profile())
 	_check(store.save_profile(profile), "Mastery duel fixture saves")
 
 	var duel: DuelController = DUEL_SCENE.instantiate() as DuelController

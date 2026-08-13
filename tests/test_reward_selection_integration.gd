@@ -35,8 +35,21 @@ func _run() -> void:
 		)
 		profile = advance_result.get("profile", profile)
 	_check(store.get_character_tier(profile) == 5, "Reward-scene fixture reaches tier five")
-	profile["mastered_card_ids"] = ["CangSongYingKe1"]
-	profile["pending_reward_card_ids"] = ["CangSongYingKe1", "MianLiCangZhen2"]
+	var available_locked_ids: Array[StringName] = []
+	for card_id: StringName in [&"KuiHua2", &"KuiHua3", &"KuiHua4"]:
+		if card_id not in store.get_unlocked_ids(profile):
+			available_locked_ids.append(card_id)
+	if available_locked_ids.size() < 2:
+		for card_id: StringName in Store.DEFAULT_LOCKED_IDS:
+			if card_id not in store.get_unlocked_ids(profile) and card_id not in available_locked_ids:
+				available_locked_ids.append(card_id)
+				if available_locked_ids.size() >= 2:
+					break
+	profile["mastered_card_ids"] = [String(available_locked_ids[0])]
+	profile["pending_reward_card_ids"] = [
+		String(available_locked_ids[0]),
+		String(available_locked_ids[1]),
+	]
 	_check(
 		store.save_profile(profile),
 		"Single-card reward-scene fixture saves after tier progression"

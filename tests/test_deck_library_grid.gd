@@ -22,7 +22,7 @@ func _run() -> void:
 	root.add_child(grid)
 	grid.size = Vector2(388.0, 497.0)
 	var store: RefCounted = Store.new("user://unused_grid_profile.json")
-	var profile: Dictionary = store.create_default_profile()
+	var profile: Dictionary = store.create_testing_profile(store.create_default_profile())
 	var display_owner_ids: Array[int] = []
 	display_owner_ids.resize(1000)
 	display_owner_ids.fill(DuelRules.PLAYER_OWNER)

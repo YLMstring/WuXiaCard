@@ -5,6 +5,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const Store = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
 const TEST_PROFILE_PATH: String = "user://duel_integration_deck_test.json"
@@ -19,6 +20,11 @@ func _init() -> void:
 
 func _run() -> void:
 	_cleanup_test_profile()
+	var fixture_store := Store.new(TEST_PROFILE_PATH)
+	var fixture_profile: Dictionary = fixture_store.create_testing_profile(
+		fixture_store.create_default_profile()
+	)
+	_check(fixture_store.save_profile(fixture_profile), "Duel integration fixture saves")
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame

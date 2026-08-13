@@ -28,14 +28,15 @@ func _run() -> void:
 	)
 	_check(bool(begin.get("ok", false)), "Ending fixture begins a run")
 	var active: Dictionary = begin.get("profile", {})
-	active["mastered_card_ids"] = ["TuNaShu2"]
+	var active_deck_ids: Array[StringName] = store.get_main_deck_ids(active)
+	active["mastered_card_ids"] = [String(active_deck_ids[0])]
 	_check(store.is_profile_valid(active), "Mastery fixture remains a valid active profile")
 	var defeat: Dictionary = store.record_completed_duel_and_save(
 		active,
 		Store.REWARD_DEFEAT,
 		2,
 		&"",
-		[&"gate_general"]
+		[active_deck_ids[1]]
 	)
 	_check(bool(defeat.get("ok", false)), "A completed defeat saves")
 	_check(not bool(defeat.get("completed", true)), "A defeat never completes the run")
@@ -45,7 +46,7 @@ func _run() -> void:
 	_check(int(after_defeat["level"]) == 1, "Defeat preserves the player level")
 	_check(String(after_defeat["current_enemy_id"]) == "qingfeng_xuedi", "Defeat preserves the rematch enemy")
 	_check(
-		store.get_mastered_card_ids(after_defeat) == [&"TuNaShu2"],
+		store.get_mastered_card_ids(after_defeat) == [active_deck_ids[0]],
 		"Defeat ignores mastery candidates"
 	)
 
@@ -54,13 +55,7 @@ func _run() -> void:
 		Store.REWARD_VICTORY,
 		2,
 		&"tieshan_menren",
-		[
-			&"gate_general",
-			&"missing_card",
-			&"CangSongYingKe1",
-			&"gate_general",
-			&"CangSongYingKe2",
-		]
+		[active_deck_ids[1], &"missing_card", active_deck_ids[2], active_deck_ids[1]]
 	)
 	_check(bool(ordinary_win.get("ok", false)), "A non-final victory saves")
 	_check(not bool(ordinary_win.get("completed", true)), "First of two victories does not finish")
@@ -72,7 +67,7 @@ func _run() -> void:
 	_check(String(advanced["current_enemy_id"]) == "tieshan_menren", "Non-final victory selects the requested next enemy")
 	_check(
 		store.get_mastered_card_ids(advanced)
-		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2"],
+		== [active_deck_ids[0], active_deck_ids[1], active_deck_ids[2]],
 		"Victory appends valid main-deck mastery candidates in stable order"
 	)
 
@@ -82,7 +77,7 @@ func _run() -> void:
 		Store.REWARD_VICTORY,
 		2,
 		&"",
-		[&"KuiHua1"]
+		[active_deck_ids[3]]
 	)
 	_check(bool(final_win.get("ok", false)), "The final victory saves")
 	_check(bool(final_win.get("completed", false)), "The configured victory target completes the run")
@@ -99,7 +94,7 @@ func _run() -> void:
 	_check(completed_profile["unlocked_card_ids"] == unlocked_before, "Completion preserves card unlocks")
 	_check(
 		store.get_mastered_card_ids(completed_profile)
-		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2", &"KuiHua1"],
+		== [active_deck_ids[0], active_deck_ids[1], active_deck_ids[2], active_deck_ids[3]],
 		"Final victory records mastery before closing the run"
 	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 5000, "Completion stores the sect's first best score")

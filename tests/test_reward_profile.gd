@@ -153,7 +153,9 @@ func _run() -> void:
 		"Run reset clears pending rewards"
 	)
 
-	var tier_five_profile: Dictionary = store.create_default_profile()
+	var tier_five_profile: Dictionary = store.create_testing_profile(
+		store.create_default_profile()
+	)
 	tier_five_profile["run_active"] = true
 	tier_five_profile["selected_sect_id"] = "HuaShanPai"
 	tier_five_profile["level"] = 11
@@ -164,6 +166,14 @@ func _run() -> void:
 		(tier_five_profile["unlocked_card_ids"] as Array).erase(String(special_id))
 		(tier_five_profile["library_slots"] as Array).erase(String(special_id))
 		(tier_five_profile["library_slots"] as Array).append("")
+	for card_id: StringName in Cards.get_all_card_ids():
+		if (
+			int(Cards.get_definition(card_id).get("tier", 0)) == 5
+			and card_id not in tier_five_profile["unlocked_card_ids"]
+		):
+			(tier_five_profile["unlocked_card_ids"] as Array).append(String(card_id))
+			(tier_five_profile["library_slots"] as Array).push_front(String(card_id))
+			(tier_five_profile["library_slots"] as Array).pop_back()
 	_check(store.is_profile_valid(tier_five_profile), "Tier-five special reward fixture is valid")
 	_check(store.save_profile(tier_five_profile), "Tier-five special reward fixture saves")
 	var tier_five_rng := RandomNumberGenerator.new()

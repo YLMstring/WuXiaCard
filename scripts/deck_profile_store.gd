@@ -20,6 +20,10 @@ const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
 ]
 const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
+	&"TaiZuChangQuan",
+	&"TuNaShu1",
+]
+const TESTING_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"gate_general",
 	&"KuiHua1",
@@ -54,7 +58,7 @@ func _init(new_save_path: String = DEFAULT_SAVE_PATH) -> void:
 
 
 func create_default_profile() -> Dictionary:
-	var unlocked_ids: Array[StringName] = _default_unlocked_ids()
+	var unlocked_ids: Array[StringName] = DEFAULT_MAIN_DECK_IDS.duplicate()
 	var main_deck: Array = []
 	for card_id: StringName in DEFAULT_MAIN_DECK_IDS:
 		if card_id in unlocked_ids:
@@ -101,6 +105,19 @@ func load_profile() -> Dictionary:
 	if repaired != parsed:
 		save_profile(repaired)
 	return repaired
+
+
+func load_profile_read_only() -> Dictionary:
+	if not FileAccess.file_exists(save_path):
+		return create_default_profile()
+	var file := FileAccess.open(save_path, FileAccess.READ)
+	if file == null:
+		return create_default_profile()
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return create_default_profile()
+	var repaired: Dictionary = repair_profile(parsed as Dictionary)
+	return repaired if is_profile_valid(repaired) else create_default_profile()
 
 
 func save_profile(profile: Dictionary) -> bool:
@@ -241,9 +258,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var unlocked: Array = unlocked_value
 	var deck: Array = deck_value
 	var library: Array = library_value
-	if deck.size() != MAIN_DECK_CAPACITY or library.size() != LIBRARY_CAPACITY:
-		return false
-	if not DeckRules.has_unique_glyphs(deck):
+	if library.size() != LIBRARY_CAPACITY:
 		return false
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	var mastered_set: Dictionary = {}
@@ -260,6 +275,14 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		if card_id == &"" or card_id not in catalog_ids or unlocked_set.has(card_id):
 			return false
 		unlocked_set[card_id] = true
+	var deck_size_valid: bool = (
+		deck.size() == MAIN_DECK_CAPACITY
+		if run_active
+		else deck.size() >= mini(DEFAULT_MAIN_DECK_IDS.size(), unlocked_set.size())
+		and deck.size() <= mini(MAIN_DECK_CAPACITY, unlocked_set.size())
+	)
+	if not deck_size_valid or not DeckRules.has_unique_glyphs(deck):
+		return false
 	var observed_rewards: Dictionary = {}
 	var pending_rewards: Array = pending_rewards_value as Array
 	if pending_rewards.size() > 3:
@@ -277,8 +300,6 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		):
 			return false
 		observed_rewards[reward_id] = true
-	if unlocked_set.size() < MAIN_DECK_CAPACITY:
-		return false
 	var placed_set: Dictionary = {}
 	for value: Variant in deck:
 		var card_id := StringName(String(value))
@@ -403,8 +424,6 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				unlocked.append(card_id)
 	else:
 		unlocked = _default_unlocked_ids()
-	if unlocked.size() < MAIN_DECK_CAPACITY:
-		return create_default_profile()
 	if run_active and schema_version >= COMPLETED_RUN_HISTORY_SCHEMA_VERSION:
 		var raw_pending_rewards: Variant = profile.get("pending_reward_card_ids", [])
 		if typeof(raw_pending_rewards) == TYPE_ARRAY:
@@ -421,11 +440,18 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 
 	var raw_deck: Variant = profile.get("main_deck", [])
 	var raw_library: Variant = profile.get("library_slots", [])
+	var repaired_deck_capacity: int = MAIN_DECK_CAPACITY
+	if not run_active and typeof(raw_deck) == TYPE_ARRAY:
+		repaired_deck_capacity = clampi(
+			(raw_deck as Array).size(),
+			mini(DEFAULT_MAIN_DECK_IDS.size(), unlocked.size()),
+			mini(MAIN_DECK_CAPACITY, unlocked.size())
+		)
 	var placement: Dictionary = DeckRules.repair_player_placement(
 		unlocked,
 		raw_deck as Array if typeof(raw_deck) == TYPE_ARRAY else [],
 		raw_library as Array if typeof(raw_library) == TYPE_ARRAY else [],
-		MAIN_DECK_CAPACITY,
+		repaired_deck_capacity,
 		LIBRARY_CAPACITY
 	)
 	if not bool(placement.get("ok", false)):
@@ -526,8 +552,10 @@ func unlock_cards_and_save(profile: Dictionary, ordered_card_ids: Array) -> Dict
 func begin_run_and_save(
 	profile: Dictionary,
 	sect_id: StringName,
-	ordered_card_ids: Array,
-	enemy_id_override: StringName = &""
+	_ordered_card_ids: Array,
+	enemy_id_override: StringName = &"",
+	rng: RandomNumberGenerator = null,
+	allow_owned_starting_cards: bool = false
 ) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if (
@@ -537,7 +565,18 @@ func begin_run_and_save(
 		or sect_id not in get_unlocked_sect_ids(profile)
 	):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	var expansion: Dictionary = _build_unlock_expansion(profile, ordered_card_ids)
+	var sect_tier_one_ids: Array[StringName] = _get_card_ids_for_sect_tier(sect_id, 1)
+	var random_tier_one_ids: Array[StringName] = _pick_starting_tier_one_ids(
+		profile,
+		sect_tier_one_ids,
+		rng,
+		allow_owned_starting_cards
+	)
+	if random_tier_one_ids.size() != MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var requested_unlocks: Array[StringName] = sect_tier_one_ids.duplicate()
+	requested_unlocks.append_array(random_tier_one_ids)
+	var expansion: Dictionary = _build_unlock_expansion(profile, requested_unlocks)
 	if not bool(expansion.get("ok", false)):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
@@ -545,6 +584,19 @@ func begin_run_and_save(
 	if enemy_id == &"":
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	_apply_unlock_expansion(candidate, expansion)
+	var starting_deck: Array[StringName] = DEFAULT_MAIN_DECK_IDS.duplicate()
+	starting_deck.append_array(random_tier_one_ids)
+	var starting_placement: Dictionary = _build_exact_deck_placement(
+		get_unlocked_ids(candidate),
+		starting_deck,
+		candidate.get("library_slots", []) as Array
+	)
+	if not bool(starting_placement.get("ok", false)):
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	candidate["main_deck"] = starting_placement.get("main_deck", [])
+	candidate["library_slots"] = _padded_library(
+		starting_placement.get("library_cards", []) as Array
+	)
 	candidate["run_active"] = true
 	candidate["selected_sect_id"] = String(sect_id)
 	candidate["level"] = 1
@@ -566,23 +618,10 @@ func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if not is_profile_valid(profile):
 		return {"ok": false, "profile": unchanged}
-	var unlocked_ids: Array[StringName] = get_unlocked_ids(profile)
-	for card_id: StringName in DEFAULT_MAIN_DECK_IDS:
-		if card_id not in unlocked_ids:
-			return {"ok": false, "profile": unchanged}
-	var library_order: Array[StringName] = []
-	for value: Variant in profile["library_slots"]:
-		var card_id := StringName(String(value))
-		if card_id != &"" and card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
-			library_order.append(card_id)
-	for value: Variant in profile["main_deck"]:
-		var card_id := StringName(String(value))
-		if card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
-			library_order.append(card_id)
-	for card_id: StringName in unlocked_ids:
-		if card_id not in DEFAULT_MAIN_DECK_IDS and card_id not in library_order:
-			library_order.append(card_id)
-	var candidate: Dictionary = profile.duplicate(true)
+	var candidate: Dictionary = create_default_profile()
+	candidate["unlocked_sect_ids"] = (profile["unlocked_sect_ids"] as Array).duplicate()
+	candidate["best_scores_by_sect"] = (profile["best_scores_by_sect"] as Dictionary).duplicate(true)
+	candidate["mastered_card_ids"] = (profile["mastered_card_ids"] as Array).duplicate()
 	candidate["run_active"] = false
 	candidate["selected_sect_id"] = ""
 	candidate["level"] = 0
@@ -591,8 +630,6 @@ func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	candidate["pending_reward_card_ids"] = []
 	candidate["effective_duel_count"] = 0
 	candidate["defeated_enemy_ids"] = []
-	candidate["main_deck"] = _string_array(DEFAULT_MAIN_DECK_IDS)
-	candidate["library_slots"] = _padded_library(_string_array(library_order))
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged}
 	return {"ok": true, "profile": candidate}
@@ -616,6 +653,40 @@ func get_unlocked_ids(profile: Dictionary) -> Array[StringName]:
 	for value: Variant in raw:
 		result.append(StringName(String(value)))
 	return result
+
+
+func create_testing_profile(profile: Dictionary) -> Dictionary:
+	var source: Dictionary = repair_profile(profile)
+	var all_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var requested_deck: Array[StringName] = get_main_deck_ids(source)
+	if requested_deck.size() < MAIN_DECK_CAPACITY:
+		requested_deck = TESTING_MAIN_DECK_IDS.duplicate()
+	var used_glyphs: Dictionary = {}
+	for value: Variant in requested_deck:
+		used_glyphs[DeckRules.get_glyph(StringName(String(value)))] = true
+	for card_id: StringName in all_ids:
+		if requested_deck.size() >= MAIN_DECK_CAPACITY:
+			break
+		var glyph: String = DeckRules.get_glyph(card_id)
+		if glyph.is_empty() or used_glyphs.has(glyph):
+			continue
+		requested_deck.append(card_id)
+		used_glyphs[glyph] = true
+	var placement: Dictionary = _build_exact_deck_placement(
+		all_ids,
+		requested_deck,
+		source.get("library_slots", []) as Array
+	)
+	if not bool(placement.get("ok", false)):
+		return {}
+	var result: Dictionary = source.duplicate(true)
+	result["pending_reward_card_ids"] = []
+	result["unlocked_card_ids"] = _string_array(all_ids)
+	result["main_deck"] = placement.get("main_deck", [])
+	result["library_slots"] = _padded_library(
+		placement.get("library_cards", []) as Array
+	)
+	return result if is_profile_valid(result) else {}
 
 
 func get_unlocked_sect_ids(profile: Dictionary) -> Array[StringName]:
@@ -773,6 +844,7 @@ func record_completed_duel_and_save(
 	_apply_mastery_candidates(candidate, mastery_candidate_ids)
 	var defeated_enemy_id: StringName = get_current_enemy_id(candidate)
 	(candidate["defeated_enemy_ids"] as Array).append(String(defeated_enemy_id))
+	_unlock_enemy_sect(candidate, defeated_enemy_id)
 	if (candidate["defeated_enemy_ids"] as Array).size() >= victories_required:
 		var summary: Dictionary = _build_ending_summary(candidate)
 		_record_best_score(candidate, summary)
@@ -946,10 +1018,58 @@ static func tier_for_level(level: int) -> int:
 
 
 func _default_unlocked_ids() -> Array[StringName]:
-	var result: Array[StringName] = []
+	return DEFAULT_MAIN_DECK_IDS.duplicate()
+
+
+func _pick_starting_tier_one_ids(
+	profile: Dictionary,
+	sect_tier_one_ids: Array[StringName],
+	rng: RandomNumberGenerator,
+	allow_owned: bool
+) -> Array[StringName]:
+	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
+	var candidates: Array[StringName] = []
+	var owned_fallbacks: Array[StringName] = []
 	for card_id: StringName in Catalog.get_all_card_ids():
-		if card_id not in DEFAULT_LOCKED_IDS:
-			result.append(card_id)
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		if (
+			int(definition.get("tier", 0)) == 1
+			and card_id not in DEFAULT_MAIN_DECK_IDS
+			and card_id not in sect_tier_one_ids
+		):
+			if card_id in already_unlocked:
+				owned_fallbacks.append(card_id)
+			else:
+				candidates.append(card_id)
+	var picker: RandomNumberGenerator = rng
+	if picker == null:
+		picker = RandomNumberGenerator.new()
+		picker.randomize()
+	_shuffle_string_names(candidates, picker)
+	_shuffle_string_names(owned_fallbacks, picker)
+	if allow_owned:
+		candidates.append_array(owned_fallbacks)
+	var result: Array[StringName] = []
+	var used_glyphs: Dictionary = {}
+	for card_id: StringName in DEFAULT_MAIN_DECK_IDS:
+		used_glyphs[DeckRules.get_glyph(card_id)] = true
+	for candidate_id: StringName in candidates:
+		var glyph: String = DeckRules.get_glyph(candidate_id)
+		if glyph.is_empty() or used_glyphs.has(glyph):
+			continue
+		result.append(candidate_id)
+		used_glyphs[glyph] = true
+		if result.size() >= MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
+			break
+	if not allow_owned and result.size() < MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
+		for candidate_id: StringName in owned_fallbacks:
+			var glyph: String = DeckRules.get_glyph(candidate_id)
+			if glyph.is_empty() or used_glyphs.has(glyph):
+				continue
+			result.append(candidate_id)
+			used_glyphs[glyph] = true
+			if result.size() >= MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
+				break
 	return result
 
 
@@ -1060,8 +1180,15 @@ func _get_selected_sect_card_ids_for_tier(
 	profile: Dictionary,
 	tier: int
 ) -> Array[StringName]:
-	var result: Array[StringName] = []
 	var sect_id: StringName = get_selected_sect_id(profile)
+	return _get_card_ids_for_sect_tier(sect_id, tier)
+
+
+func _get_card_ids_for_sect_tier(
+	sect_id: StringName,
+	tier: int
+) -> Array[StringName]:
+	var result: Array[StringName] = []
 	if sect_id == &"" or not Sects.has_sect(sect_id):
 		return result
 	var sect_glyph: String = String(Sects.get_definition(sect_id).get("glyph", ""))
@@ -1075,11 +1202,47 @@ func _get_selected_sect_card_ids_for_tier(
 	return result
 
 
+func _build_exact_deck_placement(
+	unlocked_ids: Array[StringName],
+	requested_deck: Array[StringName],
+	current_library: Array
+) -> Dictionary:
+	if (
+		requested_deck.size() != MAIN_DECK_CAPACITY
+		or not DeckRules.has_unique_glyphs(requested_deck)
+	):
+		return {"ok": false}
+	var deck_set: Dictionary = {}
+	for card_id: StringName in requested_deck:
+		if card_id not in unlocked_ids or deck_set.has(card_id):
+			return {"ok": false}
+		deck_set[card_id] = true
+	var library_cards: Array[StringName] = []
+	for value: Variant in current_library:
+		var card_id := StringName(String(value))
+		if (
+			card_id != &""
+			and card_id in unlocked_ids
+			and not deck_set.has(card_id)
+			and card_id not in library_cards
+		):
+			library_cards.append(card_id)
+	for card_id: StringName in unlocked_ids:
+		if not deck_set.has(card_id) and card_id not in library_cards:
+			library_cards.append(card_id)
+	return {
+		"ok": true,
+		"main_deck": _string_array(requested_deck),
+		"library_cards": _string_array(library_cards),
+	}
+
+
 func _build_victory_advancement(
 	profile: Dictionary,
 	enemy_id_override: StringName
 ) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
+	_unlock_enemy_sect(unchanged, get_current_enemy_id(unchanged))
 	var current_level: int = get_character_level(profile)
 	if current_level >= MAX_CHARACTER_LEVEL:
 		return {
@@ -1110,7 +1273,7 @@ func _build_victory_advancement(
 			"profile": unchanged,
 			"added_ids": [],
 		}
-	var candidate: Dictionary = profile.duplicate(true)
+	var candidate: Dictionary = unchanged.duplicate(true)
 	_apply_unlock_expansion(candidate, expansion)
 	candidate["level"] = next_level
 	candidate["current_enemy_id"] = String(next_enemy_id)
@@ -1121,6 +1284,22 @@ func _build_victory_advancement(
 		"profile": candidate,
 		"added_ids": expansion.get("added_ids", []),
 	}
+
+
+func _unlock_enemy_sect(profile: Dictionary, enemy_id: StringName) -> void:
+	if enemy_id == &"" or not Enemies.has_enemy(enemy_id):
+		return
+	_unlock_declared_sect(profile, Enemies.get_definition(enemy_id))
+
+
+static func _unlock_declared_sect(profile: Dictionary, enemy: Dictionary) -> void:
+	var sect_id := StringName(String(enemy.get("sect_id", "")))
+	if sect_id == &"" or not Sects.has_sect(sect_id):
+		return
+	var unlocked_sects: Array = profile.get("unlocked_sect_ids", []) as Array
+	if String(sect_id) not in unlocked_sects:
+		unlocked_sects.append(String(sect_id))
+	profile["unlocked_sect_ids"] = unlocked_sects
 
 
 func _build_ending_summary(profile: Dictionary) -> Dictionary:
@@ -1172,9 +1351,8 @@ func _apply_mastery_candidates(profile: Dictionary, candidate_ids: Array) -> voi
 
 func _build_closed_run_profile(profile: Dictionary) -> Dictionary:
 	var unlocked_ids: Array[StringName] = get_unlocked_ids(profile)
-	var placement: Dictionary = _build_default_deck_placement(
+	var placement: Dictionary = _build_inactive_deck_placement(
 		unlocked_ids,
-		profile.get("main_deck", []) as Array,
 		profile.get("library_slots", []) as Array
 	)
 	if not bool(placement.get("ok", false)):
@@ -1218,6 +1396,31 @@ func _build_default_deck_placement(
 		"ok": true,
 		"main_deck": _string_array(DEFAULT_MAIN_DECK_IDS),
 		"library_cards": _string_array(library_order),
+	}
+
+
+func _build_inactive_deck_placement(
+	unlocked_ids: Array[StringName],
+	current_library: Array
+) -> Dictionary:
+	for base_id: StringName in DEFAULT_MAIN_DECK_IDS:
+		if base_id not in unlocked_ids:
+			return {"ok": false}
+	var library_cards: Array[StringName] = []
+	for collection: Array in [current_library, unlocked_ids]:
+		for value: Variant in collection:
+			var card_id := StringName(String(value))
+			if (
+				card_id != &""
+				and card_id in unlocked_ids
+				and card_id not in DEFAULT_MAIN_DECK_IDS
+				and card_id not in library_cards
+			):
+				library_cards.append(card_id)
+	return {
+		"ok": true,
+		"main_deck": _string_array(DEFAULT_MAIN_DECK_IDS),
+		"library_cards": _string_array(library_cards),
 	}
 
 

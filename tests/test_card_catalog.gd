@@ -58,7 +58,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 82, "Catalog contains all eighty-two current cards")
+	_check(Catalog.get_all_card_ids().size() == 83, "Catalog contains all eighty-three current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -195,7 +195,10 @@ func _test_encounter_decks() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
-	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"KuiHua1", &"YouFenLaiYi2", &"TuNaShu2"], "Player deck preserves current hand order")
+	_check(
+		player_ids == [&"TaiZuChangQuan", &"TuNaShu1"],
+		"Inactive normal profiles expose only the two initial cards"
+	)
 	_check(opponent_ids == [&"CangSongYingKe1", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
@@ -206,7 +209,13 @@ func _test_encounter_decks() -> void:
 
 
 func _test_side_deck_pool() -> void:
-	var main_ids: Array[StringName] = Decks.get_player_card_ids()
+	var main_ids: Array[StringName] = [
+		&"CangSongYingKe2",
+		&"gate_general",
+		&"KuiHua1",
+		&"YouFenLaiYi2",
+		&"TuNaShu2",
+	]
 	var side_ids: Array[StringName] = Decks.get_side_deck_card_ids(main_ids)
 	_check(not side_ids.is_empty(), "A catalog-backed main deck derives side cards")
 	var observed_glyphs: Dictionary = {}

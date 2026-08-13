@@ -2,6 +2,7 @@ extends SceneTree
 
 const Catalog = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -13,12 +14,16 @@ func _init() -> void:
 
 func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
-	_check(Catalog.get_all_enemy_ids().size() == 30, "Catalog contains two enemies per level")
+	_check(Catalog.get_all_enemy_ids().size() == 25, "Catalog contains all configured enemies")
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
 	var observed_decks: Dictionary = {}
 	for level: int in range(1, 16):
 		var enemy_ids: Array[StringName] = Catalog.get_enemy_ids_for_level(level)
-		_check(enemy_ids.size() == 2, "Level %d has two random candidates" % level)
+		var expected_count: int = 2 if level <= 10 else 1
+		_check(
+			enemy_ids.size() == expected_count,
+			"Level %d has its configured enemy candidates" % level
+		)
 		for enemy_id: StringName in enemy_ids:
 			var definition: Dictionary = Catalog.get_definition(enemy_id)
 			_check(StringName(definition["id"]) == enemy_id, "%s preserves its ID" % enemy_id)
@@ -45,9 +50,12 @@ func _run() -> void:
 	)
 	_check(Catalog.pick_random_enemy_id(0) == &"", "Invalid levels have no enemy")
 	_check(
-		not Catalog.is_self_castration_enabled(&"qingfeng_xuedi")
-		and not Catalog.is_self_castration_enabled(&"dukou_xiaoke"),
-		"Both Young Escort Lin Pingzhi encounters explicitly disable self-castration"
+		not Catalog.is_self_castration_enabled(&"qingfeng_xuedi"),
+		"Young Escort Lin Pingzhi explicitly disables self-castration"
+	)
+	_check(
+		Catalog.is_self_castration_enabled(&"dukou_xiaoke"),
+		"Shi Biaotou keeps the default self-castration behavior"
 	)
 	_check(
 		Catalog.is_self_castration_enabled(&"tieshan_menren"),
@@ -89,6 +97,24 @@ func _run() -> void:
 	_check(
 		not Catalog.validate_definition(invalid_switch).is_empty(),
 		"Enemy self-castration declarations must be Boolean"
+	)
+	var valid_sect: Dictionary = duplicate_fixture.duplicate(true)
+	valid_sect["sect_id"] = &"TaiShanPai"
+	_check(
+		Catalog.validate_definition(valid_sect).is_empty(),
+		"Enemy definitions accept a known StringName sect declaration"
+	)
+	var invalid_sect: Dictionary = duplicate_fixture.duplicate(true)
+	invalid_sect["sect_id"] = &"missing_sect"
+	_check(
+		not Catalog.validate_definition(invalid_sect).is_empty(),
+		"Enemy definitions reject unknown sect declarations"
+	)
+	var wrong_sect_type: Dictionary = duplicate_fixture.duplicate(true)
+	wrong_sect_type["sect_id"] = String(Sects.get_all_sect_ids()[0])
+	_check(
+		not Catalog.validate_definition(wrong_sect_type).is_empty(),
+		"Enemy sect declarations must be StringName values"
 	)
 	_finish()
 

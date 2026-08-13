@@ -18,7 +18,28 @@ func _init() -> void:
 func _run() -> void:
 	_cleanup()
 	var fixture_store: RefCounted = Store.new(_save_path)
-	var fixture_profile: Dictionary = fixture_store.create_default_profile()
+	var fixture_profile: Dictionary = fixture_store.create_testing_profile(
+		fixture_store.create_default_profile()
+	)
+	var high_tier_deck: Array = [
+		"CangSongYingKe2",
+		"gate_general",
+		"KuiHua1",
+		"YouFenLaiYi2",
+		"TuNaShu2",
+	]
+	var displaced: Array = (fixture_profile["main_deck"] as Array).duplicate()
+	fixture_profile["main_deck"] = high_tier_deck
+	var occupied_library: Array = []
+	for value: Variant in fixture_profile["library_slots"]:
+		if not String(value).is_empty() and String(value) not in high_tier_deck:
+			occupied_library.append(String(value))
+	for value: Variant in displaced:
+		if String(value) not in high_tier_deck and String(value) not in occupied_library:
+			occupied_library.append(String(value))
+	while occupied_library.size() < Store.LIBRARY_CAPACITY:
+		occupied_library.append("")
+	fixture_profile["library_slots"] = occupied_library
 	var mastered_library_id := StringName(String(fixture_profile["library_slots"][0]))
 	fixture_profile["mastered_card_ids"] = [String(mastered_library_id)]
 	_check(fixture_store.save_profile(fixture_profile), "Mastery color fixture saves")
@@ -151,7 +172,13 @@ func _run() -> void:
 
 	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
 	var tier_totals: Vector2i = builder.debug_get_tier_totals()
-	_check(tier_totals == Vector2i(12, 11), "Player and enemy tier totals are calculated from catalog data")
+	_check(
+		tier_totals == Vector2i(
+			_sum_tiers(fixture_profile["main_deck"]),
+			_sum_tiers(enemy_fixture_ids)
+		),
+		"Player and enemy tier totals are calculated from catalog data"
+	)
 	_check(not builder.debug_can_go_first(), "Higher-tier player deck blocks the go-first choice")
 	var blocked_character := go_first.get_node("Characters/Qiang") as TextureRect
 	var blocked_material := blocked_character.material as ShaderMaterial
@@ -278,6 +305,15 @@ func _find_card_at_tier(card_ids: Array, tier: int) -> int:
 		if int(Catalog.get_definition(card_id).get("tier", 0)) == tier:
 			return index
 	return -1
+
+
+func _sum_tiers(card_ids: Array) -> int:
+	var total: int = 0
+	for value: Variant in card_ids:
+		var card_id := StringName(String(value))
+		if Catalog.has_card(card_id):
+			total += int(Catalog.get_definition(card_id).get("tier", 0))
+	return total
 
 
 func _cleanup() -> void:

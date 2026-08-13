@@ -29,7 +29,7 @@ func _run() -> void:
 
 	var flow: Variant = MAIN_SCENE.instantiate()
 	flow.deck_profile_path = _save_path
-	flow.testing_mode = true
+	flow.testing_mode = false
 	flow.victories_required = 1
 	root.add_child(flow)
 	await process_frame
@@ -61,7 +61,10 @@ func _run() -> void:
 	)
 	_check(not bool(completed_profile["run_active"]), "Final-victory routing persists a closed run")
 	_check((completed_profile["pending_reward_card_ids"] as Array).is_empty(), "Final victory bypasses reward creation")
-	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Final-victory routing restores the default deck")
+	_check(
+		store.get_main_deck_ids(completed_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Final-victory routing restores the default deck"
+	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Final-victory routing persists the achievement")
 
 	var overflow_fixture: String = ""

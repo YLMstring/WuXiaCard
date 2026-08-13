@@ -16,16 +16,35 @@ const OPPONENT_CARD_IDS: Array[StringName] = [
 ]
 
 
-static func get_player_card_ids(profile_path: String = ProfileStore.DEFAULT_SAVE_PATH) -> Array[StringName]:
+static func get_player_card_ids(
+	profile_path: String = ProfileStore.DEFAULT_SAVE_PATH,
+	testing_mode: bool = false
+) -> Array[StringName]:
 	var store: RefCounted = ProfileStore.new(profile_path)
-	return store.get_main_deck_ids(store.load_profile())
+	var profile: Dictionary = (
+		store.load_profile_read_only()
+		if testing_mode
+		else store.load_profile()
+	)
+	if testing_mode:
+		profile = store.create_testing_profile(profile)
+		if profile_path == ProfileStore.DEFAULT_SAVE_PATH:
+			return ProfileStore.TESTING_MAIN_DECK_IDS.duplicate()
+	return store.get_main_deck_ids(profile)
 
 
 static func get_player_enabled_effect_gates(
-	profile_path: String = ProfileStore.DEFAULT_SAVE_PATH
+	profile_path: String = ProfileStore.DEFAULT_SAVE_PATH,
+	testing_mode: bool = false
 ) -> Array[StringName]:
 	var store: RefCounted = ProfileStore.new(profile_path)
-	var profile: Dictionary = store.load_profile()
+	var profile: Dictionary = (
+		store.load_profile_read_only()
+		if testing_mode
+		else store.load_profile()
+	)
+	if testing_mode:
+		profile = store.create_testing_profile(profile)
 	var result: Array[StringName] = []
 	for card_id: StringName in store.get_unlocked_ids(profile):
 		if not Catalog.has_card(card_id):

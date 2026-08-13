@@ -45,11 +45,17 @@ func _test_profile_initializes_player_gate() -> void:
 	_cleanup_profile(profile_path)
 	_check(
 		Catalog.EFFECT_GATE_SELF_CASTRATION
-		in Decks.get_player_enabled_effect_gates(profile_path),
-		"A new profile enables player self-castration effects through unlocked KuiHua0"
+		not in Decks.get_player_enabled_effect_gates(profile_path),
+		"A new normal profile disables player self-castration effects without KuiHua0"
 	)
 	var store: RefCounted = ProfileStore.new(profile_path)
-	var profile: Dictionary = store.create_default_profile()
+	var profile: Dictionary = store.create_testing_profile(store.create_default_profile())
+	_check(store.save_profile(profile), "A fully unlocked profile saves for gate testing")
+	_check(
+		Catalog.EFFECT_GATE_SELF_CASTRATION
+		in Decks.get_player_enabled_effect_gates(profile_path),
+		"An unlocked KuiHua0 enables player self-castration effects"
+	)
 	(profile["unlocked_card_ids"] as Array).erase("KuiHua0")
 	(profile["library_slots"] as Array).erase("KuiHua0")
 	(profile["library_slots"] as Array).append("")
