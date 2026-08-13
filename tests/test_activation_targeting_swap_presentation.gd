@@ -25,7 +25,7 @@ func _run() -> void:
 	var opponent_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"gate_general",
-		&"meng_huo",
+		&"KuiHua1",
 		&"YouFenLaiYi2",
 		&"TuNaShu2",
 	]
@@ -223,7 +223,7 @@ func _check_enemy_hand_activation_target() -> void:
 	duel.set("opponent_hand_shuffle_seed", -1)
 	var opponent_ids: Array[StringName] = [
 		&"gate_general",
-		&"meng_huo",
+		&"KuiHua1",
 		&"YouFenLaiYi2",
 		&"TuNaShu2",
 		&"CangSongYingKe2",

@@ -27,7 +27,7 @@ func _test_unique_glyphs() -> void:
 		Rules.has_unique_glyphs([
 			&"CangSongYingKe2",
 			&"gate_general",
-			&"meng_huo",
+			&"KuiHua1",
 			&"YouFenLaiYi2",
 			&"TuNaShu2",
 		]),
@@ -46,7 +46,7 @@ func _test_exchanges() -> void:
 	var main: Array = [
 		"CangSongYingKe2",
 		"gate_general",
-		"meng_huo",
+		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
 	]
@@ -62,7 +62,7 @@ func _test_exchanges() -> void:
 
 	var rotated: Dictionary = Rules.build_player_exchange(main, library, 1, 2)
 	_check(rotated["main_deck"][2] == "CangSongYingKe1", "Incoming namesake enters chosen slot")
-	_check(rotated["main_deck"][0] == "meng_huo", "Chosen-slot card rotates into old namesake slot")
+	_check(rotated["main_deck"][0] == "KuiHua1", "Chosen-slot card rotates into old namesake slot")
 	_check(rotated["library_slots"][1] == "CangSongYingKe2", "Old namesake rotates into library source")
 	_check(
 		(rotated["changed_deck_indices"] as Array).size() == 2,
@@ -75,7 +75,7 @@ func _test_repair() -> void:
 		"CangSongYingKe1",
 		"CangSongYingKe2",
 		"gate_general",
-		"meng_huo",
+		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
 		"fire_envoy",
@@ -86,7 +86,7 @@ func _test_repair() -> void:
 			"CangSongYingKe1",
 			"gate_general",
 			"CangSongYingKe2",
-			"meng_huo",
+			"KuiHua1",
 			"YouFenLaiYi2",
 		],
 		["TuNaShu2", "fire_envoy"],

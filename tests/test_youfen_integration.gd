@@ -24,7 +24,7 @@ func _run() -> void:
 	var opponent_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"gate_general",
-		&"meng_huo",
+		&"KuiHua1",
 		&"YouFenLaiYi2",
 		&"TuNaShu2",
 	]

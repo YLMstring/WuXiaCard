@@ -64,9 +64,9 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"bailu_shanzhang", "name": "白鹿山长", "level": 13, "deck": [&"WanYueChaoZong1", &"DaSongYangZhang1", &"YinYangZhang3", &"HanBinZhenQi3", &"TianWaiYuLong2"]},
 	{"id": &"xuanyue_jianshou", "name": "玄岳剑首", "level": 13, "deck": [&"DaSongYangZhang1", &"YinYangZhang3", &"HanBinZhenQi3", &"TianWaiYuLong2", &"DuGu9Jian1"]},
 	{"id": &"tianmen_yishi", "name": "天门遗世", "level": 14, "deck": [&"YinYangZhang3", &"HanBinZhenQi3", &"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general"]},
-	{"id": &"guhai_kuangdao", "name": "孤海狂刀", "level": 14, "deck": [&"HanBinZhenQi3", &"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general", &"meng_huo"]},
-	{"id": &"wulin_sanren", "name": "武林散人", "level": 15, "deck": [&"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general", &"meng_huo", &"CangSongYingKe1"]},
-	{"id": &"jiugong_lunjianzhe", "name": "九宫论剑者", "level": 15, "deck": [&"DuGu9Jian1", &"gate_general", &"meng_huo", &"CangSongYingKe1", &"CangSongYingKe2"]},
+	{"id": &"guhai_kuangdao", "name": "孤海狂刀", "level": 14, "deck": [&"HanBinZhenQi3", &"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general", &"KuiHua1"]},
+	{"id": &"wulin_sanren", "name": "武林散人", "level": 15, "deck": [&"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general", &"KuiHua1", &"CangSongYingKe1"]},
+	{"id": &"jiugong_lunjianzhe", "name": "九宫论剑者", "level": 15, "deck": [&"DuGu9Jian1", &"gate_general", &"KuiHua1", &"CangSongYingKe1", &"CangSongYingKe2"]},
 ]
 
 static var _enemy_definitions: Dictionary = _build_definition_map()

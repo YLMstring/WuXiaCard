@@ -22,7 +22,7 @@ const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
 const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
 	&"gate_general",
-	&"meng_huo",
+	&"KuiHua1",
 	&"YouFenLaiYi2",
 	&"TuNaShu2",
 ]

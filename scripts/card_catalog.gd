@@ -296,7 +296,11 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"DuGu9Jian2",
 	&"DuGu9Jian3",
 	&"gate_general",
-	&"meng_huo",
+	&"KuiHua1",
+	&"KuiHua2",
+	&"KuiHua3",
+	&"KuiHua4",
+	&"KuiHua0",
 ]
 
 const HANBIN_POWER_BATCH: StringName = &"hanbin_frozen_turn"
@@ -2846,42 +2850,79 @@ const _CARD_DEFINITIONS: Dictionary = {
 			},
 		],
 	},
-	&"meng_huo": {
-		"id": &"meng_huo",
-		"glyph": "孟",
-		"picture": "res://pics/LKT010_003.png",
-		"sect": "",
-		"tier": 1,
-		"weapon": "",
-		"description": "",
-		"flavor": "",
-		"powers": [8, 7, 2, 3],
+	&"KuiHua1": {
+		"id": &"KuiHua1",
+		"glyph": "天人化生",
+		"picture": "res://pics/LKT010_006.png",
+		"sect": "江湖",
+		"tier": 5,
+		"weapon": "心法",
+		"description": "需自宫。回合结束时，额外出一张牌。",
+		"flavor": "东方不败从《葵花宝典》中领悟的人生妙谛，天人化生，万物滋长。",
+		"powers": [-1, -1, -1, -1],
 		"abilities": [
 			{
 				"triggers": [
 					{
-						"event": CARD_AFTER_FLIPPED,
-						"conditions": [
-							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_GAIN_KI, "amount": 1},
-						],
-					},
-					{
 						"event": TRIGGER_END_OWNER_TURN,
 						"conditions": [
 							{"type": CONDITION_TURN_OWNER_IS_SELF},
-							{"type": CONDITION_KI_AT_LEAST, "amount": 1},
 						],
 						"actions": [
-							{"type": ACTION_SPEND_ALL_KI},
 							{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 						],
 					},
 				],
 			},
 		],
+	},
+	&"KuiHua2": {
+		"id": &"KuiHua2",
+		"glyph": "钟馗抉目",
+		"picture": "res://pics/LKT010_482.png",
+		"sect": "江湖",
+		"tier": 1,
+		"weapon": "轻剑",
+		"description": "需自宫。被攻击时，移回手牌。锁定：防御者的点数视为其最小一侧的点数。我将敌方翻面后，获得以下效果：敌方攻击时不分敌我。",
+		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
+		"powers": [6, 4, 6, 4],
+		"abilities": [],
+	},
+	&"KuiHua3": {
+		"id": &"KuiHua3",
+		"glyph": "飞燕穿柳",
+		"picture": "res://pics/LKT010_542.png",
+		"sect": "江湖",
+		"tier": 1,
+		"weapon": "轻剑",
+		"description": "需自宫。被攻击时，移回手牌。进场后，若只有一个相邻敌方，与其交换位置。我将敌方翻面后，重新进场。",
+		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
+		"powers": [4, 6, 4, 6],
+		"abilities": [],
+	},
+	&"KuiHua4": {
+		"id": &"KuiHua4",
+		"glyph": "群邪辟易",
+		"picture": "res://pics/LKT010_488.png",
+		"sect": "江湖",
+		"tier": 1,
+		"weapon": "轻剑",
+		"description": "需自宫。被攻击时，移回手牌。进场后，抽一张牌，将所有最初是敌方的友方移除，并在相同位置生成我的复制。",
+		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
+		"powers": [5, 5, 5, 5],
+		"abilities": [],
+	},
+	&"KuiHua0": {
+		"id": &"KuiHua0",
+		"glyph": "挥剑自宫",
+		"picture": "res://pics/LKT010_007.png",
+		"sect": "江湖",
+		"tier": 5,
+		"weapon": "轻剑",
+		"description": "解锁我之后，自动激活所有需自宫牌的效果（无需携带）。",
+		"flavor": "辟邪剑谱的第一道法诀，武林称雄，挥剑自宫。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [],
 	},
 }
 

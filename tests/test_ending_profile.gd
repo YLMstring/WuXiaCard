@@ -82,7 +82,7 @@ func _run() -> void:
 		Store.REWARD_VICTORY,
 		2,
 		&"",
-		[&"meng_huo"]
+		[&"KuiHua1"]
 	)
 	_check(bool(final_win.get("ok", false)), "The final victory saves")
 	_check(bool(final_win.get("completed", false)), "The configured victory target completes the run")
@@ -99,7 +99,7 @@ func _run() -> void:
 	_check(completed_profile["unlocked_card_ids"] == unlocked_before, "Completion preserves card unlocks")
 	_check(
 		store.get_mastered_card_ids(completed_profile)
-		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2", &"meng_huo"],
+		== [&"TuNaShu2", &"gate_general", &"CangSongYingKe2", &"KuiHua1"],
 		"Final victory records mastery before closing the run"
 	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 5000, "Completion stores the sect's first best score")
@@ -168,7 +168,7 @@ func _run() -> void:
 	legacy_active.erase("effective_duel_count")
 	legacy_active.erase("defeated_enemy_ids")
 	legacy_active.erase("best_scores_by_sect")
-	legacy_active["main_deck"] = ["gate_general", "meng_huo", "jiang_wei", "TuNaShu2", "fire_envoy"]
+	legacy_active["main_deck"] = ["gate_general", "KuiHua1", "jiang_wei", "TuNaShu2", "fire_envoy"]
 	var migrated: Dictionary = store.repair_profile(legacy_active)
 	_check(store.is_profile_valid(migrated), "A legacy active profile migrates to the new schema")
 	_check(not bool(migrated["run_active"]), "Legacy migration closes an unreconstructable active run")

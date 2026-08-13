@@ -192,7 +192,7 @@ func _test_encounter_decks() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(cleanup_path))
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
-	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"meng_huo", &"YouFenLaiYi2", &"TuNaShu2"], "Player deck preserves current hand order")
+	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"KuiHua1", &"YouFenLaiYi2", &"TuNaShu2"], "Player deck preserves current hand order")
 	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
@@ -343,7 +343,7 @@ func _test_activate_ability_replacement() -> void:
 
 
 func _test_trigger_ability_schema() -> void:
-	var definition: Dictionary = Catalog.get_definition(&"meng_huo")
+	var definition: Dictionary = Catalog.get_definition(&"KuiHua1")
 	var abilities: Array = definition.get("abilities", [])
 	_check(abilities.size() == 1, "Meng Huo declares one ability")
 	var ability: Dictionary = abilities[0]
@@ -361,11 +361,11 @@ func _test_trigger_ability_schema() -> void:
 		],
 		"Meng Huo uses the shared typed conditions array"
 	)
-	var instance: Dictionary = Catalog.create_instance(&"meng_huo", 1, &"trigger_meng")
+	var instance: Dictionary = Catalog.create_instance(&"KuiHua1", 1, &"trigger_meng")
 	_check(int(instance.get("ki", -1)) == 0, "Meng Huo starts with zero ki")
 	var runtime_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
 	_check(runtime_ability.has("retained_on_flip") and not bool(runtime_ability["retained_on_flip"]), "Battle momentum normalizes to non-retained")
-	_check(Catalog.validate_ability(ability, &"meng_huo_fixture").is_empty(), "Approved trigger schema passes validation")
+	_check(Catalog.validate_ability(ability, &"KuiHua1_fixture").is_empty(), "Approved trigger schema passes validation")
 
 	var invalid_abilities: Array[Dictionary] = [
 		{},

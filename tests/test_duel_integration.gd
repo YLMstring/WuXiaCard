@@ -51,7 +51,7 @@ func _run() -> void:
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
 	await _check_manual_activate_move()
-	await _check_meng_huo_extra_turn_presentation()
+	await _check_KuiHua1_extra_turn_presentation()
 	await _check_ability_pulse_sequencing()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("DuelCanvas/PlayerHand"))
 
@@ -1204,7 +1204,7 @@ func _check_manual_activate_move() -> void:
 	await process_frame
 
 
-func _check_meng_huo_extra_turn_presentation() -> void:
+func _check_KuiHua1_extra_turn_presentation() -> void:
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
@@ -1227,7 +1227,7 @@ func _check_meng_huo_extra_turn_presentation() -> void:
 	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Meng Huo's extra card play keeps control with the same player")
 	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-card-play grant does not add an action by itself")
 	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
-	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"meng_huo", "Meng Huo remains mapped to his production board view")
+	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"KuiHua1", "Meng Huo remains mapped to his production board view")
 	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Control
 	_check(

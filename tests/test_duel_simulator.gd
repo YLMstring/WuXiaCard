@@ -52,12 +52,12 @@ func _run() -> void:
 	_test_summon_reaction_conditions_and_ability_loss()
 	_test_summon_reactions_use_board_order_and_stop_after_flip()
 	_test_summon_reaction_exile_and_successful_flip_trigger()
-	_test_meng_huo_flip_gain_and_extra_turn()
-	_test_meng_huo_multiple_flips_gain_in_order()
-	_test_meng_huo_exile_grants_no_ki()
-	_test_multiple_meng_huos_drain_for_one_extra_turn()
-	_test_meng_huo_extra_turn_can_chain()
-	_test_flipped_meng_huo_loses_ability_but_keeps_ki()
+	_test_KuiHua1_flip_gain_and_extra_turn()
+	_test_KuiHua1_multiple_flips_gain_in_order()
+	_test_KuiHua1_exile_grants_no_ki()
+	_test_multiple_KuiHua1s_drain_for_one_extra_turn()
+	_test_KuiHua1_extra_turn_can_chain()
+	_test_flipped_KuiHua1_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
 	_test_retained_after_summon_draws_for_new_owner()
 	_test_invalid_context_defaults_to_no_effect()
@@ -394,7 +394,7 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 		&"zixia_extra_start"
 	)
 	var meng: Dictionary = Catalog.create_instance(
-		&"meng_huo",
+		&"KuiHua1",
 		Rules.PLAYER_OWNER,
 		&"zixia_extra_meng"
 	)
@@ -1137,8 +1137,8 @@ func _test_search_can_choose_activate_action() -> void:
 
 func _test_trigger_groups_resolve_atomically() -> void:
 	var board: Array = Rules.empty_board()
-	var first: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"trigger_first")
-	var second: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"trigger_second")
+	var first: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"trigger_first")
+	var second: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"trigger_second")
 	first["ki"] = 2
 	second["ki"] = 3
 	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
@@ -1169,7 +1169,7 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "Trigger resolution leaves its source state untouched")
 
 	var stale_state: State = state.duplicate_state()
-	var replacement: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"replacement")
+	var replacement: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"replacement")
 	replacement["ki"] = 5
 	stale_state.board[0] = {"card": replacement, "owner": Rules.PLAYER_OWNER}
 	var stale_events: Array = []
@@ -1493,14 +1493,14 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 	_check(int((((momentum_next.board[4] as Dictionary)["card"] as Dictionary).get("ki", 0))) == 1, "Reaction source retains gained ki")
 
 
-func _test_meng_huo_flip_gain_and_extra_turn() -> void:
+func _test_KuiHua1_flip_gain_and_extra_turn() -> void:
 	var board: Array = Rules.empty_board()
 	board[5] = {
 		"card": Rules.make_card("Guard", "守", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
 		"owner": Rules.OPPONENT_OWNER,
 	}
 	var hand: Array = [
-		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"momentum_meng"),
+		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"momentum_meng"),
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
 	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
@@ -1533,7 +1533,7 @@ func _test_meng_huo_flip_gain_and_extra_turn() -> void:
 	_check(int((((next_state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 0, "Final simulator state stores the drained ki")
 
 
-func _test_meng_huo_multiple_flips_gain_in_order() -> void:
+func _test_KuiHua1_multiple_flips_gain_in_order() -> void:
 	var board: Array = Rules.empty_board()
 	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
 	for target_cell: int in [1, 5, 7, 3]:
@@ -1541,7 +1541,7 @@ func _test_meng_huo_multiple_flips_gain_in_order() -> void:
 	var state := State.new(
 		board,
 		[
-			Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"multi_meng"),
+			Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"multi_meng"),
 			Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 		],
 		[],
@@ -1569,13 +1569,13 @@ func _test_meng_huo_multiple_flips_gain_in_order() -> void:
 	_check(_count_events(events, &"extra_card_play_granted") == 1, "Any amount of gained ki grants one extra card play")
 
 
-func _test_meng_huo_exile_grants_no_ki() -> void:
+func _test_KuiHua1_exile_grants_no_ki() -> void:
 	var board: Array = Rules.empty_board()
 	board[5] = {
 		"card": Rules.make_card("Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
 		"owner": Rules.OPPONENT_OWNER,
 	}
-	var meng: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"exile_meng")
+	var meng: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"exile_meng")
 	(meng.get("active_abilities", []) as Array).append(_exile_ability())
 	var state := State.new(board, [meng], [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
@@ -1584,10 +1584,10 @@ func _test_meng_huo_exile_grants_no_ki() -> void:
 	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_card_play_granted") == 0, "Exile grants no ki or extra card play")
 
 
-func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
+func _test_multiple_KuiHua1s_drain_for_one_extra_turn() -> void:
 	var board: Array = Rules.empty_board()
-	var first: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"row_first")
-	var second: Dictionary = Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"row_second")
+	var first: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"row_first")
+	var second: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"row_second")
 	first["ki"] = 2
 	second["ki"] = 4
 	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
@@ -1611,14 +1611,14 @@ func _test_multiple_meng_huos_drain_for_one_extra_turn() -> void:
 	_check((transition["state"] as State).extra_card_plays_remaining == 1, "Coalesced requests grant one pending play")
 
 
-func _test_meng_huo_extra_turn_can_chain() -> void:
+func _test_KuiHua1_extra_turn_can_chain() -> void:
 	var board: Array = Rules.empty_board()
 	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
 	board[1] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
 	board[4] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
 	var hand: Array = [
-		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"chain_first"),
-		Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"chain_second"),
+		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"chain_first"),
+		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"chain_second"),
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
 	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
@@ -1635,9 +1635,9 @@ func _test_meng_huo_extra_turn_can_chain() -> void:
 	_check(second_state.turn_count == 2, "The original play and extra play each increment action count once")
 
 
-func _test_flipped_meng_huo_loses_ability_but_keeps_ki() -> void:
+func _test_flipped_KuiHua1_loses_ability_but_keeps_ki() -> void:
 	var board: Array = Rules.empty_board()
-	var meng: Dictionary = Catalog.create_instance(&"meng_huo", Rules.OPPONENT_OWNER, &"flipped_meng")
+	var meng: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.OPPONENT_OWNER, &"flipped_meng")
 	meng["ki"] = 3
 	board[5] = {"card": meng, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
@@ -1659,7 +1659,7 @@ func _test_unusable_extra_turn_expires() -> void:
 	var opponent_hand: Array = [Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)]
 	var state := State.new(
 		board,
-		[Catalog.create_instance(&"meng_huo", Rules.PLAYER_OWNER, &"last_meng")],
+		[Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"last_meng")],
 		opponent_hand,
 		Rules.PLAYER_OWNER
 	)
