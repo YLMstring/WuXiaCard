@@ -109,11 +109,11 @@ func _run() -> void:
 	)
 	var color_data: Dictionary = first.card_data.duplicate(true)
 	var tier_colors := {
-		1: Color("66717a"),
+		1: Color("7b858c"),
 		2: Color("3e7659"),
 		3: Color("3f6f9c"),
-		4: Color("715a96"),
-		5: Color("9a612d"),
+		4: Color("c57424"),
+		5: Color("a73737"),
 		6: Color("963f4a"),
 	}
 	for tier: int in tier_colors:

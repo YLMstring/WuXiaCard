@@ -19,11 +19,11 @@ const BASE_CARD_NAME_GAP: float = 4.0
 const CARD_NAME_GAP: float = 6.0
 const ROW_HEIGHT_INCREMENT: float = CARD_NAME_GAP - BASE_CARD_NAME_GAP
 const TIER_NAME_COLORS: Dictionary = {
-	1: Color("66717a"),
+	1: Color("7b858c"),
 	2: Color("3e7659"),
 	3: Color("3f6f9c"),
-	4: Color("715a96"),
-	5: Color("9a612d"),
+	4: Color("c57424"),
+	5: Color("a73737"),
 }
 const OTHER_TIER_NAME_COLOR: Color = Color("963f4a")
 
