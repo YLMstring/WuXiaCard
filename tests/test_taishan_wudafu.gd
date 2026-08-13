@@ -455,9 +455,14 @@ func _test_wudafu_three_empty_deck_does_not_stop_grants() -> void:
 	)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
+	var fallback_count: int = 0
+	for card_value: Variant in next_state.get_hand(Rules.PLAYER_OWNER):
+		if StringName((card_value as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan":
+			fallback_count += 1
 	_check(
-		_events_of_type(transition.get("events", []), &"card_drawn").is_empty(),
-		"WuDaFuJian3 draws nothing from an empty side deck"
+		_events_of_type(transition.get("events", []), &"card_drawn").size() == 2
+		and fallback_count == 2,
+		"WuDaFuJian3 fills both empty-deck draws with TaiZuChangQuan"
 	)
 	_check(
 		_ability_count(next_state, 0) == 1

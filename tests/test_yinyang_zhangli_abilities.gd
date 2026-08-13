@@ -272,9 +272,11 @@ func _test_empty_draw_and_no_palm_edges() -> void:
 	var next_state: State = transition.get("state") as State
 	_check(
 		_find_hand_card(next_state, &"edge_sword").get("active_abilities", []) == []
-		and _count_events(transition.get("events", []), &"card_drawn") == 0
+		and _count_events(transition.get("events", []), &"card_drawn") == 1
+		and StringName((next_state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan"
+		and (next_state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("active_abilities", []).is_empty()
 		and _count_events(transition.get("events", []), &"ability_gained") == 0,
-		"An empty deck and a hand without palm cards resolve cleanly"
+		"An empty deck draws TaiZuChangQuan without granting it palm abilities"
 	)
 
 

@@ -2,6 +2,7 @@ class_name DuelAbilityExecutor
 extends RefCounted
 
 const MAX_HAND_SIZE: int = 5
+const EMPTY_DECK_DRAW_CARD_ID: StringName = &"TaiZuChangQuan"
 
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -830,10 +831,22 @@ static func _draw_cards(
 		return _no_effect(source_cell)
 	var hand: Array = state.get_hand(owner_id)
 	var deck: Array = state.decks.get(owner_id, [])
-	var actual_count: int = mini(requested_count, mini(MAX_HAND_SIZE - hand.size(), deck.size()))
+	var actual_count: int = mini(requested_count, MAX_HAND_SIZE - hand.size())
 	var events: Array[Dictionary] = []
 	for _draw_index: int in range(maxi(actual_count, 0)):
-		var drawn_card: Dictionary = deck.pop_front()
+		var drawn_card: Dictionary
+		if deck.is_empty():
+			var instance_id: StringName = _make_generated_instance_id(
+				state,
+				EMPTY_DECK_DRAW_CARD_ID
+			)
+			drawn_card = Catalog.create_instance(
+				EMPTY_DECK_DRAW_CARD_ID,
+				owner_id,
+				instance_id
+			)
+		else:
+			drawn_card = deck.pop_front()
 		hand.append(drawn_card)
 		events.append({
 			"type": &"card_drawn",

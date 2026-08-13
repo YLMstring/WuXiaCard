@@ -619,7 +619,10 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		[]
 	)
 	var partial_transition: Dictionary = Simulator.apply_action(partial_state, Action.make_play(0, 0))
-	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 1, "A depleted side deck draws only the one remaining card")
+	var partial_hand: Array = (partial_transition["state"] as State).get_hand(Rules.PLAYER_OWNER)
+	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 2, "A depleted side deck fills every available draw")
+	_check(StringName((partial_hand[0] as Dictionary).get("card_id", &"")) == &"tiger_general", "A depleted draw uses the remaining top card first")
+	_check(StringName((partial_hand[1] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan", "A depleted draw fills its missing card with TaiZuChangQuan")
 
 
 func _test_draw_on_play_handles_empty_deck() -> void:
@@ -630,8 +633,31 @@ func _test_draw_on_play_handles_empty_deck() -> void:
 		Rules.PLAYER_OWNER
 	)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
-	_check(_count_events(transition.get("events", []), &"card_drawn") == 0, "An empty side deck emits no draw event")
-	_check((transition["state"] as State).get_hand(Rules.PLAYER_OWNER).is_empty(), "An empty side deck leaves the post-play hand empty")
+	var next_hand: Array = (transition["state"] as State).get_hand(Rules.PLAYER_OWNER)
+	_check(_count_events(transition.get("events", []), &"card_drawn") == 2, "An empty side deck emits one event for each requested draw")
+	_check(next_hand.size() == 2, "An empty side deck still fills both available draws")
+	_check(StringName((next_hand[0] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan", "The first empty-deck draw creates TaiZuChangQuan")
+	_check(StringName((next_hand[1] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan", "The second empty-deck draw creates TaiZuChangQuan")
+	_check(StringName((next_hand[0] as Dictionary).get("instance_id", &"")) != StringName((next_hand[1] as Dictionary).get("instance_id", &"")), "Each empty-deck draw creates a distinct runtime instance")
+	_check((transition["state"] as State).decks[Rules.PLAYER_OWNER].is_empty(), "Generated fallback cards do not refill the side deck")
+
+	var capped_hand: Array = [
+		Catalog.create_instance(&"TuNaShu2", Rules.PLAYER_OWNER, &"capped_fa"),
+	]
+	for index: int in range(4):
+		capped_hand.append(Rules.make_card("Capped %d" % index, "限", [1, 1, 1, 1]))
+	var capped_state := State.new(
+		Rules.empty_board(),
+		capped_hand,
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var capped_transition: Dictionary = Simulator.apply_action(
+		capped_state,
+		Action.make_play(0, 0)
+	)
+	_check(_count_events(capped_transition.get("events", []), &"card_drawn") == 1, "An empty-deck draw creates cards only up to the hand cap")
+	_check((capped_transition["state"] as State).get_hand(Rules.PLAYER_OWNER).size() == 5, "Generated fallback draws stop at five hand cards")
 
 
 func _test_turn_passes_to_owner_with_a_legal_move() -> void:
