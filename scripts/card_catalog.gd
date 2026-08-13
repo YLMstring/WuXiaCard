@@ -248,6 +248,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"tiger_general",
 	&"TuNaShu1",
 	&"TuNaShu2",
+	&"TuNaShu3",
 	&"LaiHeQinQuan1",
 	&"LaiHeQinQuan2",
 	&"LaiHeQinQuan3",
@@ -1687,6 +1688,32 @@ const _CARD_DEFINITIONS: Dictionary = {
 						],
 						"actions": [
 							{"type": ACTION_DRAW_CARDS, "amount": 2},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"TuNaShu3": {
+		"id": &"TuNaShu3",
+		"glyph": "吐纳术",
+		"picture": "res://pics/LKT010_002.png",
+		"sect": "江湖",
+		"tier": 3,
+		"weapon": "心法",
+		"description": "进场后，抽三张牌。",
+		"flavor": "江湖上常见的呼吸吐纳功夫，简单易学。",
+		"powers": [1, 2, 3, 2],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_CARD_AFTER_SUMMONED,
+						"conditions": [
+							{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_DRAW_CARDS, "amount": 3},
 						],
 					},
 				],
