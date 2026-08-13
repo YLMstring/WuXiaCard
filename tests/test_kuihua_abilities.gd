@@ -19,6 +19,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_gate_vocabulary_and_state_copy()
+	await _test_duel_enemy_gate_configuration()
 	_test_profile_initializes_player_gate()
 	_test_player_gate_controls_kuihua_one()
 	_test_zero_target_attack_has_no_after_attack_trigger()
@@ -84,6 +85,33 @@ func _test_profile_initializes_player_gate() -> void:
 		disabled_key != StateKey.build(state),
 		"State keys distinguish different effect gates"
 	)
+
+
+func _test_duel_enemy_gate_configuration() -> void:
+	var enabled_duel: Node = load("res://scenes/duel.tscn").instantiate()
+	enabled_duel.set("continue_automatically", false)
+	root.add_child(enabled_duel)
+	await process_frame
+	_check(
+		Catalog.EFFECT_GATE_SELF_CASTRATION
+		in enabled_duel.duel_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER),
+		"A duel enables enemy self-castration effects by default"
+	)
+	enabled_duel.queue_free()
+	await process_frame
+
+	var disabled_duel: Node = load("res://scenes/duel.tscn").instantiate()
+	disabled_duel.set("continue_automatically", false)
+	disabled_duel.set("opponent_self_castration_enabled", false)
+	root.add_child(disabled_duel)
+	await process_frame
+	_check(
+		Catalog.EFFECT_GATE_SELF_CASTRATION
+		not in disabled_duel.duel_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER),
+		"An explicit duel enemy declaration disables self-castration effects"
+	)
+	disabled_duel.queue_free()
+	await process_frame
 
 
 func _test_player_gate_controls_kuihua_one() -> void:

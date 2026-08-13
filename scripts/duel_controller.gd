@@ -73,6 +73,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var starting_owner_id: int = DuelRules.PLAYER_OWNER
 @export var opponent_name_text: String = "对手名字"
 @export var opponent_card_ids: Array[StringName] = []
+@export var opponent_self_castration_enabled: bool = true
 @export var remembered_enemy_glyphs: Array[String] = []
 
 var turn_state: TurnState = TurnState.PLAYER
@@ -186,6 +187,11 @@ func _ready() -> void:
 	)
 	duel_state.enabled_effect_gates_by_owner[DuelRules.PLAYER_OWNER] = (
 		Decks.get_player_enabled_effect_gates(deck_profile_path)
+	)
+	duel_state.enabled_effect_gates_by_owner[DuelRules.OPPONENT_OWNER] = (
+		[DuelRules.EFFECT_GATE_SELF_CASTRATION]
+		if opponent_self_castration_enabled
+		else []
 	)
 	duel_state.remembered_glyphs_by_owner = {
 		DuelRules.PLAYER_OWNER: remembered_enemy_glyphs.duplicate(),

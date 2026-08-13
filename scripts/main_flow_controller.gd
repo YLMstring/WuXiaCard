@@ -92,6 +92,10 @@ func _show_duel(starting_owner_id: int) -> void:
 	duel.starting_owner_id = starting_owner_id
 	duel.opponent_name_text = String(enemy["name"])
 	duel.opponent_card_ids = _enemy_deck_from_details(enemy)
+	duel.opponent_self_castration_enabled = bool(enemy.get(
+		"self_castration_enabled",
+		true
+	))
 	duel.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 	duel.testing_mode = testing_mode
 	duel.opponent_card_played.connect(_on_opponent_card_played)

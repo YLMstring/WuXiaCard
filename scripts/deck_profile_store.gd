@@ -835,8 +835,15 @@ func create_reward_offer_and_save(
 	for card_id: StringName in Catalog.get_all_card_ids():
 		if card_id in unlocked:
 			continue
-		var card_tier: int = int(Catalog.get_definition(card_id).get("tier", 0))
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		var card_tier: int = int(definition.get("tier", 0))
 		var qualifies: bool = card_tier == player_tier
+		if outcome == REWARD_VICTORY:
+			var extra_victory_tiers: Array = definition.get(
+				"extra_victory_reward_tiers",
+				[]
+			) as Array
+			qualifies = qualifies or player_tier in extra_victory_tiers
 		if outcome == REWARD_DEFEAT:
 			qualifies = (
 				card_tier == 1

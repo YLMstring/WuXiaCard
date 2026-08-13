@@ -37,8 +37,8 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
-	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
-	{"id": &"dukou_xiaoke", "name": "少镖头·林平之", "level": 1, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
+	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
+	{"id": &"dukou_xiaoke", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi2", &"TuNaShu2", &"fire_envoy"]},
 	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 2, "deck": [&"CangSongYingKe4", &"YouFenLaiYi2", &"TuNaShu2", &"fire_envoy", &"tiger_general"]},
 	{"id": &"luoxia_jianji", "name": "泰山弟子", "level": 3, "deck": [&"YouFenLaiYi2", &"TuNaShu2", &"fire_envoy", &"tiger_general", &"TuNaShu1"]},
@@ -50,7 +50,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"jinling_kuaijian", "name": "刘正风", "level": 6, "deck": [&"LaiHeQinQuan1", &"TaiShan18Pan1", &"WuDaFuJian1", &"QiXinLuoChangKong2", &"TianChangZhang3"]},
 	{"id": &"chilian_sanke", "name": "定静", "level": 6, "deck": [&"TaiShan18Pan1", &"WuDaFuJian1", &"QiXinLuoChangKong2", &"TianChangZhang3", &"HenShanJianZhen2"]},
 	{"id": &"xuanhuo_qishi", "name": "宁中则", "level": 7, "deck": [&"WuDaFuJian1", &"QiXinLuoChangKong2", &"TianChangZhang3", &"HenShanJianZhen2", &"JinZhenDuJie1"]},
-	{"id": &"baishi_daoren", "name": "五岳秘传·岳灵珊", "level": 7, "deck": [&"QiXinLuoChangKong2", &"TianChangZhang3", &"HenShanJianZhen2", &"JinZhenDuJie1", &"WanHuaJian1"]},
+	{"id": &"baishi_daoren", "name": "五岳秘剑·岳灵珊", "level": 7, "deck": [&"QiXinLuoChangKong2", &"TianChangZhang3", &"HenShanJianZhen2", &"JinZhenDuJie1", &"WanHuaJian1"]},
 	{"id": &"fengsha_lingzhu", "name": "乐厚", "level": 8, "deck": [&"TianChangZhang3", &"HenShanJianZhen2", &"JinZhenDuJie1", &"WanHuaJian1", &"MianLiCangZhen2"]},
 	{"id": &"canghai_haoke", "name": "定闲", "level": 8, "deck": [&"HenShanJianZhen2", &"JinZhenDuJie1", &"WanHuaJian1", &"MianLiCangZhen2", &"YunWu13Shi2"]},
 	{"id": &"qianji_xiansheng", "name": "天门道人", "level": 9, "deck": [&"JinZhenDuJie1", &"WanHuaJian1", &"MianLiCangZhen2", &"YunWu13Shi2", &"YiJianLuo9Yan1"]},
@@ -92,6 +92,15 @@ static func get_enemy_ids_for_level(level: int) -> Array[StringName]:
 		if int(definition.get("level", -1)) == level:
 			result.append(enemy_id)
 	return result
+
+
+static func is_self_castration_enabled(enemy_id: StringName) -> bool:
+	if not has_enemy(enemy_id):
+		return true
+	return bool((_enemy_definitions[enemy_id] as Dictionary).get(
+		"self_castration_enabled",
+		true
+	))
 
 
 static func pick_random_enemy_id(
@@ -167,6 +176,11 @@ static func _validate_definition(
 	var level: int = int(definition.get("level", 0))
 	if level < 1 or level > 15:
 		errors.append("Enemy %s requires a level from 1 to 15" % enemy_id)
+	if (
+		definition.has("self_castration_enabled")
+		and typeof(definition.get("self_castration_enabled")) != TYPE_BOOL
+	):
+		errors.append("Enemy %s requires a Boolean self_castration_enabled" % enemy_id)
 	var deck_value: Variant = definition.get("deck", null)
 	if typeof(deck_value) != TYPE_ARRAY:
 		errors.append("Enemy %s requires an Array deck" % enemy_id)

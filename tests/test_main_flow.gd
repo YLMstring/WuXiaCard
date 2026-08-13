@@ -82,6 +82,11 @@ func _run() -> void:
 		duel.opponent_name_text == String(level_one_enemy["name"]),
 		"Duel receives the same saved enemy"
 	)
+	_check(
+		Cards.EFFECT_GATE_SELF_CASTRATION
+		not in duel.duel_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER),
+		"Both level-one Lin Pingzhi encounters disable enemy self-castration effects"
+	)
 	var opponent_hand := duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
 	var played_card := opponent_hand.get_child(0).get_child(0) as CardView
 	var played_glyph: String = String(played_card.card_data.get("glyph", ""))

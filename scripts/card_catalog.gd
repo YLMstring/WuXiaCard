@@ -2999,6 +2999,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_482.png",
 		"sect": "江湖",
 		"tier": 1,
+		"extra_victory_reward_tiers": [5],
 		"weapon": "轻剑",
 		"description": "需自宫。被攻击时，移回手牌。锁定：防御者的点数视为其最小一侧的点数。我攻击后，获得以下效果：敌方攻击时不分敌我。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
@@ -3016,6 +3017,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_542.png",
 		"sect": "江湖",
 		"tier": 1,
+		"extra_victory_reward_tiers": [5],
 		"weapon": "轻剑",
 		"description": "需自宫。被攻击时，移回手牌。进场后，若只有一个相邻敌方，与其交换位置。我攻击后，若本次攻击中有敌方被翻面，我重新进场。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
@@ -3033,6 +3035,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_488.png",
 		"sect": "江湖",
 		"tier": 1,
+		"extra_victory_reward_tiers": [5],
 		"weapon": "轻剑",
 		"description": "需自宫。被攻击时，移回手牌。进场后，抽一张牌，将所有最初是敌方的友方移除，并在相同位置生成我的复制。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
@@ -3161,6 +3164,24 @@ static func _validate_definition(
 	var tier_value: Variant = definition.get("tier", null)
 	if typeof(tier_value) != TYPE_INT or int(tier_value) < 1:
 		errors.append("Card %s requires an integer tier of at least 1" % card_id)
+	if definition.has("extra_victory_reward_tiers"):
+		var reward_tiers_value: Variant = definition.get("extra_victory_reward_tiers")
+		if typeof(reward_tiers_value) != TYPE_ARRAY:
+			errors.append("Card %s requires an Array extra_victory_reward_tiers" % card_id)
+		else:
+			var observed_reward_tiers: Dictionary = {}
+			for reward_tier_value: Variant in reward_tiers_value as Array:
+				if (
+					typeof(reward_tier_value) != TYPE_INT
+					or int(reward_tier_value) < 1
+					or observed_reward_tiers.has(int(reward_tier_value))
+				):
+					errors.append(
+						"Card %s requires unique positive integer extra victory reward tiers"
+						% card_id
+					)
+					break
+				observed_reward_tiers[int(reward_tier_value)] = true
 	var powers: Array = definition.get("powers", [])
 	if powers.size() != 4:
 		errors.append("Card %s requires four powers" % card_id)

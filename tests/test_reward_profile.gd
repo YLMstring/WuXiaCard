@@ -153,6 +153,43 @@ func _run() -> void:
 		"Run reset clears pending rewards"
 	)
 
+	var tier_five_profile: Dictionary = store.create_default_profile()
+	tier_five_profile["run_active"] = true
+	tier_five_profile["selected_sect_id"] = "HuaShanPai"
+	tier_five_profile["level"] = 11
+	tier_five_profile["current_enemy_id"] = String(
+		Enemies.get_enemy_ids_for_level(11)[0]
+	)
+	for special_id: StringName in [&"KuiHua2", &"KuiHua3", &"KuiHua4"]:
+		(tier_five_profile["unlocked_card_ids"] as Array).erase(String(special_id))
+		(tier_five_profile["library_slots"] as Array).erase(String(special_id))
+		(tier_five_profile["library_slots"] as Array).append("")
+	_check(store.is_profile_valid(tier_five_profile), "Tier-five special reward fixture is valid")
+	_check(store.save_profile(tier_five_profile), "Tier-five special reward fixture saves")
+	var tier_five_rng := RandomNumberGenerator.new()
+	tier_five_rng.seed = 515
+	var tier_five_offer: Dictionary = store.create_reward_offer_and_save(
+		tier_five_profile,
+		Store.REWARD_VICTORY,
+		tier_five_rng
+	)
+	var tier_five_reward_ids: Array[StringName] = store.get_pending_reward_ids(
+		tier_five_offer.get("profile", {})
+	)
+	tier_five_reward_ids.sort()
+	var expected_special_ids: Array[StringName] = [&"KuiHua2", &"KuiHua3", &"KuiHua4"]
+	expected_special_ids.sort()
+	_check(
+		bool(tier_five_offer.get("offered", false))
+		and tier_five_reward_ids == expected_special_ids,
+		"KuiHua2-4 can fill a tier-five victory reward offer while remaining tier one"
+	)
+	for special_id: StringName in expected_special_ids:
+		_check(
+			int(Cards.get_definition(special_id).get("tier", 0)) == 1,
+			"%s keeps its real tier-one identity" % special_id
+		)
+
 	_cleanup()
 	_finish()
 

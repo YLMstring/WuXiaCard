@@ -44,6 +44,15 @@ func _run() -> void:
 		"Seeded enemy selection is deterministic"
 	)
 	_check(Catalog.pick_random_enemy_id(0) == &"", "Invalid levels have no enemy")
+	_check(
+		not Catalog.is_self_castration_enabled(&"qingfeng_xuedi")
+		and not Catalog.is_self_castration_enabled(&"dukou_xiaoke"),
+		"Both Young Escort Lin Pingzhi encounters explicitly disable self-castration"
+	)
+	_check(
+		Catalog.is_self_castration_enabled(&"tieshan_menren"),
+		"Enemies without a declaration enable self-castration by default"
+	)
 	var duplicate_fixture: Dictionary = Catalog.get_definition(&"qingfeng_xuedi")
 	duplicate_fixture["id"] = &"duplicate_fixture"
 	duplicate_fixture["deck"] = [
@@ -74,6 +83,12 @@ func _run() -> void:
 	_check(
 		not Catalog.validate_definition(unknown_fixture).is_empty(),
 		"Enemy definitions still reject unknown cards"
+	)
+	var invalid_switch: Dictionary = duplicate_fixture.duplicate(true)
+	invalid_switch["self_castration_enabled"] = 0
+	_check(
+		not Catalog.validate_definition(invalid_switch).is_empty(),
+		"Enemy self-castration declarations must be Boolean"
 	)
 	_finish()
 
