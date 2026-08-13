@@ -56,8 +56,8 @@ func _run() -> void:
 	var duplicate_fixture: Dictionary = Catalog.get_definition(&"qingfeng_xuedi")
 	duplicate_fixture["id"] = &"duplicate_fixture"
 	duplicate_fixture["deck"] = [
-		&"fire_envoy",
-		&"fire_envoy",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
 		&"CangSongYingKe1",
 		&"CangSongYingKe2",
 		&"CangSongYingKe3",
@@ -67,17 +67,17 @@ func _run() -> void:
 		"Enemy definitions may contain exact duplicates and repeated glyphs"
 	)
 	var short_fixture: Dictionary = duplicate_fixture.duplicate(true)
-	short_fixture["deck"] = [&"fire_envoy"]
+	short_fixture["deck"] = [&"TaiZuChangQuan"]
 	_check(
 		not Catalog.validate_definition(short_fixture).is_empty(),
 		"Enemy definitions still require exactly five cards"
 	)
 	var unknown_fixture: Dictionary = duplicate_fixture.duplicate(true)
 	unknown_fixture["deck"] = [
-		&"fire_envoy",
-		&"fire_envoy",
-		&"fire_envoy",
-		&"fire_envoy",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
 		&"missing_card",
 	]
 	_check(

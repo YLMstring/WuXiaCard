@@ -50,10 +50,10 @@ func _test_exchanges() -> void:
 		"YouFenLaiYi2",
 		"TuNaShu2",
 	]
-	var library: Array = ["fire_envoy", "CangSongYingKe1", "YouFenLaiYi3"]
+	var library: Array = ["TaiZuChangQuan", "CangSongYingKe1", "YouFenLaiYi3"]
 	var normal: Dictionary = Rules.build_player_exchange(main, library, 0, 1)
 	_check(bool(normal.get("ok", false)), "Ordinary exchange succeeds")
-	_check(normal["main_deck"][1] == "fire_envoy", "Incoming ordinary card enters target")
+	_check(normal["main_deck"][1] == "TaiZuChangQuan", "Incoming ordinary card enters target")
 	_check(normal["library_slots"][0] == "gate_general", "Displaced ordinary card enters source")
 
 	var direct: Dictionary = Rules.build_player_exchange(main, library, 1, 0)
@@ -78,7 +78,7 @@ func _test_repair() -> void:
 		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
-		"fire_envoy",
+		"TaiZuChangQuan",
 	]
 	var repaired: Dictionary = Rules.repair_player_placement(
 		unlocked,
@@ -89,7 +89,7 @@ func _test_repair() -> void:
 			"KuiHua1",
 			"YouFenLaiYi2",
 		],
-		["TuNaShu2", "fire_envoy"],
+		["TuNaShu2", "TaiZuChangQuan"],
 		5,
 		1000
 	)

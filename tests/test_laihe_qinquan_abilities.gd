@@ -62,7 +62,7 @@ func _test_revelation_state_is_clone_safe() -> void:
 func _test_reveal_all_and_future_draws() -> void:
 	var enemy_hand: Array = [
 		Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_a"),
-		Catalog.create_instance(&"fire_envoy", Rules.OPPONENT_OWNER, &"enemy_b"),
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"enemy_b"),
 	]
 	var reveal_one: Dictionary = Catalog.create_instance(&"LaiHeQinQuan1", Rules.PLAYER_OWNER, &"laihe_1")
 	var state := State.new(Rules.empty_board(), [reveal_one], enemy_hand, Rules.PLAYER_OWNER)
@@ -88,7 +88,7 @@ func _test_reveal_all_and_future_draws() -> void:
 
 func _test_remembered_reveal_and_weakness() -> void:
 	var remembered: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"remembered_enemy")
-	var unknown: Dictionary = Catalog.create_instance(&"fire_envoy", Rules.OPPONENT_OWNER, &"unknown_enemy")
+	var unknown: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"unknown_enemy")
 	var source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan4", Rules.PLAYER_OWNER, &"laihe_4")
 	var state := State.new(Rules.empty_board(), [source], [remembered, unknown], Rules.PLAYER_OWNER)
 	state.remembered_glyphs_by_owner = {Rules.PLAYER_OWNER: ["吐纳术"]}

@@ -643,7 +643,7 @@ func _check_catalog_hands(duel: Node) -> void:
 		var opponent_card_data: Dictionary = card.get("card_data")
 		opponent_ids.append(StringName(opponent_card_data.get("card_id", &"")))
 	_check(player_ids == Decks.get_player_card_ids(TEST_PROFILE_PATH), "Player hand resolves in saved deck order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent hand resolves in catalog deck order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent hand resolves in catalog deck order")
 	var gate_card_data: Dictionary = player_cards[1].get("card_data")
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
 	var gate_abilities: Array = gate_card_data.get("active_abilities", [])
@@ -696,11 +696,11 @@ func _expected_total_card_count() -> int:
 func _check_duplicate_enemy_instances() -> void:
 	var duplicate_duel: Node = _instantiate_duel()
 	var duplicate_card_ids: Array[StringName] = [
-		&"fire_envoy",
-		&"fire_envoy",
-		&"fire_envoy",
-		&"fire_envoy",
-		&"fire_envoy",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
+		&"TaiZuChangQuan",
 	]
 	duplicate_duel.set("opponent_card_ids", duplicate_card_ids)
 	root.add_child(duplicate_duel)

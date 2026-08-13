@@ -196,7 +196,7 @@ func _test_encounter_decks() -> void:
 	var player_ids: Array[StringName] = Decks.get_player_card_ids(test_profile_path)
 	var opponent_ids: Array[StringName] = Decks.get_opponent_card_ids()
 	_check(player_ids == [&"CangSongYingKe2", &"gate_general", &"KuiHua1", &"YouFenLaiYi2", &"TuNaShu2"], "Player deck preserves current hand order")
-	_check(opponent_ids == [&"CangSongYingKe1", &"fire_envoy", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
 	for suffix: String in ["", ".tmp", ".bak"]:
