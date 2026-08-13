@@ -817,6 +817,11 @@ const DUGU_NO_FORM: Dictionary = {
 		"event": TRIGGER_CARD_BEFORE_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
+			{
+				"type": ACTION_REVEAL_HAND_CARDS,
+				"recipient": RECIPIENT_OPPONENT,
+				"filter": REVEAL_FILTER_ALL,
+			},
 			{"type": ACTION_EXILE_SELF},
 			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{
@@ -887,11 +892,7 @@ const DUGU_BREAK_ALL: Dictionary = {
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
 			{"type": ACTION_DRAW_CARDS, "amount": 1},
-			{
-				"type": ACTION_REVEAL_HAND_CARDS,
-				"recipient": RECIPIENT_OPPONENT,
-				"filter": REVEAL_FILTER_ALL,
-			},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 			{
 				"type": ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
 				"recipient": RECIPIENT_OPPONENT,
@@ -2789,7 +2790,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "江湖",
 		"tier": 5,
 		"weapon": "剑法",
-		"description": "进场前，将自己和相邻牌移除。每以此法移除一张牌，其当前拥有者抽一张牌。",
+		"description": "进场前，揭示所有敌方手牌，将自己和相邻牌移除。每以此法移除一张牌，其当前拥有者抽一张牌。",
 		"flavor": "令狐冲于独孤九剑中领悟的剑理，剑上无招，敌人便没法可破，无招胜有招，乃剑法之极诣。",
 		"powers": [-1, -1, -1, -1],
 		"abilities": [DUGU_NO_FORM],
@@ -2813,7 +2814,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "江湖",
 		"tier": 5,
 		"weapon": "剑法",
-		"description": "进场前，将我移除，抽一张牌。揭示所有敌方手牌，对手下一张从手牌中打出的非心法牌失去效果。",
+		"description": "进场前，将我移除，抽一张牌，然后额外出一张牌。对手下一张从手牌中打出的非心法牌失去效果。",
 		"flavor": "独孤九剑，有进无退！招招都是进攻，攻敌之不得不守，自己当然不用守了。",
 		"powers": [-1, -1, -1, -1],
 		"abilities": [DUGU_BREAK_ALL],
