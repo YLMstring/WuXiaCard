@@ -35,8 +35,8 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"dukou_xiaoke", "name": "史镖头", "level": 1, "deck": [&"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"]},
-	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe3", &"CangSongYingKe4", &"YouFenLaiYi2", &"TuNaShu2", &"TaiZuChangQuan"]},
-	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 2, "deck": [&"CangSongYingKe4", &"YouFenLaiYi2", &"TuNaShu2", &"TaiZuChangQuan", &"tiger_general"]},
+	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2"]},
+	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 2, "deck": [&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2"]},
 	{"id": &"luoxia_jianji", "name": "泰山弟子", "level": 3, "deck": [&"YouFenLaiYi2", &"TuNaShu2", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1"]},
 	{"id": &"heisha_xingzhe", "name": "衡山弟子", "level": 3, "deck": [&"TuNaShu2", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1"]},
 	{"id": &"beiling_shuangying", "name": "恒山弟子", "level": 4, "deck": [&"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1", &"LaiHeQinQuan1"]},
@@ -57,7 +57,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"chisha_menzhu", "name": "复仇者·林平之", "level": 12, "deck": [&"JianFaQinYin1", &"YanHuiZhuRong3", &"WanYueChaoZong1", &"DaSongYangZhang1", &"YinYangZhang3"]},
 	{"id": &"bailu_shanzhang", "name": "五岳掌门·岳不群", "level": 13, "deck": [&"WanYueChaoZong1", &"DaSongYangZhang1", &"YinYangZhang3", &"HanBinZhenQi3", &"TianWaiYuLong2"]},
 	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"YinYangZhang3", &"HanBinZhenQi3", &"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general"]},
-	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"TianWaiYuLong2", &"DuGu9Jian1", &"gate_general", &"KuiHua1", &"CangSongYingKe1"]},
+	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"]},
 ]
 
 static var _enemy_definitions: Dictionary = _build_definition_map()
