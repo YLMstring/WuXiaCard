@@ -333,6 +333,13 @@ resolve even if an early removal opens a cell. The simulator only reports a
 terminal full board after those groups finish; an opened board continues into
 the already-determined extra/next-turn flow.
 
+All terminal conditions are checked at the same owner-turn boundary: after the
+current owner's end-turn rules and turn-scoped restoration, but before changing
+`active_player` or resolving the next owner's start-turn rules. Reaching
+`max_turns` does not interrupt already granted extra card plays, including an
+extra play granted by the current owner's end-turn rules. Each still counts as
+an action, so `turn_count` may exceed `max_turns` before that owner turn closes.
+
 Action execution preserves an immutable ability-source identity and a current
 action subject. Root actions use the source as subject. A
 `for_each_selected_card` wrapper snapshots matching instance IDs, revalidates

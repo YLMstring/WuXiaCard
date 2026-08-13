@@ -312,7 +312,11 @@ func _test_sanqin_three_attacks_in_row_major_order() -> void:
 	)
 	var state := State.new(
 		board,
-		[],
+		[Catalog.create_instance(
+			&"CangSongYingKe1",
+			Rules.PLAYER_OWNER,
+			&"sanqin_player_reply"
+		)],
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)
@@ -361,7 +365,11 @@ func _test_sanqin_spends_without_attack_targets() -> void:
 	)
 	var state := State.new(
 		board,
-		[],
+		[Catalog.create_instance(
+			&"CangSongYingKe1",
+			Rules.PLAYER_OWNER,
+			&"quiet_player_reply"
+		)],
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)

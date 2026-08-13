@@ -116,10 +116,15 @@ static func choose_greedy_action(state: StateData) -> ActionData:
 static func is_terminal(state: StateData) -> bool:
 	if state == null:
 		return true
-	if state.turn_count >= state.max_turns:
-		return true
 	if not state.effect_queue.is_empty():
 		return false
+	if (
+		state.extra_card_plays_remaining > 0
+		and _owner_has_legal_hand_play(state, state.active_player)
+	):
+		return false
+	if state.turn_count >= state.max_turns:
+		return true
 	if _board_is_full(state.board):
 		return true
 	return (
@@ -1188,7 +1193,6 @@ static func _finish_action(
 			true
 		)
 
-	var board_remained_full: bool = false
 	if _board_is_full(state.board):
 		var before_end_result: Dictionary = _resolve_trigger_event(
 			state,
@@ -1201,7 +1205,6 @@ static func _finish_action(
 			result["events"],
 			before_end_result
 		)
-		board_remained_full = _board_is_full(state.board)
 	if state.extra_card_plays_remaining > 0 and _owner_has_legal_hand_play(state, moving_owner):
 		state.active_player = moving_owner
 		return result
@@ -1219,7 +1222,7 @@ static func _finish_action(
 	)
 	state.owner_turn_serial += 1
 	state.end_turn_triggers_resolved = false
-	if board_remained_full:
+	if is_terminal(state):
 		return result
 	state.active_player = _get_next_active_owner(state, moving_owner)
 	var start_result: Dictionary = _resolve_trigger_event(

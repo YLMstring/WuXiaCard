@@ -162,7 +162,19 @@ func _test_flip_protection() -> void:
 	var turn_board: Array = Rules.empty_board()
 	turn_board[4] = {"card": turn_protected, "owner": Rules.PLAYER_OWNER}
 	var opponent_play: Dictionary = Rules.make_card("Quiet", "静", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
-	var turn_state := State.new(turn_board, [], [opponent_play], Rules.OPPONENT_OWNER)
+	var player_reply: Dictionary = Rules.make_card(
+		"Player Reply",
+		"应",
+		[1, 1, 1, 1],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var turn_state := State.new(
+		turn_board,
+		[player_reply],
+		[opponent_play],
+		Rules.OPPONENT_OWNER
+	)
 	var turn_result: Dictionary = Simulator.apply_action(turn_state, Action.make_play(0, 0))
 	var after_turn: State = turn_result["state"] as State
 	var turn_runtime: Dictionary = (after_turn.board[4] as Dictionary).get("card", {})

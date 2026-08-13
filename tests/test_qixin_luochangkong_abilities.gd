@@ -386,7 +386,7 @@ func _test_temporary_flip_protection() -> void:
 	quiet["instance_id"] = &"quiet_turn_card"
 	var turn_state := State.new(
 		turn_board,
-		[],
+		[Rules.make_card("Player Reply", "应", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)],
 		[quiet],
 		Rules.OPPONENT_OWNER
 	)

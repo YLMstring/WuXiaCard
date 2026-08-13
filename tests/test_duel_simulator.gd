@@ -33,6 +33,9 @@ func _run() -> void:
 	_test_turn_passes_to_owner_with_a_legal_move()
 	_test_reopened_cell_keeps_match_alive()
 	_test_full_board_ends_before_next_turn_starts()
+	_test_turn_cap_ends_before_next_turn_starts()
+	_test_turn_cap_waits_for_pending_extra_plays()
+	_test_turn_cap_waits_for_end_turn_extra_play()
 	_test_terminal_requires_both_players_to_be_stuck()
 	_test_greedy_choice_matches_prototype()
 	_test_greedy_ai_values_flip_over_equal_exile()
@@ -786,7 +789,175 @@ func _test_terminal_requires_both_players_to_be_stuck() -> void:
 	no_hands.effect_queue.append({"type": &"pending_test"})
 	_check(not Simulator.is_terminal(no_hands), "Pending effect queue delays terminal state")
 	no_hands.turn_count = no_hands.max_turns
-	_check(Simulator.is_terminal(no_hands), "Turn cap ends the match even with pending effects")
+	_check(not Simulator.is_terminal(no_hands), "Turn cap waits for pending effects to resolve")
+
+
+func _test_turn_cap_ends_before_next_turn_starts() -> void:
+	var board: Array = Rules.empty_board()
+	var end_source: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong4",
+		Rules.PLAYER_OWNER,
+		&"turn_cap_end_source"
+	)
+	var end_target: Dictionary = _make_runtime_card(
+		"End Target",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"turn_cap_end_target"
+	)
+	var start_source: Dictionary = Catalog.create_instance(
+		&"ZiXiaGong3",
+		Rules.OPPONENT_OWNER,
+		&"turn_cap_start_source"
+	)
+	board[0] = {"card": end_source, "owner": Rules.PLAYER_OWNER}
+	board[1] = {"card": end_target, "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": start_source, "owner": Rules.OPPONENT_OWNER}
+	var played: Dictionary = _make_runtime_card(
+		"Capped Action",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"turn_cap_action"
+	)
+	var opponent_hand_card: Dictionary = _make_runtime_card(
+		"Start Target",
+		[2, 2, 2, 2],
+		Rules.OPPONENT_OWNER,
+		&"turn_cap_start_target"
+	)
+	var state := State.new(board, [played], [opponent_hand_card], Rules.PLAYER_OWNER)
+	state.max_turns = 1
+
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4, &"turn_cap_action")
+	)
+	var next_state: State = transition.get("state") as State
+	var buffed_end_target: Dictionary = (next_state.board[1] as Dictionary).get("card", {})
+	var untouched_start_target: Dictionary = next_state.get_hand(Rules.OPPONENT_OWNER)[0]
+	_check(
+		buffed_end_target.get("powers", []) == [2, 2, 2, 2],
+		"Turn-cap closure resolves the current owner's end-turn effects"
+	)
+	_check(
+		untouched_start_target.get("powers", []) == [2, 2, 2, 2],
+		"Turn-cap closure skips the next owner's start-turn effects"
+	)
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER and Simulator.is_terminal(next_state),
+		"Turn cap becomes terminal before active ownership changes"
+	)
+
+
+func _test_turn_cap_waits_for_pending_extra_plays() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[
+			_make_runtime_card(
+				"First Extra",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"turn_cap_first_extra"
+			),
+			_make_runtime_card(
+				"Second Extra",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"turn_cap_second_extra"
+			),
+		],
+		[_make_runtime_card(
+			"Opponent Reply",
+			[1, 1, 1, 1],
+			Rules.OPPONENT_OWNER,
+			&"turn_cap_opponent_reply"
+		)],
+		Rules.PLAYER_OWNER
+	)
+	state.max_turns = 1
+	state.extra_card_plays_remaining = 2
+
+	var first_transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 0, &"turn_cap_first_extra")
+	)
+	var first_state: State = first_transition.get("state") as State
+	_check(
+		first_state.turn_count == 1
+		and first_state.extra_card_plays_remaining == 1
+		and first_state.active_player == Rules.PLAYER_OWNER
+		and not Simulator.is_terminal(first_state),
+		"Reaching the turn cap does not interrupt an already-granted extra play chain"
+	)
+
+	var second_transition: Dictionary = Simulator.apply_action(
+		first_state,
+		Action.make_play(0, 1, &"turn_cap_second_extra")
+	)
+	var second_state: State = second_transition.get("state") as State
+	_check(
+		second_state.turn_count == 2
+		and second_state.extra_card_plays_remaining == 0
+		and second_state.active_player == Rules.PLAYER_OWNER
+		and Simulator.is_terminal(second_state),
+		"Turn cap becomes terminal only after all pending extra plays finish"
+	)
+
+
+func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[
+			Catalog.create_instance(
+				&"KuiHua1",
+				Rules.PLAYER_OWNER,
+				&"turn_cap_kuihua"
+			),
+			_make_runtime_card(
+				"Granted Followup",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"turn_cap_granted_followup"
+			),
+		],
+		[_make_runtime_card(
+			"Opponent Reply",
+			[1, 1, 1, 1],
+			Rules.OPPONENT_OWNER,
+			&"turn_cap_granted_opponent_reply"
+		)],
+		Rules.PLAYER_OWNER
+	)
+	state.max_turns = 1
+	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Catalog.EFFECT_GATE_SELF_CASTRATION,
+	]
+
+	var first_transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 0, &"turn_cap_kuihua")
+	)
+	var first_state: State = first_transition.get("state") as State
+	_check(
+		first_state.turn_count == 1
+		and first_state.extra_card_plays_remaining == 1
+		and first_state.end_turn_triggers_resolved
+		and not Simulator.is_terminal(first_state),
+		"An end-turn effect may grant an extra play after the turn cap is reached"
+	)
+
+	var second_transition: Dictionary = Simulator.apply_action(
+		first_state,
+		Action.make_play(0, 1, &"turn_cap_granted_followup")
+	)
+	var second_state: State = second_transition.get("state") as State
+	_check(
+		second_state.turn_count == 2
+		and second_state.extra_card_plays_remaining == 0
+		and _count_events(second_transition.get("events", []), &"extra_card_play_granted") == 0
+		and Simulator.is_terminal(second_state),
+		"A turn-cap extra play closes the turn without repeating end-turn effects"
+	)
 
 
 func _test_greedy_ai_values_flip_over_equal_exile() -> void:
@@ -2057,7 +2228,10 @@ func _test_move_application_and_capture_parity() -> void:
 	_check(state.board[4] == null and int((state.board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Simulation never mutates the source state")
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).is_empty(), "Placed card leaves the simulated hand")
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Captured ownership updates in the simulated board")
-	_check(next_state.active_player == Rules.OPPONENT_OWNER and next_state.turn_count == 1, "Simulation advances player and turn count")
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1,
+		"A terminal move advances the action count without starting the next owner's turn"
+	)
 
 
 func _test_attack_started_event_semantics() -> void:
