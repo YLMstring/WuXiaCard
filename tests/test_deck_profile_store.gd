@@ -44,7 +44,11 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 8, "Default profile uses schema version 8")
+	_check(int(profile["schema_version"]) == 9, "Default profile uses schema version 9")
+	_check(
+		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
+		"Default profile has no shown guaranteed rewards"
+	)
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
@@ -356,7 +360,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 8, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 9, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
@@ -369,6 +373,21 @@ func _run() -> void:
 	)
 	_check(not bool(migrated["run_active"]), "Legacy migration starts with no active run")
 	_check(String(migrated["selected_sect_id"]).is_empty(), "Legacy migration clears the selected sect")
+
+	var schema_eight: Dictionary = profile.duplicate(true)
+	schema_eight["schema_version"] = 8
+	schema_eight.erase("shown_guaranteed_reward_card_ids")
+	schema_eight["mastered_card_ids"] = ["TaiZuChangQuan"]
+	var migrated_schema_eight: Dictionary = store.repair_profile(schema_eight)
+	_check(store.is_profile_valid(migrated_schema_eight), "A schema-eight profile migrates successfully")
+	_check(
+		migrated_schema_eight["mastered_card_ids"] == ["TaiZuChangQuan"],
+		"Schema-eight migration preserves mastery"
+	)
+	_check(
+		(migrated_schema_eight["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
+		"Schema-eight migration starts with no shown guaranteed rewards"
+	)
 
 	var schema_two: Dictionary = profile.duplicate(true)
 	schema_two["schema_version"] = 2

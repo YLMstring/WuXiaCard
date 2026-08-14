@@ -18,7 +18,7 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
-	_check(int(profile["schema_version"]) == 8, "Reward state advances the profile schema")
+	_check(int(profile["schema_version"]) == 9, "Reward state advances the profile schema")
 	_check(store.get_pending_reward_ids(profile).is_empty(), "Default profile has no pending reward")
 	_check(store.save_profile(profile), "Reward fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
@@ -200,8 +200,178 @@ func _run() -> void:
 			"%s keeps its real tier-one identity" % special_id
 		)
 
+	_test_kuihua_zero_defeat_guarantee(store)
+
 	_cleanup()
 	_finish()
+
+
+func _test_kuihua_zero_defeat_guarantee(store: RefCounted) -> void:
+	var qualifying: Dictionary = store.create_testing_profile(store.create_default_profile())
+	qualifying["run_active"] = true
+	qualifying["selected_sect_id"] = "HuaShanPai"
+	qualifying["level"] = 11
+	qualifying["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(11)[0])
+	qualifying["pending_reward_card_ids"] = []
+	qualifying["shown_guaranteed_reward_card_ids"] = []
+	for locked_id: StringName in [
+		&"KuiHua0",
+		&"CangSongYingKe4",
+		&"WanYueChaoZong4",
+	]:
+		_lock_library_card(qualifying, locked_id)
+	_check(store.is_profile_valid(qualifying), "KuiHua0 guarantee fixture is valid")
+
+	var tier_four: Dictionary = qualifying.duplicate(true)
+	tier_four["level"] = 8
+	tier_four["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(8)[0])
+	var tier_four_offer: Dictionary = store.create_reward_offer_and_save(
+		tier_four,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(800)
+	)
+	_check(
+		&"KuiHua0" not in store.get_pending_reward_ids(tier_four_offer.get("profile", {})),
+		"KuiHua0 cannot appear before character tier five"
+	)
+
+	var no_gate: Dictionary = qualifying.duplicate(true)
+	_replace_main_deck_card(no_gate, &"KuiHua1", &"TaiZuChangQuan")
+	for gated_id: StringName in [&"KuiHua1", &"KuiHua2", &"KuiHua3", &"KuiHua4"]:
+		_lock_library_card(no_gate, gated_id)
+	_check(store.is_profile_valid(no_gate), "No-self-castration guarantee fixture is valid")
+	var no_gate_offer: Dictionary = store.create_reward_offer_and_save(
+		no_gate,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(801)
+	)
+	_check(
+		&"KuiHua0" not in store.get_pending_reward_ids(no_gate_offer.get("profile", {})),
+		"KuiHua0 requires at least one unlocked self-castration card"
+	)
+
+	var first_offer: Dictionary = store.create_reward_offer_and_save(
+		qualifying,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(802)
+	)
+	var first_profile: Dictionary = first_offer.get("profile", {})
+	var first_ids: Array[StringName] = store.get_pending_reward_ids(first_profile)
+	_check(
+		bool(first_offer.get("offered", false))
+		and first_ids.size() == 3
+		and &"KuiHua0" in first_ids,
+		"The first qualifying tier-five defeat guarantees KuiHua0 among three choices"
+	)
+	_check(
+		first_profile["shown_guaranteed_reward_card_ids"] == ["KuiHua0"],
+		"Creating the guarantee records KuiHua0 as shown for this run"
+	)
+	var resumed_offer: Dictionary = store.create_reward_offer_and_save(
+		first_profile,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(999)
+	)
+	_check(
+		store.get_pending_reward_ids(resumed_offer.get("profile", {})) == first_ids
+		and resumed_offer["profile"]["shown_guaranteed_reward_card_ids"] == ["KuiHua0"],
+		"Reopening a pending guarantee preserves its choices and single shown record"
+	)
+	var observed_positions: Dictionary = {}
+	for seed: int in range(810, 820):
+		var positioned_offer: Dictionary = store.create_reward_offer_and_save(
+			qualifying,
+			Store.REWARD_DEFEAT,
+			_seeded_rng(seed)
+		)
+		var positioned_ids: Array[StringName] = store.get_pending_reward_ids(
+			positioned_offer.get("profile", {})
+		)
+		observed_positions[positioned_ids.find(&"KuiHua0")] = true
+	_check(observed_positions.size() > 1, "KuiHua0 has no fixed position in the reward choices")
+	var claim_kuihua_zero: Dictionary = store.claim_pending_reward_and_save(
+		first_profile,
+		&"KuiHua0"
+	)
+	var after_kuihua_zero: Dictionary = claim_kuihua_zero.get("profile", {})
+	var unlocked_repeat: Dictionary = store.create_reward_offer_and_save(
+		after_kuihua_zero,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(804)
+	)
+	_check(
+		bool(claim_kuihua_zero.get("ok", false))
+		and &"KuiHua0" in store.get_unlocked_ids(after_kuihua_zero)
+		and &"KuiHua0" not in store.get_pending_reward_ids(unlocked_repeat.get("profile", {})),
+		"An unlocked KuiHua0 is never guaranteed again"
+	)
+	var other_reward_id: StringName = &""
+	for reward_id: StringName in first_ids:
+		if reward_id != &"KuiHua0":
+			other_reward_id = reward_id
+			break
+	var claim_other: Dictionary = store.claim_pending_reward_and_save(
+		first_profile,
+		other_reward_id
+	)
+	var after_other: Dictionary = claim_other.get("profile", {})
+	_check(bool(claim_other.get("ok", false)), "A non-KuiHua0 guaranteed offer choice can be claimed")
+	_check(&"KuiHua0" not in store.get_unlocked_ids(after_other), "Skipping KuiHua0 leaves it locked")
+	var repeated_offer: Dictionary = store.create_reward_offer_and_save(
+		after_other,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(803)
+	)
+	_check(
+		&"KuiHua0" not in store.get_pending_reward_ids(repeated_offer.get("profile", {})),
+		"A skipped KuiHua0 does not reappear later in the same run"
+	)
+	var reset_result: Dictionary = store.reset_run_and_save(after_other)
+	_check(
+		bool(reset_result.get("ok", false))
+		and (reset_result["profile"]["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
+		"Closing the run clears shown guaranteed rewards for a future run"
+	)
+	var restarted_qualifying: Dictionary = qualifying.duplicate(true)
+	restarted_qualifying["shown_guaranteed_reward_card_ids"] = (
+		reset_result["profile"]["shown_guaranteed_reward_card_ids"] as Array
+	).duplicate()
+	var restarted_offer: Dictionary = store.create_reward_offer_and_save(
+		restarted_qualifying,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(805)
+	)
+	_check(
+		&"KuiHua0" in store.get_pending_reward_ids(restarted_offer.get("profile", {})),
+		"A later run can guarantee KuiHua0 again after the reset"
+	)
+
+
+func _lock_library_card(profile: Dictionary, card_id: StringName) -> void:
+	(profile["unlocked_card_ids"] as Array).erase(String(card_id))
+	var library: Array = profile["library_slots"] as Array
+	var library_index: int = library.find(String(card_id))
+	if library_index >= 0:
+		library.remove_at(library_index)
+		library.append("")
+
+
+func _replace_main_deck_card(
+	profile: Dictionary,
+	removed_id: StringName,
+	replacement_id: StringName
+) -> void:
+	var deck: Array = profile["main_deck"] as Array
+	var removed_index: int = deck.find(String(removed_id))
+	deck[removed_index] = String(replacement_id)
+	(profile["library_slots"] as Array).erase(String(replacement_id))
+	(profile["library_slots"] as Array).append("")
+
+
+func _seeded_rng(seed: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	return rng
 
 
 func _all_unique(values: Array[StringName]) -> bool:

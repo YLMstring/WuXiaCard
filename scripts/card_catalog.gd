@@ -3078,12 +3078,16 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"glyph": "挥剑自宫",
 		"picture": "res://pics/LKT010_007.png",
 		"sect": "江湖",
-		"tier": 5,
+		"tier": 6,
 		"weapon": "轻剑",
 		"description": "解锁我之后，自动激活所有需自宫牌的效果（无需携带）。",
 		"flavor": "辟邪剑谱的第一道法诀，武林称雄，挥剑自宫。",
 		"powers": [-1, -1, -1, -1],
 		"unlocks_effect_gate": EFFECT_GATE_SELF_CASTRATION,
+		"guaranteed_defeat_reward": {
+			"min_character_tier": 5,
+			"requires_unlocked_effect_gate": EFFECT_GATE_SELF_CASTRATION,
+		},
 		"abilities": [],
 	},
 }
@@ -3209,6 +3213,12 @@ static func _validate_definition(
 					)
 					break
 				observed_reward_tiers[int(reward_tier_value)] = true
+	if definition.has("guaranteed_defeat_reward"):
+		_validate_guaranteed_defeat_reward(
+			card_id,
+			definition.get("guaranteed_defeat_reward"),
+			errors
+		)
 	var powers: Array = definition.get("powers", [])
 	if powers.size() != 4:
 		errors.append("Card %s requires four powers" % card_id)
@@ -3239,6 +3249,42 @@ static func _validate_definition(
 			continue
 		var ability: Dictionary = ability_value
 		_validate_ability(card_id, ability, errors)
+
+
+static func _validate_guaranteed_defeat_reward(
+	card_id: StringName,
+	declaration_value: Variant,
+	errors: Array[String]
+) -> void:
+	if typeof(declaration_value) != TYPE_DICTIONARY:
+		errors.append("Card %s requires a Dictionary guaranteed_defeat_reward" % card_id)
+		return
+	var declaration: Dictionary = declaration_value as Dictionary
+	var known_fields: Array[StringName] = [
+		&"min_character_tier",
+		&"requires_unlocked_effect_gate",
+	]
+	for raw_key: Variant in declaration.keys():
+		if StringName(String(raw_key)) not in known_fields:
+			errors.append(
+				"Card %s guaranteed_defeat_reward uses unknown field %s"
+				% [card_id, raw_key]
+			)
+	var minimum_tier: Variant = declaration.get("min_character_tier", null)
+	if typeof(minimum_tier) != TYPE_INT or int(minimum_tier) < 1:
+		errors.append(
+			"Card %s guaranteed_defeat_reward requires a positive integer min_character_tier"
+			% card_id
+		)
+	var gate_value: Variant = declaration.get("requires_unlocked_effect_gate", null)
+	if (
+		typeof(gate_value) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or StringName(gate_value) not in KNOWN_EFFECT_GATES
+	):
+		errors.append(
+			"Card %s guaranteed_defeat_reward requires a known unlocked effect gate"
+			% card_id
+		)
 
 
 static func _normalize_abilities(raw_abilities: Array) -> Array:

@@ -114,6 +114,49 @@ func _test_definition_schema_validation() -> void:
 		var invalid_tier_definition: Dictionary = valid_fixture.duplicate(true)
 		invalid_tier_definition["tier"] = invalid_tier
 		_check(not Catalog.validate_definition(invalid_tier_definition).is_empty(), "Invalid tier %s fails validation" % str(invalid_tier))
+	var kuihua_zero: Dictionary = Catalog.get_definition(&"KuiHua0")
+	_check(int(kuihua_zero.get("tier", 0)) == 6, "KuiHua0 is a tier-six card")
+	_check(
+		kuihua_zero.get("guaranteed_defeat_reward", {})
+		== {
+			"min_character_tier": 5,
+			"requires_unlocked_effect_gate": Catalog.EFFECT_GATE_SELF_CASTRATION,
+		},
+		"KuiHua0 declares its tier-five self-castration defeat guarantee"
+	)
+	var guaranteed_reward_fixture: Dictionary = valid_fixture.duplicate(true)
+	guaranteed_reward_fixture["guaranteed_defeat_reward"] = {
+		"min_character_tier": 5,
+		"requires_unlocked_effect_gate": Catalog.EFFECT_GATE_SELF_CASTRATION,
+	}
+	_check(
+		Catalog.validate_definition(guaranteed_reward_fixture).is_empty(),
+		"A complete guaranteed defeat reward declaration passes validation"
+	)
+	for invalid_guarantee: Variant in [
+		[],
+		{},
+		{
+			"min_character_tier": 0,
+			"requires_unlocked_effect_gate": Catalog.EFFECT_GATE_SELF_CASTRATION,
+		},
+		{
+			"min_character_tier": 5,
+			"requires_unlocked_effect_gate": &"unknown_gate",
+		},
+		{
+			"min_character_tier": 5,
+			"requires_unlocked_effect_gate": Catalog.EFFECT_GATE_SELF_CASTRATION,
+			"unknown": true,
+		},
+	]:
+		var invalid_guarantee_definition: Dictionary = valid_fixture.duplicate(true)
+		invalid_guarantee_definition["guaranteed_defeat_reward"] = invalid_guarantee
+		_check(
+			not Catalog.validate_definition(invalid_guarantee_definition).is_empty(),
+			"Invalid guaranteed defeat reward declaration fails validation: %s"
+			% str(invalid_guarantee)
+		)
 	var retired_name: Dictionary = valid_fixture.duplicate(true)
 	retired_name["name"] = "Legacy"
 	_check(not Catalog.validate_definition(retired_name).is_empty(), "Retired name metadata fails validation")

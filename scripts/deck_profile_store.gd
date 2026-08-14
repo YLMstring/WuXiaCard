@@ -6,8 +6,10 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 
-const SCHEMA_VERSION: int = 8
+const SCHEMA_VERSION: int = 9
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
+const MASTERY_SCHEMA_VERSION: int = 8
+const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
@@ -75,6 +77,7 @@ func create_default_profile() -> Dictionary:
 		"current_enemy_id": "",
 		"remembered_enemy_glyphs": [],
 		"pending_reward_card_ids": [],
+		"shown_guaranteed_reward_card_ids": [],
 		"effective_duel_count": 0,
 		"defeated_enemy_ids": [],
 		"best_scores_by_sect": {},
@@ -158,6 +161,10 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
 	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
 	var pending_rewards_value: Variant = profile.get("pending_reward_card_ids", null)
+	var shown_guaranteed_rewards_value: Variant = profile.get(
+		"shown_guaranteed_reward_card_ids",
+		null
+	)
 	var effective_duels_value: Variant = profile.get("effective_duel_count", null)
 	var defeated_enemies_value: Variant = profile.get("defeated_enemy_ids", null)
 	var best_scores_value: Variant = profile.get("best_scores_by_sect", null)
@@ -169,6 +176,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or typeof(enemy_value) != TYPE_STRING
 		or typeof(remembered_glyphs_value) != TYPE_ARRAY
 		or typeof(pending_rewards_value) != TYPE_ARRAY
+		or typeof(shown_guaranteed_rewards_value) != TYPE_ARRAY
 		or typeof(effective_duels_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(defeated_enemies_value) != TYPE_ARRAY
 		or typeof(best_scores_value) != TYPE_DICTIONARY
@@ -221,6 +229,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or current_enemy_id != &""
 		or not (remembered_glyphs_value as Array).is_empty()
 		or not (pending_rewards_value as Array).is_empty()
+		or not (shown_guaranteed_rewards_value as Array).is_empty()
 		or effective_duel_count != 0
 		or not (defeated_enemies_value as Array).is_empty()
 	):
@@ -261,6 +270,20 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	if library.size() != LIBRARY_CAPACITY:
 		return false
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var shown_guaranteed_set: Dictionary = {}
+	for value: Variant in shown_guaranteed_rewards_value as Array:
+		if typeof(value) != TYPE_STRING:
+			return false
+		var shown_card_id := StringName(String(value))
+		if (
+			not run_active
+			or shown_card_id == &""
+			or shown_card_id not in catalog_ids
+			or shown_guaranteed_set.has(shown_card_id)
+			or not Catalog.get_definition(shown_card_id).has("guaranteed_defeat_reward")
+		):
+			return false
+		shown_guaranteed_set[shown_card_id] = true
 	var mastered_set: Dictionary = {}
 	for value: Variant in mastered_cards_value as Array:
 		if typeof(value) != TYPE_STRING:
@@ -331,6 +354,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var current_enemy_id: StringName = &""
 	var remembered_enemy_glyphs: Array[String] = []
 	var pending_reward_card_ids: Array[StringName] = []
+	var shown_guaranteed_reward_card_ids: Array[StringName] = []
 	var effective_duel_count: int = 0
 	var defeated_enemy_ids: Array[StringName] = []
 	var best_scores_by_sect: Dictionary = {}
@@ -404,7 +428,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				):
 					best_scores_by_sect[String(achievement_sect_id)] = int(raw_score)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
-	if schema_version >= SCHEMA_VERSION:
+	if schema_version >= MASTERY_SCHEMA_VERSION:
 		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
 		if typeof(raw_mastery) == TYPE_ARRAY:
 			for value: Variant in raw_mastery as Array:
@@ -437,6 +461,21 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 					and pending_reward_card_ids.size() < 3
 				):
 					pending_reward_card_ids.append(card_id)
+	if run_active and schema_version >= GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION:
+		var raw_shown_guaranteed: Variant = profile.get(
+			"shown_guaranteed_reward_card_ids",
+			[]
+		)
+		if typeof(raw_shown_guaranteed) == TYPE_ARRAY:
+			for value: Variant in raw_shown_guaranteed as Array:
+				var card_id := StringName(String(value))
+				if (
+					typeof(value) == TYPE_STRING
+					and card_id in catalog_ids
+					and card_id not in shown_guaranteed_reward_card_ids
+					and Catalog.get_definition(card_id).has("guaranteed_defeat_reward")
+				):
+					shown_guaranteed_reward_card_ids.append(card_id)
 
 	var raw_deck: Variant = profile.get("main_deck", [])
 	var raw_library: Variant = profile.get("library_slots", [])
@@ -475,6 +514,9 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"current_enemy_id": String(current_enemy_id),
 		"remembered_enemy_glyphs": remembered_enemy_glyphs,
 		"pending_reward_card_ids": _string_array(pending_reward_card_ids),
+		"shown_guaranteed_reward_card_ids": _string_array(
+			shown_guaranteed_reward_card_ids
+		),
 		"effective_duel_count": effective_duel_count,
 		"defeated_enemy_ids": _string_array(defeated_enemy_ids),
 		"best_scores_by_sect": best_scores_by_sect,
@@ -603,6 +645,7 @@ func begin_run_and_save(
 	candidate["current_enemy_id"] = String(enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
 	candidate["pending_reward_card_ids"] = []
+	candidate["shown_guaranteed_reward_card_ids"] = []
 	candidate["effective_duel_count"] = 0
 	candidate["defeated_enemy_ids"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
@@ -628,6 +671,7 @@ func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	candidate["current_enemy_id"] = ""
 	candidate["remembered_enemy_glyphs"] = []
 	candidate["pending_reward_card_ids"] = []
+	candidate["shown_guaranteed_reward_card_ids"] = []
 	candidate["effective_duel_count"] = 0
 	candidate["defeated_enemy_ids"] = []
 	if not is_profile_valid(candidate) or not save_profile(candidate):
@@ -924,7 +968,14 @@ func create_reward_offer_and_save(
 			)
 		if qualifies:
 			eligible.append(card_id)
-	if eligible.is_empty():
+	var guaranteed_ids: Array[StringName] = []
+	if outcome == REWARD_DEFEAT:
+		guaranteed_ids = _get_eligible_guaranteed_defeat_reward_ids(
+			profile,
+			player_tier,
+			unlocked
+		)
+	if eligible.is_empty() and guaranteed_ids.is_empty():
 		return {"ok": true, "offered": false, "profile": unchanged, "reward_ids": []}
 	var picker: RandomNumberGenerator = rng
 	if picker == null:
@@ -932,10 +983,25 @@ func create_reward_offer_and_save(
 		picker.randomize()
 	_shuffle_string_names(eligible, picker)
 	var reward_ids: Array[StringName] = []
-	for index: int in range(mini(3, eligible.size())):
-		reward_ids.append(eligible[index])
+	var included_guaranteed_ids: Array[StringName] = []
+	for guaranteed_id: StringName in guaranteed_ids:
+		if reward_ids.size() >= 3:
+			break
+		reward_ids.append(guaranteed_id)
+		included_guaranteed_ids.append(guaranteed_id)
+	for eligible_id: StringName in eligible:
+		if reward_ids.size() >= 3:
+			break
+		if eligible_id not in reward_ids:
+			reward_ids.append(eligible_id)
+	if not included_guaranteed_ids.is_empty():
+		_shuffle_string_names(reward_ids, picker)
 	var candidate: Dictionary = profile.duplicate(true)
 	candidate["pending_reward_card_ids"] = _string_array(reward_ids)
+	var shown_guaranteed: Array = candidate["shown_guaranteed_reward_card_ids"] as Array
+	for guaranteed_id: StringName in included_guaranteed_ids:
+		if String(guaranteed_id) not in shown_guaranteed:
+			shown_guaranteed.append(String(guaranteed_id))
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "offered": false, "profile": unchanged, "reward_ids": []}
 	return {
@@ -944,6 +1010,41 @@ func create_reward_offer_and_save(
 		"profile": candidate,
 		"reward_ids": reward_ids,
 	}
+
+
+func _get_eligible_guaranteed_defeat_reward_ids(
+	profile: Dictionary,
+	player_tier: int,
+	unlocked: Array[StringName]
+) -> Array[StringName]:
+	var unlocked_effect_gates: Dictionary = {}
+	for unlocked_id: StringName in unlocked:
+		var unlocked_definition: Dictionary = Catalog.get_definition(unlocked_id)
+		var effect_gate := StringName(unlocked_definition.get("effect_gate", &""))
+		if effect_gate != &"":
+			unlocked_effect_gates[effect_gate] = true
+	var shown_ids: Array[StringName] = []
+	for value: Variant in profile.get("shown_guaranteed_reward_card_ids", []):
+		shown_ids.append(StringName(String(value)))
+	var result: Array[StringName] = []
+	for card_id: StringName in Catalog.get_all_card_ids():
+		if card_id in unlocked or card_id in shown_ids:
+			continue
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		var declaration_value: Variant = definition.get(
+			"guaranteed_defeat_reward",
+			null
+		)
+		if typeof(declaration_value) != TYPE_DICTIONARY:
+			continue
+		var declaration: Dictionary = declaration_value as Dictionary
+		var minimum_tier: int = int(declaration.get("min_character_tier", 0))
+		var required_gate := StringName(
+			declaration.get("requires_unlocked_effect_gate", &"")
+		)
+		if player_tier >= minimum_tier and unlocked_effect_gates.has(required_gate):
+			result.append(card_id)
+	return result
 
 
 func claim_pending_reward_and_save(profile: Dictionary, card_id: StringName) -> Dictionary:
@@ -1364,6 +1465,7 @@ func _build_closed_run_profile(profile: Dictionary) -> Dictionary:
 	candidate["current_enemy_id"] = ""
 	candidate["remembered_enemy_glyphs"] = []
 	candidate["pending_reward_card_ids"] = []
+	candidate["shown_guaranteed_reward_card_ids"] = []
 	candidate["effective_duel_count"] = 0
 	candidate["defeated_enemy_ids"] = []
 	candidate["main_deck"] = placement.get("main_deck", [])

@@ -28,6 +28,20 @@ Optional:
 "starting_ki": 1
 ```
 
+A card that must enter one qualifying defeat offer per run may declare:
+
+```gdscript
+"guaranteed_defeat_reward": {
+    "min_character_tier": 5,
+    "requires_unlocked_effect_gate": EFFECT_GATE_SELF_CASTRATION,
+}
+```
+
+The profile store requires the card to be locked, the character to meet the
+minimum tier, and at least one unlocked card to declare the required
+`effect_gate`. A successfully saved offer records the guaranteed card as shown
+for that run, even when the player claims a different reward.
+
 Catalog rules:
 
 - `glyph` is the card name; the retired `name` field is forbidden.
