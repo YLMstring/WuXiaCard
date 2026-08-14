@@ -198,6 +198,7 @@ func _ready() -> void:
 	)
 	duel_state.remembered_glyphs_by_owner = {
 		DuelRules.PLAYER_OWNER: remembered_enemy_glyphs.duplicate(),
+		DuelRules.OPPONENT_OWNER: _unique_card_glyphs(player_cards),
 	}
 	_replay_record.begin(duel_state)
 	board = duel_state.board
@@ -584,6 +585,17 @@ func _create_card_instances(card_ids: Array[StringName], owner_id: int, zone: St
 		var instance_id := StringName("%s_%d_%d" % [zone, owner_id, card_index])
 		instances.append(Catalog.create_instance(card_ids[card_index], owner_id, instance_id))
 	return instances
+
+
+func _unique_card_glyphs(cards: Array) -> Array[String]:
+	var glyphs: Array[String] = []
+	for card_value: Variant in cards:
+		if not card_value is Dictionary:
+			continue
+		var glyph := String((card_value as Dictionary).get("glyph", ""))
+		if not glyph.is_empty() and glyph not in glyphs:
+			glyphs.append(glyph)
+	return glyphs
 
 
 func _shuffle_side_decks(player_deck: Array, opponent_deck: Array) -> void:

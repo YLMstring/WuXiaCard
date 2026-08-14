@@ -67,11 +67,34 @@ func _run() -> void:
 		duel.deck_profile_path = SAVE_PATH
 		duel.opponent_card_ids = _string_names(enemy["deck"])
 		duel.opponent_hand_shuffle_seed = seed
+		duel.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 		duel.testing_mode = false
 		root.add_child(duel)
 		await process_frame
 		var duel_cards: Array[CardView] = _hand_cards(
 			duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+		)
+		var player_opening_glyphs: Array[String] = _hand_glyphs(
+			duel.duel_state.get_hand(DuelRules.PLAYER_OWNER)
+		)
+		var enemy_remembered_glyphs: Array[String] = []
+		for value: Variant in duel.duel_state.remembered_glyphs_by_owner.get(
+			DuelRules.OPPONENT_OWNER,
+			[]
+		):
+			enemy_remembered_glyphs.append(String(value))
+		player_opening_glyphs.sort()
+		enemy_remembered_glyphs.sort()
+		_check(
+			enemy_remembered_glyphs == player_opening_glyphs,
+			"Enemy remembers every player opening main-deck glyph"
+		)
+		_check(
+			duel.duel_state.remembered_glyphs_by_owner.get(
+				DuelRules.PLAYER_OWNER,
+				[]
+			) == [shared_glyph],
+			"Player keeps the persisted enemy-glyph memory"
 		)
 		var order: Array = []
 		var all_concealed: bool = true
@@ -102,6 +125,15 @@ func _string_names(values: Array) -> Array[StringName]:
 	var result: Array[StringName] = []
 	for value: Variant in values:
 		result.append(StringName(String(value)))
+	return result
+
+
+func _hand_glyphs(hand: Array) -> Array[String]:
+	var result: Array[String] = []
+	for card_value: Variant in hand:
+		var glyph: String = String((card_value as Dictionary).get("glyph", ""))
+		if not glyph.is_empty() and glyph not in result:
+			result.append(glyph)
 	return result
 
 

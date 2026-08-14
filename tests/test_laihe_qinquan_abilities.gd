@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_revelation_state_is_clone_safe()
 	_test_reveal_all_and_future_draws()
 	_test_remembered_reveal_and_weakness()
+	_test_enemy_remembered_reveal_and_weakness()
 	_test_flip_protection()
 	await _test_picture_fade()
 	if _failures == 0:
@@ -127,6 +128,72 @@ func _test_remembered_reveal_and_weakness() -> void:
 	_check(Rules.can_attack_target(board, 4, 5), "Weakness makes every defending edge count as one")
 	_check(int((target["powers"] as Array)[3]) == 9, "Weakness does not alter stored powers")
 	_check(Abilities.has_modifier(target, Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE), "Weakness remains queryable for presentation")
+
+
+func _test_enemy_remembered_reveal_and_weakness() -> void:
+	var opening_tuna: Dictionary = Catalog.create_instance(
+		&"TuNaShu1",
+		Rules.PLAYER_OWNER,
+		&"player_opening_tuna"
+	)
+	var later_same_glyph: Dictionary = Catalog.create_instance(
+		&"TuNaShu2",
+		Rules.PLAYER_OWNER,
+		&"player_later_tuna"
+	)
+	var later_other_glyph: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"player_later_taizu"
+	)
+	var enemy_source: Dictionary = Catalog.create_instance(
+		&"LaiHeQinQuan4",
+		Rules.OPPONENT_OWNER,
+		&"enemy_laihe_4"
+	)
+	var state := State.new(
+		Rules.empty_board(),
+		[opening_tuna, later_same_glyph, later_other_glyph],
+		[enemy_source],
+		Rules.OPPONENT_OWNER
+	)
+	state.remembered_glyphs_by_owner = {
+		Rules.OPPONENT_OWNER: ["吐纳术"],
+	}
+	var reveal_result: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4)
+	)
+	var revealed_state: State = reveal_result["state"] as State
+	var player_hand: Array = revealed_state.get_hand(Rules.PLAYER_OWNER)
+	_check(
+		_is_revealed(player_hand[0], Rules.OPPONENT_OWNER),
+		"Enemy LaiHe4 reveals a remembered player opening card"
+	)
+	_check(
+		_is_revealed(player_hand[1], Rules.OPPONENT_OWNER),
+		"Enemy LaiHe4 reveals a later card sharing an opening glyph"
+	)
+	_check(
+		not _is_revealed(player_hand[2], Rules.OPPONENT_OWNER),
+		"Enemy LaiHe4 leaves a later unrelated glyph concealed"
+	)
+	var summon_result: Dictionary = Simulator.apply_action(
+		revealed_state,
+		Action.make_play(0, 0)
+	)
+	var summoned_state: State = summon_result["state"] as State
+	var summoned_card: Dictionary = (summoned_state.board[0] as Dictionary).get(
+		"card",
+		{}
+	)
+	_check(
+		Abilities.has_modifier(
+			summoned_card,
+			Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE
+		),
+		"Enemy LaiHe4 grants its weakness to a revealed player summon"
+	)
 
 
 func _test_flip_protection() -> void:
