@@ -127,6 +127,16 @@ func _test_action_and_state_keys() -> void:
 	copied = state.duplicate_state()
 	copied.pending_choice = second_order
 	_check(StateKey.build(state) == StateKey.build(copied), "Dictionary insertion order does not affect the state key")
+	copied = state.duplicate_state()
+	copied.repetition_hashes.append("board-signature")
+	_check(
+		StateKey.build(state) != StateKey.build(copied),
+		"Completed-boundary repetition history participates in the state key"
+	)
+	_check(
+		state.repetition_hashes.is_empty(),
+		"Search-state copies do not alias repetition history"
+	)
 
 
 func _test_evaluator_terminal_priority() -> void:

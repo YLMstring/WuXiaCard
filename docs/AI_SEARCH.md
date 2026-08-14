@@ -98,7 +98,8 @@ When implementing it:
 
 ## Missing AI Work
 
-- No repetition-draw adjudication.
+- Fivefold board repetition is adjudicated by the shared simulator before the
+  search receives another actionable state; there is no search-only draw rule.
 - No compact-state parity harness.
 - No difficulty profiles beyond budget.
 - No persistent opening/endgame database.

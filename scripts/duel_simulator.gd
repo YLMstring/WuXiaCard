@@ -10,6 +10,8 @@ const StateData = preload("res://scripts/duel_state.gd")
 const Targeting = preload("res://scripts/duel_targeting.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
+const BOARD_REPETITION_LIMIT: int = 5
+
 
 static func get_legal_actions(state: StateData) -> Array[ActionData]:
 	if state == null:
@@ -125,12 +127,34 @@ static func is_terminal(state: StateData) -> bool:
 		return false
 	if state.turn_count >= state.max_turns:
 		return true
+	if _has_fivefold_board_repetition(state):
+		return true
 	if _board_is_full(state.board):
 		return true
 	return (
 		get_legal_actions_for_owner(state, Rules.PLAYER_OWNER).is_empty()
 		and get_legal_actions_for_owner(state, Rules.OPPONENT_OWNER).is_empty()
 	)
+
+
+static func get_board_repetition_signature(board: Array) -> String:
+	var cell_signatures: Array[String] = []
+	for cell_index: int in range(9):
+		if cell_index >= board.size() or board[cell_index] == null:
+			cell_signatures.append("empty")
+			continue
+		var slot: Dictionary = board[cell_index] as Dictionary
+		var card: Dictionary = slot.get("card", {}) as Dictionary
+		var card_id_text := String(card.get("card_id", &""))
+		var card_id_bytes: PackedByteArray = card_id_text.to_utf8_buffer()
+		cell_signatures.append(
+			"card:%d:%s:owner:%d" % [
+				card_id_bytes.size(),
+				card_id_bytes.hex_encode(),
+				int(slot.get("owner", 0)),
+			]
+		)
+	return "|".join(cell_signatures)
 
 
 static func score_difference(state: StateData, owner_id: int) -> int:
@@ -1193,23 +1217,98 @@ static func _finish_action(
 			true
 		)
 
-	if _board_is_full(state.board):
-		var before_end_result: Dictionary = _resolve_trigger_event(
-			state,
-			Catalog.TRIGGER_BEFORE_DUEL_END,
-			{"winning_owner_ids": _get_winning_owner_ids(state.board)}
-		)
-		_merge_resolution(
-			result["captures"],
-			result["exiles"],
-			result["events"],
-			before_end_result
-		)
+	_resolve_before_full_board_end(state, result)
 	if state.extra_card_plays_remaining > 0 and _owner_has_legal_hand_play(state, moving_owner):
 		state.active_player = moving_owner
 		return result
 	state.extra_card_plays_remaining = 0
 
+	_complete_owner_turn_boundary(state, result)
+	if is_terminal(state):
+		return result
+	_advance_across_empty_owner_turns(state, moving_owner, result)
+	return result
+
+
+static func _advance_across_empty_owner_turns(
+	state: StateData,
+	completed_owner: int,
+	result: Dictionary
+) -> void:
+	var previous_owner: int = completed_owner
+	while true:
+		var turn_owner: int = other_owner(previous_owner)
+		state.active_player = turn_owner
+		var start_result: Dictionary = _resolve_trigger_event(
+			state,
+			Catalog.TRIGGER_START_OWNER_TURN,
+			{"turn_owner_id": turn_owner}
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			start_result
+		)
+		if not get_legal_actions(state).is_empty():
+			return
+
+		var end_result: Dictionary = _resolve_trigger_event(
+			state,
+			Catalog.TRIGGER_END_OWNER_TURN,
+			{"turn_owner_id": turn_owner}
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			end_result
+		)
+		state.end_turn_triggers_resolved = true
+		_apply_extra_card_play_requests(
+			state,
+			turn_owner,
+			end_result.get("extra_turn_requests", []) as Array,
+			result,
+			true
+		)
+		_resolve_before_full_board_end(state, result)
+		if (
+			state.extra_card_plays_remaining > 0
+			and _owner_has_legal_hand_play(state, turn_owner)
+		):
+			return
+		state.extra_card_plays_remaining = 0
+
+		_complete_owner_turn_boundary(state, result)
+		if is_terminal(state):
+			return
+		previous_owner = turn_owner
+
+
+static func _resolve_before_full_board_end(
+	state: StateData,
+	result: Dictionary
+) -> void:
+	if not _board_is_full(state.board):
+		return
+	var before_end_result: Dictionary = _resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_BEFORE_DUEL_END,
+		{"winning_owner_ids": _get_winning_owner_ids(state.board)}
+	)
+	_merge_resolution(
+		result["captures"],
+		result["exiles"],
+		result["events"],
+		before_end_result
+	)
+
+
+static func _complete_owner_turn_boundary(
+	state: StateData,
+	result: Dictionary
+) -> void:
 	var restore_result: Dictionary = _restore_temporary_abilities(
 		state,
 		state.owner_turn_serial
@@ -1222,21 +1321,22 @@ static func _finish_action(
 	)
 	state.owner_turn_serial += 1
 	state.end_turn_triggers_resolved = false
-	if is_terminal(state):
-		return result
-	state.active_player = _get_next_active_owner(state, moving_owner)
-	var start_result: Dictionary = _resolve_trigger_event(
-		state,
-		Catalog.TRIGGER_START_OWNER_TURN,
-		{"turn_owner_id": state.active_player}
-	)
-	_merge_resolution(
-		result["captures"],
-		result["exiles"],
-		result["events"],
-		start_result
-	)
-	return result
+	_record_board_repetition(state)
+
+
+static func _record_board_repetition(state: StateData) -> void:
+	state.repetition_hashes.append(get_board_repetition_signature(state.board))
+
+
+static func _has_fivefold_board_repetition(state: StateData) -> bool:
+	var occurrence_counts: Dictionary = {}
+	for signature_value: Variant in state.repetition_hashes:
+		var signature := String(signature_value)
+		var occurrence_count: int = int(occurrence_counts.get(signature, 0)) + 1
+		if occurrence_count >= BOARD_REPETITION_LIMIT:
+			return true
+		occurrence_counts[signature] = occurrence_count
+	return false
 
 
 static func _append_extra_card_play_requests(target: Array, resolution: Dictionary) -> void:
@@ -1532,12 +1632,3 @@ static func _invalid_transition(state: StateData) -> Dictionary:
 		"events": [],
 		"flip_prevention_requests": [],
 	}
-
-
-static func _get_next_active_owner(state: StateData, moving_owner: int) -> int:
-	var preferred_owner: int = other_owner(moving_owner)
-	if not get_legal_actions_for_owner(state, preferred_owner).is_empty():
-		return preferred_owner
-	if not get_legal_actions_for_owner(state, moving_owner).is_empty():
-		return moving_owner
-	return preferred_owner

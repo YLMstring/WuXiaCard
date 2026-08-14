@@ -31,6 +31,9 @@ func _run() -> void:
 	_test_draw_on_play_uses_top_deck_order_and_available_cards()
 	_test_draw_on_play_handles_empty_deck()
 	_test_turn_passes_to_owner_with_a_legal_move()
+	_test_empty_owner_turn_resolves_start_and_end_boundaries()
+	_test_empty_owner_turn_stops_when_start_creates_an_action()
+	_test_fivefold_board_repetition_ends_at_turn_boundary()
 	_test_reopened_cell_keeps_match_alive()
 	_test_full_board_ends_before_next_turn_starts()
 	_test_turn_cap_ends_before_next_turn_starts()
@@ -670,6 +673,258 @@ func _test_turn_passes_to_owner_with_a_legal_move() -> void:
 	var next_state = transition["state"]
 	_check(next_state.active_player == Rules.PLAYER_OWNER, "Opponent with no move passes back to the player")
 	_check(not Simulator.is_terminal(next_state), "Match continues when the player can still place a card")
+
+
+func _test_empty_owner_turn_resolves_start_and_end_boundaries() -> void:
+	var board: Array = Rules.empty_board()
+	var boundary_ability: Dictionary = {
+		"retained_on_flip": true,
+		"triggers": [
+			{
+				"event": Catalog.TRIGGER_START_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+			{
+				"event": Catalog.TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+		],
+	}
+	var boundary_source: Dictionary = _make_runtime_card(
+		"Boundary Source",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"empty_turn_boundary_source",
+		[boundary_ability]
+	)
+	board[0] = {"card": boundary_source, "owner": Rules.OPPONENT_OWNER}
+	var state := State.new(
+		board,
+		[
+			_make_runtime_card(
+				"First Action",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"empty_turn_first_action"
+			),
+			_make_runtime_card(
+				"Player Followup",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"empty_turn_player_followup"
+			),
+		],
+		[],
+		Rules.PLAYER_OWNER
+	)
+
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 8, &"empty_turn_first_action")
+	)
+	var next_state: State = transition.get("state") as State
+	var resolved_source: Dictionary = (next_state.board[0] as Dictionary).get(
+		"card",
+		{}
+	)
+	_check(
+		int(resolved_source.get("ki", 0)) == 2,
+		"An owner with no legal action still resolves start-turn then end-turn rules"
+	)
+	_check(
+		_count_events(transition.get("events", []), &"ability_triggered") == 2
+		and _count_events(transition.get("events", []), &"ki_changed") == 2,
+		"An empty owner turn emits both accepted boundary trigger event groups"
+	)
+	_check(
+		next_state.turn_count == 1 and next_state.owner_turn_serial == 2,
+		"An empty owner turn advances the owner-turn serial without counting an action"
+	)
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER
+		and not Simulator.get_legal_actions(next_state).is_empty(),
+		"Control reaches the following owner after the empty owner turn"
+	)
+
+
+func _test_empty_owner_turn_stops_when_start_creates_an_action() -> void:
+	var board: Array = Rules.empty_board()
+	var boundary_ability: Dictionary = {
+		"retained_on_flip": true,
+		"triggers": [
+			{
+				"event": Catalog.TRIGGER_START_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+			{
+				"event": Catalog.TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+		],
+	}
+	var boundary_source: Dictionary = _make_runtime_card(
+		"Drawing Boundary",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"empty_turn_drawing_source",
+		[boundary_ability]
+	)
+	board[0] = {"card": boundary_source, "owner": Rules.OPPONENT_OWNER}
+	var state := State.new(
+		board,
+		[
+			_make_runtime_card(
+				"Opening Action",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"start_draw_opening_action"
+			),
+			_make_runtime_card(
+				"Opening Followup",
+				[1, 1, 1, 1],
+				Rules.PLAYER_OWNER,
+				&"start_draw_opening_followup"
+			),
+		],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[],
+		[Catalog.create_instance(
+			&"TuNaShu1",
+			Rules.OPPONENT_OWNER,
+			&"start_draw_side_card"
+		)]
+	)
+
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 8, &"start_draw_opening_action")
+	)
+	var next_state: State = transition.get("state") as State
+	var resolved_source: Dictionary = (next_state.board[0] as Dictionary).get(
+		"card",
+		{}
+	)
+	_check(
+		next_state.active_player == Rules.OPPONENT_OWNER
+		and next_state.get_hand(Rules.OPPONENT_OWNER).size() == 1,
+		"A start-turn draw creates an action and keeps that owner active"
+	)
+	_check(
+		int(resolved_source.get("ki", 0)) == 0
+		and _count_events(transition.get("events", []), &"ability_triggered") == 1,
+		"A newly actionable owner does not resolve its end-turn rule early"
+	)
+	_check(
+		next_state.turn_count == 1 and next_state.owner_turn_serial == 1,
+		"Starting an actionable owner turn does not complete another boundary"
+	)
+
+
+func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
+	var repeated_card: Dictionary = _make_runtime_card(
+		"Repeated Card",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"repeat_instance_one"
+	)
+	repeated_card["card_id"] = &"repeated_card"
+	var equivalent_card: Dictionary = repeated_card.duplicate(true)
+	equivalent_card["instance_id"] = &"repeat_instance_two"
+	equivalent_card["powers"] = [9, 8, 7, 6]
+	var repeated_board: Array = Rules.empty_board()
+	repeated_board[0] = {"card": repeated_card, "owner": Rules.PLAYER_OWNER}
+	var equivalent_board: Array = Rules.empty_board()
+	equivalent_board[0] = {
+		"card": equivalent_card,
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var changed_owner_board: Array = equivalent_board.duplicate(true)
+	(changed_owner_board[0] as Dictionary)["owner"] = Rules.OPPONENT_OWNER
+	var repeated_signature: String = Simulator.get_board_repetition_signature(
+		repeated_board
+	)
+	var equivalent_signature: String = Simulator.get_board_repetition_signature(
+		equivalent_board
+	)
+	var changed_owner_signature: String = Simulator.get_board_repetition_signature(
+		changed_owner_board
+	)
+	_check(
+		repeated_signature == equivalent_signature,
+		"Board repetition ignores runtime instance identity and mutable powers"
+	)
+	_check(
+		repeated_signature != changed_owner_signature,
+		"Board repetition distinguishes the current owner in every occupied cell"
+	)
+
+	var opponent_reply: Dictionary = _make_runtime_card(
+		"Opponent Reply",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"repeat_opponent_reply"
+	)
+	var fourfold_state := State.new(
+		Rules.empty_board(),
+		[repeated_card],
+		[opponent_reply],
+		Rules.PLAYER_OWNER
+	)
+	fourfold_state.repetition_hashes = [
+		repeated_signature,
+		changed_owner_signature,
+		repeated_signature,
+		changed_owner_signature,
+		repeated_signature,
+	]
+	var fourfold_transition: Dictionary = Simulator.apply_action(
+		fourfold_state,
+		Action.make_play(0, 0, &"repeat_instance_one")
+	)
+	var fourfold_result: State = fourfold_transition.get("state") as State
+	_check(
+		not Simulator.is_terminal(fourfold_result)
+		and fourfold_result.repetition_hashes.count(repeated_signature) == 4,
+		"The fourth matching completed boundary remains nonterminal"
+	)
+
+	var fifth_card: Dictionary = equivalent_card.duplicate(true)
+	fifth_card["instance_id"] = &"repeat_instance_five"
+	var fivefold_state := State.new(
+		Rules.empty_board(),
+		[fifth_card],
+		[opponent_reply],
+		Rules.PLAYER_OWNER
+	)
+	fivefold_state.repetition_hashes = [
+		repeated_signature,
+		changed_owner_signature,
+		repeated_signature,
+		changed_owner_signature,
+		repeated_signature,
+		changed_owner_signature,
+		repeated_signature,
+	]
+	var fivefold_transition: Dictionary = Simulator.apply_action(
+		fivefold_state,
+		Action.make_play(0, 0, &"repeat_instance_five")
+	)
+	var fivefold_result: State = fivefold_transition.get("state") as State
+	_check(
+		Simulator.is_terminal(fivefold_result)
+		and fivefold_result.repetition_hashes.count(repeated_signature) == 5,
+		"The fifth matching completed boundary ends the duel despite intervening positions"
+	)
+	_check(
+		fivefold_result.active_player == Rules.PLAYER_OWNER,
+		"Fivefold repetition ends after the current turn and before the next owner starts"
+	)
 
 
 func _test_reopened_cell_keeps_match_alive() -> void:

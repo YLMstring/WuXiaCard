@@ -1,14 +1,14 @@
 # Known Issues, Gaps, and Risks
 
-Updated: 2026-07-26
+Updated: 2026-08-14
 
 ## Gameplay and Content
 
 - Only ten catalog definitions exist, and most metadata is placeholder/empty.
 - Balance is prototype-level.
 - No general queued choice/interrupt/reaction engine exists. `effect_queue` and `pending_choice` are scaffolding only.
-- Repetition history exists in state, but no repetition-draw policy is enforced.
-- Matches use a broad `max_turns = 200` guard.
+- Fivefold board repetition now ends matches by score; `max_turns = 100`
+  remains the broad fallback for nonrepeating pathological action sequences.
 - No result/progression screen, story/dialogue flow, deck builder, collection, save/load, tutorial, settings, accessibility menu, or formal localization system.
 - Testing mode requires editing `GameSettings.TESTING_MODE` and restarting/recreating the duel.
 

@@ -266,7 +266,10 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   preserving unlocks; do not silently invent completion history.
 - Deck-builder tests use isolated `user://` paths. Do not point tests at the
   production profile or a developer's saved deck will make them nondeterministic.
-- Repetition state is stored, but no repetition-draw rule is enforced. The only broad loop guard is `max_turns = 200`.
+- Nonterminal owners with no legal action still resolve start/end owner-turn
+  triggers; only their action phase is skipped. Five occurrences of the same
+  nine-cell catalog-ID/current-owner signature end the duel by score at the
+  end-to-start boundary. The action-count fallback is `max_turns = 100`.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

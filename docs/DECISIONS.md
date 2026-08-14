@@ -37,6 +37,13 @@ These decisions were explicitly established during development and should not be
 ## Turn and Activation Rules
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
+- If the next owner has no legal action in a nonterminal position, only that
+  owner's action phase is skipped. Their start- and end-owner-turn triggers
+  still resolve, and the empty turn does not increment the action counter.
+- After every completed owner-turn boundary, record the nine board cells by
+  catalog card ID and current owner only. The fifth occurrence of the same
+  signature anywhere in that duel ends it by the ordinary board score before
+  the next owner-turn start.
 - Every activate ability costs one ki.
 - A card may have multiple innate catalog activations in listed priority order.
   Receiving a new activation replaces every current activation-bearing ability
