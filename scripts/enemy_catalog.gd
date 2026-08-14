@@ -48,7 +48,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"xuanhuo_qishi", "name": "宁中则", "level": 7, "deck": [&"SanQinFeng3", &"CangSongYingKe3", &"YouFenLaiYi3", &"YouFenLaiYi3", &"ZiXiaGong2"]},
 	{"id": &"hanyue_nvxia", "name": "莫大", "level": 7, "sect_id": &"tingchao_gu", "deck": [&"YunWu13Shi3", &"YunWu13Shi3", &"YiJianLuo9Yan3", &"JianFaQinYin3", &"TuNaShu3"]},
 	{"id": &"canghai_haoke", "name": "定闲", "level": 8, "sect_id": &"HengShanPai", "deck": [&"HenShanJianZhen4", &"JinZhenDuJie4", &"WanHuaJian3", &"MianLiCangZhen3", &"TuNaShu3"]},
-	{"id": &"qianji_xiansheng", "name": "天门道人", "level": 8, "deck": [&"LaiHeQinQuan3", &"WuDaFuJian3", &"QiXinLuoChangKong4", &"TaiShan18Pan3", &"WuDaFuJian3"]},
+	{"id": &"qianji_xiansheng", "name": "天门道人", "level": 8, "sect_id": &"TaiShanPai", "deck": [&"LaiHeQinQuan3", &"WuDaFuJian3", &"QiXinLuoChangKong4", &"TaiShan18Pan3", &"WuDaFuJian3"]},
 	{"id": &"fengsha_lingzhu", "name": "乐厚", "level": 9, "deck": [&"YinYangZhang4", &"DaSongYangZhang4", &"DaSongYangZhang4", &"DaSongYangZhang3", &"DaSongYangZhang3"]},
 	{"id": &"baishi_daoren", "name": "五岳秘剑·岳灵珊", "level": 9, "deck": [&"YanHuiZhuRong4", &"TianZhuYunQi4", &"JinZhenDuJie4", &"WuDaFuJian3", &"WanYueChaoZong4"]},
 	{"id": &"zhenyue_shi", "name": "君子剑·岳不群", "level": 10, "deck": [&"SanQinFeng3", &"CangSongYingKe4", &"YouFenLaiYi4", &"ZiXiaGong2", &"ZiXiaGong4"]},
