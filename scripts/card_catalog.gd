@@ -1121,7 +1121,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [7, 5, 7, 7],
+		"powers": [7, 5, 6, 7],
 		"starting_ki": 1,
 		"abilities": [
 			{
@@ -1149,7 +1149,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [7, 5, 7, 7],
+		"powers": [7, 5, 6, 7],
 		"starting_ki": 2,
 		"abilities": [
 			{
@@ -1191,7 +1191,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定，指定：移动至一个相邻空格，然后发起攻击。锁定，指定：与一个相邻友方交换位置，然后发起攻击。锁定，指定：与一个相邻敌方交换位置，然后发起攻击。",
 		"flavor": "华山剑法的杀招，剑势飞舞而出，轻盈灵动。招数本极寻常，但五个后着变化繁复，威力极大。",
-		"powers": [7, 6, 7, 7],
+		"powers": [7, 6, 6, 7],
 		"starting_ki": 2,
 		"abilities": [
 			{
