@@ -18,10 +18,7 @@ static func discover(
 	var groups: Array[Dictionary] = []
 	if state == null or event_id not in Catalog.KNOWN_TRIGGER_EVENTS:
 		return groups
-	if event_id in [
-		Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
-		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-	]:
+	if event_id == Catalog.TRIGGER_CARD_BEFORE_SUMMONED:
 		_discover_from_cell(
 			state,
 			event_id,

@@ -62,7 +62,7 @@ func _run() -> void:
 	_test_KuiHua1_extra_turn_can_chain()
 	_test_flipped_KuiHua1_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
-	_test_retained_after_summon_draws_for_new_owner()
+	_test_after_summon_group_stales_after_owner_flip()
 	_test_invalid_context_defaults_to_no_effect()
 	_test_activation_costs_validate_as_a_batch()
 	_test_card_be_attacked_triggers_use_row_major_order()
@@ -1729,7 +1729,13 @@ func _test_summon_trigger_discovery_and_stale_identity() -> void:
 		"card": _make_reaction_card("Second", [1, 1, 1, 5], Rules.PLAYER_OWNER, &"react_second"),
 		"owner": Rules.PLAYER_OWNER,
 	}
-	var target: Dictionary = _make_runtime_card("Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"summoned_target")
+	var target: Dictionary = _make_runtime_card(
+		"Target",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER,
+		&"summoned_target",
+		[_draw_ability(1)]
+	)
 	board[1] = {"card": target, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
 	var context: Dictionary = {
@@ -1738,12 +1744,13 @@ func _test_summon_trigger_discovery_and_stale_identity() -> void:
 		"trigger_owner_id": Rules.OPPONENT_OWNER,
 		"summon_reason": &"hand_play",
 	}
-	var groups: Array[Dictionary] = Triggers.discover(state, Catalog.TRIGGER_CARD_SUMMONED, context)
-	_check(groups.size() == 2, "Summon discovery finds every eligible reactor")
+	var groups: Array[Dictionary] = Triggers.discover(state, Catalog.TRIGGER_CARD_AFTER_SUMMONED, context)
+	_check(groups.size() == 3, "After-summoned discovery scans every board source")
 	_check(
 		int(groups[0].get("source_cell", -1)) == 0
-			and int(groups[1].get("source_cell", -1)) == 2,
-		"Summon discovery uses row-major board order"
+			and int(groups[1].get("source_cell", -1)) == 1
+			and int(groups[2].get("source_cell", -1)) == 2,
+		"After-summoned discovery interleaves global reactions and self rules in row-major order"
 	)
 	_check((groups[0].get("context", {}) as Dictionary) == context, "Summon group preserves stable trigger context")
 	var first_result: Dictionary = Triggers.resolve_group(state, groups[0])
@@ -2119,7 +2126,7 @@ func _test_unusable_extra_turn_expires() -> void:
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
 
 
-func _test_retained_after_summon_draws_for_new_owner() -> void:
+func _test_after_summon_group_stales_after_owner_flip() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {
 		"card": Catalog.create_instance(
@@ -2163,15 +2170,16 @@ func _test_retained_after_summon_draws_for_new_owner() -> void:
 			&"ability_triggered",
 			&"attack_started",
 			&"card_flipped",
-			&"ability_triggered",
-			&"card_drawn",
 		],
-		"Retained after-summon ability resolves after the reaction flip"
+		"Earlier after-summoned reaction invalidates a queued group whose source changes owner"
 	)
 	_check(
-		next_state.get_hand(Rules.PLAYER_OWNER).size() == 1
-		and StringName((next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("instance_id", &"")) == &"player_draw",
-		"Retained draw uses the flipped card's new owner"
+		next_state.get_hand(Rules.PLAYER_OWNER).is_empty(),
+		"Retained queued ability does not transfer its trigger to the new owner"
+	)
+	_check(
+		(next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1,
+		"Invalidated queued ability leaves the new owner's deck untouched"
 	)
 	_check(
 		(next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1,
@@ -2385,7 +2393,7 @@ func _reaction_ability() -> Dictionary:
 	return {
 		"retained_on_flip": false,
 		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
 			"conditions": [
 				{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
 				{"type": Catalog.CONDITION_TRIGGER_CARD_IN_RANGE},

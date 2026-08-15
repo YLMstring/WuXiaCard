@@ -211,7 +211,7 @@ zero is `NO_EFFECT`. Subtraction floors each side at zero; four zeros remove the
 exact instance to its original owner's removed zone after emitting the power
 event. Do not encode arithmetic or named-card behavior in the executor.
 
-Draw after summon reactions:
+Draw in the after-summoned window:
 
 ```gdscript
 {
@@ -360,8 +360,10 @@ Normal summon:
 1. place the exact instance logically;
 2. resolve that instance's `TRIGGER_CARD_BEFORE_SUMMONED` rules;
 3. emit `card_placed`, then resolve global `TRIGGER_CARD_SUMMONED`;
-4. if the exact summoned instance remains on the board, resolve its current
-   `TRIGGER_CARD_AFTER_SUMMONED` rules for its current owner;
+4. if the exact summoned instance remains on the board, discover and resolve
+   all matching `TRIGGER_CARD_AFTER_SUMMONED` rules across the board in
+   row-major source order; use `CONDITION_TRIGGER_CARD_IS_SELF` for ordinary
+   entrance abilities that should only respond to the summoned card itself;
 5. standard attack only if it still belongs to the summoning owner;
 6. consume or grant any extra-card-play allowance; while a legal allowance
    remains, keep the same owner active without resolving turn boundaries;

@@ -255,7 +255,11 @@ See `docs/DECISIONS.md` for ability-specific behavior.
 
 ## Immediate Cautions
 
-- `CangSongYingKe2` resolves `TRIGGER_CARD_SUMMONED` before the summoned card's own `TRIGGER_CARD_AFTER_SUMMONED` rules and standard attack. There is still no general queued player-choice/interrupt engine.
+- `TRIGGER_CARD_AFTER_SUMMONED` scans the full board and resolves matching
+  sources in row-major order. `CangSongYingKe2` uses this window, so its order
+  relative to the summoned card's own entrance ability depends on their board
+  cells; both precede the standard attack. There is still no general queued
+  player-choice/interrupt engine.
 - `CARD_BEFORE_FLIPPED` is a committed-flip boundary, not a second attack-range
   check. Future rules that need to cancel a committed flip must do so through a
   non-movement invalidator with explicitly defined semantics.

@@ -186,9 +186,14 @@ The action/target model should also support future non-movement activations with
 
 Whenever an enemy card is summoned into an orthogonally adjacent slot that CangSongYingKe2 can beat by the normal strict power comparison, CangSongYingKe2 immediately attacks that exact card.
 
-- The reaction resolves after `card_placed` but before the summoned card's `TRIGGER_CARD_AFTER_SUMMONED` rules and standard attack.
-- If the reaction flips or removes the summoned card, those remaining phases are cancelled and the turn still ends normally.
-- Multiple eligible reactors resolve in row-major board order and stop once the summoned card leaves or changes ownership.
+- The reaction participates in the full-board `TRIGGER_CARD_AFTER_SUMMONED`
+  window after `card_placed` and before the standard attack.
+- Every matching source in that window, including the summoned card's own
+  entrance abilities, is discovered and resolved in row-major board order.
+- If an earlier source flips, removes, or otherwise invalidates a later queued
+  source, that later group does not resolve. The turn still ends normally.
+- Multiple eligible reactors stop once the summoned card leaves or changes
+  ownership.
 - Reaction attacks use the existing flip/exile path and successful-flip triggers.
 - Movement is not a summon.
 - The ability is lost on flip by the default non-retention rule.

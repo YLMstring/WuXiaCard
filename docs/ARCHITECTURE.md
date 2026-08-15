@@ -74,7 +74,9 @@ freezes both owners' previous successful hand-play records, consumes at most
 one applicable pending non-heart suppression layer,
 resolves that card's `TRIGGER_CARD_BEFORE_SUMMONED` rules, emits `card_placed`,
 resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then
-resolves the exact summoned card's current `TRIGGER_CARD_AFTER_SUMMONED` rules.
+discovers and resolves `TRIGGER_CARD_AFTER_SUMMONED` across the full board in
+row-major source order. Self-only conditions still restrict ordinary entrance
+abilities to the exact summoned card.
 Its standard attack follows only if the exact instance remains on the board
 under the summoning owner. Board movement emits neither summon event.
 

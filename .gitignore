@@ -11,3 +11,6 @@
 # Local visual brainstorming sessions
 .superpowers/
 WuxiaCard/
+
+# Generated artifact conversion workspaces
+/outputs/

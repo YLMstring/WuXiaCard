@@ -221,7 +221,7 @@ func _test_ability_declarations() -> void:
 		_check(not ability.has("id"), "%s draw ability is identity-free" % card_id)
 		_check(not ability.has("retained_on_flip"), "%s relies on default non-retention" % card_id)
 		var trigger: Dictionary = (ability.get("triggers", []) as Array)[0]
-		_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED, "%s draws after summon reactions" % card_id)
+		_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED, "%s draws in the after-summoned window" % card_id)
 		_check(trigger.get("conditions", []) == [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "%s only draws for its own summon" % card_id)
 		var expected_amount: int = 2 if card_id == &"TuNaShu2" else 1
 		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_DRAW_CARDS, "amount": expected_amount}], "%s declares its catalog draw amount" % card_id)
@@ -490,7 +490,7 @@ func _test_welcoming_pine_schema() -> void:
 	if triggers.is_empty():
 		return
 	var trigger: Dictionary = triggers[0]
-	_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_SUMMONED, "Welcoming Pine reacts to summoned cards")
+	_check(StringName(trigger.get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED, "Welcoming Pine reacts during the full-board after-summoned window")
 	_check(
 		trigger.get("conditions", []) == [
 			{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},

@@ -47,11 +47,19 @@ func _test_catalog_declarations() -> void:
 		&"SanQinFeng3",
 	]:
 		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
-		_check(abilities.size() == 1, "%s has one passive ability group" % card_id)
+		var expected_count: int = 2 if card_id in [
+			&"CangSongYingKe3",
+			&"CangSongYingKe4",
+		] else 1
 		_check(
-			Catalog.validate_ability(abilities[0] as Dictionary, card_id).is_empty(),
-			"%s declaration passes generic catalog validation" % card_id
+			abilities.size() == expected_count,
+			"%s keeps each distinct trigger in its own passive ability group" % card_id
 		)
+		for ability: Dictionary in abilities:
+			_check(
+				Catalog.validate_ability(ability, card_id).is_empty(),
+				"%s declaration passes generic catalog validation" % card_id
+			)
 	for entry: Dictionary in [
 		{
 			"type": Catalog.ACTION_ADD_CARD_TO_HAND,
@@ -170,9 +178,9 @@ func _test_cangsong_copies_before_attack_flip() -> void:
 	var copied_card: Dictionary = copied_hand[0]
 	var flipped_card: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
 	_check(
-		copied_card.get("powers", []) == [3, 8, 8, 4]
+		copied_card.get("powers", []) == [3, 8, 8, 2]
 		and int(copied_card.get("ki", -1)) == 0
-		and (copied_card.get("active_abilities", []) as Array).size() == 1
+		and (copied_card.get("active_abilities", []) as Array).size() == 2
 		and int(flipped_card.get("ki", -1)) == 0
 		and (flipped_card.get("active_abilities", []) as Array).is_empty(),
 		"The gained card is fresh while the flipped source spends ki and loses ability"
