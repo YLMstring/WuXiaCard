@@ -464,7 +464,7 @@ const QIXIN_RETAINED_ATTACK_MODIFIERS: Dictionary = {
 const QIXIN_SUMMON_REACTION: Dictionary = {
 	"triggers": [
 		{
-			"event": TRIGGER_CARD_SUMMONED,
+			"event": TRIGGER_CARD_AFTER_SUMMONED,
 			"conditions": [
 				{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
 				{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
@@ -1046,22 +1046,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对手招式进场后，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [3, 8, 8, 2],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_SUMMONED,
-						"conditions": [
-							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
-						],
-						"actions": [
-							{"type": ACTION_ATTACK_TRIGGER_CARD},
-						],
-					},
-				],
-			},
-		],
+		"abilities": [QIXIN_SUMMON_REACTION],
 	},
 	&"CangSongYingKe3": {
 		"id": &"CangSongYingKe3",
@@ -1073,19 +1058,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对手招式进场后，若在我的攻击范围内，我对其发起攻击。我翻面前，耗内力以获取一张我的复制。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [3, 8, 8, 2],
-		"abilities": [
+		"abilities": [QIXIN_SUMMON_REACTION,
 			{
 				"triggers": [
-					{
-						"event": TRIGGER_CARD_SUMMONED,
-						"conditions": [
-							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
-						],
-						"actions": [
-							{"type": ACTION_ATTACK_TRIGGER_CARD},
-						],
-					},
 					{
 						"event": CARD_BEFORE_FLIPPED,
 						"conditions": [
@@ -1115,19 +1090,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对手招式进场后，若在我的攻击范围内，我对其发起攻击。我翻面前，耗内力以获取一张我的复制。",
 		"flavor": "华山剑法的绝招。华山上有数株古松，枝叶向下伸展，有如张臂欢迎上山的游客一般，称为“迎客松”。这招“苍松迎客”，便是从这几株古松的形状上变化而出。",
 		"powers": [5, 8, 8, 4],
-		"abilities": [
+		"abilities": [QIXIN_SUMMON_REACTION,
 			{
 				"triggers": [
-					{
-						"event": TRIGGER_CARD_SUMMONED,
-						"conditions": [
-							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-							{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
-						],
-						"actions": [
-							{"type": ACTION_ATTACK_TRIGGER_CARD},
-						],
-					},
 					{
 						"event": CARD_BEFORE_FLIPPED,
 						"conditions": [
