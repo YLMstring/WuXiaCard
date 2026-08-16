@@ -56,7 +56,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"tingchao_zhuren", "name": "杜甫", "level": 11, "deck": [&"LaiHeQinQuan5", &"WuDaFuJian3", &"QiXinLuoChangKong4", &"TaiShan18Pan3", &"QiXinLuoChangKong4"]},
 	{"id": &"chisha_menzhu", "name": "复仇者·林平之", "level": 12, "deck": [&"YouFenLaiYi3", &"KuiHua4", &"KuiHua3", &"CangSongYingKe3", &"ZiXiaGong2"]},
 	{"id": &"bailu_shanzhang", "name": "五岳掌门·岳不群", "level": 13, "deck": [&"SanQinFeng3", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"ZiXiaGong4"]},
-	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"DuGu9Jian1", &"DuGu9Jian2", &"DuGu9Jian3", &"DuGu9Jian3", &"CangSongYingKe4"]},
+	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"DuGu9Jian1", &"DuGu9Jian2", &"DuGu9Jian3", &"DuGu9Jian1", &"CangSongYingKe4"]},
 	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"]},
 ]
 
