@@ -618,13 +618,13 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		[],
 		Rules.PLAYER_OWNER,
 		0,
-		[Catalog.create_instance(&"tiger_general", Rules.PLAYER_OWNER, &"partial_tiger")],
+		[Catalog.create_instance(&"HuZhuaJueHuSHou2", Rules.PLAYER_OWNER, &"partial_tiger")],
 		[]
 	)
 	var partial_transition: Dictionary = Simulator.apply_action(partial_state, Action.make_play(0, 0))
 	var partial_hand: Array = (partial_transition["state"] as State).get_hand(Rules.PLAYER_OWNER)
 	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 2, "A depleted side deck fills every available draw")
-	_check(StringName((partial_hand[0] as Dictionary).get("card_id", &"")) == &"tiger_general", "A depleted draw uses the remaining top card first")
+	_check(StringName((partial_hand[0] as Dictionary).get("card_id", &"")) == &"HuZhuaJueHuSHou2", "A depleted draw uses the remaining top card first")
 	_check(StringName((partial_hand[1] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan", "A depleted draw fills its missing card with TaiZuChangQuan")
 
 

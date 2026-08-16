@@ -198,7 +198,7 @@ func _test_new_sect_card_definitions() -> void:
 
 
 func _test_ability_declarations() -> void:
-	for card_id: StringName in [&"gate_general", &"tiger_general"]:
+	for card_id: StringName in [&"gate_general", &"HuZhuaJueHuSHou2"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])
 		_check(abilities.size() == 1, "%s declares one ability" % card_id)
@@ -242,7 +242,7 @@ func _test_encounter_decks() -> void:
 		player_ids == [&"TaiZuChangQuan", &"TuNaShu1"],
 		"Inactive normal profiles expose only the two initial cards"
 	)
-	_check(opponent_ids == [&"CangSongYingKe1", &"TaiZuChangQuan", &"tiger_general", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
+	_check(opponent_ids == [&"CangSongYingKe1", &"TaiZuChangQuan", &"HuZhuaJueHuSHou2", &"TuNaShu1", &"TuNaShu1"], "Opponent deck preserves current hand order")
 	for card_id: StringName in player_ids + opponent_ids:
 		_check(Catalog.has_card(card_id), "Deck card %s exists in the catalog" % card_id)
 	for suffix: String in ["", ".tmp", ".bak"]:

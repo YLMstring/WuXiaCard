@@ -407,10 +407,10 @@ func _run() -> void:
 
 	var malformed := {
 		"schema_version": 1,
-		"unlocked_card_ids": ["gate_general", "KuiHua1", "jiang_wei", "TuNaShu2", "TaiZuChangQuan", "tiger_general"],
+		"unlocked_card_ids": ["gate_general", "KuiHua1", "jiang_wei", "TuNaShu2", "TaiZuChangQuan", "HuZhuaJueHuSHou2"],
 		"unlocked_sect_ids": ["missing_sect", "TaiShanPai", "TaiShanPai"],
 		"main_deck": ["gate_general", "gate_general", "missing", "jiang_wei"],
-		"library_slots": ["", "KuiHua1", "", "TuNaShu2", "TaiZuChangQuan", "tiger_general"],
+		"library_slots": ["", "KuiHua1", "", "TuNaShu2", "TaiZuChangQuan", "HuZhuaJueHuSHou2"],
 	}
 	var repaired: Dictionary = store.repair_profile(malformed)
 	_check(store.is_profile_valid(repaired), "Malformed profile repairs to a valid profile")

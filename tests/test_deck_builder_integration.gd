@@ -49,7 +49,7 @@ func _run() -> void:
 	var enemy_fixture_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"DuGu9Jian1",
-		&"tiger_general",
+		&"HuZhuaJueHuSHou2",
 		&"TuNaShu1",
 		&"LaiHeQinQuan2",
 	]

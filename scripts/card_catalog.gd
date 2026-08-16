@@ -245,7 +245,10 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"ZiXiaGong3",
 	&"ZiXiaGong4",
 	&"TaiZuChangQuan",
-	&"tiger_general",
+	&"HuZhuaJueHuSHou1",
+	&"HuZhuaJueHuSHou2",
+	&"HuZhuaJueHuSHou3",
+	&"HuZhuaJueHuSHou4",
 	&"TuNaShu1",
 	&"TuNaShu2",
 	&"TuNaShu3",
@@ -1580,16 +1583,82 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [5, 5, 5, 5],
 		"abilities": [],
 	},
-	&"tiger_general": {
-		"id": &"tiger_general",
-		"glyph": "虎",
-		"picture": "res://pics/LKT010_008.png",
-		"sect": "",
-		"tier": 6,
-		"weapon": "",
+	&"HuZhuaJueHuSHou1": {
+		"id": &"HuZhuaJueHuSHou1",
+		"glyph": "虎爪绝户手",
+		"picture": "res://pics/LKT010_162.png",
+		"sect": "武当派",
+		"tier": 1,
+		"weapon": "指法",
 		"description": "",
-		"flavor": "",
-		"powers": [3, 4, 8, 8],
+		"flavor": "俞莲舟从武当虎爪手中脱胎所创，令人断子绝孙，毁灭门户的杀手。",
+		"powers": [8, 8, 4, 4],
+		"abilities": [],
+	},
+	&"HuZhuaJueHuSHou2": {
+		"id": &"HuZhuaJueHuSHou2",
+		"glyph": "虎爪绝户手",
+		"picture": "res://pics/LKT010_162.png",
+		"sect": "武当派",
+		"tier": 2,
+		"weapon": "指法",
+		"description": "锁定：我攻击时，移除目标。",
+		"flavor": "俞莲舟从武当虎爪手中脱胎所创，令人断子绝孙，毁灭门户的杀手。",
+		"powers": [8, 8, 4, 4],
+		"abilities": [
+			{
+				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"HuZhuaJueHuSHou3": {
+		"id": &"HuZhuaJueHuSHou3",
+		"glyph": "虎爪绝户手",
+		"picture": "res://pics/LKT010_162.png",
+		"sect": "武当派",
+		"tier": 3,
+		"weapon": "指法",
+		"description": "其它友方攻击后，我发起攻击。锁定：我攻击时，移除目标。",
+		"flavor": "俞莲舟从武当虎爪手中脱胎所创，令人断子绝孙，毁灭门户的杀手。",
+		"powers": [8, 8, 4, 4],
+		"abilities": [
+			{
+				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"HuZhuaJueHuSHou4": {
+		"id": &"HuZhuaJueHuSHou4",
+		"glyph": "虎爪绝户手",
+		"picture": "res://pics/LKT010_162.png",
+		"sect": "武当派",
+		"tier": 4,
+		"weapon": "指法",
+		"description": "其它友方攻击后，我发起攻击。锁定：我攻击时，移除目标。锁定：敌方抽牌时，移除其抽到的牌。",
+		"flavor": "俞莲舟从武当虎爪手中脱胎所创，令人断子绝孙，毁灭门户的杀手。",
+		"powers": [8, 8, 4, 4],
 		"abilities": [
 			{
 				"retained_on_flip": true,

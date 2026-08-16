@@ -10,7 +10,7 @@ const PLAYER_CARD_IDS: Array[StringName] = ProfileStore.DEFAULT_MAIN_DECK_IDS
 const OPPONENT_CARD_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
 	&"TaiZuChangQuan",
-	&"tiger_general",
+	&"HuZhuaJueHuSHou2",
 	&"TuNaShu1",
 	&"TuNaShu1",
 ]
