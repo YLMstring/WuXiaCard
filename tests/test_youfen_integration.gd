@@ -23,7 +23,7 @@ func _run() -> void:
 	duel.set("opponent_hand_shuffle_seed", -1)
 	var opponent_ids: Array[StringName] = [
 		&"CangSongYingKe2",
-		&"gate_general",
+		&"LeiZHenJian1",
 		&"KuiHua1",
 		&"YouFenLaiYi2",
 		&"TuNaShu2",

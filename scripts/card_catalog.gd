@@ -310,7 +310,9 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"DuGu9Jian1",
 	&"DuGu9Jian2",
 	&"DuGu9Jian3",
-	&"gate_general",
+	&"LeiZHenJian1",
+	&"LeiZHenJian2",
+	&"LeiZHenJian3",
 	&"KuiHua1",
 	&"KuiHua2",
 	&"KuiHua3",
@@ -1935,7 +1937,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "泰山派",
 		"tier": 5,
 		"weapon": "术数",
-		"description": "进场后，揭示敌方手牌中曾经出过的牌。敌方手牌中已揭示的牌进场时，使其获得以下效果：判断是否能被攻击时，所有点数视为零。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。",
+		"description": "我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。进场后，揭示敌方手牌中曾经出过的牌。敌方手牌中已揭示的牌进场时，使其获得以下效果：判断是否能被攻击时，所有点数视为零。",
 		"flavor": "泰山派剑法中最高深的绝艺，要旨不在右手剑招，而在左手的算数。左手不住屈指计算，算的是敌人所处方位、武功门派、身形长短、兵刃大小，以及日光所照高低等等，计算极为繁复，一经算准，挺剑击出，无不中的。",
 		"powers": [2, 5, 4, 3],
 		"abilities": [
@@ -3000,24 +3002,78 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [-1, -1, -1, -1],
 		"abilities": [DUGU_BREAK_ALL],
 	},
-	&"gate_general": {
-		"id": &"gate_general",
-		"glyph": "关",
-		"picture": "res://pics/LKT010_002.png",
-		"sect": "",
-		"tier": 6,
-		"weapon": "",
-		"description": "",
-		"flavor": "",
+	&"LeiZHenJian1": {
+		"id": &"LeiZHenJian1",
+		"glyph": "雷震剑法",
+		"picture": "res://pics/LKT010_551.png",
+		"sect": "棋仙派",
+		"tier": 1,
+		"weapon": "剑法",
+		"description": "判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
+		"flavor": "棋仙派剑法，六六三十六招竟无一招实招，那是雷震之前的闪电，把敌人弄得头晕眼花之后，跟着而上的便是雷轰霹雳的猛攻。",
 		"powers": [7, 7, 7, 7],
-		"abilities": [
+		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
 			{
 				"retained_on_flip": true,
 				"triggers": [
 					{
 						"event": CARD_BE_ATTACKED,
 						"conditions": [
-							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"LeiZHenJian2": {
+		"id": &"LeiZHenJian2",
+		"glyph": "雷震剑法",
+		"picture": "res://pics/LKT010_551.png",
+		"sect": "棋仙派",
+		"tier": 2,
+		"weapon": "剑法",
+		"description": "我被移除时，抽一张牌。判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
+		"flavor": "棋仙派剑法，六六三十六招竟无一招实招，那是雷震之前的闪电，把敌人弄得头晕眼花之后，跟着而上的便是雷轰霹雳的猛攻。",
+		"powers": [7, 7, 7, 7],
+		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
+			{
+				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_EXILE_ATTACKED_CARD},
+						],
+					},
+				],
+			},
+		],
+	},
+	&"LeiZHenJian3": {
+		"id": &"LeiZHenJian3",
+		"glyph": "一字电剑",
+		"picture": "res://pics/LKT010_551.png",
+		"sect": "江湖",
+		"tier": 3,
+		"weapon": "剑法",
+		"description": "敌方攻击时不分敌我。我被移除时，抽一张牌。判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
+		"flavor": "一字电剑每招之出，皆如闪电横空，耀人眼目，令人惊心动魄，神驰目眩，难以抵挡剑法的后着。",
+		"powers": [7, 7, 7, 7],
+		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
+			{
+				"retained_on_flip": true,
+				"triggers": [
+					{
+						"event": CARD_BE_ATTACKED,
+						"conditions": [
+							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
 						],
 						"actions": [
 							{"type": ACTION_EXILE_ATTACKED_CARD},

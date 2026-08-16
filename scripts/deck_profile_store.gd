@@ -27,7 +27,7 @@ const DEFAULT_MAIN_DECK_IDS: Array[StringName] = [
 ]
 const TESTING_MAIN_DECK_IDS: Array[StringName] = [
 	&"CangSongYingKe2",
-	&"gate_general",
+	&"LeiZHenJian1",
 	&"KuiHua1",
 	&"YouFenLaiYi2",
 	&"TuNaShu2",

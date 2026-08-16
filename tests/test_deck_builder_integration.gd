@@ -23,7 +23,7 @@ func _run() -> void:
 	)
 	var high_tier_deck: Array = [
 		"CangSongYingKe2",
-		"gate_general",
+		"LeiZHenJian1",
 		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",

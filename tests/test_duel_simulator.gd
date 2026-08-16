@@ -599,7 +599,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		Rules.make_card("First", "一", [1, 1, 1, 1]),
 		Rules.make_card("Second", "二", [1, 1, 1, 1]),
 	]
-	var first_draw: Dictionary = Catalog.create_instance(&"gate_general", Rules.PLAYER_OWNER, &"side_1_gate")
+	var first_draw: Dictionary = Catalog.create_instance(&"LeiZHenJian1", Rules.PLAYER_OWNER, &"side_1_gate")
 	var second_draw: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"side_1_TuNaShu1")
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER, 0, [first_draw, second_draw], [])
 

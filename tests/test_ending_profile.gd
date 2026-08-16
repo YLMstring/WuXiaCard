@@ -163,7 +163,7 @@ func _run() -> void:
 	legacy_active.erase("effective_duel_count")
 	legacy_active.erase("defeated_enemy_ids")
 	legacy_active.erase("best_scores_by_sect")
-	legacy_active["main_deck"] = ["gate_general", "KuiHua1", "jiang_wei", "TuNaShu2", "TaiZuChangQuan"]
+	legacy_active["main_deck"] = ["LeiZHenJian1", "KuiHua1", "jiang_wei", "TuNaShu2", "TaiZuChangQuan"]
 	var migrated: Dictionary = store.repair_profile(legacy_active)
 	_check(store.is_profile_valid(migrated), "A legacy active profile migrates to the new schema")
 	_check(not bool(migrated["run_active"]), "Legacy migration closes an unreconstructable active run")

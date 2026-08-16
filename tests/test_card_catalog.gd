@@ -169,8 +169,8 @@ func _test_definition_schema_validation() -> void:
 
 
 func _test_definition_copy_isolation() -> void:
-	var first: Dictionary = Catalog.get_definition(&"gate_general")
-	var second: Dictionary = Catalog.get_definition(&"gate_general")
+	var first: Dictionary = Catalog.get_definition(&"LeiZHenJian1")
+	var second: Dictionary = Catalog.get_definition(&"LeiZHenJian1")
 	(first["powers"] as Array)[0] = 99
 	(first["abilities"] as Array).clear()
 	_check(int((second["powers"] as Array)[0]) == 7, "Power mutation does not alter another catalog copy")
@@ -198,7 +198,7 @@ func _test_new_sect_card_definitions() -> void:
 
 
 func _test_ability_declarations() -> void:
-	for card_id: StringName in [&"gate_general", &"HuZhuaJueHuSHou2"]:
+	for card_id: StringName in [&"LeiZHenJian1", &"HuZhuaJueHuSHou2"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])
 		_check(abilities.size() == 1, "%s declares one ability" % card_id)
@@ -254,7 +254,7 @@ func _test_encounter_decks() -> void:
 func _test_side_deck_pool() -> void:
 	var main_ids: Array[StringName] = [
 		&"CangSongYingKe2",
-		&"gate_general",
+		&"LeiZHenJian1",
 		&"KuiHua1",
 		&"YouFenLaiYi2",
 		&"TuNaShu2",

@@ -233,7 +233,7 @@ func _test_cangsong_spends_with_full_hand() -> void:
 
 func _test_exiled_attack_target_emits_no_flip_triggers() -> void:
 	var attacker: Dictionary = Catalog.create_instance(
-		&"gate_general",
+		&"LeiZHenJian1",
 		Rules.PLAYER_OWNER,
 		&"exile_attacker"
 	)

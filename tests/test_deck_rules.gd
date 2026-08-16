@@ -26,7 +26,7 @@ func _test_unique_glyphs() -> void:
 	_check(
 		Rules.has_unique_glyphs([
 			&"CangSongYingKe2",
-			&"gate_general",
+			&"LeiZHenJian1",
 			&"KuiHua1",
 			&"YouFenLaiYi2",
 			&"TuNaShu2",
@@ -45,7 +45,7 @@ func _test_unique_glyphs() -> void:
 func _test_exchanges() -> void:
 	var main: Array = [
 		"CangSongYingKe2",
-		"gate_general",
+		"LeiZHenJian1",
 		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
@@ -54,7 +54,7 @@ func _test_exchanges() -> void:
 	var normal: Dictionary = Rules.build_player_exchange(main, library, 0, 1)
 	_check(bool(normal.get("ok", false)), "Ordinary exchange succeeds")
 	_check(normal["main_deck"][1] == "TaiZuChangQuan", "Incoming ordinary card enters target")
-	_check(normal["library_slots"][0] == "gate_general", "Displaced ordinary card enters source")
+	_check(normal["library_slots"][0] == "LeiZHenJian1", "Displaced ordinary card enters source")
 
 	var direct: Dictionary = Rules.build_player_exchange(main, library, 1, 0)
 	_check(direct["main_deck"][0] == "CangSongYingKe1", "Namesake can replace its own slot")
@@ -74,7 +74,7 @@ func _test_repair() -> void:
 	var unlocked: Array = [
 		"CangSongYingKe1",
 		"CangSongYingKe2",
-		"gate_general",
+		"LeiZHenJian1",
 		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
@@ -84,7 +84,7 @@ func _test_repair() -> void:
 		unlocked,
 		[
 			"CangSongYingKe1",
-			"gate_general",
+			"LeiZHenJian1",
 			"CangSongYingKe2",
 			"KuiHua1",
 			"YouFenLaiYi2",
