@@ -25,6 +25,7 @@ const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
+const CARD_AFTER_TARGETED_ACTIVATION: StringName = &"card_after_targeted_activation"
 const CARD_KI_CHANGED: StringName = &"card_ki_changed"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
@@ -65,6 +66,7 @@ const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_po
 const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_has_nonzero_power"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
+const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -75,6 +77,7 @@ const ACTION_GRANT_EXTRA_CARD_PLAY: StringName = &"grant_extra_card_play"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
+const ACTION_STANDARD_ATTACK_WITH_CARD: StringName = &"standard_attack_with_card"
 const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
 const ACTION_CHANGE_POWERS: StringName = &"change_powers"
 const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
@@ -116,6 +119,10 @@ const MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO: StringName = &"orthogonal_attack_ran
 const MODIFIER_ENEMY_ATTACKS_ALL: StringName = &"enemy_attacks_all"
 const MODIFIER_POWER_COMPARISON_REVERSED: StringName = &"power_comparison_reversed"
 const MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES: StringName = &"adjacent_enemy_summon_attacks_allies"
+const MODIFIER_UNLIMITED_ATTACK_RANGE: StringName = &"unlimited_attack_range"
+const MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS: StringName = &"non_orthogonal_attack_any_axis"
+const MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET: StringName = &"standard_attack_first_legal_target"
+const MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN: StringName = &"enemy_cannot_attack_during_owner_turn"
 const ATTACK_TARGET_ENEMIES_ONLY: StringName = &"enemies_only"
 const ATTACK_TARGET_ALLIES_ONLY: StringName = &"allies_only"
 const ATTACK_TARGET_ALL: StringName = &"all"
@@ -150,6 +157,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
+	CARD_AFTER_TARGETED_ACTIVATION,
 	CARD_KI_CHANGED,
 	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
@@ -180,6 +188,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_KI_CHANGED_CARD_IS_SELF,
 	CONDITION_KI_REACHED_ZERO,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
+	CONDITION_ACTIVATION_OWNER_IS_ALLY,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -207,6 +216,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_MOVE_SELF_TO_TARGET,
 	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
+	ACTION_STANDARD_ATTACK_WITH_CARD,
 	ACTION_FOR_EACH_SELECTED_CARD,
 	ACTION_CHANGE_POWERS,
 	ACTION_ADD_CARD_TO_HAND,
@@ -250,6 +260,10 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_ENEMY_ATTACKS_ALL,
 	MODIFIER_POWER_COMPARISON_REVERSED,
 	MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+	MODIFIER_UNLIMITED_ATTACK_RANGE,
+	MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS,
+	MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET,
+	MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -502,6 +516,53 @@ const QIXIN_RETAINED_ATTACK_MODIFIERS: Dictionary = {
 		{"type": MODIFIER_ATTACK_REQUIRES_OTHER_ALLY},
 		{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE},
 	],
+}
+
+const RAOZHI_LOCKED_ATTACK_MODIFIERS: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [
+		{"type": MODIFIER_UNLIMITED_ATTACK_RANGE},
+		{"type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
+		{"type": MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET},
+	],
+}
+
+const WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+		},
+		{
+			"event": CARD_AFTER_FLIPPED,
+			"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
+}
+
+const WUDANG_FLIPPED_CARD_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+
+const SHENMEN_OWNER_TURN_ATTACK_LOCK: Dictionary = {
+	"modifiers": [{"type": MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN}],
+}
+
+const RAOZHI_TARGETED_ACTIVATION_REACTION: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_TARGETED_ACTIVATION,
+		"conditions": [{"type": CONDITION_ACTIVATION_OWNER_IS_ALLY}],
+		"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+	}],
 }
 
 const QIXIN_SUMMON_REACTION: Dictionary = {
@@ -1831,7 +1892,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [8, 3, 8, 3],
-		"abilities": [],
+		"abilities": [RAOZHI_LOCKED_ATTACK_MODIFIERS],
 	},
 	&"RaoZhiRouJian3": {
 		"id": &"RaoZhiRouJian3",
@@ -1843,7 +1904,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [8, 3, 8, 3],
-		"abilities": [],
+		"abilities": [
+			RAOZHI_LOCKED_ATTACK_MODIFIERS,
+			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+		],
 	},
 	&"RaoZhiRouJian4": {
 		"id": &"RaoZhiRouJian4",
@@ -1855,7 +1919,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。你使用友方的指定效果后，我发起攻击。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [8, 3, 8, 3],
-		"abilities": [],
+		"abilities": [
+			RAOZHI_LOCKED_ATTACK_MODIFIERS,
+			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+			RAOZHI_TARGETED_ACTIVATION_REACTION,
+		],
 	},
 	&"ShenMen13Jian1": {
 		"id": &"ShenMen13Jian1",
@@ -1879,7 +1947,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我将其它牌翻面后，令其发起攻击。",
 		"flavor": "张三丰所创剑法，一十三记招式各不相同，但所刺之处全是敌人手腕的神门穴。",
 		"powers": [3, 3, 8, 8],
-		"abilities": [],
+		"abilities": [WUDANG_FLIPPED_CARD_ATTACK],
 	},
 	&"ShenMen13Jian3": {
 		"id": &"ShenMen13Jian3",
@@ -1891,7 +1959,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我将其它牌翻面后，令其发起攻击。敌方无法在你的回合进行攻击。",
 		"flavor": "张三丰所创剑法，一十三记招式各不相同，但所刺之处全是敌人手腕的神门穴。",
 		"powers": [3, 3, 8, 8],
-		"abilities": [],
+		"abilities": [
+			WUDANG_FLIPPED_CARD_ATTACK,
+			SHENMEN_OWNER_TURN_ATTACK_LOCK,
+		],
 	},
 	&"WuDangMianZhang1": {
 		"id": &"WuDangMianZhang1",
@@ -1915,7 +1986,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。",
 		"flavor": "武当派绝学，以借力打力为根本，有若絮飘雪扬，软绵绵不着力气。",
 		"powers": [3, 8, 3, 8],
-		"abilities": [],
+		"abilities": [WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP],
 	},
 	&"WuDangMianZhang3": {
 		"id": &"WuDangMianZhang3",
@@ -1927,7 +1998,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。我将其它牌翻面后，令其发起攻击。",
 		"flavor": "武当派绝学，以借力打力为根本，有若絮飘雪扬，软绵绵不着力气。",
 		"powers": [3, 8, 3, 8],
-		"abilities": [],
+		"abilities": [
+			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+			WUDANG_FLIPPED_CARD_ATTACK,
+		],
 	},
 	&"HuZhuaJueHuSHou1": {
 		"id": &"HuZhuaJueHuSHou1",
@@ -4011,6 +4085,13 @@ static func _validate_action(
 		]:
 			errors.append(
 				"Card %s %s action %s requires a known target_policy"
+				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_STANDARD_ATTACK_WITH_CARD:
+		allowed_keys.append(&"card")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
 	if action_type == ACTION_CHANGE_POWERS:

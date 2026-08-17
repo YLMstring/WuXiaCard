@@ -269,6 +269,14 @@ static func _conditions_match(
 		elif condition_type == Catalog.CONDITION_ATTACK_IS_NOT_REPEAT:
 			if bool(context.get("repeat_attack", false)):
 				return false
+		elif condition_type == Catalog.CONDITION_ACTIVATION_OWNER_IS_ALLY:
+			var source_slot: Dictionary = state.board[source_cell]
+			var activation_owner: int = int(context.get("activation_owner_id", 0))
+			if (
+				activation_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or activation_owner != int(source_slot.get("owner", 0))
+			):
+				return false
 		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
 			var source_slot: Dictionary = state.board[source_cell]
 			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):

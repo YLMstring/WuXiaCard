@@ -435,6 +435,24 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		var summon_result: Dictionary = _resolve_summon_request(next_state, request_value)
 		_append_extra_card_play_requests(extra_card_play_requests, summon_result)
 		_merge_resolution(captures, exiles, events, summon_result)
+	if action.target_kind in [ActionData.TARGET_BOARD_CELL, ActionData.TARGET_HAND_SLOT]:
+		var after_activation_result: Dictionary = _resolve_trigger_event(
+			next_state,
+			Catalog.CARD_AFTER_TARGETED_ACTIVATION,
+			{
+				"activation_instance_id": action.source_instance_id,
+				"activation_owner_id": moving_owner,
+				"activation_source_cell": _find_board_card_cell(
+					next_state,
+					action.source_instance_id,
+					action.source_index
+				),
+				"activation_target_kind": action.target_kind,
+				"activation_target_index": action.target_index,
+			}
+		)
+		_append_extra_card_play_requests(extra_card_play_requests, after_activation_result)
+		_merge_resolution(captures, exiles, events, after_activation_result)
 	var finish_result: Dictionary = _finish_action(
 		next_state,
 		moving_owner,
@@ -462,7 +480,7 @@ static func _resolve_standard_attacks(
 	if not _card_instance_at(state, source_cell, source_instance_id):
 		return result
 	var attacker_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0))
-	if _attack_limit_reached(state, attacker_owner):
+	if _attack_limit_reached(state, attacker_owner) or _attack_is_prohibited(state, attacker_owner):
 		return result
 	var attack_policy: Dictionary = _get_standard_attack_policy(
 		state,
@@ -1150,7 +1168,7 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 	):
 		return _empty_resolution()
 	var attacker_owner: int = int(request.get("source_owner_id", 0))
-	if _attack_limit_reached(state, attacker_owner):
+	if _attack_limit_reached(state, attacker_owner) or _attack_is_prohibited(state, attacker_owner):
 		return _empty_resolution()
 	var targeted_policy: Dictionary = request.get("attack_policy", {}) as Dictionary
 	if not _attack_is_valid(
@@ -1218,29 +1236,41 @@ static func _attack_is_valid(
 		or not _card_instance_at(state, attacked_cell, attacked_instance_id)
 	):
 		return false
-	if include_attack_permissions:
-		var permission_context: Dictionary = {
-			"reason": &"attack_resolution",
-			"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
-		}
-		permission_context.merge(attack_policy, true)
-		return Rules.can_attack_target(
-			state.board,
-			attacker_cell,
-			attacked_cell,
-			permission_context
-		)
-	var range_context: Dictionary = {
-		"reason": &"attack_resolution_recheck",
+	var permission_context: Dictionary = {
+		"reason": &"attack_resolution" if include_attack_permissions else &"attack_resolution_recheck",
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
 	}
-	range_context.merge(attack_policy, true)
-	return Rules.is_target_in_attack_range(
+	if not include_attack_permissions:
+		permission_context["skip_power_comparison"] = true
+	permission_context.merge(attack_policy, true)
+	return Rules.can_attack_target(
 		state.board,
 		attacker_cell,
 		attacked_cell,
-		range_context
+		permission_context
 	)
+
+
+static func _attack_is_prohibited(state: StateData, attacker_owner: int) -> bool:
+	if state == null or attacker_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return true
+	var turn_owner: int = state.active_player
+	if turn_owner == attacker_owner:
+		return false
+	for slot_value: Variant in state.board:
+		if slot_value == null:
+			continue
+		var slot: Dictionary = slot_value
+		var source_owner: int = int(slot.get("owner", 0))
+		if source_owner != turn_owner:
+			continue
+		if Abilities.has_modifier(
+			slot.get("card", {}),
+			Catalog.MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
+			state.get_enabled_effect_gates(source_owner)
+		):
+			return true
+	return false
 
 
 static func _get_standard_attack_policy(

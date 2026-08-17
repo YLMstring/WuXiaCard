@@ -683,6 +683,13 @@ static func _execute_action(
 			bool(declaration.get("repeat_attack", false)),
 			StringName(declaration.get("target_policy", &""))
 		)
+	if action_type == Catalog.ACTION_STANDARD_ATTACK_WITH_CARD:
+		return _request_standard_attack_with_card(
+			state,
+			source_cell,
+			StringName(declaration.get("card", &"")),
+			context
+		)
 	return _no_effect(source_cell)
 
 
@@ -2386,6 +2393,30 @@ static func _request_standard_attack(
 		request["attack_policy"] = {"attack_target_policy": target_policy}
 	result["attack_requests"].append(request)
 	return result
+
+
+static func _request_standard_attack_with_card(
+	state: StateData,
+	source_cell: int,
+	card_reference: StringName,
+	context: Dictionary
+) -> Dictionary:
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var subject: Dictionary = _locate_snapshot_subject(state, snapshot)
+	if (
+		subject.is_empty()
+		or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+	):
+		return _no_effect(source_cell)
+	var current_cell: int = int(subject.get("index", -1))
+	var current_owner: int = int(subject.get("owner_id", 0))
+	var card: Dictionary = subject.get("card", {})
+	return _request_standard_attack(
+		state,
+		current_cell,
+		StringName(card.get("instance_id", &"")),
+		current_owner
+	)
 
 
 static func _request_flip_self(

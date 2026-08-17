@@ -86,14 +86,37 @@ static func get_would_flip_indices(
 	if source_index < 0 or source_index >= board.size() or board[source_index] == null:
 		return targets
 
-	for direction: int in range(4):
-		var neighbor_index: int = get_neighbor_index(source_index, direction)
-		if can_attack_target(board, source_index, neighbor_index, context):
-			targets.append(neighbor_index)
-		if neighbor_index >= 0:
-			var distance_two_index: int = get_neighbor_index(neighbor_index, direction)
-			if can_attack_target(board, source_index, distance_two_index, context):
-				targets.append(distance_two_index)
+	var source_slot: Dictionary = board[source_index]
+	var source_card: Dictionary = source_slot.get("card", {})
+	var source_gates: Array = _get_effect_gates(context, int(source_slot.get("owner", 0)))
+	var unlimited_range: bool = Abilities.has_modifier(
+		source_card,
+		Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE,
+		source_gates
+	)
+	var candidate_indices: Array[int] = []
+	if unlimited_range:
+		for cell_index: int in range(board.size()):
+			if cell_index != source_index:
+				candidate_indices.append(cell_index)
+	else:
+		for direction: int in range(4):
+			var neighbor_index: int = get_neighbor_index(source_index, direction)
+			if neighbor_index >= 0:
+				candidate_indices.append(neighbor_index)
+				var distance_two_index: int = get_neighbor_index(neighbor_index, direction)
+				if distance_two_index >= 0:
+					candidate_indices.append(distance_two_index)
+	var first_legal_only: bool = Abilities.has_modifier(
+		source_card,
+		Catalog.MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET,
+		source_gates
+	)
+	for target_index: int in candidate_indices:
+		if can_attack_target(board, source_index, target_index, context):
+			targets.append(target_index)
+			if first_legal_only:
+				break
 	return targets
 
 
@@ -144,22 +167,7 @@ static func is_target_in_attack_range(
 		or board[target_index] == null
 	):
 		return false
-	var direction: int = -1
-	var distance: int = 0
-	for candidate_direction: int in range(DIRECTIONS.size()):
-		var neighbor_index: int = get_neighbor_index(source_index, candidate_direction)
-		if neighbor_index == target_index:
-			direction = candidate_direction
-			distance = 1
-			break
-		if (
-			neighbor_index >= 0
-			and get_neighbor_index(neighbor_index, candidate_direction) == target_index
-		):
-			direction = candidate_direction
-			distance = 2
-			break
-	if direction < 0:
+	if source_index == target_index:
 		return false
 	var source_slot: Dictionary = board[source_index]
 	var target_slot: Dictionary = board[target_index]
@@ -185,7 +193,44 @@ static func is_target_in_attack_range(
 		context,
 		int(source_slot.get("owner", 0))
 	)
-	if distance == 2:
+	var source_row: int = floori(float(source_index) / 3.0)
+	var source_column: int = source_index % 3
+	var target_row: int = floori(float(target_index) / 3.0)
+	var target_column: int = target_index % 3
+	var row_delta: int = target_row - source_row
+	var column_delta: int = target_column - source_column
+	var same_axis: bool = row_delta == 0 or column_delta == 0
+	var unlimited_range: bool = Abilities.has_modifier(
+		source_card,
+		Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE,
+		source_gates
+	)
+	if not same_axis and not unlimited_range:
+		return false
+	if (
+		not same_axis
+		and not Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS,
+			source_gates
+		)
+	):
+		return false
+	var direction: int = -1
+	var distance: int = 0
+	if same_axis:
+		if row_delta < 0:
+			direction = TOP
+		elif column_delta > 0:
+			direction = RIGHT
+		elif row_delta > 0:
+			direction = BOTTOM
+		elif column_delta < 0:
+			direction = LEFT
+		distance = maxi(absi(row_delta), absi(column_delta))
+	if not unlimited_range and distance > 2:
+		return false
+	if not unlimited_range and distance == 2:
 		if not Abilities.can_attack_at_orthogonal_distance_two_with_gates(
 			source_card,
 			source_gates
@@ -202,7 +247,9 @@ static func is_target_in_attack_range(
 					source_gates
 				)
 			):
-				return false
+					return false
+	if bool(context.get("skip_power_comparison", false)):
+		return true
 	var target_card: Dictionary = target_slot.get("card", {})
 	var target_gates: Array = _get_effect_gates(
 		context,
@@ -212,7 +259,69 @@ static func is_target_in_attack_range(
 	var target_powers: Array = target_card.get("powers", [])
 	if source_powers.size() != 4 or target_powers.size() != 4:
 		return false
-	var defending_direction: int = OPPOSITE[direction]
+	var comparison_reversed: bool = (
+		Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
+			source_gates
+		)
+		or Abilities.has_modifier(
+			target_card,
+			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
+			target_gates
+		)
+	)
+	if same_axis:
+		return _power_pair_wins(
+			source_card,
+			target_card,
+			direction,
+			OPPOSITE[direction],
+			source_powers,
+			target_powers,
+			source_gates,
+			target_gates,
+			comparison_reversed
+		)
+	var vertical_direction: int = TOP if row_delta < 0 else BOTTOM
+	var horizontal_direction: int = LEFT if column_delta < 0 else RIGHT
+	return (
+		_power_pair_wins(
+			source_card,
+			target_card,
+			vertical_direction,
+			OPPOSITE[vertical_direction],
+			source_powers,
+			target_powers,
+			source_gates,
+			target_gates,
+			comparison_reversed
+		)
+		or _power_pair_wins(
+			source_card,
+			target_card,
+			horizontal_direction,
+			OPPOSITE[horizontal_direction],
+			source_powers,
+			target_powers,
+			source_gates,
+			target_gates,
+			comparison_reversed
+		)
+	)
+
+
+static func _power_pair_wins(
+	source_card: Dictionary,
+	target_card: Dictionary,
+	attacking_direction: int,
+	defending_direction: int,
+	source_powers: Array,
+	target_powers: Array,
+	source_gates: Array,
+	target_gates: Array,
+	comparison_reversed: bool
+) -> bool:
 	var defending_power: int
 	if Abilities.has_modifier(
 		source_card,
@@ -232,22 +341,8 @@ static func is_target_in_attack_range(
 			int(target_powers[defending_direction]),
 			target_gates
 		)
-	var attacking_power: int = int(source_powers[direction])
-	var comparison_reversed: bool = (
-		Abilities.has_modifier(
-			source_card,
-			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
-			source_gates
-		)
-		or Abilities.has_modifier(
-			target_card,
-			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
-			target_gates
-		)
-	)
-	if comparison_reversed:
-		return attacking_power < defending_power
-	return attacking_power > defending_power
+	var attacking_power: int = int(source_powers[attacking_direction])
+	return attacking_power < defending_power if comparison_reversed else attacking_power > defending_power
 
 
 static func _get_effect_gates(context: Dictionary, owner_id: int) -> Array:
