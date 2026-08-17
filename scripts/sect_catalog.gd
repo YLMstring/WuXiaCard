@@ -3,6 +3,7 @@ extends RefCounted
 
 const ALL_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
+	&"WuDangPai",
 	&"TaiShanPai",
 	&"HengShanPai",
 	&"tingchao_gu",
