@@ -130,19 +130,42 @@
 
 比较 `drawn_owner_id` 与场上能力源当前所属方。不同则匹配。
 
-### `ACTION_EXILE_TRIGGER_CARD`
+### 事件触发牌引用
 
-移除事件上下文中 `trigger_instance_id` 指向的精确卡牌。支持场上与手牌；目标缺失、已离开支持区域或已被其它触发移除时返回 `NO_EFFECT`。
+所有围绕一张精确卡牌发生的事件都把该实例规范化为 `CARD_REF_TRIGGER_CARD`：
 
-该动作也进入统一移除入口，因此场上目标会先发出 `CARD_BEFORE_EXILED`。手牌目标不会触发自身能力。
+- `CARD_BE_ATTACKED`：被攻击牌；
+- `CARD_AFTER_DRAWN`：刚抽到的牌；
+- `CARD_BEFORE_EXILED`：即将被移除的牌；
+- 现有召唤、翻面和移动事件继续引用各自的触发牌。
+
+引用快照包含事件发生时的精确实例、区域、逻辑索引和当前所属方。动作执行时仍重新定位该实例。
+
+### `ACTION_EXILE_CARD`
+
+声明形状：
+
+```gdscript
+{
+    "type": ACTION_EXILE_CARD,
+    "card": CARD_REF_TRIGGER_CARD,
+}
+```
+
+`card` 必须是已有的通用卡牌引用，包括 `CARD_REF_ABILITY_SOURCE`、`CARD_REF_SELECTED_CARD` 或 `CARD_REF_TRIGGER_CARD`。动作移除引用指向的精确实例，支持场上与手牌；目标缺失、已离开支持区域或已被其它触发移除时返回 `NO_EFFECT`。
+
+选取包装器中的 `CARD_REF_SELECTED_CARD` 仍在动作前重验声明的选择条件。动作进入统一移除入口，因此场上目标会先发出 `CARD_BEFORE_EXILED`；手牌目标不会触发自身能力。
+
+旧的 `ACTION_EXILE_ATTACKED_CARD` 删除。现有声明迁移为 `ACTION_EXILE_CARD + CARD_REF_TRIGGER_CARD`。
+
+`ACTION_EXILE_SELF` 保留为“移除当前动作主体”的简写，供无招胜有招等主体会随选取包装器改变的规则使用。它与 `ACTION_EXILE_CARD` 共用同一个移除入口，不拥有独立的移除语义。
 
 ## 统一移除入口
 
 现有移除路径统一使用同一精确实例入口，包括：
 
 - `ACTION_EXILE_SELF`
-- `ACTION_EXILE_ATTACKED_CARD`
-- `ACTION_EXILE_TRIGGER_CARD`
+- `ACTION_EXILE_CARD`
 - 点数降为四边 0
 - 回手失败后改为移除
 
