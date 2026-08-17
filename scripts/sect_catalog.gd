@@ -31,6 +31,16 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"description": "华山派擅长强化自身招式，并在场上发动多次攻击。",
 		"flavor": "华山派正宗功夫以气功为根基，剑法变化繁复，轻灵机巧，恰如春日双燕飞舞柳间，高低左右，回转如意。",
 	},
+	&"WuDangPai": {
+		"id": &"WuDangPai",
+		"glyph": "武当派",
+		"picture": "res://pics/LKT010_004.png",
+		"sect": "武当山",
+		"tier": 5,
+		"weapon": "拳法/掌法/剑法/轻功",
+		"description": "武当派的能力十分全面，无论是进攻，防守还是对策都游刃有余。",
+		"flavor": "武当与少林并称武林中的泰山北斗，武功以绵密见长，讲究借力打力。",
+	},
 	&"TaiShanPai": {
 		"id": &"TaiShanPai",
 		"glyph": "泰山派",
