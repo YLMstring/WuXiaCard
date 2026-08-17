@@ -440,6 +440,13 @@ static func _execute_action(
 			context,
 			event_resolver
 		)
+	if action_type == Catalog.ACTION_DEPART_CARD_FOR_RESUMMON:
+		return _depart_referenced_card_for_resummon(
+			state,
+			source_cell,
+			StringName(declaration.get("card", &"")),
+			context
+		)
 	if action_type == Catalog.ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES:
 		return _temporarily_remove_non_retained_abilities(
 			state,
@@ -614,11 +621,25 @@ static func _execute_action(
 			context
 		)
 	if action_type == Catalog.ACTION_SPEND_KI:
+		var spend_instance_id: StringName = source_instance_id
+		var spend_owner: int = expected_owner
+		if declaration.has("card"):
+			var spend_snapshot: Dictionary = _get_reference_snapshot(
+				context,
+				StringName(declaration.get("card", &""))
+			)
+			var spend_subject: Dictionary = _locate_snapshot_subject(state, spend_snapshot)
+			if spend_subject.is_empty():
+				return _no_effect(source_cell)
+			spend_instance_id = StringName(
+				(spend_subject.get("card", {}) as Dictionary).get("instance_id", &"")
+			)
+			spend_owner = int(spend_subject.get("owner_id", 0))
 		return _change_ki(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner,
+			spend_instance_id,
+			spend_owner,
 			-int(declaration.get("amount", 0)),
 			action_type
 		)
@@ -630,11 +651,25 @@ static func _execute_action(
 			expected_owner
 		)
 	if action_type == Catalog.ACTION_GRANT_EXTRA_CARD_PLAY:
+		var grant_instance_id: StringName = source_instance_id
+		var grant_owner: int = expected_owner
+		if declaration.has("card"):
+			var grant_snapshot: Dictionary = _get_reference_snapshot(
+				context,
+				StringName(declaration.get("card", &""))
+			)
+			var grant_subject: Dictionary = _locate_snapshot_subject(state, grant_snapshot)
+			if grant_subject.is_empty():
+				return _no_effect(source_cell)
+			grant_instance_id = StringName(
+				(grant_subject.get("card", {}) as Dictionary).get("instance_id", &"")
+			)
+			grant_owner = int(grant_subject.get("owner_id", 0))
 		return _grant_extra_card_play(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner,
+			grant_instance_id,
+			grant_owner,
 			int(declaration.get("amount", 0)),
 			context
 		)
@@ -1202,6 +1237,41 @@ static func _exile_referenced_card(
 	)
 
 
+static func _depart_referenced_card_for_resummon(
+	state: StateData,
+	source_cell: int,
+	card_reference: StringName,
+	context: Dictionary
+) -> Dictionary:
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var subject: Dictionary = _locate_snapshot_subject(state, snapshot)
+	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+		return _no_effect(source_cell)
+	var target_cell: int = int(subject.get("index", -1))
+	if target_cell < 0 or target_cell >= state.board.size():
+		return _no_effect(source_cell)
+	var target_card: Dictionary = subject.get("card", {})
+	var target_instance_id := StringName(target_card.get("instance_id", &""))
+	var card_id := StringName(target_card.get("card_id", &""))
+	if target_instance_id == &"" or not Catalog.has_card(card_id):
+		return _no_effect(source_cell)
+	var ability_source_snapshot: Dictionary = _get_reference_snapshot(
+		context,
+		Catalog.CARD_REF_ABILITY_SOURCE
+	)
+	var ability_source_cell: int = int(ability_source_snapshot.get("index", source_cell))
+	state.board[target_cell] = null
+	return _applied(ability_source_cell, [{
+		"type": &"card_departed_for_resummon",
+		"source_cell": ability_source_cell,
+		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+		"target_cell": target_cell,
+		"owner_id": int(subject.get("owner_id", 0)),
+		"old_instance_id": target_instance_id,
+		"card_id": card_id,
+	}])
+
+
 static func _request_trigger_attack(
 	state: StateData,
 	source_cell: int,
@@ -1612,6 +1682,13 @@ static func _request_summon_card(
 		requires_adjacent_source = anchor_reference == Catalog.CARD_REF_ABILITY_SOURCE
 	if target_cell < 0 or target_cell >= state.board.size() or state.board[target_cell] != null:
 		return _no_effect(source_cell)
+	var summoned_instance_id: StringName = (
+		existing_instance_id
+		if existing_instance_id != &""
+		else _make_generated_instance_id(state, card_id)
+	)
+	if summoned_instance_id == &"":
+		return _no_effect(source_cell)
 	var result: Dictionary = _applied(current_source_cell if current_source_cell >= 0 else source_cell)
 	result["summon_requests"].append({
 		"source_cell": current_source_cell if current_source_cell >= 0 else int(source_snapshot.get("index", source_cell)),
@@ -1619,7 +1696,7 @@ static func _request_summon_card(
 		"source_owner_id": source_owner,
 		"target_cell": target_cell,
 		"card_id": card_id,
-		"instance_id": existing_instance_id if existing_instance_id != &"" else _make_generated_instance_id(state, card_id),
+		"instance_id": summoned_instance_id,
 		"existing_hand_instance_id": (
 			existing_instance_id if existing_removed_instance_id == &"" else &""
 		),
@@ -1628,6 +1705,15 @@ static func _request_summon_card(
 		"requires_adjacent_source": requires_adjacent_source,
 		"reason": &"ability_fresh_copy",
 	})
+	var reference_snapshots: Dictionary = context.get("card_reference_snapshots", {})
+	reference_snapshots[Catalog.CARD_REF_LAST_SUMMONED_CARD] = {
+		"instance_id": summoned_instance_id,
+		"card_id": card_id,
+		"owner_id": source_owner,
+		"zone": Catalog.CARD_ZONE_BOARD,
+		"index": target_cell,
+	}
+	context["card_reference_snapshots"] = reference_snapshots
 	return result
 
 
@@ -1746,15 +1832,20 @@ static func _exile_subject(
 	]:
 		return _no_effect(source_cell)
 	var result: Dictionary = _no_effect(source_cell)
-	if initial_zone == Catalog.CARD_ZONE_BOARD and event_resolver.is_valid():
+	if initial_zone in [Catalog.CARD_ZONE_BOARD, Catalog.CARD_ZONE_HAND] and event_resolver.is_valid():
 		var before_context: Dictionary = context.duplicate(true)
-		var target_cell: int = int(current_subject.get("index", -1))
+		var target_cell: int = (
+			int(current_subject.get("index", -1))
+			if initial_zone == Catalog.CARD_ZONE_BOARD
+			else -1
+		)
+		var trigger_logical_index: int = int(current_subject.get("index", -1))
 		var target_owner: int = int(current_subject.get("owner_id", 0))
 		before_context["trigger_cell"] = target_cell
 		before_context["trigger_instance_id"] = target_instance_id
 		before_context["trigger_owner_id"] = target_owner
 		before_context["trigger_zone"] = initial_zone
-		before_context["trigger_logical_index"] = target_cell
+		before_context["trigger_logical_index"] = trigger_logical_index
 		before_context["exile_reason"] = exile_reason
 		var nested_stack: Array = exile_stack.duplicate()
 		nested_stack.append(exile_identity)

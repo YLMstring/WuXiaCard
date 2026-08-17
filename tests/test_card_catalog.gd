@@ -58,7 +58,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 103, "Catalog contains all one hundred three current cards")
+	_check(Catalog.get_all_card_ids().size() == 106, "Catalog contains all one hundred six current cards")
 
 
 func _test_catalog_definitions() -> void:

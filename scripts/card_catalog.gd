@@ -67,6 +67,7 @@ const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_ha
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
+const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
@@ -99,9 +100,11 @@ const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to
 const ACTION_REVEAL_CARD: StringName = &"reveal_card"
 const ACTION_SWAP_SELF_WITH_TRIGGER_CARD: StringName = &"swap_self_with_trigger_card"
 const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_non_retained_suppression"
+const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
+const CARD_REF_LAST_SUMMONED_CARD: StringName = &"last_summoned_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
@@ -189,6 +192,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_KI_REACHED_ZERO,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
 	CONDITION_ACTIVATION_OWNER_IS_ALLY,
+	CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -238,11 +242,13 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_REVEAL_CARD,
 	ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
 	ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
+	ACTION_DEPART_CARD_FOR_RESUMMON,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
 	CARD_REF_SELECTED_CARD,
 	CARD_REF_TRIGGER_CARD,
+	CARD_REF_LAST_SUMMONED_CARD,
 ]
 const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 	OWNER_ABILITY_SOURCE,
@@ -282,6 +288,9 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"ZiXiaGong3",
 	&"ZiXiaGong4",
 	&"TaiZuChangQuan",
+	&"TiYunZong2",
+	&"TiYunZong3",
+	&"TiYunZong4",
 	&"TaiJiSanHuan4",
 	&"TaiJiSanHuan5",
 	&"TaiJiDaKui5",
@@ -525,6 +534,70 @@ const RAOZHI_LOCKED_ATTACK_MODIFIERS: Dictionary = {
 		{"type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
 		{"type": MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET},
 	],
+}
+
+const TIYUNZONG_RESUMMON_ACTIVATION: Dictionary = {
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_OTHER_ALLY_BOARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{
+				"type": ACTION_DEPART_CARD_FOR_RESUMMON,
+				"card": CARD_REF_SELECTED_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{
+				"type": ACTION_DEPART_CARD_FOR_RESUMMON,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"on_invalid_context": STOP_RULE,
+			},
+			{
+				"type": ACTION_SUMMON_CARD,
+				"card": {"type": CARD_SPEC_FRESH_COPY, "of": CARD_REF_SELECTED_CARD},
+				"cell": {"type": CELL_REF_INITIAL_CARD_CELL, "card": CARD_REF_ABILITY_SOURCE},
+			},
+			{
+				"type": ACTION_SUMMON_CARD,
+				"card": {"type": CARD_SPEC_FRESH_COPY, "of": CARD_REF_ABILITY_SOURCE},
+				"cell": {"type": CELL_REF_INITIAL_CARD_CELL, "card": CARD_REF_SELECTED_CARD},
+			},
+			{
+				"type": ACTION_SPEND_KI,
+				"amount": 1,
+				"card": CARD_REF_LAST_SUMMONED_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{
+				"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+				"amount": 1,
+				"card": CARD_REF_LAST_SUMMONED_CARD,
+			},
+		],
+	},
+}
+
+const TIYUNZONG_LOCKED_FLIP_MOVE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+		],
+		"actions": [
+			{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+		],
+	}],
+}
+
+const TIYUNZONG_DRAW_OUTSIDE_HAND_EXILE: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_EXILED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND}],
+		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+	}],
 }
 
 const WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP: Dictionary = {
@@ -1695,7 +1768,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [TIYUNZONG_RESUMMON_ACTIVATION],
 	},
 	&"TiYunZong3": {
 		"id": &"TiYunZong3",
@@ -1708,7 +1781,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			TIYUNZONG_LOCKED_FLIP_MOVE,
+			TIYUNZONG_RESUMMON_ACTIVATION,
+		],
 	},
 	&"TiYunZong4": {
 		"id": &"TiYunZong4",
@@ -1721,7 +1797,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			TIYUNZONG_DRAW_OUTSIDE_HAND_EXILE,
+			TIYUNZONG_LOCKED_FLIP_MOVE,
+			TIYUNZONG_RESUMMON_ACTIVATION,
+		],
 	},
 	&"TaiJiSanHuan4": {
 		"id": &"TaiJiSanHuan4",
@@ -4101,6 +4181,15 @@ static func _validate_action(
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type in [ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY] and action.has("card"):
+		allowed_keys.append(&"card")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s action %s requires a known card reference"
+				% [card_id, context_name, action_type]
+			)
+		if is_cost:
+			errors.append("Card %s activation cost cannot specify a card reference" % card_id)
 	if action_type == ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION:
 		allowed_keys.append(&"recipient")
 		allowed_keys.append(&"amount")
@@ -4148,6 +4237,13 @@ static func _validate_action(
 				% [card_id, context_name, action_type]
 			)
 	if action_type == ACTION_EXILE_CARD:
+		allowed_keys.append(&"card")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s action %s requires a known card reference"
+				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_DEPART_CARD_FOR_RESUMMON:
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(

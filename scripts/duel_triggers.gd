@@ -277,6 +277,14 @@ static func _conditions_match(
 				or activation_owner != int(source_slot.get("owner", 0))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND:
+			var source_slot: Dictionary = state.board[source_cell]
+			var source_owner: int = int(source_slot.get("owner", 0))
+			if (
+				StringName(context.get("trigger_zone", &"")) == Catalog.CARD_ZONE_HAND
+				and int(context.get("trigger_owner_id", 0)) == source_owner
+			):
+				return false
 		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
 			var source_slot: Dictionary = state.board[source_cell]
 			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):
