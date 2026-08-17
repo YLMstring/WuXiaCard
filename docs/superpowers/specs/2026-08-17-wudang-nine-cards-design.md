@@ -125,6 +125,177 @@
 
 多个绕指柔剑 4 按场上格子 `0 → 8` 依次触发。每次反应攻击完整结算后再处理下一张。该反应能力不是锁定能力，绕指柔剑 4 翻面后失去。
 
+## 具体 declaration
+
+以下名称是本次实现采用的确切目录 vocabulary。所有名称都必须加入对应 `KNOWN_*` 白名单并接受目录校验：
+
+```gdscript
+const CARD_AFTER_TARGETED_ACTIVATION: StringName = &"card_after_targeted_activation"
+
+const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
+
+const ACTION_STANDARD_ATTACK_WITH_CARD: StringName = &"standard_attack_with_card"
+
+const MODIFIER_UNLIMITED_ATTACK_RANGE: StringName = &"unlimited_attack_range"
+const MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS: StringName = &"non_orthogonal_attack_any_axis"
+const MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET: StringName = &"standard_attack_first_legal_target"
+const MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN: StringName = &"enemy_cannot_attack_during_owner_turn"
+```
+
+`ACTION_STANDARD_ATTACK_WITH_CARD` 必须声明 `card`，值必须属于 `KNOWN_CARD_REFERENCES`。本批卡牌使用 `CARD_REF_TRIGGER_CARD`。其它新增 condition 和 modifier 不接受额外字段。
+
+### 可复用能力常量
+
+绕指柔剑的三个锁定攻击修正器写在同一个能力条目中：
+
+```gdscript
+const RAOZHI_LOCKED_ATTACK_MODIFIERS: Dictionary = {
+    "retained_on_flip": true,
+    "modifiers": [
+        {"type": MODIFIER_UNLIMITED_ATTACK_RANGE},
+        {"type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
+        {"type": MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET},
+    ],
+}
+```
+
+绕指柔剑 3/4 与武当绵掌 2/3 共用护身能力。此 declaration 不写 `retained_on_flip`，因此默认非锁定：
+
+```gdscript
+const WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP: Dictionary = {
+    "triggers": [
+        {
+            "event": CARD_BEFORE_FLIPPED,
+            "conditions": [
+                {"type": CONDITION_TRIGGER_CARD_IS_SELF},
+            ],
+            "actions": [
+                {
+                    "type": ACTION_EXILE_CARD,
+                    "card": CARD_REF_TRIGGER_CARD,
+                },
+            ],
+        },
+        {
+            "event": CARD_AFTER_FLIPPED,
+            "conditions": [
+                {"type": CONDITION_ATTACKER_CARD_IS_SELF},
+            ],
+            "actions": [
+                {"type": ACTION_REMOVE_THIS_ABILITY},
+            ],
+        },
+    ],
+}
+```
+
+神门十三剑 2/3 与武当绵掌 3 共用“令被翻面牌攻击”能力：
+
+```gdscript
+const WUDANG_FLIPPED_CARD_ATTACK: Dictionary = {
+    "triggers": [{
+        "event": CARD_AFTER_FLIPPED,
+        "conditions": [
+            {"type": CONDITION_ATTACKER_CARD_IS_SELF},
+        ],
+        "actions": [{
+            "type": ACTION_STANDARD_ATTACK_WITH_CARD,
+            "card": CARD_REF_TRIGGER_CARD,
+        }],
+    }],
+}
+```
+
+神门十三剑 3 的回合禁攻能力默认非锁定：
+
+```gdscript
+const SHENMEN_OWNER_TURN_ATTACK_LOCK: Dictionary = {
+    "modifiers": [{
+        "type": MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
+    }],
+}
+```
+
+绕指柔剑 4 的指定能力反应默认非锁定。`CARD_AFTER_TARGETED_ACTIVATION` 只为合法且已支付成本的指定型 activation 发出，因此 declaration 不再重复检查“是否指定”：
+
+```gdscript
+const RAOZHI_TARGETED_ACTIVATION_REACTION: Dictionary = {
+    "triggers": [{
+        "event": CARD_AFTER_TARGETED_ACTIVATION,
+        "conditions": [
+            {"type": CONDITION_ACTIVATION_OWNER_IS_ALLY},
+        ],
+        "actions": [
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+        ],
+    }],
+}
+```
+
+### 九张牌的 abilities 字段
+
+目录中的九张牌使用以下确切组合：
+
+```gdscript
+&"RaoZhiRouJian2": {
+    # 其它元数据保持目录现值。
+    "abilities": [
+        RAOZHI_LOCKED_ATTACK_MODIFIERS,
+    ],
+},
+
+&"RaoZhiRouJian3": {
+    "abilities": [
+        RAOZHI_LOCKED_ATTACK_MODIFIERS,
+        WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+    ],
+},
+
+&"RaoZhiRouJian4": {
+    "abilities": [
+        RAOZHI_LOCKED_ATTACK_MODIFIERS,
+        WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+        RAOZHI_TARGETED_ACTIVATION_REACTION,
+    ],
+},
+
+&"ShenMen13Jian1": {
+    "abilities": [],
+},
+
+&"ShenMen13Jian2": {
+    "abilities": [
+        WUDANG_FLIPPED_CARD_ATTACK,
+    ],
+},
+
+&"ShenMen13Jian3": {
+    "abilities": [
+        WUDANG_FLIPPED_CARD_ATTACK,
+        SHENMEN_OWNER_TURN_ATTACK_LOCK,
+    ],
+},
+
+&"WuDangMianZhang1": {
+    "abilities": [],
+},
+
+&"WuDangMianZhang2": {
+    "abilities": [
+        WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+    ],
+},
+
+&"WuDangMianZhang3": {
+    "abilities": [
+        WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+        WUDANG_FLIPPED_CARD_ATTACK,
+    ],
+},
+```
+
+这些共享常量由目录规范化和实例创建流程进行深拷贝；运行时卡牌之间不得共享可变 ability Dictionary。
+
 ## 九张卡牌声明
 
 ### 绕指柔剑
