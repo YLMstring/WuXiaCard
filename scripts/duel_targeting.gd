@@ -43,6 +43,14 @@ static func get_valid_targets(
 					"index": target_cell,
 				})
 		return targets
+	if target_rule in [Catalog.TARGET_ANY_EMPTY_BOARD, Catalog.TARGET_ANY_ENEMY_BOARD]:
+		for target_cell: int in range(state.board.size()):
+			if _matches_target_rule(state, owner_id, target_cell, target_rule):
+				targets.append({
+					"kind": ActionData.TARGET_BOARD_CELL,
+					"index": target_cell,
+				})
+		return targets
 	for direction: int in range(4):
 		var target_cell: int = Rules.get_neighbor_index(source_cell, direction)
 		if _matches_target_rule(state, owner_id, target_cell, target_rule):
@@ -82,7 +90,7 @@ static func _matches_target_rule(
 ) -> bool:
 	if target_cell < 0 or target_cell >= state.board.size():
 		return false
-	if target_rule == Catalog.TARGET_ADJACENT_EMPTY_BOARD:
+	if target_rule in [Catalog.TARGET_ADJACENT_EMPTY_BOARD, Catalog.TARGET_ANY_EMPTY_BOARD]:
 		return Rules.can_place(state.board, target_cell)
 	var target_slot_value: Variant = state.board[target_cell]
 	if target_slot_value == null:
@@ -93,5 +101,7 @@ static func _matches_target_rule(
 	if target_rule == Catalog.TARGET_OTHER_ALLY_BOARD:
 		return target_owner == owner_id
 	if target_rule == Catalog.TARGET_ADJACENT_ENEMY_BOARD:
+		return target_owner != owner_id
+	if target_rule == Catalog.TARGET_ANY_ENEMY_BOARD:
 		return target_owner != owner_id
 	return false

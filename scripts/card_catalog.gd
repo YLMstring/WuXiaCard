@@ -12,6 +12,8 @@ const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TARGET_OTHER_ALLY_BOARD: StringName = &"other_ally_board"
 const TARGET_ENEMY_HAND_CARD: StringName = &"enemy_hand_card"
+const TARGET_ANY_EMPTY_BOARD: StringName = &"any_empty_board"
+const TARGET_ANY_ENEMY_BOARD: StringName = &"any_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
@@ -56,6 +58,7 @@ const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_ca
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY: StringName = &"selected_card_original_owner_is_enemy"
 const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
+const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_has_nonzero_power"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
@@ -95,6 +98,7 @@ const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
+const CELL_REF_ACTIVATION_TARGET: StringName = &"activation_target"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
 const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
@@ -106,8 +110,14 @@ const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_
 const MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE: StringName = &"defending_power_uses_minimum_side"
 const MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO: StringName = &"orthogonal_attack_range_two"
 const MODIFIER_ENEMY_ATTACKS_ALL: StringName = &"enemy_attacks_all"
+const MODIFIER_POWER_COMPARISON_REVERSED: StringName = &"power_comparison_reversed"
+const MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES: StringName = &"adjacent_enemy_summon_attacks_allies"
+const ATTACK_TARGET_ENEMIES_ONLY: StringName = &"enemies_only"
+const ATTACK_TARGET_ALLIES_ONLY: StringName = &"allies_only"
+const ATTACK_TARGET_ALL: StringName = &"all"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
+const CARD_ZONE_REMOVED: StringName = &"removed"
 const RECIPIENT_SELF: StringName = &"self"
 const RECIPIENT_OPPONENT: StringName = &"opponent"
 const ACTION_RESULT_APPLIED: StringName = &"applied"
@@ -121,6 +131,8 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 	TARGET_ADJACENT_ENEMY_BOARD,
 	TARGET_OTHER_ALLY_BOARD,
 	TARGET_ENEMY_HAND_CARD,
+	TARGET_ANY_EMPTY_BOARD,
+	TARGET_ANY_ENEMY_BOARD,
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_SUMMONED,
@@ -172,9 +184,10 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY,
 	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
+	CONDITION_SELECTED_CARD_HAS_NONZERO_POWER,
 	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
 ]
-const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD]
+const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD, CARD_ZONE_REMOVED]
 const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DRAW_CARDS,
 	ACTION_EXILE_ATTACKED_CARD,
@@ -227,6 +240,8 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
 	MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
 	MODIFIER_ENEMY_ATTACKS_ALL,
+	MODIFIER_POWER_COMPARISON_REVERSED,
+	MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -1601,7 +1616,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "在相邻进场且保持相邻的敌方进场攻击不会选中我的友方，反而会选中我的敌方。",
 		"flavor": "太极剑法中的招式，神在剑先，绵绵不绝。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [{
+			"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
+		}],
 	},
 	&"TaiJiSanHuan5": {
 		"id": &"TaiJiSanHuan5",
@@ -1614,7 +1631,37 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "太极剑法中的招式，神在剑先，绵绵不绝。",
 		"powers": [5, 5, 5, 5],
 		"starting_ki": 3,
-		"abilities": [],
+		"abilities": [
+			{
+				"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
+			},
+			{
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ANY_EMPTY_BOARD,
+					"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+					"actions": [
+						{
+							"type": ACTION_FOR_EACH_SELECTED_CARD,
+							"selector": {
+								"zones": [CARD_ZONE_REMOVED],
+								"conditions": [
+									{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+									{"type": CONDITION_SELECTED_CARD_HAS_NONZERO_POWER},
+								],
+								"limit": 1,
+							},
+							"actions": [{
+								"type": ACTION_SUMMON_CARD,
+								"card": CARD_REF_SELECTED_CARD,
+								"cell": {"type": CELL_REF_ACTIVATION_TARGET},
+							}],
+						},
+						{"type": ACTION_DRAW_CARDS, "amount": 1},
+					],
+				},
+			},
+		],
 	},
 	&"TaiJiDaKui5": {
 		"id": &"TaiJiDaKui5",
@@ -1627,7 +1674,36 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "太极剑法中的招式，圆转如意，严密异常。",
 		"powers": [5, 5, 5, 5],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			{
+				"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
+			},
+			{
+				"activation": {
+					"input": ACTIVATION_DRAG_TO_TARGET,
+					"target_rule": TARGET_ANY_ENEMY_BOARD,
+					"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+					"actions": [
+						{
+							"type": ACTION_CHANGE_POWERS,
+							"amount": 1,
+							"card": CARD_REF_SELECTED_CARD,
+						},
+						{
+							"type": ACTION_FOR_EACH_SELECTED_CARD,
+							"selector": {
+								"zones": [CARD_ZONE_BOARD],
+								"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+							},
+							"actions": [{
+								"type": ACTION_STANDARD_ATTACK_WITH_SELF,
+								"target_policy": ATTACK_TARGET_ALLIES_ONLY,
+							}],
+						},
+					],
+				},
+			},
+		],
 	},
 	&"TaiJiLuanHuan4": {
 		"id": &"TaiJiLuanHuan4",
@@ -1639,7 +1715,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我和其它牌比较大小时，将结果颠倒。",
 		"flavor": "乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [{
+			"modifiers": [{"type": MODIFIER_POWER_COMPARISON_REVERSED}],
+		}],
 	},
 	&"TaiJiLuanHuan5": {
 		"id": &"TaiJiLuanHuan5",
@@ -1651,7 +1729,29 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我和其它牌比较大小时，将结果颠倒。我攻击后，令所有相邻友方发起攻击。",
 		"flavor": "乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [
+			{
+				"modifiers": [{"type": MODIFIER_POWER_COMPARISON_REVERSED}],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_ATTACK,
+					"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+								{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+						},
+						"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+					}],
+				}],
+			},
+		],
 	},
 	&"TaiJiYinYang5": {
 		"id": &"TaiJiYinYang5",
@@ -1663,7 +1763,46 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我和其它牌比较大小时，将结果颠倒。我攻击后，令所有敌方获得以下效果：【判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。】",
 		"flavor": "太极阴阳少人修，吞吐开合问刚柔。正隅收放任君走，动静变里何须愁？生克二法随着用，闪进全在动中求。轻重虚实怎的是？重里现轻勿稍留。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [
+			{
+				"modifiers": [{"type": MODIFIER_POWER_COMPARISON_REVERSED}],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_ATTACK,
+					"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+						},
+						"actions": [
+							{
+								"type": ACTION_GRANT_ABILITY_TO_SELF,
+								"ability": {
+									"modifiers": [{
+										"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+										"value": 0,
+									}],
+								},
+							},
+							{
+								"type": ACTION_GRANT_ABILITY_TO_SELF,
+								"ability": {
+									"retained_on_flip": true,
+									"triggers": [{
+										"event": CARD_BE_ATTACKED,
+										"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+										"actions": [{"type": ACTION_EXILE_ATTACKED_CARD}],
+									}],
+								},
+							},
+						],
+					}],
+				}],
+			},
+		],
 	},
 	&"HuZhuaJueHuSHou1": {
 		"id": &"HuZhuaJueHuSHou1",
@@ -3712,9 +3851,19 @@ static func _validate_action(
 			errors.append("Card %s %s suppression action requires a positive integer amount" % [card_id, context_name])
 	if action_type == ACTION_STANDARD_ATTACK_WITH_SELF:
 		allowed_keys.append(&"repeat_attack")
+		allowed_keys.append(&"target_policy")
 		if action.has("repeat_attack") and typeof(action.get("repeat_attack")) != TYPE_BOOL:
 			errors.append(
 				"Card %s %s action %s requires a Boolean repeat_attack"
+				% [card_id, context_name, action_type]
+			)
+		if action.has("target_policy") and StringName(action.get("target_policy", &"")) not in [
+			ATTACK_TARGET_ENEMIES_ONLY,
+			ATTACK_TARGET_ALLIES_ONLY,
+			ATTACK_TARGET_ALL,
+		]:
+			errors.append(
+				"Card %s %s action %s requires a known target_policy"
 				% [card_id, context_name, action_type]
 			)
 	if action_type == ACTION_CHANGE_POWERS:
@@ -3976,9 +4125,17 @@ static func _validate_summon_cell_spec(
 		errors.append("Card %s %s summon action requires a cell specification" % [card_id, context_name])
 		return
 	var spec: Dictionary = value
-	if StringName(spec.get("type", &"")) not in [CELL_REF_INITIAL_CARD_CELL, CELL_REF_FIRST_ADJACENT_EMPTY]:
+	var cell_type := StringName(spec.get("type", &""))
+	if cell_type not in [
+		CELL_REF_INITIAL_CARD_CELL,
+		CELL_REF_FIRST_ADJACENT_EMPTY,
+		CELL_REF_ACTIVATION_TARGET,
+	]:
 		errors.append("Card %s %s summon action uses an unknown cell specification" % [card_id, context_name])
-	if StringName(spec.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+	if (
+		cell_type != CELL_REF_ACTIVATION_TARGET
+		and StringName(spec.get("card", &"")) not in KNOWN_CARD_REFERENCES
+	):
 		errors.append("Card %s %s summon cell requires a known card reference" % [card_id, context_name])
 	for key: Variant in spec.keys():
 		if StringName(key) not in [&"type", &"card"]:

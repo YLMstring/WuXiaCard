@@ -11,6 +11,7 @@ var removed_cards: Dictionary = {}
 var active_player: int = Rules.PLAYER_OWNER
 var turn_count: int = 0
 var owner_turn_serial: int = 0
+var attacks_started_by_owner: Dictionary = {}
 var extra_card_plays_remaining: int = 0
 var end_turn_triggers_resolved: bool = false
 var max_turns: int = 100
@@ -51,6 +52,10 @@ func _init(
 	removed_cards = {
 		Rules.PLAYER_OWNER: [],
 		Rules.OPPONENT_OWNER: [],
+	}
+	attacks_started_by_owner = {
+		Rules.PLAYER_OWNER: 0,
+		Rules.OPPONENT_OWNER: 0,
 	}
 	last_hand_play_by_owner = {
 		Rules.PLAYER_OWNER: {},
@@ -95,6 +100,7 @@ func duplicate_state():
 	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_turn_serial = owner_turn_serial
+	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version

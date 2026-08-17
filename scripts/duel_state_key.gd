@@ -16,6 +16,7 @@ static func build(state: StateData) -> String:
 		"active_player": state.active_player,
 		"turn_count": state.turn_count,
 		"owner_turn_serial": state.owner_turn_serial,
+		"attacks_started_by_owner": state.attacks_started_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,
 		"end_turn_triggers_resolved": state.end_turn_triggers_resolved,
 		"max_turns": state.max_turns,

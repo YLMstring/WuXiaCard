@@ -11,6 +11,7 @@ const Targeting = preload("res://scripts/duel_targeting.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
 const BOARD_REPETITION_LIMIT: int = 5
+const MAX_ATTACKS_PER_OWNER_TURN: int = 20
 
 
 static func get_legal_actions(state: StateData) -> Array[ActionData]:
@@ -260,6 +261,11 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"trigger_owner_id": summoning_owner,
 		"summon_reason": &"hand_play",
 		"previous_hand_play_by_owner": previous_hand_play_by_owner,
+		"summon_attack_redirect_sources": _snapshot_summon_attack_redirect_sources(
+			next_state,
+			action.target_index,
+			summoning_owner
+		),
 	}
 	var before_summon_result: Dictionary = _resolve_trigger_event(
 		next_state,
@@ -306,7 +312,14 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 			next_state,
 			attack_cell,
 			instance_id,
-			&"summon_standard_attack"
+			&"summon_standard_attack",
+			false,
+			_get_summon_attack_policy(
+				next_state,
+				attack_cell,
+				summoning_owner,
+				summon_context.get("summon_attack_redirect_sources", []) as Array
+			)
 		)
 		_append_extra_card_play_requests(extra_card_play_requests, attack_result)
 		_merge_resolution(captures, exiles, events, attack_result)
@@ -442,13 +455,20 @@ static func _resolve_standard_attacks(
 	source_cell: int,
 	source_instance_id: StringName,
 	reason: StringName,
-	repeat_attack: bool = false
+	repeat_attack: bool = false,
+	requested_policy: Dictionary = {}
 ) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
 	if not _card_instance_at(state, source_cell, source_instance_id):
 		return result
 	var attacker_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0))
-	var attack_policy: Dictionary = _get_standard_attack_policy(state, attacker_owner)
+	if _attack_limit_reached(state, attacker_owner):
+		return result
+	var attack_policy: Dictionary = _get_standard_attack_policy(
+		state,
+		attacker_owner,
+		requested_policy
+	)
 	var rules_context: Dictionary = {
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
 	}
@@ -458,6 +478,9 @@ static func _resolve_standard_attacks(
 		source_cell,
 		rules_context
 	)
+	if target_cells.is_empty():
+		return result
+	_record_attack_started(state, attacker_owner)
 	for target_cell: int in target_cells:
 		if not _card_instance_at(state, source_cell, source_instance_id):
 			break
@@ -583,7 +606,14 @@ static func _resolve_attack_target(
 	)
 	var captured_owner: int = attacker_owner
 	if attacked_owner == attacker_owner:
-		captured_owner = int(attack_policy.get("capture_owner_id", attacker_owner))
+		var default_enemy_owner: int = (
+			Rules.OPPONENT_OWNER
+			if attacker_owner == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+		captured_owner = int(
+			attack_policy.get("capture_owner_id", default_enemy_owner)
+		)
 	if captured_owner == attacked_owner:
 		return result
 	var before_flip_context: Dictionary = attack_context.duplicate(true)
@@ -929,6 +959,9 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	var existing_hand_instance_id := StringName(
 		request.get("existing_hand_instance_id", &"")
 	)
+	var existing_removed_instance_id := StringName(
+		request.get("existing_removed_instance_id", &"")
+	)
 	var existing_hand_index: int = -1
 	if existing_hand_instance_id != &"":
 		var source_hand: Array = state.get_hand(source_owner)
@@ -936,6 +969,18 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 			var hand_card: Dictionary = source_hand[hand_index]
 			if StringName(hand_card.get("instance_id", &"")) == existing_hand_instance_id:
 				existing_hand_index = hand_index
+				break
+	var existing_removed_index: int = -1
+	if existing_removed_instance_id != &"":
+		var source_removed: Array = state.removed_cards.get(source_owner, []) as Array
+		for removed_index: int in range(source_removed.size()):
+			var removed_value: Variant = source_removed[removed_index]
+			if (
+				removed_value is Dictionary
+				and StringName((removed_value as Dictionary).get("instance_id", &""))
+				== existing_removed_instance_id
+			):
+				existing_removed_index = removed_index
 				break
 	if (
 		requires_source
@@ -951,6 +996,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		or not Catalog.has_card(card_id)
 		or instance_id == &""
 		or existing_hand_instance_id != &"" and existing_hand_index < 0
+		or existing_removed_instance_id != &"" and existing_removed_index < 0
 	):
 		return result
 	var summoned_card: Dictionary
@@ -958,6 +1004,10 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		var source_hand: Array = state.get_hand(source_owner)
 		summoned_card = source_hand[existing_hand_index]
 		source_hand.remove_at(existing_hand_index)
+	elif existing_removed_index >= 0:
+		var source_removed: Array = state.removed_cards.get(source_owner, []) as Array
+		summoned_card = source_removed[existing_removed_index]
+		source_removed.remove_at(existing_removed_index)
 	else:
 		summoned_card = Catalog.create_instance(card_id, source_owner, instance_id)
 	state.board[target_cell] = {
@@ -974,6 +1024,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"instance_id": instance_id,
 		"card": summoned_card.duplicate(true),
 		"from_hand_instance_id": existing_hand_instance_id,
+		"from_removed_instance_id": existing_removed_instance_id,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
 	})
 	var summon_context: Dictionary = {
@@ -981,6 +1032,11 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"trigger_instance_id": instance_id,
 		"trigger_owner_id": source_owner,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
+		"summon_attack_redirect_sources": _snapshot_summon_attack_redirect_sources(
+			state,
+			target_cell,
+			source_owner
+		),
 	}
 	var before_summon_result: Dictionary = _resolve_trigger_event(
 		state,
@@ -1028,7 +1084,14 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 			state,
 			current_cell,
 			instance_id,
-			&"generated_summon_standard_attack"
+			&"generated_summon_standard_attack",
+			false,
+			_get_summon_attack_policy(
+				state,
+				current_cell,
+				source_owner,
+				summon_context.get("summon_attack_redirect_sources", []) as Array
+			)
 		)
 		_merge_resolution(
 			result["captures"],
@@ -1069,7 +1132,8 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 			source_cell,
 			source_instance_id,
 			StringName(request.get("reason", &"ability_standard_attack")),
-			bool(request.get("repeat_attack", false))
+			bool(request.get("repeat_attack", false)),
+			request.get("attack_policy", {}) as Dictionary
 		)
 	if mode != &"targeted":
 		return _empty_resolution()
@@ -1083,13 +1147,28 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 	):
 		return _empty_resolution()
 	var attacker_owner: int = int(request.get("source_owner_id", 0))
+	if _attack_limit_reached(state, attacker_owner):
+		return _empty_resolution()
+	var targeted_policy: Dictionary = request.get("attack_policy", {}) as Dictionary
+	if not _attack_is_valid(
+		state,
+		source_cell,
+		source_instance_id,
+		target_cell,
+		target_instance_id,
+		true,
+		targeted_policy
+	):
+		return _empty_resolution()
+	_record_attack_started(state, attacker_owner)
 	var result: Dictionary = _resolve_attack_target(
 		state,
 		source_cell,
 		source_instance_id,
 		target_cell,
 		target_instance_id,
-		StringName(request.get("reason", &"ability_targeted_attack"))
+		StringName(request.get("reason", &"ability_targeted_attack")),
+		targeted_policy
 	)
 	if _events_have_type(result["events"], &"attack_started"):
 		var after_attack: Dictionary = _resolve_trigger_event(
@@ -1161,7 +1240,13 @@ static func _attack_is_valid(
 	)
 
 
-static func _get_standard_attack_policy(state: StateData, attacker_owner: int) -> Dictionary:
+static func _get_standard_attack_policy(
+	state: StateData,
+	attacker_owner: int,
+	requested_policy: Dictionary = {}
+) -> Dictionary:
+	if not requested_policy.is_empty():
+		return requested_policy.duplicate(true)
 	for slot_value: Variant in state.board:
 		if slot_value == null:
 			continue
@@ -1176,10 +1261,69 @@ static func _get_standard_attack_policy(state: StateData, attacker_owner: int) -
 			state.get_enabled_effect_gates(source_owner)
 		):
 			return {
-				"allow_allied_targets": true,
+				"attack_target_policy": Catalog.ATTACK_TARGET_ALL,
 				"capture_owner_id": source_owner,
 			}
 	return {}
+
+
+static func _snapshot_summon_attack_redirect_sources(
+	state: StateData,
+	summon_cell: int,
+	summoning_owner: int
+) -> Array[StringName]:
+	var source_ids: Array[StringName] = []
+	for direction: int in range(4):
+		var source_cell: int = Rules.get_neighbor_index(summon_cell, direction)
+		if source_cell < 0 or state.board[source_cell] == null:
+			continue
+		var source_slot: Dictionary = state.board[source_cell]
+		var source_owner: int = int(source_slot.get("owner", 0))
+		if source_owner == summoning_owner:
+			continue
+		var source_card: Dictionary = source_slot.get("card", {})
+		if Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+			state.get_enabled_effect_gates(source_owner)
+		):
+			source_ids.append(StringName(source_card.get("instance_id", &"")))
+	return source_ids
+
+
+static func _get_summon_attack_policy(
+	state: StateData,
+	summoned_cell: int,
+	summoning_owner: int,
+	source_ids: Array
+) -> Dictionary:
+	for source_id_value: Variant in source_ids:
+		var source_id := StringName(source_id_value)
+		var source_cell: int = _find_board_card_cell(state, source_id)
+		if source_cell < 0 or not _are_adjacent(source_cell, summoned_cell):
+			continue
+		var source_slot: Dictionary = state.board[source_cell]
+		var source_owner: int = int(source_slot.get("owner", 0))
+		if source_owner == summoning_owner:
+			continue
+		var source_card: Dictionary = source_slot.get("card", {})
+		if Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+			state.get_enabled_effect_gates(source_owner)
+		):
+			return {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY}
+	return {}
+
+
+static func _attack_limit_reached(state: StateData, owner_id: int) -> bool:
+	return int(state.attacks_started_by_owner.get(owner_id, 0)) >= MAX_ATTACKS_PER_OWNER_TURN
+
+
+static func _record_attack_started(state: StateData, owner_id: int) -> void:
+	state.attacks_started_by_owner[owner_id] = (
+		int(state.attacks_started_by_owner.get(owner_id, 0)) + 1
+	)
 
 
 static func _finish_action(
@@ -1320,6 +1464,8 @@ static func _complete_owner_turn_boundary(
 		restore_result
 	)
 	state.owner_turn_serial += 1
+	state.attacks_started_by_owner[Rules.PLAYER_OWNER] = 0
+	state.attacks_started_by_owner[Rules.OPPONENT_OWNER] = 0
 	state.end_turn_triggers_resolved = false
 	_record_board_repetition(state)
 

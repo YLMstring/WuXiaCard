@@ -58,7 +58,7 @@ func _run() -> void:
 func _test_catalog_validation() -> void:
 	var validation_errors: Array[String] = Catalog.validate_catalog()
 	_check(validation_errors.is_empty(), "All catalog definitions pass validation: %s" % str(validation_errors))
-	_check(Catalog.get_all_card_ids().size() == 83, "Catalog contains all eighty-three current cards")
+	_check(Catalog.get_all_card_ids().size() == 94, "Catalog contains all ninety-four current cards")
 
 
 func _test_catalog_definitions() -> void:
@@ -174,7 +174,7 @@ func _test_definition_copy_isolation() -> void:
 	(first["powers"] as Array)[0] = 99
 	(first["abilities"] as Array).clear()
 	_check(int((second["powers"] as Array)[0]) == 7, "Power mutation does not alter another catalog copy")
-	_check((second["abilities"] as Array).size() == 1, "Ability mutation does not alter another catalog copy")
+	_check((second["abilities"] as Array).size() == 2, "Ability mutation does not alter another catalog copy")
 
 
 func _test_new_sect_card_definitions() -> void:
@@ -198,7 +198,21 @@ func _test_new_sect_card_definitions() -> void:
 
 
 func _test_ability_declarations() -> void:
-	for card_id: StringName in [&"LeiZHenJian1", &"HuZhuaJueHuSHou2"]:
+	var leizhen_abilities: Array = Catalog.get_definition(&"LeiZHenJian1").get("abilities", [])
+	_check(leizhen_abilities.size() == 2, "LeiZHenJian1 separates defense and retained removal")
+	if leizhen_abilities.size() == 2:
+		var defense: Dictionary = leizhen_abilities[0]
+		var removal: Dictionary = leizhen_abilities[1]
+		_check(
+			defense.get("modifiers", []) == [{"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0}],
+			"LeiZHenJian1 defends as zero"
+		)
+		_check(bool(removal.get("retained_on_flip", false)), "LeiZHenJian1 retains self-removal after ownership flips")
+		var removal_trigger: Dictionary = (removal.get("triggers", []) as Array)[0]
+		_check(StringName(removal_trigger.get("event", &"")) == Catalog.CARD_BE_ATTACKED, "LeiZHenJian1 reacts when attacked")
+		_check(removal_trigger.get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}], "LeiZHenJian1 only removes itself when attacked")
+		_check(removal_trigger.get("actions", []) == [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}], "LeiZHenJian1 exiles the attacked self")
+	for card_id: StringName in [&"HuZhuaJueHuSHou2"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])
 		_check(abilities.size() == 1, "%s declares one ability" % card_id)

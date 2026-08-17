@@ -129,6 +129,10 @@ static func conditions_match(
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE:
 			if not Rules.can_change_powers(selected_card):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_HAS_NONZERO_POWER:
+			var powers: Array = selected_card.get("powers", [])
+			if powers.size() != 4 or powers.all(func(value: Variant) -> bool: return int(value) == 0):
+				return false
 		elif condition_type == Catalog.CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY:
 			var played_by_owner: int = _resolve_relative_owner(
 				StringName(condition.get("played_by", &"")),
@@ -159,7 +163,10 @@ static func _resolve_source(
 	context: Dictionary
 ) -> Dictionary:
 	var live_source: Dictionary = locate_card(state, source_instance_id)
-	if not live_source.is_empty():
+	if (
+		not live_source.is_empty()
+		and StringName(live_source.get("zone", &"")) != Catalog.CARD_ZONE_REMOVED
+	):
 		return live_source
 	var snapshots_value: Variant = context.get("card_reference_snapshots", {})
 	if not snapshots_value is Dictionary:
@@ -244,6 +251,19 @@ static func locate_card(state: StateData, instance_id: StringName) -> Dictionary
 					"index": hand_index,
 					"card": card,
 				}
+		var removed: Array = state.removed_cards.get(owner_id, []) as Array
+		for removed_index: int in range(removed.size()):
+			var removed_value: Variant = removed[removed_index]
+			if not removed_value is Dictionary:
+				continue
+			var removed_card: Dictionary = removed_value
+			if StringName(removed_card.get("instance_id", &"")) == instance_id:
+				return {
+					"zone": Catalog.CARD_ZONE_REMOVED,
+					"owner_id": owner_id,
+					"index": removed_index,
+					"card": removed_card,
+				}
 	return {}
 
 
@@ -286,6 +306,26 @@ static func _get_zone_candidates(
 				"index": cell,
 				"card": slot.get("card", {}),
 			})
+	elif zone == Catalog.CARD_ZONE_REMOVED:
+		var owner_order: Array[int] = [source_owner]
+		var other_owner: int = (
+			Rules.OPPONENT_OWNER
+			if source_owner == Rules.PLAYER_OWNER
+			else Rules.PLAYER_OWNER
+		)
+		owner_order.append(other_owner)
+		for owner_id: int in owner_order:
+			var removed: Array = state.removed_cards.get(owner_id, []) as Array
+			for removed_index: int in range(removed.size()):
+				var card_value: Variant = removed[removed_index]
+				if not card_value is Dictionary:
+					continue
+				candidates.append({
+					"zone": Catalog.CARD_ZONE_REMOVED,
+					"owner_id": owner_id,
+					"index": removed_index,
+					"card": card_value,
+				})
 	return candidates
 
 

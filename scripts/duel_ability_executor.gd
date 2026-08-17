@@ -675,7 +675,8 @@ static func _execute_action(
 			source_cell,
 			source_instance_id,
 			expected_owner,
-			bool(declaration.get("repeat_attack", false))
+			bool(declaration.get("repeat_attack", false)),
+			StringName(declaration.get("target_policy", &""))
 		)
 	return _no_effect(source_cell)
 
@@ -1558,18 +1559,21 @@ static func _request_summon_card(
 	var card_spec: Variant = declaration.get("card", null)
 	var card_id: StringName = &""
 	var existing_instance_id: StringName = &""
+	var existing_removed_instance_id: StringName = &""
 	if typeof(card_spec) in [TYPE_STRING, TYPE_STRING_NAME]:
 		var card_reference := StringName(card_spec)
 		var card_snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
 		existing_instance_id = StringName(card_snapshot.get("instance_id", &""))
 		var existing_location: Dictionary = Selector.locate_card(state, existing_instance_id)
-		if (
-			existing_location.is_empty()
-			or StringName(existing_location.get("zone", &"")) != Catalog.CARD_ZONE_HAND
-		):
+		var existing_zone := StringName(existing_location.get("zone", &""))
+		if existing_location.is_empty() or existing_zone not in [
+			Catalog.CARD_ZONE_HAND,
+			Catalog.CARD_ZONE_REMOVED,
+		]:
 			return _no_effect(source_cell)
 		card_id = StringName((existing_location.get("card", {}) as Dictionary).get("card_id", &""))
-		source_owner = int(existing_location.get("owner_id", source_owner))
+		if existing_zone == Catalog.CARD_ZONE_REMOVED:
+			existing_removed_instance_id = existing_instance_id
 	elif card_spec is Dictionary:
 		var fresh_spec: Dictionary = card_spec
 		if StringName(fresh_spec.get("type", &"")) != Catalog.CARD_SPEC_FRESH_COPY:
@@ -1593,6 +1597,8 @@ static func _request_summon_card(
 	var requires_adjacent_source: bool = false
 	if StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_INITIAL_CARD_CELL:
 		target_cell = int(anchor_snapshot.get("index", -1))
+	elif StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_ACTIVATION_TARGET:
+		target_cell = int(context.get("target_index", -1))
 	elif StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_FIRST_ADJACENT_EMPTY:
 		var anchor_location: Dictionary = Selector.locate_card(
 			state,
@@ -1619,7 +1625,10 @@ static func _request_summon_card(
 		"target_cell": target_cell,
 		"card_id": card_id,
 		"instance_id": existing_instance_id if existing_instance_id != &"" else _make_generated_instance_id(state, card_id),
-		"existing_hand_instance_id": existing_instance_id,
+		"existing_hand_instance_id": (
+			existing_instance_id if existing_removed_instance_id == &"" else &""
+		),
+		"existing_removed_instance_id": existing_removed_instance_id,
 		"requires_source": requires_adjacent_source,
 		"requires_adjacent_source": requires_adjacent_source,
 		"reason": &"ability_fresh_copy",
@@ -2278,7 +2287,8 @@ static func _request_standard_attack(
 	source_cell: int,
 	source_instance_id: StringName,
 	expected_owner: int,
-	repeat_attack: bool = false
+	repeat_attack: bool = false,
+	target_policy: StringName = &""
 ) -> Dictionary:
 	var source_slot: Dictionary = _get_card_slot(
 		state,
@@ -2289,14 +2299,17 @@ static func _request_standard_attack(
 	if source_slot.is_empty():
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
-	result["attack_requests"].append({
+	var request: Dictionary = {
 		"mode": &"standard",
 		"source_cell": source_cell,
 		"source_instance_id": source_instance_id,
 		"source_owner_id": int(source_slot.get("owner", 0)),
 		"reason": &"activated_ability",
 		"repeat_attack": repeat_attack,
-	})
+	}
+	if target_policy != &"":
+		request["attack_policy"] = {"attack_target_policy": target_policy}
+	result["attack_requests"].append(request)
 	return result
 
 

@@ -23,7 +23,7 @@ func _run() -> void:
 	)
 	var high_tier_deck: Array = [
 		"CangSongYingKe2",
-		"LeiZHenJian1",
+		"LeiZHenJian2",
 		"KuiHua1",
 		"YouFenLaiYi2",
 		"TuNaShu2",
@@ -196,7 +196,7 @@ func _run() -> void:
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()
 	_check(_back_count == 1 and builder.get_parent() == root, "Back button emits without navigating")
 
-	var exchange_library_index: int = _find_card_at_tier(profile["library_slots"], 1)
+	var exchange_library_index: int = (profile["library_slots"] as Array).find("TaiZuChangQuan")
 	var exchange_deck_index: int = _find_card_at_tier(profile["main_deck"], 2)
 	_check(exchange_library_index >= 0 and exchange_deck_index >= 0, "Eligibility fixture finds tier-one and tier-two cards")
 	var old_deck_card: String = String(profile["main_deck"][exchange_deck_index])

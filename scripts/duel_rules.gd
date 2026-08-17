@@ -163,9 +163,21 @@ static func is_target_in_attack_range(
 		return false
 	var source_slot: Dictionary = board[source_index]
 	var target_slot: Dictionary = board[target_index]
+	var source_owner: int = int(source_slot.get("owner", 0))
+	var target_owner: int = int(target_slot.get("owner", 0))
+	var target_policy := StringName(
+		context.get("attack_target_policy", Catalog.ATTACK_TARGET_ENEMIES_ONLY)
+	)
+	if bool(context.get("allow_allied_targets", false)):
+		target_policy = Catalog.ATTACK_TARGET_ALL
 	if (
-		int(source_slot.get("owner", 0)) == int(target_slot.get("owner", 0))
-		and not bool(context.get("allow_allied_targets", false))
+		target_policy == Catalog.ATTACK_TARGET_ENEMIES_ONLY and source_owner == target_owner
+		or target_policy == Catalog.ATTACK_TARGET_ALLIES_ONLY and source_owner != target_owner
+		or target_policy not in [
+			Catalog.ATTACK_TARGET_ENEMIES_ONLY,
+			Catalog.ATTACK_TARGET_ALLIES_ONLY,
+			Catalog.ATTACK_TARGET_ALL,
+		]
 	):
 		return false
 	var source_card: Dictionary = source_slot.get("card", {})
@@ -220,7 +232,22 @@ static func is_target_in_attack_range(
 			int(target_powers[defending_direction]),
 			target_gates
 		)
-	return int(source_powers[direction]) > defending_power
+	var attacking_power: int = int(source_powers[direction])
+	var comparison_reversed: bool = (
+		Abilities.has_modifier(
+			source_card,
+			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
+			source_gates
+		)
+		or Abilities.has_modifier(
+			target_card,
+			Catalog.MODIFIER_POWER_COMPARISON_REVERSED,
+			target_gates
+		)
+	)
+	if comparison_reversed:
+		return attacking_power < defending_power
+	return attacking_power > defending_power
 
 
 static func _get_effect_gates(context: Dictionary, owner_id: int) -> Array:

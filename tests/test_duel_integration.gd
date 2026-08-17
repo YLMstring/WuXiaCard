@@ -654,7 +654,11 @@ func _check_catalog_hands(duel: Node) -> void:
 	var tiger_card_data: Dictionary = opponent_cards[2].get("card_data")
 	var gate_abilities: Array = gate_card_data.get("active_abilities", [])
 	var tiger_abilities: Array = tiger_card_data.get("active_abilities", [])
-	_check(gate_abilities.size() == 1 and bool((gate_abilities[0] as Dictionary).get("retained_on_flip", false)), "Gate General view receives its retained catalog ability")
+	_check(
+		gate_abilities.size() == 2
+		and bool((gate_abilities[1] as Dictionary).get("retained_on_flip", false)),
+		"LeiZHenJian1 view receives zero defense and retained self-removal"
+	)
 	_check(tiger_abilities.size() == 1 and bool((tiger_abilities[0] as Dictionary).get("retained_on_flip", false)), "Tiger General view receives its retained catalog ability")
 	_check(not duel.has_method("_get_player_cards") and not duel.has_method("_get_opponent_cards"), "Controller no longer owns hard-coded card definitions")
 
@@ -1305,26 +1309,25 @@ func _check_player_gate_exile() -> void:
 	_check(gate_view.has_node("Overlay/InkSlash"), "Card view contains the exile ink overlay")
 	_check(gate_view.has_method("play_effect_pulse") and gate_view.has_method("play_exile"), "Card view exposes exile presentation methods")
 
-	var first_placed: bool = await exile_duel.debug_commit_move(1, 0, 0, false)
+	var gate_placed: bool = await exile_duel.debug_commit_move(1, 1, 4, false)
 	var target_placed: bool = await exile_duel.debug_commit_move(2, 1, 5, false)
-	var gate_placed: bool = await exile_duel.debug_commit_move(1, 0, 4, false)
-	_check(first_placed and target_placed and gate_placed, "Scripted Gate General exile uses production move commits")
+	_check(gate_placed and target_placed, "Scripted LeiZHenJian self-removal uses production move commits")
 	await process_frame
-	_check(exile_duel.debug_get_board_occupancy() == 2, "Gate General removes Fire Envoy instead of flipping it")
-	_check(exile_duel.has_method("debug_has_board_card_view") and not bool(exile_duel.call("debug_has_board_card_view", 5)), "Gate General exile clears the target card view")
-	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 2)) == 1, "Fire Envoy enters the opponent's removed zone")
-	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 5)), "Gate General's cleared cell is reusable")
+	_check(exile_duel.debug_get_board_occupancy() == 1, "LeiZHenJian removes itself instead of flipping")
+	_check(exile_duel.has_method("debug_has_board_card_view") and not bool(exile_duel.call("debug_has_board_card_view", 4)), "LeiZHenJian removal clears its card view")
+	_check(exile_duel.has_method("debug_get_removed_count") and int(exile_duel.call("debug_get_removed_count", 1)) == 1, "LeiZHenJian enters the player's removed zone")
+	_check(exile_duel.has_method("debug_can_place_at") and bool(exile_duel.call("debug_can_place_at", 4)), "LeiZHenJian's cleared cell is reusable")
 	var gate_scores: Vector2i = exile_duel.debug_get_scores()
-	_check(gate_scores == Vector2i(2, 0), "Gate General exile awards no point for the removed target")
+	_check(gate_scores == Vector2i(0, 1), "LeiZHenJian self-removal awards no point for the removed card")
 	var gate_trace: Array[StringName] = exile_duel.debug_get_presentation_trace()
 	_check(
 		gate_trace.rfind(&"attack_started") < gate_trace.rfind(&"ability_triggered")
 		and gate_trace.rfind(&"ability_triggered") < gate_trace.rfind(&"card_exiled"),
-		"Gate interception presents attack cue, target pulse, then exile"
+		"LeiZHenJian interception presents attack cue, target pulse, then exile"
 	)
 	_check(
 		exile_duel.debug_get_attack_vfx_trace().size() == 1,
-		"Gate interception still plays one attempted-attack stroke"
+		"LeiZHenJian interception still plays one attempted-attack stroke"
 	)
 	exile_duel.queue_free()
 	await process_frame
