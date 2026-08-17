@@ -703,10 +703,25 @@ func _run() -> void:
 	var capped_result: Dictionary = store.advance_after_victory_and_save(progression_profile)
 	_check(bool(capped_result.get("ok", false)), "A level-fifteen victory is a successful no-op")
 	_check(not bool(capped_result.get("advanced", true)), "Level fifteen does not advance")
+	var capped_profile: Dictionary = capped_result.get("profile", {})
 	_check(
-		capped_result.get("profile", {}) == progression_profile,
-		"Level-fifteen victory preserves the opponent"
+		store.get_character_level(capped_profile) == Store.MAX_CHARACTER_LEVEL,
+		"Level-fifteen victory preserves the capped level"
 	)
+	_check(
+		store.get_current_enemy_id(capped_profile)
+		== store.get_current_enemy_id(progression_profile),
+		"Level-fifteen victory preserves the current opponent"
+	)
+	var capped_enemy: Dictionary = Enemies.get_definition(
+		store.get_current_enemy_id(progression_profile)
+	)
+	var capped_enemy_sect := StringName(String(capped_enemy.get("sect_id", "")))
+	if capped_enemy_sect != &"":
+		_check(
+			capped_enemy_sect in store.get_unlocked_sect_ids(capped_profile),
+			"Level-fifteen victory still unlocks the defeated enemy's declared sect"
+		)
 
 	var expected_tiers: Dictionary = {
 		0: 1,

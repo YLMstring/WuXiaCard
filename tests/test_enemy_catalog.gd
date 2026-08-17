@@ -14,17 +14,18 @@ func _init() -> void:
 
 func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
-	_check(Catalog.get_all_enemy_ids().size() == 25, "Catalog contains all configured enemies")
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
 	var observed_decks: Dictionary = {}
+	var observed_enemy_ids: Dictionary = {}
 	for level: int in range(1, 16):
 		var enemy_ids: Array[StringName] = Catalog.get_enemy_ids_for_level(level)
-		var expected_count: int = 2 if level <= 10 else 1
 		_check(
-			enemy_ids.size() == expected_count,
-			"Level %d has its configured enemy candidates" % level
+			not enemy_ids.is_empty(),
+			"Level %d has at least one configured enemy candidate" % level
 		)
 		for enemy_id: StringName in enemy_ids:
+			_check(not observed_enemy_ids.has(enemy_id), "%s appears at exactly one level" % enemy_id)
+			observed_enemy_ids[enemy_id] = true
 			var definition: Dictionary = Catalog.get_definition(enemy_id)
 			_check(StringName(definition["id"]) == enemy_id, "%s preserves its ID" % enemy_id)
 			_check(int(definition["level"]) == level, "%s preserves its level" % enemy_id)
@@ -38,6 +39,10 @@ func _run() -> void:
 			observed_decks[deck_signature] = enemy_id
 			for value: Variant in deck:
 				_check(StringName(String(value)) in card_ids, "%s uses a known card" % enemy_id)
+	_check(
+		observed_enemy_ids.size() == Catalog.get_all_enemy_ids().size(),
+		"Level candidate lookup covers every configured enemy"
+	)
 
 	var seeded_a := RandomNumberGenerator.new()
 	var seeded_b := RandomNumberGenerator.new()

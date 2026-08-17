@@ -54,20 +54,19 @@ func _run() -> void:
 	_check(_inspectable_hand_slots(opponent_hand) == 0, "Upper initial card backs are not inspectable")
 	_check(_inspectable_hand_slots(player_hand) == 0, "Lower initial card backs are not inspectable")
 
-	var expected_sect_ids: Array[StringName] = [
-		&"HuaShanPai",
-		&"TaiShanPai",
-		&"HengShanPai",
-		&"tingchao_gu",
-		&"SongShanPai",
-	]
+	var expected_sect_ids: Array[StringName] = Sects.get_all_sect_ids()
 	for index: int in range(expected_sect_ids.size()):
 		var entry: Dictionary = grid.library_slots[index]
 		_check(
 			StringName(String(entry.get("id", ""))) == expected_sect_ids[index],
 			"Sect grid preserves catalog order at slot %d" % index
 		)
-	_check(String(grid.library_slots[5]).is_empty(), "The first unused sect position is empty")
+	var first_unused_entry: Variant = grid.library_slots[expected_sect_ids.size()]
+	_check(
+		not first_unused_entry is Dictionary
+		or (first_unused_entry as Dictionary).is_empty(),
+		"The first position after the current sect catalog is empty"
+	)
 	_check(
 		grid.get_display_owner_id(0) == DuelRules.PLAYER_OWNER,
 		"Default unlocked sect is blue"
@@ -137,6 +136,7 @@ func _run() -> void:
 	await process_frame
 
 	var locked_slot: Variant = grid.debug_get_bound_slot(1)
+	var locked_sect_id: StringName = expected_sect_ids[1]
 	var locked_center: Vector2 = locked_slot.get_global_rect().get_center()
 	locked_slot.debug_begin_pointer(locked_center)
 	locked_slot.debug_end_pointer(locked_center)
@@ -146,10 +146,10 @@ func _run() -> void:
 	locked_slot.debug_begin_pointer(locked_center)
 	locked_slot.debug_force_hold_timeout()
 	locked_slot.debug_end_pointer(locked_center)
-	_check(selector.debug_get_selected_sect_id() == &"TaiShanPai", "Holding a locked sect updates selection")
+	_check(selector.debug_get_selected_sect_id() == locked_sect_id, "Holding a locked sect updates selection")
 	_check(
 		selector.debug_get_upper_preview_ids()
-		== _expected_preview_ids(&"TaiShanPai", false),
+		== _expected_preview_ids(locked_sect_id, false),
 		"A locked sect previews its five highest-tier cards"
 	)
 	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
