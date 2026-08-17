@@ -1697,7 +1697,10 @@ func _test_passive_trigger_event_semantics() -> void:
 			"triggers": [{
 				"event": Catalog.TRIGGER_END_OWNER_TURN,
 				"conditions": [],
-				"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+				"actions": [{
+					"type": Catalog.ACTION_EXILE_CARD,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+				}],
 			}],
 		}]
 	)
@@ -2198,7 +2201,7 @@ func _test_invalid_context_defaults_to_no_effect() -> void:
 	board[0] = {"card": source, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
 	var actions: Array = [
-		{"type": Catalog.ACTION_EXILE_ATTACKED_CARD},
+		{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD},
 		{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
 	]
 	var result: Dictionary = Executor.execute_actions(
@@ -2207,7 +2210,7 @@ func _test_invalid_context_defaults_to_no_effect() -> void:
 		&"context_source",
 		Rules.PLAYER_OWNER,
 		actions,
-		{"attacked_cell": 1, "attacked_instance_id": &"missing"}
+		{"trigger_cell": 1, "trigger_instance_id": &"missing"}
 	)
 	var state_source: Dictionary = (state.board[0] as Dictionary)["card"]
 	_check(
@@ -2226,12 +2229,13 @@ func _test_invalid_context_defaults_to_no_effect() -> void:
 		Rules.PLAYER_OWNER,
 		[
 			{
-				"type": Catalog.ACTION_EXILE_ATTACKED_CARD,
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
 				"on_invalid_context": Catalog.STOP_RULE,
 			},
 			{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
 		],
-		{"attacked_cell": 1, "attacked_instance_id": &"missing"}
+		{"trigger_cell": 1, "trigger_instance_id": &"missing"}
 	)
 	_check(
 		int(stopped_source.get("ki", 0)) == 0
@@ -2420,7 +2424,10 @@ func _exile_ability() -> Dictionary:
 		"triggers": [{
 			"event": Catalog.CARD_BE_ATTACKED,
 			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
-			"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+			"actions": [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
 		}],
 	}
 

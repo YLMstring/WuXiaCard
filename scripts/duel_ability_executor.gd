@@ -429,15 +429,16 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner,
 			int(declaration.get("amount", 0)),
-			context
+			context,
+			event_resolver
 		)
-	if action_type == Catalog.ACTION_EXILE_ATTACKED_CARD:
-		return _exile_attacked_card(
+	if action_type == Catalog.ACTION_EXILE_CARD:
+		return _exile_referenced_card(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner,
-			context
+			StringName(declaration.get("card", &"")),
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES:
 		return _temporarily_remove_non_retained_abilities(
@@ -472,7 +473,8 @@ static func _execute_action(
 			StringName(power_snapshot.get("instance_id", &"")),
 			int(power_snapshot.get("owner_id", 0)),
 			declaration.get("amount", null),
-			context
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_ADD_CARD_TO_HAND:
 		return _add_card_to_hand(
@@ -583,7 +585,8 @@ static func _execute_action(
 			source_cell,
 			StringName(declaration.get("card", &"")),
 			StringName(declaration.get("recipient", &"")),
-			context
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_SUMMON_CARD:
 		return _request_summon_card(
@@ -597,7 +600,9 @@ static func _execute_action(
 			state,
 			source_cell,
 			source_instance_id,
-			expected_owner
+			expected_owner,
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_RESUMMON_CARD_IN_PLACE:
 		return _request_card_resummon(
@@ -816,7 +821,8 @@ static func _draw_cards(
 	source_instance_id: StringName,
 	expected_owner: int,
 	requested_count: int,
-	context: Dictionary
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	var owner_id: int = int(source.get("owner_id", 0))
@@ -832,9 +838,10 @@ static func _draw_cards(
 		return _no_effect(source_cell)
 	var hand: Array = state.get_hand(owner_id)
 	var deck: Array = state.decks.get(owner_id, [])
-	var actual_count: int = mini(requested_count, MAX_HAND_SIZE - hand.size())
-	var events: Array[Dictionary] = []
-	for _draw_index: int in range(maxi(actual_count, 0)):
+	var result: Dictionary = _no_effect(source_cell)
+	for _draw_index: int in range(requested_count):
+		if hand.size() >= MAX_HAND_SIZE:
+			break
 		var drawn_card: Dictionary
 		if deck.is_empty():
 			var instance_id: StringName = _make_generated_instance_id(
@@ -849,27 +856,50 @@ static func _draw_cards(
 		else:
 			drawn_card = deck.pop_front()
 		hand.append(drawn_card)
-		events.append({
+		var logical_hand_index: int = hand.size() - 1
+		var drawn_instance_id := StringName(drawn_card.get("instance_id", &""))
+		result["result"] = Catalog.ACTION_RESULT_APPLIED
+		result["events"].append({
 			"type": &"card_drawn",
 			"source_cell": source_cell,
 			"owner_id": owner_id,
 			"card_id": StringName(drawn_card.get("card_id", &"")),
-			"instance_id": StringName(drawn_card.get("instance_id", &"")),
-			"logical_hand_index": hand.size() - 1,
+			"instance_id": drawn_instance_id,
+			"logical_hand_index": logical_hand_index,
+			"card": drawn_card.duplicate(true),
 		})
 		for observer_value: Variant in Revelation.get_future_draw_audiences(state, owner_id):
 			var observer_owner_id: int = int(observer_value)
 			if Revelation.reveal_to(drawn_card, observer_owner_id):
-				events.append({
+				result["events"].append({
 					"type": &"card_revealed",
 					"source_cell": source_cell,
 					"owner_id": owner_id,
 					"observer_owner_id": observer_owner_id,
 					"card_id": StringName(drawn_card.get("card_id", &"")),
-					"instance_id": StringName(drawn_card.get("instance_id", &"")),
-					"logical_hand_index": hand.size() - 1,
+					"instance_id": drawn_instance_id,
+					"logical_hand_index": logical_hand_index,
 				})
-	return _applied(source_cell, events) if actual_count > 0 else _no_effect(source_cell)
+		if event_resolver.is_valid():
+			var drawn_context: Dictionary = context.duplicate(true)
+			drawn_context["trigger_cell"] = -1
+			drawn_context["trigger_instance_id"] = drawn_instance_id
+			drawn_context["trigger_owner_id"] = owner_id
+			drawn_context["trigger_zone"] = Catalog.CARD_ZONE_HAND
+			drawn_context["trigger_logical_index"] = logical_hand_index
+			var snapshots: Dictionary = drawn_context.get("card_reference_snapshots", {}).duplicate(true)
+			snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_card_reference(
+				state,
+				drawn_instance_id
+			)
+			drawn_context["card_reference_snapshots"] = snapshots
+			var resolution_value: Variant = event_resolver.call(
+				Catalog.CARD_AFTER_DRAWN,
+				drawn_context
+			)
+			if resolution_value is Dictionary:
+				_merge_action_resolution(result, resolution_value as Dictionary)
+	return result
 
 
 static func _reveal_hand_cards(
@@ -1126,40 +1156,43 @@ static func _resolve_owner_reference(
 	return 0
 
 
-static func _exile_attacked_card(
+static func _exile_referenced_card(
 	state: StateData,
 	source_cell: int,
-	source_instance_id: StringName,
-	expected_owner: int,
-	context: Dictionary
+	card_reference: StringName,
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
-	var source_slot: Dictionary = _get_card_slot(
-		state,
-		source_cell,
-		source_instance_id,
-		expected_owner
-	)
-	var target_cell: int = int(context.get("attacked_cell", -1))
-	var target_instance_id := StringName(context.get("attacked_instance_id", &""))
-	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
-	if source_slot.is_empty() or target_slot.is_empty():
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	if snapshot.is_empty() and card_reference == Catalog.CARD_REF_TRIGGER_CARD:
+		snapshot = _snapshot_context_trigger_card(state, context)
+	var target_instance_id := StringName(snapshot.get("instance_id", &""))
+	var subject: Dictionary = _locate_snapshot_subject(state, snapshot)
+	if subject.is_empty():
 		return _no_effect(source_cell)
-	var target_card: Dictionary = target_slot.get("card", {})
-	var original_owner: int = int(target_card.get("original_owner", 0))
-	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
-		original_owner = int(target_slot.get("owner", 0))
-	if not state.removed_cards.has(original_owner):
-		state.removed_cards[original_owner] = []
-	(state.removed_cards[original_owner] as Array).append(target_card)
-	state.board[target_cell] = null
-	return _applied(source_cell, [{
-		"type": &"card_exiled",
-		"source_cell": source_cell,
-		"target_cell": target_cell,
-		"owner_id": int(source_slot.get("owner", 0)),
-		"original_owner": original_owner,
-		"instance_id": target_instance_id,
-	}])
+	if card_reference == Catalog.CARD_REF_SELECTED_CARD:
+		subject = Selector.revalidate(
+			state,
+			target_instance_id,
+			StringName(context.get("ability_source_instance_id", &"")),
+			context.get("selected_card_conditions", []) as Array,
+			context
+		)
+		if subject.is_empty():
+			return _no_effect(source_cell)
+	var ability_source_instance_id := StringName(
+		context.get("ability_source_instance_id", &"")
+	)
+	return _exile_subject(
+		state,
+		subject,
+		source_cell,
+		ability_source_instance_id,
+		ability_source_instance_id == target_instance_id,
+		&"ability_exile_card",
+		context,
+		event_resolver
+	)
 
 
 static func _request_trigger_attack(
@@ -1237,7 +1270,8 @@ static func _change_powers(
 	target_instance_id: StringName,
 	expected_owner: int,
 	amount_value: Variant,
-	context: Dictionary
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
 	var target: Dictionary = _get_subject(state, target_instance_id, expected_owner)
 	if target.is_empty():
@@ -1275,16 +1309,20 @@ static func _change_powers(
 		"zone": StringName(target.get("zone", &"")),
 		"logical_index": int(target.get("index", -1)),
 	}]
+	var result: Dictionary = _applied(source_cell, events)
 	if amount < 0 and resulting_powers == [0, 0, 0, 0]:
-		var exile_event: Dictionary = _remove_powerless_subject(
+		var exile_result: Dictionary = _exile_subject(
 			state,
 			target,
 			source_cell,
-			StringName(context.get("ability_source_instance_id", &""))
+			StringName(context.get("ability_source_instance_id", &"")),
+			StringName(context.get("ability_source_instance_id", &"")) == target_instance_id,
+			&"power_reached_zero",
+			context,
+			event_resolver
 		)
-		if not exile_event.is_empty():
-			events.append(exile_event)
-	return _applied(source_cell, events)
+		_merge_action_resolution(result, exile_result)
+	return result
 
 
 static func _resolve_power_change_amount(
@@ -1320,60 +1358,6 @@ static func _resolve_power_change_amount(
 		if card_value is Dictionary:
 			count += 1
 	return count
-
-
-static func _remove_powerless_subject(
-	state: StateData,
-	subject: Dictionary,
-	source_cell: int,
-	ability_source_instance_id: StringName
-) -> Dictionary:
-	var zone := StringName(subject.get("zone", &""))
-	var logical_index: int = int(subject.get("index", -1))
-	var card: Dictionary = subject.get("card", {})
-	var instance_id := StringName(card.get("instance_id", &""))
-	var current_owner: int = int(subject.get("owner_id", 0))
-	if instance_id == &"":
-		return {}
-	if zone == Catalog.CARD_ZONE_BOARD:
-		if (
-			logical_index < 0
-			or logical_index >= state.board.size()
-			or state.board[logical_index] == null
-		):
-			return {}
-		state.board[logical_index] = null
-	elif zone == Catalog.CARD_ZONE_HAND:
-		var hand: Array = state.get_hand(current_owner)
-		if (
-			logical_index < 0
-			or logical_index >= hand.size()
-			or not hand[logical_index] is Dictionary
-			or StringName((hand[logical_index] as Dictionary).get("instance_id", &""))
-			!= instance_id
-		):
-			return {}
-		hand.remove_at(logical_index)
-	else:
-		return {}
-	var original_owner: int = int(card.get("original_owner", 0))
-	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
-		original_owner = current_owner
-	if not state.removed_cards.has(original_owner):
-		state.removed_cards[original_owner] = []
-	(state.removed_cards[original_owner] as Array).append(card)
-	return {
-		"type": &"card_exiled",
-		"source_cell": source_cell,
-		"source_instance_id": ability_source_instance_id,
-		"target_cell": logical_index if zone == Catalog.CARD_ZONE_BOARD else -1,
-		"owner_id": current_owner,
-		"original_owner": original_owner,
-		"instance_id": instance_id,
-		"self_removal": ability_source_instance_id == instance_id,
-		"zone": zone,
-		"logical_index": logical_index,
-	}
 
 
 static func _add_card_to_hand(
@@ -1473,7 +1457,8 @@ static func _return_card_to_hand(
 	source_cell: int,
 	card_reference: StringName,
 	recipient_reference: StringName,
-	context: Dictionary
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
 	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
 	var instance_id := StringName(snapshot.get("instance_id", &""))
@@ -1509,12 +1494,15 @@ static func _return_card_to_hand(
 			return _no_effect(source_cell)
 	var hand: Array = state.get_hand(recipient_owner)
 	if hand.size() >= MAX_HAND_SIZE:
-		return _exile_board_subject(
+		return _exile_subject(
 			state,
 			subject,
 			source_current_cell,
 			StringName(context.get("ability_source_instance_id", &"")),
-			card_reference == Catalog.CARD_REF_ABILITY_SOURCE
+			card_reference == Catalog.CARD_REF_ABILITY_SOURCE,
+			&"return_to_full_hand",
+			context,
+			event_resolver
 		)
 	var old_card: Dictionary = subject.get("card", {})
 	var card_id := StringName(old_card.get("card_id", &""))
@@ -1696,51 +1684,138 @@ static func _exile_self(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
-	expected_owner: int
+	expected_owner: int,
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
 	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
 		return _no_effect(source_cell)
-	return _exile_board_subject(
+	return _exile_subject(
 		state,
 		subject,
 		int(subject.get("index", source_cell)),
 		source_instance_id,
-		true
+		true,
+		&"ability_exile_self",
+		context,
+		event_resolver
 	)
 
 
-static func _exile_board_subject(
+static func _exile_subject(
 	state: StateData,
 	subject: Dictionary,
 	source_cell: int,
-	source_instance_id: StringName,
-	self_removal: bool
+	ability_source_instance_id: StringName,
+	self_removal: bool,
+	exile_reason: StringName,
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
-	var target_cell: int = int(subject.get("index", -1))
-	if target_cell < 0 or target_cell >= state.board.size():
-		return _no_effect(source_cell)
 	var target_card: Dictionary = subject.get("card", {})
 	var target_instance_id := StringName(target_card.get("instance_id", &""))
-	if target_instance_id == &"" or state.board[target_cell] == null:
+	var initial_zone := StringName(subject.get("zone", &""))
+	var initial_index: int = int(subject.get("index", -1))
+	var initial_owner: int = int(subject.get("owner_id", 0))
+	var exile_identity := target_instance_id
+	if exile_identity == &"":
+		exile_identity = StringName(
+			"legacy:%s:%d:%d" % [String(initial_zone), initial_owner, initial_index]
+		)
+	var exile_stack: Array = context.get("exile_in_progress_instance_ids", [])
+	if exile_identity in exile_stack:
 		return _no_effect(source_cell)
+	var current_subject: Dictionary = _locate_exact_subject(
+		state,
+		target_instance_id,
+		initial_zone,
+		initial_index,
+		initial_owner
+	)
+	if current_subject.is_empty() or initial_zone not in [
+		Catalog.CARD_ZONE_BOARD,
+		Catalog.CARD_ZONE_HAND,
+	]:
+		return _no_effect(source_cell)
+	var result: Dictionary = _no_effect(source_cell)
+	if initial_zone == Catalog.CARD_ZONE_BOARD and event_resolver.is_valid():
+		var before_context: Dictionary = context.duplicate(true)
+		var target_cell: int = int(current_subject.get("index", -1))
+		var target_owner: int = int(current_subject.get("owner_id", 0))
+		before_context["trigger_cell"] = target_cell
+		before_context["trigger_instance_id"] = target_instance_id
+		before_context["trigger_owner_id"] = target_owner
+		before_context["trigger_zone"] = initial_zone
+		before_context["trigger_logical_index"] = target_cell
+		before_context["exile_reason"] = exile_reason
+		var nested_stack: Array = exile_stack.duplicate()
+		nested_stack.append(exile_identity)
+		before_context["exile_in_progress_instance_ids"] = nested_stack
+		var snapshots: Dictionary = before_context.get("card_reference_snapshots", {}).duplicate(true)
+		snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_location(current_subject)
+		before_context["card_reference_snapshots"] = snapshots
+		var before_value: Variant = event_resolver.call(
+			Catalog.CARD_BEFORE_EXILED,
+			before_context
+		)
+		if before_value is Dictionary:
+			_merge_action_resolution(result, before_value as Dictionary)
+	current_subject = _locate_exact_subject(
+		state,
+		target_instance_id,
+		initial_zone,
+		initial_index,
+		initial_owner
+	)
+	if current_subject.is_empty():
+		return result
+	var zone := StringName(current_subject.get("zone", &""))
+	var logical_index: int = int(current_subject.get("index", -1))
+	var current_owner: int = int(current_subject.get("owner_id", 0))
+	target_card = current_subject.get("card", {})
+	if zone == Catalog.CARD_ZONE_BOARD:
+		if (
+			logical_index < 0
+			or logical_index >= state.board.size()
+			or state.board[logical_index] == null
+		):
+			return result
+		state.board[logical_index] = null
+	elif zone == Catalog.CARD_ZONE_HAND:
+		var hand: Array = state.get_hand(current_owner)
+		if (
+			logical_index < 0
+			or logical_index >= hand.size()
+			or not hand[logical_index] is Dictionary
+			or StringName((hand[logical_index] as Dictionary).get("instance_id", &""))
+			!= target_instance_id
+		):
+			return result
+		hand.remove_at(logical_index)
+	else:
+		return result
 	var original_owner: int = int(target_card.get("original_owner", 0))
 	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
-		original_owner = int(subject.get("owner_id", 0))
+		original_owner = current_owner
 	if not state.removed_cards.has(original_owner):
 		state.removed_cards[original_owner] = []
 	(state.removed_cards[original_owner] as Array).append(target_card)
-	state.board[target_cell] = null
-	return _applied(source_cell, [{
+	var exile_result: Dictionary = _applied(source_cell, [{
 		"type": &"card_exiled",
 		"source_cell": source_cell,
-		"source_instance_id": source_instance_id,
-		"target_cell": target_cell,
-		"owner_id": int(subject.get("owner_id", 0)),
+		"source_instance_id": ability_source_instance_id,
+		"target_cell": logical_index if zone == Catalog.CARD_ZONE_BOARD else -1,
+		"owner_id": current_owner,
 		"original_owner": original_owner,
 		"instance_id": target_instance_id,
 		"self_removal": self_removal,
+		"zone": zone,
+		"logical_index": logical_index,
+		"exile_reason": exile_reason,
 	}])
+	_merge_action_resolution(result, exile_result)
+	return result
 
 
 static func _spend_all_ki(
@@ -2383,14 +2458,89 @@ static func _snapshot_card_reference(
 	var location: Dictionary = Selector.locate_card(state, instance_id)
 	if location.is_empty():
 		return {}
+	return _snapshot_location(location)
+
+
+static func _snapshot_location(location: Dictionary) -> Dictionary:
 	var card: Dictionary = location.get("card", {})
 	return {
-		"instance_id": instance_id,
+		"instance_id": StringName(card.get("instance_id", &"")),
 		"card_id": StringName(card.get("card_id", &"")),
 		"owner_id": int(location.get("owner_id", 0)),
 		"zone": StringName(location.get("zone", &"")),
 		"index": int(location.get("index", -1)),
 	}
+
+
+static func _snapshot_context_trigger_card(
+	state: StateData,
+	context: Dictionary
+) -> Dictionary:
+	var trigger_cell: int = int(context.get("trigger_cell", -1))
+	if trigger_cell < 0:
+		trigger_cell = int(context.get("attacked_cell", -1))
+	var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
+	if trigger_instance_id == &"":
+		trigger_instance_id = StringName(context.get("attacked_instance_id", &""))
+	var trigger_owner: int = int(context.get("trigger_owner_id", 0))
+	if trigger_owner == 0:
+		trigger_owner = int(context.get("attacked_owner_id", 0))
+	var subject: Dictionary = _locate_exact_subject(
+		state,
+		trigger_instance_id,
+		Catalog.CARD_ZONE_BOARD,
+		trigger_cell,
+		trigger_owner
+	)
+	return _snapshot_location(subject) if not subject.is_empty() else {}
+
+
+static func _locate_snapshot_subject(state: StateData, snapshot: Dictionary) -> Dictionary:
+	return _locate_exact_subject(
+		state,
+		StringName(snapshot.get("instance_id", &"")),
+		StringName(snapshot.get("zone", &"")),
+		int(snapshot.get("index", -1)),
+		int(snapshot.get("owner_id", 0))
+	)
+
+
+static func _locate_exact_subject(
+	state: StateData,
+	instance_id: StringName,
+	zone: StringName,
+	index: int,
+	owner_id: int
+) -> Dictionary:
+	if instance_id != &"":
+		return Selector.locate_card(state, instance_id)
+	if zone == Catalog.CARD_ZONE_BOARD:
+		if index < 0 or index >= state.board.size() or state.board[index] == null:
+			return {}
+		var slot: Dictionary = state.board[index]
+		var card: Dictionary = slot.get("card", {})
+		if StringName(card.get("instance_id", &"")) != &"":
+			return {}
+		return {
+			"zone": zone,
+			"owner_id": int(slot.get("owner", 0)),
+			"index": index,
+			"card": card,
+		}
+	if zone == Catalog.CARD_ZONE_HAND and owner_id in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var hand: Array = state.get_hand(owner_id)
+		if index < 0 or index >= hand.size() or not hand[index] is Dictionary:
+			return {}
+		var card: Dictionary = hand[index]
+		if StringName(card.get("instance_id", &"")) != &"":
+			return {}
+		return {
+			"zone": zone,
+			"owner_id": owner_id,
+			"index": index,
+			"card": card,
+		}
+	return {}
 
 
 static func _get_reference_snapshot(
@@ -2495,6 +2645,26 @@ static func _empty_result() -> Dictionary:
 		"exiles": [],
 		"source_cell": -1,
 	}
+
+
+static func _merge_action_resolution(target: Dictionary, source: Dictionary) -> void:
+	for key: StringName in [
+		&"events",
+		&"attack_requests",
+		&"flip_requests",
+		&"summon_requests",
+		&"extra_turn_requests",
+		&"flip_prevention_requests",
+		&"captures",
+		&"exiles",
+	]:
+		if not target.has(key):
+			target[key] = []
+		var source_values: Variant = source.get(key, [])
+		if source_values is Array:
+			(target[key] as Array).append_array(source_values as Array)
+	if StringName(source.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED:
+		target["result"] = Catalog.ACTION_RESULT_APPLIED
 
 
 static func _no_effect(source_cell: int) -> Dictionary:

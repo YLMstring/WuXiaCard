@@ -304,6 +304,24 @@ static func _conditions_match(
 				or attacker_owner == int(source_slot.get("owner", 0))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_ATTACKER_CARD_IS_OTHER_ALLY:
+			var source_slot: Dictionary = state.board[source_cell]
+			var attacker_owner: int = int(context.get("attacker_owner_id", 0))
+			if (
+				attacker_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or attacker_owner != int(source_slot.get("owner", 0))
+				or StringName(context.get("attacker_instance_id", &""))
+				== StringName(card.get("instance_id", &""))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_DRAWN_CARD_IS_ENEMY:
+			var source_slot: Dictionary = state.board[source_cell]
+			var drawn_owner: int = int(context.get("trigger_owner_id", 0))
+			if (
+				drawn_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or drawn_owner == int(source_slot.get("owner", 0))
+			):
+				return false
 		elif condition_type == Catalog.CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE:
 			if not _attack_flipped_ally_in_range(
 				state,

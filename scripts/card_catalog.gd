@@ -19,6 +19,8 @@ const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
+const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
+const CARD_AFTER_DRAWN: StringName = &"card_after_drawn"
 const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
@@ -37,6 +39,8 @@ const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
 const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revealed_to_self"
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
+const CONDITION_ATTACKER_CARD_IS_OTHER_ALLY: StringName = &"attacker_card_is_other_ally"
+const CONDITION_DRAWN_CARD_IS_ENEMY: StringName = &"drawn_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
@@ -62,7 +66,7 @@ const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_ha
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
-const ACTION_EXILE_ATTACKED_CARD: StringName = &"exile_attacked_card"
+const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
@@ -140,6 +144,8 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_AFTER_SUMMONED,
 	TRIGGER_CARD_AFTER_ATTACK,
 	CARD_BE_ATTACKED,
+	CARD_BEFORE_EXILED,
+	CARD_AFTER_DRAWN,
 	CARD_BEFORE_MOVED,
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
@@ -160,6 +166,8 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_REVEALED_TO_SELF,
 	CONDITION_TRIGGER_CARD_WAS_ENEMY,
 	CONDITION_ATTACKER_CARD_IS_ENEMY,
+	CONDITION_ATTACKER_CARD_IS_OTHER_ALLY,
+	CONDITION_DRAWN_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 	CONDITION_ATTACK_FLIPPED_ENEMY,
 	CONDITION_ATTACKED_CARD_IS_SELF,
@@ -190,7 +198,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD, CARD_ZONE_REMOVED]
 const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DRAW_CARDS,
-	ACTION_EXILE_ATTACKED_CARD,
+	ACTION_EXILE_CARD,
 	ACTION_ATTACK_TRIGGER_CARD,
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
@@ -1794,7 +1802,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"triggers": [{
 										"event": CARD_BE_ATTACKED,
 										"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
-										"actions": [{"type": ACTION_EXILE_ATTACKED_CARD}],
+										"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
 									}],
 								},
 							},
@@ -1836,7 +1844,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
 						],
 						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
+							{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD},
 						],
 					},
 				],
@@ -1863,10 +1871,17 @@ const _CARD_DEFINITIONS: Dictionary = {
 							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
 						],
 						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
+							{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD},
 						],
 					},
 				],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_ATTACK,
+					"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_OTHER_ALLY}],
+					"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+				}],
 			},
 		],
 	},
@@ -1890,10 +1905,25 @@ const _CARD_DEFINITIONS: Dictionary = {
 							{"type": CONDITION_ATTACKER_CARD_IS_SELF},
 						],
 						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
+							{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD},
 						],
 					},
 				],
+			},
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_AFTER_ATTACK,
+					"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_OTHER_ALLY}],
+					"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+				}],
+			},
+			{
+				"retained_on_flip": true,
+				"triggers": [{
+					"event": CARD_AFTER_DRAWN,
+					"conditions": [{"type": CONDITION_DRAWN_CARD_IS_ENEMY}],
+					"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+				}],
 			},
 		],
 	},
@@ -3231,20 +3261,15 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
 		"flavor": "棋仙派剑法，六六三十六招竟无一招实招，那是雷震之前的闪电，把敌人弄得头晕眼花之后，跟着而上的便是雷轰霹雳的猛攻。",
 		"powers": [7, 7, 7, 7],
-		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
+		"abilities": [
+			{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0}]},
 			{
 				"retained_on_flip": true,
-				"triggers": [
-					{
-						"event": CARD_BE_ATTACKED,
-						"conditions": [
-							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
-						],
-					},
-				],
+				"triggers": [{
+					"event": CARD_BE_ATTACKED,
+					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+				}],
 			},
 		],
 	},
@@ -3258,20 +3283,22 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我被移除时，抽一张牌。判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
 		"flavor": "棋仙派剑法，六六三十六招竟无一招实招，那是雷震之前的闪电，把敌人弄得头晕眼花之后，跟着而上的便是雷轰霹雳的猛攻。",
 		"powers": [7, 7, 7, 7],
-		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
+		"abilities": [
+			{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0}]},
 			{
 				"retained_on_flip": true,
-				"triggers": [
-					{
-						"event": CARD_BE_ATTACKED,
-						"conditions": [
-							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
-						],
-					},
-				],
+				"triggers": [{
+					"event": CARD_BE_ATTACKED,
+					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+				}],
+			},
+			{
+				"triggers": [{
+					"event": CARD_BEFORE_EXILED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+				}],
 			},
 		],
 	},
@@ -3285,21 +3312,24 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "敌方攻击时不分敌我。我被移除时，抽一张牌。判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
 		"flavor": "一字电剑每招之出，皆如闪电横空，耀人眼目，令人惊心动魄，神驰目眩，难以抵挡剑法的后着。",
 		"powers": [7, 7, 7, 7],
-		"abilities": [{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0,}],},
+		"abilities": [
+			{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0}]},
 			{
 				"retained_on_flip": true,
-				"triggers": [
-					{
-						"event": CARD_BE_ATTACKED,
-						"conditions": [
-							{"type": CONDITION_ATTACKED_CARD_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_EXILE_ATTACKED_CARD},
-						],
-					},
-				],
+				"triggers": [{
+					"event": CARD_BE_ATTACKED,
+					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+				}],
 			},
+			{
+				"triggers": [{
+					"event": CARD_BEFORE_EXILED,
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+					"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+				}],
+			},
+			{"modifiers": [{"type": MODIFIER_ENEMY_ATTACKS_ALL}]},
 		],
 	},
 	&"KuiHua1": {
@@ -3875,6 +3905,13 @@ static func _validate_action(
 			action.get("amount", null),
 			errors
 		)
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s action %s requires a known card reference"
+				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_EXILE_CARD:
+		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
 				"Card %s %s action %s requires a known card reference"

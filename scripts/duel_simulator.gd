@@ -556,6 +556,9 @@ static func _resolve_attack_target(
 		"attacked_cell": attacked_cell,
 		"attacked_instance_id": attacked_instance_id,
 		"attacked_owner_id": int(attacked_slot.get("owner", 0)),
+		"trigger_cell": attacked_cell,
+		"trigger_instance_id": attacked_instance_id,
+		"trigger_owner_id": int(attacked_slot.get("owner", 0)),
 		"attack_reason": reason,
 	}
 	result["events"].append({

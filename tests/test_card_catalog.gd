@@ -211,7 +211,13 @@ func _test_ability_declarations() -> void:
 		var removal_trigger: Dictionary = (removal.get("triggers", []) as Array)[0]
 		_check(StringName(removal_trigger.get("event", &"")) == Catalog.CARD_BE_ATTACKED, "LeiZHenJian1 reacts when attacked")
 		_check(removal_trigger.get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}], "LeiZHenJian1 only removes itself when attacked")
-		_check(removal_trigger.get("actions", []) == [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}], "LeiZHenJian1 exiles the attacked self")
+		_check(
+			removal_trigger.get("actions", []) == [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
+			"LeiZHenJian1 exiles the attacked self"
+		)
 	for card_id: StringName in [&"HuZhuaJueHuSHou2"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])
@@ -224,7 +230,13 @@ func _test_ability_declarations() -> void:
 		var trigger: Dictionary = (ability.get("triggers", []) as Array)[0]
 		_check(StringName(trigger.get("event", &"")) == Catalog.CARD_BE_ATTACKED, "%s reacts before an attack resolves" % card_id)
 		_check(trigger.get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}], "%s only replaces its own attacks" % card_id)
-		_check(trigger.get("actions", []) == [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}], "%s exiles the attacked card" % card_id)
+		_check(
+			trigger.get("actions", []) == [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
+			"%s exiles the attacked card" % card_id
+		)
 	for card_id: StringName in [&"TuNaShu2", &"TuNaShu1"]:
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var abilities: Array = definition.get("abilities", [])

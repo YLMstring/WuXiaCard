@@ -111,7 +111,10 @@ physical copy still receives a distinct runtime ID.
             {"type": CONDITION_ATTACKER_CARD_IS_SELF},
         ],
         "actions": [
-            {"type": ACTION_EXILE_ATTACKED_CARD},
+            {
+                "type": ACTION_EXILE_CARD,
+                "card": CARD_REF_TRIGGER_CARD,
+            },
         ],
     }],
 }

@@ -1439,6 +1439,8 @@ func _present_hand_addition_event(
 	var owner_id: int = int(event.get("owner_id", 0))
 	var instance_id := StringName(event.get("instance_id", &""))
 	var card_data: Dictionary = _get_logical_hand_card_by_instance(owner_id, instance_id)
+	if card_data.is_empty() and event.get("card", null) is Dictionary:
+		card_data = (event.get("card", {}) as Dictionary).duplicate(true)
 	var target_slot: PanelContainer = _get_first_empty_hand_slot(_get_hand_for_owner(owner_id))
 	if card_data.is_empty() or target_slot == null:
 		return

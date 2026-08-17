@@ -56,6 +56,7 @@ func _run() -> void:
 	await _check_cangsong_reaction_presentation()
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
+	await _check_intercepted_draw_uses_transient_card_view()
 	await _check_manual_activate_move()
 	await _check_KuiHua1_extra_turn_presentation()
 	await _check_ability_pulse_sequencing()
@@ -838,6 +839,65 @@ func _check_opponent_draw_visibility() -> void:
 	await process_frame
 
 
+func _check_intercepted_draw_uses_transient_card_view() -> void:
+	var draw_duel: Node = _instantiate_duel()
+	draw_duel.set("testing_mode", true)
+	root.add_child(draw_duel)
+	await process_frame
+	await process_frame
+	draw_duel.debug_set_fast_mode(true)
+	_check(
+		await draw_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false),
+		"Transient-draw fixture opens one physical hand slot"
+	)
+	var transient_card: Dictionary = Catalog.create_instance(
+		&"LeiZHenJian2",
+		Rules.PLAYER_OWNER,
+		&"transient_intercepted_draw"
+	)
+	var events: Array = [
+		{
+			"type": &"card_drawn",
+			"owner_id": Rules.PLAYER_OWNER,
+			"card_id": &"LeiZHenJian2",
+			"instance_id": &"transient_intercepted_draw",
+			"logical_hand_index": 4,
+			"card": transient_card.duplicate(true),
+		},
+		{
+			"type": &"card_exiled",
+			"owner_id": Rules.PLAYER_OWNER,
+			"original_owner": Rules.PLAYER_OWNER,
+			"instance_id": &"transient_intercepted_draw",
+			"target_cell": -1,
+			"zone": Catalog.CARD_ZONE_HAND,
+			"logical_index": 4,
+		},
+	]
+	await draw_duel.call(
+		"_present_transition_events",
+		events,
+		Rules.PLAYER_OWNER
+	)
+	await process_frame
+	var trace: Array[StringName] = draw_duel.debug_get_presentation_trace()
+	_check(
+		trace.size() >= 3
+		and trace.slice(trace.size() - 3)
+		== [&"card_drawn", &"post_draw_gap", &"card_exiled"],
+		"An intercepted draw animates from its event snapshot before exile"
+	)
+	var hand_view_ids: Array[StringName] = draw_duel.debug_get_hand_view_instance_ids(
+		Rules.PLAYER_OWNER
+	)
+	_check(
+		&"transient_intercepted_draw" not in hand_view_ids,
+		"The transient intercepted draw view is removed after its exile animation"
+	)
+	draw_duel.queue_free()
+	await process_frame
+
+
 func _check_normal_opponent_concealment(duel: Node) -> void:
 	var opponent_cards: Array[Control] = _cards_below(duel.get_node("DuelCanvas/OpponentHand"))
 	var all_concealed: bool = not opponent_cards.is_empty()
@@ -1406,7 +1466,10 @@ func _check_cangsong_reaction_presentation() -> void:
 		"triggers": [{
 			"event": Catalog.CARD_BE_ATTACKED,
 			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
-			"actions": [{"type": Catalog.ACTION_EXILE_ATTACKED_CARD}],
+			"actions": [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
 		}],
 	})
 	var cang_view: Control = _cards_below(exile_duel.get_node("DuelCanvas/PlayerHand"))[0]
