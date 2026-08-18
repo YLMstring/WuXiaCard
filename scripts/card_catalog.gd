@@ -2010,7 +2010,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
-		"powers": [8, 3, 8, 3],
+		"powers": [7, 3, 7, 3],
 		"abilities": [RAOZHI_LOCKED_ATTACK_MODIFIERS],
 	},
 	&"RaoZhiRouJian3": {
@@ -2022,7 +2022,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
-		"powers": [8, 3, 8, 3],
+		"powers": [7, 3, 7, 3],
 		"abilities": [
 			RAOZHI_LOCKED_ATTACK_MODIFIERS,
 			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
@@ -2037,7 +2037,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "翻面前，将我移除，我将其它牌翻面后，失去此效果。锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。你使用友方的指定效果后，我发起攻击。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
-		"powers": [8, 3, 8, 3],
+		"powers": [7, 3, 7, 3],
 		"abilities": [
 			RAOZHI_LOCKED_ATTACK_MODIFIERS,
 			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
