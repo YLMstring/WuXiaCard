@@ -42,6 +42,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"heisha_xingzhe", "name": "衡山弟子", "level": 3, "deck": [&"YunWu13Shi2", &"TaiZuChangQuan", &"YiJianLuo9Yan2", &"JianFaQinYin2", &"TuNaShu1"]},
 	{"id": &"beiling_shuangying", "name": "恒山弟子", "level": 4, "deck": [&"HenShanJianZhen2", &"JinZhenDuJie2", &"WanHuaJian2", &"MianLiCangZhen2", &"TuNaShu2"]},
 	{"id": &"yanbo_yuke", "name": "嵩山弟子", "level": 4, "deck": [&"WanYueChaoZong2", &"TaiZuChangQuan", &"DaSongYangZhang2", &"TianWaiYuLong2", &"TuNaShu2"]},
+	{"id": &"cangyan_hufa2", "name": "武当弟子", "level": 5, "deck": [&"HuZhuaJueHuSHou2", &"TiYunZong3", &"WuDangMianZhang3", &"RaoZhiRouJian2", &"ShenMen13Jian2"]},
 	{"id": &"cangyan_hufa", "name": "玉玑子", "level": 5, "deck": [&"LaiHeQinQuan2", &"WuDaFuJian2", &"QiXinLuoChangKong2", &"TaiShan18Pan3", &"WuDaFuJian3"]},
 	{"id": &"tingyu_zhangshi", "name": "费斌", "level": 5, "deck": [&"WanYueChaoZong2", &"DaSongYangZhang3", &"DaSongYangZhang2", &"TianWaiYuLong3", &"TuNaShu2"]},
 	{"id": &"jinling_kuaijian", "name": "刘正风", "level": 6, "deck": [&"YunWu13Shi3", &"YunWu13Shi2", &"YiJianLuo9Yan3", &"YiJianLuo9Yan2", &"TuNaShu3"]},
