@@ -58,7 +58,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_491.png",
 		"sect": "恒山",
 		"tier": 4,
-		"weapon": "轻剑/剑阵",
+		"weapon": "轻剑/阵法",
 		"description": "恒山派擅长保护友方，防守反击。",
 		"flavor": "恒山剑法破绽极少，若言守御之严，仅逊于武当派的太极剑法，但偶尔忽出攻招，却又在太极剑法之上。",
 	},
