@@ -3503,7 +3503,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"tier": 6,
 		"weapon": "术数",
 		"description": "锁定：翻面前，将我移除。",
-		"flavor": "对局开始时，后行动的一方所占据的八卦方位。",
+		"flavor": "对局开始时，后行动的一方以逸待劳，所占据的八卦方位。",
 		"powers": [-1, -1, -1, -1],
 		"abilities": [],
 	},
