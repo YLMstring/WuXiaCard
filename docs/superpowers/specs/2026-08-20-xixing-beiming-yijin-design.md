@@ -70,7 +70,7 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
 目标，直到来源内力耗尽。
 
 每次转移前，目标必须仍存在、仍为来源当前所属方的其它友方牌，并仍有
-可耗内力的 activation。失效目标从后续轮次跳过，不补入快照外的新牌。
+当前生效的耗内力能力。失效目标从后续轮次跳过，不补入快照外的新牌。
 若一整轮没有合法接收者，动作停止并让来源保留剩余内力。
 
 ### 既有动作扩展
@@ -90,6 +90,12 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
 内力。现有 `card_uses_ki` 与内力珠显示语义保持不变，避免借本规则改动既有
 界面表现。
 
+新增数据驱动的 `CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE`。它接收
+与转移动作相同的 `resource`、`fallback_resource` 和 `amount`，只判断候选
+牌当前是否至少能提供首选资源或回退资源，不改变状态。吸取手牌时先用这个
+条件过滤，再应用 `limit = 1`，因此最左候选若无内力且不能提供点数，会继续
+向右选择下一张合法牌。执行转移动作时仍按相同规则重新验证精确实例。
+
 新增 `MODIFIER_SELF_ATTACKS_ALL`。携带者自己的普通攻击与指定攻击可将
 敌方和友方都作为目标。攻击者友方被成功攻击后，沿用通用规则翻成攻击者
 的敌方。该 modifier 不影响其它牌的攻击。
@@ -102,14 +108,15 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
 
 在来源当前所属方的回合开始时：
 
-1. 用手牌选择器选择当前所属方最左侧的一张手牌。
+1. 用手牌选择器从左到右寻找当前所属方第一张存在可转移资源的手牌。
 2. 对它执行一次 `ACTION_TRANSFER_CARD_RESOURCE`。
 3. 再用场上选择器按格子 `0→8` 快照所有与来源相邻的其它友方。
 4. 按快照顺序逐张执行相同转移动作。
 
 每张目标独立判断：目标有内力时转移一点内力；目标没有内力时改为吸取
-一点点数。四边 `-1` 的无内力目标跳过点数分支；四边 `-1` 的有内力目标
-仍正常转移内力。每张目标完全结算后才处理下一张。
+一点点数。四边 `-1` 的无内力目标以及没有任何可减少点数的普通目标在
+选择阶段即不合法；手牌选择继续向右寻找下一张合法牌。四边 `-1` 的有
+内力目标仍正常转移内力。每张目标完全结算后才处理下一张。
 
 相邻目标轮到结算时必须仍与来源相邻。移动、离场、翻面后变成敌方或其它
 失效情况都令该快照目标跳过，不顺延选取新目标。
@@ -175,6 +182,220 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
 翻到非最初一方时不触发。该锁定条目持续保留，以后每次重新回到最初一方
 都能再次触发。
 
+## 完整 catalog declaration
+
+下面的声明是实现时写入 `card_catalog.gd` 的完整目标形态。除注册对应的
+action、condition、resource 和 modifier 常量外，不允许在执行器中补充任何
+卡名隐式语义。
+
+```gdscript
+const RESOURCE_KI: StringName = &"ki"
+const RESOURCE_POWERS: StringName = &"powers"
+
+const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
+const ACTION_DISTRIBUTE_KI: StringName = &"distribute_ki"
+const CONDITION_SELECTED_CARD_CAN_SPEND_KI: StringName = &"selected_card_can_spend_ki"
+const CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE: StringName = (
+	&"selected_card_can_transfer_resource"
+)
+const MODIFIER_SELF_ATTACKS_ALL: StringName = &"self_attacks_all"
+
+const XIXING_BEIMING_TRANSFER: Dictionary = {
+	"type": ACTION_TRANSFER_CARD_RESOURCE,
+	"from": CARD_REF_SELECTED_CARD,
+	"to": CARD_REF_ABILITY_SOURCE,
+	"amount": 1,
+	"resource": RESOURCE_KI,
+	"fallback_resource": RESOURCE_POWERS,
+}
+
+const XIXING_BEIMING_TURN_ABSORB: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_START_OWNER_TURN,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+							"amount": 1,
+							"resource": RESOURCE_KI,
+							"fallback_resource": RESOURCE_POWERS,
+						},
+					],
+					"limit": 1,
+				},
+				"actions": [XIXING_BEIMING_TRANSFER],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						{
+							"type": CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+							"amount": 1,
+							"resource": RESOURCE_KI,
+							"fallback_resource": RESOURCE_POWERS,
+						},
+					],
+				},
+				"actions": [XIXING_BEIMING_TRANSFER],
+			},
+		],
+	}],
+}
+
+const XIXING_BEIMING_ZERO_DEFENSE: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+		"value": 0,
+	}],
+}
+
+const XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_DISTRIBUTE_KI,
+				"from": CARD_REF_ABILITY_SOURCE,
+				"amount": 1,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD, CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_CAN_SPEND_KI},
+					],
+				},
+			},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
+	}],
+}
+
+const XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_TURN_ABSORB,
+			},
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_ZERO_DEFENSE,
+			},
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE,
+			},
+		],
+	}],
+}
+
+const XIXING_BEIMING_ENTRY_FLIP: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FLIP_SELF,
+			"new_owner": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+		}],
+	}],
+}
+
+const XIXING_SELF_ATTACKS_ALL: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{"type": MODIFIER_SELF_ATTACKS_ALL}],
+}
+
+const YIJIN_HAND_BATCH: StringName = &"yijin_all_hand"
+
+const YIJIN_STRENGTHEN_HAND_ACTIONS: Array = [
+	{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_HAND],
+			"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+		},
+		"actions": [
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": CARD_REF_SELECTED_CARD,
+			},
+			{
+				"type": ACTION_GAIN_KI,
+				"amount": 1,
+				"card": CARD_REF_SELECTED_CARD,
+			},
+		],
+		"power_change_batch_group": YIJIN_HAND_BATCH,
+	},
+	{"type": ACTION_DRAW_CARDS, "amount": 1},
+]
+
+const YIJIN_AFTER_SUMMONED: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": YIJIN_STRENGTHEN_HAND_ACTIONS,
+	}],
+}
+
+const YIJIN_RETURNED_TO_ORIGINAL: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF},
+		],
+		"actions": YIJIN_STRENGTHEN_HAND_ACTIONS,
+	}],
+}
+```
+
+对应卡牌定义中的最终 `abilities` 数组为：
+
+```gdscript
+&"XiXinDaFa4": {
+	# 其它现有字段保持不变。
+	"abilities": [
+		XIXING_SELF_ATTACKS_ALL,
+		XIXING_BEIMING_ENTRY_FLIP,
+		XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT,
+	],
+},
+
+&"XiXinDaFa5": {
+	# 其它现有字段保持不变。
+	"abilities": [
+		XIXING_BEIMING_ENTRY_FLIP,
+		XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT,
+	],
+},
+
+&"YiJJ5": {
+	# 其它现有字段保持不变。
+	"abilities": [
+		YIJIN_AFTER_SUMMONED,
+		YIJIN_RETURNED_TO_ORIGINAL,
+	],
+},
+```
+
 ## 事件与展示
 
 通用动作只产生纯数据事件。控制器继续消费已有的 `ki_changed`、
@@ -191,6 +412,8 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
 - 三张卡的完整能力条目、保留标记、隔离的自身翻面后声明和 catalog 校验；
 - 内力优先、点数回退、来源实际增长、部分零边、四边归零移除；
 - 四边 `-1` 无法被吸取点数，但可以被吸取内力；
+- 手牌最左候选没有可转移资源时继续向右，直到找到第一张可吸取牌或耗尽
+  手牌候选；
 - 最左手牌优先、相邻友方 `0→8` 顺序和逐牌重验证；
 - 内力分配按场上后手牌顺序循环、失效目标跳过、无人接收时保留内力；
 - 可耗内力资格同时识别有凤来仪式主动费用、太岳三青峰式自动触发动作、
