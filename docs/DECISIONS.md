@@ -6,6 +6,11 @@ These decisions were explicitly established during development and should not be
 
 - The game is portrait-first and intended for mobile.
 - Board cells use row-major order, left-to-right then top-to-bottom.
+- Once the first actor is known, the later side starts with two fresh
+  `BaGuaFangWei` cards on one uniformly selected orthogonally adjacent cell
+  pair. All 12 unordered pairs are equally likely. These are static initial
+  cards, not summons: they emit no entrance events or attacks and appear
+  immediately when the duel screen opens.
 - Card powers are top, right, bottom, left.
 - The center board is visually separated from two five-slot hands. Empty slots remain; cards do not grow or repack as hand size falls.
 - Mouse and touch should produce equivalent gameplay behavior.
@@ -57,6 +62,8 @@ These decisions were explicitly established during development and should not be
 - A successful flip means ownership actually changes.
 - Abilities default to lost on flip. Catalog authors do not need to declare the common default.
 - Only an ability with `retained_on_flip = true` survives.
+- `BaGuaFangWei` uses a retained locked before-flip ability to exile itself, so
+  the pending flip never changes its ownership.
 - Once an ability is lost, later ownership changes do not restore it.
 - Ki remains on the card when abilities are lost.
 

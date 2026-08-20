@@ -51,6 +51,9 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 ### Rules
 
+- `duel_opening_setup.gd` — pure initial-board construction. It owns the stable
+  12-pair orthogonal adjacency space, seeded uniform selection, and the two
+  fresh later-owner `BaGuaFangWei` instances. It emits no gameplay events.
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
@@ -68,6 +71,12 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 - `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
+
+Before constructing `DuelState`, the controller chooses the first owner and
+passes it plus a dedicated layout RNG to `DuelOpeningSetup`. The returned board
+already contains the two later-owner Bagua cards. Board views reconcile from
+that state without a summon transition, and the replay record snapshots it
+before the first action.
 
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most

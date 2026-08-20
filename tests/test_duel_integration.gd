@@ -25,6 +25,7 @@ func _run() -> void:
 		fixture_store.create_default_profile()
 	)
 	_check(fixture_store.save_profile(fixture_profile), "Duel integration fixture saves")
+	await _check_opening_bagua_layout()
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
@@ -702,6 +703,57 @@ func _expected_total_card_count() -> int:
 		).size()
 		+ Decks.get_side_deck_card_ids(Decks.get_opponent_card_ids()).size()
 	)
+
+
+func _check_opening_bagua_layout() -> void:
+	var opening_duel: Node = DUEL_SCENE.instantiate()
+	opening_duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	opening_duel.set("testing_mode", true)
+	opening_duel.set("player_hand_shuffle_seed", -1)
+	opening_duel.set("opponent_hand_shuffle_seed", -1)
+	opening_duel.set("opening_layout_seed", 8192)
+	opening_duel.set("starting_owner_id", Rules.PLAYER_OWNER)
+	root.add_child(opening_duel)
+	await process_frame
+	await process_frame
+	var state: Variant = opening_duel.get("duel_state")
+	var occupied: Array[int] = []
+	for cell: int in range(state.board.size()):
+		if state.board[cell] != null:
+			occupied.append(cell)
+	_check(occupied.size() == 2, "Production duel starts with exactly two Bagua cards")
+	if occupied.size() == 2:
+		var row_distance: int = absi(
+			floori(float(occupied[0]) / 3.0) - floori(float(occupied[1]) / 3.0)
+		)
+		var column_distance: int = absi(occupied[0] % 3 - occupied[1] % 3)
+		_check(row_distance + column_distance == 1, "Production opening Bagua cards are adjacent")
+		for cell: int in occupied:
+			var slot: Dictionary = state.board[cell]
+			var card: Dictionary = slot.get("card", {})
+			_check(
+				int(slot.get("owner", 0)) == Rules.OPPONENT_OWNER
+				and StringName(card.get("card_id", &"")) == &"BaGuaFangWei"
+				and int(card.get("original_owner", 0)) == Rules.OPPONENT_OWNER,
+				"Player-first production setup gives each Bagua card to the opponent"
+			)
+			_check(
+				opening_duel.debug_has_board_card_view(cell),
+				"Opening Bagua is already statically visible when the duel appears"
+			)
+	_check(opening_duel.debug_first_empty_cell() >= 0, "Opening Bagua leaves seven playable cells")
+	_check(
+		opening_duel.debug_get_presentation_trace().is_empty(),
+		"Opening Bagua placement emits no summon or attack presentation"
+	)
+	var replay_record: Variant = opening_duel.get("_replay_record")
+	var replay_initial_state: Variant = replay_record.get_initial_state()
+	_check(
+		replay_initial_state != null and replay_initial_state.board == state.board,
+		"Replay snapshots the exact initialized Bagua layout"
+	)
+	opening_duel.queue_free()
+	await process_frame
 
 
 func _check_duplicate_enemy_instances() -> void:
@@ -1650,6 +1702,7 @@ func _instantiate_duel() -> Node:
 	duel.set("testing_mode", false)
 	duel.set("player_hand_shuffle_seed", -1)
 	duel.set("opponent_hand_shuffle_seed", -1)
+	duel.set("opening_layout_seed", -1)
 	return duel
 
 

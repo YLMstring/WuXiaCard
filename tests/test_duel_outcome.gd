@@ -15,6 +15,7 @@ func _run() -> void:
 	var abandoned_outcome: Dictionary = {"value": &""}
 	var active_duel: Node = DUEL_SCENE.instantiate()
 	active_duel.set("testing_mode", true)
+	active_duel.set("opening_layout_seed", -1)
 	root.add_child(active_duel)
 	await process_frame
 	active_duel.return_requested.connect(
@@ -28,6 +29,7 @@ func _run() -> void:
 	var victory_outcome: Dictionary = {"value": &"", "count": 0}
 	var victory_duel: Node = DUEL_SCENE.instantiate()
 	victory_duel.set("testing_mode", true)
+	victory_duel.set("opening_layout_seed", -1)
 	root.add_child(victory_duel)
 	await process_frame
 	var victory_board: Array = Rules.empty_board()
@@ -50,6 +52,7 @@ func _run() -> void:
 	var defeat_outcome: Dictionary = {"value": &""}
 	var defeat_duel: Node = DUEL_SCENE.instantiate()
 	defeat_duel.set("testing_mode", true)
+	defeat_duel.set("opening_layout_seed", -1)
 	root.add_child(defeat_duel)
 	await process_frame
 	defeat_duel.set("board", Rules.empty_board())

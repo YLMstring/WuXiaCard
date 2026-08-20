@@ -22,6 +22,7 @@ func _run() -> void:
 	duel.set("testing_mode", true)
 	duel.set("player_hand_shuffle_seed", -1)
 	duel.set("opponent_hand_shuffle_seed", -1)
+	duel.set("opening_layout_seed", -1)
 	root.add_child(duel)
 	await process_frame
 	await process_frame

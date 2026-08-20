@@ -21,6 +21,7 @@ func _run() -> void:
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
 	duel.set("testing_mode", true)
 	duel.set("opponent_hand_shuffle_seed", -1)
+	duel.set("opening_layout_seed", -1)
 	var opponent_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"LeiZHenJian1",

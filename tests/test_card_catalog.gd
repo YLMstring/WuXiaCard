@@ -197,6 +197,31 @@ func _test_new_sect_card_definitions() -> void:
 
 
 func _test_ability_declarations() -> void:
+	var bagua_abilities: Array = Catalog.get_definition(&"BaGuaFangWei").get("abilities", [])
+	_check(bagua_abilities.size() == 1, "BaGuaFangWei declares one retained pre-flip exile ability")
+	if bagua_abilities.size() == 1:
+		var bagua_ability: Dictionary = bagua_abilities[0]
+		_check(
+			bool(bagua_ability.get("retained_on_flip", false)),
+			"BaGuaFangWei retains its locked exile ability"
+		)
+		var bagua_trigger: Dictionary = (bagua_ability.get("triggers", []) as Array)[0]
+		_check(
+			StringName(bagua_trigger.get("event", &"")) == Catalog.CARD_BEFORE_FLIPPED,
+			"BaGuaFangWei reacts before its own flip"
+		)
+		_check(
+			bagua_trigger.get("conditions", [])
+			== [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"BaGuaFangWei only reacts to its own pending flip"
+		)
+		_check(
+			bagua_trigger.get("actions", []) == [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
+			"BaGuaFangWei exiles the pending flip target"
+		)
 	var leizhen_abilities: Array = Catalog.get_definition(&"LeiZHenJian1").get("abilities", [])
 	_check(leizhen_abilities.size() == 2, "LeiZHenJian1 separates defense and retained removal")
 	if leizhen_abilities.size() == 2:

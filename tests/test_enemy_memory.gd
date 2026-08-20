@@ -67,6 +67,7 @@ func _run() -> void:
 		duel.deck_profile_path = SAVE_PATH
 		duel.opponent_card_ids = _string_names(enemy["deck"])
 		duel.opponent_hand_shuffle_seed = seed
+		duel.opening_layout_seed = -1
 		duel.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 		duel.testing_mode = false
 		root.add_child(duel)

@@ -19,6 +19,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const OpeningSetup = preload("res://scripts/duel_opening_setup.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
@@ -63,6 +64,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var side_deck_shuffle_seed: int = 0
 @export var player_hand_shuffle_seed: int = 0
 @export var opponent_hand_shuffle_seed: int = 0
+@export var opening_layout_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var opponent_search_budget_seconds: float = 10.0
 @export_range(0.0, 10.0, 0.05) var replay_turn_delay: float = 2.0
@@ -179,6 +181,7 @@ func _ready() -> void:
 	)
 	_shuffle_side_decks(player_side_deck, opponent_side_deck)
 	var opening_owner: int = _get_valid_starting_owner()
+	board = _build_opening_board(opening_owner)
 	duel_state = StateData.new(
 		board,
 		player_cards,
@@ -203,6 +206,7 @@ func _ready() -> void:
 	_replay_record.begin(duel_state)
 	board = duel_state.board
 	_create_hands()
+	_reconcile_board_card_views()
 	_create_placeholder_audio()
 	top_bar.move_child(enemy_seal, 0)
 	_style_static_ui()
@@ -232,6 +236,17 @@ func _get_valid_starting_owner() -> int:
 	if starting_owner_id == DuelRules.OPPONENT_OWNER:
 		return DuelRules.OPPONENT_OWNER
 	return DuelRules.PLAYER_OWNER
+
+
+func _build_opening_board(opening_owner: int) -> Array:
+	if opening_layout_seed < 0:
+		return DuelRules.empty_board()
+	var rng := RandomNumberGenerator.new()
+	if opening_layout_seed == 0:
+		rng.randomize()
+	else:
+		rng.seed = opening_layout_seed
+	return OpeningSetup.build_opening_board(opening_owner, rng)
 
 
 func _begin_opening_opponent_turn() -> void:

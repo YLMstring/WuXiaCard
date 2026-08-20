@@ -621,6 +621,18 @@ const WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP: Dictionary = {
 	],
 }
 
+const BAGUA_EXILE_BEFORE_FLIP: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_EXILE_CARD,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+
 const WUDANG_FLIPPED_CARD_ATTACK: Dictionary = {
 	"triggers": [{
 		"event": CARD_AFTER_FLIPPED,
@@ -3505,7 +3517,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：翻面前，将我移除。",
 		"flavor": "对局开始时，后行动的一方以逸待劳，所占据的八卦方位。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [BAGUA_EXILE_BEFORE_FLIP],
 	},
 	&"YinYangZhang3": {
 		"id": &"YinYangZhang3",

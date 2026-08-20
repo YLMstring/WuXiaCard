@@ -23,6 +23,7 @@ func _run() -> void:
 	duel.testing_mode = false
 	duel.side_deck_shuffle_seed = 8841
 	duel.opponent_hand_shuffle_seed = -1
+	duel.opening_layout_seed = 8192
 	duel.replay_turn_delay = 0.01
 	duel.opponent_card_played.connect(func(_glyph: String) -> void: _memory_emissions += 1)
 	root.add_child(duel)

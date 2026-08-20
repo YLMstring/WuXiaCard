@@ -33,6 +33,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   persistent completion, early-tap gating, and fresh-journey navigation.
 - `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
+- `test_duel_opening_setup.gd` — the exact 12-pair Bagua layout space, seeded
+  reproducibility, later-owner identity, untouched turn/deck data, and retained
+  pre-flip exile behavior.
 - `test_duel_card_selector.gd` — generic zone ordering, filters, limits,
   movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,

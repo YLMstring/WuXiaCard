@@ -69,12 +69,19 @@ The creator has made several direct UI and localization edits. Preserve those ed
 ## Implemented Rules Snapshot
 
 - Board indices are row-major: `0,1,2` top row; `3,4,5` middle; `6,7,8` bottom.
+- After the first owner is chosen, `DuelOpeningSetup` selects one of the 12
+  orthogonally adjacent unordered cell pairs with exact `1/12` probability and
+  places two fresh `BaGuaFangWei` instances for the later owner. They are
+  static initial state: no summon events, standard attacks, action count, or
+  opening animation. Replay snapshots the selected pair instead of rerolling.
 - Power arrays are `[top, right, bottom, left]`.
 - A higher opposing power captures; ties do not.
 - Player owner ID is `1`; opponent owner ID is `2`.
 - A turn permits either playing one hand card or activating one board card.
 - Any activation costs one ki.
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
+- `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the
+  exact pending target before ownership can change.
 - Only cards with an activation count as ki-using for bead display.
 - A card may declare multiple catalog activations in priority order. A dynamically
   received activation replaces all current activations while preserving passive

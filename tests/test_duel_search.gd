@@ -39,6 +39,7 @@ func _run() -> void:
 
 func _run_runtime_benchmark() -> void:
 	var duel: Node = DUEL_SCENE.instantiate()
+	duel.set("opening_layout_seed", 8192)
 	root.add_child(duel)
 	await process_frame
 	await process_frame
