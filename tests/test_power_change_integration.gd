@@ -97,6 +97,30 @@ func _run() -> void:
 		"Coalescing uses earliest previous and latest final powers"
 	)
 
+	var staged_previous: Array = repeated_final.duplicate()
+	var staged_final: Array = _offset(staged_previous, 1)
+	var logical_first_card: Dictionary = duel.call("_get_logical_card_by_instance", first_id)
+	logical_first_card["powers"] = staged_final.duplicate()
+	duel.set("capture_flip_duration", 0.20)
+	duel.call(
+		"_present_transition_events",
+		[
+			{"type": &"ability_lost", "instance_id": first_id},
+			_power_event(first_id, staged_previous, staged_final, 1, &"staged_sync_batch"),
+		],
+		Rules.PLAYER_OWNER
+	)
+	_check(
+		(first_card.get("card_data") as Dictionary).get("powers", []) == staged_previous,
+		"Ability-loss presentation does not expose future power values before their animation"
+	)
+	await create_timer(0.22).timeout
+	_check(
+		(first_card.get("card_data") as Dictionary).get("powers", []) == staged_final,
+		"The queued power animation eventually applies the logical final values"
+	)
+	duel.set("capture_flip_duration", 0.0)
+
 	var opponent_ids: Array[StringName] = duel.call("debug_get_hand_instance_ids", Rules.OPPONENT_OWNER)
 	var hidden_id: StringName = opponent_ids[0]
 	var hidden_card: Node = duel.call("_get_card_view_by_instance", hidden_id)
@@ -113,7 +137,7 @@ func _run() -> void:
 	elapsed_msec = Time.get_ticks_msec() - started_msec
 	trace = duel.call("debug_get_power_change_presentation_trace")
 	_check(elapsed_msec < 80, "A fully hidden batch adds no empty animation wait")
-	_check(trace.size() == 3, "A face-down opponent card emits no visible animation trace")
+	_check(trace.size() == 4, "A face-down opponent card emits no visible animation trace")
 	_check(
 		bool(hidden_card.call("is_face_down"))
 		and (hidden_card.get("card_data") as Dictionary).get("powers", []) == hidden_final,
@@ -127,7 +151,7 @@ func _run() -> void:
 	await duel.call(
 		"_present_transition_events",
 		[
-			_power_event(first_id, repeated_final, zero_powers, -9, &"lethal_batch"),
+			_power_event(first_id, staged_final, zero_powers, -9, &"lethal_batch"),
 			{
 				"type": &"card_exiled",
 				"instance_id": first_id,

@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_second_flip_distributes_then_attacks()
 	_test_entry_flip_cancels_standard_attack()
 	_test_xixing_later_attack_targets_all_while_beiming_does_not()
+	_test_standard_attack_stops_after_mid_chain_double_flip()
 	_test_yijin_strengthens_then_draws_and_repeats_on_return()
 	_finish()
 
@@ -539,6 +540,93 @@ func _test_xixing_later_attack_targets_all_while_beiming_does_not() -> void:
 		and int((targeted_state.board[5] as Dictionary).get("owner", 0))
 		== Rules.OPPONENT_OWNER,
 		"XiXin's locked target policy also permits a specified attack on an ally"
+	)
+
+
+func _test_standard_attack_stops_after_mid_chain_double_flip() -> void:
+	var source: Dictionary = _plain(
+		&"mid_flip_source",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	var counter: Dictionary = _plain(
+		&"mid_flip_counter",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER
+	)
+	counter["active_abilities"] = [
+		{
+			"retained_on_flip": true,
+			"modifiers": [{"type": Catalog.MODIFIER_SELF_ATTACKS_ALL}],
+		},
+		{
+			"triggers": [{
+				"event": Catalog.CARD_BE_ATTACKED,
+				"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+				"actions": [
+					{
+						"type": Catalog.ACTION_CHANGE_POWERS,
+						"amount": 10,
+						"card": Catalog.CARD_REF_ABILITY_SOURCE,
+					},
+					{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF},
+					{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF},
+				],
+			}],
+		},
+	]
+	var second_target: Dictionary = _plain(
+		&"mid_flip_second",
+		[1, 1, 1, 1],
+		Rules.OPPONENT_OWNER
+	)
+	var board: Array = Rules.empty_board()
+	board[1] = _slot(counter, Rules.OPPONENT_OWNER)
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[5] = _slot(second_target, Rules.OPPONENT_OWNER)
+	var state := State.new(board)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		4,
+		&"mid_flip_source",
+		&"mid_chain_double_flip_fixture",
+		false,
+		{"attack_target_policy": Catalog.ATTACK_TARGET_ALL}
+	)
+	var source_flip_count: int = 0
+	var attacked_second: bool = false
+	for event_value: Variant in result.get("events", []):
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value as Dictionary
+		if (
+			StringName(event.get("type", &"")) == &"card_flipped"
+			and StringName(event.get("instance_id", &"")) == &"mid_flip_source"
+		):
+			source_flip_count += 1
+		if (
+			StringName(event.get("type", &"")) == &"attack_started"
+			and StringName(event.get("source_instance_id", &"")) == &"mid_flip_source"
+			and StringName(event.get("target_instance_id", &"")) == &"mid_flip_second"
+		):
+			attacked_second = true
+	_check(
+		source_flip_count == 2
+		and int((state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
+		and int((state.board[5] as Dictionary).get("owner", 0))
+		== Rules.OPPONENT_OWNER
+		and not attacked_second,
+		(
+			"Any mid-chain attacker flip stops later standard-attack targets even after flipping back; "
+			+ "source_flips=%d source_owner=%d second_owner=%d attacked_second=%s events=%s"
+			% [
+				source_flip_count,
+				int((state.board[4] as Dictionary).get("owner", 0)),
+				int((state.board[5] as Dictionary).get("owner", 0)),
+				attacked_second,
+				_event_types(result.get("events", [])),
+			]
+		)
 	)
 
 

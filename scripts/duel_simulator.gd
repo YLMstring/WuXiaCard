@@ -534,6 +534,11 @@ static func _resolve_standard_attacks(
 		result["attack_flips"].append_array(
 			target_result.get("attack_flips", []) as Array
 		)
+		if _events_include_card_flip(
+			target_result.get("events", []) as Array,
+			source_instance_id
+		):
+			break
 	if _events_have_type(result["events"], &"attack_started"):
 		var after_attack: Dictionary = _resolve_trigger_event(
 			state,
@@ -1264,6 +1269,19 @@ static func _events_have_type(events: Array, event_type: StringName) -> bool:
 		if (
 			event_value is Dictionary
 			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return true
+	return false
+
+
+static func _events_include_card_flip(events: Array, instance_id: StringName) -> bool:
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) == &"card_flipped"
+			and StringName(event.get("instance_id", &"")) == instance_id
 		):
 			return true
 	return false

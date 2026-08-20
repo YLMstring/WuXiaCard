@@ -1250,7 +1250,13 @@ func _present_transition_events(
 			var changed_view: CardView = _get_card_view_by_instance(changed_instance_id)
 			var changed_data: Dictionary = _get_logical_card_by_instance(changed_instance_id)
 			if changed_view != null and not changed_data.is_empty():
+				var displayed_powers: Array = (
+					changed_view.card_data.get("powers", []) as Array
+				).duplicate()
+				var displayed_ki: int = int(changed_view.card_data.get("ki", 0))
 				changed_view.sync_runtime_data(changed_data, changed_view.owner_id)
+				changed_view.set_runtime_powers(displayed_powers)
+				changed_view.set_runtime_ki(displayed_ki)
 				if event_type == &"ability_lost":
 					await changed_view.play_ability_lost(capture_flip_duration * 0.5)
 		elif event_type == &"card_flipped":
