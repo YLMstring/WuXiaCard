@@ -106,7 +106,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Completed wins and losses increment schema-7 run history atomically. A final
   victory at the configurable threshold (15 by default) skips rewards, records
   `floor(15000 / effective_duel_count)`, preserves the best score for the
-  selected sect, closes the run, and restores the default deck.
+  selected sect, closes the run, and resets card unlocks, the main deck, the
+  library, and run-only reward history to their fresh-profile values. Sect
+  unlocks (including the final enemy's declared sect) and mastery are retained.
 - Schema 9 stores global mastery by exact card ID. A successful player hand
   play qualifies when that exact ID was in the main deck at duel start; a win
   commits the candidates, while defeat or abandon commits none. `闭关重修`

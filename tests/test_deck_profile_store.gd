@@ -775,6 +775,16 @@ func _run() -> void:
 		failed_advance.get("profile", {}) == active_profile,
 		"Progression save failure rolls back level, enemy, and automatic unlocks"
 	)
+	var failed_completion: Dictionary = failing_store.record_completed_duel_and_save(
+		active_profile,
+		Store.REWARD_VICTORY,
+		1
+	)
+	_check(not bool(failed_completion.get("ok", true)), "Completion save failure is reported")
+	_check(
+		failed_completion.get("profile", {}) == active_profile,
+		"Completion save failure rolls back the run and retained progress"
+	)
 	var failed_reset: Dictionary = failing_store.reset_run_and_save(saved_before_failure)
 	_check(not bool(failed_reset.get("ok", true)), "Run-reset save failure is reported")
 	_check(failed_reset.get("profile", {}) == saved_before_failure, "Run-reset save failure rolls back")

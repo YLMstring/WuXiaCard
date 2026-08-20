@@ -71,7 +71,9 @@ func _run() -> void:
 		"Victory appends valid main-deck mastery candidates in stable order"
 	)
 
-	var unlocked_before: Array = (advanced["unlocked_card_ids"] as Array).duplicate()
+	advanced["level"] = 7
+	advanced["current_enemy_id"] = "hanyue_nvxia"
+	_check(store.is_profile_valid(advanced), "Final-win fixture can use an enemy that unlocks a sect")
 	var final_win: Dictionary = store.record_completed_duel_and_save(
 		advanced,
 		Store.REWARD_VICTORY,
@@ -85,13 +87,24 @@ func _run() -> void:
 	var summary: Dictionary = final_win.get("ending_summary", {})
 	_check(String(summary.get("sect_id", "")) == "HuaShanPai", "Ending summary records the selected sect")
 	_check(int(summary.get("effective_duel_count", 0)) == 3, "Ending summary records every effective duel")
-	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi", "tieshan_menren"], "Ending summary preserves defeated enemies chronologically")
+	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi", "hanyue_nvxia"], "Ending summary preserves defeated enemies chronologically")
 	_check(int(summary.get("score", -1)) == 5000, "Ending score floors 15000 divided by effective duels")
 	_check(not bool(summary.get("flawless", true)), "A run containing a loss is not flawless")
 	var completed_profile: Dictionary = final_win.get("profile", {})
 	_check(not bool(completed_profile["run_active"]), "Completion closes the active run")
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Completion restores the default deck")
-	_check(completed_profile["unlocked_card_ids"] == unlocked_before, "Completion preserves card unlocks")
+	_check(
+		store.get_unlocked_ids(completed_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Completion clears card unlocks except the two base cards"
+	)
+	_check(
+		completed_profile["library_slots"] == store.create_default_profile()["library_slots"],
+		"Completion clears the library"
+	)
+	_check(
+		&"tingchao_gu" in store.get_unlocked_sect_ids(completed_profile),
+		"Completion preserves the sect unlocked by the final enemy"
+	)
 	_check(
 		store.get_mastered_card_ids(completed_profile)
 		== [active_deck_ids[0], active_deck_ids[1], active_deck_ids[2], active_deck_ids[3]],

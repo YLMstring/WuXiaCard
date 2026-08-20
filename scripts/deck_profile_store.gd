@@ -659,22 +659,10 @@ func begin_run_and_save(
 
 func reset_run_and_save(profile: Dictionary) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
-	if not is_profile_valid(profile):
+	var candidate: Dictionary = _build_run_reset_profile(profile)
+	if candidate.is_empty():
 		return {"ok": false, "profile": unchanged}
-	var candidate: Dictionary = create_default_profile()
-	candidate["unlocked_sect_ids"] = (profile["unlocked_sect_ids"] as Array).duplicate()
-	candidate["best_scores_by_sect"] = (profile["best_scores_by_sect"] as Dictionary).duplicate(true)
-	candidate["mastered_card_ids"] = (profile["mastered_card_ids"] as Array).duplicate()
-	candidate["run_active"] = false
-	candidate["selected_sect_id"] = ""
-	candidate["level"] = 0
-	candidate["current_enemy_id"] = ""
-	candidate["remembered_enemy_glyphs"] = []
-	candidate["pending_reward_card_ids"] = []
-	candidate["shown_guaranteed_reward_card_ids"] = []
-	candidate["effective_duel_count"] = 0
-	candidate["defeated_enemy_ids"] = []
-	if not is_profile_valid(candidate) or not save_profile(candidate):
+	if not save_profile(candidate):
 		return {"ok": false, "profile": unchanged}
 	return {"ok": true, "profile": candidate}
 
@@ -892,7 +880,7 @@ func record_completed_duel_and_save(
 	if (candidate["defeated_enemy_ids"] as Array).size() >= victories_required:
 		var summary: Dictionary = _build_ending_summary(candidate)
 		_record_best_score(candidate, summary)
-		var completed_candidate: Dictionary = _build_closed_run_profile(candidate)
+		var completed_candidate: Dictionary = _build_run_reset_profile(candidate)
 		if completed_candidate.is_empty():
 			return failed
 		if not is_profile_valid(completed_candidate) or not save_profile(completed_candidate):
@@ -1450,29 +1438,22 @@ func _apply_mastery_candidates(profile: Dictionary, candidate_ids: Array) -> voi
 	profile["mastered_card_ids"] = _string_array(mastered_ids)
 
 
-func _build_closed_run_profile(profile: Dictionary) -> Dictionary:
-	var unlocked_ids: Array[StringName] = get_unlocked_ids(profile)
-	var placement: Dictionary = _build_inactive_deck_placement(
-		unlocked_ids,
-		profile.get("library_slots", []) as Array
-	)
-	if not bool(placement.get("ok", false)):
+func _build_run_reset_profile(profile: Dictionary) -> Dictionary:
+	if not is_profile_valid(profile):
 		return {}
-	var candidate: Dictionary = profile.duplicate(true)
-	candidate["run_active"] = false
-	candidate["selected_sect_id"] = ""
-	candidate["level"] = 0
-	candidate["current_enemy_id"] = ""
-	candidate["remembered_enemy_glyphs"] = []
-	candidate["pending_reward_card_ids"] = []
-	candidate["shown_guaranteed_reward_card_ids"] = []
-	candidate["effective_duel_count"] = 0
-	candidate["defeated_enemy_ids"] = []
-	candidate["main_deck"] = placement.get("main_deck", [])
-	candidate["library_slots"] = _padded_library(
-		placement.get("library_cards", []) as Array
-	)
-	return candidate
+	var reset_profile: Dictionary = create_default_profile()
+	reset_profile["unlocked_sect_ids"] = (
+		profile["unlocked_sect_ids"] as Array
+	).duplicate()
+	reset_profile["best_scores_by_sect"] = (
+		profile["best_scores_by_sect"] as Dictionary
+	).duplicate(true)
+	reset_profile["mastered_card_ids"] = (
+		profile["mastered_card_ids"] as Array
+	).duplicate()
+	if not is_profile_valid(reset_profile):
+		return {}
+	return reset_profile
 
 
 func _build_default_deck_placement(

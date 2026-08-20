@@ -327,10 +327,12 @@ respectively, in row-major order. The source itself is eligible.
   therefore score 1000; losses lower the result.
 - Final victory bypasses reward selection. The ending receives immutable sect,
   score, duel-count, defeated-enemy, and flawless data.
-- Completion closes the run and restores the default main deck while preserving
-  unlocks and the highest score achieved for each sect.
-- `闭关重修` preserves best scores. `封剑归隐` clears them with all other
-  progress.
+- Completion uses the same card/run reset as `闭关重修`: it restores the two
+  base card unlocks, default main deck, empty library, and empty run-only reward
+  history. It preserves unlocked sects (including one declared by the final
+  defeated enemy), card mastery, and the highest score achieved for each sect.
+- `闭关重修` also preserves best scores, unlocked sects, and card mastery.
+  `封剑归隐` clears them with all other progress.
 - The ending is the main-menu presentation without its three actions. It lists
   every defeated enemy in order and uses a distinct undefeated passage when the
   run contains no losses.

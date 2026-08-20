@@ -65,6 +65,14 @@ func _run() -> void:
 		store.get_main_deck_ids(completed_profile) == Store.DEFAULT_MAIN_DECK_IDS,
 		"Final-victory routing restores the default deck"
 	)
+	_check(
+		store.get_unlocked_ids(completed_profile) == Store.DEFAULT_MAIN_DECK_IDS,
+		"Final-victory routing clears run card unlocks"
+	)
+	_check(
+		completed_profile["library_slots"] == store.create_default_profile()["library_slots"],
+		"Final-victory routing clears the library"
+	)
 	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Final-victory routing persists the achievement")
 
 	var overflow_fixture: String = ""
