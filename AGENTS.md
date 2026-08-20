@@ -9,8 +9,12 @@ Before changing anything:
 1. Read `docs/HANDOFF.md`.
 2. Read the relevant architecture or workflow document linked from it.
 3. Run `git status --short` and preserve all user-owned changes.
-4. Run `powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1` before and after behavioral changes.
-5. Inspect current code and tests instead of assuming an old plan is already implemented.
+4. Ensure a relevant passing baseline before behavioral changes. If the full suite
+   already passed during the current task and no relevant code changed afterward,
+   reuse that result instead of running it again. Otherwise run
+   `powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1`.
+5. Run the full suite after behavioral changes.
+6. Inspect current code and tests instead of assuming an old plan is already implemented.
 
 ## Source-of-Truth Order
 
