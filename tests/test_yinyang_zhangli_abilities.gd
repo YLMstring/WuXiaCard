@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_distance_two_attack_rules()
 	_test_entry_draw_and_grant_order()
 	_test_empty_draw_and_no_palm_edges()
+	_test_filtered_draw_respects_hand_capacity()
 	_test_repeat_attack_is_nonrecursive()
 	_test_grant_deduplication_and_flip_loss()
 	_finish()
@@ -53,9 +54,16 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 		"Partial negative-one and ordinary zero powers do not use the sentinel rule"
 	)
 	for card_id: StringName in [&"YinYangZhang3", &"YinYangZhang4"]:
+		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
+		var actions: Array = (((abilities[0] as Dictionary).get("triggers", []) as Array)[0] as Dictionary).get("actions", [])
+		_check(not abilities.is_empty(), "%s declares its complete ability" % card_id)
 		_check(
-			not (Catalog.get_definition(card_id).get("abilities", []) as Array).is_empty(),
-			"%s declares its complete ability" % card_id
+			actions[1] == {
+				"type": Catalog.ACTION_DRAW_CARDS,
+				"amount": 2,
+				"weapon": "掌法",
+			},
+			"%s draws two palm cards with the generic filtered draw action" % card_id
 		)
 
 
@@ -201,9 +209,20 @@ func _test_entry_draw_and_grant_order() -> void:
 		"剑法"
 	)
 	var drawn_palm: Dictionary = _plain(
-		&"drawn_palm",
+		&"drawn_palm_one",
 		[4, 4, 4, 4],
 		Rules.PLAYER_OWNER
+	)
+	var drawn_palm_two: Dictionary = _plain(
+		&"drawn_palm_two",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	var skipped_sword_one: Dictionary = _plain(
+		&"skipped_sword_one", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"
+	)
+	var skipped_sword_two: Dictionary = _plain(
+		&"skipped_sword_two", [2, 2, 2, 2], Rules.PLAYER_OWNER, "剑法"
 	)
 	var transition: Dictionary = Simulator.apply_action(
 		State.new(
@@ -212,14 +231,15 @@ func _test_entry_draw_and_grant_order() -> void:
 			[_plain(&"opponent_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
 			Rules.PLAYER_OWNER,
 			0,
-			[drawn_palm],
+			[skipped_sword_one, drawn_palm, skipped_sword_two, drawn_palm_two],
 			[]
 		),
 		Action.make_play(0, 4, &"entry_yinyang")
 	)
 	var next_state: State = transition.get("state") as State
 	var runtime_existing: Dictionary = _find_hand_card(next_state, &"existing_palm")
-	var runtime_drawn: Dictionary = _find_hand_card(next_state, &"drawn_palm")
+	var runtime_drawn: Dictionary = _find_hand_card(next_state, &"drawn_palm_one")
+	var runtime_drawn_two: Dictionary = _find_hand_card(next_state, &"drawn_palm_two")
 	var runtime_non_palm: Dictionary = _find_hand_card(next_state, &"existing_sword")
 	_check(
 		bool(transition.get("valid", false))
@@ -230,8 +250,9 @@ func _test_entry_draw_and_grant_order() -> void:
 	_check(
 		(runtime_existing.get("active_abilities", []) as Array).size() == 2
 		and (runtime_drawn.get("active_abilities", []) as Array).size() == 2
+		and (runtime_drawn_two.get("active_abilities", []) as Array).size() == 2
 		and (runtime_non_palm.get("active_abilities", []) as Array).is_empty(),
-		"Existing and newly drawn palm cards receive both effects, while non-palm cards do not"
+		"Existing and both newly drawn palm cards receive both effects, while non-palm cards do not"
 	)
 	_check(
 		Abilities.can_attack_at_orthogonal_distance_two(runtime_drawn)
@@ -240,11 +261,22 @@ func _test_entry_draw_and_grant_order() -> void:
 	)
 	var events: Array = transition.get("events", [])
 	var exile_index: int = _event_index(events, &"card_exiled", &"entry_yinyang")
-	var draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm")
-	var grant_index: int = _event_index(events, &"ability_gained", &"drawn_palm")
+	var draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm_one")
+	var second_draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm_two")
+	var grant_index: int = _event_index(events, &"ability_gained", &"drawn_palm_one")
 	_check(
-		exile_index >= 0 and exile_index < draw_index and draw_index < grant_index,
-		"Entry events present exile, draw, then grants in order"
+		exile_index >= 0
+		and exile_index < draw_index
+		and draw_index < second_draw_index
+		and second_draw_index < grant_index,
+		"Entry events present exile, two filtered draws, then grants in order"
+	)
+	var remaining_deck: Array = next_state.decks.get(Rules.PLAYER_OWNER, [])
+	_check(
+		remaining_deck.size() == 2
+		and StringName((remaining_deck[0] as Dictionary).get("instance_id", &"")) == &"skipped_sword_one"
+		and StringName((remaining_deck[1] as Dictionary).get("instance_id", &"")) == &"skipped_sword_two",
+		"Filtered draws leave skipped non-palms in their original order"
 	)
 	_check(
 		_count_events(events, &"attack_started") == 0,
@@ -272,11 +304,43 @@ func _test_empty_draw_and_no_palm_edges() -> void:
 	var next_state: State = transition.get("state") as State
 	_check(
 		_find_hand_card(next_state, &"edge_sword").get("active_abilities", []) == []
-		and _count_events(transition.get("events", []), &"card_drawn") == 1
-		and StringName((next_state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("card_id", &"")) == &"TaiZuChangQuan"
-		and (next_state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("active_abilities", []).is_empty()
+		and _count_events(transition.get("events", []), &"card_drawn") == 0
+		and next_state.get_hand(Rules.PLAYER_OWNER).size() == 1
 		and _count_events(transition.get("events", []), &"ability_gained") == 0,
-		"An empty deck draws TaiZuChangQuan without granting it palm abilities"
+		"An empty deck draws no filtered fallback card and grants no palm abilities"
+	)
+
+
+func _test_filtered_draw_respects_hand_capacity() -> void:
+	var player_hand: Array = [
+		Catalog.create_instance(&"YinYangZhang4", Rules.PLAYER_OWNER, &"capacity_yinyang"),
+		_plain(&"capacity_one", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"),
+		_plain(&"capacity_two", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"),
+		_plain(&"capacity_three", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"),
+		_plain(&"capacity_four", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"),
+	]
+	var deck: Array = [
+		_plain(&"capacity_palm_one", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		_plain(&"capacity_palm_two", [3, 3, 3, 3], Rules.PLAYER_OWNER),
+	]
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			Rules.empty_board(),
+			player_hand,
+			[_plain(&"capacity_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER,
+			0,
+			deck,
+			[]
+		),
+		Action.make_play(0, 4, &"capacity_yinyang")
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		_count_events(transition.get("events", []), &"card_drawn") == 1
+		and next_state.get_hand(Rules.PLAYER_OWNER).size() == 5
+		and StringName(((next_state.decks[Rules.PLAYER_OWNER] as Array)[0] as Dictionary).get("instance_id", &"")) == &"capacity_palm_two",
+		"Filtered draw stops at hand capacity and leaves the second matching card in the deck"
 	)
 
 

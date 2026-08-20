@@ -22,6 +22,8 @@ func _run() -> void:
 	_test_attack_target_policies()
 	_test_attack_counter_state()
 	_test_sanhuan_redirects_summon_attack()
+	_test_other_friendly_fire_consumes_all_taiji_redirects()
+	_test_enemy_attack_against_taiji_ally_does_not_consume_redirect()
 	_test_sanhuan_resurrects_same_instance()
 	_test_dakui_strengthens_then_attacks_allies()
 	_test_luanhuan_starts_adjacent_attacks()
@@ -32,6 +34,11 @@ func _run() -> void:
 
 func _test_catalog_and_vocabulary() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "The catalog accepts all six Taiji declarations")
+	_check(
+		Catalog.CONDITION_ATTACK_TARGETED_ATTACKER_ALLY
+		in Catalog.KNOWN_TRIGGER_CONDITIONS,
+		"Attacks against attacker allies use a registered trigger condition"
+	)
 	for card_id: StringName in [
 		&"TaiJiSanHuan4", &"TaiJiSanHuan5", &"TaiJiDaKui5",
 		&"TaiJiLuanHuan4", &"TaiJiLuanHuan5", &"TaiJiYinYang5",
@@ -39,6 +46,27 @@ func _test_catalog_and_vocabulary() -> void:
 		_check(
 			not (Catalog.get_definition(card_id).get("abilities", []) as Array).is_empty(),
 			"%s declares its complete ability" % card_id
+		)
+	for card_id: StringName in [&"TaiJiSanHuan4", &"TaiJiSanHuan5", &"TaiJiDaKui5"]:
+		var common_ability: Dictionary = (
+			Catalog.get_definition(card_id).get("abilities", []) as Array
+		)[0]
+		var common_trigger: Dictionary = (
+			common_ability.get("triggers", []) as Array
+		)[0]
+		_check(
+			common_ability.get("modifiers", []) == [{
+				"type": Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+			}]
+			and common_trigger.get("event", &"") == Catalog.TRIGGER_CARD_AFTER_ATTACK
+			and common_trigger.get("conditions", []) == [
+				{"type": Catalog.CONDITION_ATTACKER_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_ATTACK_TARGETED_ATTACKER_ALLY},
+			]
+			and common_trigger.get("actions", []) == [{
+				"type": Catalog.ACTION_REMOVE_THIS_ABILITY,
+			}],
+			"%s declares the shared one-use friendly-fire redirect" % card_id
 		)
 
 
@@ -96,6 +124,10 @@ func _test_sanhuan_redirects_summon_attack() -> void:
 		Catalog.create_instance(&"TaiJiSanHuan4", Rules.PLAYER_OWNER, &"sanhuan_guard"),
 		Rules.PLAYER_OWNER
 	)
+	board[7] = _slot(
+		Catalog.create_instance(&"TaiJiSanHuan5", Rules.PLAYER_OWNER, &"second_guard"),
+		Rules.PLAYER_OWNER
+	)
 	board[3] = _slot(_plain(&"summoner_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[5] = _slot(_plain(&"summoner_enemy", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(
@@ -112,6 +144,71 @@ func _test_sanhuan_redirects_summon_attack() -> void:
 		int((next_state.board[3] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
 		and int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
 		"An adjacent SanHuan redirects only the summoner's ally and flips it to the enemy"
+	)
+	_check(
+		not Abilities.has_modifier(
+			(next_state.board[1] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		)
+		and not Abilities.has_modifier(
+			(next_state.board[7] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		),
+		"Every adjacent Taiji source loses the redirect after the summoned enemy attacks its ally"
+	)
+
+
+func _test_other_friendly_fire_consumes_all_taiji_redirects() -> void:
+	var board: Array = Rules.empty_board()
+	board[1] = _slot(_plain(&"friendly_fire_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[3] = _slot(_plain(&"friendly_fire_enemy", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	board[4] = _slot(_plain(&"friendly_fire_attacker", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[6] = _slot(Catalog.create_instance(&"TaiJiSanHuan4", Rules.PLAYER_OWNER, &"watcher_one"), Rules.PLAYER_OWNER)
+	board[0] = _slot(Catalog.create_instance(&"LeiZHenJian3", Rules.PLAYER_OWNER, &"yizi_modifier"), Rules.PLAYER_OWNER)
+	board[8] = _slot(Catalog.create_instance(&"TaiJiDaKui5", Rules.PLAYER_OWNER, &"watcher_two"), Rules.PLAYER_OWNER)
+	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		4,
+		&"friendly_fire_attacker",
+		&"test_yizi_friendly_fire"
+	)
+	_check(
+		_count_events(result.get("events", []), &"attack_started") == 2,
+		"YiZi causes the enemy to attack both owners"
+	)
+	_check(
+		not Abilities.has_modifier(
+			(state.board[6] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		)
+		and not Abilities.has_modifier(
+			(state.board[8] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		),
+		"Friendly fire caused by another card consumes every enemy Taiji redirect"
+	)
+
+
+func _test_enemy_attack_against_taiji_ally_does_not_consume_redirect() -> void:
+	var board: Array = Rules.empty_board()
+	board[1] = _slot(_plain(&"ordinary_target", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	board[4] = _slot(_plain(&"ordinary_enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[8] = _slot(Catalog.create_instance(&"TaiJiSanHuan4", Rules.PLAYER_OWNER, &"ordinary_watcher"), Rules.PLAYER_OWNER)
+	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		4,
+		&"ordinary_enemy",
+		&"test_enemy_attack"
+	)
+	_check(
+		_count_events(result.get("events", []), &"attack_started") == 1
+		and Abilities.has_modifier(
+			(state.board[8] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		),
+		"An enemy attacking the Taiji owner's ally does not consume the redirect"
 	)
 
 

@@ -306,6 +306,19 @@ func _test_draw_action_validation() -> void:
 		}],
 	})
 	_check(valid_errors.is_empty(), "Positive integer draw actions pass validation")
+	_check(
+		Catalog.validate_ability({
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"actions": [{
+					"type": Catalog.ACTION_DRAW_CARDS,
+					"amount": 2,
+					"weapon": "掌法",
+				}],
+			}],
+		}).is_empty(),
+		"Draw actions accept an optional nonempty weapon filter"
+	)
 	for invalid_count: Variant in [null, 1.5, 0, -2]:
 		var action: Dictionary = {"type": Catalog.ACTION_DRAW_CARDS}
 		if invalid_count != null:

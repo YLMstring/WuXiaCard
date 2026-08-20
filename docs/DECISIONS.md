@@ -444,6 +444,19 @@ respectively, in row-major order. The source itself is eligible.
   declared recipient; generic `ACTION_SUMMON_CARD` accepts either an exact
   selected instance or a fresh-copy specification plus a declared cell rule.
 
+## 太极剑共通效果
+
+- TaiJiSanHuan4/5 and TaiJiDaKui5 snapshot adjacent enemy summon sources and
+  redirect the summon standard attack only while source and summoned card remain
+  adjacent. The redirected attack targets only the attacker's current allies.
+- The shared modifier and its consume trigger occupy one ability entry. After
+  any enemy actually starts an attack against at least one card that shared the
+  attacker's owner at attack start, `ACTION_REMOVE_THIS_ABILITY` removes that
+  entry. The friendly fire may come from this redirect, YiZi, or another effect.
+- Every qualifying Taiji source consumes its own effect. Zero-target,
+  insufficient-power, and ordinary enemy-versus-source-ally attacks do not
+  consume it; a started friendly-fire attack consumes it even without a flip.
+
 ## 阴阳掌力
 
 - The special power rule applies only when all four stored powers are exactly
@@ -451,9 +464,11 @@ respectively, in row-major order. The source itself is eligible.
   defeats the corresponding `-1`, and signed power-change actions cannot
   affect or select that card. Limited selectors filter it before counting the
   limit.
-- YinYang resolves its own exile, then one draw, then grants every allied palm
-  currently in hand. A palm drawn by that action is included. Empty decks and
-  hands without palms simply produce no draw/grant events.
+- YinYang resolves its own exile, then draws the first two palm cards from the
+  side deck, then grants every allied palm currently in hand. Skipped non-palms
+  remain in their original relative order. Hand capacity can reduce the count;
+  a filtered empty/no-match draw does not create the ordinary TaiZu fallback.
+  Both newly drawn palms are included in the later grant.
 - Tier 3 palms may attack an orthogonal enemy two cells away only through one
   empty cell. Tier 4 also permits one intervening current ally; an enemy always
   blocks. Ordinary adjacent attacks remain unchanged.

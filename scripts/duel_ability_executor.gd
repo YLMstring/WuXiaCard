@@ -429,6 +429,7 @@ static func _execute_action(
 			source_instance_id,
 			expected_owner,
 			int(declaration.get("amount", 0)),
+			String(declaration.get("weapon", "")),
 			context,
 			event_resolver
 		)
@@ -863,6 +864,7 @@ static func _draw_cards(
 	source_instance_id: StringName,
 	expected_owner: int,
 	requested_count: int,
+	weapon_filter: String,
 	context: Dictionary,
 	event_resolver: Callable
 ) -> Dictionary:
@@ -885,7 +887,21 @@ static func _draw_cards(
 		if hand.size() >= MAX_HAND_SIZE:
 			break
 		var drawn_card: Dictionary
-		if deck.is_empty():
+		var deck_index: int = 0
+		if not weapon_filter.is_empty():
+			deck_index = -1
+			for candidate_index: int in range(deck.size()):
+				var candidate_value: Variant = deck[candidate_index]
+				if (
+					candidate_value is Dictionary
+					and String((candidate_value as Dictionary).get("weapon", ""))
+					== weapon_filter
+				):
+					deck_index = candidate_index
+					break
+			if deck_index < 0:
+				break
+		elif deck.is_empty():
 			var instance_id: StringName = _make_generated_instance_id(
 				state,
 				EMPTY_DECK_DRAW_CARD_ID
@@ -896,7 +912,9 @@ static func _draw_cards(
 				instance_id
 			)
 		else:
-			drawn_card = deck.pop_front()
+			deck_index = 0
+		if deck_index >= 0 and not deck.is_empty():
+			drawn_card = deck.pop_at(deck_index)
 		hand.append(drawn_card)
 		var logical_hand_index: int = hand.size() - 1
 		var drawn_instance_id := StringName(drawn_card.get("instance_id", &""))

@@ -156,11 +156,17 @@ The creator has made several direct UI and localization edits. Preserve those ed
   by `+1/+1/+1/+2`; tiers 2–4 weaken adjacent enemy summons by `-1/-2/-2`.
 - YinYangZhang3–4 now hide their four `-1` powers, can be attacked by any
   nonnegative facing power, and cannot be selected by power-changing effects.
-  After summoning they exile themselves, draw, then grant both the existing
+  After summoning they exile themselves, draw the first two palm cards from the
+  side deck without disturbing skipped non-palms, then grant both the existing
   and newly drawn allied hand palms a nonrecursive repeat attack plus a
   distance-two orthogonal attack. Tier 3 passes only one empty cell; tier 4
   also passes one allied card. All grants are exact-instance, idempotent, and
   non-retained on flip.
+- TaiJiSanHuan4/5 and TaiJiDaKui5 redirect an adjacent enemy's summon standard
+  attack only while adjacency is preserved. After any enemy really attacks one
+  of its own allies, every qualifying Taiji source removes its shared redirect
+  ability, including friendly fire caused by YiZi or another effect. Failed or
+  zero-target attacks do not consume it.
 - HanBinZhenQi3–4 now target an exact enemy hand instance, weaken it, and
   reveal it to the activating owner. An actively chosen YinYang card remains a
   legal target but ignores the power loss. Tier 4 flips immediately when its

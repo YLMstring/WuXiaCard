@@ -230,6 +230,17 @@ Draw in the after-summoned window:
 }
 ```
 
+Filtered draw is exceptional and may add a nonempty weapon string:
+
+```gdscript
+{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"}
+```
+
+It removes the first matching cards without disturbing skipped deck entries.
+Unlike an ordinary empty-deck draw, a filtered draw with no match creates no
+fallback card. Each successful card still resolves the normal per-card draw
+events.
+
 Summon reaction:
 
 ```gdscript

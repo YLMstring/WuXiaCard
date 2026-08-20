@@ -499,6 +499,7 @@ static func _resolve_standard_attacks(
 	if target_cells.is_empty():
 		return result
 	_record_attack_started(state, attacker_owner)
+	var attack_targets: Array[Dictionary] = []
 	for target_cell: int in target_cells:
 		if not _card_instance_at(state, source_cell, source_instance_id):
 			break
@@ -515,6 +516,13 @@ static func _resolve_standard_attacks(
 			reason,
 			attack_policy
 		)
+		var attack_target: Dictionary = _find_attack_started_target(
+			target_result.get("events", []) as Array,
+			source_instance_id,
+			StringName(target_card.get("instance_id", &""))
+		)
+		if not attack_target.is_empty():
+			attack_targets.append(attack_target)
 		_merge_resolution(
 			result["captures"],
 			result["exiles"],
@@ -532,6 +540,7 @@ static func _resolve_standard_attacks(
 				"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
 				"attacker_instance_id": source_instance_id,
 				"attacker_owner_id": attacker_owner,
+				"attack_targets": attack_targets.duplicate(true),
 				"attack_flips": result["attack_flips"].duplicate(true),
 				"repeat_attack": repeat_attack,
 			}
@@ -1192,6 +1201,14 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 		targeted_policy
 	)
 	if _events_have_type(result["events"], &"attack_started"):
+		var attack_targets: Array[Dictionary] = []
+		var attack_target: Dictionary = _find_attack_started_target(
+			result.get("events", []) as Array,
+			source_instance_id,
+			target_instance_id
+		)
+		if not attack_target.is_empty():
+			attack_targets.append(attack_target)
 		var after_attack: Dictionary = _resolve_trigger_event(
 			state,
 			Catalog.TRIGGER_CARD_AFTER_ATTACK,
@@ -1199,6 +1216,7 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 				"attacker_cell": _find_board_card_cell(state, source_instance_id, source_cell),
 				"attacker_instance_id": source_instance_id,
 				"attacker_owner_id": attacker_owner,
+				"attack_targets": attack_targets,
 				"attack_flips": (result.get("attack_flips", []) as Array).duplicate(true),
 				"repeat_attack": bool(request.get("repeat_attack", false)),
 			}
@@ -1210,6 +1228,27 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 			after_attack
 		)
 	return result
+
+
+static func _find_attack_started_target(
+	events: Array,
+	attacker_instance_id: StringName,
+	attacked_instance_id: StringName
+) -> Dictionary:
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) == &"attack_started"
+			and StringName(event.get("source_instance_id", &"")) == attacker_instance_id
+			and StringName(event.get("target_instance_id", &"")) == attacked_instance_id
+		):
+			return {
+				"instance_id": attacked_instance_id,
+				"owner_id": int(event.get("target_owner_id", 0)),
+			}
+	return {}
 
 
 static func _events_have_type(events: Array, event_type: StringName) -> bool:

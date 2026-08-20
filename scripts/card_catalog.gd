@@ -44,6 +44,7 @@ const CONDITION_ATTACKER_CARD_IS_OTHER_ALLY: StringName = &"attacker_card_is_oth
 const CONDITION_DRAWN_CARD_IS_ENEMY: StringName = &"drawn_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
+const CONDITION_ATTACK_TARGETED_ATTACKER_ALLY: StringName = &"attack_targeted_attacker_ally"
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
@@ -181,6 +182,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_DRAWN_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 	CONDITION_ATTACK_FLIPPED_ENEMY,
+	CONDITION_ATTACK_TARGETED_ATTACKER_ALLY,
 	CONDITION_ATTACKED_CARD_IS_SELF,
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
@@ -928,6 +930,18 @@ const YANHUI_FLIP_REPLACEMENT: Dictionary = {
 	}],
 }
 
+const TAIJI_SWORD_REDIRECT_ONCE: Dictionary = {
+	"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_ENEMY},
+			{"type": CONDITION_ATTACK_TARGETED_ATTACKER_ALLY},
+		],
+		"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+	}],
+}
+
 const YINYANG_REPEAT_ATTACK: Dictionary = {
 	"triggers": [{
 		"event": TRIGGER_CARD_AFTER_ATTACK,
@@ -962,7 +976,7 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
@@ -990,7 +1004,7 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
@@ -1853,9 +1867,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "在相邻进场且保持相邻的敌方进场攻击不会选中我的友方，反而会选中我的敌方，敌方攻击敌方后，我失去此效果。",
 		"flavor": "太极剑法中的招式，神在剑先，绵绵不绝。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [{
-			"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
-		}],
+		"abilities": [TAIJI_SWORD_REDIRECT_ONCE],
 	},
 	&"TaiJiSanHuan5": {
 		"id": &"TaiJiSanHuan5",
@@ -1869,9 +1881,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [5, 5, 5, 5],
 		"starting_ki": 3,
 		"abilities": [
-			{
-				"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
-			},
+			TAIJI_SWORD_REDIRECT_ONCE,
 			{
 				"activation": {
 					"input": ACTIVATION_DRAG_TO_TARGET,
@@ -1912,9 +1922,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [5, 5, 5, 5],
 		"starting_ki": 1,
 		"abilities": [
-			{
-				"modifiers": [{"type": MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}],
-			},
+			TAIJI_SWORD_REDIRECT_ONCE,
 			{
 				"activation": {
 					"input": ACTIVATION_DRAG_TO_TARGET,
@@ -4233,6 +4241,11 @@ static func _validate_action(
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_DRAW_CARDS and action.has("weapon"):
+		allowed_keys.append(&"weapon")
+		var weapon: Variant = action.get("weapon", null)
+		if typeof(weapon) != TYPE_STRING or String(weapon).strip_edges().is_empty():
+			errors.append("Card %s %s draw action requires a nonempty weapon filter" % [card_id, context_name])
 	if action_type in [ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY] and action.has("card"):
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:

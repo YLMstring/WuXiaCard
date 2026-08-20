@@ -358,6 +358,19 @@ static func _conditions_match(
 					break
 			if not flipped_enemy:
 				return false
+		elif condition_type == Catalog.CONDITION_ATTACK_TARGETED_ATTACKER_ALLY:
+			var attacker_owner: int = int(context.get("attacker_owner_id", 0))
+			var targeted_attacker_ally: bool = false
+			for record_value: Variant in context.get("attack_targets", []):
+				if (
+					record_value is Dictionary
+					and int((record_value as Dictionary).get("owner_id", 0))
+					== attacker_owner
+				):
+					targeted_attacker_ally = true
+					break
+			if not targeted_attacker_ally:
+				return false
 		elif condition_type == Catalog.CONDITION_ATTACKED_CARD_IS_SELF:
 			if (
 				StringName(card.get("instance_id", &""))
