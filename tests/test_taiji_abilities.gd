@@ -216,13 +216,19 @@ func _test_sanhuan_resurrects_same_instance() -> void:
 	var source: Dictionary = Catalog.create_instance(&"TaiJiSanHuan5", Rules.PLAYER_OWNER, &"sanhuan_five")
 	var skipped: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"zero_removed")
 	skipped["powers"] = [0, 0, 0, 0]
+	var negative_skipped: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"negative_removed"
+	)
+	negative_skipped["powers"] = [-1, -1, -1, -1]
 	var revived: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"revived_exact")
 	revived["powers"] = [2, 3, 4, 5]
 	revived["ki"] = 2
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, [_plain(&"drawn", [1, 1, 1, 1], Rules.PLAYER_OWNER)], [])
-	state.removed_cards[Rules.PLAYER_OWNER] = [skipped, revived]
+	state.removed_cards[Rules.PLAYER_OWNER] = [skipped, negative_skipped, revived]
 	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_activate(4, &"sanhuan_five", Action.TARGET_BOARD_CELL, 8, 0)
@@ -233,14 +239,21 @@ func _test_sanhuan_resurrects_same_instance() -> void:
 		StringName(runtime.get("instance_id", &"")) == &"revived_exact"
 		and runtime.get("powers", []) == [2, 3, 4, 5]
 		and int(runtime.get("ki", 0)) == 2,
-		"SanHuan skips four-zero cards and summons the same preserved instance"
+		"SanHuan skips cards without ordinary powers and summons the same preserved instance"
 	)
+	var remaining_removed: Array = next_state.removed_cards.get(
+		Rules.PLAYER_OWNER,
+		[]
+	) as Array
 	_check(
-		(state.removed_cards.get(Rules.PLAYER_OWNER, []) as Array).size() == 2
-		and (next_state.removed_cards.get(Rules.PLAYER_OWNER, []) as Array).size() == 1
-		and StringName(((next_state.removed_cards[Rules.PLAYER_OWNER] as Array)[0] as Dictionary).get("instance_id", &"")) == &"zero_removed"
+		(state.removed_cards.get(Rules.PLAYER_OWNER, []) as Array).size() == 3
+		and remaining_removed.size() == 2
+		and StringName((remaining_removed[0] as Dictionary).get("instance_id", &""))
+		== &"zero_removed"
+		and StringName((remaining_removed[1] as Dictionary).get("instance_id", &""))
+		== &"negative_removed"
 		and next_state.get_hand(Rules.PLAYER_OWNER).size() == 1,
-		"Only the revived instance leaves removal and the activation draws one"
+		"Only the powered instance leaves removal and the activation draws one"
 	)
 
 

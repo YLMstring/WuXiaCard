@@ -2100,6 +2100,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 								"conditions": [
 									{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 									{"type": CONDITION_SELECTED_CARD_HAS_NONZERO_POWER},
+									{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
 								],
 								"limit": 1,
 							},
