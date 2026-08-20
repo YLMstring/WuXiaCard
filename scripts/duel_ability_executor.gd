@@ -244,6 +244,7 @@ static func execute_actions(
 					not event_value is Dictionary
 					or StringName((event_value as Dictionary).get("type", &""))
 					!= &"ki_changed"
+					or bool((event_value as Dictionary).get("ki_trigger_resolved", false))
 				):
 					continue
 				var ki_event: Dictionary = event_value
@@ -464,13 +465,43 @@ static func _execute_action(
 			context
 		)
 	if action_type == Catalog.ACTION_GAIN_KI:
+		var gain_instance_id: StringName = source_instance_id
+		var gain_owner: int = expected_owner
+		if declaration.has("card"):
+			var gain_snapshot: Dictionary = _get_reference_snapshot(
+				context,
+				StringName(declaration.get("card", &""))
+			)
+			var gain_subject: Dictionary = _locate_snapshot_subject(state, gain_snapshot)
+			if gain_subject.is_empty():
+				return _no_effect(source_cell)
+			gain_instance_id = StringName(
+				(gain_subject.get("card", {}) as Dictionary).get("instance_id", &"")
+			)
+			gain_owner = int(gain_subject.get("owner_id", 0))
 		return _change_ki(
 			state,
 			source_cell,
-			source_instance_id,
-			expected_owner,
+			gain_instance_id,
+			gain_owner,
 			int(declaration.get("amount", 0)),
 			action_type
+		)
+	if action_type == Catalog.ACTION_TRANSFER_CARD_RESOURCE:
+		return _transfer_card_resource(
+			state,
+			source_cell,
+			declaration,
+			context,
+			event_resolver
+		)
+	if action_type == Catalog.ACTION_DISTRIBUTE_KI:
+		return _distribute_ki(
+			state,
+			source_cell,
+			declaration,
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_CHANGE_POWERS:
 		var power_reference := StringName(declaration.get("card", &""))
@@ -727,6 +758,306 @@ static func _execute_action(
 			context
 		)
 	return _no_effect(source_cell)
+
+
+static func _transfer_card_resource(
+	state: StateData,
+	source_cell: int,
+	declaration: Dictionary,
+	context: Dictionary,
+	event_resolver: Callable
+) -> Dictionary:
+	var donor: Dictionary = _locate_snapshot_subject(
+		state,
+		_get_reference_snapshot(
+			context,
+			StringName(declaration.get("from", &""))
+		)
+	)
+	var receiver: Dictionary = _locate_snapshot_subject(
+		state,
+		_get_reference_snapshot(
+			context,
+			StringName(declaration.get("to", &""))
+		)
+	)
+	if donor.is_empty() or receiver.is_empty():
+		return _no_effect(source_cell)
+	var donor_id := StringName((donor.get("card", {}) as Dictionary).get("instance_id", &""))
+	var receiver_id := StringName(
+		(receiver.get("card", {}) as Dictionary).get("instance_id", &"")
+	)
+	if donor_id == &"" or receiver_id == &"" or donor_id == receiver_id:
+		return _no_effect(source_cell)
+	var amount: int = int(declaration.get("amount", 0))
+	for resource_key: StringName in [
+		StringName(declaration.get("resource", &"")),
+		StringName(declaration.get("fallback_resource", &"")),
+	]:
+		if not _subject_can_donate_resource(donor, resource_key, amount):
+			continue
+		if not _subject_can_receive_resource(receiver, resource_key):
+			return _no_effect(source_cell)
+		if resource_key == Catalog.RESOURCE_KI:
+			return _transfer_ki_between_subjects(
+				state,
+				source_cell,
+				donor,
+				receiver,
+				amount,
+				false,
+				event_resolver
+			)
+		if resource_key == Catalog.RESOURCE_POWERS:
+			return _transfer_powers_between_subjects(
+				state,
+				source_cell,
+				donor,
+				receiver,
+				amount,
+				context,
+				event_resolver
+			)
+	return _no_effect(source_cell)
+
+
+static func _distribute_ki(
+	state: StateData,
+	source_cell: int,
+	declaration: Dictionary,
+	context: Dictionary,
+	event_resolver: Callable
+) -> Dictionary:
+	var distributor: Dictionary = _locate_snapshot_subject(
+		state,
+		_get_reference_snapshot(
+			context,
+			StringName(declaration.get("from", &""))
+		)
+	)
+	if distributor.is_empty():
+		return _no_effect(source_cell)
+	var distributor_id := StringName(
+		(distributor.get("card", {}) as Dictionary).get("instance_id", &"")
+	)
+	var amount: int = int(declaration.get("amount", 0))
+	if distributor_id == &"" or amount <= 0:
+		return _no_effect(source_cell)
+	var selector: Dictionary = declaration.get("selector", {})
+	var conditions: Array = selector.get("conditions", [])
+	var selected_ids: Array[StringName] = Selector.snapshot(
+		state,
+		selector,
+		distributor_id,
+		context
+	)
+	var result: Dictionary = _no_effect(source_cell)
+	while true:
+		distributor = Selector.locate_card(state, distributor_id)
+		if (
+			distributor.is_empty()
+			or not _subject_can_donate_resource(distributor, Catalog.RESOURCE_KI, amount)
+		):
+			break
+		var transferred_in_round: bool = false
+		for selected_id: StringName in selected_ids:
+			distributor = Selector.locate_card(state, distributor_id)
+			if (
+				distributor.is_empty()
+				or not _subject_can_donate_resource(
+					distributor,
+					Catalog.RESOURCE_KI,
+					amount
+				)
+			):
+				break
+			var recipient: Dictionary = Selector.revalidate(
+				state,
+				selected_id,
+				distributor_id,
+				conditions,
+				context
+			)
+			if recipient.is_empty():
+				continue
+			var transfer_result: Dictionary = _transfer_ki_between_subjects(
+				state,
+				source_cell,
+				distributor,
+				recipient,
+				amount,
+				true,
+				event_resolver
+			)
+			if StringName(transfer_result.get("result", &"")) != Catalog.ACTION_RESULT_APPLIED:
+				continue
+			transferred_in_round = true
+			_merge_action_resolution(result, transfer_result)
+		if not transferred_in_round:
+			break
+	result["source_cell"] = source_cell
+	return result
+
+
+static func _transfer_ki_between_subjects(
+	state: StateData,
+	source_cell: int,
+	donor: Dictionary,
+	receiver: Dictionary,
+	amount: int,
+	resolve_triggers_now: bool,
+	event_resolver: Callable
+) -> Dictionary:
+	if (
+		not _subject_can_donate_resource(donor, Catalog.RESOURCE_KI, amount)
+		or not _subject_can_receive_resource(receiver, Catalog.RESOURCE_KI)
+	):
+		return _no_effect(source_cell)
+	var donor_card: Dictionary = donor.get("card", {})
+	var receiver_card: Dictionary = receiver.get("card", {})
+	var donor_id := StringName(donor_card.get("instance_id", &""))
+	var receiver_id := StringName(receiver_card.get("instance_id", &""))
+	if donor_id == &"" or receiver_id == &"" or donor_id == receiver_id:
+		return _no_effect(source_cell)
+	var result: Dictionary = _no_effect(source_cell)
+	_merge_action_resolution(
+		result,
+		_change_ki(
+			state,
+			source_cell,
+			donor_id,
+			int(donor.get("owner_id", 0)),
+			-amount,
+			Catalog.ACTION_TRANSFER_CARD_RESOURCE
+		)
+	)
+	_merge_action_resolution(
+		result,
+		_change_ki(
+			state,
+			source_cell,
+			receiver_id,
+			int(receiver.get("owner_id", 0)),
+			amount,
+			Catalog.ACTION_TRANSFER_CARD_RESOURCE
+		)
+	)
+	if resolve_triggers_now:
+		_resolve_ki_events_now(result, event_resolver)
+	return result
+
+
+static func _transfer_powers_between_subjects(
+	state: StateData,
+	source_cell: int,
+	donor: Dictionary,
+	receiver: Dictionary,
+	amount: int,
+	context: Dictionary,
+	event_resolver: Callable
+) -> Dictionary:
+	if (
+		not _subject_can_donate_resource(donor, Catalog.RESOURCE_POWERS, amount)
+		or not _subject_can_receive_resource(receiver, Catalog.RESOURCE_POWERS)
+	):
+		return _no_effect(source_cell)
+	var donor_id := StringName((donor.get("card", {}) as Dictionary).get("instance_id", &""))
+	var receiver_id := StringName(
+		(receiver.get("card", {}) as Dictionary).get("instance_id", &"")
+	)
+	if donor_id == &"" or receiver_id == &"" or donor_id == receiver_id:
+		return _no_effect(source_cell)
+	var result: Dictionary = _no_effect(source_cell)
+	_merge_action_resolution(
+		result,
+		_change_powers(
+			state,
+			source_cell,
+			donor_id,
+			int(donor.get("owner_id", 0)),
+			-amount,
+			context,
+			event_resolver
+		)
+	)
+	_merge_action_resolution(
+		result,
+		_change_powers(
+			state,
+			source_cell,
+			receiver_id,
+			int(receiver.get("owner_id", 0)),
+			amount,
+			context,
+			event_resolver
+		)
+	)
+	return result
+
+
+static func _subject_can_donate_resource(
+	subject: Dictionary,
+	resource: StringName,
+	amount: int
+) -> bool:
+	if subject.is_empty() or amount <= 0:
+		return false
+	var card: Dictionary = subject.get("card", {})
+	if resource == Catalog.RESOURCE_KI:
+		return int(card.get("ki", 0)) >= amount
+	if resource == Catalog.RESOURCE_POWERS:
+		if not Rules.can_change_powers(card):
+			return false
+		var powers: Array = card.get("powers", [])
+		return (
+			powers.size() == 4
+			and powers.any(func(value: Variant) -> bool: return int(value) > 0)
+		)
+	return false
+
+
+static func _subject_can_receive_resource(
+	subject: Dictionary,
+	resource: StringName
+) -> bool:
+	if subject.is_empty():
+		return false
+	if resource == Catalog.RESOURCE_KI:
+		return true
+	if resource == Catalog.RESOURCE_POWERS:
+		var card: Dictionary = subject.get("card", {})
+		return Rules.can_change_powers(card) and (card.get("powers", []) as Array).size() == 4
+	return false
+
+
+static func _resolve_ki_events_now(
+	result: Dictionary,
+	event_resolver: Callable
+) -> void:
+	if not event_resolver.is_valid():
+		return
+	var initial_events: Array = (result.get("events", []) as Array).duplicate()
+	for event_value: Variant in initial_events:
+		if (
+			not event_value is Dictionary
+			or StringName((event_value as Dictionary).get("type", &"")) != &"ki_changed"
+		):
+			continue
+		var ki_event: Dictionary = event_value
+		ki_event["ki_trigger_resolved"] = true
+		var resolution_value: Variant = event_resolver.call(
+			Catalog.CARD_KI_CHANGED,
+			{
+				"trigger_cell": int(ki_event.get("target_cell", -1)),
+				"trigger_instance_id": StringName(ki_event.get("instance_id", &"")),
+				"trigger_owner_id": int(ki_event.get("owner_id", 0)),
+				"previous_ki": int(ki_event.get("previous_ki", 0)),
+				"ki": int(ki_event.get("ki", 0)),
+				"change_reason": StringName(ki_event.get("change_reason", &"")),
+			}
+		)
+		if resolution_value is Dictionary:
+			_merge_action_resolution(result, resolution_value as Dictionary)
 
 
 static func _for_each_selected_card(
@@ -1308,24 +1639,40 @@ static func _request_trigger_attack(
 	var target_slot: Dictionary = _get_card_slot(state, target_cell, target_instance_id)
 	if source_slot.is_empty() or target_slot.is_empty():
 		return _no_effect(source_cell)
+	var attack_policy: Dictionary = {}
+	var source_owner: int = int(source_slot.get("owner", 0))
+	if Abilities.has_modifier(
+		source_slot.get("card", {}),
+		Catalog.MODIFIER_SELF_ATTACKS_ALL,
+		state.get_enabled_effect_gates(source_owner)
+	):
+		attack_policy["attack_target_policy"] = Catalog.ATTACK_TARGET_ALL
+	var rules_context: Dictionary = {
+		"reason": &"card_summoned_reaction",
+		"trigger_context": context,
+	}
+	rules_context.merge(attack_policy, true)
 	if not Rules.can_attack_target(
 		state.board,
 		source_cell,
 		target_cell,
-		{"reason": &"card_summoned_reaction", "trigger_context": context}
+		rules_context
 	):
 		return _no_effect(source_cell)
 	var result: Dictionary = _applied(source_cell)
-	result["attack_requests"].append({
+	var request: Dictionary = {
 		"mode": &"targeted",
 		"source_cell": source_cell,
 		"source_instance_id": source_instance_id,
-		"source_owner_id": int(source_slot.get("owner", 0)),
+		"source_owner_id": source_owner,
 		"target_cell": target_cell,
 		"target_instance_id": target_instance_id,
 		"target_owner_id": int(target_slot.get("owner", 0)),
 		"reason": &"card_summoned_reaction",
-	})
+	}
+	if not attack_policy.is_empty():
+		request["attack_policy"] = attack_policy
+	result["attack_requests"].append(request)
 	return result
 
 

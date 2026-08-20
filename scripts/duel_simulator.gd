@@ -484,6 +484,8 @@ static func _resolve_standard_attacks(
 		return result
 	var attack_policy: Dictionary = _get_standard_attack_policy(
 		state,
+		source_cell,
+		source_instance_id,
 		attacker_owner,
 		requested_policy
 	)
@@ -1179,7 +1181,13 @@ static func _resolve_attack_request(state: StateData, request: Dictionary) -> Di
 	var attacker_owner: int = int(request.get("source_owner_id", 0))
 	if _attack_limit_reached(state, attacker_owner) or _attack_is_prohibited(state, attacker_owner):
 		return _empty_resolution()
-	var targeted_policy: Dictionary = request.get("attack_policy", {}) as Dictionary
+	var targeted_policy: Dictionary = _get_standard_attack_policy(
+		state,
+		source_cell,
+		source_instance_id,
+		attacker_owner,
+		request.get("attack_policy", {}) as Dictionary
+	)
 	if not _attack_is_valid(
 		state,
 		source_cell,
@@ -1314,11 +1322,25 @@ static func _attack_is_prohibited(state: StateData, attacker_owner: int) -> bool
 
 static func _get_standard_attack_policy(
 	state: StateData,
+	attacker_cell: int,
+	attacker_instance_id: StringName,
 	attacker_owner: int,
 	requested_policy: Dictionary = {}
 ) -> Dictionary:
-	if not requested_policy.is_empty():
-		return requested_policy.duplicate(true)
+	var resolved_policy: Dictionary = requested_policy.duplicate(true)
+	if _card_instance_at(state, attacker_cell, attacker_instance_id):
+		var attacker_card: Dictionary = (
+			(state.board[attacker_cell] as Dictionary).get("card", {})
+		)
+		if Abilities.has_modifier(
+			attacker_card,
+			Catalog.MODIFIER_SELF_ATTACKS_ALL,
+			state.get_enabled_effect_gates(attacker_owner)
+		):
+			resolved_policy["attack_target_policy"] = Catalog.ATTACK_TARGET_ALL
+			return resolved_policy
+	if not resolved_policy.is_empty():
+		return resolved_policy
 	for slot_value: Variant in state.board:
 		if slot_value == null:
 			continue

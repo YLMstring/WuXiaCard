@@ -71,6 +71,50 @@ static func card_uses_ki(card: Dictionary) -> bool:
 	return not get_activate_abilities(card).is_empty()
 
 
+static func card_can_spend_ki(
+	card: Dictionary,
+	enabled_effect_gates: Variant = null
+) -> bool:
+	if not card_effects_enabled(card, enabled_effect_gates):
+		return false
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		var activation_value: Variant = ability.get("activation", null)
+		if activation_value is Dictionary:
+			var activation: Dictionary = activation_value
+			if (
+				_actions_can_spend_ki(activation.get("costs", []))
+				or _actions_can_spend_ki(activation.get("actions", []))
+			):
+				return true
+		for trigger_value: Variant in ability.get("triggers", []):
+			if (
+				trigger_value is Dictionary
+				and _actions_can_spend_ki(
+					(trigger_value as Dictionary).get("actions", [])
+				)
+			):
+				return true
+	return false
+
+
+static func _actions_can_spend_ki(actions_value: Variant) -> bool:
+	if not actions_value is Array:
+		return false
+	for action_value: Variant in actions_value as Array:
+		if not action_value is Dictionary:
+			continue
+		var action: Dictionary = action_value
+		var action_type := StringName(action.get("type", &""))
+		if action_type in [Catalog.ACTION_SPEND_KI, Catalog.ACTION_SPEND_ALL_KI]:
+			return true
+		if _actions_can_spend_ki(action.get("actions", null)):
+			return true
+	return false
+
+
 static func get_ki_bead_presentation(card: Dictionary) -> Dictionary:
 	var ki: int = maxi(0, int(card.get("ki", 0)))
 	var has_activation: bool = card_uses_ki(card)

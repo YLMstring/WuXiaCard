@@ -2,6 +2,7 @@ class_name DuelCardSelector
 extends RefCounted
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
@@ -152,9 +153,52 @@ static func conditions_match(
 				!= selected_instance_id
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_CAN_SPEND_KI:
+			if not Abilities.card_can_spend_ki(
+				selected_card,
+				state.get_enabled_effect_gates(int(candidate.get("owner_id", 0)))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE:
+			if not _can_transfer_declared_resource(selected_card, condition):
+				return false
 		else:
 			return false
 	return true
+
+
+static func _can_transfer_declared_resource(
+	card: Dictionary,
+	declaration: Dictionary
+) -> bool:
+	var amount: int = int(declaration.get("amount", 0))
+	if amount <= 0:
+		return false
+	if _card_has_resource(card, StringName(declaration.get("resource", &"")), amount):
+		return true
+	return _card_has_resource(
+		card,
+		StringName(declaration.get("fallback_resource", &"")),
+		amount
+	)
+
+
+static func _card_has_resource(
+	card: Dictionary,
+	resource: StringName,
+	amount: int
+) -> bool:
+	if resource == Catalog.RESOURCE_KI:
+		return int(card.get("ki", 0)) >= amount
+	if resource == Catalog.RESOURCE_POWERS:
+		if not Rules.can_change_powers(card):
+			return false
+		var powers: Array = card.get("powers", [])
+		return (
+			powers.size() == 4
+			and powers.any(func(value: Variant) -> bool: return int(value) > 0)
+		)
+	return false
 
 
 static func _resolve_source(

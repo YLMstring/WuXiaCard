@@ -147,8 +147,8 @@ catalog 声明与纯数据事件路径，不在 `DuelController`、搜索或界�
    吸取”“防守视为零”“再次翻面后分配并攻击”三个能力条目。
 
 进场后的第一次自我翻面只改变所属方并授予三个新效果，不执行内力分配或
-额外攻击。翻面保留的不分敌我 modifier 会影响随后正常发生的进场攻击，
-以及来源之后发起的所有攻击。
+额外攻击。由于所属方已经改变，沿用既有规则取消这次标准进场攻击；翻面
+保留的不分敌我 modifier 只影响来源之后实际发起的攻击。
 
 ## 北冥神功 `XiXinDaFa5`
 
@@ -327,21 +327,29 @@ const YIJIN_STRENGTHEN_HAND_ACTIONS: Array = [
 		"type": ACTION_FOR_EACH_SELECTED_CARD,
 		"selector": {
 			"zones": [CARD_ZONE_HAND],
+			"conditions": [
+				{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+				{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+			],
+		},
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": CARD_REF_SELECTED_CARD,
+		}],
+		"power_change_batch_group": YIJIN_HAND_BATCH,
+	},
+	{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_HAND],
 			"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
 		},
-		"actions": [
-			{
-				"type": ACTION_CHANGE_POWERS,
-				"amount": 1,
-				"card": CARD_REF_SELECTED_CARD,
-			},
-			{
-				"type": ACTION_GAIN_KI,
-				"amount": 1,
-				"card": CARD_REF_SELECTED_CARD,
-			},
-		],
-		"power_change_batch_group": YIJIN_HAND_BATCH,
+		"actions": [{
+			"type": ACTION_GAIN_KI,
+			"amount": 1,
+			"card": CARD_REF_SELECTED_CARD,
+		}],
 	},
 	{"type": ACTION_DRAW_CARDS, "amount": 1},
 ]

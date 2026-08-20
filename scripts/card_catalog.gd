@@ -66,6 +66,10 @@ const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
 const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_has_nonzero_power"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
+const CONDITION_SELECTED_CARD_CAN_SPEND_KI: StringName = &"selected_card_can_spend_ki"
+const CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE: StringName = (
+	&"selected_card_can_transfer_resource"
+)
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
 const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
@@ -102,6 +106,8 @@ const ACTION_REVEAL_CARD: StringName = &"reveal_card"
 const ACTION_SWAP_SELF_WITH_TRIGGER_CARD: StringName = &"swap_self_with_trigger_card"
 const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_non_retained_suppression"
 const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
+const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
+const ACTION_DISTRIBUTE_KI: StringName = &"distribute_ki"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
@@ -114,6 +120,8 @@ const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
 const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
 const VALUE_CARD_COUNT: StringName = &"card_count"
+const RESOURCE_KI: StringName = &"ki"
+const RESOURCE_POWERS: StringName = &"powers"
 const REVEAL_FILTER_ALL: StringName = &"all"
 const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
@@ -127,6 +135,7 @@ const MODIFIER_UNLIMITED_ATTACK_RANGE: StringName = &"unlimited_attack_range"
 const MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS: StringName = &"non_orthogonal_attack_any_axis"
 const MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET: StringName = &"standard_attack_first_legal_target"
 const MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN: StringName = &"enemy_cannot_attack_during_owner_turn"
+const MODIFIER_SELF_ATTACKS_ALL: StringName = &"self_attacks_all"
 const ATTACK_TARGET_ENEMIES_ONLY: StringName = &"enemies_only"
 const ATTACK_TARGET_ALLIES_ONLY: StringName = &"allies_only"
 const ATTACK_TARGET_ALL: StringName = &"all"
@@ -209,6 +218,8 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
 	CONDITION_SELECTED_CARD_HAS_NONZERO_POWER,
 	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+	CONDITION_SELECTED_CARD_CAN_SPEND_KI,
+	CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD, CARD_ZONE_REMOVED]
 const KNOWN_ACTIONS: Array[StringName] = [
@@ -245,6 +256,8 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_SWAP_SELF_WITH_TRIGGER_CARD,
 	ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
 	ACTION_DEPART_CARD_FOR_RESUMMON,
+	ACTION_TRANSFER_CARD_RESOURCE,
+	ACTION_DISTRIBUTE_KI,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
@@ -258,6 +271,7 @@ const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 	OWNER_OPPONENT_OF_ABILITY_SOURCE,
 ]
 const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
+const KNOWN_RESOURCES: Array[StringName] = [RESOURCE_KI, RESOURCE_POWERS]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
 const KNOWN_MODIFIERS: Array[StringName] = [
@@ -272,6 +286,7 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS,
 	MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET,
 	MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
+	MODIFIER_SELF_ATTACKS_ALL,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -463,6 +478,177 @@ const HANBIN_LAST_KI_FLIP: Dictionary = {
 			"type": ACTION_FLIP_SELF,
 			"new_owner": OWNER_OPPONENT_OF_ABILITY_SOURCE,
 		}],
+	}],
+}
+
+const XIXING_BEIMING_TRANSFER: Dictionary = {
+	"type": ACTION_TRANSFER_CARD_RESOURCE,
+	"from": CARD_REF_SELECTED_CARD,
+	"to": CARD_REF_ABILITY_SOURCE,
+	"amount": 1,
+	"resource": RESOURCE_KI,
+	"fallback_resource": RESOURCE_POWERS,
+}
+
+const XIXING_BEIMING_TRANSFERABLE: Dictionary = {
+	"type": CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+	"amount": 1,
+	"resource": RESOURCE_KI,
+	"fallback_resource": RESOURCE_POWERS,
+}
+
+const XIXING_BEIMING_TURN_ABSORB: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_START_OWNER_TURN,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						XIXING_BEIMING_TRANSFERABLE,
+					],
+					"limit": 1,
+				},
+				"actions": [XIXING_BEIMING_TRANSFER],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						XIXING_BEIMING_TRANSFERABLE,
+					],
+				},
+				"actions": [XIXING_BEIMING_TRANSFER],
+			},
+		],
+	}],
+}
+
+const XIXING_BEIMING_ZERO_DEFENSE: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+		"value": 0,
+	}],
+}
+
+const XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_DISTRIBUTE_KI,
+				"from": CARD_REF_ABILITY_SOURCE,
+				"amount": 1,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD, CARD_ZONE_HAND],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_CAN_SPEND_KI},
+					],
+				},
+			},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
+	}],
+}
+
+const XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_TURN_ABSORB,
+			},
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_ZERO_DEFENSE,
+			},
+			{
+				"type": ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE,
+			},
+		],
+	}],
+}
+
+const XIXING_BEIMING_ENTRY_FLIP: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FLIP_SELF,
+			"new_owner": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+		}],
+	}],
+}
+
+const XIXING_SELF_ATTACKS_ALL: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{"type": MODIFIER_SELF_ATTACKS_ALL}],
+}
+
+const YIJIN_HAND_BATCH: StringName = &"yijin_all_hand"
+
+const YIJIN_STRENGTHEN_HAND_ACTIONS: Array = [
+	{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_HAND],
+			"conditions": [
+				{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+				{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+			],
+		},
+		"actions": [{
+			"type": ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": CARD_REF_SELECTED_CARD,
+		}],
+		"power_change_batch_group": YIJIN_HAND_BATCH,
+	},
+	{
+		"type": ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [CARD_ZONE_HAND],
+			"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+		},
+		"actions": [{
+			"type": ACTION_GAIN_KI,
+			"amount": 1,
+			"card": CARD_REF_SELECTED_CARD,
+		}],
+	},
+	{"type": ACTION_DRAW_CARDS, "amount": 1},
+]
+
+const YIJIN_AFTER_SUMMONED: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": YIJIN_STRENGTHEN_HAND_ACTIONS,
+	}],
+}
+
+const YIJIN_RETURNED_TO_ORIGINAL: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF},
+		],
+		"actions": YIJIN_STRENGTHEN_HAND_ACTIONS,
 	}],
 }
 
@@ -1797,7 +1983,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，所有手牌加一点数和内力，抽一张牌。锁定：翻面后，若我此时回到最初一方，所有手牌加一点数和内力，抽一张牌。",
 		"flavor": "易筋经的功夫圜一身之脉络，系五脏之精神，周而不散，行而不断，气自内生，血从外润。练成此经后，心动而力发，一攒一放，自然而施，不觉其出而自出，如潮之涨，似雷之发。少侠，练那易筋经，便如一叶小舟于大海巨涛之中，怒浪澎湃之际，小舟自然抛高伏低，何尝用力？若要用力，又那有力道可用？又从何处用起？",
 		"powers": [3, 3, 3, 3],
-		"abilities": [],
+		"abilities": [YIJIN_AFTER_SUMMONED, YIJIN_RETURNED_TO_ORIGINAL],
 	},
 	&"XiXinDaFa4": {
 		"id": &"XiXinDaFa4",
@@ -1809,7 +1995,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：我攻击时不分敌我。进场后，使我翻面，并获得以下效果：回合开始时，向你最左侧的手牌以及所有相邻友方吸取一点内力，若没有内力可以吸取，改为吸取点数，判断是否能被攻击时，所有点数视为零，我翻面后，将我的内力依次分配给场上和手牌中能够耗内力的友方牌，直到我的内力耗尽，然后发起攻击。",
 		"flavor": "任我行吸取旁人功力以为己用的阴毒武功，武林中人人闻之色变。",
 		"powers": [1, 1, 1, 1],
-		"abilities": [],
+		"abilities": [
+			XIXING_SELF_ATTACKS_ALL,
+			XIXING_BEIMING_ENTRY_FLIP,
+			XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT,
+		],
 	},
 	&"XiXinDaFa5": {
 		"id": &"XiXinDaFa5",
@@ -1821,7 +2011,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，使我翻面，并获得以下效果：回合开始时，向你最左侧的手牌以及所有相邻友方吸取一点内力，若没有内力可以吸取，改为吸取点数，判断是否能被攻击时，所有点数视为零，我翻面后，将我的内力依次分配给场上和手牌中能够耗内力的友方牌，直到我的内力耗尽，然后发起攻击。",
 		"flavor": "逍遥派武功，以积蓄内力为第一要义。内力既厚，天下武功无不为我所用，犹之北冥，大舟小舟无不载，大鱼小鱼无不容。是故内力为本，招数为末。",
 		"powers": [1, 1, 1, 1],
-		"abilities": [],
+		"abilities": [
+			XIXING_BEIMING_ENTRY_FLIP,
+			XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT,
+		],
 	},
 	&"TiYunZong2": {
 		"id": &"TiYunZong2",
@@ -4258,7 +4451,7 @@ static func _validate_action(
 		var weapon: Variant = action.get("weapon", null)
 		if typeof(weapon) != TYPE_STRING or String(weapon).strip_edges().is_empty():
 			errors.append("Card %s %s draw action requires a nonempty weapon filter" % [card_id, context_name])
-	if action_type in [ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY] and action.has("card"):
+	if action_type in [ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY] and action.has("card"):
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
@@ -4267,6 +4460,51 @@ static func _validate_action(
 			)
 		if is_cost:
 			errors.append("Card %s activation cost cannot specify a card reference" % card_id)
+	if action_type == ACTION_TRANSFER_CARD_RESOURCE:
+		for field: StringName in [&"from", &"to"]:
+			allowed_keys.append(field)
+			if StringName(action.get(field, &"")) not in KNOWN_CARD_REFERENCES:
+				errors.append(
+					"Card %s %s transfer action requires a known %s card reference"
+					% [card_id, context_name, field]
+				)
+		for field: StringName in [&"resource", &"fallback_resource"]:
+			allowed_keys.append(field)
+			if StringName(action.get(field, &"")) not in KNOWN_RESOURCES:
+				errors.append(
+					"Card %s %s transfer action requires a known %s"
+					% [card_id, context_name, field]
+				)
+		allowed_keys.append(&"amount")
+		var transfer_amount: Variant = action.get("amount", null)
+		if typeof(transfer_amount) != TYPE_INT or int(transfer_amount) <= 0:
+			errors.append(
+				"Card %s %s transfer action requires a positive integer amount"
+				% [card_id, context_name]
+			)
+		if StringName(action.get("resource", &"")) == StringName(
+			action.get("fallback_resource", &"")
+		):
+			errors.append(
+				"Card %s %s transfer action requires distinct primary and fallback resources"
+				% [card_id, context_name]
+			)
+	if action_type == ACTION_DISTRIBUTE_KI:
+		allowed_keys.append(&"from")
+		allowed_keys.append(&"amount")
+		allowed_keys.append(&"selector")
+		if StringName(action.get("from", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append(
+				"Card %s %s distribute action requires a known source card reference"
+				% [card_id, context_name]
+			)
+		var distribute_amount: Variant = action.get("amount", null)
+		if typeof(distribute_amount) != TYPE_INT or int(distribute_amount) <= 0:
+			errors.append(
+				"Card %s %s distribute action requires a positive integer amount"
+				% [card_id, context_name]
+			)
+		_validate_selector(card_id, context_name, action.get("selector", null), errors)
 	if action_type == ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION:
 		allowed_keys.append(&"recipient")
 		allowed_keys.append(&"amount")
@@ -4664,6 +4902,29 @@ static func _validate_selector_condition(
 			OWNER_OPPONENT_OF_ABILITY_SOURCE,
 		]:
 			errors.append("Card %s %s previous-play condition requires a relative owner" % [card_id, context_name])
+	if condition_type == CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE:
+		allowed_keys.append(&"amount")
+		allowed_keys.append(&"resource")
+		allowed_keys.append(&"fallback_resource")
+		var amount_value: Variant = condition.get("amount", null)
+		if typeof(amount_value) != TYPE_INT or int(amount_value) <= 0:
+			errors.append(
+				"Card %s %s transferable-resource condition requires a positive integer amount"
+				% [card_id, context_name]
+			)
+		for field: StringName in [&"resource", &"fallback_resource"]:
+			if StringName(condition.get(field, &"")) not in KNOWN_RESOURCES:
+				errors.append(
+					"Card %s %s transferable-resource condition requires a known %s"
+					% [card_id, context_name, field]
+				)
+		if StringName(condition.get("resource", &"")) == StringName(
+			condition.get("fallback_resource", &"")
+		):
+			errors.append(
+				"Card %s %s transferable-resource condition requires distinct resources"
+				% [card_id, context_name]
+			)
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s selector condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])
