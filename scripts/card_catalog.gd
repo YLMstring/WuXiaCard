@@ -1420,7 +1420,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe1": {
 		"id": &"CangSongYingKe1",
 		"glyph": "苍松迎客",
-		"picture": "res://pics/LKT010_568.png",
+		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山派",
 		"tier": 1,
 		"weapon": "剑法",
@@ -1432,7 +1432,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe2": {
 		"id": &"CangSongYingKe2",
 		"glyph": "苍松迎客",
-		"picture": "res://pics/LKT010_568.png",
+		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山派",
 		"tier": 2,
 		"weapon": "剑法",
@@ -1444,7 +1444,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe3": {
 		"id": &"CangSongYingKe3",
 		"glyph": "苍松迎客",
-		"picture": "res://pics/LKT010_568.png",
+		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山派",
 		"tier": 3,
 		"weapon": "剑法",
@@ -1476,7 +1476,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe4": {
 		"id": &"CangSongYingKe4",
 		"glyph": "苍松迎客",
-		"picture": "res://pics/LKT010_568.png",
+		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山派",
 		"tier": 4,
 		"weapon": "剑法",

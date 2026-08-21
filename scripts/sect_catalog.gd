@@ -25,7 +25,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 	&"HuaShanPai": {
 		"id": &"HuaShanPai",
 		"glyph": "华山派",
-		"picture": "res://pics/LKT010_568.png",
+		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山",
 		"tier": 4,
 		"weapon": "剑法/心法",
