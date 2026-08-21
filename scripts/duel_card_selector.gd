@@ -295,6 +295,19 @@ static func locate_card(state: StateData, instance_id: StringName) -> Dictionary
 					"index": hand_index,
 					"card": card,
 				}
+		var discarded: Array = state.discard_piles.get(owner_id, []) as Array
+		for discard_index: int in range(discarded.size()):
+			var discard_value: Variant = discarded[discard_index]
+			if not discard_value is Dictionary:
+				continue
+			var discarded_card: Dictionary = discard_value
+			if StringName(discarded_card.get("instance_id", &"")) == instance_id:
+				return {
+					"zone": Catalog.CARD_ZONE_DISCARD,
+					"owner_id": owner_id,
+					"index": discard_index,
+					"card": discarded_card,
+				}
 		var removed: Array = state.removed_cards.get(owner_id, []) as Array
 		for removed_index: int in range(removed.size()):
 			var removed_value: Variant = removed[removed_index]
@@ -350,7 +363,7 @@ static func _get_zone_candidates(
 				"index": cell,
 				"card": slot.get("card", {}),
 			})
-	elif zone == Catalog.CARD_ZONE_REMOVED:
+	elif zone in [Catalog.CARD_ZONE_DISCARD, Catalog.CARD_ZONE_REMOVED]:
 		var owner_order: Array[int] = [source_owner]
 		var other_owner: int = (
 			Rules.OPPONENT_OWNER
@@ -359,15 +372,19 @@ static func _get_zone_candidates(
 		)
 		owner_order.append(other_owner)
 		for owner_id: int in owner_order:
-			var removed: Array = state.removed_cards.get(owner_id, []) as Array
-			for removed_index: int in range(removed.size()):
-				var card_value: Variant = removed[removed_index]
+			var cards: Array = (
+				state.discard_piles.get(owner_id, []) as Array
+				if zone == Catalog.CARD_ZONE_DISCARD
+				else state.removed_cards.get(owner_id, []) as Array
+			)
+			for card_index: int in range(cards.size()):
+				var card_value: Variant = cards[card_index]
 				if not card_value is Dictionary:
 					continue
 				candidates.append({
-					"zone": Catalog.CARD_ZONE_REMOVED,
+					"zone": zone,
 					"owner_id": owner_id,
-					"index": removed_index,
+					"index": card_index,
 					"card": card_value,
 				})
 	return candidates

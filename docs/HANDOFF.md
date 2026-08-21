@@ -82,6 +82,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
 - `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the
   exact pending target before ownership can change.
+- `JinGangBuHuai1`–`4` use generic discard and exact-instance recall actions.
+  Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4 makes
+  every protected friendly gain one point and attack once per tier-4 source.
+- Runtime ki beads are gold for any flip-prevention ability and light gray for
+  semantic self-exile, in that priority order. `BaGuaFangWei` suppresses its
+  bead absolutely. Discard presentation reuses the existing fade-out.
 - Only cards with an activation count as ki-using for bead display.
 - A card may declare multiple catalog activations in priority order. A dynamically
   received activation replaces all current activations while preserving passive

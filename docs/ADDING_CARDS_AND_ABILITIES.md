@@ -391,10 +391,12 @@ Every attack:
 3. relocate both exact instances and revalidate the normal attack, including
    range and power;
 4. if valid, resolve global `CARD_BEFORE_FLIPPED`;
-5. relocate both exact instances again, but do not recheck attack range;
-6. cancel only if a non-movement invalidator now prevents the committed flip;
-7. flip the exact target instance in its current cell;
-8. resolve `CARD_AFTER_FLIPPED`.
+5. if an explicit prevention request matches, emit and globally resolve
+   `CARD_FLIP_PREVENTED`, then end this flip without after-flip timing;
+6. relocate both exact instances again, but do not recheck attack range;
+7. cancel only if a non-movement invalidator now prevents the committed flip;
+8. flip the exact target instance in its current cell;
+9. resolve `CARD_AFTER_FLIPPED`.
 
 If step 3 fails, neither flip trigger is emitted. Once
 `CARD_BEFORE_FLIPPED` begins, movement by itself never cancels the committed
@@ -403,6 +405,11 @@ intended owner still prevents it. Non-attack flips use the same before/after
 events and follow the exact target instance across movement.
 
 Movement is not a summon. Exile is not a flip.
+
+Discard is also not exile. `ACTION_DISCARD_CARD` moves an exact hand reference
+to `CARD_ZONE_DISCARD`; `ACTION_RETURN_CARD_TO_HAND` with
+`preserve_instance = true` can return that exact dictionary and `instance_id`
+without recreating the catalog card.
 
 Every actual move first resolves the catalog boundary `CARD_BEFORE_MOVED` for
 the exact moving instance. The requested move then rechecks source identity and

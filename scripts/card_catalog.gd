@@ -25,6 +25,7 @@ const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
+const CARD_FLIP_PREVENTED: StringName = &"card_flip_prevented"
 const CARD_AFTER_TARGETED_ACTIVATION: StringName = &"card_after_targeted_activation"
 const CARD_KI_CHANGED: StringName = &"card_ki_changed"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
@@ -75,6 +76,7 @@ const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_all
 const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
+const ACTION_DISCARD_CARD: StringName = &"discard_card"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
@@ -141,6 +143,7 @@ const ATTACK_TARGET_ALLIES_ONLY: StringName = &"allies_only"
 const ATTACK_TARGET_ALL: StringName = &"all"
 const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
+const CARD_ZONE_DISCARD: StringName = &"discard"
 const CARD_ZONE_REMOVED: StringName = &"removed"
 const RECIPIENT_SELF: StringName = &"self"
 const RECIPIENT_OPPONENT: StringName = &"opponent"
@@ -170,6 +173,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
 	CARD_AFTER_FLIPPED,
+	CARD_FLIP_PREVENTED,
 	CARD_AFTER_TARGETED_ACTIVATION,
 	CARD_KI_CHANGED,
 	TRIGGER_START_OWNER_TURN,
@@ -221,10 +225,16 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_CAN_SPEND_KI,
 	CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
 ]
-const KNOWN_CARD_ZONES: Array[StringName] = [CARD_ZONE_HAND, CARD_ZONE_BOARD, CARD_ZONE_REMOVED]
+const KNOWN_CARD_ZONES: Array[StringName] = [
+	CARD_ZONE_HAND,
+	CARD_ZONE_BOARD,
+	CARD_ZONE_DISCARD,
+	CARD_ZONE_REMOVED,
+]
 const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DRAW_CARDS,
 	ACTION_EXILE_CARD,
+	ACTION_DISCARD_CARD,
 	ACTION_ATTACK_TRIGGER_CARD,
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
@@ -713,6 +723,76 @@ const TEMPORARY_FLIP_PROTECTION: Dictionary = {
 			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
 		},
 	],
+}
+
+const JINGANG_DISCARD_PROTECTION: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				"limit": 1,
+				"required_count": 1,
+			},
+			"actions": [
+				{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
+				{"type": ACTION_PREVENT_TRIGGER_FLIP},
+			],
+		}],
+	}],
+}
+
+const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				"limit": 1,
+				"required_count": 1,
+			},
+			"actions": [
+				{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
+				{"type": ACTION_PREVENT_TRIGGER_FLIP},
+				{
+					"type": ACTION_SPEND_KI,
+					"amount": 1,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"on_invalid_context": STOP_RULE,
+				},
+				{
+					"type": ACTION_RETURN_CARD_TO_HAND,
+					"card": CARD_REF_SELECTED_CARD,
+					"recipient": OWNER_CARD_CURRENT,
+					"preserve_instance": true,
+				},
+			],
+		}],
+	}],
+}
+
+const JINGANG_PREVENTED_ALLY_RALLY: Dictionary = {
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": CARD_REF_TRIGGER_CARD,
+			},
+			{
+				"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+				"card": CARD_REF_TRIGGER_CARD,
+			},
+		],
+	}],
 }
 
 const QIXIN_RETAINED_ATTACK_MODIFIERS: Dictionary = {
@@ -1986,7 +2066,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，丢弃最左侧的手牌，若如此做，阻止翻面。",
 		"flavor": "韦陀掌是少林派的扎根基武功，这一招双掌推出，招式平平，所含力道却甚雄浑。",
 		"powers": [6, 2, 6, 2],
-		"abilities": [],
+		"abilities": [JINGANG_DISCARD_PROTECTION],
 	},
 	&"JinGangBuHuai2": {
 		"id": &"JinGangBuHuai2",
@@ -1998,7 +2078,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，丢弃最左侧的手牌，若如此做，阻止翻面，然后耗内力以抽回丢弃的牌。",
 		"flavor": "韦陀掌是少林派的扎根基武功，这一招双掌推出，招式平平，所含力道却甚雄浑。",
 		"powers": [6, 2, 6, 2],
-		"abilities": [],
+		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_RECALL],
 	},
 	&"JinGangBuHuai3": {
 		"id": &"JinGangBuHuai3",
@@ -2011,7 +2091,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "少林派的护体神功，随心而起，布满全身，乃古今五大神功之一。",
 		"powers": [6, 3, 6, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_RECALL],
 	},
 	&"JinGangBuHuai4": {
 		"id": &"JinGangBuHuai4",
@@ -2024,7 +2104,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "少林派的护体神功，随心而起，布满全身，乃古今五大神功之一。",
 		"powers": [6, 3, 6, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [
+			JINGANG_DISCARD_PROTECTION_WITH_RECALL,
+			JINGANG_PREVENTED_ALLY_RALLY,
+		],
 	},
 	&"YiJJ5": {
 		"id": &"YiJJ5",
@@ -3764,6 +3847,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：翻面前，将我移除。",
 		"flavor": "对局开始时，后行动的一方以逸待劳，所占据的八卦方位。",
 		"powers": [-1, -1, -1, -1],
+		"suppress_ki_bead": true,
 		"abilities": [BAGUA_EXILE_BEFORE_FLIP],
 	},
 	&"YinYangZhang3": {
@@ -4095,6 +4179,7 @@ static func create_instance(
 		"effect_gate": StringName(definition.get("effect_gate", &"")),
 		"original_owner": original_owner,
 		"ki": int(definition.get("starting_ki", 0)),
+		"suppress_ki_bead": bool(definition.get("suppress_ki_bead", false)),
 		"active_abilities": _normalize_abilities(definition["abilities"] as Array),
 		"revealed_to_owner_ids": [original_owner],
 	}
@@ -4208,6 +4293,11 @@ static func _validate_definition(
 	var starting_ki: Variant = definition.get("starting_ki", 0)
 	if typeof(starting_ki) != TYPE_INT or int(starting_ki) < 0:
 		errors.append("Card %s requires a non-negative integer starting_ki" % card_id)
+	if (
+		definition.has("suppress_ki_bead")
+		and typeof(definition.get("suppress_ki_bead")) != TYPE_BOOL
+	):
+		errors.append("Card %s requires a Boolean suppress_ki_bead" % card_id)
 	if not abilities_value is Array:
 		errors.append("Card %s requires an abilities array" % card_id)
 		return
@@ -4605,7 +4695,7 @@ static func _validate_action(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
-	if action_type == ACTION_EXILE_CARD:
+	if action_type in [ACTION_EXILE_CARD, ACTION_DISCARD_CARD]:
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
@@ -4704,10 +4794,13 @@ static func _validate_action(
 	if action_type == ACTION_RETURN_CARD_TO_HAND:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"recipient")
+		allowed_keys.append(&"preserve_instance")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append("Card %s %s return action requires a known card reference" % [card_id, context_name])
 		if StringName(action.get("recipient", &"")) not in KNOWN_OWNER_REFERENCES:
 			errors.append("Card %s %s return action requires a known recipient" % [card_id, context_name])
+		if action.has("preserve_instance") and typeof(action.get("preserve_instance")) != TYPE_BOOL:
+			errors.append("Card %s %s return action requires Boolean preserve_instance" % [card_id, context_name])
 	if action_type == ACTION_SUMMON_CARD:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"cell")

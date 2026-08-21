@@ -7,8 +7,10 @@ const CardScene: PackedScene = preload("res://scenes/card_view.tscn")
 const BEAD_NONE: StringName = &"none"
 const BEAD_DARK: StringName = &"dark"
 const BEAD_LIGHT: StringName = &"light"
+const BEAD_GRAY: StringName = &"gray"
 const BEAD_GOLD: StringName = &"gold"
 const LIGHT_BEAD_BACKGROUND: Color = Color("2f7664")
+const GRAY_BEAD_BACKGROUND: Color = Color("aeb4b2")
 const GOLD_BEAD_BACKGROUND: Color = Color("9a6a20")
 const DARK_BEAD_MODULATE: Color = Color(0.55, 0.62, 0.59, 0.72)
 const PASSIVE_MARKER_FONT_SCALE: float = 0.8
@@ -110,6 +112,118 @@ func _test_presentation_priority_table() -> void:
 		true,
 		0,
 		"Ki-threshold trigger displays zero on a gold bead"
+	)
+	var generic_prevention: Dictionary = _trigger_action_ability(
+		Catalog.CARD_BEFORE_FLIPPED,
+		[{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+		[{"type": Catalog.ACTION_PREVENT_TRIGGER_FLIP}]
+	)
+	_expect(
+		_card(0, [generic_prevention]),
+		BEAD_GOLD,
+		false,
+		0,
+		"Any runtime ability that prevents a flip uses gold"
+	)
+	var self_exile: Dictionary = _self_exile_ability()
+	_expect(
+		_card(0, [self_exile]),
+		BEAD_GRAY,
+		false,
+		0,
+		"An ability that exiles its source uses an unnumbered gray bead"
+	)
+	_expect(
+		_card(2, [self_exile]),
+		BEAD_GRAY,
+		true,
+		2,
+		"A self-exiling card displays positive ki on its gray bead"
+	)
+	var explicit_source_exile: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_EXILE_CARD,
+			"card": Catalog.CARD_REF_ABILITY_SOURCE,
+		}]
+	)
+	_expect(
+		_card(0, [explicit_source_exile]),
+		BEAD_GRAY,
+		false,
+		0,
+		"Explicitly exiling the ability source uses gray"
+	)
+	var self_trigger_exile: Dictionary = _trigger_action_ability(
+		Catalog.CARD_BEFORE_FLIPPED,
+		[{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+		[{
+			"type": Catalog.ACTION_EXILE_CARD,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}]
+	)
+	_expect(
+		_card(0, [self_trigger_exile]),
+		BEAD_GRAY,
+		false,
+		0,
+		"A self-conditioned trigger-card exile uses gray"
+	)
+	var other_trigger_exile: Dictionary = _trigger_action_ability(
+		Catalog.CARD_BEFORE_EXILED,
+		[],
+		[{
+			"type": Catalog.ACTION_EXILE_CARD,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}]
+	)
+	_expect(
+		_card(0, [other_trigger_exile]),
+		BEAD_LIGHT,
+		false,
+		0,
+		"Exiling a non-self trigger card does not classify the source as gray"
+	)
+	_expect(
+		_card(0, [self_exile, generic_prevention]),
+		BEAD_GOLD,
+		false,
+		0,
+		"Gold flip prevention takes priority over gray self-exile"
+	)
+	var selected_subject_exile: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [Catalog.CARD_ZONE_BOARD],
+				"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			},
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}]
+	)
+	_expect(
+		_card(0, [selected_subject_exile]),
+		BEAD_LIGHT,
+		false,
+		0,
+		"Exiling a selected action subject does not classify the ability source as gray"
+	)
+	var bagua: Dictionary = Catalog.create_instance(
+		&"BaGuaFangWei", 1, &"bead_hidden_bagua"
+	)
+	bagua["ki"] = 3
+	(bagua.get("active_abilities", []) as Array).append(
+		Catalog.normalize_ability(generic_prevention)
+	)
+	_expect(
+		bagua,
+		BEAD_NONE,
+		false,
+		3,
+		"Bagua suppresses its bead even after gaining ki and flip prevention"
 	)
 	_expect(
 		_card(0, [{"modifiers": [{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY}]}]),
@@ -259,6 +373,15 @@ func _test_card_view_rendering() -> void:
 	_check(
 		_style_background(badge).is_equal_approx(GOLD_BEAD_BACKGROUND),
 		"Temporary protection renders the gold bead"
+	)
+
+	card_view.call("sync_runtime_data", _card(0, [_self_exile_ability()]), 1)
+	_check(
+		badge.visible
+		and value.visible
+		and str(value.get("text")) == "化"
+		and _style_background(badge).is_equal_approx(GRAY_BEAD_BACKGROUND),
+		"Self-exile renders an unnumbered light-gray bead"
 	)
 
 	card_view.call("sync_runtime_data", _card(0, [_activate_ability()]), 1)
@@ -483,6 +606,26 @@ func _trigger(event_type: StringName, conditions: Array = []) -> Dictionary:
 		"conditions": conditions.duplicate(true),
 		"actions": [],
 	}
+
+
+func _trigger_action_ability(
+	event_type: StringName,
+	conditions: Array,
+	actions: Array
+) -> Dictionary:
+	return {"triggers": [{
+		"event": event_type,
+		"conditions": conditions.duplicate(true),
+		"actions": actions.duplicate(true),
+	}]}
+
+
+func _self_exile_ability() -> Dictionary:
+	return _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{"type": Catalog.ACTION_EXILE_SELF}]
+	)
 
 
 func _expect(

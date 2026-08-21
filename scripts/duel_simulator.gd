@@ -676,13 +676,34 @@ static func _resolve_attack_target(
 	)
 	if _has_flip_prevention(before_flip_result, attacked_instance_id, captured_owner):
 		result["events"].append({
-			"type": &"card_flip_prevented",
+			"type": Catalog.CARD_FLIP_PREVENTED,
 			"source_cell": attacker_cell,
 			"target_cell": attacked_cell,
 			"owner_id": attacked_owner,
 			"new_owner_id": captured_owner,
 			"instance_id": attacked_instance_id,
 		})
+		var prevented_cell: int = _find_board_card_cell(
+			state,
+			attacked_instance_id,
+			attacked_cell
+		)
+		if prevented_cell >= 0:
+			before_flip_context["trigger_cell"] = prevented_cell
+			before_flip_context["trigger_owner_id"] = int(
+				(state.board[prevented_cell] as Dictionary).get("owner", attacked_owner)
+			)
+			var prevented_result: Dictionary = _resolve_trigger_event(
+				state,
+				Catalog.CARD_FLIP_PREVENTED,
+				before_flip_context
+			)
+			_merge_resolution(
+				result["captures"],
+				result["exiles"],
+				result["events"],
+				prevented_result
+			)
 		return result
 	attacker_cell = _find_board_card_cell(
 		state,
@@ -791,13 +812,34 @@ static func resolve_non_attack_flip(
 	)
 	if _has_flip_prevention(before_result, target_instance_id, new_owner):
 		result["events"].append({
-			"type": &"card_flip_prevented",
+			"type": Catalog.CARD_FLIP_PREVENTED,
 			"source_cell": -1,
 			"target_cell": target_cell,
 			"owner_id": previous_owner,
 			"new_owner_id": new_owner,
 			"instance_id": target_instance_id,
 		})
+		var prevented_cell: int = _find_board_card_cell(
+			state,
+			target_instance_id,
+			target_cell
+		)
+		if prevented_cell >= 0:
+			context["trigger_cell"] = prevented_cell
+			context["trigger_owner_id"] = int(
+				(state.board[prevented_cell] as Dictionary).get("owner", previous_owner)
+			)
+			var prevented_result: Dictionary = _resolve_trigger_event(
+				state,
+				Catalog.CARD_FLIP_PREVENTED,
+				context
+			)
+			_merge_resolution(
+				result["captures"],
+				result["exiles"],
+				result["events"],
+				prevented_result
+			)
 		return result
 	target_cell = _find_board_card_cell(state, target_instance_id)
 	if target_cell < 0:

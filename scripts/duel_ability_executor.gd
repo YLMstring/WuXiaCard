@@ -442,6 +442,13 @@ static func _execute_action(
 			context,
 			event_resolver
 		)
+	if action_type == Catalog.ACTION_DISCARD_CARD:
+		return _discard_referenced_card(
+			state,
+			source_cell,
+			StringName(declaration.get("card", &"")),
+			context
+		)
 	if action_type == Catalog.ACTION_DEPART_CARD_FOR_RESUMMON:
 		return _depart_referenced_card_for_resummon(
 			state,
@@ -624,6 +631,7 @@ static func _execute_action(
 			source_cell,
 			StringName(declaration.get("card", &"")),
 			StringName(declaration.get("recipient", &"")),
+			bool(declaration.get("preserve_instance", false)),
 			context,
 			event_resolver
 		)
@@ -1586,6 +1594,61 @@ static func _exile_referenced_card(
 	)
 
 
+static func _discard_referenced_card(
+	state: StateData,
+	source_cell: int,
+	card_reference: StringName,
+	context: Dictionary
+) -> Dictionary:
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	var target_instance_id := StringName(snapshot.get("instance_id", &""))
+	var subject: Dictionary = Selector.locate_card(state, target_instance_id)
+	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_HAND:
+		return _no_effect(source_cell)
+	if card_reference == Catalog.CARD_REF_SELECTED_CARD:
+		subject = Selector.revalidate(
+			state,
+			target_instance_id,
+			StringName(context.get("ability_source_instance_id", &"")),
+			context.get("selected_card_conditions", []) as Array,
+			context
+		)
+		if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_HAND:
+			return _no_effect(source_cell)
+	var owner_id: int = int(subject.get("owner_id", 0))
+	var logical_index: int = int(subject.get("index", -1))
+	var hand: Array = state.get_hand(owner_id)
+	if (
+		logical_index < 0
+		or logical_index >= hand.size()
+		or not hand[logical_index] is Dictionary
+		or StringName((hand[logical_index] as Dictionary).get("instance_id", &""))
+		!= target_instance_id
+	):
+		return _no_effect(source_cell)
+	var discarded_card: Dictionary = hand.pop_at(logical_index)
+	if not state.discard_piles.has(owner_id):
+		state.discard_piles[owner_id] = []
+	(state.discard_piles[owner_id] as Array).append(discarded_card)
+	var ability_source: Dictionary = Selector.locate_card(
+		state,
+		StringName(context.get("ability_source_instance_id", &""))
+	)
+	var current_source_cell: int = _get_location_cell(ability_source)
+	if current_source_cell < 0:
+		current_source_cell = source_cell
+	return _applied(current_source_cell, [{
+		"type": &"card_discarded",
+		"source_cell": current_source_cell,
+		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+		"owner_id": owner_id,
+		"instance_id": target_instance_id,
+		"zone": Catalog.CARD_ZONE_HAND,
+		"logical_hand_index": logical_index,
+		"card": discarded_card.duplicate(true),
+	}])
+
+
 static func _depart_referenced_card_for_resummon(
 	state: StateData,
 	source_cell: int,
@@ -1899,13 +1962,22 @@ static func _return_card_to_hand(
 	source_cell: int,
 	card_reference: StringName,
 	recipient_reference: StringName,
+	preserve_instance: bool,
 	context: Dictionary,
 	event_resolver: Callable
 ) -> Dictionary:
 	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
 	var instance_id := StringName(snapshot.get("instance_id", &""))
 	var subject: Dictionary = Selector.locate_card(state, instance_id)
-	if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_BOARD:
+	if subject.is_empty():
+		return _no_effect(source_cell)
+	var subject_zone := StringName(subject.get("zone", &""))
+	if (
+		preserve_instance
+		and subject_zone != Catalog.CARD_ZONE_DISCARD
+		or not preserve_instance
+		and subject_zone != Catalog.CARD_ZONE_BOARD
+	):
 		return _no_effect(source_cell)
 	if card_reference == Catalog.CARD_REF_SELECTED_CARD:
 		var selected_conditions: Array = context.get("selected_card_conditions", [])
@@ -1918,6 +1990,14 @@ static func _return_card_to_hand(
 			context
 		)
 		if subject.is_empty():
+			return _no_effect(source_cell)
+		subject_zone = StringName(subject.get("zone", &""))
+		if (
+			preserve_instance
+			and subject_zone != Catalog.CARD_ZONE_DISCARD
+			or not preserve_instance
+			and subject_zone != Catalog.CARD_ZONE_BOARD
+		):
 			return _no_effect(source_cell)
 	var target_cell: int = int(subject.get("index", -1))
 	var ability_source: Dictionary = Selector.locate_card(
@@ -1936,6 +2016,8 @@ static func _return_card_to_hand(
 			return _no_effect(source_cell)
 	var hand: Array = state.get_hand(recipient_owner)
 	if hand.size() >= MAX_HAND_SIZE:
+		if preserve_instance:
+			return _no_effect(source_current_cell)
 		return _exile_subject(
 			state,
 			subject,
@@ -1948,6 +2030,32 @@ static func _return_card_to_hand(
 		)
 	var old_card: Dictionary = subject.get("card", {})
 	var card_id := StringName(old_card.get("card_id", &""))
+	if preserve_instance:
+		var discard_owner: int = int(subject.get("owner_id", 0))
+		var discard_index: int = int(subject.get("index", -1))
+		var discard_pile: Array = state.discard_piles.get(discard_owner, []) as Array
+		if (
+			discard_index < 0
+			or discard_index >= discard_pile.size()
+			or not discard_pile[discard_index] is Dictionary
+			or StringName((discard_pile[discard_index] as Dictionary).get("instance_id", &""))
+			!= instance_id
+		):
+			return _no_effect(source_current_cell)
+		var returned_same_card: Dictionary = discard_pile.pop_at(discard_index)
+		hand.append(returned_same_card)
+		return _applied(source_current_cell, [{
+			"type": &"card_returned_to_hand",
+			"source_cell": source_current_cell,
+			"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+			"target_cell": -1,
+			"old_instance_id": instance_id,
+			"owner_id": recipient_owner,
+			"card_id": card_id,
+			"instance_id": instance_id,
+			"logical_hand_index": hand.size() - 1,
+			"card": returned_same_card.duplicate(true),
+		}])
 	if not Catalog.has_card(card_id):
 		return _no_effect(source_cell)
 	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
@@ -3019,6 +3127,19 @@ static func _locate_exact_subject(
 		if index < 0 or index >= hand.size() or not hand[index] is Dictionary:
 			return {}
 		var card: Dictionary = hand[index]
+		if StringName(card.get("instance_id", &"")) != &"":
+			return {}
+		return {
+			"zone": zone,
+			"owner_id": owner_id,
+			"index": index,
+			"card": card,
+		}
+	if zone == Catalog.CARD_ZONE_DISCARD and owner_id in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var discard_pile: Array = state.discard_piles.get(owner_id, []) as Array
+		if index < 0 or index >= discard_pile.size() or not discard_pile[index] is Dictionary:
+			return {}
+		var card: Dictionary = discard_pile[index]
 		if StringName(card.get("instance_id", &"")) != &"":
 			return {}
 		return {

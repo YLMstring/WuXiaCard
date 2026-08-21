@@ -23,7 +23,7 @@ func _run() -> void:
 	_test_attack_counter_state()
 	_test_sanhuan_redirects_summon_attack()
 	_test_other_friendly_fire_consumes_all_taiji_redirects()
-	_test_enemy_attack_against_taiji_ally_does_not_consume_redirect()
+	_test_enemy_attack_against_taiji_ally_consumes_redirect()
 	_test_sanhuan_resurrects_same_instance()
 	_test_dakui_strengthens_then_attacks_allies()
 	_test_luanhuan_starts_adjacent_attacks()
@@ -61,7 +61,6 @@ func _test_catalog_and_vocabulary() -> void:
 			and common_trigger.get("event", &"") == Catalog.TRIGGER_CARD_AFTER_ATTACK
 			and common_trigger.get("conditions", []) == [
 				{"type": Catalog.CONDITION_ATTACKER_CARD_IS_ENEMY},
-				{"type": Catalog.CONDITION_ATTACK_TARGETED_ATTACKER_ALLY},
 			]
 			and common_trigger.get("actions", []) == [{
 				"type": Catalog.ACTION_REMOVE_THIS_ABILITY,
@@ -190,7 +189,7 @@ func _test_other_friendly_fire_consumes_all_taiji_redirects() -> void:
 	)
 
 
-func _test_enemy_attack_against_taiji_ally_does_not_consume_redirect() -> void:
+func _test_enemy_attack_against_taiji_ally_consumes_redirect() -> void:
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(_plain(&"ordinary_target", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
 	board[4] = _slot(_plain(&"ordinary_enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
@@ -204,11 +203,11 @@ func _test_enemy_attack_against_taiji_ally_does_not_consume_redirect() -> void:
 	)
 	_check(
 		_count_events(result.get("events", []), &"attack_started") == 1
-		and Abilities.has_modifier(
+		and not Abilities.has_modifier(
 			(state.board[8] as Dictionary).get("card", {}),
 			Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
 		),
-		"An enemy attacking the Taiji owner's ally does not consume the redirect"
+		"Any enemy attack consumes the Taiji redirect"
 	)
 
 

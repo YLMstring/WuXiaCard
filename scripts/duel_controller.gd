@@ -1241,6 +1241,8 @@ func _present_transition_events(
 			await _present_generated_summon_event(event)
 		elif event_type == &"card_departed_for_resummon":
 			await _present_card_departed_for_resummon_event(event)
+		elif event_type == &"card_discarded":
+			await _present_card_discarded_event(event)
 		elif event_type == &"card_returned_to_hand":
 			await _present_card_returned_to_hand_event(event)
 		elif event_type == &"card_revealed":
@@ -1512,6 +1514,20 @@ func _present_card_departed_for_resummon_event(event: Dictionary) -> void:
 	_presentation_trace.append(&"card_resummon_faded")
 	await old_view.play_fade_out(card_fade_duration)
 	old_view.queue_free()
+
+
+func _present_card_discarded_event(event: Dictionary) -> void:
+	var discarded_instance_id := StringName(event.get("instance_id", &""))
+	var discarded_view: CardView = _get_card_view_by_instance(discarded_instance_id)
+	_presentation_trace.append(&"card_discarded")
+	if discarded_view == null:
+		return
+	_presentation_trace.append(&"card_discard_faded")
+	await discarded_view.play_fade_out(card_fade_duration)
+	var former_slot: Node = discarded_view.get_parent()
+	if former_slot != null:
+		former_slot.remove_child(discarded_view)
+	discarded_view.queue_free()
 
 
 func _present_card_returned_to_hand_event(event: Dictionary) -> void:

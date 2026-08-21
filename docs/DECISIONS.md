@@ -56,6 +56,10 @@ These decisions were explicitly established during development and should not be
 - Ki is independent from abilities and survives ownership flips.
 - A zero-ki card with no activate ability does not show a ki bead.
 - `card_uses_ki()` intentionally counts activations only. Passive Meng Huo abilities do not make a zero-ki bead appear.
+- Ki bead styling follows the current runtime abilities: recursive flip
+  prevention is gold, semantic self-exile is light gray, and gold wins over
+  gray and the ordinary light/dark states. A catalog card may declare
+  `suppress_ki_bead = true`; `BaGuaFangWei` does so and never shows a bead.
 
 ## Ownership and Ability Retention
 
@@ -83,6 +87,13 @@ These decisions were explicitly established during development and should not be
 - Stopping one rule never cancels later trigger groups, the enclosing event, or the turn.
 - Generic card selection snapshots matching instances in declared zone order.
   Every nested action finishes for one selected card before the next begins.
+- `ACTION_DISCARD_CARD` moves the exact hand instance to its current owner's
+  discard pile without emitting exile timing. `ACTION_RETURN_CARD_TO_HAND`
+  may declare `preserve_instance = true` to move that same exact instance back
+  from discard; a full hand leaves it in discard.
+- Explicit `ACTION_PREVENT_TRIGGER_FLIP` emits `CARD_FLIP_PREVENTED` after all
+  before-flip rules and before any after-flip timing. Removal or another reason
+  the pending flip becomes invalid does not emit this event.
 - A selected card is skipped only when one or more declared selector conditions
   no longer match. Moving between cells or zones does not invalidate it by
   itself.

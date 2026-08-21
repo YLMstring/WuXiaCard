@@ -27,6 +27,11 @@ const GOLD_KI_BEAD_BORDER: Color = Color("f1d27a")
 const GOLD_KI_BEAD_SHADOW: Color = Color(0.20, 0.10, 0.02, 0.52)
 const GOLD_KI_TEXT: Color = Color("fff2c2")
 const GOLD_KI_TEXT_OUTLINE: Color = Color("4b2b10")
+const GRAY_KI_BEAD_BACKGROUND: Color = Color("aeb4b2")
+const GRAY_KI_BEAD_BORDER: Color = Color("e5e8e5")
+const GRAY_KI_BEAD_SHADOW: Color = Color(0.12, 0.14, 0.14, 0.35)
+const GRAY_KI_TEXT: Color = Color("303737")
+const GRAY_KI_TEXT_OUTLINE: Color = Color("dfe3e1")
 const KI_BEAD_DIAMETER_RATIO: float = 0.20
 const KI_BEAD_MIN_DIAMETER: float = 14.0
 const KI_BEAD_MARGIN_RATIO: float = 0.025
@@ -644,25 +649,29 @@ func _update_ki_value_font_size(value_text: String) -> void:
 func _style_ki_badge(bead_kind: StringName) -> void:
 	var bead_style := StyleBoxFlat.new()
 	var uses_gold: bool = bead_kind == Abilities.KI_BEAD_GOLD
+	var uses_gray: bool = bead_kind == Abilities.KI_BEAD_GRAY
 	var rim_size: int = maxi(
 		KI_BEAD_MIN_RIM_SIZE,
 		roundi(_ki_bead_diameter * KI_BEAD_RIM_RATIO)
 	)
-	bead_style.bg_color = (
-		GOLD_KI_BEAD_BACKGROUND if uses_gold else LIGHT_KI_BEAD_BACKGROUND
-	)
-	bead_style.border_color = (
-		GOLD_KI_BEAD_BORDER if uses_gold else LIGHT_KI_BEAD_BORDER
-	)
+	if uses_gold:
+		bead_style.bg_color = GOLD_KI_BEAD_BACKGROUND
+		bead_style.border_color = GOLD_KI_BEAD_BORDER
+		bead_style.shadow_color = GOLD_KI_BEAD_SHADOW
+	elif uses_gray:
+		bead_style.bg_color = GRAY_KI_BEAD_BACKGROUND
+		bead_style.border_color = GRAY_KI_BEAD_BORDER
+		bead_style.shadow_color = GRAY_KI_BEAD_SHADOW
+	else:
+		bead_style.bg_color = LIGHT_KI_BEAD_BACKGROUND
+		bead_style.border_color = LIGHT_KI_BEAD_BORDER
+		bead_style.shadow_color = LIGHT_KI_BEAD_SHADOW
 	bead_style.set_border_width_all(rim_size)
 	bead_style.set_corner_radius_all(roundi(_ki_bead_diameter * 0.5))
 	bead_style.set_content_margin(SIDE_LEFT, float(rim_size))
 	bead_style.set_content_margin(SIDE_RIGHT, float(rim_size))
 	bead_style.set_content_margin(SIDE_TOP, float(rim_size))
 	bead_style.set_content_margin(SIDE_BOTTOM, float(rim_size))
-	bead_style.shadow_color = (
-		GOLD_KI_BEAD_SHADOW if uses_gold else LIGHT_KI_BEAD_SHADOW
-	)
 	bead_style.shadow_size = rim_size
 	bead_style.shadow_offset = Vector2(
 		0.0,
@@ -674,10 +683,12 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 		if bead_kind == Abilities.KI_BEAD_DARK
 		else Color.WHITE
 	)
-	ki_value.set_value_colors(
-		GOLD_KI_TEXT if uses_gold else LIGHT_KI_TEXT,
-		GOLD_KI_TEXT_OUTLINE if uses_gold else LIGHT_KI_TEXT_OUTLINE
-	)
+	if uses_gold:
+		ki_value.set_value_colors(GOLD_KI_TEXT, GOLD_KI_TEXT_OUTLINE)
+	elif uses_gray:
+		ki_value.set_value_colors(GRAY_KI_TEXT, GRAY_KI_TEXT_OUTLINE)
+	else:
+		ki_value.set_value_colors(LIGHT_KI_TEXT, LIGHT_KI_TEXT_OUTLINE)
 
 
 func _apply_owner_style() -> void:
