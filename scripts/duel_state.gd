@@ -3,6 +3,9 @@ extends RefCounted
 
 const Rules = preload("res://scripts/duel_rules.gd")
 
+const HAND_SLOT_COUNT: int = 5
+const HAND_SLOT_INDEX_KEY: StringName = &"hand_slot_index"
+
 var board: Array = []
 var hands: Dictionary = {}
 var decks: Dictionary = {}
@@ -41,6 +44,8 @@ func _init(
 		Rules.PLAYER_OWNER: player_hand.duplicate(true),
 		Rules.OPPONENT_OWNER: opponent_hand.duplicate(true),
 	}
+	_normalize_hand_slots(hands[Rules.PLAYER_OWNER] as Array)
+	_normalize_hand_slots(hands[Rules.OPPONENT_OWNER] as Array)
 	decks = {
 		Rules.PLAYER_OWNER: player_deck.duplicate(true),
 		Rules.OPPONENT_OWNER: opponent_deck.duplicate(true),
@@ -75,6 +80,77 @@ func _init(
 
 func get_hand(owner_id: int) -> Array:
 	return hands.get(owner_id, [])
+
+
+func get_leftmost_empty_hand_slot(owner_id: int) -> int:
+	var occupied: Dictionary = {}
+	for card_value: Variant in get_hand(owner_id):
+		if not card_value is Dictionary:
+			continue
+		var slot_index: int = int((card_value as Dictionary).get(HAND_SLOT_INDEX_KEY, -1))
+		if slot_index >= 0 and slot_index < HAND_SLOT_COUNT:
+			occupied[slot_index] = true
+	for slot_index: int in range(HAND_SLOT_COUNT):
+		if not occupied.has(slot_index):
+			return slot_index
+	return -1
+
+
+func assign_card_to_leftmost_empty_hand_slot(owner_id: int, card: Dictionary) -> int:
+	var slot_index: int = get_leftmost_empty_hand_slot(owner_id)
+	if slot_index >= 0:
+		card[HAND_SLOT_INDEX_KEY] = slot_index
+	return slot_index
+
+
+func shift_hand_slots_after_discard(owner_id: int, discarded_slot: int) -> Array[Dictionary]:
+	var moves: Array[Dictionary] = []
+	if discarded_slot < 0 or discarded_slot >= HAND_SLOT_COUNT:
+		return moves
+	for card_value: Variant in get_hand(owner_id):
+		if not card_value is Dictionary:
+			continue
+		var card: Dictionary = card_value
+		var from_slot: int = int(card.get(HAND_SLOT_INDEX_KEY, -1))
+		if from_slot <= discarded_slot or from_slot >= HAND_SLOT_COUNT:
+			continue
+		var to_slot: int = from_slot - 1
+		card[HAND_SLOT_INDEX_KEY] = to_slot
+		moves.append({
+			"instance_id": StringName(card.get("instance_id", &"")),
+			"from_slot": from_slot,
+			"to_slot": to_slot,
+		})
+	moves.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
+		return int(first.get("from_slot", -1)) < int(second.get("from_slot", -1))
+	)
+	return moves
+
+
+func _normalize_hand_slots(hand: Array) -> void:
+	var occupied: Dictionary = {}
+	var unassigned: Array[Dictionary] = []
+	for card_value: Variant in hand:
+		if not card_value is Dictionary:
+			continue
+		var card: Dictionary = card_value
+		var slot_index: int = int(card.get(HAND_SLOT_INDEX_KEY, -1))
+		if (
+			slot_index >= 0
+			and slot_index < HAND_SLOT_COUNT
+			and not occupied.has(slot_index)
+		):
+			occupied[slot_index] = true
+		else:
+			card.erase(HAND_SLOT_INDEX_KEY)
+			unassigned.append(card)
+	for card: Dictionary in unassigned:
+		for slot_index: int in range(HAND_SLOT_COUNT):
+			if occupied.has(slot_index):
+				continue
+			card[HAND_SLOT_INDEX_KEY] = slot_index
+			occupied[slot_index] = true
+			break
 
 
 func duplicate_state():

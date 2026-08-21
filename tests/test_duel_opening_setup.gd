@@ -102,8 +102,22 @@ func _test_seeded_layout_and_ownership() -> void:
 	)
 	_check(state.active_player == Rules.PLAYER_OWNER, "Opening layout does not change the first actor")
 	_check(state.turn_count == 0, "Opening layout does not consume an action")
-	_check(state.get_hand(Rules.PLAYER_OWNER) == player_hand, "Opening layout preserves the player hand")
-	_check(state.get_hand(Rules.OPPONENT_OWNER) == opponent_hand, "Opening layout preserves the opponent hand")
+	var runtime_player_hand: Array = state.get_hand(Rules.PLAYER_OWNER)
+	var runtime_opponent_hand: Array = state.get_hand(Rules.OPPONENT_OWNER)
+	_check(
+		runtime_player_hand.size() == 1
+		and StringName((runtime_player_hand[0] as Dictionary).get("instance_id", &""))
+		== &"opening_player_hand"
+		and int((runtime_player_hand[0] as Dictionary).get("hand_slot_index", -1)) == 0,
+		"Opening layout preserves the player hand and assigns its physical slot"
+	)
+	_check(
+		runtime_opponent_hand.size() == 1
+		and StringName((runtime_opponent_hand[0] as Dictionary).get("instance_id", &""))
+		== &"opening_opponent_hand"
+		and int((runtime_opponent_hand[0] as Dictionary).get("hand_slot_index", -1)) == 0,
+		"Opening layout preserves the opponent hand and assigns its physical slot"
+	)
 	_check(state.decks[Rules.PLAYER_OWNER] == player_deck, "Opening layout preserves the side deck")
 
 

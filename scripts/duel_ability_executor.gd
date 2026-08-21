@@ -1254,6 +1254,12 @@ static func _draw_cards(
 			deck_index = 0
 		if deck_index >= 0 and not deck.is_empty():
 			drawn_card = deck.pop_at(deck_index)
+		var hand_slot_index: int = state.assign_card_to_leftmost_empty_hand_slot(
+			owner_id,
+			drawn_card
+		)
+		if hand_slot_index < 0:
+			break
 		hand.append(drawn_card)
 		var logical_hand_index: int = hand.size() - 1
 		var drawn_instance_id := StringName(drawn_card.get("instance_id", &""))
@@ -1265,6 +1271,7 @@ static func _draw_cards(
 			"card_id": StringName(drawn_card.get("card_id", &"")),
 			"instance_id": drawn_instance_id,
 			"logical_hand_index": logical_hand_index,
+			"hand_slot_index": hand_slot_index,
 			"card": drawn_card.duplicate(true),
 		})
 		for observer_value: Variant in Revelation.get_future_draw_audiences(state, owner_id):
@@ -1627,6 +1634,8 @@ static func _discard_referenced_card(
 	):
 		return _no_effect(source_cell)
 	var discarded_card: Dictionary = hand.pop_at(logical_index)
+	var discarded_slot: int = int(discarded_card.get(StateData.HAND_SLOT_INDEX_KEY, logical_index))
+	discarded_card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	if not state.discard_piles.has(owner_id):
 		state.discard_piles[owner_id] = []
 	(state.discard_piles[owner_id] as Array).append(discarded_card)
@@ -1637,7 +1646,7 @@ static func _discard_referenced_card(
 	var current_source_cell: int = _get_location_cell(ability_source)
 	if current_source_cell < 0:
 		current_source_cell = source_cell
-	return _applied(current_source_cell, [{
+	var events: Array[Dictionary] = [{
 		"type": &"card_discarded",
 		"source_cell": current_source_cell,
 		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
@@ -1645,8 +1654,22 @@ static func _discard_referenced_card(
 		"instance_id": target_instance_id,
 		"zone": Catalog.CARD_ZONE_HAND,
 		"logical_hand_index": logical_index,
+		"hand_slot_index": discarded_slot,
 		"card": discarded_card.duplicate(true),
-	}])
+	}]
+	var moves: Array[Dictionary] = state.shift_hand_slots_after_discard(
+		owner_id,
+		discarded_slot
+	)
+	if not moves.is_empty():
+		events.append({
+			"type": &"hand_cards_shifted",
+			"source_cell": current_source_cell,
+			"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+			"owner_id": owner_id,
+			"moves": moves,
+		})
+	return _applied(current_source_cell, events)
 
 
 static func _depart_referenced_card_for_resummon(
@@ -1897,6 +1920,12 @@ static func _add_card_to_hand(
 		recipient_owner,
 		instance_id
 	)
+	var hand_slot_index: int = state.assign_card_to_leftmost_empty_hand_slot(
+		recipient_owner,
+		added_card
+	)
+	if hand_slot_index < 0:
+		return _no_effect(source_cell)
 	hand.append(added_card)
 	return _applied(source_cell, [{
 		"type": &"card_added_to_hand",
@@ -1906,6 +1935,7 @@ static func _add_card_to_hand(
 		"card_id": card_id,
 		"instance_id": instance_id,
 		"logical_hand_index": hand.size() - 1,
+		"hand_slot_index": hand_slot_index,
 		"card": added_card.duplicate(true),
 	}])
 
@@ -2043,6 +2073,13 @@ static func _return_card_to_hand(
 		):
 			return _no_effect(source_current_cell)
 		var returned_same_card: Dictionary = discard_pile.pop_at(discard_index)
+		var returned_hand_slot_index: int = state.assign_card_to_leftmost_empty_hand_slot(
+			recipient_owner,
+			returned_same_card
+		)
+		if returned_hand_slot_index < 0:
+			discard_pile.insert(discard_index, returned_same_card)
+			return _no_effect(source_current_cell)
 		hand.append(returned_same_card)
 		return _applied(source_current_cell, [{
 			"type": &"card_returned_to_hand",
@@ -2054,6 +2091,7 @@ static func _return_card_to_hand(
 			"card_id": card_id,
 			"instance_id": instance_id,
 			"logical_hand_index": hand.size() - 1,
+			"hand_slot_index": returned_hand_slot_index,
 			"card": returned_same_card.duplicate(true),
 		}])
 	if not Catalog.has_card(card_id):
@@ -2065,6 +2103,13 @@ static func _return_card_to_hand(
 		recipient_owner,
 		new_instance_id
 	)
+	var fresh_hand_slot_index: int = state.assign_card_to_leftmost_empty_hand_slot(
+		recipient_owner,
+		returned_card
+	)
+	if fresh_hand_slot_index < 0:
+		state.board[target_cell] = {"card": old_card, "owner": int(subject.get("owner_id", 0))}
+		return _no_effect(source_current_cell)
 	hand.append(returned_card)
 	return _applied(source_current_cell, [{
 		"type": &"card_returned_to_hand",
@@ -2076,6 +2121,7 @@ static func _return_card_to_hand(
 		"card_id": card_id,
 		"instance_id": new_instance_id,
 		"logical_hand_index": hand.size() - 1,
+		"hand_slot_index": fresh_hand_slot_index,
 		"card": returned_card.duplicate(true),
 	}])
 
@@ -2364,6 +2410,7 @@ static func _exile_subject(
 		):
 			return result
 		hand.remove_at(logical_index)
+		target_card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	else:
 		return result
 	var original_owner: int = int(target_card.get("original_owner", 0))

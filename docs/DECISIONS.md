@@ -12,7 +12,11 @@ These decisions were explicitly established during development and should not be
   cards, not summons: they emit no entrance events or attacks and appear
   immediately when the duel screen opens.
 - Card powers are top, right, bottom, left.
-- The center board is visually separated from two five-slot hands. Empty slots remain; cards do not grow or repack as hand size falls.
+- The center board is visually separated from two five-slot hands. Runtime
+  `hand_slot_index`, not compact array order, defines physical left-to-right
+  order and every automatic "leftmost" choice. Draws and returns fill the
+  leftmost empty slot. Normal play and hand removal leave gaps; discard alone
+  shifts every card to its right left by one slot, simultaneously.
 - Mouse and touch should produce equivalent gameplay behavior.
 - Opponent name is shown at top-left and exit at top-right.
 

@@ -16,6 +16,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_order_and_filters()
 	_test_declared_zone_order_and_limit()
+	_test_hand_order_uses_physical_slots()
 	_test_revalidation_ignores_movement()
 	_test_revalidation_skips_failed_conditions()
 	if _failures == 0:
@@ -89,6 +90,37 @@ func _test_declared_zone_order_and_limit() -> void:
 	_check(
 		selected == [&"board_one", &"board_two"],
 		"Selector honors declared zone order, board order, self exclusion, and initial limit"
+	)
+
+
+func _test_hand_order_uses_physical_slots() -> void:
+	var source: Dictionary = _card(&"physical_source", "心法")
+	var older_card: Dictionary = _card(&"older_logical_card", "剑法")
+	var visual_leftmost: Dictionary = _card(&"visual_leftmost", "剑法")
+	older_card["hand_slot_index"] = 1
+	visual_leftmost["hand_slot_index"] = 0
+	var board: Array = Rules.empty_board()
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+	var state := StateData.new(board, [older_card, visual_leftmost], [])
+	var selected: Array[StringName] = Selector.snapshot(
+		state,
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+			],
+			"limit": 1,
+		},
+		&"physical_source"
+	)
+	_check(
+		selected == [&"visual_leftmost"],
+		"Hand selectors use physical left-to-right slot order instead of compact array order"
+	)
+	_check(
+		int(Selector.locate_card(state, &"older_logical_card").get("index", -1)) == 0
+		and int(Selector.locate_card(state, &"visual_leftmost").get("index", -1)) == 1,
+		"Physical ordering does not change logical action indices"
 	)
 
 

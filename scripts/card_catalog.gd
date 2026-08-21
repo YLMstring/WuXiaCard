@@ -3981,7 +3981,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 				"triggers": [{
 					"event": CARD_BE_ATTACKED,
 					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
-					"actions": [{"type": ACTION_EXILE_SELF}],
+					"actions": [{
+						"type": ACTION_EXILE_CARD,
+						"card": CARD_REF_TRIGGER_CARD,
+					}],
 				}],
 			},
 		],

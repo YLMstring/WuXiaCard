@@ -137,7 +137,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   smaller score stays fixed beneath the title while the prose rolls upward in
   a clipped clear-sky viewport. Early taps do nothing; after the last line is
   fully visible, the first tap returns to the normal menu.
-- Hands are capped at five and always render five fixed physical slots.
+- Hands are capped at five and always render five fixed physical slots. Runtime
+  hand cards carry `hand_slot_index`; automatic "leftmost" selection follows
+  physical slot order rather than compact hand-array order. New draws and
+  returns fill the leftmost empty slot. Only discard closes its gap: every card
+  physically to its right shifts left one slot in one simultaneous presentation
+  batch. Normal play and hand exile/removal leave all other slots unchanged.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs

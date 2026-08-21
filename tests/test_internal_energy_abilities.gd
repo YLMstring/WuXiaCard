@@ -200,16 +200,22 @@ func _test_transfer_ki_and_power_fallback() -> void:
 
 	var exile_source: Dictionary = _plain(&"exile_source", [1, 1, 1, 1], Rules.PLAYER_OWNER)
 	var exile_target: Dictionary = _plain(&"exile_target", [0, 1, 0, 0], Rules.PLAYER_OWNER)
+	var exile_survivor: Dictionary = _plain(&"exile_survivor", [5, 5, 5, 5], Rules.PLAYER_OWNER)
+	exile_target["hand_slot_index"] = 1
+	exile_survivor["hand_slot_index"] = 4
 	var exile_board: Array = Rules.empty_board()
 	exile_board[4] = _slot(exile_source, Rules.PLAYER_OWNER)
-	var exile_state := State.new(exile_board, [exile_target])
+	var exile_state := State.new(exile_board, [exile_survivor, exile_target])
 	exile_source = _runtime_card(exile_state, &"exile_source")
 	var exile_result: Dictionary = _execute_transfer(exile_state, &"exile_target")
+	var survivor_after: Dictionary = _runtime_card(exile_state, &"exile_survivor")
 	_check(
-		exile_state.get_hand(Rules.PLAYER_OWNER).is_empty()
+		exile_state.get_hand(Rules.PLAYER_OWNER).size() == 1
 		and _event_types(exile_result.get("events", [])).has(&"card_exiled")
+		and not _event_types(exile_result.get("events", [])).has(&"hand_cards_shifted")
+		and int(survivor_after.get("hand_slot_index", -1)) == 4
 		and exile_source.get("powers", []) == [2, 2, 2, 2],
-		"A donor reaching four zero is truly exiled after the receiver gains powers"
+		"A hand donor reaching four zero is exiled without shifting other hand slots"
 	)
 
 

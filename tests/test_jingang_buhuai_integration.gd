@@ -52,14 +52,27 @@ func _test_discard_fades_before_same_instance_return(duel: Node) -> void:
 		),
 		"owner": Rules.PLAYER_OWNER,
 	}
-	var hand_card: Dictionary = Catalog.create_instance(
+	var right_near: Dictionary = Catalog.create_instance(
 		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"integration_jingang_right_near"
+	)
+	var discarded_card: Dictionary = Catalog.create_instance(
+		&"TuNaShu1",
 		Rules.PLAYER_OWNER,
 		&"integration_jingang_discard"
 	)
+	var right_far: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"integration_jingang_right_far"
+	)
+	discarded_card["hand_slot_index"] = 0
+	right_near["hand_slot_index"] = 1
+	right_far["hand_slot_index"] = 2
 	duel.call(
 		"_rebuild_views_from_state",
-		State.new(board, [hand_card], [], Rules.PLAYER_OWNER)
+		State.new(board, [right_near, discarded_card, right_far], [], Rules.PLAYER_OWNER)
 	)
 	var result: Dictionary = Simulator.resolve_non_attack_flip(
 		duel.duel_state,
@@ -75,14 +88,37 @@ func _test_discard_fades_before_same_instance_return(duel: Node) -> void:
 	var hand_view_ids: Array[StringName] = duel.debug_get_hand_view_instance_ids(
 		Rules.PLAYER_OWNER
 	)
+	var slot_view_ids: Array = duel.call(
+		"debug_get_hand_view_slot_instance_ids", Rules.PLAYER_OWNER
+	)
+	var movement_trace: Array[Dictionary] = duel.debug_get_movement_presentation_trace()
 	_check(
 		trace.rfind(&"card_discarded") < trace.rfind(&"card_returned_to_hand")
 		and &"card_discard_faded" in trace,
 		"Discard reuses the fade-out presentation before the recalled card appears"
 	)
 	_check(
-		hand_view_ids == [&"integration_jingang_discard"],
-		"Same-instance recall leaves exactly one synchronized hand view"
+		hand_view_ids == [
+			&"integration_jingang_right_near",
+			&"integration_jingang_right_far",
+			&"integration_jingang_discard",
+		],
+		"Same-instance recall leaves one synchronized view per physical card"
+	)
+	_check(
+		trace.rfind(&"card_discarded") < trace.rfind(&"hand_cards_shifted")
+		and trace.rfind(&"hand_cards_shifted") < trace.rfind(&"card_returned_to_hand")
+		and slot_view_ids == [
+			&"integration_jingang_right_near",
+			&"integration_jingang_right_far",
+			&"integration_jingang_discard",
+			&"",
+			&"",
+		]
+		and not movement_trace.is_empty()
+		and StringName(movement_trace[-1].get("kind", &"")) == &"hand_shift"
+		and (movement_trace[-1].get("moves", []) as Array).size() == 2,
+		"Discard shifts right-side views left together before recall fills the leftmost hole"
 	)
 
 

@@ -590,6 +590,11 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	_check(StringName(draw_event.get("card_id", &"")) == &"CangSongYingKe1", "Draw event identifies the top side-deck card")
 	_check(StringName(draw_event.get("instance_id", &"")) == &"side_1_top", "Draw event carries stable instance identity")
 	_check(int(draw_event.get("logical_hand_index", -1)) == 4, "Draw event reports its resulting logical hand index")
+	_check(
+		int(draw_event.get("hand_slot_index", -1)) == 0
+		and int((next_state.get_hand(Rules.PLAYER_OWNER)[4] as Dictionary).get("hand_slot_index", -1)) == 0,
+		"A draw fills the vacated leftmost physical slot without changing its compact append index"
+	)
 	_check((state.decks[Rules.PLAYER_OWNER] as Array).size() == 2, "Draw transition leaves its source deck untouched")
 
 

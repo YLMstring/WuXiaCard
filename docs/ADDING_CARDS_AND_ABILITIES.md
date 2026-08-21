@@ -411,6 +411,15 @@ to `CARD_ZONE_DISCARD`; `ACTION_RETURN_CARD_TO_HAND` with
 `preserve_instance = true` can return that exact dictionary and `instance_id`
 without recreating the catalog card.
 
+Hand arrays remain compact logical storage for action indices, but visible and
+automatic left-to-right order comes from each runtime card's
+`hand_slot_index`. Draws, created cards, and returns enter the leftmost empty
+physical slot. A successful discard emits `card_discarded`, then one optional
+`hand_cards_shifted` event whose `moves` entries contain `instance_id`,
+`from_slot`, and `to_slot`; every card to the discarded card's right moves left
+exactly one slot and the controller animates the batch simultaneously. No other
+hand departure repacks slots.
+
 Every actual move first resolves the catalog boundary `CARD_BEFORE_MOVED` for
 the exact moving instance. The requested move then rechecks source identity and
 its destination. Both legs of every swap use this boundary, and every swap is

@@ -341,16 +341,33 @@ static func _get_zone_candidates(
 			owner_order.append(other_owner)
 		for owner_id: int in owner_order:
 			var hand: Array = state.get_hand(owner_id)
+			var owner_candidates: Array[Dictionary] = []
 			for hand_index: int in range(hand.size()):
 				var card_value: Variant = hand[hand_index]
 				if not card_value is Dictionary:
 					continue
-				candidates.append({
+				owner_candidates.append({
 					"zone": Catalog.CARD_ZONE_HAND,
 					"owner_id": owner_id,
 					"index": hand_index,
 					"card": card_value,
 				})
+			owner_candidates.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
+				var first_card: Dictionary = first.get("card", {})
+				var second_card: Dictionary = second.get("card", {})
+				var first_slot: int = int(first_card.get(
+					StateData.HAND_SLOT_INDEX_KEY,
+					int(first.get("index", -1))
+				))
+				var second_slot: int = int(second_card.get(
+					StateData.HAND_SLOT_INDEX_KEY,
+					int(second.get("index", -1))
+				))
+				if first_slot == second_slot:
+					return int(first.get("index", -1)) < int(second.get("index", -1))
+				return first_slot < second_slot
+			)
+			candidates.append_array(owner_candidates)
 	elif zone == Catalog.CARD_ZONE_BOARD:
 		for cell: int in range(state.board.size()):
 			var slot_value: Variant = state.board[cell]

@@ -233,6 +233,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	var hand: Array = next_state.get_hand(summoning_owner)
 	var card: Dictionary = (hand[action.source_index] as Dictionary).duplicate(true)
 	hand.remove_at(action.source_index)
+	card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	_normalize_runtime_card(card, summoning_owner, next_state.turn_count, action.source_index)
 	var instance_id := StringName(card.get("instance_id", &""))
 	next_state.board[action.target_index] = {
@@ -1083,6 +1084,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		var source_hand: Array = state.get_hand(source_owner)
 		summoned_card = source_hand[existing_hand_index]
 		source_hand.remove_at(existing_hand_index)
+		summoned_card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	elif existing_removed_index >= 0:
 		var source_removed: Array = state.removed_cards.get(source_owner, []) as Array
 		summoned_card = source_removed[existing_removed_index]

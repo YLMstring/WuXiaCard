@@ -18,8 +18,10 @@ func _run() -> void:
 	_test_declarations()
 	_test_empty_hand_does_not_prevent_flip()
 	_test_tier_one_discards_leftmost_and_never_recalls()
+	_test_discard_shifts_only_cards_to_its_right()
 	_test_tier_two_without_ki_leaves_discarded_card()
 	_test_tier_three_spends_ki_and_recalls_same_instance()
+	_test_normal_play_preserves_remaining_physical_slots()
 	_test_attack_flip_uses_the_same_discard_prevention()
 	_test_tier_four_reacts_to_its_own_prevention()
 	_test_tier_four_reacts_to_other_friendly_prevention()
@@ -127,6 +129,38 @@ func _test_tier_one_discards_leftmost_and_never_recalls() -> void:
 	)
 
 
+func _test_discard_shifts_only_cards_to_its_right() -> void:
+	var discarded: Dictionary = _plain(&"shift_discarded", Rules.PLAYER_OWNER)
+	var right_near: Dictionary = _plain(&"shift_right_near", Rules.PLAYER_OWNER)
+	var right_far: Dictionary = _plain(&"shift_right_far", Rules.PLAYER_OWNER)
+	discarded["hand_slot_index"] = 2
+	right_near["hand_slot_index"] = 3
+	right_far["hand_slot_index"] = 4
+	var state: State = _state_with_source(
+		&"JinGangBuHuai1",
+		&"shift_guard",
+		[discarded, right_near, right_far],
+		4
+	)
+	var result: Dictionary = Simulator.resolve_non_attack_flip(
+		state, &"shift_guard", Rules.OPPONENT_OWNER
+	)
+	var hand: Array = state.get_hand(Rules.PLAYER_OWNER)
+	_check(
+		_hand_slot_of(hand, &"shift_right_near") == 2
+		and _hand_slot_of(hand, &"shift_right_far") == 3,
+		"Discard shifts every card to its right left by exactly one slot"
+	)
+	var shift_event: Dictionary = _first_event(result.get("events", []), &"hand_cards_shifted")
+	_check(
+		shift_event.get("moves", []) == [
+			{"instance_id": &"shift_right_near", "from_slot": 3, "to_slot": 2},
+			{"instance_id": &"shift_right_far", "from_slot": 4, "to_slot": 3},
+		],
+		"Discard emits one ordered pure-data batch for simultaneous presentation"
+	)
+
+
 func _test_tier_two_without_ki_leaves_discarded_card() -> void:
 	var discarded: Dictionary = _plain(&"tier_two_discard", Rules.PLAYER_OWNER)
 	var state: State = _state_with_source(
@@ -144,14 +178,24 @@ func _test_tier_two_without_ki_leaves_discarded_card() -> void:
 
 func _test_tier_three_spends_ki_and_recalls_same_instance() -> void:
 	var recalled: Dictionary = _plain(&"tier_three_recall", Rules.PLAYER_OWNER)
+	var retained_right: Dictionary = _plain(&"tier_three_right", Rules.PLAYER_OWNER)
+	var retained_far: Dictionary = _plain(&"tier_three_far", Rules.PLAYER_OWNER)
+	recalled["hand_slot_index"] = 0
+	retained_right["hand_slot_index"] = 1
+	retained_far["hand_slot_index"] = 2
 	recalled["powers"] = [2, 3, 4, 5]
 	var state: State = _state_with_source(
-		&"JinGangBuHuai3", &"tier_three_guard", [recalled], 4
+		&"JinGangBuHuai3",
+		&"tier_three_guard",
+		[retained_right, recalled, retained_far],
+		4
 	)
 	var result: Dictionary = Simulator.resolve_non_attack_flip(
 		state, &"tier_three_guard", Rules.OPPONENT_OWNER
 	)
-	var returned: Dictionary = state.get_hand(Rules.PLAYER_OWNER)[0]
+	var returned: Dictionary = _card_in_hand(
+		state.get_hand(Rules.PLAYER_OWNER), &"tier_three_recall"
+	)
 	_check(
 		_board_owner(state, &"tier_three_guard") == Rules.PLAYER_OWNER
 		and int(_board_card(state, &"tier_three_guard").get("ki", -1)) == 0,
@@ -160,13 +204,40 @@ func _test_tier_three_spends_ki_and_recalls_same_instance() -> void:
 	_check(
 		StringName(returned.get("instance_id", &"")) == &"tier_three_recall"
 		and returned.get("powers", []) == [2, 3, 4, 5]
+		and int(returned.get("hand_slot_index", -1)) == 2
+		and _hand_slot_of(state.get_hand(Rules.PLAYER_OWNER), &"tier_three_right") == 0
+		and _hand_slot_of(state.get_hand(Rules.PLAYER_OWNER), &"tier_three_far") == 1
 		and (state.discard_piles[Rules.PLAYER_OWNER] as Array).is_empty(),
-		"Tier three recalls the same exact discarded instance with runtime data intact"
+		"Tier three recalls the same instance into the leftmost slot after the discard shift"
+	)
+	_check(
+		_event_types_between(
+			result.get("events", []),
+			[&"card_discarded", &"hand_cards_shifted", &"card_returned_to_hand"]
+		),
+		"Discard fade, batch shift, and recall remain explicitly ordered"
 	)
 	_check(
 		_event_count(result.get("events", []), &"card_discarded") == 1
 		and _event_count(result.get("events", []), &"card_returned_to_hand") == 1,
 		"Successful recall emits discard then return"
+	)
+
+
+func _test_normal_play_preserves_remaining_physical_slots() -> void:
+	var played: Dictionary = _plain(&"normal_played", Rules.PLAYER_OWNER)
+	var remaining: Dictionary = _plain(&"normal_remaining", Rules.PLAYER_OWNER)
+	played["hand_slot_index"] = 1
+	remaining["hand_slot_index"] = 4
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(Rules.empty_board(), [played, remaining], [], Rules.PLAYER_OWNER),
+		Action.make_play(0, 4, &"normal_played")
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		_hand_slot_of(next_state.get_hand(Rules.PLAYER_OWNER), &"normal_remaining") == 4
+		and _event_count(transition.get("events", []), &"hand_cards_shifted") == 0,
+		"Normal play leaves every other physical hand slot unchanged"
 	)
 
 
@@ -345,6 +416,40 @@ func _instance_at(cards: Array, index: int) -> StringName:
 	if index < 0 or index >= cards.size() or not cards[index] is Dictionary:
 		return &""
 	return StringName((cards[index] as Dictionary).get("instance_id", &""))
+
+
+func _card_in_hand(hand: Array, instance_id: StringName) -> Dictionary:
+	for card_value: Variant in hand:
+		if (
+			card_value is Dictionary
+			and StringName((card_value as Dictionary).get("instance_id", &"")) == instance_id
+		):
+			return card_value as Dictionary
+	return {}
+
+
+func _hand_slot_of(hand: Array, instance_id: StringName) -> int:
+	return int(_card_in_hand(hand, instance_id).get("hand_slot_index", -1))
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_value as Dictionary
+	return {}
+
+
+func _event_types_between(events: Array, expected: Array[StringName]) -> bool:
+	var next_expected: int = 0
+	for event_value: Variant in events:
+		if not event_value is Dictionary or next_expected >= expected.size():
+			continue
+		if StringName((event_value as Dictionary).get("type", &"")) == expected[next_expected]:
+			next_expected += 1
+	return next_expected == expected.size()
 
 
 func _event_count(events: Array, event_type: StringName) -> int:

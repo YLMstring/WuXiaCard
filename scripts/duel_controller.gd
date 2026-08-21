@@ -46,6 +46,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var movement_audio_volume_db: float = -9.0
 @export var movement_duration: float = 0.20
 @export var swap_duration: float = 0.28
+@export var hand_shift_duration: float = 0.18
 @export var swap_arc_ratio: float = 0.12
 @export var summon_swap_readable_duration: float = 0.30
 @export var targeting_trace_width: float = 6.0
@@ -277,6 +278,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_post_effect_gap = 0.0
 		movement_duration = 0.0
 		swap_duration = 0.0
+		hand_shift_duration = 0.0
 		summon_swap_readable_duration = 0.0
 		ki_gain_pulse_duration = 0.0
 		power_change_pre_delay = 0.0
@@ -484,6 +486,16 @@ func debug_get_hand_view_instance_ids(owner_id: int) -> Array[StringName]:
 	return instance_ids
 
 
+func debug_get_hand_view_slot_instance_ids(owner_id: int) -> Array[StringName]:
+	var instance_ids: Array[StringName] = []
+	var hand_container: HBoxContainer = _get_hand_for_owner(owner_id)
+	for slot_index: int in range(StateData.HAND_SLOT_COUNT):
+		var slot: PanelContainer = _get_hand_slot_by_index(hand_container, slot_index)
+		var cards: Array[CardView] = _get_cards_in_slot(slot)
+		instance_ids.append(_get_card_instance_id(cards[0]) if not cards.is_empty() else &"")
+	return instance_ids
+
+
 func debug_get_board_card_instance_id(cell_index: int) -> StringName:
 	if not debug_has_board_card_view(cell_index):
 		return &""
@@ -587,11 +599,18 @@ func _create_hands() -> void:
 	_create_hand_slots(player_hand)
 	for card_index: int in range(duel_state.get_hand(DuelRules.OPPONENT_OWNER).size()):
 		var card_data: Dictionary = duel_state.get_hand(DuelRules.OPPONENT_OWNER)[card_index]
-		var opponent_card: CardView = _spawn_card_in_slot(opponent_hand.get_child(card_index) as PanelContainer, card_data, DuelRules.OPPONENT_OWNER, false)
+		var hand_slot_index: int = int(card_data.get(StateData.HAND_SLOT_INDEX_KEY, card_index))
+		var opponent_slot: PanelContainer = _get_hand_slot_by_index(opponent_hand, hand_slot_index)
+		if opponent_slot == null:
+			continue
+		var opponent_card: CardView = _spawn_card_in_slot(opponent_slot, card_data, DuelRules.OPPONENT_OWNER, false)
 		opponent_card.set_face_down(_should_conceal_hand_card(card_data, DuelRules.OPPONENT_OWNER))
 	for card_index: int in range(duel_state.get_hand(DuelRules.PLAYER_OWNER).size()):
 		var card_data: Dictionary = duel_state.get_hand(DuelRules.PLAYER_OWNER)[card_index]
-		_spawn_card_in_slot(player_hand.get_child(card_index) as PanelContainer, card_data, DuelRules.PLAYER_OWNER, false)
+		var hand_slot_index: int = int(card_data.get(StateData.HAND_SLOT_INDEX_KEY, card_index))
+		var player_slot: PanelContainer = _get_hand_slot_by_index(player_hand, hand_slot_index)
+		if player_slot != null:
+			_spawn_card_in_slot(player_slot, card_data, DuelRules.PLAYER_OWNER, false)
 
 
 func _create_card_instances(card_ids: Array[StringName], owner_id: int, zone: String) -> Array:
@@ -922,7 +941,6 @@ func _animate_single_movement(event: Dictionary) -> void:
 	if not _valid_movement_cells(source_cell, target_cell) or card == null:
 		_apply_movement_mapping_immediate(event)
 		return
-	var start_global: Vector2 = card.global_position
 	var end_global: Vector2 = board_cells[target_cell].get_global_rect().position
 	card.reparent(drag_layer, true)
 	card.z_index = 90
@@ -1243,6 +1261,8 @@ func _present_transition_events(
 			await _present_card_departed_for_resummon_event(event)
 		elif event_type == &"card_discarded":
 			await _present_card_discarded_event(event)
+		elif event_type == &"hand_cards_shifted":
+			await _present_hand_cards_shifted_event(event)
 		elif event_type == &"card_returned_to_hand":
 			await _present_card_returned_to_hand_event(event)
 		elif event_type == &"card_revealed":
@@ -1464,7 +1484,17 @@ func _present_hand_addition_event(
 	var card_data: Dictionary = _get_logical_hand_card_by_instance(owner_id, instance_id)
 	if card_data.is_empty() and event.get("card", null) is Dictionary:
 		card_data = (event.get("card", {}) as Dictionary).duplicate(true)
-	var target_slot: PanelContainer = _get_first_empty_hand_slot(_get_hand_for_owner(owner_id))
+	var hand_container: HBoxContainer = _get_hand_for_owner(owner_id)
+	var hand_slot_index: int = int(card_data.get(
+		StateData.HAND_SLOT_INDEX_KEY,
+		int(event.get("hand_slot_index", -1))
+	))
+	var target_slot: PanelContainer = _get_hand_slot_by_index(
+		hand_container,
+		hand_slot_index
+	)
+	if target_slot == null or not _get_cards_in_slot(target_slot).is_empty():
+		target_slot = _get_first_empty_hand_slot(hand_container)
 	if card_data.is_empty() or target_slot == null:
 		return
 	var card: CardView = _spawn_card_in_slot(target_slot, card_data, owner_id, false)
@@ -1528,6 +1558,66 @@ func _present_card_discarded_event(event: Dictionary) -> void:
 	if former_slot != null:
 		former_slot.remove_child(discarded_view)
 	discarded_view.queue_free()
+
+
+func _present_hand_cards_shifted_event(event: Dictionary) -> void:
+	var owner_id: int = int(event.get("owner_id", 0))
+	var hand_container: HBoxContainer = _get_hand_for_owner(owner_id)
+	var animations: Array[Dictionary] = []
+	for move_value: Variant in event.get("moves", []):
+		if not move_value is Dictionary:
+			continue
+		var move: Dictionary = move_value
+		var instance_id := StringName(move.get("instance_id", &""))
+		var from_slot: int = int(move.get("from_slot", -1))
+		var to_slot: int = int(move.get("to_slot", -1))
+		var card: CardView = _get_hand_card_view_by_instance(hand_container, instance_id)
+		var target_slot: PanelContainer = _get_hand_slot_by_index(hand_container, to_slot)
+		if card == null or target_slot == null:
+			continue
+		animations.append({
+			"card": card,
+			"instance_id": instance_id,
+			"from_slot": from_slot,
+			"to_slot": to_slot,
+			"target_slot": target_slot,
+			"end_global": target_slot.get_global_rect().position,
+		})
+	_presentation_trace.append(&"hand_cards_shifted")
+	if animations.is_empty():
+		return
+	_movement_presentation_trace.append({
+		"kind": &"hand_shift",
+		"owner_id": owner_id,
+		"duration": hand_shift_duration,
+		"moves": event.get("moves", []).duplicate(true),
+	})
+	for animation: Dictionary in animations:
+		var card: CardView = animation.get("card") as CardView
+		card.reparent(drag_layer, true)
+		card.z_index = 90
+	if hand_shift_duration > 0.0:
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		for animation: Dictionary in animations:
+			var card: CardView = animation.get("card") as CardView
+			tween.tween_property(
+				card,
+				"global_position",
+				animation.get("end_global", card.global_position),
+				hand_shift_duration
+			)
+		await tween.finished
+	for animation: Dictionary in animations:
+		var card: CardView = animation.get("card") as CardView
+		var target_slot: PanelContainer = animation.get("target_slot") as PanelContainer
+		if card == null or not is_instance_valid(card) or target_slot == null:
+			continue
+		card.reparent(target_slot, false)
+		card.scale = Vector2.ONE
+		card.rotation = 0.0
+		card.z_index = 1
 
 
 func _present_card_returned_to_hand_event(event: Dictionary) -> void:
@@ -1823,6 +1913,19 @@ func _get_first_empty_hand_slot(container: HBoxContainer) -> PanelContainer:
 		if slot != null and _get_cards_in_slot(slot).is_empty():
 			return slot
 	return null
+
+
+func _get_hand_slot_by_index(
+	container: HBoxContainer,
+	slot_index: int
+) -> PanelContainer:
+	if (
+		container == null
+		or slot_index < 0
+		or slot_index >= container.get_child_count()
+	):
+		return null
+	return container.get_child(slot_index) as PanelContainer
 
 
 func _get_cards_in_slot(slot: Node) -> Array[CardView]:
@@ -2560,10 +2663,20 @@ func _rebuild_views_from_state(source_state: StateData) -> void:
 	for owner_id: int in [DuelRules.OPPONENT_OWNER, DuelRules.PLAYER_OWNER]:
 		var hand_container: HBoxContainer = _get_hand_for_owner(owner_id)
 		var hand: Array = duel_state.get_hand(owner_id)
-		for card_index: int in range(mini(hand.size(), hand_container.get_child_count())):
+		for card_index: int in range(hand.size()):
 			var card_data: Dictionary = hand[card_index]
+			var hand_slot_index: int = int(card_data.get(
+				StateData.HAND_SLOT_INDEX_KEY,
+				card_index
+			))
+			var hand_slot: PanelContainer = _get_hand_slot_by_index(
+				hand_container,
+				hand_slot_index
+			)
+			if hand_slot == null:
+				continue
 			var card: CardView = _spawn_card_in_slot(
-				hand_container.get_child(card_index) as PanelContainer,
+				hand_slot,
 				card_data,
 				owner_id,
 				false
