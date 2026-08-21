@@ -600,7 +600,10 @@ func _check_card_picture_layout() -> void:
 	var picture: TextureRect = card.get_node("Overlay/CardPicture") as TextureRect
 	_check(picture.visible and picture.texture != null, "A face-up catalog picture loads into the card view")
 	_check(picture.size.is_equal_approx(Vector2(76.8, 76.8)), "A 96x128 card gives its picture 80% of the shorter side")
-	_check(picture.position.is_equal_approx(Vector2(9.6, 25.6)), "The square picture is centered on both card axes")
+	_check(
+		picture.get_global_rect().get_center().is_equal_approx(card.get_global_rect().get_center()),
+		"The square picture is centered on both card axes"
+	)
 	_check(picture.expand_mode == TextureRect.EXPAND_IGNORE_SIZE, "Picture dimensions never enlarge the card")
 	_check(picture.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED, "Picture keeps its source aspect ratio without cropping")
 	for power_name: String in ["TopPower", "RightPower", "BottomPower", "LeftPower"]:
@@ -610,7 +613,18 @@ func _check_card_picture_layout() -> void:
 	card.size = Vector2(80.0, 120.0)
 	await process_frame
 	_check(picture.size.is_equal_approx(Vector2(64.0, 64.0)), "Picture recomputes its 80% square after a card resize")
-	_check(picture.position.is_equal_approx(Vector2(8.0, 28.0)), "Resized picture remains exactly centered")
+	_check(
+		picture.get_global_rect().get_center().is_equal_approx(card.get_global_rect().get_center()),
+		"Resized picture remains exactly centered"
+	)
+	card.call("_apply_drag_style")
+	await process_frame
+	_check(
+		picture.get_global_rect().get_center().is_equal_approx(card.get_global_rect().get_center()),
+		"Picture remains centered when the drag border becomes thicker"
+	)
+	card.call("_apply_owner_style")
+	await process_frame
 	card.call("set_face_down", true)
 	_check(not picture.visible and (card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆", "Face-down cards hide pictures and retain the existing card back")
 	card.call("set_face_down", false)

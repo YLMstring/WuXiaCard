@@ -57,6 +57,7 @@ var _pending_pointer_id: int = -2
 var _pending_pointer_start: Vector2 = Vector2.ZERO
 var _ki_bead_diameter: float = 26.0
 
+@onready var overlay: Control = $Overlay
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
 @onready var card_picture: TextureRect = $Overlay/CardPicture
 @onready var ink_slash: ColorRect = $Overlay/InkSlash
@@ -73,6 +74,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
 	resized.connect(_on_resized)
+	overlay.resized.connect(_center_card_picture)
 	_on_resized()
 	_refresh_face_content()
 	_apply_owner_style()
@@ -556,12 +558,16 @@ func _on_resized() -> void:
 	var short_side: float = minf(size.x, size.y)
 	var picture_side: float = short_side * CARD_PICTURE_SCALE
 	card_picture.size = Vector2.ONE * picture_side
-	card_picture.position = (size - card_picture.size) * 0.5
+	_center_card_picture()
 	var power_size: int = maxi(14, int(short_side * 0.2))
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
 		power_label.add_theme_font_size_override("font_size", power_size)
 	_layout_ki_badge(short_side)
 	_update_title_font_size()
+
+
+func _center_card_picture() -> void:
+	card_picture.position = (overlay.size - card_picture.size) * 0.5
 
 
 func _layout_ki_badge(short_side: float) -> void:
