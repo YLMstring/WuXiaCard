@@ -303,11 +303,7 @@ func _check_attack_vfx_placement(duel: Node) -> void:
 		return
 
 	var right_adjacent: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 1)
-	var right_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 2)
-	var left_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 2, 0)
 	var down_adjacent: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 3)
-	var down_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 0, 6)
-	var up_far: Dictionary = duel.call("debug_get_attack_vfx_placement", 6, 0)
 
 	var cell0: Control = duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell0")
 	var cell1: Control = duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell1")
@@ -345,45 +341,13 @@ func _check_attack_vfx_placement(duel: Node) -> void:
 		"Down attack centers the bitmap on the first vertical seam"
 	)
 	_check(
-		not right_far.is_empty()
-		and (right_far.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
-			right_adjacent.get("center", Vector2.ZERO)
-		)
-		and int(right_far.get("neighbor_cell", -1)) == 1
-		and is_equal_approx(
-			float(right_far.get("rotation", INF)),
-			float(right_adjacent.get("rotation", -INF))
-		),
-		"Far same-row target keeps the bitmap on the first empty-neighbor seam"
-	)
-	_check(
-		not down_far.is_empty()
-		and (down_far.get("center", Vector2.ZERO) as Vector2).is_equal_approx(
-			down_adjacent.get("center", Vector2.ZERO)
-		)
-		and int(down_far.get("neighbor_cell", -1)) == 3
-		and is_equal_approx(
-			float(down_far.get("rotation", INF)),
-			float(down_adjacent.get("rotation", -INF))
-		),
-		"Far same-column target keeps the bitmap on the first empty-neighbor seam"
-	)
-	_check(
-		int(left_far.get("neighbor_cell", -1)) == 1
-		and is_equal_approx(float(left_far.get("rotation", INF)), PI),
-		"Left attack rotates the supplied attacker side by 180 degrees"
-	)
-	_check(
-		int(up_far.get("neighbor_cell", -1)) == 3
-		and is_equal_approx(float(up_far.get("rotation", INF)), -PI / 2.0),
-		"Up attack rotates the supplied attacker side by negative 90 degrees"
-	)
-	_check(
 		(duel.call("debug_get_attack_vfx_placement", 0, 0) as Dictionary).is_empty()
 		and (duel.call("debug_get_attack_vfx_placement", 0, 4) as Dictionary).is_empty()
+		and (duel.call("debug_get_attack_vfx_placement", 0, 2) as Dictionary).is_empty()
+		and (duel.call("debug_get_attack_vfx_placement", 0, 6) as Dictionary).is_empty()
 		and (duel.call("debug_get_attack_vfx_placement", -1, 0) as Dictionary).is_empty()
 		and (duel.call("debug_get_attack_vfx_placement", 0, 9) as Dictionary).is_empty(),
-		"Equal, diagonal, and out-of-range placement inputs are rejected"
+		"Equal, diagonal, non-adjacent, and out-of-range ink placements are rejected"
 	)
 
 
@@ -1603,7 +1567,20 @@ func _check_ability_pulse_sequencing() -> void:
 		second_trace.size() == first_trace.size() + 1 and second_trace[-1] == source_a,
 		"Pulse suppression resets before the next move"
 	)
+	var has_lunge_trace: bool = duel.has_method("debug_get_attack_lunge_trace")
+	_check(has_lunge_trace, "Duel controller exposes non-adjacent attack-lunge diagnostics")
+	if not has_lunge_trace:
+		duel.queue_free()
+		await process_frame
+		return
+	var source_view: Control = _first_card(
+		duel.get_node("DuelCanvas/BoardCenter/BoardGrid/Cell0")
+	)
+	var source_start: Vector2 = source_view.global_position
+	var source_parent: Node = source_view.get_parent()
 	var attack_trace_size: int = duel.debug_get_attack_vfx_trace().size()
+	var lunge_trace_size: int = (duel.call("debug_get_attack_lunge_trace") as Array).size()
+	var presentation_trace_size: int = duel.debug_get_presentation_trace().size()
 	await duel.call(
 		"_present_transition_events",
 		[
@@ -1611,15 +1588,28 @@ func _check_ability_pulse_sequencing() -> void:
 				"type": &"attack_started",
 				"source_cell": 0,
 				"source_instance_id": source_a,
-				"target_cell": 2,
-				"target_instance_id": &"synthetic_far_target",
+				"target_cell": 1,
+				"target_instance_id": &"synthetic_adjacent_target",
+			},
+			{
+				"type": &"attack_started",
+				"source_cell": 0,
+				"source_instance_id": source_a,
+				"target_cell": 8,
+				"target_instance_id": source_b,
+			},
+			{
+				"type": &"card_flipped",
+				"target_cell": 8,
+				"instance_id": source_b,
+				"owner_id": Rules.PLAYER_OWNER,
 			},
 			{
 				"type": &"attack_started",
 				"source_cell": 0,
 				"source_instance_id": &"missing_source",
-				"target_cell": 2,
-				"target_instance_id": &"synthetic_far_target",
+				"target_cell": 8,
+				"target_instance_id": source_b,
 			},
 			{"type": &"card_moved"},
 		],
@@ -1627,7 +1617,32 @@ func _check_ability_pulse_sequencing() -> void:
 	)
 	_check(
 		duel.debug_get_attack_vfx_trace().size() == attack_trace_size + 1,
-		"Valid synthetic attack plays once while a missing source skips without delay"
+		"Only the adjacent synthetic attack plays the ink-stroke cue"
+	)
+	var lunge_trace: Array = duel.call("debug_get_attack_lunge_trace") as Array
+	var completed_lunge: Dictionary = lunge_trace[-1] as Dictionary
+	_check(
+		lunge_trace.size() == lunge_trace_size + 1
+		and StringName(completed_lunge.get("source_instance_id", &"")) == source_a
+		and StringName(completed_lunge.get("target_instance_id", &"")) == source_b,
+		"Only the valid non-adjacent attack performs one visual lunge"
+	)
+	_check(
+		bool(completed_lunge.get("returned_to_source_parent", false))
+		and (completed_lunge.get("returned_global", Vector2.INF) as Vector2).is_equal_approx(
+			source_start
+		)
+		and source_view.get_parent() == source_parent
+		and duel.debug_get_board_card_instance_id(0) == source_a,
+		"Attack lunge returns the same view to its original visual and logical cell"
+	)
+	var new_presentation_trace: Array[StringName] = (
+		duel.debug_get_presentation_trace().slice(presentation_trace_size)
+	)
+	_check(
+		new_presentation_trace.find(&"attack_lunge_completed")
+		< new_presentation_trace.find(&"card_flipped"),
+		"Non-adjacent attack finishes its complete visual round trip before flip presentation"
 	)
 	_check(
 		bool(duel.get_node("DuelCanvas/AttackVfx").call("debug_is_clean")),

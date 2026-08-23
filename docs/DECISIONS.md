@@ -85,6 +85,12 @@ These decisions were explicitly established during development and should not be
 - Every initially valid attack emits `attack_started` before
   `CARD_BE_ATTACKED`. This presentation-only cue remains even when a later rule
   exiles or otherwise prevents the target from flipping.
+- Attack presentation depends only on board-cell adjacency at `attack_started`:
+  adjacent attacks keep the existing ink-stroke cue, while non-adjacent attacks
+  temporarily raise the attacker's live card view, move it over the target, and
+  return it to its original cell before any following flip presentation. This
+  lunge is presentation-only and never changes board mapping or emits movement,
+  summon, or departure timing.
 - Activate abilities do not pulse.
 - Missing, moved, or replaced context defaults to `NO_EFFECT`, and later actions in that rule continue.
 - Only an action explicitly declaring `on_invalid_context = STOP_RULE` stops that rule's remaining actions.

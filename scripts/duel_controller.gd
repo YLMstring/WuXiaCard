@@ -37,6 +37,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var snap_duration: float = 0.12
 @export var capture_flip_duration: float = 0.18
 @export var attack_vfx_duration: float = 0.15
+@export var attack_lunge_step_duration: float = 0.15
 @export var ability_trigger_pulse_duration: float = 0.14
 @export var exile_duration: float = 0.22
 @export var exile_step_delay: float = 0.10
@@ -96,6 +97,7 @@ var _targeting_trace_end_global: Vector2 = Vector2.ZERO
 var _fast_mode: bool = false
 var _presentation_trace: Array[StringName] = []
 var _attack_vfx_trace: Array[Dictionary] = []
+var _attack_lunge_trace: Array[Dictionary] = []
 var _ability_pulse_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
 var _power_change_presentation_trace: Array[Dictionary] = []
@@ -269,6 +271,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		snap_duration = 0.0
 		capture_flip_duration = 0.0
 		attack_vfx_duration = 0.0
+		attack_lunge_step_duration = 0.0
 		ability_trigger_pulse_duration = 0.0
 		exile_duration = 0.0
 		exile_step_delay = 0.0
@@ -399,6 +402,10 @@ func debug_get_presentation_trace() -> Array[StringName]:
 
 func debug_get_attack_vfx_trace() -> Array[Dictionary]:
 	return _attack_vfx_trace.duplicate(true)
+
+
+func debug_get_attack_lunge_trace() -> Array[Dictionary]:
+	return _attack_lunge_trace.duplicate(true)
 
 
 func debug_get_attack_vfx_placement(
@@ -1206,27 +1213,36 @@ func _present_transition_events(
 				and is_instance_valid(board_cards[source_cell])
 			):
 				source_card = board_cards[source_cell] as CardView
-			var placement: Dictionary = _get_attack_vfx_placement(
-				source_cell,
-				target_cell
-			)
 			if (
 				source_card != null
 				and _get_card_instance_id(source_card) == source_instance_id
-				and not placement.is_empty()
 			):
-				_attack_vfx_trace.append({
-					"source_instance_id": source_instance_id,
-					"target_instance_id": target_instance_id,
-					"neighbor_cell": int(placement["neighbor_cell"]),
-					"center": placement["center"],
-					"rotation": float(placement["rotation"]),
-				})
-				await attack_vfx.play_attack(
-					placement["center"],
-					float(placement["rotation"]),
-					attack_vfx_duration
-				)
+				if _board_cells_are_adjacent(source_cell, target_cell):
+					var placement: Dictionary = _get_attack_vfx_placement(
+						source_cell,
+						target_cell
+					)
+					if not placement.is_empty():
+						_attack_vfx_trace.append({
+							"source_instance_id": source_instance_id,
+							"target_instance_id": target_instance_id,
+							"neighbor_cell": int(placement["neighbor_cell"]),
+							"center": placement["center"],
+							"rotation": float(placement["rotation"]),
+						})
+						await attack_vfx.play_attack(
+							placement["center"],
+							float(placement["rotation"]),
+							attack_vfx_duration
+						)
+				else:
+					await _present_attack_lunge(
+						source_card,
+						source_cell,
+						source_instance_id,
+						target_cell,
+						target_instance_id
+					)
 		elif event_type == &"ability_triggered":
 			_presentation_trace.append(event_type)
 			var source_instance_id := StringName(event.get("source_instance_id", &""))
@@ -1945,6 +1961,95 @@ func _get_cards_in_hand(container: HBoxContainer) -> Array[CardView]:
 	return result
 
 
+func _board_cells_are_adjacent(source_cell: int, target_cell: int) -> bool:
+	if (
+		source_cell < 0
+		or source_cell >= 9
+		or target_cell < 0
+		or target_cell >= 9
+	):
+		return false
+	var source_row: int = floori(float(source_cell) / 3.0)
+	var source_column: int = source_cell % 3
+	var target_row: int = floori(float(target_cell) / 3.0)
+	var target_column: int = target_cell % 3
+	return (
+		absi(source_row - target_row)
+		+ absi(source_column - target_column)
+		== 1
+	)
+
+
+func _present_attack_lunge(
+	source_card: CardView,
+	source_cell: int,
+	source_instance_id: StringName,
+	target_cell: int,
+	target_instance_id: StringName
+) -> void:
+	if (
+		source_card == null
+		or not is_instance_valid(source_card)
+		or not _valid_movement_cells(source_cell, target_cell)
+		or source_cell == target_cell
+	):
+		return
+	var target_card := board_cards[target_cell] as CardView
+	if (
+		target_card == null
+		or not is_instance_valid(target_card)
+		or _get_card_instance_id(target_card) != target_instance_id
+	):
+		return
+	var original_parent: Node = source_card.get_parent()
+	if original_parent == null or not is_instance_valid(original_parent):
+		return
+	var start_global: Vector2 = source_card.global_position
+	var target_global: Vector2 = target_card.global_position
+	var original_scale: Vector2 = source_card.scale
+	var original_rotation: float = source_card.rotation
+	var original_z_index: int = source_card.z_index
+	source_card.reparent(drag_layer, true)
+	source_card.z_index = 95
+	if attack_lunge_step_duration > 0.0:
+		var tween: Tween = create_tween()
+		tween.tween_property(
+			source_card,
+			"global_position",
+			target_global,
+			attack_lunge_step_duration
+		).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(
+			source_card,
+			"global_position",
+			start_global,
+			attack_lunge_step_duration
+		).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+		await tween.finished
+	else:
+		source_card.global_position = target_global
+		source_card.global_position = start_global
+	if source_card == null or not is_instance_valid(source_card):
+		return
+	source_card.reparent(original_parent, false)
+	source_card.global_position = start_global
+	source_card.scale = original_scale
+	source_card.rotation = original_rotation
+	source_card.z_index = original_z_index
+	_presentation_trace.append(&"attack_lunge_completed")
+	_attack_lunge_trace.append({
+		"source_instance_id": source_instance_id,
+		"target_instance_id": target_instance_id,
+		"source_cell": source_cell,
+		"target_cell": target_cell,
+		"start_global": start_global,
+		"target_global": target_global,
+		"returned_global": source_card.global_position,
+		"returned_to_source_parent": source_card.get_parent() == original_parent,
+		"step_duration": attack_lunge_step_duration,
+	})
+
+
 func _get_attack_vfx_placement(
 	source_cell: int,
 	target_cell: int
@@ -1955,6 +2060,7 @@ func _get_attack_vfx_placement(
 		or target_cell < 0
 		or target_cell >= 9
 		or source_cell == target_cell
+		or not _board_cells_are_adjacent(source_cell, target_cell)
 		or board_cells.size() != 9
 	):
 		return {}
