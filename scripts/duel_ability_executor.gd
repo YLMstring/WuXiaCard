@@ -545,12 +545,16 @@ static func _execute_action(
 			event_resolver
 		)
 	if action_type == Catalog.ACTION_ADD_CARD_TO_HAND:
+		var added_card_id: StringName = _resolve_add_card_to_hand_id(
+			declaration,
+			context
+		)
 		return _add_card_to_hand(
 			state,
 			source_cell,
 			source_instance_id,
 			expected_owner,
-			StringName(declaration.get("card_id", &"")),
+			added_card_id,
 			StringName(declaration.get("recipient", &""))
 		)
 	if action_type == Catalog.ACTION_REVEAL_HAND_CARDS:
@@ -2056,6 +2060,25 @@ static func _add_card_to_hand(
 		"hand_slot_index": hand_slot_index,
 		"card": added_card.duplicate(true),
 	}])
+
+
+static func _resolve_add_card_to_hand_id(
+	declaration: Dictionary,
+	context: Dictionary
+) -> StringName:
+	if declaration.has("card_id"):
+		return StringName(declaration.get("card_id", &""))
+	var card_spec_value: Variant = declaration.get("card", null)
+	if not card_spec_value is Dictionary:
+		return &""
+	var card_spec: Dictionary = card_spec_value
+	if StringName(card_spec.get("type", &"")) != Catalog.CARD_SPEC_FRESH_COPY:
+		return &""
+	var copied_snapshot: Dictionary = _get_reference_snapshot(
+		context,
+		StringName(card_spec.get("of", &""))
+	)
+	return StringName(copied_snapshot.get("card_id", &""))
 
 
 static func _make_generated_instance_id(

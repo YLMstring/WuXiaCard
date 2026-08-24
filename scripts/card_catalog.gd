@@ -772,7 +772,7 @@ const JINGANG_DISCARD_PROTECTION: Dictionary = {
 	}],
 }
 
-const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
+const JINGANG_DISCARD_PROTECTION_WITH_COPY: Dictionary = {
 	"triggers": [{
 		"event": CARD_BEFORE_FLIPPED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
@@ -794,10 +794,12 @@ const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
 					"on_invalid_context": STOP_RULE,
 				},
 				{
-					"type": ACTION_RETURN_CARD_TO_HAND,
-					"card": CARD_REF_SELECTED_CARD,
-					"recipient": OWNER_CARD_CURRENT,
-					"preserve_instance": true,
+					"type": ACTION_ADD_CARD_TO_HAND,
+					"card": {
+						"type": CARD_SPEC_FRESH_COPY,
+						"of": CARD_REF_SELECTED_CARD,
+					},
+					"recipient": RECIPIENT_SELF,
 				},
 			],
 		}],
@@ -2533,7 +2535,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，丢弃最左侧的手牌，若如此做，阻止翻面，然后耗内力以获得一张被丢弃牌的复制。",
 		"flavor": "韦陀掌是少林派的扎根基武功，这一招双掌推出，招式平平，所含力道却甚雄浑。",
 		"powers": [6, 2, 6, 2],
-		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_RECALL],
+		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_COPY],
 	},
 	&"JinGangBuHuai3": {
 		"id": &"JinGangBuHuai3",
@@ -2546,7 +2548,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "少林派的护体神功，随心而起，布满全身，乃古今五大神功之一。",
 		"powers": [6, 3, 6, 3],
 		"starting_ki": 1,
-		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_RECALL],
+		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_COPY],
 	},
 	&"JinGangBuHuai4": {
 		"id": &"JinGangBuHuai4",
@@ -2560,7 +2562,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [6, 3, 6, 3],
 		"starting_ki": 1,
 		"abilities": [
-			JINGANG_DISCARD_PROTECTION_WITH_RECALL,
+			JINGANG_DISCARD_PROTECTION_WITH_COPY,
 			JINGANG_PREVENTED_ALLY_RALLY,
 		],
 	},
@@ -5297,17 +5299,33 @@ static func _validate_action(
 				)
 	if action_type == ACTION_ADD_CARD_TO_HAND:
 		allowed_keys.append(&"card_id")
+		allowed_keys.append(&"card")
 		allowed_keys.append(&"recipient")
-		var added_card_value: Variant = action.get("card_id", null)
-		var added_card_id: StringName = (
-			StringName(added_card_value)
-			if typeof(added_card_value) in [TYPE_STRING, TYPE_STRING_NAME]
-			else &""
-		)
-		if added_card_id not in ALL_CARD_IDS:
+		var has_fixed_card_id: bool = action.has("card_id")
+		var has_card_spec: bool = action.has("card")
+		if has_fixed_card_id == has_card_spec:
 			errors.append(
-				"Card %s %s action %s requires a known card_id"
+				"Card %s %s action %s requires exactly one of card_id or card"
 				% [card_id, context_name, action_type]
+			)
+		elif has_fixed_card_id:
+			var added_card_value: Variant = action.get("card_id", null)
+			var added_card_id: StringName = (
+				StringName(added_card_value)
+				if typeof(added_card_value) in [TYPE_STRING, TYPE_STRING_NAME]
+				else &""
+			)
+			if added_card_id not in ALL_CARD_IDS:
+				errors.append(
+					"Card %s %s action %s requires a known card_id"
+					% [card_id, context_name, action_type]
+				)
+		else:
+			_validate_add_card_to_hand_spec(
+				card_id,
+				context_name,
+				action.get("card", null),
+				errors
 			)
 		var recipient_value: Variant = action.get("recipient", null)
 		var recipient: StringName = (
@@ -5489,6 +5507,37 @@ static func _validate_summon_card_spec(
 	for key: Variant in spec.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s summon card specification has unsupported field %s" % [card_id, context_name, key])
+
+
+static func _validate_add_card_to_hand_spec(
+	card_id: StringName,
+	context_name: String,
+	value: Variant,
+	errors: Array[String]
+) -> void:
+	if not value is Dictionary:
+		errors.append(
+			"Card %s %s add-to-hand action requires a card specification"
+			% [card_id, context_name]
+		)
+		return
+	var spec: Dictionary = value
+	if StringName(spec.get("type", &"")) != CARD_SPEC_FRESH_COPY:
+		errors.append(
+			"Card %s %s add-to-hand action uses an unknown card specification"
+			% [card_id, context_name]
+		)
+	if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
+		errors.append(
+			"Card %s %s fresh-copy add-to-hand action requires a known card reference"
+			% [card_id, context_name]
+		)
+	for key: Variant in spec.keys():
+		if StringName(key) not in [&"type", &"of"]:
+			errors.append(
+				"Card %s %s add-to-hand card specification has unsupported field %s"
+				% [card_id, context_name, key]
+			)
 
 
 static func _validate_summon_cell_spec(

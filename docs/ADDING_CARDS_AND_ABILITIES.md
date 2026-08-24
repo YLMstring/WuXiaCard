@@ -293,6 +293,25 @@ Create a fresh catalog card in a hand:
 It creates a fresh catalog instance with a deterministic unique runtime ID and
 returns `NO_EFFECT` when the destination hand already contains five cards.
 
+The same action can derive the catalog ID from an existing card-reference
+snapshot instead of naming a fixed card:
+
+```gdscript
+{
+    "type": ACTION_ADD_CARD_TO_HAND,
+    "card": {
+        "type": CARD_SPEC_FRESH_COPY,
+        "of": CARD_REF_SELECTED_CARD,
+    },
+    "recipient": RECIPIENT_SELF,
+}
+```
+
+Declare exactly one of `card_id` or `card`. A fresh-copy specification reads
+only the referenced snapshot's `card_id`; it creates a new instance with the
+catalog powers, starting ki, and complete abilities. It neither copies runtime
+changes nor moves the referenced instance from its current zone.
+
 Attack with the first three matching board cards, fully resolving each attack
 before revalidating the next snapshot member:
 

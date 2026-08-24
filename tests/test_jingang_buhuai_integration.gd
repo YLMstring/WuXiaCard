@@ -28,7 +28,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
-	await _test_discard_fades_before_same_instance_return(duel)
+	await _test_discard_fades_before_fresh_copy_appears(duel)
 	duel.queue_free()
 	await process_frame
 	_cleanup_profile()
@@ -42,7 +42,7 @@ func _run() -> void:
 	quit(_failures)
 
 
-func _test_discard_fades_before_same_instance_return(duel: Node) -> void:
+func _test_discard_fades_before_fresh_copy_appears(duel: Node) -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {
 		"card": Catalog.create_instance(
@@ -85,6 +85,8 @@ func _test_discard_fades_before_same_instance_return(duel: Node) -> void:
 		Rules.PLAYER_OWNER
 	)
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
+	var added_event: Dictionary = _first_event(result.get("events", []), &"card_added_to_hand")
+	var copied_instance_id := StringName(added_event.get("instance_id", &""))
 	var hand_view_ids: Array[StringName] = duel.debug_get_hand_view_instance_ids(
 		Rules.PLAYER_OWNER
 	)
@@ -93,33 +95,55 @@ func _test_discard_fades_before_same_instance_return(duel: Node) -> void:
 	)
 	var movement_trace: Array[Dictionary] = duel.debug_get_movement_presentation_trace()
 	_check(
-		trace.rfind(&"card_discarded") < trace.rfind(&"card_returned_to_hand")
+		trace.rfind(&"card_discarded") < trace.rfind(&"card_added_to_hand")
 		and &"card_discard_faded" in trace,
-		"Discard reuses the fade-out presentation before the recalled card appears"
+		"Discard reuses the fade-out presentation before the fresh copy appears"
 	)
 	_check(
 		hand_view_ids == [
 			&"integration_jingang_right_near",
 			&"integration_jingang_right_far",
-			&"integration_jingang_discard",
+			copied_instance_id,
 		],
-		"Same-instance recall leaves one synchronized view per physical card"
+		"The discarded view stays gone while one fresh-copy view appears"
 	)
 	_check(
 		trace.rfind(&"card_discarded") < trace.rfind(&"hand_cards_shifted")
-		and trace.rfind(&"hand_cards_shifted") < trace.rfind(&"card_returned_to_hand")
+		and trace.rfind(&"hand_cards_shifted") < trace.rfind(&"card_added_to_hand")
 		and slot_view_ids == [
 			&"integration_jingang_right_near",
 			&"integration_jingang_right_far",
-			&"integration_jingang_discard",
+			copied_instance_id,
 			&"",
 			&"",
 		]
 		and not movement_trace.is_empty()
 		and StringName(movement_trace[-1].get("kind", &"")) == &"hand_shift"
 		and (movement_trace[-1].get("moves", []) as Array).size() == 2,
-		"Discard shifts right-side views left together before recall fills the leftmost hole"
+		"Discard shifts right-side views left together before the copy fills the next slot"
 	)
+	_check(
+		_instance_at(duel.duel_state.discard_piles[Rules.PLAYER_OWNER] as Array, 0)
+		== &"integration_jingang_discard"
+		and copied_instance_id != &"integration_jingang_discard",
+		"Presentation keeps the original discard and the fresh copy as distinct instances"
+	)
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_value as Dictionary
+	return {}
+
+
+func _instance_at(cards: Array, index: int) -> StringName:
+	if index < 0 or index >= cards.size() or not cards[index] is Dictionary:
+		return &""
+	return StringName((cards[index] as Dictionary).get("instance_id", &""))
 
 
 func _cleanup_profile() -> void:

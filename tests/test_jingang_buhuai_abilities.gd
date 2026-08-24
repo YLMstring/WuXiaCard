@@ -20,7 +20,8 @@ func _run() -> void:
 	_test_tier_one_discards_leftmost_and_never_recalls()
 	_test_discard_shifts_only_cards_to_its_right()
 	_test_tier_two_without_ki_leaves_discarded_card()
-	_test_tier_three_spends_ki_and_recalls_same_instance()
+	_test_tier_three_spends_ki_and_gains_fresh_copy()
+	_test_full_hand_after_discard_trigger_still_spends_ki()
 	_test_normal_play_preserves_remaining_physical_slots()
 	_test_attack_flip_uses_the_same_discard_prevention()
 	_test_tier_four_reacts_to_its_own_prevention()
@@ -62,9 +63,21 @@ func _test_declarations() -> void:
 				&"discard_card",
 				Catalog.ACTION_PREVENT_TRIGGER_FLIP,
 				Catalog.ACTION_SPEND_KI,
-				Catalog.ACTION_RETURN_CARD_TO_HAND,
+				Catalog.ACTION_ADD_CARD_TO_HAND,
 			]),
-			"Tier two through four declare discard, prevention, ki spend, and recall"
+			"Tier two through four declare discard, prevention, ki spend, and a fresh copy"
+		)
+		var copy_action: Dictionary = _first_action_of_type(
+			tier_two[0] as Dictionary,
+			Catalog.ACTION_ADD_CARD_TO_HAND
+		)
+		_check(
+			copy_action.get("card", {}) == {
+				"type": Catalog.CARD_SPEC_FRESH_COPY,
+				"of": Catalog.CARD_REF_SELECTED_CARD,
+			}
+			and StringName(copy_action.get("recipient", &"")) == Catalog.RECIPIENT_SELF,
+			"Jingang's generic add-to-hand action copies the discarded selection"
 		)
 	_check(tier_four.size() == 2, "Tier four keeps protection and rally as separate abilities")
 	if tier_four.size() == 2:
@@ -176,25 +189,38 @@ func _test_tier_two_without_ki_leaves_discarded_card() -> void:
 	)
 
 
-func _test_tier_three_spends_ki_and_recalls_same_instance() -> void:
-	var recalled: Dictionary = _plain(&"tier_three_recall", Rules.PLAYER_OWNER)
+func _test_tier_three_spends_ki_and_gains_fresh_copy() -> void:
+	var discarded: Dictionary = Catalog.create_instance(
+		&"TuNaShu1",
+		Rules.PLAYER_OWNER,
+		&"tier_three_discard"
+	)
 	var retained_right: Dictionary = _plain(&"tier_three_right", Rules.PLAYER_OWNER)
 	var retained_far: Dictionary = _plain(&"tier_three_far", Rules.PLAYER_OWNER)
-	recalled["hand_slot_index"] = 0
+	discarded["hand_slot_index"] = 0
 	retained_right["hand_slot_index"] = 1
 	retained_far["hand_slot_index"] = 2
-	recalled["powers"] = [2, 3, 4, 5]
+	discarded["powers"] = [2, 3, 4, 5]
+	discarded["ki"] = 3
+	discarded["active_abilities"] = []
 	var state: State = _state_with_source(
 		&"JinGangBuHuai3",
 		&"tier_three_guard",
-		[retained_right, recalled, retained_far],
+		[retained_right, discarded, retained_far],
 		4
 	)
 	var result: Dictionary = Simulator.resolve_non_attack_flip(
 		state, &"tier_three_guard", Rules.OPPONENT_OWNER
 	)
-	var returned: Dictionary = _card_in_hand(
-		state.get_hand(Rules.PLAYER_OWNER), &"tier_three_recall"
+	var added_event: Dictionary = _first_event(result.get("events", []), &"card_added_to_hand")
+	var copied_instance_id := StringName(added_event.get("instance_id", &""))
+	var copied: Dictionary = _card_in_hand(
+		state.get_hand(Rules.PLAYER_OWNER), copied_instance_id
+	)
+	var fresh_baseline: Dictionary = Catalog.create_instance(
+		&"TuNaShu1",
+		Rules.PLAYER_OWNER,
+		&"fresh_baseline"
 	)
 	_check(
 		_board_owner(state, &"tier_three_guard") == Rules.PLAYER_OWNER
@@ -202,25 +228,78 @@ func _test_tier_three_spends_ki_and_recalls_same_instance() -> void:
 		"Tier three prevents its flip and spends exactly one ki"
 	)
 	_check(
-		StringName(returned.get("instance_id", &"")) == &"tier_three_recall"
-		and returned.get("powers", []) == [2, 3, 4, 5]
-		and int(returned.get("hand_slot_index", -1)) == 2
+		copied_instance_id != &""
+		and copied_instance_id != &"tier_three_discard"
+		and StringName(copied.get("card_id", &"")) == &"TuNaShu1"
+		and copied.get("powers", []) == fresh_baseline.get("powers", [])
+		and int(copied.get("ki", -1)) == int(fresh_baseline.get("ki", -2))
+		and copied.get("active_abilities", []) == fresh_baseline.get("active_abilities", [])
+		and int(copied.get("hand_slot_index", -1)) == 2
 		and _hand_slot_of(state.get_hand(Rules.PLAYER_OWNER), &"tier_three_right") == 0
 		and _hand_slot_of(state.get_hand(Rules.PLAYER_OWNER), &"tier_three_far") == 1
-		and (state.discard_piles[Rules.PLAYER_OWNER] as Array).is_empty(),
-		"Tier three recalls the same instance into the leftmost slot after the discard shift"
+		and _instance_at(state.discard_piles[Rules.PLAYER_OWNER] as Array, 0)
+		== &"tier_three_discard",
+		"Tier three leaves the discarded instance behind and gains a catalog-fresh copy"
 	)
 	_check(
 		_event_types_between(
 			result.get("events", []),
-			[&"card_discarded", &"hand_cards_shifted", &"card_returned_to_hand"]
+			[&"card_discarded", &"hand_cards_shifted", &"card_added_to_hand"]
 		),
-		"Discard fade, batch shift, and recall remain explicitly ordered"
+		"Discard fade, batch shift, and copy addition remain explicitly ordered"
 	)
 	_check(
 		_event_count(result.get("events", []), &"card_discarded") == 1
-		and _event_count(result.get("events", []), &"card_returned_to_hand") == 1,
-		"Successful recall emits discard then return"
+		and _event_count(result.get("events", []), &"card_added_to_hand") == 1
+		and _event_count(result.get("events", []), &"card_returned_to_hand") == 0,
+		"Successful copy emits discard then add without returning the original"
+	)
+
+
+func _test_full_hand_after_discard_trigger_still_spends_ki() -> void:
+	var nianhua: Dictionary = Catalog.create_instance(
+		&"NianhuaWeiXiao4",
+		Rules.PLAYER_OWNER,
+		&"full_hand_discard"
+	)
+	nianhua["hand_slot_index"] = 0
+	var owner_hand: Array = [nianhua]
+	for index: int in range(4):
+		var filler: Dictionary = _plain(
+			StringName("full_hand_filler_%d" % index),
+			Rules.PLAYER_OWNER
+		)
+		filler["hand_slot_index"] = index + 1
+		owner_hand.append(filler)
+	var state: State = _state_with_source(
+		&"JinGangBuHuai3",
+		&"full_hand_guard",
+		owner_hand,
+		8
+	)
+	state.board[0] = _slot(
+		_plain(&"full_hand_enemy", Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	state.board[2] = _slot(
+		Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"full_hand_returned"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var result: Dictionary = Simulator.resolve_non_attack_flip(
+		state,
+		&"full_hand_guard",
+		Rules.OPPONENT_OWNER
+	)
+	_check(
+		int(_board_card(state, &"full_hand_guard").get("ki", -1)) == 0
+		and state.get_hand(Rules.PLAYER_OWNER).size() == 5
+		and _board_cell(state, &"full_hand_discard") == 1
+		and _event_count(result.get("events", []), &"card_added_to_hand") == 0,
+		"Jingang spends ki without refund when a discard trigger refills the hand first"
 	)
 
 
@@ -412,6 +491,19 @@ func _board_owner(state: State, instance_id: StringName) -> int:
 	return 0
 
 
+func _board_cell(state: State, instance_id: StringName) -> int:
+	for cell: int in range(state.board.size()):
+		var slot_value: Variant = state.board[cell]
+		if (
+			slot_value is Dictionary
+			and StringName(((slot_value as Dictionary).get("card", {}) as Dictionary).get(
+				"instance_id", &""
+			)) == instance_id
+		):
+			return cell
+	return -1
+
+
 func _instance_at(cards: Array, index: int) -> StringName:
 	if index < 0 or index >= cards.size() or not cards[index] is Dictionary:
 		return &""
@@ -484,6 +576,32 @@ func _action_types(ability: Dictionary) -> Array[StringName]:
 		if trigger_value is Dictionary:
 			_collect_action_types((trigger_value as Dictionary).get("actions", []), types)
 	return types
+
+
+func _first_action_of_type(ability: Dictionary, expected_type: StringName) -> Dictionary:
+	for trigger_value: Variant in ability.get("triggers", []):
+		if not trigger_value is Dictionary:
+			continue
+		var found: Dictionary = _find_action_of_type(
+			(trigger_value as Dictionary).get("actions", []),
+			expected_type
+		)
+		if not found.is_empty():
+			return found
+	return {}
+
+
+func _find_action_of_type(actions: Array, expected_type: StringName) -> Dictionary:
+	for action_value: Variant in actions:
+		if not action_value is Dictionary:
+			continue
+		var action: Dictionary = action_value
+		if StringName(action.get("type", &"")) == expected_type:
+			return action
+		var nested: Dictionary = _find_action_of_type(action.get("actions", []), expected_type)
+		if not nested.is_empty():
+			return nested
+	return {}
 
 
 func _collect_action_types(actions: Array, types: Array[StringName]) -> void:

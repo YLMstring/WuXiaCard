@@ -82,9 +82,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
 - `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the
   exact pending target before ownership can change.
-- `JinGangBuHuai1`–`4` use generic discard and exact-instance recall actions.
-  Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4 makes
-  every protected friendly gain one point and attack once per tier-4 source.
+- `JinGangBuHuai1`–`4` use generic physical-leftmost discard and flip
+  prevention. Tiers 2–4 then spend one ki and use `ACTION_ADD_CARD_TO_HAND`
+  with `CARD_SPEC_FRESH_COPY` to gain a catalog-fresh copy; the discarded
+  instance remains in discard unless its own trigger moves it. If that trigger
+  refills the hand first, the ki remains spent and adding the copy has no
+  effect. Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4
+  makes every protected friendly gain one point and attack once per tier-4
+  source.
 - `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
   selection. Their point gains occur only after the required discard count.
   Locked prevented-flip reactions exile only the exact target attacked by that
