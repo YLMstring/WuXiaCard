@@ -240,14 +240,20 @@ static func is_target_in_attack_range(
 		var intervening_value: Variant = board[intervening_index]
 		if intervening_value != null:
 			var intervening_slot: Dictionary = intervening_value
-			if (
-				int(intervening_slot.get("owner", 0)) != int(source_slot.get("owner", 0))
-				or not Abilities.allows_intervening_ally_at_orthogonal_distance_two_with_gates(
+			var intervening_is_ally: bool = (
+				int(intervening_slot.get("owner", 0)) == int(source_slot.get("owner", 0))
+			)
+			if intervening_is_ally:
+				if not Abilities.allows_intervening_ally_at_orthogonal_distance_two_with_gates(
 					source_card,
 					source_gates
-				)
-			):
+				):
 					return false
+			elif not Abilities.allows_intervening_enemy_at_orthogonal_distance_two_with_gates(
+				source_card,
+				source_gates
+			):
+				return false
 	if bool(context.get("skip_power_comparison", false)):
 		return true
 	var target_card: Dictionary = target_slot.get("card", {})

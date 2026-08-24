@@ -340,6 +340,25 @@ only the referenced snapshot's `card_id`; it creates a new instance with the
 catalog powers, starting ki, and complete abilities. It neither copies runtime
 changes nor moves the referenced instance from its current zone.
 
+A perfect-copy specification instead copies the referenced card's complete
+runtime snapshot while assigning a new deterministic `instance_id`:
+
+```gdscript
+{
+    "type": ACTION_ADD_CARD_TO_HAND,
+    "card": {
+        "type": CARD_SPEC_PERFECT_COPY,
+        "of": CARD_REF_SELECTED_CARD,
+    },
+    "recipient": RECIPIENT_SELF,
+}
+```
+
+It preserves current powers, ki, `original_owner`, active abilities, and other
+runtime card fields, but clears old physical-zone placement such as a hand
+slot. `ACTION_SUMMON_CARD` accepts the same specification and sends the clone
+through the complete ordinary summon and standard-attack pipeline.
+
 Attack with the first three matching board cards, fully resolving each attack
 before revalidating the next snapshot member:
 
@@ -504,7 +523,19 @@ its destination. Both legs of every swap use this boundary, and every swap is
 orthogonally adjacent at resolution. A failed swap returns `NO_EFFECT`; a rule
 that must stop afterward declares `on_invalid_context = STOP_RULE`. A
 successful mutation then resolves `CARD_AFTER_MOVED` for the exact moving
-instance.
+instance. Movement contexts expose that instance as `CARD_REF_TRIGGER_CARD`;
+`CONDITION_MOVING_CARD_IS_ALLY` compares its current owner with each trigger
+source.
+
+Every completed exile emits `CARD_AFTER_EXILED` after the card has entered its
+original owner's removed zone. The context preserves the pre-exile runtime
+snapshot, former zone/cell/current owner, and exile reason. Global sources are
+then discovered row-major from cards still on the board. Use
+`CONDITION_TRIGGER_CARD_WAS_ON_BOARD` for board-only reactions and
+`CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE` to apply the same
+`Rules.can_change_powers()` predicate used by selected-card power-change
+filtering to the pre-exile snapshot. `[0,0,0,0]` therefore qualifies while the
+four-`-1` sentinel does not.
 
 `ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES` stores each removed ability
 on that exact card until the current turn ends. Retained abilities are never

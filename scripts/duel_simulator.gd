@@ -1048,6 +1048,12 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	var existing_discard_owner_id: int = int(
 		request.get("existing_discard_owner_id", source_owner)
 	)
+	var perfect_copy_value: Variant = request.get("perfect_copy_card", {})
+	var perfect_copy_card: Dictionary = (
+		(perfect_copy_value as Dictionary).duplicate(true)
+		if perfect_copy_value is Dictionary
+		else {}
+	)
 	var existing_hand_index: int = -1
 	if existing_hand_instance_id != &"":
 		var source_hand: Array = state.get_hand(source_owner)
@@ -1118,6 +1124,10 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		) as Array
 		summoned_card = source_discard[existing_discard_index]
 		source_discard.remove_at(existing_discard_index)
+	elif not perfect_copy_card.is_empty():
+		summoned_card = perfect_copy_card
+		summoned_card["instance_id"] = instance_id
+		summoned_card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	else:
 		summoned_card = Catalog.create_instance(card_id, source_owner, instance_id)
 	state.board[target_cell] = {

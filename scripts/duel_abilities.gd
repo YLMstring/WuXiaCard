@@ -552,6 +552,20 @@ static func allows_intervening_ally_at_orthogonal_distance_two_with_gates(
 	return false
 
 
+static func allows_intervening_enemy_at_orthogonal_distance_two_with_gates(
+	card: Dictionary,
+	enabled_effect_gates: Variant
+) -> bool:
+	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
+		if (
+			StringName(modifier.get("type", &""))
+			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
+			and bool(modifier.get("allow_intervening_enemy", false))
+		):
+			return true
+	return false
+
+
 static func get_effective_defending_power(
 	card: Dictionary,
 	_direction: int,

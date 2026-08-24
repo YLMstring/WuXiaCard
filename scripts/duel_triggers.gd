@@ -476,6 +476,27 @@ static func _conditions_match(
 				or source_cell != int(context.get("moving_source_cell", -1))
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_MOVING_CARD_IS_ALLY:
+			var moving_owner: int = int(context.get("moving_owner_id", 0))
+			var moving_instance_id := StringName(context.get("moving_instance_id", &""))
+			var source_slot: Dictionary = state.board[source_cell]
+			if (
+				moving_instance_id == &""
+				or moving_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or moving_owner != int(source_slot.get("owner", 0))
+			):
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_WAS_ON_BOARD:
+			if StringName(context.get("trigger_zone", &"")) != Catalog.CARD_ZONE_BOARD:
+				return false
+		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE:
+			var trigger_snapshot_value: Variant = context.get("trigger_card_snapshot", {})
+			if not trigger_snapshot_value is Dictionary:
+				return false
+			var trigger_snapshot: Dictionary = trigger_snapshot_value
+			var powers: Array = trigger_snapshot.get("powers", [])
+			if powers.size() != 4 or not Rules.can_change_powers(trigger_snapshot):
+				return false
 		elif condition_type == Catalog.CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE:
 			if not _are_adjacent(source_cell, int(context.get("trigger_cell", -1))):
 				return false

@@ -39,10 +39,10 @@ const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
 新增通用条件：
 
 ```gdscript
-{"type": CONDITION_TRIGGER_CARD_HAD_NUMBERED_POWERS}
+{"type": CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE}
 ```
 
-它读取离场前快照。四边均为普通非负整数时成立，包含 `[0, 0, 0, 0]`；四边 `-1` 的无点数牌不成立。
+它读取离场前快照，并与 `CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE` 共用 `Rules.can_change_powers()` 判断。四边均为普通非负整数时成立，包含 `[0, 0, 0, 0]`；四边 `-1` 的无点数牌不成立。
 
 ### 运行时完美复制
 
@@ -59,21 +59,17 @@ const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
 
 `ACTION_ADD_CARD_TO_HAND` 与 `ACTION_SUMMON_CARD` 都接受此规格。前者沿用五张手牌上限与最左空槽规则；后者沿用完整普通进场管线。复制数据在规格实际执行时从稳定引用快照读取，不移动原实例。
 
-新增原格引用供移除后事件使用：
-
-```gdscript
-{"type": CELL_REF_TRIGGER_CARD_INITIAL_CELL}
-```
+原格复用现有 `CELL_REF_INITIAL_CARD_CELL`，并把 `CARD_REF_TRIGGER_CARD` 指向移除前快照；不新增专用格位词汇。
 
 ### 移动牌阵营条件
 
 新增触发条件：
 
 ```gdscript
-{"type": CONDITION_TRIGGER_CARD_IS_ALLY}
+{"type": CONDITION_MOVING_CARD_IS_ALLY}
 ```
 
-在 `CARD_BEFORE_MOVED` 中，触发牌就是即将移动的精确实例；“友方”相对能力来源结算时的当前所属方判断，并包含来源自身。每次真实移动及交换的每一条腿仍独立发出移动前事件。
+在 `CARD_BEFORE_MOVED` 中，“友方”相对能力来源结算时的当前所属方判断，并包含来源自身。移动上下文同时把 `CARD_REF_TRIGGER_CARD` 指向即将移动的精确实例，供通用动作引用。每次真实移动及交换的每一条腿仍独立发出移动前事件。
 
 ### 隔敌攻击范围
 
@@ -82,6 +78,7 @@ const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
 ```gdscript
 {
     "type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+    "allow_intervening_ally": false,
     "allow_intervening_enemy": true,
 }
 ```
@@ -111,7 +108,7 @@ const FUMO_SHARED: Dictionary = {
         {
             "event": CARD_BEFORE_MOVED,
             "conditions": [
-                {"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+                {"type": CONDITION_MOVING_CARD_IS_ALLY},
             ],
             "actions": [
                 {
@@ -175,7 +172,8 @@ const QIANSHOU_RESUMMON_PERFECT_COPY: Dictionary = {
     "triggers": [{
         "event": CARD_AFTER_EXILED,
         "conditions": [
-            {"type": CONDITION_TRIGGER_CARD_HAD_NUMBERED_POWERS},
+            {"type": CONDITION_TRIGGER_CARD_WAS_ON_BOARD},
+            {"type": CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE},
         ],
         "actions": [{
             "type": ACTION_SUMMON_CARD,
@@ -184,7 +182,8 @@ const QIANSHOU_RESUMMON_PERFECT_COPY: Dictionary = {
                 "of": CARD_REF_ABILITY_SOURCE,
             },
             "cell": {
-                "type": CELL_REF_TRIGGER_CARD_INITIAL_CELL,
+                "type": CELL_REF_INITIAL_CARD_CELL,
+                "card": CARD_REF_TRIGGER_CARD,
             },
         }],
     }],
@@ -247,7 +246,7 @@ const QIANSHOU_DISCARD_PROTECTION: Dictionary = {
 
 1. 外部移除或点数归零确定精确实例及离场前快照。
 2. 完成移除区写入并发出现有 `card_exiled` 表现事件。
-3. 发出 `CARD_AFTER_EXILED`，快照仍在场且合法的来源，按行优先依次结算。
+3. 清除外层动作的 ability-source 引用，发出 `CARD_AFTER_EXILED`，快照仍在场且合法的来源，按行优先依次结算；每个触发组重新绑定自己的能力来源。
 4. 千手如来掌在原格尝试普通进场；每次成功进场的完整连锁结算完毕后才处理下一个移除后来源。
 5. 原格已被占、来源已离场/翻面失去能力或引用失效时，该动作仅 `NO_EFFECT`，不影响后续来源。
 6. 千手如来掌自身是被移除牌时已经不在全场来源集合，因此不会用自己的离场触发自身复制；其它仍在场的千手如来掌仍可响应。

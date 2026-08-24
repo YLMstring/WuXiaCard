@@ -62,6 +62,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   immunity, limited-selector skipping, tiered distance-two attacks,
   exile/draw/grant ordering, newly drawn palm inclusion, nonrecursive repeat
   attacks, duplicate-grant handling, and flip cleanup.
+- `test_fumo_qianshou_abilities.gd` — movement-before power loss and stacking,
+  empty-hand idempotent grants, enemy-intervening range, after-exile snapshots,
+  zero-power and four-`-1` filtering, complete runtime perfect copies,
+  competing original-cell summons, and discard-based flip prevention.
 - `test_hanbin_tianwai_abilities.gd` — enemy-hand target snapshots, active
   YinYang no-effect/reveal behavior, last-ki flip ordering, staged
   self-after-flip cleanup, automatic YinYang skipping, shared power batches,

@@ -559,13 +559,18 @@ static func _execute_action(
 			declaration,
 			context
 		)
+		var perfect_copy_card: Dictionary = _resolve_perfect_copy_card(
+			declaration.get("card", null),
+			context
+		)
 		return _add_card_to_hand(
 			state,
 			source_cell,
 			source_instance_id,
 			expected_owner,
 			added_card_id,
-			StringName(declaration.get("recipient", &""))
+			StringName(declaration.get("recipient", &"")),
+			perfect_copy_card
 		)
 	if action_type == Catalog.ACTION_REVEAL_HAND_CARDS:
 		return _reveal_hand_cards(
@@ -2137,7 +2142,8 @@ static func _add_card_to_hand(
 	source_instance_id: StringName,
 	expected_owner: int,
 	card_id: StringName,
-	recipient: StringName
+	recipient: StringName,
+	perfect_copy_card: Dictionary = {}
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	if (
@@ -2158,11 +2164,13 @@ static func _add_card_to_hand(
 	if hand.size() >= MAX_HAND_SIZE:
 		return _no_effect(source_cell)
 	var instance_id: StringName = _make_generated_instance_id(state, card_id)
-	var added_card: Dictionary = Catalog.create_instance(
-		card_id,
-		recipient_owner,
-		instance_id
-	)
+	var added_card: Dictionary
+	if perfect_copy_card.is_empty():
+		added_card = Catalog.create_instance(card_id, recipient_owner, instance_id)
+	else:
+		added_card = perfect_copy_card.duplicate(true)
+		added_card["instance_id"] = instance_id
+		added_card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	var hand_slot_index: int = state.assign_card_to_leftmost_empty_hand_slot(
 		recipient_owner,
 		added_card
@@ -2193,13 +2201,33 @@ static func _resolve_add_card_to_hand_id(
 	if not card_spec_value is Dictionary:
 		return &""
 	var card_spec: Dictionary = card_spec_value
-	if StringName(card_spec.get("type", &"")) != Catalog.CARD_SPEC_FRESH_COPY:
+	if StringName(card_spec.get("type", &"")) not in [
+		Catalog.CARD_SPEC_FRESH_COPY,
+		Catalog.CARD_SPEC_PERFECT_COPY,
+	]:
 		return &""
 	var copied_snapshot: Dictionary = _get_reference_snapshot(
 		context,
 		StringName(card_spec.get("of", &""))
 	)
 	return StringName(copied_snapshot.get("card_id", &""))
+
+
+static func _resolve_perfect_copy_card(
+	card_spec_value: Variant,
+	context: Dictionary
+) -> Dictionary:
+	if not card_spec_value is Dictionary:
+		return {}
+	var card_spec: Dictionary = card_spec_value
+	if StringName(card_spec.get("type", &"")) != Catalog.CARD_SPEC_PERFECT_COPY:
+		return {}
+	var copied_snapshot: Dictionary = _get_reference_snapshot(
+		context,
+		StringName(card_spec.get("of", &""))
+	)
+	var copied_card_value: Variant = copied_snapshot.get("card", {})
+	return copied_card_value.duplicate(true) if copied_card_value is Dictionary else {}
 
 
 static func _make_generated_instance_id(
@@ -2461,6 +2489,7 @@ static func _request_summon_card(
 	var existing_removed_instance_id: StringName = &""
 	var existing_discard_instance_id: StringName = &""
 	var existing_discard_owner_id: int = 0
+	var perfect_copy_card: Dictionary = {}
 	if typeof(card_spec) in [TYPE_STRING, TYPE_STRING_NAME]:
 		var card_reference := StringName(card_spec)
 		var card_snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
@@ -2488,6 +2517,16 @@ static func _request_summon_card(
 				StringName(summon_spec.get("of", &""))
 			)
 			card_id = StringName(copied_snapshot.get("card_id", &""))
+		elif summon_spec_type == Catalog.CARD_SPEC_PERFECT_COPY:
+			var copied_snapshot: Dictionary = _get_reference_snapshot(
+				context,
+				StringName(summon_spec.get("of", &""))
+			)
+			card_id = StringName(copied_snapshot.get("card_id", &""))
+			var copied_card_value: Variant = copied_snapshot.get("card", {})
+			if not copied_card_value is Dictionary:
+				return _no_effect(source_cell)
+			perfect_copy_card = (copied_card_value as Dictionary).duplicate(true)
 		elif summon_spec_type == Catalog.CARD_SPEC_TOP_DISCARD:
 			var discard_owner: int = _resolve_owner_reference(
 				StringName(summon_spec.get("owner", &"")),
@@ -2597,6 +2636,7 @@ static func _request_summon_card(
 		"existing_removed_instance_id": existing_removed_instance_id,
 		"existing_discard_instance_id": existing_discard_instance_id,
 		"existing_discard_owner_id": existing_discard_owner_id,
+		"perfect_copy_card": perfect_copy_card,
 		"requires_source": requires_source,
 		"requires_adjacent_source": requires_adjacent_source,
 		"reason": (
@@ -2773,6 +2813,7 @@ static func _exile_subject(
 	var logical_index: int = int(current_subject.get("index", -1))
 	var current_owner: int = int(current_subject.get("owner_id", 0))
 	target_card = current_subject.get("card", {})
+	var exiled_snapshot: Dictionary = _snapshot_location(current_subject)
 	if zone == Catalog.CARD_ZONE_BOARD:
 		if (
 			logical_index < 0
@@ -2826,6 +2867,36 @@ static func _exile_subject(
 		"exile_reason": exile_reason,
 	}])
 	_merge_action_resolution(result, exile_result)
+	if event_resolver.is_valid():
+		var after_context: Dictionary = context.duplicate(true)
+		after_context.erase("ability_source_instance_id")
+		after_context.erase("ability_source_owner_id")
+		after_context.erase("action_subject_snapshot")
+		after_context["trigger_cell"] = (
+			logical_index if zone == Catalog.CARD_ZONE_BOARD else -1
+		)
+		after_context["trigger_instance_id"] = target_instance_id
+		after_context["trigger_owner_id"] = current_owner
+		after_context["trigger_zone"] = zone
+		after_context["trigger_logical_index"] = logical_index
+		after_context["exile_reason"] = exile_reason
+		after_context["trigger_card_snapshot"] = (
+			(exiled_snapshot.get("card", {}) as Dictionary).duplicate(true)
+		)
+		var after_snapshots: Dictionary = after_context.get(
+			"card_reference_snapshots",
+			{}
+		).duplicate(true)
+		after_snapshots.erase(Catalog.CARD_REF_ABILITY_SOURCE)
+		after_snapshots.erase(Catalog.CARD_REF_SELECTED_CARD)
+		after_snapshots[Catalog.CARD_REF_TRIGGER_CARD] = exiled_snapshot.duplicate(true)
+		after_context["card_reference_snapshots"] = after_snapshots
+		var after_value: Variant = event_resolver.call(
+			Catalog.CARD_AFTER_EXILED,
+			after_context
+		)
+		if after_value is Dictionary:
+			_merge_action_resolution(result, after_value as Dictionary)
 	return result
 
 
@@ -3340,6 +3411,10 @@ static func _resolve_movement_event(
 		"moving_target_cell": target_cell,
 		"moving_instance_id": instance_id,
 		"moving_owner_id": expected_owner,
+		"trigger_cell": source_cell,
+		"trigger_instance_id": instance_id,
+		"trigger_owner_id": expected_owner,
+		"trigger_zone": Catalog.CARD_ZONE_BOARD,
 	})
 	if resolution_value is Dictionary:
 		result = resolution_value as Dictionary
@@ -3504,6 +3579,7 @@ static func _snapshot_location(location: Dictionary) -> Dictionary:
 		"owner_id": int(location.get("owner_id", 0)),
 		"zone": StringName(location.get("zone", &"")),
 		"index": int(location.get("index", -1)),
+		"card": card.duplicate(true),
 	}
 
 

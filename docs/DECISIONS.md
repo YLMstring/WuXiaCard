@@ -555,3 +555,29 @@ respectively, in row-major order. The source itself is eligible.
   nor consume them. Each later non-heart hand play consumes at most one layer
   before its own before-summon ability discovery, permanently removing every
   non-retained ability while preserving `retained_on_flip` entries.
+
+## 金刚伏魔圈 / 千手如来掌
+
+- Every Fumo source reduces an allied moving card by one before each real move
+  or swap leg. Sources resolve row-major and stack. Four-`-1` cards ignore the
+  change; a card reduced to four zeroes is exiled and its pending movement ends.
+- At its current owner's turn end, an empty hand makes Fumo grant every current
+  ally the same non-retained after-summon reaction. Structurally identical
+  grants are idempotent. The reaction attacks only when the enemy summon is in
+  the recipient's current legal range and resolves before that summon's normal
+  standard attack.
+- Fumo tier 4's retained range permits orthogonal distance two through exactly
+  one empty cell or one current enemy. An intervening ally remains illegal.
+- `CARD_AFTER_EXILED` runs after the exact card has entered its original
+  owner's removed zone. Qianshou reacts only when the card was on the board and
+  its pre-exile snapshot passes the same `Rules.can_change_powers()` predicate
+  as selected-card power changes; four zeroes qualify and four `-1`s do not.
+- A Qianshou perfect copy preserves the source's complete current runtime card
+  state while receiving a new instance ID. It enters the removed card's former
+  cell through the full normal summon/attack path. Multiple sources resolve
+  row-major, so only the first still-valid source can occupy that cell.
+- Before its own flip, Qianshou discards the physical-leftmost allied hand card
+  to prevent the committed flip. It then spends one ki and attempts to add a
+  perfect runtime copy of the discarded snapshot. No hand means no prevention;
+  failed ki payment stops only the copy, while a full hand after discard chains
+  still spends the ki and makes the add action no-effect.

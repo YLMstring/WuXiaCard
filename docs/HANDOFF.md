@@ -90,6 +90,18 @@ The creator has made several direct UI and localization edits. Preserve those ed
   effect. Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4
   makes every protected friendly gain one point and attack once per tier-4
   source.
+- `FuMoQuan3`–`4` reduce every allied moving card before each movement/swap
+  leg; multiple sources stack and a four-zero result removes the mover before
+  it can relocate. Empty-hand owner-turn endings grant all current allies one
+  idempotent, non-retained after-summon counterattack. Tier 4's retained range
+  also crosses exactly one intervening enemy, while an ally still blocks.
+- `QianShouRuLai5` uses the global post-exile snapshot boundary. A board card
+  whose pre-exile powers pass `Rules.can_change_powers()`—including four
+  zeroes, excluding four `-1`s—makes each still-valid source try row-major to
+  summon a complete runtime perfect copy in the old cell through the normal
+  summon/attack pipeline. Its before-flip rule discards the physical-leftmost
+  hand card to prevent flipping, then spends one ki to add a new-ID perfect
+  runtime copy of that discarded snapshot.
 - `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
   selection. Their point gains occur only after the required discard count.
   Locked prevented-flip reactions exile only the exact target attacked by that

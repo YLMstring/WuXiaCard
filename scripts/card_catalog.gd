@@ -21,6 +21,7 @@ const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
+const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
 const CARD_AFTER_DRAWN: StringName = &"card_after_drawn"
 const CARD_AFTER_DISCARDED: StringName = &"card_after_discarded"
 const TRIGGER_DISCARD_BATCH_FINISHED: StringName = &"discard_batch_finished"
@@ -53,6 +54,11 @@ const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
 const CONDITION_MOVING_CARD_IS_SELF: StringName = &"moving_card_is_self"
+const CONDITION_MOVING_CARD_IS_ALLY: StringName = &"moving_card_is_ally"
+const CONDITION_TRIGGER_CARD_WAS_ON_BOARD: StringName = &"trigger_card_was_on_board"
+const CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE: StringName = (
+	&"trigger_card_powers_could_change"
+)
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
@@ -125,6 +131,7 @@ const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
 const CARD_REF_ATTACKER_CARD: StringName = &"attacker_card"
 const CARD_REF_LAST_SUMMONED_CARD: StringName = &"last_summoned_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
+const CARD_SPEC_PERFECT_COPY: StringName = &"perfect_copy"
 const CARD_SPEC_TOP_DISCARD: StringName = &"top_discard"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
@@ -184,6 +191,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_AFTER_ATTACK,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_EXILED,
+	CARD_AFTER_EXILED,
 	CARD_AFTER_DRAWN,
 	CARD_AFTER_DISCARDED,
 	TRIGGER_DISCARD_BATCH_FINISHED,
@@ -218,6 +226,9 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
 	CONDITION_MOVING_CARD_IS_SELF,
+	CONDITION_MOVING_CARD_IS_ALLY,
+	CONDITION_TRIGGER_CARD_WAS_ON_BOARD,
+	CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE,
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
@@ -842,6 +853,61 @@ const JINGANG_PREVENTED_ALLY_RALLY: Dictionary = {
 				"card": CARD_REF_TRIGGER_CARD,
 			},
 		],
+	}],
+}
+
+const QIANSHOU_RESUMMON_PERFECT_COPY: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_EXILED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_WAS_ON_BOARD},
+			{"type": CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE},
+		],
+		"actions": [{
+			"type": ACTION_SUMMON_CARD,
+			"card": {
+				"type": CARD_SPEC_PERFECT_COPY,
+				"of": CARD_REF_ABILITY_SOURCE,
+			},
+			"cell": {
+				"type": CELL_REF_INITIAL_CARD_CELL,
+				"card": CARD_REF_TRIGGER_CARD,
+			},
+		}],
+	}],
+}
+
+const QIANSHOU_DISCARD_PROTECTION: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				"limit": 1,
+				"required_count": 1,
+			},
+			"actions": [
+				{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
+				{"type": ACTION_PREVENT_TRIGGER_FLIP},
+				{
+					"type": ACTION_SPEND_KI,
+					"amount": 1,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"on_invalid_context": STOP_RULE,
+				},
+				{
+					"type": ACTION_ADD_CARD_TO_HAND,
+					"card": {
+						"type": CARD_SPEC_PERFECT_COPY,
+						"of": CARD_REF_SELECTED_CARD,
+					},
+					"recipient": RECIPIENT_SELF,
+				},
+			],
+		}],
 	}],
 }
 
@@ -1805,6 +1871,59 @@ const LOCKED_RANGE_TWO_EMPTY_OR_ALLY: Dictionary = {
 	}],
 }
 
+const FUMO_SUMMON_REACTION: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+			{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
+		],
+		"actions": [{"type": ACTION_ATTACK_TRIGGER_CARD}],
+	}],
+}
+
+const FUMO_SHARED: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_MOVED,
+			"conditions": [{"type": CONDITION_MOVING_CARD_IS_ALLY}],
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_TRIGGER_CARD,
+			}],
+		},
+		{
+			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{
+				"type": ACTION_IF,
+				"conditions": [{"type": CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+				"actions": [{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+					},
+					"actions": [{
+						"type": ACTION_GRANT_ABILITY_TO_SELF,
+						"ability": FUMO_SUMMON_REACTION,
+					}],
+				}],
+			}],
+		},
+	],
+}
+
+const LOCKED_RANGE_TWO_ENEMY: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": false,
+		"allow_intervening_enemy": true,
+	}],
+}
+
 const NIANHUA_RETURN_ADJACENT: Dictionary = {
 	"triggers": [{
 		"event": TRIGGER_CARD_AFTER_SUMMONED,
@@ -2582,7 +2701,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场后，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "金刚伏魔圈乃佛力伏魔的精妙大法，以《金刚经》为最高旨义，最后要达“无我相、无人相、无众生相、无寿者相”的境界，于人我之分、生死之别，尽皆视作空幻。",
 		"powers": [8, 7, 2, 7],
-		"abilities": [],
+		"abilities": [FUMO_SHARED],
 	},
 	&"FuMoQuan4": {
 		"id": &"FuMoQuan4",
@@ -2594,7 +2713,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场后，若在我的攻击范围内，我对其发起攻击。锁定：我可以攻击直线上相隔一个空位，或相隔一个敌方的敌方。",
 		"flavor": "金刚伏魔圈乃佛力伏魔的精妙大法，以《金刚经》为最高旨义，最后要达“无我相、无人相、无众生相、无寿者相”的境界，于人我之分、生死之别，尽皆视作空幻。",
 		"powers": [8, 7, 2, 7],
-		"abilities": [],
+		"abilities": [FUMO_SHARED, LOCKED_RANGE_TWO_ENEMY],
 	},
 	&"NianhuaWeiXiao3": {
 		"id": &"NianhuaWeiXiao3",
@@ -2823,7 +2942,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "场上有点数的牌被移除后，在原位生成我的完美复制。我翻面前，丢弃最左侧的手牌，若如此做，阻止翻面，然后耗内力以获得一张被丢弃牌的完美复制。",
 		"flavor": "千手如来掌似拙实巧，变幻莫测，每一掌击出，甫到中途，已变为好几个方位，一掌变两掌，两掌变四掌，四掌变八掌，只须迟得顷刻，便八掌变十六掌，进而幻化为三十二掌。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [
+			QIANSHOU_RESUMMON_PERFECT_COPY,
+			QIANSHOU_DISCARD_PROTECTION,
+		],
 	},
 	&"YiJJ5": {
 		"id": &"YiJJ5",
@@ -5172,16 +5294,18 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 				errors.append("Card %s modifier %s requires a non-negative integer value" % [card_id, modifier_type])
 		if modifier_type == MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO:
 			allowed_keys.append(&"allow_intervening_ally")
+			allowed_keys.append(&"allow_intervening_enemy")
 			if typeof(modifier.get("allow_intervening_ally", null)) != TYPE_BOOL:
 				errors.append(
 					"Card %s modifier %s requires a Boolean allow_intervening_ally"
 					% [card_id, modifier_type]
 				)
-		if modifier_type == MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO:
-			allowed_keys.append(&"allow_intervening_ally")
-			if typeof(modifier.get("allow_intervening_ally", null)) != TYPE_BOOL:
+			if (
+				modifier.has("allow_intervening_enemy")
+				and typeof(modifier.get("allow_intervening_enemy")) != TYPE_BOOL
+			):
 				errors.append(
-					"Card %s modifier %s requires a Boolean allow_intervening_ally"
+					"Card %s modifier %s requires a Boolean allow_intervening_enemy"
 					% [card_id, modifier_type]
 				)
 		for key: Variant in modifier.keys():
@@ -5765,10 +5889,10 @@ static func _validate_summon_card_spec(
 	var spec: Dictionary = value
 	var spec_type := StringName(spec.get("type", &""))
 	var allowed_keys: Array[StringName] = [&"type"]
-	if spec_type == CARD_SPEC_FRESH_COPY:
+	if spec_type in [CARD_SPEC_FRESH_COPY, CARD_SPEC_PERFECT_COPY]:
 		allowed_keys.append(&"of")
 		if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
-			errors.append("Card %s %s fresh-copy summon requires a known card reference" % [card_id, context_name])
+			errors.append("Card %s %s copy summon requires a known card reference" % [card_id, context_name])
 	elif spec_type == CARD_SPEC_TOP_DISCARD:
 		allowed_keys.append(&"owner")
 		if StringName(spec.get("owner", &"")) not in KNOWN_OWNER_REFERENCES:
@@ -5793,14 +5917,14 @@ static func _validate_add_card_to_hand_spec(
 		)
 		return
 	var spec: Dictionary = value
-	if StringName(spec.get("type", &"")) != CARD_SPEC_FRESH_COPY:
+	if StringName(spec.get("type", &"")) not in [CARD_SPEC_FRESH_COPY, CARD_SPEC_PERFECT_COPY]:
 		errors.append(
 			"Card %s %s add-to-hand action uses an unknown card specification"
 			% [card_id, context_name]
 		)
 	if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
 		errors.append(
-			"Card %s %s fresh-copy add-to-hand action requires a known card reference"
+			"Card %s %s copy add-to-hand action requires a known card reference"
 			% [card_id, context_name]
 		)
 	for key: Variant in spec.keys():
