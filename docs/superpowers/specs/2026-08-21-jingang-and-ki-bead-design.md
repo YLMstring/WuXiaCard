@@ -8,7 +8,7 @@
 实现继续以 `DuelSimulator` 为唯一规则路径。卡牌只声明通用事件、条件和 action，
 模拟器、搜索与展示代码均不按金刚不坏的卡牌 ID 分支。
 
-## 通用弃牌与同实例回手
+## 通用弃牌、同实例回手与复制
 
 新增以下通用声明词汇：
 
@@ -37,8 +37,25 @@ const ACTION_DISCARD_CARD: StringName = &"discard_card"
 
 默认行为保持不变。仅在 `preserve_instance = true` 且精确目标位于弃牌区时，action
 从弃牌区取出原 Dictionary 并追加到目标手牌，保留 `instance_id`、点数、内力和
-当前能力。目标手牌已满时不移动，牌仍留在弃牌区。成功后沿用
+当前能力。目标手牌已满时按当前通用规则将该实例移除。成功后沿用
 `card_returned_to_hand` 事件，且 `old_instance_id == instance_id`。
+
+2026-08-24 的平衡调整扩展现有 `ACTION_ADD_CARD_TO_HAND`：除固定
+`card_id` 外，`card` 也可以接受与召唤动作相同的 `CARD_SPEC_FRESH_COPY`：
+
+```gdscript
+{
+    "type": ACTION_ADD_CARD_TO_HAND,
+    "card": {
+        "type": CARD_SPEC_FRESH_COPY,
+        "of": CARD_REF_SELECTED_CARD,
+    },
+    "recipient": RECIPIENT_SELF,
+}
+```
+
+该声明只读取快照中的 `card_id`，创建拥有目录初始点数、初始内力与完整能力的
+全新实例；不复制原实例的临时点数、内力或能力状态，也不移动原实例。
 
 ## 翻面被阻止时点
 
@@ -89,10 +106,10 @@ const JINGANG_DISCARD_PROTECTION: Dictionary = {
 `JinGangBuHuai1` 使用该能力。选择器从来源当前所属方手牌按索引访问，因此选中
 最左侧手牌；空手时 `required_count` 令整个 wrapper 无效果，翻面照常完成。
 
-二至四级使用带抽回的版本：
+二至四级使用带复制的版本：
 
 ```gdscript
-const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
+const JINGANG_DISCARD_PROTECTION_WITH_COPY: Dictionary = {
     "triggers": [{
         "event": CARD_BEFORE_FLIPPED,
         "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
@@ -114,10 +131,12 @@ const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
                     "on_invalid_context": STOP_RULE,
                 },
                 {
-                    "type": ACTION_RETURN_CARD_TO_HAND,
-                    "card": CARD_REF_SELECTED_CARD,
-                    "recipient": OWNER_CARD_CURRENT,
-                    "preserve_instance": true,
+                    "type": ACTION_ADD_CARD_TO_HAND,
+                    "card": {
+                        "type": CARD_SPEC_FRESH_COPY,
+                        "of": CARD_REF_SELECTED_CARD,
+                    },
+                    "recipient": RECIPIENT_SELF,
                 },
             ],
         }],
@@ -126,8 +145,11 @@ const JINGANG_DISCARD_PROTECTION_WITH_RECALL: Dictionary = {
 ```
 
 没有内力时，丢牌和阻止翻面已经完成；耗内力返回 `NO_EFFECT` 并以 `STOP_RULE`
-停止抽回。`JinGangBuHuai2` 没有初始内力，但以后获得内力时仍可抽回。
+停止复制。`JinGangBuHuai2` 没有初始内力，但以后获得内力时仍可复制。
 `JinGangBuHuai3`、`JinGangBuHuai4` 保持现有一点初始内力。
+
+原被丢弃实例始终留在弃牌堆。若其“被丢弃后”能力先令手牌重新填满，金刚不坏
+仍按既定顺序消耗一点内力，但添加复制返回 `NO_EFFECT`，不会退还内力。
 
 四级另有独立能力条目：
 
