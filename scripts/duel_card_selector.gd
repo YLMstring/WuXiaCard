@@ -27,7 +27,8 @@ static func snapshot(
 		for candidate: Dictionary in _get_zone_candidates(
 			state,
 			zone,
-			int(source.get("owner_id", 0))
+			int(source.get("owner_id", 0)),
+			StringName(selector.get("order", &""))
 		):
 			var instance_id := StringName(
 				(candidate.get("card", {}) as Dictionary).get("instance_id", &"")
@@ -327,7 +328,8 @@ static func locate_card(state: StateData, instance_id: StringName) -> Dictionary
 static func _get_zone_candidates(
 	state: StateData,
 	zone: StringName,
-	source_owner: int
+	source_owner: int,
+	selection_order: StringName = &""
 ) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
 	if zone == Catalog.CARD_ZONE_HAND:
@@ -367,6 +369,8 @@ static func _get_zone_candidates(
 					return int(first.get("index", -1)) < int(second.get("index", -1))
 				return first_slot < second_slot
 			)
+			if selection_order == Catalog.SELECT_ORDER_HAND_RIGHT_TO_LEFT:
+				owner_candidates.reverse()
 			candidates.append_array(owner_candidates)
 	elif zone == Catalog.CARD_ZONE_BOARD:
 		for cell: int in range(state.board.size()):

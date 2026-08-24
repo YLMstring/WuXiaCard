@@ -1276,7 +1276,15 @@ func _present_transition_events(
 		elif event_type == &"card_departed_for_resummon":
 			await _present_card_departed_for_resummon_event(event)
 		elif event_type == &"card_discarded":
-			await _present_card_discarded_event(event)
+			var discard_batch_id := StringName(event.get("discard_batch_id", &""))
+			if discard_batch_id == &"":
+				await _present_card_discarded_event(event)
+			else:
+				consumed_events = await _present_card_discard_batch(
+					events,
+					event_index,
+					discard_batch_id
+				)
 		elif event_type == &"hand_cards_shifted":
 			await _present_hand_cards_shifted_event(event)
 		elif event_type == &"card_returned_to_hand":
@@ -1576,6 +1584,57 @@ func _present_card_discarded_event(event: Dictionary) -> void:
 	if former_slot != null:
 		former_slot.remove_child(discarded_view)
 	discarded_view.queue_free()
+
+
+func _present_card_discard_batch(
+	events: Array,
+	start_index: int,
+	batch_id: StringName
+) -> int:
+	_presentation_trace.append(&"card_discard_batch")
+	var discarded_views: Array[CardView] = []
+	var consumed: int = 0
+	for event_index: int in range(start_index, events.size()):
+		var event_value: Variant = events[event_index]
+		if not event_value is Dictionary:
+			break
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) != &"card_discarded"
+			or StringName(event.get("discard_batch_id", &"")) != batch_id
+		):
+			break
+		consumed += 1
+		_presentation_trace.append(&"card_discarded")
+		var discarded_view: CardView = _get_card_view_by_instance(
+			StringName(event.get("instance_id", &""))
+		)
+		if discarded_view != null:
+			_presentation_trace.append(&"card_discard_faded")
+			discarded_views.append(discarded_view)
+	if discarded_views.is_empty():
+		return maxi(consumed, 1)
+	if card_fade_duration <= 0.0:
+		for discarded_view: CardView in discarded_views:
+			discarded_view.modulate.a = 0.0
+	else:
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+		for discarded_view: CardView in discarded_views:
+			tween.tween_property(
+				discarded_view,
+				"modulate:a",
+				0.0,
+				card_fade_duration
+			)
+		await tween.finished
+	for discarded_view: CardView in discarded_views:
+		var former_slot: Node = discarded_view.get_parent()
+		if former_slot != null:
+			former_slot.remove_child(discarded_view)
+		discarded_view.queue_free()
+	return maxi(consumed, 1)
 
 
 func _present_card_transformed_event(event: Dictionary) -> void:

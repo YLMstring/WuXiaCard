@@ -177,6 +177,34 @@ movement or a zone change remains valid unless a condition becomes false.
 Inside the wrapper, the selected card is the action subject while the original
 ability source remains available to source-relative conditions.
 
+For physical rightmost hand selection, declare
+`"order": SELECT_ORDER_HAND_RIGHT_TO_LEFT`. The order is applied within each
+owner's fixed hand slots; do not rely on logical array insertion order.
+
+Batch discard uses the selector directly:
+
+```gdscript
+{
+    "type": ACTION_DISCARD_CARDS,
+    "selector": {
+        "zones": [CARD_ZONE_HAND],
+        "conditions": [
+            {"type": CONDITION_SELECTED_CARD_IS_ALLY},
+        ],
+        "limit": 2,
+    },
+}
+```
+
+The action snapshots exact instances, moves all selected cards to discard,
+emits one `card_discarded` event per card with a shared `discard_batch_id`,
+performs one final physical hand-slot shift, resolves each discarded card's
+self-`CARD_AFTER_DISCARDED` chain in selection order, then emits one global
+`TRIGGER_DISCARD_BATCH_FINISHED`. `ACTION_DISCARD_CARD` delegates to the same
+transaction as a batch of one. A later `ACTION_IF` in the same action list can
+test `CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST` with an `amount`; global
+batch reactions can test `CONDITION_DISCARD_OWNER_IS_SELF`.
+
 Actions that default to the current subject, such as `ACTION_DRAW_CARDS`, keep
 that subject's owner/location snapshot for the duration of one action list.
 This permits the concise sequence `ACTION_EXILE_SELF` followed by

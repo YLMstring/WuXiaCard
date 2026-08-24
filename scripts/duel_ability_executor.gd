@@ -82,14 +82,16 @@ static func execute_activation(
 				((target_value as Dictionary).get("card", {}) as Dictionary).get("instance_id", &"")
 			)
 	elif target_kind == &"hand_slot":
-		var opponent_owner: int = (
-			Rules.OPPONENT_OWNER
-			if owner_id == Rules.PLAYER_OWNER
-			else Rules.PLAYER_OWNER
-		)
-		var opponent_hand: Array = state.get_hand(opponent_owner)
-		if target_index >= 0 and target_index < opponent_hand.size():
-			var target_card: Dictionary = opponent_hand[target_index]
+		var target_owner: int = owner_id
+		if StringName(activation.get("target_rule", &"")) == Catalog.TARGET_ENEMY_HAND_CARD:
+			target_owner = (
+				Rules.OPPONENT_OWNER
+				if owner_id == Rules.PLAYER_OWNER
+				else Rules.PLAYER_OWNER
+			)
+		var target_hand: Array = state.get_hand(target_owner)
+		if target_index >= 0 and target_index < target_hand.size():
+			var target_card: Dictionary = target_hand[target_index]
 			context["selected_card_instance_id"] = StringName(
 				target_card.get("instance_id", &"")
 			)
@@ -468,6 +470,14 @@ static func _execute_action(
 			state,
 			source_cell,
 			StringName(declaration.get("card", &"")),
+			context,
+			event_resolver
+		)
+	if action_type == Catalog.ACTION_DISCARD_CARDS:
+		return _discard_selected_cards(
+			state,
+			source_cell,
+			declaration.get("selector", {}) as Dictionary,
 			context,
 			event_resolver
 		)
@@ -1257,6 +1267,12 @@ static func _action_conditions_match(
 			):
 				return false
 			continue
+		if condition_type == Catalog.CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST:
+			if int(context.get("last_discard_batch_size", 0)) < int(
+				(condition_value as Dictionary).get("amount", 0)
+			):
+				return false
+			continue
 		return false
 	return true
 
@@ -1720,23 +1736,107 @@ static func _discard_referenced_card(
 		)
 		if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_HAND:
 			return _no_effect(source_cell)
-	var owner_id: int = int(subject.get("owner_id", 0))
-	var logical_index: int = int(subject.get("index", -1))
-	var hand: Array = state.get_hand(owner_id)
-	if (
-		logical_index < 0
-		or logical_index >= hand.size()
-		or not hand[logical_index] is Dictionary
-		or StringName((hand[logical_index] as Dictionary).get("instance_id", &""))
-		!= target_instance_id
-	):
+	return _discard_locked_instances(
+		state,
+		source_cell,
+		[target_instance_id],
+		context,
+		event_resolver
+	)
+
+
+static func _discard_selected_cards(
+	state: StateData,
+	source_cell: int,
+	selector: Dictionary,
+	context: Dictionary,
+	event_resolver: Callable
+) -> Dictionary:
+	var source_instance_id := StringName(context.get("ability_source_instance_id", &""))
+	var selected_ids: Array[StringName] = Selector.snapshot(
+		state,
+		selector,
+		source_instance_id,
+		context
+	)
+	context["last_discard_batch_size"] = 0
+	if selected_ids.is_empty():
 		return _no_effect(source_cell)
-	var discarded_card: Dictionary = hand.pop_at(logical_index)
-	var discarded_slot: int = int(discarded_card.get(StateData.HAND_SLOT_INDEX_KEY, logical_index))
-	discarded_card.erase(StateData.HAND_SLOT_INDEX_KEY)
-	if not state.discard_piles.has(owner_id):
-		state.discard_piles[owner_id] = []
-	(state.discard_piles[owner_id] as Array).append(discarded_card)
+	return _discard_locked_instances(
+		state,
+		source_cell,
+		selected_ids,
+		context,
+		event_resolver
+	)
+
+
+static func _discard_locked_instances(
+	state: StateData,
+	source_cell: int,
+	locked_instance_ids: Array[StringName],
+	context: Dictionary,
+	event_resolver: Callable
+) -> Dictionary:
+	var subjects: Array[Dictionary] = []
+	var owner_id: int = 0
+	for instance_id: StringName in locked_instance_ids:
+		var subject: Dictionary = Selector.locate_card(state, instance_id)
+		if subject.is_empty() or StringName(subject.get("zone", &"")) != Catalog.CARD_ZONE_HAND:
+			continue
+		var subject_owner: int = int(subject.get("owner_id", 0))
+		if owner_id == 0:
+			owner_id = subject_owner
+		if subject_owner != owner_id:
+			continue
+		subjects.append(subject)
+	context["last_discard_batch_size"] = subjects.size()
+	if subjects.is_empty() or owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return _no_effect(source_cell)
+	var batch_id := StringName(
+		"discard:%s:%d:%d:%d"
+		% [
+			StringName(context.get("ability_source_instance_id", &"")),
+			owner_id,
+			state.turn_count,
+			(state.discard_piles.get(owner_id, []) as Array).size(),
+		]
+	)
+	var discarded_records: Array[Dictionary] = []
+	var discarded_slots: Array[int] = []
+	for subject: Dictionary in subjects:
+		var target_instance_id := StringName(
+			(subject.get("card", {}) as Dictionary).get("instance_id", &"")
+		)
+		var current_subject: Dictionary = Selector.locate_card(state, target_instance_id)
+		if (
+			current_subject.is_empty()
+			or StringName(current_subject.get("zone", &"")) != Catalog.CARD_ZONE_HAND
+			or int(current_subject.get("owner_id", 0)) != owner_id
+		):
+			continue
+		var logical_index: int = int(current_subject.get("index", -1))
+		var hand: Array = state.get_hand(owner_id)
+		if logical_index < 0 or logical_index >= hand.size():
+			continue
+		var discarded_card: Dictionary = hand.pop_at(logical_index)
+		var discarded_slot: int = int(
+			discarded_card.get(StateData.HAND_SLOT_INDEX_KEY, logical_index)
+		)
+		discarded_card.erase(StateData.HAND_SLOT_INDEX_KEY)
+		if not state.discard_piles.has(owner_id):
+			state.discard_piles[owner_id] = []
+		(state.discard_piles[owner_id] as Array).append(discarded_card)
+		discarded_slots.append(discarded_slot)
+		discarded_records.append({
+			"instance_id": target_instance_id,
+			"logical_hand_index": logical_index,
+			"hand_slot_index": discarded_slot,
+			"card": discarded_card,
+		})
+	context["last_discard_batch_size"] = discarded_records.size()
+	if discarded_records.is_empty():
+		return _no_effect(source_cell)
 	var ability_source: Dictionary = Selector.locate_card(
 		state,
 		StringName(context.get("ability_source_instance_id", &""))
@@ -1744,20 +1844,24 @@ static func _discard_referenced_card(
 	var current_source_cell: int = _get_location_cell(ability_source)
 	if current_source_cell < 0:
 		current_source_cell = source_cell
-	var events: Array[Dictionary] = [{
-		"type": &"card_discarded",
-		"source_cell": current_source_cell,
-		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
-		"owner_id": owner_id,
-		"instance_id": target_instance_id,
-		"zone": Catalog.CARD_ZONE_HAND,
-		"logical_hand_index": logical_index,
-		"hand_slot_index": discarded_slot,
-		"card": discarded_card.duplicate(true),
-	}]
-	var moves: Array[Dictionary] = state.shift_hand_slots_after_discard(
+	var events: Array[Dictionary] = []
+	for record: Dictionary in discarded_records:
+		events.append({
+			"type": &"card_discarded",
+			"source_cell": current_source_cell,
+			"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+			"owner_id": owner_id,
+			"instance_id": StringName(record.get("instance_id", &"")),
+			"zone": Catalog.CARD_ZONE_HAND,
+			"logical_hand_index": int(record.get("logical_hand_index", -1)),
+			"hand_slot_index": int(record.get("hand_slot_index", -1)),
+			"discard_batch_id": batch_id,
+			"discard_batch_size": discarded_records.size(),
+			"card": (record.get("card", {}) as Dictionary).duplicate(true),
+		})
+	var moves: Array[Dictionary] = state.shift_hand_slots_after_batch_discard(
 		owner_id,
-		discarded_slot
+		discarded_slots
 	)
 	if not moves.is_empty():
 		events.append({
@@ -1769,28 +1873,45 @@ static func _discard_referenced_card(
 		})
 	var result: Dictionary = _applied(current_source_cell, events)
 	if event_resolver.is_valid():
-		var discard_context: Dictionary = context.duplicate(true)
-		discard_context["trigger_cell"] = -1
-		discard_context["trigger_instance_id"] = target_instance_id
-		discard_context["trigger_owner_id"] = owner_id
-		discard_context["trigger_zone"] = Catalog.CARD_ZONE_DISCARD
-		discard_context["trigger_logical_index"] = (
-			(state.discard_piles[owner_id] as Array).size() - 1
+		for record: Dictionary in discarded_records:
+			var target_instance_id := StringName(record.get("instance_id", &""))
+			var trigger_subject: Dictionary = Selector.locate_card(state, target_instance_id)
+			if trigger_subject.is_empty():
+				continue
+			var discard_context: Dictionary = context.duplicate(true)
+			discard_context["trigger_cell"] = -1
+			discard_context["trigger_instance_id"] = target_instance_id
+			discard_context["trigger_owner_id"] = owner_id
+			discard_context["trigger_zone"] = StringName(trigger_subject.get("zone", Catalog.CARD_ZONE_DISCARD))
+			discard_context["trigger_logical_index"] = int(trigger_subject.get("index", -1))
+			discard_context["discard_batch_id"] = batch_id
+			discard_context["discard_batch_size"] = discarded_records.size()
+			var snapshots: Dictionary = discard_context.get(
+				"card_reference_snapshots", {}
+			).duplicate(true)
+			snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_card_reference(
+				state,
+				target_instance_id
+			)
+			discard_context["card_reference_snapshots"] = snapshots
+			var resolution_value: Variant = event_resolver.call(
+				Catalog.CARD_AFTER_DISCARDED,
+				discard_context
+			)
+			if resolution_value is Dictionary:
+				_merge_action_resolution(result, resolution_value as Dictionary)
+		var batch_resolution_value: Variant = event_resolver.call(
+			Catalog.TRIGGER_DISCARD_BATCH_FINISHED,
+			{
+				"discard_owner_id": owner_id,
+				"discard_batch_id": batch_id,
+				"discard_batch_size": discarded_records.size(),
+				"ability_source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+				"ability_source_owner_id": int(context.get("ability_source_owner_id", owner_id)),
+			}
 		)
-		var snapshots: Dictionary = discard_context.get(
-			"card_reference_snapshots", {}
-		).duplicate(true)
-		snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_card_reference(
-			state,
-			target_instance_id
-		)
-		discard_context["card_reference_snapshots"] = snapshots
-		var resolution_value: Variant = event_resolver.call(
-			Catalog.CARD_AFTER_DISCARDED,
-			discard_context
-		)
-		if resolution_value is Dictionary:
-			_merge_action_resolution(result, resolution_value as Dictionary)
+		if batch_resolution_value is Dictionary:
+			_merge_action_resolution(result, batch_resolution_value as Dictionary)
 	return result
 
 

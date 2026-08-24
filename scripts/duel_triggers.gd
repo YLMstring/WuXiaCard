@@ -350,6 +350,12 @@ static func _conditions_match(
 				and int(context.get("trigger_owner_id", 0)) == source_owner
 			):
 				return false
+		elif condition_type == Catalog.CONDITION_DISCARD_OWNER_IS_SELF:
+			var discard_source_slot: Dictionary = state.board[source_cell]
+			if int(discard_source_slot.get("owner", 0)) != int(
+				context.get("discard_owner_id", 0)
+			):
+				return false
 		elif condition_type == Catalog.CONDITION_TURN_OWNER_IS_SELF:
 			var source_slot: Dictionary = state.board[source_cell]
 			if int(source_slot.get("owner", 0)) != int(context.get("turn_owner_id", 0)):

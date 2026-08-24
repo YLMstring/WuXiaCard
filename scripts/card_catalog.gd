@@ -12,6 +12,7 @@ const TARGET_ADJACENT_ALLY_BOARD: StringName = &"adjacent_ally_board"
 const TARGET_ADJACENT_ENEMY_BOARD: StringName = &"adjacent_enemy_board"
 const TARGET_OTHER_ALLY_BOARD: StringName = &"other_ally_board"
 const TARGET_ENEMY_HAND_CARD: StringName = &"enemy_hand_card"
+const TARGET_ALLY_HAND_CARD: StringName = &"ally_hand_card"
 const TARGET_ANY_EMPTY_BOARD: StringName = &"any_empty_board"
 const TARGET_ANY_ENEMY_BOARD: StringName = &"any_enemy_board"
 const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
@@ -22,6 +23,7 @@ const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
 const CARD_AFTER_DRAWN: StringName = &"card_after_drawn"
 const CARD_AFTER_DISCARDED: StringName = &"card_after_discarded"
+const TRIGGER_DISCARD_BATCH_FINISHED: StringName = &"discard_batch_finished"
 const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
@@ -76,9 +78,12 @@ const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
 const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
 const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
+const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
+const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_DISCARD_CARD: StringName = &"discard_card"
+const ACTION_DISCARD_CARDS: StringName = &"discard_cards"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
@@ -154,6 +159,7 @@ const CARD_ZONE_HAND: StringName = &"hand"
 const CARD_ZONE_BOARD: StringName = &"board"
 const CARD_ZONE_DISCARD: StringName = &"discard"
 const CARD_ZONE_REMOVED: StringName = &"removed"
+const SELECT_ORDER_HAND_RIGHT_TO_LEFT: StringName = &"hand_right_to_left"
 const RECIPIENT_SELF: StringName = &"self"
 const RECIPIENT_OPPONENT: StringName = &"opponent"
 const ACTION_RESULT_APPLIED: StringName = &"applied"
@@ -167,6 +173,7 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 	TARGET_ADJACENT_ENEMY_BOARD,
 	TARGET_OTHER_ALLY_BOARD,
 	TARGET_ENEMY_HAND_CARD,
+	TARGET_ALLY_HAND_CARD,
 	TARGET_ANY_EMPTY_BOARD,
 	TARGET_ANY_ENEMY_BOARD,
 ]
@@ -179,6 +186,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_BEFORE_EXILED,
 	CARD_AFTER_DRAWN,
 	CARD_AFTER_DISCARDED,
+	TRIGGER_DISCARD_BATCH_FINISHED,
 	CARD_BEFORE_MOVED,
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
@@ -218,6 +226,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ATTACK_IS_NOT_REPEAT,
 	CONDITION_ACTIVATION_OWNER_IS_ALLY,
 	CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
+	CONDITION_DISCARD_OWNER_IS_SELF,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -237,6 +246,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 ]
 const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_OWNER_HAND_EMPTY,
+	CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [
 	CARD_ZONE_HAND,
@@ -244,10 +254,12 @@ const KNOWN_CARD_ZONES: Array[StringName] = [
 	CARD_ZONE_DISCARD,
 	CARD_ZONE_REMOVED,
 ]
+const KNOWN_SELECTOR_ORDERS: Array[StringName] = [SELECT_ORDER_HAND_RIGHT_TO_LEFT]
 const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DRAW_CARDS,
 	ACTION_EXILE_CARD,
 	ACTION_DISCARD_CARD,
+	ACTION_DISCARD_CARDS,
 	ACTION_ATTACK_TRIGGER_CARD,
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
@@ -859,32 +871,24 @@ const SHAOLIN_DISCARD_TWO_GAIN_THREE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{
-				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"type": ACTION_DISCARD_CARDS,
 				"selector": {
 					"zones": [CARD_ZONE_HAND],
 					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
-					"limit": 1,
+					"limit": 2,
 				},
-				"actions": [{
-					"type": ACTION_DISCARD_CARD,
-					"card": CARD_REF_SELECTED_CARD,
-				}],
 			},
 			{
-				"type": ACTION_FOR_EACH_SELECTED_CARD,
-				"selector": {
-					"zones": [CARD_ZONE_HAND],
-					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
-					"limit": 1,
-				},
-				"actions": [
-					{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
-					{
-						"type": ACTION_CHANGE_POWERS,
-						"amount": 3,
-						"card": CARD_REF_ABILITY_SOURCE,
-					},
-				],
+				"type": ACTION_IF,
+				"conditions": [{
+					"type": CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
+					"amount": 2,
+				}],
+				"actions": [{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": 3,
+					"card": CARD_REF_ABILITY_SOURCE,
+				}],
 			},
 		],
 	}],
@@ -959,13 +963,140 @@ const QIXIN_RETAINED_ATTACK_MODIFIERS: Dictionary = {
 	],
 }
 
-const RAOZHI_LOCKED_ATTACK_MODIFIERS: Dictionary = {
+const LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK: Dictionary = {
 	"retained_on_flip": true,
 	"modifiers": [
 		{"type": MODIFIER_UNLIMITED_ATTACK_RANGE},
 		{"type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
 		{"type": MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET},
 	],
+}
+
+const RANMU_LOCKED_DISCARD_ACTIVATION: Dictionary = {
+	"retained_on_flip": true,
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ALLY_HAND_CARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{
+				"type": ACTION_DISCARD_CARD,
+				"card": CARD_REF_SELECTED_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+					],
+				},
+				"power_change_batch_group": &"ranmu_all_allies",
+				"actions": [{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": 1,
+					"card": CARD_REF_SELECTED_CARD,
+				}],
+			},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+		],
+	},
+}
+
+const RANMU_AFTER_ATTACK_BUFF: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+				],
+			},
+			"power_change_batch_group": &"ranmu_all_allies",
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": CARD_REF_SELECTED_CARD,
+			}],
+		}],
+	}],
+}
+
+const WUXIANG_LOCKED_DISCARD_ACTIVATION: Dictionary = {
+	"retained_on_flip": true,
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ALLY_HAND_CARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{
+				"type": ACTION_DISCARD_CARD,
+				"card": CARD_REF_SELECTED_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+		],
+	},
+}
+
+const WUXIANG_LOCKED_ATTACK_AFTER_DISCARD_BATCH: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": TRIGGER_DISCARD_BATCH_FINISHED,
+		"conditions": [{"type": CONDITION_DISCARD_OWNER_IS_SELF}],
+		"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+	}],
+}
+
+const YIKONG_DISCARD_AND_DRAW: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{
+				"type": ACTION_DISCARD_CARDS,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				},
+			},
+			{"type": ACTION_DRAW_CARDS, "amount": 5},
+		],
+	}],
+}
+
+const YIKONG_DISCARD_AND_DRAW_WITH_ENEMY_DISCARD: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{
+				"type": ACTION_DISCARD_CARDS,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				},
+			},
+			{"type": ACTION_DRAW_CARDS, "amount": 5},
+			{
+				"type": ACTION_DISCARD_CARDS,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+					"order": SELECT_ORDER_HAND_RIGHT_TO_LEFT,
+					"limit": 1,
+				},
+			},
+		],
+	}],
 }
 
 const TIYUNZONG_RESUMMON_ACTIVATION: Dictionary = {
@@ -2479,7 +2610,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，将我移除，丢弃所有手牌，抽五张牌。",
 		"flavor": "般若掌的最后一掌，乃佛门掌法中的最高功夫。既不是空，也不是非空，掌力化于无形，没有了色，没有了受想行识，色是空，声香味触法也都是空，掌力是空，空即是掌力。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [YIKONG_DISCARD_AND_DRAW],
 	},
 	&"YiKongDaoDi5": {
 		"id": &"YiKongDaoDi5",
@@ -2491,7 +2622,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，将我移除，丢弃所有手牌，抽五张牌，令对手丢弃最右侧的手牌。",
 		"flavor": "般若掌的最后一掌，乃佛门掌法中的最高功夫。既不是空，也不是非空，掌力化于无形，没有了色，没有了受想行识，色是空，声香味触法也都是空，掌力是空，空即是掌力。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [YIKONG_DISCARD_AND_DRAW_WITH_ENEMY_DISCARD],
 	},
 	&"RanMuDaoFa2": {
 		"id": &"RanMuDaoFa2",
@@ -2504,7 +2635,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "燃木刀法练成之后，在一根干木旁快劈九九八十一刀，刀刃不能损伤木材丝毫，刀上所发热力，却要将木材点燃生火。虽是单刀刀法，亦能以手掌作戒刀，狠砍狠斫。",
 		"powers": [5, 7, 7, 5],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [RANMU_LOCKED_DISCARD_ACTIVATION],
 	},
 	&"RanMuDaoFa3": {
 		"id": &"RanMuDaoFa3",
@@ -2517,7 +2648,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "燃木刀法练成之后，在一根干木旁快劈九九八十一刀，刀刃不能损伤木材丝毫，刀上所发热力，却要将木材点燃生火。虽是单刀刀法，亦能以手掌作戒刀，狠砍狠斫。",
 		"powers": [5, 7, 7, 5],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [RANMU_AFTER_ATTACK_BUFF, RANMU_LOCKED_DISCARD_ACTIVATION],
 	},
 	&"WuXiangJieZhi3": {
 		"id": &"WuXiangJieZhi3",
@@ -2530,7 +2661,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "少林寺七十二绝技之一，指力从衣袖中暗暗发出，全无形迹。",
 		"powers": [6, 6, 2, 2],
 		"starting_ki": 2,
-		"abilities": [],
+		"abilities": [
+			LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK,
+			WUXIANG_LOCKED_DISCARD_ACTIVATION,
+		],
 	},
 	&"WuXiangJieZhi4": {
 		"id": &"WuXiangJieZhi4",
@@ -2543,7 +2677,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "少林寺七十二绝技之一，指力从衣袖中暗暗发出，全无形迹。",
 		"powers": [6, 6, 2, 2],
 		"starting_ki": 2,
-		"abilities": [],
+		"abilities": [
+			LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK,
+			WUXIANG_LOCKED_DISCARD_ACTIVATION,
+			WUXIANG_LOCKED_ATTACK_AFTER_DISCARD_BATCH,
+		],
 	},
 	&"SanRuDiYu1": {
 		"id": &"SanRuDiYu1",
@@ -2940,7 +3078,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。",
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [7, 3, 7, 3],
-		"abilities": [RAOZHI_LOCKED_ATTACK_MODIFIERS],
+		"abilities": [LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK],
 	},
 	&"RaoZhiRouJian3": {
 		"id": &"RaoZhiRouJian3",
@@ -2953,7 +3091,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [7, 3, 7, 3],
 		"abilities": [
-			RAOZHI_LOCKED_ATTACK_MODIFIERS,
+			LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK,
 			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
 		],
 	},
@@ -2968,7 +3106,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "武当派的七十二招绕指柔剑，轻柔曲折，飘忽不定，全仗浑厚内力逼弯剑刃，使剑招闪烁无常，敌人难以挡架。",
 		"powers": [7, 3, 7, 3],
 		"abilities": [
-			RAOZHI_LOCKED_ATTACK_MODIFIERS,
+			LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK,
 			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
 			RAOZHI_TARGETED_ACTIVATION_REACTION,
 		],
@@ -5088,8 +5226,17 @@ static func _validate_action_condition(
 			% [card_id, context_name, condition_type]
 		)
 		return
+	var allowed_keys: Array[StringName] = [&"type"]
+	if condition_type == CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST:
+		allowed_keys.append(&"amount")
+		var amount_value: Variant = condition.get("amount", null)
+		if typeof(amount_value) != TYPE_INT or int(amount_value) <= 0:
+			errors.append(
+				"Card %s %s discard batch condition requires a positive integer amount"
+				% [card_id, context_name]
+			)
 	for key: Variant in condition.keys():
-		if StringName(key) != &"type":
+		if StringName(key) not in allowed_keys:
 			errors.append(
 				"Card %s %s action condition %s has unsupported field %s"
 				% [card_id, context_name, condition_type, key]
@@ -5265,6 +5412,9 @@ static func _validate_action(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
+	if action_type == ACTION_DISCARD_CARDS:
+		allowed_keys.append(&"selector")
+		_validate_selector(card_id, context_name, action.get("selector", null), errors)
 	if action_type == ACTION_DEPART_CARD_FOR_RESUMMON:
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
@@ -5679,8 +5829,13 @@ static func _validate_selector(
 		return
 	var selector: Dictionary = selector_value
 	for key: Variant in selector.keys():
-		if StringName(key) not in [&"zones", &"conditions", &"limit", &"required_count"]:
+		if StringName(key) not in [&"zones", &"conditions", &"limit", &"required_count", &"order"]:
 			errors.append("Card %s %s selector has unsupported field %s" % [card_id, context_name, key])
+	if selector.has("order") and StringName(selector.get("order", &"")) not in KNOWN_SELECTOR_ORDERS:
+		errors.append(
+			"Card %s %s selector uses unknown order %s"
+			% [card_id, context_name, selector.get("order", &"")]
+		)
 	var zones_value: Variant = selector.get("zones", null)
 	if not zones_value is Array or (zones_value as Array).is_empty():
 		errors.append("Card %s %s selector requires a non-empty zones array" % [card_id, context_name])

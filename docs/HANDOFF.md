@@ -99,6 +99,24 @@ The creator has made several direct UI and localization edits. Preserve those ed
   The generic `ACTION_IF`, `CONDITION_SOURCE_OWNER_HAND_EMPTY`, and
   `CARD_REF_ATTACKER_CARD` declarations support these rules without card-ID
   branches.
+- Discard actions now share one generic batch transaction. Exact hand
+  instances are snapshotted first, all selected cards enter discard before any
+  self-`CARD_AFTER_DISCARDED` chain, those chains resolve in physical hand
+  order, and one global `discard_batch_finished` event follows. A batch emits
+  one final hand-slot shift and its individual discard views fade together.
+  Single-card discard uses the same path as a batch of one. `LiJingRuLai4`
+  locks up to two physical-leftmost cards in one batch and gains three only
+  when both were actually discarded.
+- `YiKongDaoDi4`–`5` exile themselves at `card_summoned` timing, batch-discard
+  the remaining allied hand, then draw five one card at a time; therefore they
+  emit normal placement but skip after-summoned rules and standard attack.
+  Tier 5 then discards the opponent's physical rightmost occupied hand slot.
+  `RanMuDaoFa2`–`3` use a locked allied-hand activation to discard the exact
+  target, batch-buff every legal allied board card, and grant one extra play;
+  tier 3 repeats the board buff only after a real attack. `WuXiangJieZhi3`–`4`
+  reuse the locked first-legal unlimited attack modifiers and have a locked
+  discard/draw activation. Tier 4 attacks once after each successful discard
+  batch owned by its current side; multiple sources resolve row-major.
 - `NianhuaWeiXiao3`–`4` return a row-major snapshot of adjacent cards to each
   card's original owner. Tier 4 can react from its own discard entry and reuse
   the same instance in the first enemy-adjacent empty cell. `SanRuDiYu1`–`3`

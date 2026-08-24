@@ -104,17 +104,39 @@ func assign_card_to_leftmost_empty_hand_slot(owner_id: int, card: Dictionary) ->
 
 
 func shift_hand_slots_after_discard(owner_id: int, discarded_slot: int) -> Array[Dictionary]:
+	return shift_hand_slots_after_batch_discard(owner_id, [discarded_slot])
+
+
+func shift_hand_slots_after_batch_discard(
+	owner_id: int,
+	discarded_slots: Array[int]
+) -> Array[Dictionary]:
 	var moves: Array[Dictionary] = []
-	if discarded_slot < 0 or discarded_slot >= HAND_SLOT_COUNT:
+	var valid_slots: Array[int] = []
+	for discarded_slot: int in discarded_slots:
+		if (
+			discarded_slot >= 0
+			and discarded_slot < HAND_SLOT_COUNT
+			and discarded_slot not in valid_slots
+		):
+			valid_slots.append(discarded_slot)
+	valid_slots.sort()
+	if valid_slots.is_empty():
 		return moves
 	for card_value: Variant in get_hand(owner_id):
 		if not card_value is Dictionary:
 			continue
 		var card: Dictionary = card_value
 		var from_slot: int = int(card.get(HAND_SLOT_INDEX_KEY, -1))
-		if from_slot <= discarded_slot or from_slot >= HAND_SLOT_COUNT:
+		if from_slot < 0 or from_slot >= HAND_SLOT_COUNT:
 			continue
-		var to_slot: int = from_slot - 1
+		var removed_before: int = 0
+		for discarded_slot: int in valid_slots:
+			if discarded_slot < from_slot:
+				removed_before += 1
+		var to_slot: int = from_slot - removed_before
+		if to_slot == from_slot:
+			continue
 		card[HAND_SLOT_INDEX_KEY] = to_slot
 		moves.append({
 			"instance_id": StringName(card.get("instance_id", &"")),
