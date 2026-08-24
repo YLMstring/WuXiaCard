@@ -114,7 +114,7 @@ action 开始时完成一次 selector 快照，锁定仍合法的精确实例。
 ```gdscript
 const YIKONG_EXILE_DISCARD_DRAW: Dictionary = {
     "triggers": [{
-        "event": TRIGGER_CARD_BEFORE_SUMMONED,
+        "event": TRIGGER_CARD_SUMMONED,
         "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
         "actions": [
             {"type": ACTION_EXILE_SELF, "on_invalid_context": STOP_RULE},
@@ -131,13 +131,15 @@ const YIKONG_EXILE_DISCARD_DRAW: Dictionary = {
 }
 ```
 
-牌在 `TRIGGER_CARD_BEFORE_SUMMONED` 中先真正进入其最初所属方的移除区。后续
-动作使用规则开始时保存的来源所属方，因此即使来源已经离场，仍同时弃掉该方
-当时剩余的全部手牌，完整结算弃牌连锁，再逐张尝试抽五张。空牌库和手牌容量
-沿用现有抽牌规则。
+牌先正常放入目标格并产生 `card_placed`，然后进入全场
+`TRIGGER_CARD_SUMMONED` 时点。所有场上来源仍按格子 `0..8` 结算，因此排在
+一空所在格之前的其它进场时能力可以先响应；一空在轮到自身能力时真正进入其
+最初所属方的移除区。后续动作使用规则开始时保存的来源所属方，因此即使来源
+已经离场，仍同时弃掉该方当时剩余的全部手牌，完整结算弃牌连锁，再逐张尝试
+抽五张。空牌库和手牌容量沿用现有抽牌规则。
 
-因为来源在全场 `card_summoned` 前已经离场，本次打出不产生 `card_placed`、
-全场进场、进场后或标准攻击。
+一空离场后，当前全场进场时事件继续按既有快照和重检规则处理剩余来源；一空
+自身不再进入 `TRIGGER_CARD_AFTER_SUMMONED`，也不发起标准攻击。
 
 `YiKongDaoDi5` 在上述抽牌后追加：
 
@@ -342,7 +344,8 @@ const SHAOLIN_DISCARD_TWO_GAIN_THREE: Dictionary = {
 - 批量弃牌先原子移除全部锁定实例，再按物理左到右结算自身弃牌能力。
 - 结算期间的新手牌不加入原批次；嵌套弃牌形成独立批次。
 - 同批只发一次批次结束事件；零成功弃牌不发事件。
-- 一空自移除后不进入任何后续召唤节点，随后批量弃牌并逐张抽五张。
+- 一空正常产生 `card_placed` 并参与全场进场时顺序，在自身进场时能力中移除，
+  随后批量弃牌并逐张抽五张；自身不进入进场后或标准攻击。
 - 一空五级只弃对手物理最右手牌；对手空手安全无效果。
 - 燃木主动能力的目标、耗内力、弃牌、场上友方同时加点和额外出牌。
 - 燃木三级只在真实攻击后加点，翻面后失去该非锁定能力。
