@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-13
+Updated: 2026-08-24
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -85,6 +85,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - `JinGangBuHuai1`–`4` use generic discard and exact-instance recall actions.
   Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4 makes
   every protected friendly gain one point and attack once per tier-4 source.
+- `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
+  selection. Their point gains occur only after the required discard count.
+  Locked prevented-flip reactions exile only the exact target attacked by that
+  source. BaoCan's attacked reaction snapshots and exiles both participants;
+  tier 4 checks its source owner's hand once after both complete exile chains,
+  then attempts two fully resolved fresh-copy summons in former-cell order.
+  The generic `ACTION_IF`, `CONDITION_SOURCE_OWNER_HAND_EMPTY`, and
+  `CARD_REF_ATTACKER_CARD` declarations support these rules without card-ID
+  branches.
 - Runtime ki beads are gold for any flip-prevention ability and light gray for
   semantic self-exile, in that priority order. `BaGuaFangWei` suppresses its
   bead absolutely. Discard presentation reuses the existing fade-out.

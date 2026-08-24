@@ -209,10 +209,30 @@ The supported dynamic form currently counts cards in one owner's hand:
 ```
 
 The action accepts ability-source, selected-card, and trigger-card references.
+Attack reaction contexts also expose `CARD_REF_ATTACKER_CARD`; it snapshots the
+exact attacker and its initial board cell before reaction actions can remove or
+move either participant.
 Literal amounts must be nonzero signed integers. A dynamic count resolving to
 zero is `NO_EFFECT`. Subtraction floors each side at zero; four zeros remove the
 exact instance to its original owner's removed zone after emitting the power
 event. Do not encode arithmetic or named-card behavior in the executor.
+
+Conditional action blocks use a separate action-condition vocabulary:
+
+```gdscript
+{
+    "type": ACTION_IF,
+    "conditions": [{"type": CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+    "actions": [
+        # Generic nested actions.
+    ],
+}
+```
+
+All conditions are checked once when `ACTION_IF` begins. If they pass, its
+nested actions resolve in order without rechecking the condition between them.
+`CONDITION_SOURCE_OWNER_HAND_EMPTY` reads the ability source's snapshotted
+current owner, so it remains meaningful after that source has been removed.
 
 Draw in the after-summoned window:
 
@@ -440,7 +460,9 @@ either an exact reference such as `CARD_REF_SELECTED_CARD`, or a
 an exact card's initial cell or the lowest-index adjacent empty cell. Exact hand
 instances leave that hand; fresh specifications create a unique catalog
 instance. Every successful summon resolves both summon trigger phases and a
-standard attack.
+standard attack. Sequential summon actions finish each complete summon chain
+before attempting the next action; an occupied destination makes only that
+later summon return `NO_EFFECT`.
 
 `ACTION_RETURN_CARD_TO_HAND` accepts an exact card reference and owner-relative
 recipient. It follows the instance across board movement and creates a fresh

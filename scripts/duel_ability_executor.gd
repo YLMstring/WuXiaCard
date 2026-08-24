@@ -204,6 +204,13 @@ static func execute_actions(
 				state,
 				trigger_instance_id
 			)
+	if not reference_snapshots.has(Catalog.CARD_REF_ATTACKER_CARD):
+		var attacker_instance_id := StringName(action_context.get("attacker_instance_id", &""))
+		if attacker_instance_id != &"":
+			reference_snapshots[Catalog.CARD_REF_ATTACKER_CARD] = _snapshot_card_reference(
+				state,
+				attacker_instance_id
+			)
 	var current_source_cell: int = source_cell
 	for action_index: int in range(actions.size()):
 		var action_value: Variant = actions[action_index]
@@ -411,6 +418,20 @@ static func _execute_action(
 	event_resolver: Callable
 ) -> Dictionary:
 	var action_type := StringName(declaration.get("type", &""))
+	if action_type == Catalog.ACTION_IF:
+		return _execute_if(
+			state,
+			source_cell,
+			source_instance_id,
+			expected_owner,
+			declaration,
+			context,
+			attack_resolver,
+			flip_resolver,
+			summon_resolver,
+			before_move_resolver,
+			event_resolver
+		)
 	if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
 		return _for_each_selected_card(
 			state,
@@ -1164,6 +1185,67 @@ static func _for_each_selected_card(
 		if StringName(current_ability_source.get("zone", &"")) == Catalog.CARD_ZONE_BOARD:
 			result["source_cell"] = int(current_ability_source.get("index", result["source_cell"]))
 	return result
+
+
+static func _execute_if(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	declaration: Dictionary,
+	context: Dictionary,
+	attack_resolver: Callable,
+	flip_resolver: Callable,
+	summon_resolver: Callable,
+	before_move_resolver: Callable,
+	event_resolver: Callable
+) -> Dictionary:
+	if not _action_conditions_match(state, declaration.get("conditions", []), context):
+		return _no_effect(source_cell)
+	return execute_actions(
+		state,
+		source_cell,
+		source_instance_id,
+		expected_owner,
+		declaration.get("actions", []) as Array,
+		context,
+		attack_resolver,
+		flip_resolver,
+		summon_resolver,
+		before_move_resolver,
+		event_resolver
+	)
+
+
+static func _action_conditions_match(
+	state: StateData,
+	conditions_value: Variant,
+	context: Dictionary
+) -> bool:
+	if not conditions_value is Array or (conditions_value as Array).is_empty():
+		return false
+	for condition_value: Variant in conditions_value as Array:
+		if not condition_value is Dictionary:
+			return false
+		var condition_type := StringName(
+			(condition_value as Dictionary).get("type", &"")
+		)
+		if condition_type == Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY:
+			var source_owner: int = int(context.get("ability_source_owner_id", 0))
+			if source_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+				var source_snapshot: Dictionary = _get_reference_snapshot(
+					context,
+					Catalog.CARD_REF_ABILITY_SOURCE
+				)
+				source_owner = int(source_snapshot.get("owner_id", 0))
+			if (
+				source_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+				or not state.get_hand(source_owner).is_empty()
+			):
+				return false
+			continue
+		return false
+	return true
 
 
 static func _temporarily_remove_non_retained_abilities(

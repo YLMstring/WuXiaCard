@@ -74,6 +74,7 @@ const CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE: StringName = (
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
 const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
+const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_DISCARD_CARD: StringName = &"discard_card"
@@ -87,6 +88,7 @@ const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
 const ACTION_STANDARD_ATTACK_WITH_CARD: StringName = &"standard_attack_with_card"
 const ACTION_FOR_EACH_SELECTED_CARD: StringName = &"for_each_selected_card"
+const ACTION_IF: StringName = &"if"
 const ACTION_CHANGE_POWERS: StringName = &"change_powers"
 const ACTION_ADD_CARD_TO_HAND: StringName = &"add_card_to_hand"
 const ACTION_REVEAL_HAND_CARDS: StringName = &"reveal_hand_cards"
@@ -113,6 +115,7 @@ const ACTION_DISTRIBUTE_KI: StringName = &"distribute_ki"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
+const CARD_REF_ATTACKER_CARD: StringName = &"attacker_card"
 const CARD_REF_LAST_SUMMONED_CARD: StringName = &"last_summoned_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
@@ -225,6 +228,9 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_CAN_SPEND_KI,
 	CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
 ]
+const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
+	CONDITION_SOURCE_OWNER_HAND_EMPTY,
+]
 const KNOWN_CARD_ZONES: Array[StringName] = [
 	CARD_ZONE_HAND,
 	CARD_ZONE_BOARD,
@@ -245,6 +251,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_STANDARD_ATTACK_WITH_SELF,
 	ACTION_STANDARD_ATTACK_WITH_CARD,
 	ACTION_FOR_EACH_SELECTED_CARD,
+	ACTION_IF,
 	ACTION_CHANGE_POWERS,
 	ACTION_ADD_CARD_TO_HAND,
 	ACTION_REVEAL_HAND_CARDS,
@@ -273,6 +280,7 @@ const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
 	CARD_REF_SELECTED_CARD,
 	CARD_REF_TRIGGER_CARD,
+	CARD_REF_ATTACKER_CARD,
 	CARD_REF_LAST_SUMMONED_CARD,
 ]
 const KNOWN_OWNER_REFERENCES: Array[StringName] = [
@@ -323,8 +331,8 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"NianhuaWeiXiao3",
 	&"NianhuaWeiXiao4",
 	&"SanRuDiYu1",
-	&"SanRuDiYu2"
-	&"SanRuDiYu3"
+	&"SanRuDiYu2",
+	&"SanRuDiYu3",
 	&"JinGangBuHuai1",
 	&"JinGangBuHuai2",
 	&"JinGangBuHuai3",
@@ -800,6 +808,127 @@ const JINGANG_PREVENTED_ALLY_RALLY: Dictionary = {
 			{
 				"type": ACTION_STANDARD_ATTACK_WITH_CARD,
 				"card": CARD_REF_TRIGGER_CARD,
+			},
+		],
+	}],
+}
+
+const SHAOLIN_DISCARD_ONE_GAIN_TWO: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
+				{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": 2,
+					"card": CARD_REF_ABILITY_SOURCE,
+				},
+			],
+		}],
+	}],
+}
+
+const SHAOLIN_DISCARD_TWO_GAIN_THREE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_DISCARD_CARD,
+					"card": CARD_REF_SELECTED_CARD,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+				},
+				"actions": [
+					{"type": ACTION_DISCARD_CARD, "card": CARD_REF_SELECTED_CARD},
+					{
+						"type": ACTION_CHANGE_POWERS,
+						"amount": 3,
+						"card": CARD_REF_ABILITY_SOURCE,
+					},
+				],
+			},
+		],
+	}],
+}
+
+const SHAOLIN_EXILE_PREVENTED_ATTACK_TARGET: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+		"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+	}],
+}
+
+const BAOCAN_MUTUAL_EXILE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ABILITY_SOURCE},
+			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ATTACKER_CARD},
+		],
+	}],
+}
+
+const BAOCAN_MUTUAL_EXILE_WITH_COPIES: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ABILITY_SOURCE},
+			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ATTACKER_CARD},
+			{
+				"type": ACTION_IF,
+				"conditions": [{"type": CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+				"actions": [
+					{
+						"type": ACTION_SUMMON_CARD,
+						"card": {
+							"type": CARD_SPEC_FRESH_COPY,
+							"of": CARD_REF_ABILITY_SOURCE,
+						},
+						"cell": {
+							"type": CELL_REF_INITIAL_CARD_CELL,
+							"card": CARD_REF_ABILITY_SOURCE,
+						},
+					},
+					{
+						"type": ACTION_SUMMON_CARD,
+						"card": {
+							"type": CARD_SPEC_FRESH_COPY,
+							"of": CARD_REF_ABILITY_SOURCE,
+						},
+						"cell": {
+							"type": CELL_REF_INITIAL_CARD_CELL,
+							"card": CARD_REF_ATTACKER_CARD,
+						},
+					},
+				],
 			},
 		],
 	}],
@@ -2076,7 +2205,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，丢弃最左侧的手牌，若如此做，我点数加二。锁定：被攻击时，将我和攻击者移除。",
 		"flavor": "龙爪手中最后两招，一瞥之下，似乎破绽百出，施招者手忙脚乱，竭力招架，其实这两招似守实攻，大巧若拙，每一处破绽中都隐伏着厉害无比的陷阱。龙爪手本来走的是刚猛路子，但到了最后两式时，刚猛中暗藏阴柔，已到了返璞还真、炉火纯青的境界。",
 		"powers": [6, 6, 0, 0],
-		"abilities": [],
+		"abilities": [SHAOLIN_DISCARD_ONE_GAIN_TWO, BAOCAN_MUTUAL_EXILE],
 	},
 	&"BaoCanShouQue3": {
 		"id": &"BaoCanShouQue3",
@@ -2088,7 +2217,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，丢弃最左侧的手牌，若如此做，我点数加二。锁定：我发动的翻面被阻止后，移除目标牌。锁定：被攻击时，将我和攻击者移除。",
 		"flavor": "龙爪手中最后两招，一瞥之下，似乎破绽百出，施招者手忙脚乱，竭力招架，其实这两招似守实攻，大巧若拙，每一处破绽中都隐伏着厉害无比的陷阱。龙爪手本来走的是刚猛路子，但到了最后两式时，刚猛中暗藏阴柔，已到了返璞还真、炉火纯青的境界。",
 		"powers": [6, 6, 0, 0],
-		"abilities": [],
+		"abilities": [
+			SHAOLIN_DISCARD_ONE_GAIN_TWO,
+			SHAOLIN_EXILE_PREVENTED_ATTACK_TARGET,
+			BAOCAN_MUTUAL_EXILE,
+		],
 	},
 	&"BaoCanShouQue4": {
 		"id": &"BaoCanShouQue4",
@@ -2100,7 +2233,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，丢弃最左侧的手牌，若如此做，我点数加二。锁定：我发动的翻面被阻止后，移除目标牌。锁定：被攻击时，将我和攻击者移除，若你手牌为空，在这两个位置依次生成我的复制。",
 		"flavor": "龙爪手中最后两招，一瞥之下，似乎破绽百出，施招者手忙脚乱，竭力招架，其实这两招似守实攻，大巧若拙，每一处破绽中都隐伏着厉害无比的陷阱。龙爪手本来走的是刚猛路子，但到了最后两式时，刚猛中暗藏阴柔，已到了返璞还真、炉火纯青的境界。",
 		"powers": [6, 6, 0, 0],
-		"abilities": [],
+		"abilities": [
+			SHAOLIN_DISCARD_ONE_GAIN_TWO,
+			SHAOLIN_EXILE_PREVENTED_ATTACK_TARGET,
+			BAOCAN_MUTUAL_EXILE_WITH_COPIES,
+		],
 	},
 	&"LiJingRuLai3": {
 		"id": &"LiJingRuLai3",
@@ -2112,7 +2249,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，丢弃最左侧的手牌，若如此做，我点数加二。",
 		"flavor": "大金刚拳的起手式，乃佛门最上乘的刚猛功夫，蕴含极深内力。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [SHAOLIN_DISCARD_ONE_GAIN_TWO],
 	},
 	&"LiJingRuLai4": {
 		"id": &"LiJingRuLai4",
@@ -2124,7 +2261,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，丢弃最左侧的两张手牌，若如此做，我点数加三。锁定：我发动的翻面被阻止后，移除目标牌。",
 		"flavor": "大金刚拳的起手式，乃佛门最上乘的刚猛功夫，蕴含极深内力。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [
+			SHAOLIN_DISCARD_TWO_GAIN_THREE,
+			SHAOLIN_EXILE_PREVENTED_ATTACK_TARGET,
+		],
 	},
 	&"NianhuaWeiXiao3": {
 		"id": &"NianhuaWeiXiao3",
@@ -4666,6 +4806,27 @@ static func _validate_condition(
 			errors.append("Card %s %s condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])
 
 
+static func _validate_action_condition(
+	card_id: StringName,
+	context_name: String,
+	condition: Dictionary,
+	errors: Array[String]
+) -> void:
+	var condition_type := StringName(condition.get("type", &""))
+	if condition_type not in KNOWN_ACTION_CONDITIONS:
+		errors.append(
+			"Card %s %s uses unknown action condition %s"
+			% [card_id, context_name, condition_type]
+		)
+		return
+	for key: Variant in condition.keys():
+		if StringName(key) != &"type":
+			errors.append(
+				"Card %s %s action condition %s has unsupported field %s"
+				% [card_id, context_name, condition_type, key]
+			)
+
+
 static func _validate_activation(
 	card_id: StringName,
 	activation_value: Variant,
@@ -4864,6 +5025,56 @@ static func _validate_action(
 				"Card %s %s action %s requires a known new_owner"
 				% [card_id, context_name, action_type]
 			)
+	if action_type == ACTION_IF:
+		allowed_keys.append(&"conditions")
+		allowed_keys.append(&"actions")
+		var action_conditions_value: Variant = action.get("conditions", null)
+		if (
+			not action_conditions_value is Array
+			or (action_conditions_value as Array).is_empty()
+		):
+			errors.append(
+				"Card %s %s conditional action requires non-empty conditions"
+				% [card_id, context_name]
+			)
+		else:
+			for condition_value: Variant in action_conditions_value as Array:
+				if not condition_value is Dictionary:
+					errors.append(
+						"Card %s %s conditional action has a non-dictionary condition"
+						% [card_id, context_name]
+					)
+					continue
+				_validate_action_condition(
+					card_id,
+					"%s conditional action" % context_name,
+					condition_value as Dictionary,
+					errors
+				)
+		var conditional_actions_value: Variant = action.get("actions", null)
+		if (
+			not conditional_actions_value is Array
+			or (conditional_actions_value as Array).is_empty()
+		):
+			errors.append(
+				"Card %s %s conditional action requires non-empty actions"
+				% [card_id, context_name]
+			)
+		else:
+			for nested_value: Variant in conditional_actions_value as Array:
+				if not nested_value is Dictionary:
+					errors.append(
+						"Card %s %s conditional action has a non-dictionary action"
+						% [card_id, context_name]
+					)
+					continue
+				_validate_action(
+					card_id,
+					"%s conditional action" % context_name,
+					nested_value as Dictionary,
+					false,
+					errors
+				)
 	if action_type == ACTION_FOR_EACH_SELECTED_CARD:
 		allowed_keys.append(&"selector")
 		allowed_keys.append(&"actions")
@@ -4990,7 +5201,7 @@ static func _actions_change_selected_card_powers(actions: Array) -> bool:
 		):
 			return true
 		if (
-			action_type == ACTION_FOR_EACH_SELECTED_CARD
+			action_type in [ACTION_FOR_EACH_SELECTED_CARD, ACTION_IF]
 			and action.get("actions", null) is Array
 			and _actions_change_selected_card_powers(action.get("actions", []) as Array)
 		):
