@@ -1042,6 +1042,12 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	var existing_removed_instance_id := StringName(
 		request.get("existing_removed_instance_id", &"")
 	)
+	var existing_discard_instance_id := StringName(
+		request.get("existing_discard_instance_id", &"")
+	)
+	var existing_discard_owner_id: int = int(
+		request.get("existing_discard_owner_id", source_owner)
+	)
 	var existing_hand_index: int = -1
 	if existing_hand_instance_id != &"":
 		var source_hand: Array = state.get_hand(source_owner)
@@ -1062,6 +1068,21 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 			):
 				existing_removed_index = removed_index
 				break
+	var existing_discard_index: int = -1
+	if existing_discard_instance_id != &"":
+		var source_discard: Array = state.discard_piles.get(
+			existing_discard_owner_id,
+			[]
+		) as Array
+		for discard_index: int in range(source_discard.size()):
+			var discard_value: Variant = source_discard[discard_index]
+			if (
+				discard_value is Dictionary
+				and StringName((discard_value as Dictionary).get("instance_id", &""))
+				== existing_discard_instance_id
+			):
+				existing_discard_index = discard_index
+				break
 	if (
 		requires_source
 		and not _owned_card_instance_at(state, source_cell, source_instance_id, source_owner)
@@ -1077,6 +1098,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		or instance_id == &""
 		or existing_hand_instance_id != &"" and existing_hand_index < 0
 		or existing_removed_instance_id != &"" and existing_removed_index < 0
+		or existing_discard_instance_id != &"" and existing_discard_index < 0
 	):
 		return result
 	var summoned_card: Dictionary
@@ -1089,6 +1111,13 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		var source_removed: Array = state.removed_cards.get(source_owner, []) as Array
 		summoned_card = source_removed[existing_removed_index]
 		source_removed.remove_at(existing_removed_index)
+	elif existing_discard_index >= 0:
+		var source_discard: Array = state.discard_piles.get(
+			existing_discard_owner_id,
+			[]
+		) as Array
+		summoned_card = source_discard[existing_discard_index]
+		source_discard.remove_at(existing_discard_index)
 	else:
 		summoned_card = Catalog.create_instance(card_id, source_owner, instance_id)
 	state.board[target_cell] = {
@@ -1106,6 +1135,7 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"card": summoned_card.duplicate(true),
 		"from_hand_instance_id": existing_hand_instance_id,
 		"from_removed_instance_id": existing_removed_instance_id,
+		"from_discard_instance_id": existing_discard_instance_id,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
 	})
 	var summon_context: Dictionary = {

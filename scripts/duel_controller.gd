@@ -1281,6 +1281,8 @@ func _present_transition_events(
 			await _present_hand_cards_shifted_event(event)
 		elif event_type == &"card_returned_to_hand":
 			await _present_card_returned_to_hand_event(event)
+		elif event_type == &"card_transformed":
+			_present_card_transformed_event(event)
 		elif event_type == &"card_revealed":
 			_present_card_revealed_event(event)
 		elif event_type in [&"ability_gained", &"ability_lost"]:
@@ -1574,6 +1576,16 @@ func _present_card_discarded_event(event: Dictionary) -> void:
 	if former_slot != null:
 		former_slot.remove_child(discarded_view)
 	discarded_view.queue_free()
+
+
+func _present_card_transformed_event(event: Dictionary) -> void:
+	_presentation_trace.append(&"card_transformed")
+	var instance_id := StringName(event.get("instance_id", &""))
+	var card_view: CardView = _get_card_view_by_instance(instance_id)
+	var card_value: Variant = event.get("card", null)
+	if card_view == null or not card_value is Dictionary:
+		return
+	card_view.sync_runtime_data(card_value as Dictionary, int(event.get("owner_id", 0)))
 
 
 func _present_hand_cards_shifted_event(event: Dictionary) -> void:

@@ -18,6 +18,9 @@ static func discover(
 	var groups: Array[Dictionary] = []
 	if state == null or event_id not in Catalog.KNOWN_TRIGGER_EVENTS:
 		return groups
+	if event_id == Catalog.CARD_AFTER_DISCARDED:
+		_discover_discarded_trigger_card(state, event_id, groups, context)
+		return groups
 	if event_id == Catalog.TRIGGER_CARD_BEFORE_SUMMONED:
 		_discover_from_cell(
 			state,
@@ -143,20 +146,82 @@ static func _discover_from_cell(
 			})
 
 
+static func _discover_discarded_trigger_card(
+	state: StateData,
+	event_id: StringName,
+	groups: Array[Dictionary],
+	context: Dictionary
+) -> void:
+	var trigger_instance_id := StringName(context.get("trigger_instance_id", &""))
+	var location: Dictionary = Selector.locate_card(state, trigger_instance_id)
+	if (
+		location.is_empty()
+		or StringName(location.get("zone", &"")) != Catalog.CARD_ZONE_DISCARD
+		or int(location.get("owner_id", 0)) != int(context.get("trigger_owner_id", 0))
+	):
+		return
+	var card: Dictionary = location.get("card", {})
+	var owner_id: int = int(location.get("owner_id", 0))
+	if not Abilities.card_effects_enabled(card, state.get_enabled_effect_gates(owner_id)):
+		return
+	var active_abilities: Array = card.get("active_abilities", [])
+	for ability_index: int in range(active_abilities.size()):
+		var ability_value: Variant = active_abilities[ability_index]
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value
+		var triggers: Array = ability.get("triggers", [])
+		for trigger_index: int in range(triggers.size()):
+			var rule_value: Variant = triggers[trigger_index]
+			if not rule_value is Dictionary:
+				continue
+			var rule: Dictionary = rule_value
+			if StringName(rule.get("event", &"")) != event_id:
+				continue
+			if not _conditions_match(state, -1, card, rule.get("conditions", []), context):
+				continue
+			groups.append({
+				"event_id": event_id,
+				"source_owner_id": owner_id,
+				"source_cell": -1,
+				"source_zone": Catalog.CARD_ZONE_DISCARD,
+				"source_instance_id": trigger_instance_id,
+				"ability_index": ability_index,
+				"ability_snapshot": ability.duplicate(true),
+				"trigger_index": trigger_index,
+				"context": context.duplicate(true),
+			})
+
+
 static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary:
 	var source_cell: int = int(group.get("source_cell", -1))
-	if source_cell < 0 or source_cell >= state.board.size():
-		return {}
-	var slot_value: Variant = state.board[source_cell]
-	if slot_value == null:
-		return {}
-	var slot: Dictionary = slot_value
-	if int(slot.get("owner", 0)) != int(group.get("source_owner_id", 0)):
-		return {}
-	var card: Dictionary = slot.get("card", {})
+	var source_owner: int = int(group.get("source_owner_id", 0))
+	var card: Dictionary = {}
+	if StringName(group.get("source_zone", &"")) == Catalog.CARD_ZONE_DISCARD:
+		var location: Dictionary = Selector.locate_card(
+			state,
+			StringName(group.get("source_instance_id", &""))
+		)
+		if (
+			location.is_empty()
+			or StringName(location.get("zone", &"")) != Catalog.CARD_ZONE_DISCARD
+			or int(location.get("owner_id", 0)) != source_owner
+		):
+			return {}
+		card = location.get("card", {})
+	else:
+		if source_cell < 0 or source_cell >= state.board.size():
+			return {}
+		var slot_value: Variant = state.board[source_cell]
+		if slot_value == null:
+			return {}
+		var slot: Dictionary = slot_value
+		if int(slot.get("owner", 0)) != source_owner:
+			return {}
+		card = slot.get("card", {})
 	if not Abilities.card_effects_enabled(
 		card,
-		state.get_enabled_effect_gates(int(slot.get("owner", 0)))
+		state.get_enabled_effect_gates(source_owner)
 	):
 		return {}
 	if (

@@ -21,6 +21,7 @@ const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
 const CARD_AFTER_DRAWN: StringName = &"card_after_drawn"
+const CARD_AFTER_DISCARDED: StringName = &"card_after_discarded"
 const CARD_BEFORE_MOVED: StringName = &"card_before_moved"
 const CARD_AFTER_MOVED: StringName = &"card_after_moved"
 const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
@@ -101,6 +102,7 @@ const ACTION_REMOVE_THIS_ABILITY: StringName = &"remove_this_ability"
 const ACTION_FLIP_SELF: StringName = &"flip_self"
 const ACTION_RETURN_CARD_TO_HAND: StringName = &"return_card_to_hand"
 const ACTION_SUMMON_CARD: StringName = &"summon_card"
+const ACTION_TRANSFORM_CARD: StringName = &"transform_card"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
 const ACTION_RESUMMON_CARD_IN_PLACE: StringName = &"resummon_card_in_place"
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
@@ -118,11 +120,15 @@ const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
 const CARD_REF_ATTACKER_CARD: StringName = &"attacker_card"
 const CARD_REF_LAST_SUMMONED_CARD: StringName = &"last_summoned_card"
 const CARD_SPEC_FRESH_COPY: StringName = &"fresh_copy"
+const CARD_SPEC_TOP_DISCARD: StringName = &"top_discard"
 const CELL_REF_INITIAL_CARD_CELL: StringName = &"initial_card_cell"
 const CELL_REF_FIRST_ADJACENT_EMPTY: StringName = &"first_adjacent_empty"
 const CELL_REF_ACTIVATION_TARGET: StringName = &"activation_target"
+const CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY: StringName = &"first_empty_adjacent_to_enemy"
+const CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY: StringName = &"first_adjacent_or_any_empty"
 const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
+const OWNER_CARD_ORIGINAL: StringName = &"card_original_owner"
 const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
 const VALUE_CARD_COUNT: StringName = &"card_count"
 const RESOURCE_KI: StringName = &"ki"
@@ -172,6 +178,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_EXILED,
 	CARD_AFTER_DRAWN,
+	CARD_AFTER_DISCARDED,
 	CARD_BEFORE_MOVED,
 	CARD_AFTER_MOVED,
 	CARD_BEFORE_FLIPPED,
@@ -264,6 +271,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_FLIP_SELF,
 	ACTION_RETURN_CARD_TO_HAND,
 	ACTION_SUMMON_CARD,
+	ACTION_TRANSFORM_CARD,
 	ACTION_EXILE_SELF,
 	ACTION_RESUMMON_CARD_IN_PLACE,
 	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
@@ -286,6 +294,7 @@ const KNOWN_CARD_REFERENCES: Array[StringName] = [
 const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 	OWNER_ABILITY_SOURCE,
 	OWNER_CARD_CURRENT,
+	OWNER_CARD_ORIGINAL,
 	OWNER_OPPONENT_OF_ABILITY_SOURCE,
 ]
 const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
@@ -1638,6 +1647,161 @@ const KUIHUA4_DRAW_EXILE_AND_COPY: Dictionary = {
 	}],
 }
 
+const LOCKED_RANGE_TWO_EMPTY: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": false,
+	}],
+}
+
+const LOCKED_RANGE_TWO_EMPTY_OR_ALLY: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": true,
+	}],
+}
+
+const NIANHUA_RETURN_ADJACENT: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [{
+					"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+				}],
+			},
+			"actions": [{
+				"type": ACTION_RETURN_CARD_TO_HAND,
+				"card": CARD_REF_SELECTED_CARD,
+				"recipient": OWNER_CARD_ORIGINAL,
+			}],
+		}],
+	}],
+}
+
+const NIANHUA_DISCARD_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DISCARDED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_SUMMON_CARD,
+			"card": CARD_REF_TRIGGER_CARD,
+			"cell": {
+				"type": CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY,
+				"owner": OWNER_ABILITY_SOURCE,
+			},
+		}],
+	}],
+}
+
+const SANRU_ONE_TRANSFORM: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DISCARDED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_TRANSFORM_CARD,
+				"card": CARD_REF_TRIGGER_CARD,
+				"card_id": &"SanRuDiYu2",
+			},
+			{
+				"type": ACTION_RETURN_CARD_TO_HAND,
+				"card": CARD_REF_TRIGGER_CARD,
+				"recipient": OWNER_CARD_CURRENT,
+				"preserve_instance": true,
+			},
+		],
+	}],
+}
+
+const SANRU_TWO_TRANSFORM: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DISCARDED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_TRANSFORM_CARD,
+				"card": CARD_REF_TRIGGER_CARD,
+				"card_id": &"SanRuDiYu3",
+			},
+			{
+				"type": ACTION_RETURN_CARD_TO_HAND,
+				"card": CARD_REF_TRIGGER_CARD,
+				"recipient": OWNER_CARD_CURRENT,
+				"preserve_instance": true,
+			},
+		],
+	}],
+}
+
+const SANRU_SUMMON_TOP_ADJACENT: Dictionary = {
+	"type": ACTION_SUMMON_CARD,
+	"card": {
+		"type": CARD_SPEC_TOP_DISCARD,
+		"owner": OWNER_ABILITY_SOURCE,
+	},
+	"cell": {
+		"type": CELL_REF_FIRST_ADJACENT_EMPTY,
+		"card": CARD_REF_ABILITY_SOURCE,
+	},
+}
+
+const SANRU_SUMMON_TOP_WITH_FALLBACK: Dictionary = {
+	"type": ACTION_SUMMON_CARD,
+	"card": {
+		"type": CARD_SPEC_TOP_DISCARD,
+		"owner": OWNER_ABILITY_SOURCE,
+	},
+	"cell": {
+		"type": CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY,
+		"card": CARD_REF_ABILITY_SOURCE,
+	},
+}
+
+const SANRU_ONE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [SANRU_SUMMON_TOP_ADJACENT],
+	}],
+}
+
+const SANRU_TWO_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			SANRU_SUMMON_TOP_ADJACENT,
+			SANRU_SUMMON_TOP_ADJACENT,
+		],
+	}],
+}
+
+const SANRU_THREE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			SANRU_SUMMON_TOP_WITH_FALLBACK,
+			SANRU_SUMMON_TOP_WITH_FALLBACK,
+			SANRU_SUMMON_TOP_WITH_FALLBACK,
+		],
+	}],
+}
+
+const SANRU_END_TURN_EXILE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_END_OWNER_TURN,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"actions": [{"type": ACTION_EXILE_SELF}],
+	}],
+}
+
 const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe1": {
 		"id": &"CangSongYingKe1",
@@ -2276,7 +2440,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，令所有相邻牌移回最初一方的手牌。锁定：我可以攻击直线上相隔一个空位的敌方。",
 		"flavor": "拈花指出手轻柔无比，讲究制敌而不伤人，每一次弹出，都像是要弹去鲜花上的露珠，却又生怕震落了花瓣，脸上始终慈和微笑，显得深有会心，温颜微笑间神功已运。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [
+			NIANHUA_RETURN_ADJACENT,
+			LOCKED_RANGE_TWO_EMPTY,
+		],
 	},
 	&"NianhuaWeiXiao4": {
 		"id": &"NianhuaWeiXiao4",
@@ -2288,7 +2455,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我被丢弃后，在首个与敌方相邻的空位进场。进场后，令所有相邻牌移回最初一方的手牌。锁定：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。",
 		"flavor": "拈花指出手轻柔无比，讲究制敌而不伤人，每一次弹出，都像是要弹去鲜花上的露珠，却又生怕震落了花瓣，脸上始终慈和微笑，显得深有会心，温颜微笑间神功已运。",
 		"powers": [6, 6, 6, 6],
-		"abilities": [],
+		"abilities": [
+			NIANHUA_DISCARD_SUMMON,
+			NIANHUA_RETURN_ADJACENT,
+			LOCKED_RANGE_TWO_EMPTY_OR_ALLY,
+		],
 	},
 	&"SanRuDiYu1": {
 		"id": &"SanRuDiYu1",
@@ -2300,7 +2471,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我被丢弃后，将我变成二入地狱并抽回手牌。进场后，在首个相邻空位打出你弃牌堆最上方的牌。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [],
+		"abilities": [
+			SANRU_ONE_TRANSFORM,
+			SANRU_ONE_SUMMON,
+			SANRU_END_TURN_EXILE,
+			LOCKED_RANGE_TWO_EMPTY,
+		],
 	},
 	&"SanRuDiYu2": {
 		"id": &"SanRuDiYu2",
@@ -2312,7 +2488,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我被丢弃后，将我变成三入地狱并抽回手牌。进场后，在首两个相邻空位依次打出你弃牌堆最上方的两张牌。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [],
+		"abilities": [
+			SANRU_TWO_TRANSFORM,
+			SANRU_TWO_SUMMON,
+			SANRU_END_TURN_EXILE,
+			LOCKED_RANGE_TWO_EMPTY_OR_ALLY,
+		],
 	},
 	&"SanRuDiYu3": {
 		"id": &"SanRuDiYu3",
@@ -2324,7 +2505,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，在首三个相邻空位依次打出你弃牌堆最上方的三张牌，如果相邻空位不足，在非相邻空位继续打出。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [],
+		"abilities": [
+			SANRU_THREE_SUMMON,
+			SANRU_END_TURN_EXILE,
+			LOCKED_RANGE_TWO_EMPTY_OR_ALLY,
+		],
 	},
 	&"JinGangBuHuai1": {
 		"id": &"JinGangBuHuai1",
@@ -5145,6 +5330,13 @@ static func _validate_action(
 			errors.append("Card %s %s return action requires a known recipient" % [card_id, context_name])
 		if action.has("preserve_instance") and typeof(action.get("preserve_instance")) != TYPE_BOOL:
 			errors.append("Card %s %s return action requires Boolean preserve_instance" % [card_id, context_name])
+	if action_type == ACTION_TRANSFORM_CARD:
+		allowed_keys.append(&"card")
+		allowed_keys.append(&"card_id")
+		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append("Card %s %s transform action requires a known card reference" % [card_id, context_name])
+		if StringName(action.get("card_id", &"")) not in ALL_CARD_IDS:
+			errors.append("Card %s %s transform action requires a known card_id" % [card_id, context_name])
 	if action_type == ACTION_SUMMON_CARD:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"cell")
@@ -5282,12 +5474,20 @@ static func _validate_summon_card_spec(
 		errors.append("Card %s %s summon action requires a card specification" % [card_id, context_name])
 		return
 	var spec: Dictionary = value
-	if StringName(spec.get("type", &"")) != CARD_SPEC_FRESH_COPY:
+	var spec_type := StringName(spec.get("type", &""))
+	var allowed_keys: Array[StringName] = [&"type"]
+	if spec_type == CARD_SPEC_FRESH_COPY:
+		allowed_keys.append(&"of")
+		if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
+			errors.append("Card %s %s fresh-copy summon requires a known card reference" % [card_id, context_name])
+	elif spec_type == CARD_SPEC_TOP_DISCARD:
+		allowed_keys.append(&"owner")
+		if StringName(spec.get("owner", &"")) not in KNOWN_OWNER_REFERENCES:
+			errors.append("Card %s %s top-discard summon requires a known owner reference" % [card_id, context_name])
+	else:
 		errors.append("Card %s %s summon action uses an unknown card specification" % [card_id, context_name])
-	if StringName(spec.get("of", &"")) not in KNOWN_CARD_REFERENCES:
-		errors.append("Card %s %s fresh-copy summon requires a known card reference" % [card_id, context_name])
 	for key: Variant in spec.keys():
-		if StringName(key) not in [&"type", &"of"]:
+		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s summon card specification has unsupported field %s" % [card_id, context_name, key])
 
 
@@ -5306,15 +5506,34 @@ static func _validate_summon_cell_spec(
 		CELL_REF_INITIAL_CARD_CELL,
 		CELL_REF_FIRST_ADJACENT_EMPTY,
 		CELL_REF_ACTIVATION_TARGET,
+		CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY,
+		CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY,
 	]:
 		errors.append("Card %s %s summon action uses an unknown cell specification" % [card_id, context_name])
 	if (
-		cell_type != CELL_REF_ACTIVATION_TARGET
+		cell_type not in [
+			CELL_REF_ACTIVATION_TARGET,
+			CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY,
+		]
 		and StringName(spec.get("card", &"")) not in KNOWN_CARD_REFERENCES
 	):
 		errors.append("Card %s %s summon cell requires a known card reference" % [card_id, context_name])
+	if (
+		cell_type == CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY
+		and StringName(spec.get("owner", &"")) not in KNOWN_OWNER_REFERENCES
+	):
+		errors.append("Card %s %s enemy-adjacent cell requires a known owner reference" % [card_id, context_name])
+	var allowed_keys: Array[StringName] = [&"type"]
+	if cell_type in [
+		CELL_REF_INITIAL_CARD_CELL,
+		CELL_REF_FIRST_ADJACENT_EMPTY,
+		CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY,
+	]:
+		allowed_keys.append(&"card")
+	elif cell_type == CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY:
+		allowed_keys.append(&"owner")
 	for key: Variant in spec.keys():
-		if StringName(key) not in [&"type", &"card"]:
+		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s summon cell specification has unsupported field %s" % [card_id, context_name, key])
 
 

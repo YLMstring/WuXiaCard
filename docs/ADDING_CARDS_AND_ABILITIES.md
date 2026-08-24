@@ -429,7 +429,18 @@ Movement is not a summon. Exile is not a flip.
 Discard is also not exile. `ACTION_DISCARD_CARD` moves an exact hand reference
 to `CARD_ZONE_DISCARD`; `ACTION_RETURN_CARD_TO_HAND` with
 `preserve_instance = true` can return that exact dictionary and `instance_id`
-without recreating the catalog card.
+without recreating the catalog card. After the discard and physical hand shift
+events, `CARD_AFTER_DISCARDED` discovers only the exact discarded card's own
+rules in its discard pile. Other off-board cards and board sources are outside
+this self-reaction boundary.
+
+`ACTION_TRANSFORM_CARD` replaces an exact runtime card with a fresh catalog
+snapshot for its declared `card_id`, while preserving `instance_id`,
+`original_owner`, zone ownership, hand slot when applicable, and reveal
+audiences. It emits `card_transformed`. A following preserved-instance return
+therefore moves the transformed dictionary rather than reconstructing it. If
+that destination hand is full, the exact discard instance uses normal external
+exile instead.
 
 Hand arrays remain compact logical storage for action indices, but visible and
 automatic left-to-right order comes from each runtime card's
@@ -456,20 +467,27 @@ those abilities never return.
 
 Ability-created summons use generic `ACTION_SUMMON_CARD`. Its `card` spec is
 either an exact reference such as `CARD_REF_SELECTED_CARD`, or a
-`CARD_SPEC_FRESH_COPY` of another card reference. Its `cell` spec may refer to
-an exact card's initial cell or the lowest-index adjacent empty cell. Exact hand
-instances leave that hand; fresh specifications create a unique catalog
-instance. Every successful summon resolves both summon trigger phases and a
-standard attack. Sequential summon actions finish each complete summon chain
-before attempting the next action; an occupied destination makes only that
-later summon return `NO_EFFECT`.
+`CARD_SPEC_FRESH_COPY` of another card reference, or the declared owner's
+current `CARD_SPEC_TOP_DISCARD`. Its `cell` spec may refer to an exact card's
+initial cell, the lowest-index adjacent empty cell, the first empty cell
+adjacent to an enemy, or an adjacent-first/any-empty fallback. Exact hand,
+discard, and removed instances leave that zone; fresh specifications create a
+unique catalog instance. A discard instance keeps its point, ki,
+`instance_id`, and `original_owner`, but its board owner becomes the summoning
+ability's owner. Every successful summon resolves both summon trigger phases
+and a standard attack. Sequential summon actions finish each complete summon
+chain before attempting the next action, so a later top-discard specification
+reads the live pile after all earlier chains; an occupied destination makes
+only that later summon return `NO_EFFECT`.
 
 `ACTION_RETURN_CARD_TO_HAND` accepts an exact card reference and owner-relative
-recipient. It follows the instance across board movement and creates a fresh
-catalog hand instance for that recipient; a full hand uses normal external
-exile instead. Selected-card wrappers still revalidate their declared
-conditions immediately before the action. `ACTION_EXILE_SELF` removes only an
-on-board source and marks its event for fade presentation.
+recipient, including `OWNER_CARD_ORIGINAL`. It follows the instance across
+board movement and creates a fresh catalog hand instance for that recipient;
+a full hand uses normal external exile instead. With `preserve_instance =
+true`, it instead moves the exact discard dictionary and uses the same
+full-hand exile fallback. Selected-card wrappers still revalidate their
+declared conditions immediately before the action. `ACTION_EXILE_SELF` removes
+only an on-board source and marks its event for fade presentation.
 
 `TRIGGER_BEFORE_DUEL_END` runs only during a full-board end attempt and receives
 an immutable `winning_owner_ids` snapshot.

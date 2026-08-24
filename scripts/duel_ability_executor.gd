@@ -468,7 +468,8 @@ static func _execute_action(
 			state,
 			source_cell,
 			StringName(declaration.get("card", &"")),
-			context
+			context,
+			event_resolver
 		)
 	if action_type == Catalog.ACTION_DEPART_CARD_FOR_RESUMMON:
 		return _depart_referenced_card_for_resummon(
@@ -661,6 +662,14 @@ static func _execute_action(
 			state,
 			source_cell,
 			declaration,
+			context
+		)
+	if action_type == Catalog.ACTION_TRANSFORM_CARD:
+		return _transform_card(
+			state,
+			source_cell,
+			StringName(declaration.get("card", &"")),
+			StringName(declaration.get("card_id", &"")),
 			context
 		)
 	if action_type == Catalog.ACTION_EXILE_SELF:
@@ -1641,6 +1650,8 @@ static func _resolve_owner_reference(
 		)
 	if reference == Catalog.OWNER_CARD_CURRENT:
 		return int(card_location.get("owner_id", 0))
+	if reference == Catalog.OWNER_CARD_ORIGINAL:
+		return int((card_location.get("card", {}) as Dictionary).get("original_owner", 0))
 	return 0
 
 
@@ -1687,7 +1698,8 @@ static func _discard_referenced_card(
 	state: StateData,
 	source_cell: int,
 	card_reference: StringName,
-	context: Dictionary
+	context: Dictionary,
+	event_resolver: Callable
 ) -> Dictionary:
 	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
 	var target_instance_id := StringName(snapshot.get("instance_id", &""))
@@ -1751,7 +1763,31 @@ static func _discard_referenced_card(
 			"owner_id": owner_id,
 			"moves": moves,
 		})
-	return _applied(current_source_cell, events)
+	var result: Dictionary = _applied(current_source_cell, events)
+	if event_resolver.is_valid():
+		var discard_context: Dictionary = context.duplicate(true)
+		discard_context["trigger_cell"] = -1
+		discard_context["trigger_instance_id"] = target_instance_id
+		discard_context["trigger_owner_id"] = owner_id
+		discard_context["trigger_zone"] = Catalog.CARD_ZONE_DISCARD
+		discard_context["trigger_logical_index"] = (
+			(state.discard_piles[owner_id] as Array).size() - 1
+		)
+		var snapshots: Dictionary = discard_context.get(
+			"card_reference_snapshots", {}
+		).duplicate(true)
+		snapshots[Catalog.CARD_REF_TRIGGER_CARD] = _snapshot_card_reference(
+			state,
+			target_instance_id
+		)
+		discard_context["card_reference_snapshots"] = snapshots
+		var resolution_value: Variant = event_resolver.call(
+			Catalog.CARD_AFTER_DISCARDED,
+			discard_context
+		)
+		if resolution_value is Dictionary:
+			_merge_action_resolution(result, resolution_value as Dictionary)
+	return result
 
 
 static func _depart_referenced_card_for_resummon(
@@ -2069,6 +2105,61 @@ static func _append_card_instance_id(
 		instance_ids.append(instance_id)
 
 
+static func _transform_card(
+	state: StateData,
+	source_cell: int,
+	card_reference: StringName,
+	new_card_id: StringName,
+	context: Dictionary
+) -> Dictionary:
+	if not Catalog.has_card(new_card_id):
+		return _no_effect(source_cell)
+	var snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
+	if snapshot.is_empty() and card_reference == Catalog.CARD_REF_TRIGGER_CARD:
+		snapshot = _snapshot_context_trigger_card(state, context)
+	var instance_id := StringName(snapshot.get("instance_id", &""))
+	var subject: Dictionary = Selector.locate_card(state, instance_id)
+	if subject.is_empty():
+		return _no_effect(source_cell)
+	var old_card: Dictionary = subject.get("card", {})
+	var old_card_id := StringName(old_card.get("card_id", &""))
+	var original_owner: int = int(old_card.get("original_owner", 0))
+	if original_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		original_owner = int(subject.get("owner_id", 0))
+	var revealed_to: Array = old_card.get("revealed_to_owner_ids", []).duplicate()
+	var current_owner: int = int(subject.get("owner_id", 0))
+	if current_owner in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER] and current_owner not in revealed_to:
+		revealed_to.append(current_owner)
+	var hand_slot_index: int = int(old_card.get(StateData.HAND_SLOT_INDEX_KEY, -1))
+	var transformed: Dictionary = Catalog.create_instance(
+		new_card_id,
+		original_owner,
+		instance_id
+	)
+	transformed["revealed_to_owner_ids"] = revealed_to
+	if hand_slot_index >= 0:
+		transformed[StateData.HAND_SLOT_INDEX_KEY] = hand_slot_index
+	old_card.clear()
+	old_card.merge(transformed, true)
+	return _applied(source_cell, [{
+		"type": &"card_transformed",
+		"source_cell": source_cell,
+		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
+		"target_cell": (
+			int(subject.get("index", -1))
+			if StringName(subject.get("zone", &"")) == Catalog.CARD_ZONE_BOARD
+			else -1
+		),
+		"owner_id": current_owner,
+		"zone": StringName(subject.get("zone", &"")),
+		"logical_index": int(subject.get("index", -1)),
+		"instance_id": instance_id,
+		"old_card_id": old_card_id,
+		"card_id": new_card_id,
+		"card": transformed.duplicate(true),
+	}])
+
+
 static func _return_card_to_hand(
 	state: StateData,
 	source_cell: int,
@@ -2128,8 +2219,6 @@ static func _return_card_to_hand(
 			return _no_effect(source_cell)
 	var hand: Array = state.get_hand(recipient_owner)
 	if hand.size() >= MAX_HAND_SIZE:
-		if preserve_instance:
-			return _no_effect(source_current_cell)
 		return _exile_subject(
 			state,
 			subject,
@@ -2226,6 +2315,8 @@ static func _request_summon_card(
 	var card_id: StringName = &""
 	var existing_instance_id: StringName = &""
 	var existing_removed_instance_id: StringName = &""
+	var existing_discard_instance_id: StringName = &""
+	var existing_discard_owner_id: int = 0
 	if typeof(card_spec) in [TYPE_STRING, TYPE_STRING_NAME]:
 		var card_reference := StringName(card_spec)
 		var card_snapshot: Dictionary = _get_reference_snapshot(context, card_reference)
@@ -2234,21 +2325,43 @@ static func _request_summon_card(
 		var existing_zone := StringName(existing_location.get("zone", &""))
 		if existing_location.is_empty() or existing_zone not in [
 			Catalog.CARD_ZONE_HAND,
+			Catalog.CARD_ZONE_DISCARD,
 			Catalog.CARD_ZONE_REMOVED,
 		]:
 			return _no_effect(source_cell)
 		card_id = StringName((existing_location.get("card", {}) as Dictionary).get("card_id", &""))
 		if existing_zone == Catalog.CARD_ZONE_REMOVED:
 			existing_removed_instance_id = existing_instance_id
+		elif existing_zone == Catalog.CARD_ZONE_DISCARD:
+			existing_discard_instance_id = existing_instance_id
+			existing_discard_owner_id = int(existing_location.get("owner_id", 0))
 	elif card_spec is Dictionary:
-		var fresh_spec: Dictionary = card_spec
-		if StringName(fresh_spec.get("type", &"")) != Catalog.CARD_SPEC_FRESH_COPY:
+		var summon_spec: Dictionary = card_spec
+		var summon_spec_type := StringName(summon_spec.get("type", &""))
+		if summon_spec_type == Catalog.CARD_SPEC_FRESH_COPY:
+			var copied_snapshot: Dictionary = _get_reference_snapshot(
+				context,
+				StringName(summon_spec.get("of", &""))
+			)
+			card_id = StringName(copied_snapshot.get("card_id", &""))
+		elif summon_spec_type == Catalog.CARD_SPEC_TOP_DISCARD:
+			var discard_owner: int = _resolve_owner_reference(
+				StringName(summon_spec.get("owner", &"")),
+				context,
+				source_location
+			)
+			if discard_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+				return _no_effect(source_cell)
+			var discard_pile: Array = state.discard_piles.get(discard_owner, []) as Array
+			if discard_pile.is_empty() or not discard_pile.back() is Dictionary:
+				return _no_effect(source_cell)
+			var top_card: Dictionary = discard_pile.back()
+			existing_instance_id = StringName(top_card.get("instance_id", &""))
+			existing_discard_instance_id = existing_instance_id
+			existing_discard_owner_id = discard_owner
+			card_id = StringName(top_card.get("card_id", &""))
+		else:
 			return _no_effect(source_cell)
-		var copied_snapshot: Dictionary = _get_reference_snapshot(
-			context,
-			StringName(fresh_spec.get("of", &""))
-		)
-		card_id = StringName(copied_snapshot.get("card_id", &""))
 	else:
 		return _no_effect(source_cell)
 	if not Catalog.has_card(card_id):
@@ -2260,27 +2373,61 @@ static func _request_summon_card(
 	var anchor_reference := StringName(cell_spec.get("card", &""))
 	var anchor_snapshot: Dictionary = _get_reference_snapshot(context, anchor_reference)
 	var target_cell: int = -1
+	var requires_source: bool = false
 	var requires_adjacent_source: bool = false
-	if StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_INITIAL_CARD_CELL:
+	var cell_spec_type := StringName(cell_spec.get("type", &""))
+	if cell_spec_type == Catalog.CELL_REF_INITIAL_CARD_CELL:
 		target_cell = int(anchor_snapshot.get("index", -1))
-	elif StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_ACTIVATION_TARGET:
+	elif cell_spec_type == Catalog.CELL_REF_ACTIVATION_TARGET:
 		target_cell = int(context.get("target_index", -1))
-	elif StringName(cell_spec.get("type", &"")) == Catalog.CELL_REF_FIRST_ADJACENT_EMPTY:
+	elif cell_spec_type in [
+		Catalog.CELL_REF_FIRST_ADJACENT_EMPTY,
+		Catalog.CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY,
+	]:
 		var anchor_location: Dictionary = Selector.locate_card(
 			state,
 			StringName(anchor_snapshot.get("instance_id", &""))
 		)
 		var anchor_cell: int = _get_location_cell(anchor_location)
+		if anchor_cell < 0:
+			return _no_effect(source_cell)
 		var empty_neighbors: Array[int] = []
 		for direction: int in range(4):
 			var neighbor_cell: int = Rules.get_neighbor_index(anchor_cell, direction)
 			if neighbor_cell >= 0 and state.board[neighbor_cell] == null:
 				empty_neighbors.append(neighbor_cell)
-		if empty_neighbors.is_empty():
+		if not empty_neighbors.is_empty():
+			empty_neighbors.sort()
+			target_cell = empty_neighbors[0]
+			requires_adjacent_source = anchor_reference == Catalog.CARD_REF_ABILITY_SOURCE
+		elif cell_spec_type == Catalog.CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY:
+			for cell: int in range(state.board.size()):
+				if state.board[cell] == null:
+					target_cell = cell
+					break
+		else:
 			return _no_effect(source_cell)
-		empty_neighbors.sort()
-		target_cell = empty_neighbors[0]
-		requires_adjacent_source = anchor_reference == Catalog.CARD_REF_ABILITY_SOURCE
+		requires_source = anchor_reference == Catalog.CARD_REF_ABILITY_SOURCE
+	elif cell_spec_type == Catalog.CELL_REF_FIRST_EMPTY_ADJACENT_TO_ENEMY:
+		var reference_owner: int = _resolve_owner_reference(
+			StringName(cell_spec.get("owner", &"")),
+			context,
+			source_location
+		)
+		if reference_owner not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+			return _no_effect(source_cell)
+		for cell: int in range(state.board.size()):
+			if state.board[cell] != null:
+				continue
+			for direction: int in range(4):
+				var neighbor_cell: int = Rules.get_neighbor_index(cell, direction)
+				if neighbor_cell < 0 or state.board[neighbor_cell] == null:
+					continue
+				if int((state.board[neighbor_cell] as Dictionary).get("owner", 0)) != reference_owner:
+					target_cell = cell
+					break
+			if target_cell >= 0:
+				break
 	if target_cell < 0 or target_cell >= state.board.size() or state.board[target_cell] != null:
 		return _no_effect(source_cell)
 	var summoned_instance_id: StringName = (
@@ -2299,12 +2446,20 @@ static func _request_summon_card(
 		"card_id": card_id,
 		"instance_id": summoned_instance_id,
 		"existing_hand_instance_id": (
-			existing_instance_id if existing_removed_instance_id == &"" else &""
+			existing_instance_id
+			if existing_removed_instance_id == &"" and existing_discard_instance_id == &""
+			else &""
 		),
 		"existing_removed_instance_id": existing_removed_instance_id,
-		"requires_source": requires_adjacent_source,
+		"existing_discard_instance_id": existing_discard_instance_id,
+		"existing_discard_owner_id": existing_discard_owner_id,
+		"requires_source": requires_source,
 		"requires_adjacent_source": requires_adjacent_source,
-		"reason": &"ability_fresh_copy",
+		"reason": (
+			&"ability_discard_summon"
+			if existing_discard_instance_id != &""
+			else &"ability_fresh_copy"
+		),
 	})
 	var reference_snapshots: Dictionary = context.get("card_reference_snapshots", {})
 	reference_snapshots[Catalog.CARD_REF_LAST_SUMMONED_CARD] = {
@@ -2430,6 +2585,7 @@ static func _exile_subject(
 	if current_subject.is_empty() or initial_zone not in [
 		Catalog.CARD_ZONE_BOARD,
 		Catalog.CARD_ZONE_HAND,
+		Catalog.CARD_ZONE_DISCARD,
 	]:
 		return _no_effect(source_cell)
 	var result: Dictionary = _no_effect(source_cell)
@@ -2493,6 +2649,17 @@ static func _exile_subject(
 			return result
 		hand.remove_at(logical_index)
 		target_card.erase(StateData.HAND_SLOT_INDEX_KEY)
+	elif zone == Catalog.CARD_ZONE_DISCARD:
+		var discard_pile: Array = state.discard_piles.get(current_owner, []) as Array
+		if (
+			logical_index < 0
+			or logical_index >= discard_pile.size()
+			or not discard_pile[logical_index] is Dictionary
+			or StringName((discard_pile[logical_index] as Dictionary).get("instance_id", &""))
+			!= target_instance_id
+		):
+			return result
+		discard_pile.remove_at(logical_index)
 	else:
 		return result
 	var original_owner: int = int(target_card.get("original_owner", 0))

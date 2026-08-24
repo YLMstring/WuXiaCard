@@ -94,6 +94,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   The generic `ACTION_IF`, `CONDITION_SOURCE_OWNER_HAND_EMPTY`, and
   `CARD_REF_ATTACKER_CARD` declarations support these rules without card-ID
   branches.
+- `NianhuaWeiXiao3`–`4` return a row-major snapshot of adjacent cards to each
+  card's original owner. Tier 4 can react from its own discard entry and reuse
+  the same instance in the first enemy-adjacent empty cell. `SanRuDiYu1`–`3`
+  transform exact discarded instances through their stages and dynamically
+  summon the current discard top once per declared action. Every such summon
+  finishes its full entrance and attack chain before the next pile read. Their
+  range-two modifiers are locked; their end-turn self-exile is not.
 - Runtime ki beads are gold for any flip-prevention ability and light gray for
   semantic self-exile, in that priority order. `BaGuaFangWei` suppresses its
   bead absolutely. Discard presentation reuses the existing fade-out.

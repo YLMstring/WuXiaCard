@@ -98,8 +98,18 @@ func _run() -> void:
 	var opponent_hand := duel.get_node("DuelCanvas/OpponentHand") as HBoxContainer
 	var played_card := opponent_hand.get_child(0).get_child(0) as CardView
 	var played_glyph: String = String(played_card.card_data.get("glyph", ""))
+	var memory_play_cell: int = -1
+	for cell: int in range(duel.duel_state.board.size()):
+		if duel.duel_state.board[cell] == null:
+			memory_play_cell = cell
+			break
 	_check(
-		await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false),
+		await duel.debug_commit_move(
+			Rules.OPPONENT_OWNER,
+			0,
+			memory_play_cell,
+			false
+		),
 		"Opponent hand play commits for memory tracking"
 	)
 	var memory_profile: Dictionary = store.load_profile()
