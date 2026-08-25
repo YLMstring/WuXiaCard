@@ -5,6 +5,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -60,8 +61,17 @@ func _run() -> void:
 	_check(not duel.debug_is_replay_ready(), "Active duel replay is not ready")
 	_check(not await duel.debug_start_replay(), "Replay request during active duel is a no-op")
 	_check(StateKey.build(duel.duel_state) == opening_key, "Unavailable replay preserves active duel state")
+	replay_button.pressed.emit()
+	await process_frame
+	_check(
+		not duel.debug_is_inspection_open(),
+		"Replay button is inert before the opponent has played a hand card"
+	)
 
 	var action_count: int = 0
+	var active_inspection_checked: bool = false
+	var player_history_isolated_checked: bool = false
+	var latest_opponent_card_id: StringName = &""
 	while not duel.debug_is_complete() and action_count < 100:
 		var actions: Array[ActionData] = Simulator.get_legal_actions(duel.duel_state)
 		_check(not actions.is_empty(), "Non-terminal replay fixture has a legal action")
@@ -69,6 +79,14 @@ func _run() -> void:
 			break
 		var action: ActionData = actions[0]
 		var owner_id: int = duel.debug_get_active_owner()
+		var played_card_id: StringName = &""
+		if action.action_type == ActionData.TYPE_PLAY:
+			played_card_id = StringName(
+				(duel.duel_state.get_hand(owner_id)[action.source_index] as Dictionary).get(
+					"card_id",
+					&""
+				)
+			)
 		var committed: bool = false
 		if action.action_type == ActionData.TYPE_PLAY:
 			committed = await duel.debug_commit_move(
@@ -87,8 +105,49 @@ func _run() -> void:
 			)
 		_check(committed, "Replay fixture commits legal action %d" % (action_count + 1))
 		action_count += 1
+		if (
+			owner_id == Rules.OPPONENT_OWNER
+			and action.action_type == ActionData.TYPE_PLAY
+			and not active_inspection_checked
+			and not duel.debug_is_complete()
+		):
+			latest_opponent_card_id = played_card_id
+			replay_button.pressed.emit()
+			await process_frame
+			_check(
+				duel.debug_is_inspection_open(),
+				"Replay button inspects the opponent's latest live hand play"
+			)
+			var live_snapshot: Dictionary = duel.card_inspector.get_card_snapshot()
+			_check(
+				StringName(live_snapshot.get("id", &"")) == latest_opponent_card_id
+				and String(live_snapshot.get("description", ""))
+				== String(Catalog.get_definition(latest_opponent_card_id).get("description", "")),
+				"Live replay-button inspection uses the fixed catalog description"
+			)
+			duel.debug_close_inspection()
+			active_inspection_checked = true
+		elif (
+			owner_id == Rules.PLAYER_OWNER
+			and action.action_type == ActionData.TYPE_PLAY
+			and active_inspection_checked
+			and not player_history_isolated_checked
+			and not duel.debug_is_complete()
+		):
+			replay_button.pressed.emit()
+			await process_frame
+			_check(
+				duel.debug_is_inspection_open()
+				and StringName(duel.card_inspector.get_card_snapshot().get("id", &""))
+				== latest_opponent_card_id,
+				"A later player hand play does not replace the opponent inspection history"
+			)
+			duel.debug_close_inspection()
+			player_history_isolated_checked = true
 
 	_check(duel.debug_is_complete(), "Replay fixture reaches a completed duel")
+	_check(active_inspection_checked, "Live fixture includes an opponent hand play to inspect")
+	_check(player_history_isolated_checked, "Live fixture verifies owner-separated hand-play history")
 	_check(duel.debug_is_replay_ready(), "Completed duel produces a ready replay")
 	_check(duel.debug_get_replay_action_count() == action_count, "Every successful real action is recorded exactly once")
 	_check(duel.debug_get_replay_initial_decks() == opening_side_decks, "Replay preserves exact shuffled opening side decks")
@@ -127,8 +186,42 @@ func _run() -> void:
 		wait_frames += 1
 	_check(duel.debug_is_replay_waiting(), "Replay reaches a settled inter-turn delay")
 	_check(_opponent_hand_is_concealed(duel), "Normal-mode opponent hand remains concealed during replay")
-	var inspect_card: CardView = _first_card(duel.get_node("DuelCanvas/PlayerHand"))
-	_check(inspect_card != null and duel.debug_open_inspection(inspect_card.card_data), "A revealed card can be inspected during replay delay")
+	replay_button.pressed.emit()
+	await process_frame
+	_check(
+		not duel.debug_is_inspection_open(),
+		"Replay button does not reveal a future opponent play before it occurs"
+	)
+	var opponent_history_wait_frames: int = 0
+	while (
+		duel.debug_is_replaying()
+		and (
+			not duel.debug_is_replay_waiting()
+			or (duel.duel_state.last_hand_play_by_owner.get(
+				Rules.OPPONENT_OWNER,
+				{}
+			) as Dictionary).is_empty()
+		)
+		and opponent_history_wait_frames < 1500
+	):
+		await process_frame
+		opponent_history_wait_frames += 1
+	var replay_opponent_record: Dictionary = duel.duel_state.last_hand_play_by_owner.get(
+		Rules.OPPONENT_OWNER,
+		{}
+	) as Dictionary
+	_check(
+		duel.debug_is_replay_waiting() and not replay_opponent_record.is_empty(),
+		"Replay reaches an interval after an opponent hand play"
+	)
+	replay_button.pressed.emit()
+	await process_frame
+	_check(
+		duel.debug_is_inspection_open()
+		and StringName(duel.card_inspector.get_card_snapshot().get("id", &""))
+		== StringName(replay_opponent_record.get("card_id", &"")),
+		"Replay button inspects the opponent hand play at the current replay position"
+	)
 	var paused_remaining: float = duel.debug_get_replay_delay_remaining()
 	await create_timer(0.08).timeout
 	_check(

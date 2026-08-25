@@ -197,11 +197,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
-  the exact opening state and replays all successful actions. It is inert while
-  the duel is active or already replaying. The first action is immediate and
-  later actions wait two seconds; inspection pauses that wait. Exit cancels the
-  replay and returns using the original result. Replay does not run AI or alter
-  mastery, enemy memory, profiles, rewards, or progression.
+  the exact opening state and replays all successful actions. During a live
+  duel or between replay actions, it instead opens the ordinary catalog-based
+  inspector for owner 2's latest successful hand play, reusing
+  `last_hand_play_by_owner`; missing history or an action currently being
+  presented leaves it inert. The first replay action is immediate and later
+  actions wait two seconds; inspection pauses that wait. Exit cancels the
+  replay and returns using the original result. Replay and inspection do not
+  run AI or alter revelation, mastery, enemy memory, profiles, rewards, or
+  progression.
 - ZiXiaGong1–4 use the generic `for_each_selected_card` action. The selector
   supports ordered hand/board snapshots, reusable selected-card conditions,
   optional limits, and source-versus-subject execution context.

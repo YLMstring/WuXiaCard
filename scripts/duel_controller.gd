@@ -2714,9 +2714,26 @@ func _vibrate(duration_ms: int) -> void:
 
 
 func _on_replay_pressed() -> void:
-	if turn_state != TurnState.COMPLETE or _is_replaying or not _replay_record.is_ready():
+	if turn_state == TurnState.COMPLETE and not _is_replaying:
+		if _replay_record.is_ready():
+			_start_replay()
 		return
-	_start_replay()
+	_inspect_last_opponent_hand_play()
+
+
+func _inspect_last_opponent_hand_play() -> void:
+	if duel_state == null:
+		return
+	var record_value: Variant = duel_state.last_hand_play_by_owner.get(
+		DuelRules.OPPONENT_OWNER,
+		{}
+	)
+	if not record_value is Dictionary:
+		return
+	var card_id := StringName((record_value as Dictionary).get("card_id", &""))
+	if card_id == &"" or not Catalog.has_card(card_id):
+		return
+	_on_card_inspection_requested(Catalog.get_definition(card_id))
 
 
 func _on_replay_button_down() -> void:

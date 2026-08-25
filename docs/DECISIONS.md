@@ -30,15 +30,21 @@ These decisions were explicitly established during development and should not be
 
 ## Completed-Duel Replay
 
-- Replay is available only after a duel reaches victory or defeat. Pressing it
-  during a live duel or during playback has no gameplay effect.
+- After victory or defeat, pressing the replay button while no replay is
+  running starts playback. During a live duel or between replay actions, the
+  same button opens the ordinary inspector for owner 2's latest successful
+  hand play, using the fixed catalog description stored by card ID. It is
+  inert before that owner has played a hand card and while an action is being
+  presented.
 - The first recorded turn starts immediately; later turns begin after a
   configurable delay that is 2 seconds in production.
 - Replay reuses the authoritative simulator and normal VFX path. It is an
   in-memory presentation and never changes progression, rewards, mastery, or
   remembered enemy cards.
 - Normal mode keeps the opponent hand concealed during replay. Revealed cards
-  may be inspected between actions; inspection pauses the remaining delay.
+  and the latest opponent hand play may be inspected between actions;
+  inspection pauses the remaining delay. This presentation-only inspection
+  does not alter revelation or enemy memory.
 - Real card play and activation are disabled during replay. The return icon
   remains active, cancels playback, and reports the original duel outcome.
 - Playback stops on the recorded final board and may be started repeatedly.

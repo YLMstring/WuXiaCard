@@ -44,9 +44,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 - `test_duel_replay_record.gd` — independent initial/final state snapshots,
   immutable ordered action copies, readiness, access isolation, and reset.
-- `test_duel_replay.gd` — completed-only gating, supplied icon and touch
-  feedback, exact state reconstruction, repeated playback, side-effect
-  suppression, concealment, inspection-paused timing, recovery, and exit.
+- `test_duel_replay.gd` — terminal replay gating, live/current-replay opponent
+  hand-play inspection, supplied icon and touch feedback, exact state
+  reconstruction, repeated playback, side-effect suppression, concealment,
+  inspection-paused timing, recovery, and exit.
 - `test_card_mastery.gd` — exact-ID eligibility, successful-play capture,
   identical-copy qualification, namesake exclusion, and deduplication.
 - `test_zixia_integration.gd` — hand/board mutable-value presentation and
@@ -169,8 +170,9 @@ For replay changes, run `test_duel_replay_record.gd`, `test_duel_replay.gd`,
 `test_card_inspector.gd`, `test_duel_backdrop.gd`, and
 `test_duel_integration.gd`. Manually complete a normal-mode duel, replay it
 twice at the production two-second cadence, confirm the enemy hand stays
-concealed, inspect a revealed card during a gap, verify touch feedback, and
-exit during playback to confirm original-result routing.
+concealed, use the replay button to inspect the latest opponent hand play in
+both live play and a replay gap, verify the gap pauses and touch feedback
+remains, and exit during playback to confirm original-result routing.
 
 For ending changes, run `test_ending_profile.gd`, `test_ending_scene.gd`,
 `test_ending_flow.gd`, and `test_main_flow.gd`. Manually verify both flawless
