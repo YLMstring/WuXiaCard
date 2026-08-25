@@ -30,7 +30,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "华山",
 		"tier": 4,
 		"weapon": "剑法/心法",
-		"description": "华山派擅长强化自身招式，并在场上发动多次攻击。",
+		"description": "华山派擅长强化自身招式，并在场上发动多次攻击。初始门派，无需解锁。",
 		"flavor": "华山派正宗功夫以气功为根基，剑法变化繁复，轻灵机巧，恰如春日双燕飞舞柳间，高低左右，回转如意。",
 	},
 	&"ShaoLinPai": {
@@ -50,7 +50,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "武当山",
 		"tier": 5,
 		"weapon": "拳法/掌法/剑法/轻功",
-		"description": "武当派的能力十分全面，无论是进攻，防守还是对策都游刃有余。",
+		"description": "武当派的能力十分全面，无论是进攻，防守还是对策都游刃有余。击败张三丰解锁。",
 		"flavor": "武当与少林并称武林中的泰山北斗，武功以绵密见长，讲究借力打力，以柔克刚。",
 	},
 	&"TaiShanPai": {
@@ -60,7 +60,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "泰山",
 		"tier": 5,
 		"weapon": "重剑/术数",
-		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。",
+		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。击败天门解锁。",
 		"flavor": "泰山剑招以厚重沉稳见长，规矩谨严而又不失迅疾，犹似行云流水。",
 	},
 	&"HengShanPai": {
@@ -70,7 +70,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "恒山",
 		"tier": 4,
 		"weapon": "轻剑/阵法",
-		"description": "恒山派擅长保护友方，防守反击。",
+		"description": "恒山派擅长保护友方，防守反击。击败定闲解锁。",
 		"flavor": "恒山剑法破绽极少，若言守御之严，仅逊于武当派的太极剑法，但偶尔忽出攻招，却又在太极剑法之上。",
 	},
 	&"tingchao_gu": {
@@ -80,7 +80,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "衡山",
 		"tier": 4,
 		"weapon": "轻剑",
-		"description": "衡山派擅长解除对手的防御，用巧妙的移动和攻击来逆转局势。",
+		"description": "衡山派擅长解除对手的防御，用巧妙的移动和攻击来逆转局势。击败莫大解锁。",
 		"flavor": "衡山剑法灵动难测，变幻无方，一招既占先机，后招绵绵而至，再强的高手也难以抵御。",
 	},
 	&"SongShanPai": {
@@ -90,7 +90,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "嵩山",
 		"tier": 4,
 		"weapon": "剑法/掌法/心法",
-		"description": "嵩山派擅长使用场上的卡牌配合形成点数差距，压制对手。",
+		"description": "嵩山派擅长使用场上的卡牌配合形成点数差距，压制对手。击败左冷禅解锁。",
 		"flavor": "嵩山派武功乃堂堂之阵，正正之师，剑法气象森严，便似千军万马奔驰而来，长枪大戟，黄沙千里。",
 	},
 }
