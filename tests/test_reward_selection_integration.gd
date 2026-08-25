@@ -9,6 +9,7 @@ const SAVE_PATH: String = "user://reward_selection_test.json"
 var _checks: int = 0
 var _failures: int = 0
 var _claim_count: int = 0
+var _claimed_card_id: StringName = &""
 var _back_count: int = 0
 
 
@@ -149,6 +150,7 @@ func _run() -> void:
 	reward.call("_on_library_drag_ended", 0, hand.get_global_rect().get_center())
 	await process_frame
 	_check(_claim_count == 1, "A successful claim emits completion once")
+	_check(_claimed_card_id == reward_ids[0], "A successful claim emits the exact card ID")
 	var claimed_profile: Dictionary = store.load_profile()
 	_check(reward_ids[0] in store.get_unlocked_ids(claimed_profile), "Scene claim unlocks reward")
 	_check(store.get_main_deck_ids(claimed_profile) == deck_before, "Scene claim preserves main deck")
@@ -170,8 +172,9 @@ func _string_names(values: Array) -> Array[StringName]:
 	return result
 
 
-func _on_reward_claimed() -> void:
+func _on_reward_claimed(card_id: StringName) -> void:
 	_claim_count += 1
+	_claimed_card_id = card_id
 
 
 func _on_back_requested() -> void:

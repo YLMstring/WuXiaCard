@@ -7,6 +7,7 @@ const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn"
 const REWARD_SELECTION_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const ENDING_SCENE: PackedScene = preload("res://scenes/ending.tscn")
+const Music = preload("res://scripts/music_director.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
@@ -24,9 +25,13 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 var testing_mode: bool = Settings.TESTING_MODE
 var _current_screen: Control = null
 var _normal_deck_profile_path: String = ""
+var _music_director: Node = null
+var _play_lose_on_next_deck_builder: bool = false
 
 
 func _ready() -> void:
+	_music_director = Music.new() as Node
+	add_child(_music_director)
 	if testing_mode:
 		_prepare_testing_profile()
 	_show_main_menu()
@@ -45,12 +50,17 @@ func debug_get_current_screen() -> Control:
 	return _current_screen
 
 
+func debug_get_music_director() -> Node:
+	return _music_director
+
+
 func _show_main_menu(notice: String = "") -> void:
 	var menu := MAIN_MENU_SCENE.instantiate() as MenuController
 	menu.journey_requested.connect(_on_journey_requested)
 	menu.run_reset_confirmed.connect(_on_run_reset_confirmed)
 	menu.progress_reset_confirmed.connect(_on_progress_reset_confirmed)
 	_replace_screen(menu)
+	_music_director.request_context(Music.CONTEXT_MENU)
 	if not notice.is_empty():
 		menu.show_notice(notice)
 
@@ -64,6 +74,7 @@ func _show_sect_selection() -> void:
 	selector.deck_builder_requested.connect(_on_deck_builder_requested)
 	selector.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(selector)
+	_music_director.request_context(Music.CONTEXT_MENU)
 
 
 func _show_deck_builder() -> void:
@@ -79,6 +90,11 @@ func _show_deck_builder() -> void:
 	builder.duel_requested.connect(_on_duel_requested)
 	builder.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(builder)
+	if _play_lose_on_next_deck_builder:
+		_play_lose_on_next_deck_builder = false
+		_music_director.request_context(Music.CONTEXT_DECK_LOSE)
+	else:
+		_music_director.request_context(Music.CONTEXT_STORY)
 
 
 func _show_reward_selection() -> void:
@@ -94,6 +110,12 @@ func _show_reward_selection() -> void:
 	reward.reward_claimed.connect(_on_reward_claimed)
 	reward.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(reward)
+	var reward_ids: Array[StringName] = store.get_pending_reward_ids(profile)
+	_music_director.request_context(
+		Music.CONTEXT_TERROR
+		if &"KuiHua0" in reward_ids
+		else Music.CONTEXT_STORY
+	)
 
 
 func _show_duel(starting_owner_id: int) -> void:
@@ -114,6 +136,7 @@ func _show_duel(starting_owner_id: int) -> void:
 	duel.opponent_card_played.connect(_on_opponent_card_played)
 	duel.return_requested.connect(_on_duel_return_requested)
 	_replace_screen(duel)
+	_music_director.request_context(Music.CONTEXT_BATTLE)
 
 
 func _show_ending(summary: Dictionary) -> void:
@@ -121,6 +144,11 @@ func _show_ending(summary: Dictionary) -> void:
 	ending.call("present", summary)
 	ending.connect(&"return_requested", _on_ending_return_requested)
 	_replace_screen(ending)
+	_music_director.request_context(
+		Music.CONTEXT_ENDING_BIXIE
+		if bool(summary.get("kuihua0_unlocked_this_run", false))
+		else Music.CONTEXT_ENDING_LONELY
+	)
 
 
 func _replace_screen(next_screen: Control) -> void:
@@ -205,6 +233,10 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 			mastery_candidate_ids = completed_duel.get_mastery_candidate_ids()
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
+	var kuihua0_unlocked_this_run: bool = (
+		not testing_mode
+		and &"KuiHua0" in store.get_unlocked_ids(profile)
+	)
 	var reward_outcome: StringName = (
 		Store.REWARD_VICTORY
 		if outcome == DuelController.OUTCOME_VICTORY
@@ -222,7 +254,11 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		_show_deck_builder()
 		return
 	if bool(duel_result.get("completed", false)):
-		_show_ending(duel_result.get("ending_summary", {}) as Dictionary)
+		var ending_summary: Dictionary = (
+			duel_result.get("ending_summary", {}) as Dictionary
+		).duplicate(true)
+		ending_summary["kuihua0_unlocked_this_run"] = kuihua0_unlocked_this_run
+		_show_ending(ending_summary)
 		return
 	profile = duel_result.get("profile", profile)
 	var offer_result: Dictionary = store.create_reward_offer_and_save(
@@ -239,7 +275,9 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		_show_deck_builder()
 
 
-func _on_reward_claimed() -> void:
+func _on_reward_claimed(card_id: StringName) -> void:
+	if card_id == &"KuiHua0":
+		_play_lose_on_next_deck_builder = true
 	_show_deck_builder()
 
 

@@ -61,6 +61,8 @@ $testScripts = @(
     "test_sect_selection_integration.gd",
     "test_main_menu.gd",
     "test_ending_scene.gd",
+	"test_music_director.gd",
+	"test_music_flow.gd",
     "test_main_flow.gd",
     "test_ending_flow.gd",
     "test_card_inspector.gd",

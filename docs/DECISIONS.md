@@ -587,3 +587,25 @@ respectively, in row-major order. The source itself is eligible.
   perfect runtime copy of the discarded snapshot. No hand means no prevention;
   failed ki payment stops only the copy, while a full hand after discard chains
   still spends the ki and makes the add action no-effect.
+
+## 场景背景音乐
+
+- Background music is owned by one persistent presentation node under
+  `MainFlowController`; replacing a screen must not destroy or recreate the
+  player. Directly running a child scene may remain silent.
+- Main menu and sect selection share one continuing `menu1`–`menu3` pool.
+  Deck building and ordinary rewards share one continuing pool in which every
+  `village` track has weight two and every `story` track has weight one.
+  Immediate random repeats are allowed.
+- Battles use `battle1`–`battle6`. Ordinary completed runs use `lonely`; a
+  normal-mode run that owned `KuiHua0` before completion reset uses `bixie`.
+  Testing-mode temporary full unlocks never qualify.
+- Any reward offer containing `KuiHua0` overrides the normal reward pool with
+  `terror`. Successfully choosing that exact card makes only the immediately
+  following deck entry play `lose`; entering that screen consumes the override
+  even if the player leaves before the track ends. Natural `lose` completion
+  returns to the ordinary deck pool.
+- A scene-triggered track replacement fades out before the new track starts.
+  Context requests are generation-gated so rapid navigation leaves only the
+  latest request active. Natural track completion reselects from the current
+  context.

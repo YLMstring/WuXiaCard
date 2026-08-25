@@ -279,6 +279,8 @@ func _run() -> void:
 	)
 	failing_flow.queue_free()
 	await process_frame
+	await create_timer(0.1).timeout
+	await process_frame
 
 	_cleanup()
 	_finish()

@@ -31,6 +31,13 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   lock, exact final stop, and single post-roll return.
 - `test_ending_flow.gd` — threshold-one final-victory routing, reward bypass,
   persistent completion, early-tap gating, and fresh-journey navigation.
+- `test_music_director.gd` — fixed-resource loading, scanned per-track weights,
+  pool continuation, special tracks, natural `lose` expiry, fade-before-start
+  ordering, and latest-request-wins cancellation.
+- `test_music_flow.gd` — production screen-to-context routing, bidirectional
+  menu/sect and deck/reward continuation, exact reward-ID propagation,
+  `terror`/one-shot `lose`, battle selection, `bixie`, and testing-mode
+  `lonely` exclusion.
 - `test_duel_backdrop.gd` — fixed 9:16 duel canvas and decorative overflow layout.
 - `test_duel_rules.gd` — board geometry and baseline capture helpers.
 - `test_duel_opening_setup.gd` — the exact 12-pair Bagua layout space, seeded
@@ -157,6 +164,14 @@ For deck-builder UI changes, also run the profile, library-grid, and
 deck-builder integration suites. Manually verify tap-to-inspect,
 hold-then-drag exchange, swipe scrolling, invalid drops, and normal/testing
 opponent concealment.
+
+For background-music changes, run `test_music_director.gd`,
+`test_music_flow.gd`, `test_reward_selection_integration.gd`,
+`test_main_flow.gd`, and `test_ending_flow.gd`. Then listen through the
+production main scene: menu/sect continuation, deck/ordinary-reward
+continuation, battle replacement, `terror`, one-time `lose`, ordinary
+`lonely`, and qualifying `bixie`. Confirm a mid-track scene switch fades rather
+than cutting abruptly.
 
 For mastery changes, run `test_card_mastery.gd`, `test_deck_profile_store.gd`,
 `test_ending_profile.gd`, `test_deck_builder_integration.gd`,

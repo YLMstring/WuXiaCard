@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -188,6 +188,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
   smaller score stays fixed beneath the title while the prose rolls upward in
   a clipped clear-sky viewport. Early taps do nothing; after the last line is
   fully visible, the first tap returns to the normal menu.
+- `MainFlowController` owns one persistent presentation-only `MusicDirector`.
+  Menu/sect share a continuing `menu1`–`menu3` pool; deck building and normal
+  rewards share a continuing per-track weighted `village`/`story` pool;
+  battles use `battle1`–`battle6`. A reward containing `KuiHua0` uses
+  `terror`, claiming it consumes a one-entry `lose` override for the next deck
+  screen, and completed runs use `bixie` only when normal-mode run unlocks
+  included `KuiHua0` before progression reset. All other endings use `lonely`.
+  Scene-driven replacements fade out the old track, and natural completion
+  reselects from the current context.
 - Hands are capped at five and always render five fixed physical slots. Runtime
   hand cards carry `hand_slot_index`; automatic "leftmost" selection follows
   physical slot order rather than compact hand-array order. New draws and

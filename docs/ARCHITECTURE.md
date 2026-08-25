@@ -128,6 +128,11 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 
 ### Presentation
 
+- `music_director.gd` — one persistent `MainFlowController` child that owns
+  background audio selection, weighted pools, same-pool continuation,
+  natural-finish reselection, cancellable fade transitions, and the one-shot
+  post-`KuiHua0` deck override. It is presentation-only and never enters duel
+  state, replay, search, or persistence.
 - `duel_controller.gd` — creates the encounter, translates drag gestures into
   actions, calls the simulator, and presents transition events. Logical event
   order stays sequential; visible power changes sharing one transition batch
@@ -252,6 +257,16 @@ a constant speed behind a clipping Control. The roll stops when its last line
 is fully visible; release input is consumed until then. Its single return
 signal restores the normal main menu, where the now-inactive run routes the
 next journey to sect selection.
+
+`MainFlowController` also maps screens to music contexts. Menu and sect
+selection submit the same context; deck building and ordinary rewards submit
+the same weighted context, so those pairs preserve the current stream and
+playback position. Special rewards and endings submit single-track contexts.
+`RewardSelectionController.reward_claimed(card_id)` reports the exact selected
+ID so the flow can consume `lose` on the immediately following deck entry.
+Before final-run persistence clears card unlocks, the flow snapshots whether
+normal mode currently owns `KuiHua0` and decorates the immutable ending summary
+for `bixie` selection; testing-mode temporary unlocks are excluded.
 
 At duel construction, each side deck is derived independently from its owner's
 actual main deck. Every non-`江湖` main card raises a tier threshold for its

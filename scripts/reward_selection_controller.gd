@@ -2,7 +2,7 @@ class_name RewardSelectionController
 extends Control
 
 signal back_requested
-signal reward_claimed
+signal reward_claimed(card_id: StringName)
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -267,16 +267,17 @@ func _on_library_drag_ended(
 func _claim_reward(reward_index: int) -> bool:
 	if reward_index < 0 or reward_index >= _reward_ids.size():
 		return false
+	var claimed_card_id: StringName = _reward_ids[reward_index]
 	var result: Dictionary = _profile_store.claim_pending_reward_and_save(
 		profile,
-		_reward_ids[reward_index]
+		claimed_card_id
 	)
 	if not bool(result.get("ok", false)):
 		status_label.text = "保存失败，请重试"
 		return false
 	profile = result.get("profile", profile)
 	_reward_ids.clear()
-	reward_claimed.emit()
+	reward_claimed.emit(claimed_card_id)
 	return true
 
 
