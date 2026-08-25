@@ -31,8 +31,8 @@ const LOSE_TRACK_PATH: String = "res://music/lose.mp3"
 const LONELY_TRACK_PATH: String = "res://music/lonely.mp3"
 const BIXIE_TRACK_PATH: String = "res://music/bixie.mp3"
 
-@export_range(0.0, 5.0, 0.01) var fade_out_seconds: float = 0.6
-@export_range(0.0, 5.0, 0.01) var fade_in_seconds: float = 0.08
+@export_range(0.0, 5.0, 0.01) var fade_out_seconds: float = 3.0
+@export_range(0.0, 5.0, 0.01) var fade_in_seconds: float = 0.05
 @export_range(-80.0, 12.0, 0.1) var playback_volume_db: float = 0.0
 @export_range(-80.0, 0.0, 0.1) var silent_volume_db: float = -60.0
 
