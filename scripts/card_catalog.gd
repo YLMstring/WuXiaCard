@@ -4333,7 +4333,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 8, 6, 2],
+		"powers": [7, 8, 6, 3],
 		"abilities": [],
 	},
 	&"YiJianLuo9Yan2": {
@@ -4345,7 +4345,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 8, 6, 2],
+		"powers": [7, 8, 6, 3],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_AFTER_ATTACK,
@@ -4374,7 +4374,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "攻击后，若本次攻击中有且只有一名敌方被翻面，我与其交换位置，然后发起攻击。",
 		"flavor": "衡山派三十六路回风落雁剑中的第十七招，莫大先生曾用此式一剑削断七只茶杯，而茶杯一只不倒。",
-		"powers": [6, 8, 6, 2],
+		"powers": [7, 8, 6, 3],
 		"abilities": [{
 			"triggers": [{
 				"event": TRIGGER_CARD_AFTER_ATTACK,
