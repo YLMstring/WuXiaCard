@@ -2187,7 +2187,7 @@ static func _add_card_to_hand(
 	if hand_slot_index < 0:
 		return _no_effect(source_cell)
 	hand.append(added_card)
-	return _applied(source_cell, [{
+	var add_event: Dictionary = {
 		"type": &"card_added_to_hand",
 		"source_cell": _get_location_cell(source),
 		"source_instance_id": source_instance_id,
@@ -2196,8 +2196,11 @@ static func _add_card_to_hand(
 		"instance_id": instance_id,
 		"logical_hand_index": hand.size() - 1,
 		"hand_slot_index": hand_slot_index,
-		"card": added_card.duplicate(true),
-	}])
+	}
+	return _applied(
+		source_cell,
+		_public_hand_addition_events(added_card, recipient_owner, add_event)
+	)
 
 
 static func _resolve_add_card_to_hand_id(
@@ -2433,7 +2436,7 @@ static func _return_card_to_hand(
 			discard_pile.insert(discard_index, returned_same_card)
 			return _no_effect(source_current_cell)
 		hand.append(returned_same_card)
-		return _applied(source_current_cell, [{
+		var same_instance_return_event: Dictionary = {
 			"type": &"card_returned_to_hand",
 			"source_cell": source_current_cell,
 			"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
@@ -2444,8 +2447,15 @@ static func _return_card_to_hand(
 			"instance_id": instance_id,
 			"logical_hand_index": hand.size() - 1,
 			"hand_slot_index": returned_hand_slot_index,
-			"card": returned_same_card.duplicate(true),
-		}])
+		}
+		return _applied(
+			source_current_cell,
+			_public_hand_addition_events(
+				returned_same_card,
+				recipient_owner,
+				same_instance_return_event
+			)
+		)
 	if not Catalog.has_card(card_id):
 		return _no_effect(source_cell)
 	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
@@ -2463,7 +2473,7 @@ static func _return_card_to_hand(
 		state.board[target_cell] = {"card": old_card, "owner": int(subject.get("owner_id", 0))}
 		return _no_effect(source_current_cell)
 	hand.append(returned_card)
-	return _applied(source_current_cell, [{
+	var fresh_return_event: Dictionary = {
 		"type": &"card_returned_to_hand",
 		"source_cell": source_current_cell,
 		"source_instance_id": StringName(context.get("ability_source_instance_id", &"")),
@@ -2474,8 +2484,42 @@ static func _return_card_to_hand(
 		"instance_id": new_instance_id,
 		"logical_hand_index": hand.size() - 1,
 		"hand_slot_index": fresh_hand_slot_index,
-		"card": returned_card.duplicate(true),
-	}])
+	}
+	return _applied(
+		source_current_cell,
+		_public_hand_addition_events(returned_card, recipient_owner, fresh_return_event)
+	)
+
+
+static func _public_hand_addition_events(
+	card: Dictionary,
+	hand_owner_id: int,
+	hand_addition_event: Dictionary
+) -> Array[Dictionary]:
+	var observer_owner_id: int = (
+		Rules.OPPONENT_OWNER
+		if hand_owner_id == Rules.PLAYER_OWNER
+		else Rules.PLAYER_OWNER
+	)
+	var newly_revealed: bool = Revelation.reveal_to(card, observer_owner_id)
+	hand_addition_event["card"] = card.duplicate(true)
+	var events: Array[Dictionary] = [hand_addition_event]
+	if newly_revealed:
+		events.append({
+			"type": &"card_revealed",
+			"source_cell": int(hand_addition_event.get("source_cell", -1)),
+			"source_instance_id": StringName(
+				hand_addition_event.get("source_instance_id", &"")
+			),
+			"owner_id": hand_owner_id,
+			"observer_owner_id": observer_owner_id,
+			"card_id": StringName(card.get("card_id", &"")),
+			"instance_id": StringName(card.get("instance_id", &"")),
+			"logical_hand_index": int(
+				hand_addition_event.get("logical_hand_index", -1)
+			),
+		})
+	return events
 
 
 static func _request_summon_card(

@@ -8,6 +8,7 @@ const Search = preload("res://scripts/duel_search.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
@@ -587,8 +588,14 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 5, "Playing from a full hand draws only enough to return to five")
 	_check((next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "Hand cap leaves the second side-deck card undrawn")
 	var draw_event: Dictionary = _first_event(transition.get("events", []), &"card_drawn")
+	var normally_drawn: Dictionary = next_state.get_hand(Rules.PLAYER_OWNER)[4]
 	_check(StringName(draw_event.get("card_id", &"")) == &"CangSongYingKe1", "Draw event identifies the top side-deck card")
 	_check(StringName(draw_event.get("instance_id", &"")) == &"side_1_top", "Draw event carries stable instance identity")
+	_check(
+		not Revelation.is_revealed_to(normally_drawn, Rules.OPPONENT_OWNER)
+		and _count_events(transition.get("events", []), &"card_revealed") == 0,
+		"A normal draw remains concealed from the drawing owner's opponent"
+	)
 	_check(int(draw_event.get("logical_hand_index", -1)) == 4, "Draw event reports its resulting logical hand index")
 	_check(
 		int(draw_event.get("hand_slot_index", -1)) == 0

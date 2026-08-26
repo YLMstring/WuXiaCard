@@ -443,6 +443,11 @@ respectively, in row-major order. The source itself is eligible.
 - Revelation is stored per exact runtime instance in
   `revealed_to_owner_ids`; testing mode and AI perfect information never add to
   it. A revealed card remains revealed for the duel.
+- Every card placed into a hand by an effect other than normal drawing is
+  permanently revealed to that hand owner's opponent. This includes created
+  cards, copies, fresh board returns, and preserved-instance discard returns.
+  The addition/return event precedes one `card_revealed` event when the
+  instance was not already public. Failed full-hand additions reveal nothing.
 - LaiHe1 reveals the current enemy hand. LaiHe3 also records a permanent
   audience for later enemy draws, which survives the source flipping or
   leaving play. Each successful draw emits `card_drawn` before

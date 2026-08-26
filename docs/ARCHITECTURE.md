@@ -327,8 +327,16 @@ memory resets for the next move.
 
 `card_added_to_hand` carries the fresh card payload, stable instance ID,
 relative recipient owner, and logical hand index. The controller presents it
-through the same silent Ink Summon path as a draw while preserving opponent
-concealment. It does not imply that any side-deck card was removed.
+through the same silent Ink Summon path as a draw. Unlike a normal draw, every
+effect-created hand addition is revealed permanently to the recipient's
+opponent before this event snapshot is emitted. It does not imply that any
+side-deck card was removed.
+
+`card_returned_to_hand` follows the same public-information rule for both fresh
+returns from the board and preserved-instance returns from discard. A newly
+public non-draw addition emits `card_revealed` immediately after its addition
+or return event. Normal `card_drawn` concealment remains unchanged unless an
+independent reveal effect applies.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 

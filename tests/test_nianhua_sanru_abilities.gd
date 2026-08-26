@@ -3,6 +3,7 @@ extends SceneTree
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -183,11 +184,24 @@ func _test_sanru_discard_transforms_and_returns_same_instance() -> void:
 		"Transformation preserves original owner and exact instance identity"
 	)
 	_check(
+		Revelation.is_revealed_to(transformed, Rules.OPPONENT_OWNER),
+		"The same instance returned from discard becomes permanently visible to the opponent"
+	)
+	_check(
 		_event_types_in_order(
 			result.get("events", []),
-			[&"card_discarded", &"card_transformed", &"card_returned_to_hand"]
+			[&"card_discarded", &"card_transformed", &"card_returned_to_hand", &"card_revealed"]
 		),
-		"Discard, transform, and exact-instance return emit ordered pure-data events"
+		"Discard, transform, exact-instance return, and public reveal emit ordered pure-data events"
+	)
+	var second_result: Dictionary = _discard_selected_hand_card(
+		state, 8, &"san_transform_source", &"san_transform"
+	)
+	_check(
+		StringName(_card_in_hand(state, Rules.PLAYER_OWNER, &"san_transform").get("card_id", &""))
+		== &"SanRuDiYu3"
+		and _event_count(second_result.get("events", []), &"card_revealed") == 0,
+		"Returning an already-public exact instance does not emit a duplicate reveal"
 	)
 
 

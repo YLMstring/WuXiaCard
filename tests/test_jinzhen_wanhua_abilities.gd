@@ -3,6 +3,7 @@ extends SceneTree
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -97,7 +98,16 @@ func _test_jinzhen_returns_first_matching_card_as_fresh_copy() -> void:
 		_check(StringName(returned.get("instance_id", &"")) != &"generated_TianChangZhang3_1", "Returned card receives a fresh instance ID")
 		_check(returned.get("powers", []) == definition.get("powers", []) and int(returned.get("ki", -1)) == 0, "Returned card resets to catalog powers and ki")
 		_check(int(returned.get("original_owner", 0)) == Rules.PLAYER_OWNER, "Returned fresh copy belongs originally to the source owner")
+		_check(
+			Revelation.is_revealed_to(returned, Rules.OPPONENT_OWNER),
+			"A fresh board return is permanently visible to the recipient's opponent"
+		)
 	_check(_event_count(transition.get("events", []), &"card_returned_to_hand") == 1, "Return emits one ordered presentation event")
+	_check(
+		_event_types(transition.get("events", [])).find(&"card_revealed")
+		== _event_types(transition.get("events", [])).find(&"card_returned_to_hand") + 1,
+		"A fresh return emits its reveal immediately after entering the hand"
+	)
 	_check((next_state.removed_cards[Rules.PLAYER_OWNER] as Array).is_empty(), "Successful return does not exile the old instance")
 
 

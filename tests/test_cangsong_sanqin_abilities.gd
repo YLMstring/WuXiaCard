@@ -4,6 +4,7 @@ const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -26,7 +27,7 @@ func _run() -> void:
 	_test_non_attack_flip_uses_before_and_after_events()
 	_test_sanqin_three_attacks_in_row_major_order()
 	_test_sanqin_spends_without_attack_targets()
-	await _test_opponent_hand_addition_stays_concealed()
+	await _test_opponent_hand_addition_is_revealed()
 
 	if _failures == 0:
 		print("CANGSONG_SANQIN_TESTS_PASSED checks=%d" % _checks)
@@ -113,12 +114,22 @@ func _test_generic_add_card_to_hand() -> void:
 		"Generic add-card action can add to the source owner's opponent"
 	)
 	var added: Dictionary = opponent_hand[0]
+	var add_events: Array = result.get("events", [])
 	_check(
 		StringName(added.get("card_id", &"")) == &"CangSongYingKe3"
 		and int(added.get("original_owner", 0)) == Rules.OPPONENT_OWNER
 		and StringName(added.get("instance_id", &""))
 		== &"generated_CangSongYingKe3_1",
 		"Added card is a deterministic fresh catalog instance"
+	)
+	_check(
+		Revelation.is_revealed_to(added, Rules.PLAYER_OWNER)
+		and _event_types(add_events) == [&"card_added_to_hand", &"card_revealed"]
+		and Revelation.is_revealed_to(
+			(_first_event(add_events, &"card_added_to_hand").get("card", {}) as Dictionary),
+			Rules.PLAYER_OWNER
+		),
+		"A non-draw hand addition is public to the recipient's opponent before its event snapshot"
 	)
 	var copied_state: State = state.duplicate_state()
 	var second_result: Dictionary = Executor.execute_actions(
@@ -185,6 +196,10 @@ func _test_cangsong_copies_before_attack_flip() -> void:
 		and (flipped_card.get("active_abilities", []) as Array).is_empty(),
 		"The gained card is fresh while the flipped source spends ki and loses ability"
 	)
+	_check(
+		Revelation.is_revealed_to(copied_card, Rules.PLAYER_OWNER),
+		"CangSong's enemy-hand copy is permanently visible to the player"
+	)
 	var event_types: Array[StringName] = _event_types(transition.get("events", []))
 	_check(
 		event_types.find(&"ki_changed")
@@ -228,6 +243,10 @@ func _test_cangsong_spends_with_full_hand() -> void:
 		and int(flipped.get("ki", -1)) == 0
 		and &"card_added_to_hand" not in _event_types(transition.get("events", [])),
 		"A full hand prevents the copy but does not refund CangSong's ki"
+	)
+	_check(
+		&"card_revealed" not in _event_types(transition.get("events", [])),
+		"A failed full-hand addition emits no reveal"
 	)
 
 
@@ -394,7 +413,7 @@ func _test_sanqin_spends_without_attack_targets() -> void:
 	)
 
 
-func _test_opponent_hand_addition_stays_concealed() -> void:
+func _test_opponent_hand_addition_is_revealed() -> void:
 	_cleanup_test_profile()
 	var duel: Node = DUEL_SCENE.instantiate()
 	duel.set("deck_profile_path", TEST_PROFILE_PATH)
@@ -421,6 +440,7 @@ func _test_opponent_hand_addition_stays_concealed() -> void:
 		Rules.OPPONENT_OWNER,
 		&"present_added"
 	)
+	Revelation.reveal_to(added, Rules.PLAYER_OWNER)
 	opponent_hand.append(added)
 	await duel.call(
 		"_present_transition_events",
@@ -439,9 +459,16 @@ func _test_opponent_hand_addition_stays_concealed() -> void:
 	var trace: Array[StringName] = duel.call("debug_get_presentation_trace")
 	_check(
 		added_view != null
-		and bool(added_view.call("is_face_down"))
+		and not bool(added_view.call("is_face_down"))
 		and &"card_added_to_hand" in trace,
-		"Production hand-addition presentation keeps a normal opponent card concealed"
+		"Production hand-addition presentation immediately shows a public opponent card"
+	)
+	duel.call("_rebuild_views_from_state", state.duplicate_state())
+	await process_frame
+	added_view = duel.call("_get_card_view_by_instance", &"present_added")
+	_check(
+		added_view != null and not bool(added_view.call("is_face_down")),
+		"Rebuilding views preserves public non-draw opponent hand additions"
 	)
 	duel.queue_free()
 	await process_frame
@@ -461,6 +488,16 @@ func _event_types(events: Array) -> Array[StringName]:
 		if event_value is Dictionary:
 			types.append(StringName((event_value as Dictionary).get("type", &"")))
 	return types
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_value as Dictionary
+	return {}
 
 
 func _check(condition: bool, message: String) -> void:

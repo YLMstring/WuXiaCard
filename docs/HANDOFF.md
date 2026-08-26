@@ -212,6 +212,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   returns fill the leftmost empty slot. Only discard closes its gap: every card
   physically to its right shifts left one slot in one simultaneous presentation
   batch. Normal play and hand exile/removal leave all other slots unchanged.
+- Normal draws retain the existing concealment rules. Every other successful
+  effect-driven hand addition is permanently public to the recipient's
+  opponent, including created cards, copies, fresh board returns, and the same
+  instance returning from discard. Newly public instances emit
+  `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
