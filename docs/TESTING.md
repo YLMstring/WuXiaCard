@@ -31,7 +31,7 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   lock, exact final stop, and single post-roll return.
 - `test_ending_flow.gd` — threshold-one final-victory routing, reward bypass,
   persistent completion, early-tap gating, and fresh-journey navigation.
-- `test_music_director.gd` — fixed-resource loading, scanned per-track weights,
+- `test_music_director.gd` — fixed-resource loading, exact fixed per-track weights,
   pool continuation, special tracks, natural `lose` expiry, fade-before-start
   ordering, and latest-request-wins cancellation.
 - `test_music_flow.gd` — production screen-to-context routing, bidirectional

@@ -190,7 +190,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   fully visible, the first tap returns to the normal menu.
 - `MainFlowController` owns one persistent presentation-only `MusicDirector`.
   Menu/sect share a continuing `menu1`–`menu3` pool; deck building and normal
-  rewards share a continuing per-track weighted `village`/`story` pool;
+  rewards share a continuing fixed, per-track weighted `village`/`story` pool;
   battles use `battle1`–`battle6`. A reward containing `KuiHua0` uses
   `terror`, claiming it consumes a one-entry `lose` override for the next deck
   screen, and completed runs use `bixie` only when normal-mode run unlocks

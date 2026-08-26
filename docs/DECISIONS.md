@@ -594,9 +594,10 @@ respectively, in row-major order. The source itself is eligible.
   `MainFlowController`; replacing a screen must not destroy or recreate the
   player. Directly running a child scene may remain silent.
 - Main menu and sect selection share one continuing `menu1`–`menu3` pool.
-  Deck building and ordinary rewards share one continuing pool in which every
-  `village` track has weight two and every `story` track has weight one.
-  Immediate random repeats are allowed.
+  Deck building and ordinary rewards share one continuing, explicitly declared
+  pool containing seven `village` tracks at weight two and four `story` tracks
+  at weight one. New files never enter the pool implicitly. Immediate random
+  repeats are allowed.
 - Battles use `battle1`–`battle6`. Ordinary completed runs use `lonely`; a
   normal-mode run that owned `KuiHua0` before completion reset uses `bixie`.
   Testing-mode temporary full unlocks never qualify.

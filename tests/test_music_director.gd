@@ -1,6 +1,26 @@
 extends SceneTree
 
 const Music = preload("res://scripts/music_director.gd")
+const EXPECTED_STORY_TRACK_PATHS: Array[String] = [
+	"res://music/funny-village.mp3",
+	"res://music/funny-village.mp3",
+	"res://music/happy-village.mp3",
+	"res://music/happy-village.mp3",
+	"res://music/lively-village.mp3",
+	"res://music/lively-village.mp3",
+	"res://music/monk-village.mp3",
+	"res://music/monk-village.mp3",
+	"res://music/monk2-village.mp3",
+	"res://music/monk2-village.mp3",
+	"res://music/peace-village.mp3",
+	"res://music/peace-village.mp3",
+	"res://music/virtue-village.mp3",
+	"res://music/virtue-village.mp3",
+	"res://music/exciting-story.mp3",
+	"res://music/happy-story.mp3",
+	"res://music/sad-story.mp3",
+	"res://music/sadder-story.mp3",
+]
 
 var _checks: int = 0
 var _failures: int = 0
@@ -22,25 +42,19 @@ func _run() -> void:
 		_check(ResourceLoader.load(path) is AudioStream, "Fixed music loads: %s" % path)
 
 	var weighted_story_pool: Array[String] = director.debug_get_story_pool_entries()
+	_check(
+		weighted_story_pool == EXPECTED_STORY_TRACK_PATHS,
+		"Story pool uses the exact fixed weighted track list"
+	)
 	var unique_story_paths: Dictionary = {}
 	for path: String in weighted_story_pool:
 		unique_story_paths[path] = true
-	var expected_unique_count: int = 0
-	var expected_total_weight: int = 0
-	for filename: String in DirAccess.get_files_at("res://music"):
-		var lowercase_name: String = filename.to_lower()
-		if lowercase_name.get_extension() not in ["mp3", "ogg", "wav"]:
-			continue
-		if "village" in lowercase_name:
-			expected_unique_count += 1
-			expected_total_weight += 2
-		elif "story" in lowercase_name:
-			expected_unique_count += 1
-			expected_total_weight += 1
-	_check(weighted_story_pool.size() == expected_total_weight, "Story pool has the scanned total weight")
-	_check(unique_story_paths.size() == expected_unique_count, "Story pool contains every village/story track")
+	_check(weighted_story_pool.size() == 18, "Story pool has 18 fixed weighted entries")
+	_check(unique_story_paths.size() == 11, "Story pool contains the 11 fixed tracks")
 	for path_value: Variant in unique_story_paths.keys():
 		var path: String = String(path_value)
+		_check(ResourceLoader.exists(path), "Fixed story music exists: %s" % path)
+		_check(ResourceLoader.load(path) is AudioStream, "Fixed story music loads: %s" % path)
 		var expected_count: int = 2 if "village" in path.get_file().to_lower() else 1
 		_check(
 			weighted_story_pool.count(path) == expected_count,
@@ -125,6 +139,8 @@ func _run() -> void:
 	)
 
 	director.queue_free()
+	await process_frame
+	await create_timer(0.1).timeout
 	await process_frame
 	_finish()
 

@@ -11,8 +11,6 @@ const CONTEXT_DECK_LOSE: StringName = &"deck_lose"
 const CONTEXT_ENDING_LONELY: StringName = &"ending_lonely"
 const CONTEXT_ENDING_BIXIE: StringName = &"ending_bixie"
 
-const MUSIC_DIRECTORY: String = "res://music"
-const AUDIO_EXTENSIONS: Array[String] = ["mp3", "ogg", "wav"]
 const MENU_TRACK_PATHS: Array[String] = [
 	"res://music/menu1.mp3",
 	"res://music/menu2.mp3",
@@ -26,6 +24,26 @@ const BATTLE_TRACK_PATHS: Array[String] = [
 	"res://music/battle5.mp3",
 	"res://music/battle6.mp3",
 ]
+const STORY_TRACK_PATHS: Array[String] = [
+	"res://music/funny-village.mp3",
+	"res://music/funny-village.mp3",
+	"res://music/happy-village.mp3",
+	"res://music/happy-village.mp3",
+	"res://music/lively-village.mp3",
+	"res://music/lively-village.mp3",
+	"res://music/monk-village.mp3",
+	"res://music/monk-village.mp3",
+	"res://music/monk2-village.mp3",
+	"res://music/monk2-village.mp3",
+	"res://music/peace-village.mp3",
+	"res://music/peace-village.mp3",
+	"res://music/virtue-village.mp3",
+	"res://music/virtue-village.mp3",
+	"res://music/exciting-story.mp3",
+	"res://music/happy-story.mp3",
+	"res://music/sad-story.mp3",
+	"res://music/sadder-story.mp3",
+]
 const TERROR_TRACK_PATH: String = "res://music/terror.mp3"
 const LOSE_TRACK_PATH: String = "res://music/lose.mp3"
 const LONELY_TRACK_PATH: String = "res://music/lonely.mp3"
@@ -38,7 +56,6 @@ const BIXIE_TRACK_PATH: String = "res://music/bixie.mp3"
 
 var _player: AudioStreamPlayer = null
 var _random := RandomNumberGenerator.new()
-var _story_pool_entries: Array[String] = []
 var _current_context: StringName = &""
 var _current_track_path: String = ""
 var _request_generation: int = 0
@@ -50,7 +67,6 @@ var _transition_trace: Array[String] = []
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_random.randomize()
-	_story_pool_entries = _scan_story_pool()
 	_ensure_player()
 
 
@@ -91,7 +107,7 @@ func debug_get_current_track_path() -> String:
 
 
 func debug_get_story_pool_entries() -> Array[String]:
-	return _story_pool_entries.duplicate()
+	return STORY_TRACK_PATHS.duplicate()
 
 
 func debug_get_fixed_track_paths() -> Array[String]:
@@ -147,37 +163,13 @@ func _ensure_player() -> void:
 	_player.finished.connect(_on_track_finished)
 
 
-func _scan_story_pool() -> Array[String]:
-	var weighted_entries: Array[String] = []
-	var filenames: PackedStringArray = DirAccess.get_files_at(MUSIC_DIRECTORY)
-	filenames.sort()
-	for filename: String in filenames:
-		var lowercase_name: String = filename.to_lower()
-		if lowercase_name.get_extension() not in AUDIO_EXTENSIONS:
-			continue
-		var weight: int = 0
-		if "village" in lowercase_name:
-			weight = 2
-		elif "story" in lowercase_name:
-			weight = 1
-		if weight == 0:
-			continue
-		var path: String = MUSIC_DIRECTORY.path_join(filename)
-		if not ResourceLoader.exists(path):
-			push_warning("Music track is unavailable: %s" % path)
-			continue
-		for copy_index: int in range(weight):
-			weighted_entries.append(path)
-	return weighted_entries
-
-
 func _get_context_entries(context: StringName) -> Array[String]:
 	var entries: Array[String] = []
 	match context:
 		CONTEXT_MENU:
 			entries.append_array(MENU_TRACK_PATHS)
 		CONTEXT_STORY:
-			entries.append_array(_story_pool_entries)
+			entries.append_array(STORY_TRACK_PATHS)
 		CONTEXT_BATTLE:
 			entries.append_array(BATTLE_TRACK_PATHS)
 		CONTEXT_TERROR:

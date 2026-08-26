@@ -129,7 +129,7 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 ### Presentation
 
 - `music_director.gd` — one persistent `MainFlowController` child that owns
-  background audio selection, weighted pools, same-pool continuation,
+  background audio selection, explicitly declared weighted pools, same-pool continuation,
   natural-finish reselection, cancellable fade transitions, and the one-shot
   post-`KuiHua0` deck override. It is presentation-only and never enters duel
   state, replay, search, or persistence.
