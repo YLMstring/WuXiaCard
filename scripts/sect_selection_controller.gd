@@ -27,7 +27,11 @@ const DIFFICULTY_NUMERALS: Array[String] = [
 	"八",
 	"九",
 ]
-const DIFFICULTY_BUTTON_SIZE: Vector2 = Vector2(42.0, 68.0)
+const DIFFICULTY_BUTTON_SIZE: Vector2 = Vector2(21.0, 34.0)
+const DIFFICULTY_BUTTON_CENTER_GAP: float = 21.0
+const DIFFICULTY_BUTTON_PRESSED_SCALE: Vector2 = Vector2(0.92, 0.92)
+const DIFFICULTY_BUTTON_PRESSED_ALPHA: float = 0.62
+const DIFFICULTY_BUTTON_RELEASE_DURATION: float = 0.14
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "江湖门派"
@@ -47,6 +51,7 @@ var _scroll_before_inspection: float = 0.0
 var _drag_source_index: int = -1
 var _drag_proxy: CardView = null
 var _drag_proxy_offset: Vector2 = Vector2.ZERO
+var _difficulty_feedback_tweens: Dictionary = {}
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -118,6 +123,9 @@ func _ready() -> void:
 	back_button.pressed.connect(_on_back_pressed)
 	difficulty_left_button.pressed.connect(_on_difficulty_left_pressed)
 	difficulty_right_button.pressed.connect(_on_difficulty_right_pressed)
+	for button: TextureButton in [difficulty_left_button, difficulty_right_button]:
+		button.button_down.connect(_on_difficulty_button_down.bind(button))
+		button.button_up.connect(_on_difficulty_button_up.bind(button))
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
@@ -205,6 +213,9 @@ func _update_difficulty_button_interaction() -> void:
 	)
 	difficulty_left_button.disabled = disabled
 	difficulty_right_button.disabled = disabled
+	if disabled:
+		_reset_difficulty_button_feedback(difficulty_left_button)
+		_reset_difficulty_button_feedback(difficulty_right_button)
 
 
 func _on_difficulty_left_pressed() -> void:
@@ -213,6 +224,48 @@ func _on_difficulty_left_pressed() -> void:
 
 func _on_difficulty_right_pressed() -> void:
 	_cycle_difficulty(1)
+
+
+func _on_difficulty_button_down(button: TextureButton) -> void:
+	if button.disabled:
+		return
+	_kill_difficulty_feedback_tween(button)
+	button.pivot_offset = button.size * 0.5
+	button.scale = DIFFICULTY_BUTTON_PRESSED_SCALE
+	button.modulate.a = DIFFICULTY_BUTTON_PRESSED_ALPHA
+
+
+func _on_difficulty_button_up(button: TextureButton) -> void:
+	_kill_difficulty_feedback_tween(button)
+	var tween: Tween = button.create_tween()
+	_difficulty_feedback_tweens[button.get_instance_id()] = tween
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(
+		button,
+		"scale",
+		Vector2.ONE,
+		DIFFICULTY_BUTTON_RELEASE_DURATION
+	)
+	tween.parallel().tween_property(
+		button,
+		"modulate:a",
+		1.0,
+		DIFFICULTY_BUTTON_RELEASE_DURATION
+	)
+
+
+func _reset_difficulty_button_feedback(button: TextureButton) -> void:
+	_kill_difficulty_feedback_tween(button)
+	button.scale = Vector2.ONE
+	button.modulate.a = 1.0
+
+
+func _kill_difficulty_feedback_tween(button: TextureButton) -> void:
+	var tween_id: int = button.get_instance_id()
+	var tween: Tween = _difficulty_feedback_tweens.get(tween_id) as Tween
+	if tween != null and tween.is_valid():
+		tween.kill()
+	_difficulty_feedback_tweens.erase(tween_id)
 
 
 func _cycle_difficulty(delta: int) -> void:
@@ -539,19 +592,20 @@ func _layout_scene() -> void:
 
 func _layout_difficulty_buttons() -> void:
 	var library_rect := Rect2(library_grid.position, library_grid.size)
-	var button_y: float = (
-		library_rect.get_center().y - DIFFICULTY_BUTTON_SIZE.y * 0.5
+	var left_center := Vector2(
+		library_rect.position.x - DIFFICULTY_BUTTON_CENTER_GAP,
+		library_rect.get_center().y
 	)
-	difficulty_left_button.position = Vector2(
-		library_rect.position.x - DIFFICULTY_BUTTON_SIZE.x,
-		button_y
+	var right_center := Vector2(
+		library_rect.end.x + DIFFICULTY_BUTTON_CENTER_GAP,
+		library_rect.get_center().y
 	)
 	difficulty_left_button.size = DIFFICULTY_BUTTON_SIZE
-	difficulty_right_button.position = Vector2(
-		library_rect.end.x,
-		button_y
-	)
 	difficulty_right_button.size = DIFFICULTY_BUTTON_SIZE
+	difficulty_left_button.position = left_center - DIFFICULTY_BUTTON_SIZE * 0.5
+	difficulty_right_button.position = right_center - DIFFICULTY_BUTTON_SIZE * 0.5
+	difficulty_left_button.pivot_offset = DIFFICULTY_BUTTON_SIZE * 0.5
+	difficulty_right_button.pivot_offset = DIFFICULTY_BUTTON_SIZE * 0.5
 
 
 func _get_library_rect() -> Rect2:

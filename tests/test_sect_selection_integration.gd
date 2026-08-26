@@ -263,27 +263,53 @@ func _run() -> void:
 		"Unlocking more difficulties reveals both arrows"
 	)
 	if left_difficulty_button != null and right_difficulty_button != null:
+		var grid_rect: Rect2 = grid.get_global_rect()
+		_check(
+			left_difficulty_button.size.is_equal_approx(Vector2(21.0, 34.0))
+			and right_difficulty_button.size.is_equal_approx(Vector2(21.0, 34.0)),
+			"Difficulty arrow buttons use half-size geometry"
+		)
 		_check(
 			is_equal_approx(
 				left_difficulty_button.get_global_rect().get_center().y,
-				grid.get_global_rect().get_center().y
+				grid_rect.get_center().y
 			)
 			and is_equal_approx(
 				right_difficulty_button.get_global_rect().get_center().y,
-				grid.get_global_rect().get_center().y
+				grid_rect.get_center().y
 			),
 			"Difficulty arrows remain vertically centered beside the scroll"
 		)
 		_check(
-			left_difficulty_button.get_global_rect().get_center().x
-			< grid.get_global_rect().position.x
-			and right_difficulty_button.get_global_rect().get_center().x
-			> grid.get_global_rect().end.x,
-			"Difficulty arrows sit on opposite sides of the scroll"
+			is_equal_approx(
+				left_difficulty_button.get_global_rect().get_center().x,
+				grid_rect.position.x - 21.0
+			)
+			and is_equal_approx(
+				right_difficulty_button.get_global_rect().get_center().x,
+				grid_rect.end.x + 21.0
+			),
+			"Difficulty arrows keep their original horizontal centers"
+		)
+		left_difficulty_button.button_down.emit()
+		_check(
+			left_difficulty_button.pivot_offset.is_equal_approx(
+				left_difficulty_button.size * 0.5
+			)
+			and left_difficulty_button.scale.is_equal_approx(Vector2(0.92, 0.92))
+			and is_equal_approx(left_difficulty_button.modulate.a, 0.62),
+			"Difficulty arrow touch-down provides centered scale and opacity feedback"
+		)
+		left_difficulty_button.button_up.emit()
+		await create_timer(0.18).timeout
+		_check(
+			left_difficulty_button.scale.is_equal_approx(Vector2.ONE)
+			and is_equal_approx(left_difficulty_button.modulate.a, 1.0),
+			"Difficulty arrow touch feedback restores cleanly on release"
 		)
 	_check(
 		_selected_difficulty(selector) == 1
-		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派-进阶一"
+		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶一"
 		and selector.debug_get_status() == "进阶一：进阶特效文本占位",
 		"Reopening the selector restores difficulty one and its Chinese text"
 	)
@@ -309,10 +335,12 @@ func _run() -> void:
 		left_difficulty_button.pressed.emit()
 	_check(
 		_selected_difficulty(selector) == 2
-		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派-进阶二"
+		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶二"
 		and selector.debug_get_status() == "进阶二：进阶特效文本占位",
 		"The left arrow wraps from zero to the highest unlocked difficulty"
 	)
+	if left_difficulty_button != null:
+		left_difficulty_button.button_down.emit()
 	first_slot = grid.debug_get_bound_slot(0)
 	first_slot.debug_begin_pointer(first_slot.get_global_rect().get_center())
 	first_slot.debug_end_pointer(first_slot.get_global_rect().get_center())
@@ -324,6 +352,14 @@ func _run() -> void:
 	_check(
 		left_difficulty_button == null or left_difficulty_button.disabled,
 		"Difficulty arrows are disabled while inspecting"
+	)
+	_check(
+		left_difficulty_button == null
+		or (
+			left_difficulty_button.scale.is_equal_approx(Vector2.ONE)
+			and is_equal_approx(left_difficulty_button.modulate.a, 1.0)
+		),
+		"Disabling a held difficulty arrow restores its resting visual state"
 	)
 	selector.card_inspector.close()
 	await process_frame

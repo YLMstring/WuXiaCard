@@ -42,8 +42,8 @@ anchors_preset = 0
 [node name="DifficultyLeftButton" type="TextureButton" parent="DuelCanvas"]
 visible = false
 z_index = 4
-offset_right = 42.0
-offset_bottom = 68.0
+offset_right = 21.0
+offset_bottom = 34.0
 focus_mode = 0
 texture_normal = ExtResource("3_arrow")
 ignore_texture_size = true
@@ -53,8 +53,8 @@ flip_h = true
 [node name="DifficultyRightButton" type="TextureButton" parent="DuelCanvas"]
 visible = false
 z_index = 4
-offset_right = 42.0
-offset_bottom = 68.0
+offset_right = 21.0
+offset_bottom = 34.0
 focus_mode = 0
 texture_normal = ExtResource("3_arrow")
 ignore_texture_size = true
