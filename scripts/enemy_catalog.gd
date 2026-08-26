@@ -13,6 +13,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"heisha_xingzhe",
 	&"beiling_shuangying",
 	&"yanbo_yuke",
+	&"cangyan_hufa3",
 	&"cangyan_hufa2",
 	&"cangyan_hufa",
 	&"tingyu_zhangshi",
@@ -26,13 +27,18 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"hanyue_nvxia",
 	&"zhenyue_shi",
 	&"wuying_ke",
+	&"wuying_ke2",
 	&"tingchao_zhuren",
+	&"tingchao_zhuren2",
 	&"chisha_menzhu",
 	&"chisha_menzhu2",
+	&"chisha_menzhu3",
 	&"bailu_shanzhang",
+	&"bailu_shanzhang2",
 	&"tianmen_yishi",
-	&"wulin_sanren",
-	&"wulin_sanren2",
+	#&"wulin_sanren",
+	#&"wulin_sanren2",
+	&"wulin_sanren3",
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
