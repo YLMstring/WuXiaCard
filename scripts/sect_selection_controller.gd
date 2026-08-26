@@ -13,7 +13,7 @@ const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
 const DEFAULT_STATUS: String = "轻触门派查看详情，长按门派并拖至下方"
 const LOCKED_STATUS: String = "该门派尚未解锁"
-const DIFFICULTY_ENEMY_PREFIX: String = "江湖门派-进阶"
+const DIFFICULTY_ENEMY_PREFIX: String = "江湖门派·进阶"
 const DIFFICULTY_STATUS_SUFFIX: String = "：进阶特效文本占位"
 const DIFFICULTY_NUMERALS: Array[String] = [
 	"零",

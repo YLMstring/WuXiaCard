@@ -36,7 +36,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 	&"ShaoLinPai": {
 		"id": &"ShaoLinPai",
 		"glyph": "少林派",
-		"picture": "res://pics/LKT010_004.png",
+		"picture": "res://pics/LKT010_077.png",
 		"sect": "嵩山",
 		"tier": 5,
 		"weapon": "拳法/掌法/指法/刀法/心法/阵法",
