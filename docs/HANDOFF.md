@@ -173,13 +173,22 @@ The creator has made several direct UI and localization edits. Preserve those ed
   selected sect, closes the run, and resets card unlocks, the main deck, the
   library, and run-only reward history to their fresh-profile values. Sect
   unlocks (including the final enemy's declared sect) and mastery are retained.
-- Schema 9 stores global mastery by exact card ID. A successful player hand
+- Schema 8 stores global mastery by exact card ID. A successful player hand
   play qualifies when that exact ID was in the main deck at duel start; a win
   commits the candidates, while defeat or abandon commits none. `闭关重修`
   preserves mastery and `封剑归隐` clears it.
 - Schema 9 also tracks guaranteed reward cards already shown in the active run.
   A catalog-declared defeat guarantee may force a locked card into an eligible
   reward offer once per run; closing and restarting a run clears that history.
+- Schema 10 adds global maximum difficulty, persistent last-selected
+  difficulty, and active-run difficulty. New profiles start at difficulty 0;
+  completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and
+  `闭关重修` clear only active-run difficulty, while `封剑归隐` resets all
+  difficulty data. Legacy saves unlock and select difficulty 2, and preserved
+  active runs migrate as difficulty 2. Difficulty currently has no duel effect.
+- Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
+  left copy is flipped, both wrap through the unlocked range, and each change
+  saves immediately. They remain hidden when only difficulty 0 is unlocked.
 - Revealed library and reward cards are blue when mastered and red otherwise.
   Revealed enemy cards stay red; unoccupied reward backs keep random colors.
 - The ending instances the production main menu so it shares the exact

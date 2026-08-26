@@ -350,6 +350,25 @@ respectively, in row-major order. The source itself is eligible.
   it. Revealed library/reward cards derive blue/red appearance from mastery;
   enemy reveals remain red and reward placeholder backs remain random.
 
+## Difficulty Progression
+
+- Every active run stores one difficulty from 0 through 9. New profiles unlock
+  and select only difficulty 0.
+- The profile stores global `max_unlocked_difficulty`, persistent
+  `last_selected_difficulty`, and active-run `run_difficulty` separately.
+- Sect selection saves every arrow change immediately and restores it across
+  scene and process restarts. The two arrow buttons wrap within the unlocked
+  range and remain hidden while only difficulty 0 is available.
+- Completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and `闭关重修`
+  clear only the active run difficulty while preserving the global maximum and
+  last selection. `封剑归隐` clears every difficulty field.
+- Schema-9 and other preservable legacy saves migrate with difficulties 0, 1,
+  and 2 unlocked, difficulty 2 selected, and any preserved active run assigned
+  difficulty 2. Older active runs already closed by history migration remain
+  inactive.
+- Nonzero difficulty currently changes only sect-selection text. It has no
+  enemy, deck, AI, reward, score, or duel-rule effect.
+
 ## Run Completion and Score
 
 - A run ends after a configurable number of victories; the production value is

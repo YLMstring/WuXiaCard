@@ -34,8 +34,34 @@ func _run() -> void:
 	var opponent_hand := canvas.get_node("OpponentHand") as HBoxContainer
 	var player_hand := canvas.get_node("PlayerHand") as HBoxContainer
 	var title_image := grid.get_node("Body/Margin/Layout/Title/Image") as TextureRect
+	var left_difficulty_button := canvas.get_node_or_null("DifficultyLeftButton") as TextureButton
+	var right_difficulty_button := canvas.get_node_or_null("DifficultyRightButton") as TextureButton
 	_check(selector.upcoming_enemy_name == "测试对手", "Selector accepts the upcoming enemy name")
 	_check((canvas.get_node("TopBar/OpponentName") as Label).text == "测试对手", "Header shows the upcoming enemy name")
+	_check(
+		left_difficulty_button != null and right_difficulty_button != null,
+		"Sect selection declares both difficulty arrow buttons"
+	)
+	if left_difficulty_button != null and right_difficulty_button != null:
+		_check(
+			not left_difficulty_button.visible and not right_difficulty_button.visible,
+			"Difficulty arrows stay hidden while only difficulty zero is unlocked"
+		)
+		_check(
+			left_difficulty_button.texture_normal != null
+			and left_difficulty_button.texture_normal.resource_path == "res://inkpics/arrow.png"
+			and right_difficulty_button.texture_normal == left_difficulty_button.texture_normal,
+			"Both difficulty buttons reuse the supplied arrow texture"
+		)
+		_check(
+			left_difficulty_button.flip_h and not right_difficulty_button.flip_h,
+			"Only the left difficulty arrow is horizontally flipped"
+		)
+	_check(
+		selector.has_method("debug_get_selected_difficulty")
+		and _selected_difficulty(selector) == 0,
+		"A new selector begins on difficulty zero"
+	)
 	_check(
 		(canvas.get_node("TopBar/EnemySeal/Value") as Label).text == "友",
 		"Sect selection uses the friend seal"
@@ -213,6 +239,8 @@ func _run() -> void:
 	var scores: Dictionary = saved_profile["best_scores_by_sect"] as Dictionary
 	scores["HuaShanPai"] = 4321
 	saved_profile["best_scores_by_sect"] = scores
+	saved_profile["max_unlocked_difficulty"] = 2
+	saved_profile["last_selected_difficulty"] = 1
 	_check(Store.new(_save_path).save_profile(saved_profile), "Best-score fixture saves")
 	selector.queue_free()
 	await process_frame
@@ -224,6 +252,67 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	grid = selector.get_node("DuelCanvas/DeckLibraryGrid") as DeckLibraryGrid
+	canvas = selector.get_node("DuelCanvas") as Control
+	left_difficulty_button = canvas.get_node_or_null("DifficultyLeftButton") as TextureButton
+	right_difficulty_button = canvas.get_node_or_null("DifficultyRightButton") as TextureButton
+	_check(
+		left_difficulty_button != null
+		and right_difficulty_button != null
+		and left_difficulty_button.visible
+		and right_difficulty_button.visible,
+		"Unlocking more difficulties reveals both arrows"
+	)
+	if left_difficulty_button != null and right_difficulty_button != null:
+		_check(
+			is_equal_approx(
+				left_difficulty_button.get_global_rect().get_center().y,
+				grid.get_global_rect().get_center().y
+			)
+			and is_equal_approx(
+				right_difficulty_button.get_global_rect().get_center().y,
+				grid.get_global_rect().get_center().y
+			),
+			"Difficulty arrows remain vertically centered beside the scroll"
+		)
+		_check(
+			left_difficulty_button.get_global_rect().get_center().x
+			< grid.get_global_rect().position.x
+			and right_difficulty_button.get_global_rect().get_center().x
+			> grid.get_global_rect().end.x,
+			"Difficulty arrows sit on opposite sides of the scroll"
+		)
+	_check(
+		_selected_difficulty(selector) == 1
+		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派-进阶一"
+		and selector.debug_get_status() == "进阶一：进阶特效文本占位",
+		"Reopening the selector restores difficulty one and its Chinese text"
+	)
+	if right_difficulty_button != null:
+		right_difficulty_button.pressed.emit()
+	_check(
+		_selected_difficulty(selector) == 2
+		and Store.new(_save_path).get_last_selected_difficulty(
+			Store.new(_save_path).load_profile()
+		) == 2,
+		"The right arrow advances and immediately saves difficulty two"
+	)
+	if right_difficulty_button != null:
+		right_difficulty_button.pressed.emit()
+	_check(
+		_selected_difficulty(selector) == 0
+		and (canvas.get_node("TopBar/OpponentName") as Label).text
+		== selector.upcoming_enemy_name
+		and selector.debug_get_status() == SelectorController.DEFAULT_STATUS,
+		"The right arrow wraps to difficulty zero and restores existing text"
+	)
+	if left_difficulty_button != null:
+		left_difficulty_button.pressed.emit()
+	_check(
+		_selected_difficulty(selector) == 2
+		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派-进阶二"
+		and selector.debug_get_status() == "进阶二：进阶特效文本占位",
+		"The left arrow wraps from zero to the highest unlocked difficulty"
+	)
 	first_slot = grid.debug_get_bound_slot(0)
 	first_slot.debug_begin_pointer(first_slot.get_global_rect().get_center())
 	first_slot.debug_end_pointer(first_slot.get_global_rect().get_center())
@@ -232,7 +321,39 @@ func _run() -> void:
 		== "最高分：4321",
 		"Sect inspection displays the saved per-sect best score"
 	)
+	_check(
+		left_difficulty_button == null or left_difficulty_button.disabled,
+		"Difficulty arrows are disabled while inspecting"
+	)
+	selector.card_inspector.close()
+	await process_frame
+	_check(
+		selector.debug_get_status() == "进阶二：进阶特效文本占位",
+		"Closing inspection restores the selected difficulty status"
+	)
 
+	selector.queue_free()
+	await process_frame
+	var store := Store.new(_save_path)
+	var reset_result: Dictionary = store.reset_run_and_save(store.load_profile())
+	_check(bool(reset_result.get("ok", false)), "Difficulty persistence fixture closes the active run")
+	selector = SECT_SCENE.instantiate() as SelectorController
+	selector.profile_path = _save_path
+	root.add_child(selector)
+	selector.size = Vector2(540.0, 960.0)
+	await process_frame
+	await process_frame
+	_check(
+		_selected_difficulty(selector) == 2,
+		"A fresh selector instance restores the last saved difficulty"
+	)
+	_check(selector.debug_select_sect(&"HuaShanPai"), "Persisted difficulty fixture selects an unlocked sect")
+	_check(selector.debug_confirm_selected_sect(), "Persisted difficulty fixture starts a run")
+	var difficulty_run: Dictionary = store.load_profile()
+	_check(
+		store.get_run_difficulty(difficulty_run) == 2,
+		"Confirming a sect records the selected difficulty on the active run"
+	)
 	selector.queue_free()
 	await process_frame
 	_cleanup()
@@ -245,6 +366,12 @@ func _occupied_hand_slots(hand: HBoxContainer) -> int:
 		if slot.get_child_count() > 0:
 			result += 1
 	return result
+
+
+func _selected_difficulty(selector: Node) -> int:
+	if not selector.has_method("debug_get_selected_difficulty"):
+		return -1
+	return int(selector.call("debug_get_selected_difficulty"))
 
 
 func _expected_preview_ids(sect_id: StringName, ascending: bool) -> Array[StringName]:

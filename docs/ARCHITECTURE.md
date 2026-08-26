@@ -190,12 +190,17 @@ possible, and replaced with a valid default when necessary.
 
 Schema 7 adds `effective_duel_count`, chronological `defeated_enemy_ids`, and
 global `best_scores_by_sect`. Schema 8 adds global, exact-ID
-`mastered_card_ids`; schema-7 saves migrate with empty mastery without closing
-an active run. `record_completed_duel_and_save()` is the sole
+`mastered_card_ids`; schema 9 adds active-run guaranteed-reward history; and
+schema 10 separates global maximum difficulty, persistent last selection, and
+active-run difficulty. Pre-schema-10 saves migrate with difficulty 2 unlocked
+and selected; preserved active runs also use difficulty 2. Schema-7 saves
+migrate with empty mastery without closing an active run.
+`record_completed_duel_and_save()` is the sole
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,
-updates the sect best, closes the run, and restores the default deck in one
-atomic save. Abandon never enters this transaction. Legacy active saves lack
+updates the sect best, unlocks the next difficulty, closes the run, and
+restores the default deck in one atomic save. Abandon never enters this
+transaction. Legacy active saves lack
 reconstructable history, so migration closes their run and restores the
 default deck while preserving card/sect unlocks.
 

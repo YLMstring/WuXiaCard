@@ -6,13 +6,16 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 
-const SCHEMA_VERSION: int = 9
+const SCHEMA_VERSION: int = 10
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
+const DIFFICULTY_SCHEMA_VERSION: int = 10
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
+const MAX_DIFFICULTY: int = 9
+const LEGACY_UNLOCKED_DIFFICULTY: int = 2
 const DEFAULT_VICTORIES_REQUIRED: int = 15
 const ENDING_SCORE_POOL: int = 15000
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
@@ -73,6 +76,9 @@ func create_default_profile() -> Dictionary:
 		"schema_version": SCHEMA_VERSION,
 		"run_active": false,
 		"selected_sect_id": "",
+		"max_unlocked_difficulty": 0,
+		"last_selected_difficulty": 0,
+		"run_difficulty": 0,
 		"level": 0,
 		"current_enemy_id": "",
 		"remembered_enemy_glyphs": [],
@@ -157,6 +163,9 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		return false
 	var run_active_value: Variant = profile.get("run_active", null)
 	var selected_sect_value: Variant = profile.get("selected_sect_id", null)
+	var max_difficulty_value: Variant = profile.get("max_unlocked_difficulty", null)
+	var last_difficulty_value: Variant = profile.get("last_selected_difficulty", null)
+	var run_difficulty_value: Variant = profile.get("run_difficulty", null)
 	var level_value: Variant = profile.get("level", null)
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
 	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
@@ -172,6 +181,9 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	if (
 		typeof(run_active_value) != TYPE_BOOL
 		or typeof(selected_sect_value) != TYPE_STRING
+		or typeof(max_difficulty_value) != TYPE_INT
+		or typeof(last_difficulty_value) != TYPE_INT
+		or typeof(run_difficulty_value) != TYPE_INT
 		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(enemy_value) != TYPE_STRING
 		or typeof(remembered_glyphs_value) != TYPE_ARRAY
@@ -185,6 +197,19 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		return false
 	var run_active: bool = bool(run_active_value)
 	var selected_sect_id := StringName(String(selected_sect_value))
+	var max_unlocked_difficulty: int = int(max_difficulty_value)
+	var last_selected_difficulty: int = int(last_difficulty_value)
+	var run_difficulty: int = int(run_difficulty_value)
+	if (
+		max_unlocked_difficulty < 0
+		or max_unlocked_difficulty > MAX_DIFFICULTY
+		or last_selected_difficulty < 0
+		or last_selected_difficulty > max_unlocked_difficulty
+		or run_difficulty < 0
+		or run_difficulty > max_unlocked_difficulty
+		or (not run_active and run_difficulty != 0)
+	):
+		return false
 	var level: int = int(level_value)
 	if float(level_value) != float(level):
 		return false
@@ -350,6 +375,9 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	)
 	var run_active: bool = false
 	var selected_sect_id: StringName = &""
+	var max_unlocked_difficulty: int = 0
+	var last_selected_difficulty: int = 0
+	var run_difficulty: int = 0
 	var level: int = 0
 	var current_enemy_id: StringName = &""
 	var remembered_enemy_glyphs: Array[String] = []
@@ -427,6 +455,30 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 					and int(raw_score) >= 0
 				):
 					best_scores_by_sect[String(achievement_sect_id)] = int(raw_score)
+	if schema_version < DIFFICULTY_SCHEMA_VERSION:
+		max_unlocked_difficulty = LEGACY_UNLOCKED_DIFFICULTY
+		last_selected_difficulty = LEGACY_UNLOCKED_DIFFICULTY
+		run_difficulty = LEGACY_UNLOCKED_DIFFICULTY if run_active else 0
+	else:
+		max_unlocked_difficulty = clampi(
+			int(profile.get("max_unlocked_difficulty", 0)),
+			0,
+			MAX_DIFFICULTY
+		)
+		last_selected_difficulty = clampi(
+			int(profile.get("last_selected_difficulty", 0)),
+			0,
+			max_unlocked_difficulty
+		)
+		run_difficulty = (
+			clampi(
+				int(profile.get("run_difficulty", 0)),
+				0,
+				max_unlocked_difficulty
+			)
+			if run_active
+			else 0
+		)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	if schema_version >= MASTERY_SCHEMA_VERSION:
 		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
@@ -510,6 +562,9 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"schema_version": SCHEMA_VERSION,
 		"run_active": run_active,
 		"selected_sect_id": String(selected_sect_id),
+		"max_unlocked_difficulty": max_unlocked_difficulty,
+		"last_selected_difficulty": last_selected_difficulty,
+		"run_difficulty": run_difficulty,
 		"level": level,
 		"current_enemy_id": String(current_enemy_id),
 		"remembered_enemy_glyphs": remembered_enemy_glyphs,
@@ -597,7 +652,8 @@ func begin_run_and_save(
 	_ordered_card_ids: Array,
 	enemy_id_override: StringName = &"",
 	rng: RandomNumberGenerator = null,
-	allow_owned_starting_cards: bool = false
+	allow_owned_starting_cards: bool = false,
+	difficulty: int = 0
 ) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if (
@@ -605,6 +661,8 @@ func begin_run_and_save(
 		or bool(profile["run_active"])
 		or sect_id == &""
 		or sect_id not in get_unlocked_sect_ids(profile)
+		or difficulty < 0
+		or difficulty > get_max_unlocked_difficulty(profile)
 	):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var sect_tier_one_ids: Array[StringName] = _get_card_ids_for_sect_tier(sect_id, 1)
@@ -641,6 +699,7 @@ func begin_run_and_save(
 	)
 	candidate["run_active"] = true
 	candidate["selected_sect_id"] = String(sect_id)
+	candidate["run_difficulty"] = difficulty
 	candidate["level"] = 1
 	candidate["current_enemy_id"] = String(enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
@@ -748,6 +807,42 @@ func get_selected_sect_id(profile: Dictionary) -> StringName:
 	if not is_profile_valid(profile):
 		return &""
 	return StringName(String(profile["selected_sect_id"]))
+
+
+func get_max_unlocked_difficulty(profile: Dictionary) -> int:
+	if not is_profile_valid(profile):
+		return 0
+	return int(profile["max_unlocked_difficulty"])
+
+
+func get_last_selected_difficulty(profile: Dictionary) -> int:
+	if not is_profile_valid(profile):
+		return 0
+	return int(profile["last_selected_difficulty"])
+
+
+func get_run_difficulty(profile: Dictionary) -> int:
+	if not is_profile_valid(profile):
+		return 0
+	return int(profile["run_difficulty"])
+
+
+func set_last_selected_difficulty_and_save(
+	profile: Dictionary,
+	difficulty: int
+) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if (
+		not is_profile_valid(profile)
+		or difficulty < 0
+		or difficulty > get_max_unlocked_difficulty(profile)
+	):
+		return {"ok": false, "profile": unchanged}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["last_selected_difficulty"] = difficulty
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
 
 
 func get_character_level(profile: Dictionary) -> int:
@@ -878,6 +973,7 @@ func record_completed_duel_and_save(
 	(candidate["defeated_enemy_ids"] as Array).append(String(defeated_enemy_id))
 	_unlock_enemy_sect(candidate, defeated_enemy_id)
 	if (candidate["defeated_enemy_ids"] as Array).size() >= victories_required:
+		_unlock_next_difficulty(candidate)
 		var summary: Dictionary = _build_ending_summary(candidate)
 		_record_best_score(candidate, summary)
 		var completed_candidate: Dictionary = _build_run_reset_profile(candidate)
@@ -1381,6 +1477,18 @@ func _unlock_enemy_sect(profile: Dictionary, enemy_id: StringName) -> void:
 	_unlock_declared_sect(profile, Enemies.get_definition(enemy_id))
 
 
+static func _unlock_next_difficulty(profile: Dictionary) -> void:
+	var completed_difficulty: int = clampi(
+		int(profile.get("run_difficulty", 0)),
+		0,
+		MAX_DIFFICULTY
+	)
+	profile["max_unlocked_difficulty"] = maxi(
+		int(profile.get("max_unlocked_difficulty", 0)),
+		mini(completed_difficulty + 1, MAX_DIFFICULTY)
+	)
+
+
 static func _unlock_declared_sect(profile: Dictionary, enemy: Dictionary) -> void:
 	var sect_id := StringName(String(enemy.get("sect_id", "")))
 	if sect_id == &"" or not Sects.has_sect(sect_id):
@@ -1451,6 +1559,12 @@ func _build_run_reset_profile(profile: Dictionary) -> Dictionary:
 	reset_profile["mastered_card_ids"] = (
 		profile["mastered_card_ids"] as Array
 	).duplicate()
+	reset_profile["max_unlocked_difficulty"] = int(
+		profile["max_unlocked_difficulty"]
+	)
+	reset_profile["last_selected_difficulty"] = int(
+		profile["last_selected_difficulty"]
+	)
 	if not is_profile_valid(reset_profile):
 		return {}
 	return reset_profile

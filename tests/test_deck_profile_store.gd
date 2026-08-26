@@ -44,13 +44,25 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 9, "Default profile uses schema version 9")
+	_check(int(profile["schema_version"]) == 10, "Default profile uses schema version 10")
 	_check(
 		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
 		"Default profile has no shown guaranteed rewards"
 	)
 	_check(not bool(profile["run_active"]), "Default profile has no active run")
 	_check(String(profile["selected_sect_id"]).is_empty(), "Default profile has no selected sect")
+	_check(
+		int(profile.get("max_unlocked_difficulty", -1)) == 0,
+		"New profiles unlock only difficulty zero"
+	)
+	_check(
+		int(profile.get("last_selected_difficulty", -1)) == 0,
+		"New profiles select difficulty zero"
+	)
+	_check(
+		int(profile.get("run_difficulty", -1)) == 0,
+		"New profiles have no active run difficulty"
+	)
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
 	_check(store.get_character_tier(profile) == 1, "Character tier begins at one")
 	_check(store.get_current_enemy_id(profile) == &"", "Inactive profiles have no enemy")
@@ -360,7 +372,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 9, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 10, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
@@ -373,6 +385,12 @@ func _run() -> void:
 	)
 	_check(not bool(migrated["run_active"]), "Legacy migration starts with no active run")
 	_check(String(migrated["selected_sect_id"]).is_empty(), "Legacy migration clears the selected sect")
+	_check(
+		int(migrated.get("max_unlocked_difficulty", -1)) == 2
+		and int(migrated.get("last_selected_difficulty", -1)) == 2
+		and int(migrated.get("run_difficulty", -1)) == 0,
+		"Legacy inactive profiles unlock and select difficulty two without an active difficulty"
+	)
 
 	var schema_eight: Dictionary = profile.duplicate(true)
 	schema_eight["schema_version"] = 8
@@ -419,9 +437,77 @@ func _run() -> void:
 		"Repair removes unknown and duplicate sects while restoring the default"
 	)
 	_check(_library_has_no_gaps(repaired["library_slots"]), "Repair leaves no gaps in occupied prefix")
+	var malformed_difficulty: Dictionary = repaired.duplicate(true)
+	malformed_difficulty["max_unlocked_difficulty"] = 12.5
+	malformed_difficulty["last_selected_difficulty"] = -3
+	malformed_difficulty["run_difficulty"] = 7
+	_check(
+		not store.is_profile_valid(malformed_difficulty),
+		"Difficulty fields reject fractional, negative, and inactive-run values"
+	)
+	var repaired_difficulty: Dictionary = store.repair_profile(malformed_difficulty)
+	_check(
+		store.is_profile_valid(repaired_difficulty)
+		and int(repaired_difficulty.get("max_unlocked_difficulty", -1)) == 9
+		and int(repaired_difficulty.get("last_selected_difficulty", -1)) == 0
+		and int(repaired_difficulty.get("run_difficulty", -1)) == 0,
+		"Difficulty repair clamps the global range and clears inactive run difficulty"
+	)
 
 	var run_start_source: Dictionary = store.create_default_profile()
 	_check(store.save_profile(run_start_source), "Run-state fixture saves")
+	var selectable_difficulty_profile: Dictionary = run_start_source.duplicate(true)
+	selectable_difficulty_profile["max_unlocked_difficulty"] = 2
+	var select_difficulty: Dictionary = store.set_last_selected_difficulty_and_save(
+		selectable_difficulty_profile,
+		2
+	)
+	_check(bool(select_difficulty.get("ok", false)), "Selecting an unlocked difficulty saves")
+	var selected_difficulty_profile: Dictionary = select_difficulty.get("profile", {})
+	_check(
+		store.get_max_unlocked_difficulty(selected_difficulty_profile) == 2
+		and store.get_last_selected_difficulty(selected_difficulty_profile) == 2,
+		"Difficulty accessors return the saved global and selected values"
+	)
+	var reject_difficulty: Dictionary = store.set_last_selected_difficulty_and_save(
+		selected_difficulty_profile,
+		3
+	)
+	_check(
+		not bool(reject_difficulty.get("ok", true))
+		and reject_difficulty.get("profile", {}) == selected_difficulty_profile,
+		"Selecting a locked difficulty fails without changing the profile"
+	)
+	var difficulty_rng := RandomNumberGenerator.new()
+	difficulty_rng.seed = 3107
+	var difficulty_begin: Dictionary = store.begin_run_and_save(
+		selected_difficulty_profile,
+		&"HuaShanPai",
+		[&"CangSongYingKe1"],
+		&"qingfeng_xuedi",
+		difficulty_rng,
+		false,
+		2
+	)
+	_check(
+		bool(difficulty_begin.get("ok", false))
+		and store.get_run_difficulty(difficulty_begin.get("profile", {})) == 2,
+		"Beginning an unlocked difficulty records it on the active run"
+	)
+	var locked_difficulty_begin: Dictionary = store.begin_run_and_save(
+		selected_difficulty_profile,
+		&"HuaShanPai",
+		[&"CangSongYingKe1"],
+		&"qingfeng_xuedi",
+		difficulty_rng,
+		false,
+		3
+	)
+	_check(
+		not bool(locked_difficulty_begin.get("ok", true)),
+		"Beginning a locked difficulty is rejected by the profile store"
+	)
+	_check(store.save_profile(run_start_source), "Run-state fixture resets after difficulty checks")
 	var start_rng := RandomNumberGenerator.new()
 	start_rng.seed = 3108
 	var begin_result: Dictionary = store.begin_run_and_save(
@@ -436,6 +522,20 @@ func _run() -> void:
 	_check(store.is_run_active(active_profile), "Beginning a run marks it active")
 	_check(store.get_character_level(active_profile) == 1, "Beginning a run advances to level one")
 	_check(store.get_character_tier(active_profile) == 1, "Level one remains tier one")
+	_check(store.get_run_difficulty(active_profile) == 0, "Existing run-start callers default to difficulty zero")
+	var schema_nine_active: Dictionary = active_profile.duplicate(true)
+	schema_nine_active["schema_version"] = 9
+	schema_nine_active.erase("max_unlocked_difficulty")
+	schema_nine_active.erase("last_selected_difficulty")
+	schema_nine_active.erase("run_difficulty")
+	var migrated_schema_nine_active: Dictionary = store.repair_profile(schema_nine_active)
+	_check(
+		store.is_profile_valid(migrated_schema_nine_active)
+		and store.get_max_unlocked_difficulty(migrated_schema_nine_active) == 2
+		and store.get_last_selected_difficulty(migrated_schema_nine_active) == 2
+		and store.get_run_difficulty(migrated_schema_nine_active) == 2,
+		"A schema-nine active run migrates as difficulty two"
+	)
 	var first_enemy_id: StringName = store.get_current_enemy_id(active_profile)
 	_check(
 		first_enemy_id in Enemies.get_enemy_ids_for_level(1),
@@ -753,6 +853,14 @@ func _run() -> void:
 	var failed_save: Dictionary = failing_store.exchange_and_save(saved_before_failure, 0, 0)
 	_check(not bool(failed_save.get("ok", true)), "Save failure is reported")
 	_check(failed_save.get("profile", {}) == saved_before_failure, "Save failure rolls back candidate data")
+	var failed_difficulty_save: Dictionary = (
+		failing_store.set_last_selected_difficulty_and_save(saved_before_failure, 0)
+	)
+	_check(
+		not bool(failed_difficulty_save.get("ok", true))
+		and failed_difficulty_save.get("profile", {}) == saved_before_failure,
+		"Difficulty-selection save failure reports and rolls back"
+	)
 	var failed_batch: Dictionary = failing_store.unlock_cards_and_save(
 		saved_before_failure,
 		[&"CangSongYingKe1"]

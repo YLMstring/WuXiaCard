@@ -55,7 +55,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"cangyan_hufa", "name": "玉玑子", "level": 5, "deck": [&"LaiHeQinQuan2", &"WuDaFuJian2", &"QiXinLuoChangKong2", &"TaiShan18Pan3", &"WuDaFuJian3"]},
 	{"id": &"tingyu_zhangshi", "name": "费斌", "level": 5, "deck": [&"WanYueChaoZong2", &"DaSongYangZhang3", &"DaSongYangZhang2", &"TianWaiYuLong3", &"TuNaShu2"]},
 	{"id": &"jinling_kuaijian", "name": "刘正风", "level": 6, "deck": [&"YunWu13Shi3", &"YunWu13Shi2", &"YiJianLuo9Yan3", &"YiJianLuo9Yan2", &"TuNaShu3"]},
-	{"id": &"chilian_sanke", "name": "定静", "level": 6, "deck": [&"TianChangZhang4", &"JinZhenDuJie2", &"WanHuaJian3", &"MianLiCangZhen2", &"TuNaShu2"]},
+	{"id": &"chilian_sanke", "name": "定静", "level": 6, "deck": [&"TianChangZhang3", &"JinZhenDuJie3", &"WanHuaJian3", &"MianLiCangZhen2", &"TuNaShu2"]},
 	{"id": &"xuanhuo_qishi", "name": "宁中则", "level": 7, "deck": [&"SanQinFeng3", &"CangSongYingKe3", &"YouFenLaiYi3", &"YouFenLaiYi3", &"ZiXiaGong2"]},
 	{"id": &"hanyue_nvxia", "name": "莫大", "level": 7, "sect_id": &"tingchao_gu", "deck": [&"YunWu13Shi3", &"YunWu13Shi3", &"YiJianLuo9Yan3", &"JianFaQinYin3", &"TuNaShu3"]},
 	{"id": &"canghai_haoke", "name": "定闲", "level": 8, "sect_id": &"HengShanPai", "deck": [&"HenShanJianZhen4", &"JinZhenDuJie4", &"WanHuaJian3", &"MianLiCangZhen3", &"TuNaShu3"]},

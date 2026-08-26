@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" path="res://scenes/deck_builder.tscn" id="1_base"]
 [ext_resource type="Script" uid="uid://b32nwrhj2taoe" path="res://scripts/sect_selection_controller.gd" id="2_controller"]
+[ext_resource type="Texture2D" path="res://inkpics/arrow.png" id="3_arrow"]
 
 [node name="SectSelection" unique_id=632780980 instance=ExtResource("1_base")]
 script = ExtResource("2_controller")
@@ -37,6 +38,27 @@ offset_bottom = 131.0
 
 [node name="DeckLibraryGrid" parent="DuelCanvas" index="3"]
 anchors_preset = 0
+
+[node name="DifficultyLeftButton" type="TextureButton" parent="DuelCanvas"]
+visible = false
+z_index = 4
+offset_right = 42.0
+offset_bottom = 68.0
+focus_mode = 0
+texture_normal = ExtResource("3_arrow")
+ignore_texture_size = true
+stretch_mode = 5
+flip_h = true
+
+[node name="DifficultyRightButton" type="TextureButton" parent="DuelCanvas"]
+visible = false
+z_index = 4
+offset_right = 42.0
+offset_bottom = 68.0
+focus_mode = 0
+texture_normal = ExtResource("3_arrow")
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="GoFirstButton" parent="DuelCanvas" index="4"]
 visible = false

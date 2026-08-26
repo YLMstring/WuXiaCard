@@ -13,6 +13,21 @@ const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
 const DEFAULT_STATUS: String = "轻触门派查看详情，长按门派并拖至下方"
 const LOCKED_STATUS: String = "该门派尚未解锁"
+const DIFFICULTY_ENEMY_PREFIX: String = "江湖门派-进阶"
+const DIFFICULTY_STATUS_SUFFIX: String = "：进阶特效文本占位"
+const DIFFICULTY_NUMERALS: Array[String] = [
+	"零",
+	"一",
+	"二",
+	"三",
+	"四",
+	"五",
+	"六",
+	"七",
+	"八",
+	"九",
+]
+const DIFFICULTY_BUTTON_SIZE: Vector2 = Vector2(42.0, 68.0)
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "江湖门派"
@@ -23,6 +38,8 @@ const LOCKED_STATUS: String = "该门派尚未解锁"
 var profile: Dictionary = {}
 var _profile_store: RefCounted
 var _selected_sect_id: StringName = &""
+var _max_unlocked_difficulty: int = 0
+var _selected_difficulty: int = 0
 var _upper_preview_ids: Array[StringName] = []
 var _lower_preview_ids: Array[StringName] = []
 var _inspection_open: bool = false
@@ -44,6 +61,8 @@ var _drag_proxy_offset: Vector2 = Vector2.ZERO
 @onready var back_button: Button = $DuelCanvas/TopBar/BackButton
 @onready var opponent_hand: HBoxContainer = $DuelCanvas/OpponentHand
 @onready var library_grid: DeckLibraryGrid = $DuelCanvas/DeckLibraryGrid
+@onready var difficulty_left_button: TextureButton = $DuelCanvas/DifficultyLeftButton
+@onready var difficulty_right_button: TextureButton = $DuelCanvas/DifficultyRightButton
 @onready var go_first_button: Button = $DuelCanvas/GoFirstButton
 @onready var go_second_button: Button = $DuelCanvas/GoSecondButton
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
@@ -59,6 +78,8 @@ func _ready() -> void:
 	assert(sect_errors.is_empty(), "Invalid sect catalog: %s" % str(sect_errors))
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
+	_max_unlocked_difficulty = _profile_store.get_max_unlocked_difficulty(profile)
+	_selected_difficulty = _profile_store.get_last_selected_difficulty(profile)
 	SelectionShell.style_header(
 		top_wash,
 		top_wash_tint,
@@ -95,12 +116,13 @@ func _ready() -> void:
 	library_grid.drag_moved.connect(_on_library_drag_moved)
 	library_grid.drag_ended.connect(_on_library_drag_ended)
 	back_button.pressed.connect(_on_back_pressed)
+	difficulty_left_button.pressed.connect(_on_difficulty_left_pressed)
+	difficulty_right_button.pressed.connect(_on_difficulty_right_pressed)
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	enemy_seal_label.text = "友"
-	opponent_name.text = upcoming_enemy_name
-	status_label.text = DEFAULT_STATUS
+	_refresh_difficulty_ui()
 	_layout_scene.call_deferred()
 
 
@@ -122,6 +144,14 @@ func debug_get_selected_sect_id() -> StringName:
 	return _selected_sect_id
 
 
+func debug_get_selected_difficulty() -> int:
+	return _selected_difficulty
+
+
+func debug_get_max_unlocked_difficulty() -> int:
+	return _max_unlocked_difficulty
+
+
 func debug_get_upper_preview_ids() -> Array[StringName]:
 	return _upper_preview_ids.duplicate()
 
@@ -136,6 +166,77 @@ func debug_is_inspecting() -> bool:
 
 func debug_get_status() -> String:
 	return status_label.text
+
+
+func _difficulty_default_status() -> String:
+	if _selected_difficulty <= 0:
+		return DEFAULT_STATUS
+	return "进阶%s%s" % [
+		DIFFICULTY_NUMERALS[_selected_difficulty],
+		DIFFICULTY_STATUS_SUFFIX,
+	]
+
+
+func _refresh_difficulty_ui() -> void:
+	_selected_difficulty = clampi(
+		_selected_difficulty,
+		0,
+		_max_unlocked_difficulty
+	)
+	if _selected_difficulty == 0:
+		opponent_name.text = upcoming_enemy_name
+	else:
+		opponent_name.text = "%s%s" % [
+			DIFFICULTY_ENEMY_PREFIX,
+			DIFFICULTY_NUMERALS[_selected_difficulty],
+		]
+	status_label.text = _difficulty_default_status()
+	_update_difficulty_button_interaction()
+
+
+func _update_difficulty_button_interaction() -> void:
+	var has_multiple_difficulties: bool = _max_unlocked_difficulty > 0
+	difficulty_left_button.visible = has_multiple_difficulties
+	difficulty_right_button.visible = has_multiple_difficulties
+	var disabled: bool = (
+		not has_multiple_difficulties
+		or _inspection_open
+		or _drag_proxy != null
+	)
+	difficulty_left_button.disabled = disabled
+	difficulty_right_button.disabled = disabled
+
+
+func _on_difficulty_left_pressed() -> void:
+	_cycle_difficulty(-1)
+
+
+func _on_difficulty_right_pressed() -> void:
+	_cycle_difficulty(1)
+
+
+func _cycle_difficulty(delta: int) -> void:
+	if (
+		_max_unlocked_difficulty <= 0
+		or _inspection_open
+		or _drag_proxy != null
+	):
+		return
+	var difficulty_count: int = _max_unlocked_difficulty + 1
+	var next_difficulty: int = posmod(
+		_selected_difficulty + delta,
+		difficulty_count
+	)
+	var result: Dictionary = _profile_store.set_last_selected_difficulty_and_save(
+		profile,
+		next_difficulty
+	)
+	if not bool(result.get("ok", false)):
+		status_label.text = "保存失败"
+		return
+	profile = result.get("profile", profile)
+	_selected_difficulty = next_difficulty
+	_refresh_difficulty_ui()
 
 
 func _refresh_sect_grid() -> void:
@@ -284,7 +385,7 @@ func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
 		status_label.text = LOCKED_STATUS
 		library_grid.play_rejected_drag_pulse(logical_index)
 	else:
-		status_label.text = DEFAULT_STATUS
+		status_label.text = _difficulty_default_status()
 
 
 func _on_card_inspection_requested(data: Dictionary) -> void:
@@ -303,6 +404,7 @@ func _open_inspector(data: Dictionary) -> void:
 	if _inspection_open or data.is_empty():
 		return
 	_inspection_open = true
+	_update_difficulty_button_interaction()
 	_scroll_before_inspection = library_grid.get_scroll_offset()
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
@@ -317,7 +419,8 @@ func _on_inspection_closed() -> void:
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
 	library_grid.set_scroll_offset(_scroll_before_inspection)
-	status_label.text = DEFAULT_STATUS
+	status_label.text = _difficulty_default_status()
+	_update_difficulty_button_interaction()
 
 
 func _on_library_drag_started(
@@ -338,6 +441,7 @@ func _on_library_drag_started(
 	_drag_proxy.set_ki_badge_enabled(false)
 	_drag_proxy.set_power_numbers_enabled(false)
 	_drag_proxy.configure(data, DuelRules.PLAYER_OWNER, false)
+	_update_difficulty_button_interaction()
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
 	var source_size: Vector2 = _drag_proxy.size
 	if source_slot != null:
@@ -379,13 +483,14 @@ func _complete_selected_sect() -> bool:
 		_get_tier_one_ids(_selected_sect_id),
 		&"",
 		null,
-		testing_mode
+		testing_mode,
+		_selected_difficulty
 	)
 	if not bool(result.get("ok", false)):
 		status_label.text = "保存失败"
 		return false
 	profile = result.get("profile", profile)
-	status_label.text = DEFAULT_STATUS
+	status_label.text = _difficulty_default_status()
 	deck_builder_requested.emit()
 	return true
 
@@ -405,6 +510,7 @@ func _clear_drag_proxy() -> void:
 		_drag_proxy.queue_free()
 	_drag_proxy = null
 	_drag_source_index = -1
+	_update_difficulty_button_interaction()
 
 
 func _on_back_pressed() -> void:
@@ -426,8 +532,26 @@ func _layout_scene() -> void:
 		player_hand,
 		status_label
 	)
+	_layout_difficulty_buttons()
 	if _inspection_open:
 		card_inspector.set_board_rect(_get_library_rect())
+
+
+func _layout_difficulty_buttons() -> void:
+	var library_rect := Rect2(library_grid.position, library_grid.size)
+	var button_y: float = (
+		library_rect.get_center().y - DIFFICULTY_BUTTON_SIZE.y * 0.5
+	)
+	difficulty_left_button.position = Vector2(
+		library_rect.position.x - DIFFICULTY_BUTTON_SIZE.x,
+		button_y
+	)
+	difficulty_left_button.size = DIFFICULTY_BUTTON_SIZE
+	difficulty_right_button.position = Vector2(
+		library_rect.end.x,
+		button_y
+	)
+	difficulty_right_button.size = DIFFICULTY_BUTTON_SIZE
 
 
 func _get_library_rect() -> Rect2:

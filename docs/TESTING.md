@@ -20,11 +20,17 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 ## Suites
 
 - `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
-- `test_deck_profile_store.gd` — default profile, validation/repair, schema-7-to-8 mastery migration, atomic persistence, exchanges, unlock ordering, and save-failure rollback.
+- `test_deck_profile_store.gd` — default profile, validation/repair, schema
+  migration through difficulty schema 10, difficulty persistence, atomic
+  saves, exchanges, unlock ordering, and save-failure rollback.
 - `test_ending_profile.gd` — effective-duel history, atomic completion,
-  scoring, per-sect bests, reset behavior, and legacy migration.
+  scoring, per-sect bests, difficulty unlock/cap/reset behavior, and legacy
+  migration.
 - `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
 - `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
+- `test_sect_selection_integration.gd` — sect previews and selection plus
+  difficulty-arrow assets, layout, wrapping, Chinese text, immediate
+  persistence, and run-start propagation.
 - `test_card_inspector.gd` — modal display data and inspector interaction behavior.
 - `test_ending_scene.gd` — reused menu presentation, compact clear-sky layout,
   dynamic prose branches, Chinese wrapping, measured clipped roll, early-tap
