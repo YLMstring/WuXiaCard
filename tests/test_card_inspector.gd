@@ -37,6 +37,8 @@ func _run() -> void:
 	await process_frame
 
 	var parchment: Control = inspector.get_node("Parchment") as Control
+	var parchment_shadow: Control = inspector.get_node("Parchment/Shadow") as Control
+	var parchment_body: Control = inspector.get_node("Parchment/Body") as Control
 	var content: VBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content") as VBoxContainer
 	var title: Label = content.get_node("Title") as Label
 	var tags: HBoxContainer = content.get_node("Tags") as HBoxContainer
@@ -53,6 +55,7 @@ func _run() -> void:
 	)
 	_check(bool(inspector.call("is_open")), "Present opens the inspector")
 	_check(parchment.position.is_equal_approx(board_rect.position) and parchment.size.is_equal_approx(board_rect.size), "Parchment exactly occupies the supplied board rectangle")
+	_check(not parchment_shadow.visible and parchment_body.visible, "Inspector parchment hides its shadow without hiding the scroll body")
 	_check(title.text == "苍松迎客", "Glyph is displayed as the card name")
 	_check(sect_value.text == "华山派" and tier_value.text == "不凡" and weapon_value.text == "剑法", "Sect, tier, and weapon values are populated")
 	_check(

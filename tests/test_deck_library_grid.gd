@@ -44,6 +44,13 @@ func _run() -> void:
 	await process_frame
 	var inspector_parchment := inspector.get_node("Parchment") as Control
 	_check(
+		not (grid.get_node("Shadow") as Control).visible
+		and not (inspector_parchment.get_node("Shadow") as Control).visible
+		and (grid.get_node("Body") as Control).visible
+		and (inspector_parchment.get_node("Body") as Control).visible,
+		"Library and inspector hide only the shared parchment shadow"
+	)
+	_check(
 		(grid.get_node("Shadow") as Control).position.is_equal_approx((inspector_parchment.get_node("Shadow") as Control).position)
 		and (grid.get_node("Shadow") as Control).size.is_equal_approx((inspector_parchment.get_node("Shadow") as Control).size)
 		and (grid.get_node("Body") as Control).position.is_equal_approx((inspector_parchment.get_node("Body") as Control).position)

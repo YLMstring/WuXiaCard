@@ -373,6 +373,7 @@ static func _consume_pending_hand_play_suppression(
 	for _removed_index: int in range(removed_count):
 		events.append({
 			"type": &"ability_lost",
+			"source_instance_id": &"",
 			"source_cell": cell,
 			"target_cell": cell,
 			"owner_id": owner_id,
@@ -770,6 +771,7 @@ static func _resolve_attack_target(
 		state,
 		result["events"],
 		attacker_cell,
+		attacker_instance_id,
 		attacked_instance_id,
 		captured_owner,
 		deferred_after_flip
@@ -880,6 +882,7 @@ static func resolve_non_attack_flip(
 		state,
 		result["events"],
 		-1,
+		&"",
 		target_instance_id,
 		new_owner,
 		deferred_after_flip
@@ -891,6 +894,7 @@ static func _append_deferred_after_flip_cleanup_events(
 	state: StateData,
 	events: Array,
 	source_cell: int,
+	source_instance_id: StringName,
 	target_instance_id: StringName,
 	new_owner: int,
 	deferred_snapshots: Array[Dictionary]
@@ -909,6 +913,7 @@ static func _append_deferred_after_flip_cleanup_events(
 	for _removed_index: int in range(removed_count):
 		events.append({
 			"type": &"ability_lost",
+			"source_instance_id": source_instance_id,
 			"source_cell": source_cell,
 			"target_cell": target_cell,
 			"owner_id": new_owner,

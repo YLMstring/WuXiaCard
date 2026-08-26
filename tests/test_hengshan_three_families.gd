@@ -114,6 +114,12 @@ func _test_yunwu_suppresses_summon_reactions_then_restores() -> void:
 		> _event_index(transition.get("events", []), &"card_placed"),
 		"Suppression happens before summon reactions and restoration happens at turn end"
 	)
+	var loss_event: Dictionary = _first_event(transition.get("events", []), &"ability_lost")
+	_check(
+		StringName(loss_event.get("source_instance_id", &"")) == &"yunwu_two"
+		and StringName(loss_event.get("instance_id", &"")) == &"yunwu_reactor",
+		"Temporary suppression records YunWu as the external source of the ability loss"
+	)
 
 
 func _test_yijian_two_swaps_with_its_only_direct_flip() -> void:
@@ -338,6 +344,16 @@ func _event_index(events: Array, event_type: StringName) -> int:
 		if event_value is Dictionary and StringName((event_value as Dictionary).get("type", &"")) == event_type:
 			return index
 	return 1_000_000
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_value as Dictionary
+	return {}
 
 
 func _has_attack_event(

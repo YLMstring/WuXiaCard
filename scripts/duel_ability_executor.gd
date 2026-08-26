@@ -398,6 +398,7 @@ static func resolve_normal_flip(
 	for _removed_index: int in range(removed_count):
 		events.append({
 			"type": &"ability_lost",
+			"source_instance_id": source_instance_id,
 			"source_cell": source_cell,
 			"target_cell": target_cell,
 			"owner_id": new_owner,
@@ -493,7 +494,8 @@ static func _execute_action(
 			state,
 			source_cell,
 			source_instance_id,
-			expected_owner
+			expected_owner,
+			context
 		)
 	if action_type == Catalog.ACTION_ATTACK_TRIGGER_CARD:
 		return _request_trigger_attack(
@@ -1286,7 +1288,8 @@ static func _temporarily_remove_non_retained_abilities(
 	state: StateData,
 	source_cell: int,
 	source_instance_id: StringName,
-	expected_owner: int
+	expected_owner: int,
+	context: Dictionary
 ) -> Dictionary:
 	var subject: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	if subject.is_empty():
@@ -1302,6 +1305,9 @@ static func _temporarily_remove_non_retained_abilities(
 	for _entry: Dictionary in removed_entries:
 		events.append({
 			"type": &"ability_lost",
+			"source_instance_id": StringName(
+				context.get("ability_source_instance_id", &"")
+			),
 			"source_cell": source_cell,
 			"target_cell": location_cell,
 			"owner_id": int(subject.get("owner_id", 0)),
@@ -1646,6 +1652,9 @@ static func _remove_this_ability(
 	var current_cell: int = _get_location_cell(source)
 	return _applied(current_cell, [{
 		"type": &"ability_lost",
+		"source_instance_id": StringName(
+			context.get("ability_source_instance_id", source_instance_id)
+		),
 		"source_cell": current_cell,
 		"target_cell": current_cell,
 		"owner_id": int(source.get("owner_id", 0)),

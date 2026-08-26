@@ -62,6 +62,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var draw_bloom_duration: float = 0.12
 @export var draw_rise_duration: float = 0.28
 @export var draw_post_effect_gap: float = 0.20
+@export var summon_post_entry_delay: float = 0.50
 @export var draw_ink_color: Color = Color("211824")
 @export var side_deck_shuffle_seed: int = 0
 @export var player_hand_shuffle_seed: int = 0
@@ -99,6 +100,7 @@ var _presentation_trace: Array[StringName] = []
 var _attack_vfx_trace: Array[Dictionary] = []
 var _attack_lunge_trace: Array[Dictionary] = []
 var _ability_pulse_trace: Array[StringName] = []
+var _ability_loss_flash_trace: Array[StringName] = []
 var _ki_presentation_trace: Array[int] = []
 var _power_change_presentation_trace: Array[Dictionary] = []
 var _movement_presentation_trace: Array[Dictionary] = []
@@ -279,6 +281,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		draw_bloom_duration = 0.0
 		draw_rise_duration = 0.0
 		draw_post_effect_gap = 0.0
+		summon_post_entry_delay = 0.0
 		movement_duration = 0.0
 		swap_duration = 0.0
 		hand_shift_duration = 0.0
@@ -417,6 +420,10 @@ func debug_get_attack_vfx_placement(
 
 func debug_get_ability_pulse_trace() -> Array[StringName]:
 	return _ability_pulse_trace.duplicate()
+
+
+func debug_get_ability_loss_flash_trace() -> Array[StringName]:
+	return _ability_loss_flash_trace.duplicate()
 
 
 func debug_get_ki_presentation_trace() -> Array[int]:
@@ -851,6 +858,8 @@ func _commit_action(
 		await snap_tween.finished
 	else:
 		card.scale = Vector2.ONE
+	if action.action_type == ActionData.TYPE_PLAY:
+		await _wait_after_board_entry()
 
 	var resolved_targets: int = await _present_transition_events(
 		events,
@@ -1305,7 +1314,12 @@ func _present_transition_events(
 				changed_view.sync_runtime_data(changed_data, changed_view.owner_id)
 				changed_view.set_runtime_powers(displayed_powers)
 				changed_view.set_runtime_ki(displayed_ki)
-				if event_type == &"ability_lost":
+				if (
+					event_type == &"ability_lost"
+					and StringName(event.get("source_instance_id", &""))
+					== changed_instance_id
+				):
+					_ability_loss_flash_trace.append(changed_instance_id)
 					await changed_view.play_ability_lost(capture_flip_duration * 0.5)
 		elif event_type == &"card_flipped":
 			if drew_card and not waited_after_draw:
@@ -1556,6 +1570,13 @@ func _present_generated_summon_event(event: Dictionary) -> void:
 	board_cards[target_cell] = card
 	_presentation_trace.append(&"card_summoned")
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+	await _wait_after_board_entry()
+
+
+func _wait_after_board_entry() -> void:
+	_presentation_trace.append(&"board_entry_pause")
+	if summon_post_entry_delay > 0.0:
+		await get_tree().create_timer(summon_post_entry_delay).timeout
 
 
 func _present_card_departed_for_resummon_event(event: Dictionary) -> void:

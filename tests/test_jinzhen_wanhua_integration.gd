@@ -51,6 +51,7 @@ func _configure_short_presentations(duel: Node) -> void:
 	duel.set("draw_bloom_duration", 0.0)
 	duel.set("draw_rise_duration", 0.0)
 	duel.set("draw_post_effect_gap", 0.0)
+	duel.set("summon_post_entry_delay", 0.0)
 	duel.set("exile_step_delay", 0.0)
 	duel.set("card_fade_duration", 0.06)
 
@@ -90,7 +91,12 @@ func _test_generated_copy_gets_a_board_view(duel: Node) -> void:
 	var committed: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 1, false)
 	_check(committed and duel.debug_has_board_card_view(3), "Generated WanHua copy receives a live board view")
 	_check(duel.debug_get_board_card_instance_id(3) == _instance_at(duel, 3), "Generated view stays synchronized with simulator identity")
-	_check(&"card_summoned" in duel.debug_get_presentation_trace(), "Generated summon uses its dedicated presentation event")
+	var trace: Array[StringName] = duel.debug_get_presentation_trace()
+	_check(&"card_summoned" in trace, "Generated summon uses its dedicated presentation event")
+	_check(
+		trace.rfind(&"card_summoned") < trace.rfind(&"board_entry_pause"),
+		"Generated summon crosses the shared board-entry pause before later presentation"
+	)
 
 
 func _test_self_exile_fades_without_external_exile_animation(duel: Node) -> void:

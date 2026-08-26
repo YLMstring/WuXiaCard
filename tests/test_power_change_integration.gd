@@ -105,7 +105,11 @@ func _run() -> void:
 	duel.call(
 		"_present_transition_events",
 		[
-			{"type": &"ability_lost", "instance_id": first_id},
+			{
+				"type": &"ability_lost",
+				"instance_id": first_id,
+				"source_instance_id": first_id,
+			},
 			_power_event(first_id, staged_previous, staged_final, 1, &"staged_sync_batch"),
 		],
 		Rules.PLAYER_OWNER
@@ -115,11 +119,26 @@ func _run() -> void:
 		"Ability-loss presentation does not expose future power values before their animation"
 	)
 	await create_timer(0.22).timeout
+	var ability_loss_flash_trace: Array[StringName] = duel.call("debug_get_ability_loss_flash_trace")
+	_check(ability_loss_flash_trace == [first_id], "A self-caused ability loss keeps the gray-white flash")
 	_check(
 		(first_card.get("card_data") as Dictionary).get("powers", []) == staged_final,
 		"The queued power animation eventually applies the logical final values"
 	)
 	duel.set("capture_flip_duration", 0.0)
+	await duel.call(
+		"_present_transition_events",
+		[{
+			"type": &"ability_lost",
+			"instance_id": second_id,
+			"source_instance_id": first_id,
+		}],
+		Rules.PLAYER_OWNER
+	)
+	_check(
+		duel.call("debug_get_ability_loss_flash_trace") == ability_loss_flash_trace,
+		"An externally caused ability loss synchronizes silently without flashing the target"
+	)
 
 	var opponent_ids: Array[StringName] = duel.call("debug_get_hand_instance_ids", Rules.OPPONENT_OWNER)
 	var hidden_id: StringName = opponent_ids[0]

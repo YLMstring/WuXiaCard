@@ -319,6 +319,15 @@ func _test_baocan_four_checks_empty_hand_once() -> void:
 		),
 		"Both copy actions continue in order after the one-time empty-hand check"
 	)
+	var self_loss_event: Dictionary = _first_event(
+		transition.get("events", []),
+		&"ability_lost"
+	)
+	_check(
+		StringName(self_loss_event.get("source_instance_id", &"")) == &"draw_watcher"
+		and StringName(self_loss_event.get("instance_id", &"")) == &"draw_watcher",
+		"Remove-this-ability records the losing card itself as the source"
+	)
 
 
 func _test_baocan_four_second_copy_respects_occupied_cell() -> void:
@@ -523,6 +532,16 @@ func _event_count(events: Array, event_type: StringName) -> int:
 		):
 			count += 1
 	return count
+
+
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_value as Dictionary
+	return {}
 
 
 func _action_types(ability: Dictionary) -> Array[StringName]:

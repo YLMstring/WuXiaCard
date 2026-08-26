@@ -31,7 +31,9 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	_check(is_equal_approx(float(duel.debug_get_search_budget_seconds()), 10.0), "Shen Lian defaults to the hard 10-second search profile")
+	_check(is_equal_approx(float(duel.get("summon_post_entry_delay")), 0.5), "Board entry pauses half a second before later effects")
 	duel.debug_set_fast_mode(true)
+	_check(is_zero_approx(float(duel.get("summon_post_entry_delay"))), "Fast test mode removes the board-entry pause")
 
 	_check_layout(duel)
 	_check_duel_canvas_structure(duel)
@@ -71,6 +73,7 @@ func _run() -> void:
 		player_turns += 1
 		if player_turns == 1:
 			await process_frame
+			_check(&"board_entry_pause" in duel.debug_get_presentation_trace(), "A normal hand play crosses the shared board-entry pause")
 			_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
 			_check_remaining_card_sizes(duel.get_node("DuelCanvas/PlayerHand"), initial_player_card_sizes)
 

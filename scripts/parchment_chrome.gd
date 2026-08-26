@@ -8,10 +8,7 @@ static func apply(
 	top_rod: Panel,
 	bottom_rod: Panel
 ) -> void:
-	var shadow_style := StyleBoxFlat.new()
-	shadow_style.bg_color = Color(0.12, 0.07, 0.04, 0.28)
-	shadow_style.set_corner_radius_all(7)
-	shadow.add_theme_stylebox_override("panel", shadow_style)
+	shadow.visible = false
 
 	var parchment_style := StyleBoxFlat.new()
 	parchment_style.bg_color = Color("eddbb2")
