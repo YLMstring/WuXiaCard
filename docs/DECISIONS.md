@@ -366,8 +366,9 @@ respectively, in row-major order. The source itself is eligible.
   and 2 unlocked, difficulty 2 selected, and any preserved active run assigned
   difficulty 2. Older active runs already closed by history migration remain
   inactive.
-- Nonzero difficulty currently changes only sect-selection text. It has no
-  enemy, deck, AI, reward, score, or duel-rule effect.
+- Difficulty currently changes sect-selection text and selects an independent
+  per-sect score bucket. It still has no enemy, deck, AI, reward, or duel-rule
+  effect.
 
 ## Run Completion and Score
 
@@ -376,14 +377,19 @@ respectively, in row-major order. The source itself is eligible.
 - Only completed wins and completed losses are effective duels. Abandoning a
   duel changes neither score inputs nor defeated-enemy history.
 - Every victory appends the exact current enemy ID in chronological order.
-- Final score is `floor(15000 / effective_duel_count)`. Fifteen straight wins
-  therefore score 1000; losses lower the result.
+- Raw final score is `floor(15000 / effective_duel_count)`. Difficulty 0 and 1
+  cap the actual ending score at 500; difficulty 2 through 9 keep the raw
+  value. Fifteen straight wins therefore score 500 on difficulties 0 and 1,
+  and 1000 on higher difficulties; losses lower the result.
 - Final victory bypasses reward selection. The ending receives immutable sect,
   score, duel-count, defeated-enemy, and flawless data.
 - Completion uses the same card/run reset as `闭关重修`: it restores the two
   base card unlocks, default main deck, empty library, and empty run-only reward
   history. It preserves unlocked sects (including one declared by the final
-  defeated enemy), card mastery, and the highest score achieved for each sect.
+  defeated enemy), card mastery, and the highest score achieved for each sect
+  at each difficulty. A completed score raises the current difficulty and all
+  lower difficulty records for that sect, never higher ones. Target difficulty
+  0 and 1 records remain capped at 500.
 - `闭关重修` also preserves best scores, unlocked sects, and card mastery.
   `封剑归隐` clears them with all other progress.
 - The ending is the main-menu presentation without its three actions. It lists

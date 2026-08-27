@@ -119,7 +119,13 @@ func _run() -> void:
 		== [active_deck_ids[0], active_deck_ids[1], active_deck_ids[2], active_deck_ids[3]],
 		"Final victory records mastery before closing the run"
 	)
-	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 5000, "Completion stores the sect's first best score")
+	_check(
+		store.get_best_score(completed_profile, &"HuaShanPai", 0) == 500
+		and store.get_best_score(completed_profile, &"HuaShanPai", 1) == 500
+		and store.get_best_score(completed_profile, &"HuaShanPai", 2) == 5000
+		and store.get_best_score(completed_profile, &"HuaShanPai", 3) == 0,
+		"Difficulty-two completion records its score downward with low-difficulty caps"
+	)
 	_check(int(completed_profile["effective_duel_count"]) == 0, "Closed run clears its duel counter")
 	_check((completed_profile["defeated_enemy_ids"] as Array).is_empty(), "Closed run clears its defeated-enemy history")
 	_check(
@@ -136,7 +142,10 @@ func _run() -> void:
 		completed_profile,
 		&"HuaShanPai",
 		[],
-		&"qingfeng_xuedi"
+		&"qingfeng_xuedi",
+		null,
+		false,
+		2
 	)
 	var flawless_finish: Dictionary = store.record_completed_duel_and_save(
 		flawless_begin.get("profile", {}),
@@ -147,7 +156,12 @@ func _run() -> void:
 	_check(bool(flawless_summary.get("flawless", false)), "A victory-only run is flawless")
 	_check(int(flawless_summary.get("score", -1)) == 15000, "One effective duel earns 15000 points")
 	var best_profile: Dictionary = flawless_finish.get("profile", {})
-	_check(int((best_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "A higher score replaces the previous sect best")
+	_check(
+		store.get_best_score(best_profile, &"HuaShanPai", 0) == 500
+		and store.get_best_score(best_profile, &"HuaShanPai", 1) == 500
+		and store.get_best_score(best_profile, &"HuaShanPai", 2) == 15000,
+		"A higher difficulty-two score replaces only its uncapped best and keeps low caps"
+	)
 
 	var lower_begin: Dictionary = store.begin_run_and_save(
 		best_profile,
@@ -167,16 +181,91 @@ func _run() -> void:
 		Store.REWARD_VICTORY,
 		1
 	)
-	_check(int((lower_finish["profile"]["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "A lower result never replaces the sect best")
+	_check(
+		int((lower_finish.get("ending_summary", {}) as Dictionary).get("score", -1)) == 500
+		and store.get_best_score(lower_finish.get("profile", {}), &"HuaShanPai", 0) == 500
+		and store.get_best_score(lower_finish.get("profile", {}), &"HuaShanPai", 2) == 15000,
+		"Difficulty-zero score caps at 500 and never replaces a higher difficulty best"
+	)
+
+	var difficulty_one_begin: Dictionary = store.begin_run_and_save(
+		lower_finish.get("profile", {}),
+		&"HuaShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		1
+	)
+	var difficulty_one_finish: Dictionary = store.record_completed_duel_and_save(
+		difficulty_one_begin.get("profile", {}),
+		Store.REWARD_VICTORY,
+		1
+	)
+	_check(
+		int((difficulty_one_finish.get("ending_summary", {}) as Dictionary).get("score", -1))
+		== 500
+		and store.get_best_score(
+			difficulty_one_finish.get("profile", {}),
+			&"HuaShanPai",
+			1
+		) == 500
+		and store.get_best_score(
+			difficulty_one_finish.get("profile", {}),
+			&"HuaShanPai",
+			2
+		) == 15000,
+		"Difficulty-one final score caps at 500 without changing higher difficulty scores"
+	)
+	var isolation_source: Dictionary = (
+		difficulty_one_finish.get("profile", {}) as Dictionary
+	).duplicate(true)
+	(isolation_source["unlocked_sect_ids"] as Array).append("TaiShanPai")
+	var isolation_scores: Dictionary = isolation_source["best_scores_by_sect"] as Dictionary
+	var isolation_huashan_scores: Dictionary = (
+		isolation_scores["HuaShanPai"] as Dictionary
+	).duplicate(true)
+	isolation_huashan_scores["2"] = 12000
+	isolation_scores["HuaShanPai"] = isolation_huashan_scores
+	isolation_source["best_scores_by_sect"] = isolation_scores
+	_check(store.is_profile_valid(isolation_source), "Per-sect score isolation fixture is valid")
+	var isolation_begin: Dictionary = store.begin_run_and_save(
+		isolation_source,
+		&"TaiShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		2
+	)
+	var isolation_finish: Dictionary = store.record_completed_duel_and_save(
+		isolation_begin.get("profile", {}),
+		Store.REWARD_VICTORY,
+		1
+	)
+	_check(
+		store.get_best_score(isolation_finish.get("profile", {}), &"TaiShanPai", 2)
+		== 15000
+		and store.get_best_score(
+			isolation_finish.get("profile", {}),
+			&"HuaShanPai",
+			2
+		) == 12000,
+		"Completing one sect updates only that sect's per-difficulty scores"
+	)
 
 	var reset_begin: Dictionary = store.begin_run_and_save(
-		lower_finish.get("profile", {}),
+		difficulty_one_finish.get("profile", {}),
 		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi"
 	)
 	var run_reset: Dictionary = store.reset_run_and_save(reset_begin.get("profile", {}))
-	_check(int((run_reset["profile"]["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Run reset preserves ending achievements")
+	_check(
+		store.get_best_score(run_reset.get("profile", {}), &"HuaShanPai", 0) == 500
+		and store.get_best_score(run_reset.get("profile", {}), &"HuaShanPai", 2) == 15000,
+		"Run reset preserves all per-difficulty ending achievements"
+	)
 	_check(
 		store.get_mastered_card_ids(run_reset.get("profile", {}))
 		== store.get_mastered_card_ids(reset_begin.get("profile", {})),
@@ -223,6 +312,14 @@ func _run() -> void:
 		and store.get_max_unlocked_difficulty(capped_finish.get("profile", {}))
 		== Store.MAX_DIFFICULTY,
 		"Completing difficulty nine remains capped at difficulty nine"
+	)
+	_check(
+		int((capped_finish.get("ending_summary", {}) as Dictionary).get("score", -1)) == 15000
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 0) == 500
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 1) == 500
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 2) == 15000
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 9) == 15000,
+		"Difficulty-nine completion keeps its full score and propagates through every lower difficulty"
 	)
 
 	var legacy_active: Dictionary = active.duplicate(true)

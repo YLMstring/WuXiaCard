@@ -194,12 +194,17 @@ global `best_scores_by_sect`. Schema 8 adds global, exact-ID
 schema 10 separates global maximum difficulty, persistent last selection, and
 active-run difficulty. Pre-schema-10 saves migrate with difficulty 2 unlocked
 and selected; preserved active runs also use difficulty 2. Schema-7 saves
-migrate with empty mastery without closing an active run.
+migrate with empty mastery without closing an active run. Schema 11 changes
+each sect's best score into a sparse dictionary keyed by difficulty `0..9`.
+Earlier scalar sect scores migrate into difficulties 0, 1, and 2; the first two
+are capped at 500 while difficulty 2 retains the old value.
 `record_completed_duel_and_save()` is the sole
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,
-updates the sect best, unlocks the next difficulty, closes the run, and
-restores the default deck in one atomic save. Abandon never enters this
+updates the current sect's best for the completed difficulty and every lower
+difficulty, unlocks the next difficulty, closes the run, and restores the
+default deck in one atomic save. Difficulties 0 and 1 cap both the ending score
+and their stored best at 500. Abandon never enters this
 transaction. Legacy active saves lack
 reconstructable history, so migration closes their run and restores the
 default deck while preserving card/sect unlocks.

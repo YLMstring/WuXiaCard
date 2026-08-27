@@ -448,8 +448,18 @@ func _on_card_inspection_requested(data: Dictionary) -> void:
 func _build_sect_inspector_data(data: Dictionary) -> Dictionary:
 	var result: Dictionary = data.duplicate(true)
 	var sect_id := StringName(String(result.get("id", "")))
-	var best_scores: Dictionary = _profile_store.get_best_scores_by_sect(profile)
-	result["sect"] = "最高分：%d" % int(best_scores.get(String(sect_id), 0))
+	var best_score: int = _profile_store.get_best_score(
+		profile,
+		sect_id,
+		_selected_difficulty
+	)
+	if _selected_difficulty <= 0:
+		result["sect"] = "最高分：%d" % best_score
+	else:
+		result["sect"] = "进阶%s：%d" % [
+			DIFFICULTY_NUMERALS[_selected_difficulty],
+			best_score,
+		]
 	return result
 
 

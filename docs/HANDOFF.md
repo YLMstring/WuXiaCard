@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-25
+Updated: 2026-08-27
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -167,12 +167,17 @@ The creator has made several direct UI and localization edits. Preserve those ed
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
   sect before reward selection. Tier 5 remains the cap through level 15.
-- Completed wins and losses increment schema-7 run history atomically. A final
-  victory at the configurable threshold (15 by default) skips rewards, records
-  `floor(15000 / effective_duel_count)`, preserves the best score for the
-  selected sect, closes the run, and resets card unlocks, the main deck, the
-  library, and run-only reward history to their fresh-profile values. Sect
-  unlocks (including the final enemy's declared sect) and mastery are retained.
+- Completed wins and losses increment schema-7 run history atomically. Schema
+  11 stores a sparse difficulty `0..9` score dictionary for each sect; earlier
+  scalar sect scores migrate into difficulties 0, 1, and 2, with difficulties
+  0 and 1 capped at 500. A final victory at the configurable threshold (15 by
+  default) skips rewards, computes `floor(15000 / effective_duel_count)`, caps
+  the actual ending score at 500 on difficulties 0 and 1, and raises the
+  selected sect's record for the current difficulty and every lower one. It
+  then closes the run and resets card unlocks, the main deck, the library, and
+  run-only reward history to their fresh-profile values. Sect unlocks
+  (including the final enemy's declared sect), mastery, and all per-difficulty
+  best scores are retained.
 - Schema 8 stores global mastery by exact card ID. A successful player hand
   play qualifies when that exact ID was in the main deck at duel start; a win
   commits the candidates, while defeat or abandon commits none. `闭关重修`

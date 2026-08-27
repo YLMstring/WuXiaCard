@@ -52,7 +52,7 @@ func _run() -> void:
 	var ending := flow.debug_get_current_screen() as EndingController
 	_check(ending != null, "Final victory routes directly to the ending scene")
 	var summary: Dictionary = ending.get_summary()
-	_check(int(summary.get("score", -1)) == 15000, "Threshold-one final victory displays the formula score")
+	_check(int(summary.get("score", -1)) == 500, "Difficulty-zero final victory displays the capped score")
 	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi"], "Ending receives the defeated enemy history")
 	var completed_profile: Dictionary = store.load_profile()
 	_check(
@@ -73,7 +73,10 @@ func _run() -> void:
 		completed_profile["library_slots"] == store.create_default_profile()["library_slots"],
 		"Final-victory routing clears the library"
 	)
-	_check(int((completed_profile["best_scores_by_sect"] as Dictionary)["HuaShanPai"]) == 15000, "Final-victory routing persists the achievement")
+	_check(
+		store.get_best_score(completed_profile, &"HuaShanPai", 0) == 500,
+		"Final-victory routing persists the capped difficulty-zero achievement"
+	)
 
 	var overflow_fixture: String = ""
 	for index: int in range(20):

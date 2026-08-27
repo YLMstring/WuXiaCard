@@ -237,7 +237,11 @@ func _run() -> void:
 	)
 
 	var scores: Dictionary = saved_profile["best_scores_by_sect"] as Dictionary
-	scores["HuaShanPai"] = 4321
+	scores["HuaShanPai"] = {
+		"0": 500,
+		"1": 111,
+		"2": 4321,
+	}
 	saved_profile["best_scores_by_sect"] = scores
 	saved_profile["max_unlocked_difficulty"] = 2
 	saved_profile["last_selected_difficulty"] = 1
@@ -313,6 +317,17 @@ func _run() -> void:
 		and selector.debug_get_status() == "进阶一：进阶特效文本占位",
 		"Reopening the selector restores difficulty one and its Chinese text"
 	)
+	_check(
+		selector.debug_select_sect(&"HuaShanPai", true),
+		"Difficulty-one score fixture opens sect inspection"
+	)
+	_check(
+		String(selector.card_inspector.get_card_snapshot().get("sect", ""))
+		== "进阶一：111",
+		"Difficulty-one sect inspection displays only its own best score"
+	)
+	selector.card_inspector.close()
+	await process_frame
 	if right_difficulty_button != null:
 		right_difficulty_button.pressed.emit()
 	_check(
@@ -346,8 +361,8 @@ func _run() -> void:
 	first_slot.debug_end_pointer(first_slot.get_global_rect().get_center())
 	_check(
 		String(selector.card_inspector.get_card_snapshot().get("sect", ""))
-		== "最高分：4321",
-		"Sect inspection displays the saved per-sect best score"
+		== "进阶二：4321",
+		"Sect inspection displays the selected difficulty's per-sect best score"
 	)
 	_check(
 		left_difficulty_button == null or left_difficulty_button.disabled,

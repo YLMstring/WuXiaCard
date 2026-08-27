@@ -6,11 +6,12 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 
-const SCHEMA_VERSION: int = 10
+const SCHEMA_VERSION: int = 11
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
 const DIFFICULTY_SCHEMA_VERSION: int = 10
+const DIFFICULTY_BEST_SCORE_SCHEMA_VERSION: int = 11
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
@@ -18,6 +19,7 @@ const MAX_DIFFICULTY: int = 9
 const LEGACY_UNLOCKED_DIFFICULTY: int = 2
 const DEFAULT_VICTORIES_REQUIRED: int = 15
 const ENDING_SCORE_POOL: int = 15000
+const LOW_DIFFICULTY_SCORE_CAP: int = 500
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
 const REWARD_VICTORY: StringName = &"victory"
 const REWARD_DEFEAT: StringName = &"defeat"
@@ -271,15 +273,35 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		return false
 	for raw_sect_id: Variant in (best_scores_value as Dictionary).keys():
 		var sect_id := StringName(String(raw_sect_id))
-		var score_value: Variant = (best_scores_value as Dictionary)[raw_sect_id]
+		var difficulty_scores_value: Variant = (
+			(best_scores_value as Dictionary)[raw_sect_id]
+		)
 		if (
 			typeof(raw_sect_id) != TYPE_STRING
 			or not Sects.has_sect(sect_id)
-			or typeof(score_value) not in [TYPE_INT, TYPE_FLOAT]
-			or float(score_value) != float(int(score_value))
-			or int(score_value) < 0
+			or typeof(difficulty_scores_value) != TYPE_DICTIONARY
 		):
 			return false
+		for raw_difficulty: Variant in (difficulty_scores_value as Dictionary).keys():
+			if typeof(raw_difficulty) != TYPE_STRING:
+				return false
+			var difficulty_text: String = String(raw_difficulty)
+			if not _is_valid_difficulty_score_key(difficulty_text):
+				return false
+			var difficulty: int = int(difficulty_text)
+			var score_value: Variant = (
+				(difficulty_scores_value as Dictionary)[raw_difficulty]
+			)
+			if (
+				typeof(score_value) not in [TYPE_INT, TYPE_FLOAT]
+				or float(score_value) != float(int(score_value))
+				or int(score_value) < 0
+				or (
+					difficulty <= 1
+					and int(score_value) > LOW_DIFFICULTY_SCORE_CAP
+				)
+			):
+				return false
 	var valid_enemy_glyphs: Dictionary = _enemy_glyph_set(current_enemy_id)
 	var observed_glyphs: Dictionary = {}
 	for value: Variant in remembered_glyphs_value as Array:
@@ -443,18 +465,10 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 							defeated_enemy_ids.append(defeated_id)
 				if defeated_enemy_ids.size() > effective_duel_count:
 					effective_duel_count = defeated_enemy_ids.size()
-		var raw_best_scores: Variant = profile.get("best_scores_by_sect", {})
-		if typeof(raw_best_scores) == TYPE_DICTIONARY:
-			for raw_sect_id: Variant in (raw_best_scores as Dictionary).keys():
-				var achievement_sect_id := StringName(String(raw_sect_id))
-				var raw_score: Variant = (raw_best_scores as Dictionary)[raw_sect_id]
-				if (
-					Sects.has_sect(achievement_sect_id)
-					and typeof(raw_score) in [TYPE_INT, TYPE_FLOAT]
-					and float(raw_score) == float(int(raw_score))
-					and int(raw_score) >= 0
-				):
-					best_scores_by_sect[String(achievement_sect_id)] = int(raw_score)
+		best_scores_by_sect = _repair_best_scores_by_sect(
+			profile.get("best_scores_by_sect", {}),
+			schema_version
+		)
 	if schema_version < DIFFICULTY_SCHEMA_VERSION:
 		max_unlocked_difficulty = LEGACY_UNLOCKED_DIFFICULTY
 		last_selected_difficulty = LEGACY_UNLOCKED_DIFFICULTY
@@ -913,6 +927,25 @@ func get_best_scores_by_sect(profile: Dictionary) -> Dictionary:
 	if not is_profile_valid(profile):
 		return {}
 	return (profile["best_scores_by_sect"] as Dictionary).duplicate(true)
+
+
+func get_best_score(
+	profile: Dictionary,
+	sect_id: StringName,
+	difficulty: int
+) -> int:
+	if (
+		not is_profile_valid(profile)
+		or not Sects.has_sect(sect_id)
+		or difficulty < 0
+		or difficulty > MAX_DIFFICULTY
+	):
+		return 0
+	var best_scores: Dictionary = profile["best_scores_by_sect"] as Dictionary
+	var difficulty_scores_value: Variant = best_scores.get(String(sect_id), {})
+	if typeof(difficulty_scores_value) != TYPE_DICTIONARY:
+		return 0
+	return int((difficulty_scores_value as Dictionary).get(str(difficulty), 0))
 
 
 func get_mastered_card_ids(profile: Dictionary) -> Array[StringName]:
@@ -1502,9 +1535,15 @@ static func _unlock_declared_sect(profile: Dictionary, enemy: Dictionary) -> voi
 func _build_ending_summary(profile: Dictionary) -> Dictionary:
 	var effective_duels: int = maxi(1, int(profile.get("effective_duel_count", 0)))
 	var defeated_ids: Array = (profile.get("defeated_enemy_ids", []) as Array).duplicate()
+	var difficulty: int = clampi(
+		int(profile.get("run_difficulty", 0)),
+		0,
+		MAX_DIFFICULTY
+	)
+	var raw_score: int = floori(float(ENDING_SCORE_POOL) / float(effective_duels))
 	return {
 		"sect_id": String(profile.get("selected_sect_id", "")),
-		"score": floori(float(ENDING_SCORE_POOL) / float(effective_duels)),
+		"score": _score_for_difficulty(raw_score, difficulty),
 		"effective_duel_count": effective_duels,
 		"defeated_enemy_ids": defeated_ids,
 		"flawless": effective_duels == defeated_ids.size(),
@@ -1515,9 +1554,97 @@ func _record_best_score(profile: Dictionary, summary: Dictionary) -> void:
 	var sect_id: String = String(summary.get("sect_id", ""))
 	var score: int = int(summary.get("score", 0))
 	var best_scores: Dictionary = profile.get("best_scores_by_sect", {}) as Dictionary
-	if not best_scores.has(sect_id) or score > int(best_scores[sect_id]):
-		best_scores[sect_id] = score
+	var difficulty_scores: Dictionary = (
+		(best_scores.get(sect_id, {}) as Dictionary).duplicate(true)
+	)
+	var completed_difficulty: int = clampi(
+		int(profile.get("run_difficulty", 0)),
+		0,
+		MAX_DIFFICULTY
+	)
+	for difficulty: int in range(completed_difficulty + 1):
+		var difficulty_key: String = str(difficulty)
+		var candidate_score: int = _score_for_difficulty(score, difficulty)
+		if (
+			not difficulty_scores.has(difficulty_key)
+			or candidate_score > int(difficulty_scores[difficulty_key])
+		):
+			difficulty_scores[difficulty_key] = candidate_score
+	best_scores[sect_id] = difficulty_scores
 	profile["best_scores_by_sect"] = best_scores
+
+
+static func _score_for_difficulty(score: int, difficulty: int) -> int:
+	var nonnegative_score: int = maxi(0, score)
+	if difficulty <= 1:
+		return mini(nonnegative_score, LOW_DIFFICULTY_SCORE_CAP)
+	return nonnegative_score
+
+
+static func _is_valid_difficulty_score_key(value: String) -> bool:
+	if not value.is_valid_int():
+		return false
+	var difficulty: int = int(value)
+	return (
+		difficulty >= 0
+		and difficulty <= MAX_DIFFICULTY
+		and value == str(difficulty)
+	)
+
+
+func _repair_best_scores_by_sect(
+	raw_best_scores_value: Variant,
+	schema_version: int
+) -> Dictionary:
+	var repaired: Dictionary = {}
+	if typeof(raw_best_scores_value) != TYPE_DICTIONARY:
+		return repaired
+	var raw_best_scores: Dictionary = raw_best_scores_value as Dictionary
+	for raw_sect_id: Variant in raw_best_scores.keys():
+		var sect_id := StringName(String(raw_sect_id))
+		if typeof(raw_sect_id) != TYPE_STRING or not Sects.has_sect(sect_id):
+			continue
+		if schema_version < DIFFICULTY_BEST_SCORE_SCHEMA_VERSION:
+			var legacy_score_value: Variant = raw_best_scores[raw_sect_id]
+			if (
+				typeof(legacy_score_value) not in [TYPE_INT, TYPE_FLOAT]
+				or float(legacy_score_value) != float(int(legacy_score_value))
+				or int(legacy_score_value) < 0
+			):
+				continue
+			var legacy_score: int = int(legacy_score_value)
+			repaired[String(sect_id)] = {
+				"0": _score_for_difficulty(legacy_score, 0),
+				"1": _score_for_difficulty(legacy_score, 1),
+				"2": legacy_score,
+			}
+			continue
+		var raw_difficulty_scores_value: Variant = raw_best_scores[raw_sect_id]
+		if typeof(raw_difficulty_scores_value) != TYPE_DICTIONARY:
+			continue
+		var repaired_difficulty_scores: Dictionary = {}
+		var raw_difficulty_scores: Dictionary = raw_difficulty_scores_value as Dictionary
+		for raw_difficulty: Variant in raw_difficulty_scores.keys():
+			if typeof(raw_difficulty) != TYPE_STRING:
+				continue
+			var difficulty_text: String = String(raw_difficulty)
+			if not _is_valid_difficulty_score_key(difficulty_text):
+				continue
+			var raw_score_value: Variant = raw_difficulty_scores[raw_difficulty]
+			if (
+				typeof(raw_score_value) not in [TYPE_INT, TYPE_FLOAT]
+				or float(raw_score_value) != float(int(raw_score_value))
+				or int(raw_score_value) < 0
+			):
+				continue
+			var difficulty: int = int(difficulty_text)
+			repaired_difficulty_scores[difficulty_text] = _score_for_difficulty(
+				int(raw_score_value),
+				difficulty
+			)
+		if not repaired_difficulty_scores.is_empty():
+			repaired[String(sect_id)] = repaired_difficulty_scores
+	return repaired
 
 
 func _apply_mastery_candidates(profile: Dictionary, candidate_ids: Array) -> void:
