@@ -69,9 +69,9 @@ func _run() -> void:
 	var status_label := canvas.get_node("Status") as Label
 	var card_inspector := canvas.get_node("CardInspector") as Control
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Deck builder bottom status uses the card flavor text color"
+		"Deck builder bottom status uses the perceptually matched flavor color"
 	)
 	_check(
 		status_label.z_index > card_inspector.z_index,
@@ -201,9 +201,9 @@ func _run() -> void:
 	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
 	_check(builder.debug_get_status() == "卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Blocked go-first status keeps the card flavor text color"
+		"Blocked go-first status keeps the perceptually matched flavor color"
 	)
 	go_second.pressed.emit()
 	_check(_duel_requests == [DuelRules.OPPONENT_OWNER], "Go-second choice requests an opponent opening turn")

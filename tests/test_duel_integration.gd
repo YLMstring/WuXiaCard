@@ -136,9 +136,9 @@ func _check_layout(duel: Node) -> void:
 	_check(absf(turn_status.position.x - player_hand.position.x) < 1.0 and absf(turn_status.size.x - player_hand.size.x) < 1.0, "Turn status matches the player hand's horizontal bounds")
 	_check(turn_status.position.y + turn_status.size.y <= canvas.size.y - 8.0, "Turn status remains inside the bottom safe area")
 	_check(
-		turn_status.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		turn_status.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and turn_status.modulate.is_equal_approx(Color.WHITE),
-		"Battle bottom status uses the card flavor text color"
+		"Battle bottom status uses the perceptually matched flavor color"
 	)
 	_check(
 		turn_status.z_index > card_inspector.z_index,
@@ -1374,10 +1374,10 @@ func _check_testing_mode_manual_turns() -> void:
 	_check("Testing" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text and "Opponent" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text, "Testing status identifies the opponent side")
 	_check(
 		(test_duel.get_node("DuelCanvas/TurnStatus") as Label)
-		.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and (test_duel.get_node("DuelCanvas/TurnStatus") as Label)
 		.modulate.is_equal_approx(Color.WHITE),
-		"Battle status keeps the card flavor text color after the active side changes"
+		"Battle status keeps the perceptually matched flavor color after the active side changes"
 	)
 
 	var opponent_card: Control = opponent_cards[0]

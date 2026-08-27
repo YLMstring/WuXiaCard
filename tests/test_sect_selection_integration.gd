@@ -39,9 +39,9 @@ func _run() -> void:
 	var status_label := canvas.get_node("Status") as Label
 	var card_inspector := canvas.get_node("CardInspector") as Control
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Sect selection bottom status uses the card flavor text color"
+		"Sect selection bottom status uses the perceptually matched flavor color"
 	)
 	_check(
 		status_label.z_index > card_inspector.z_index,
@@ -193,9 +193,9 @@ func _run() -> void:
 	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")
 	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked hold reports its status")
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Locked sect status keeps the card flavor text color"
+		"Locked sect status keeps the perceptually matched flavor color"
 	)
 	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 1, "A locked hold pulses exactly once")
 	locked_slot.debug_begin_pointer(locked_center)
