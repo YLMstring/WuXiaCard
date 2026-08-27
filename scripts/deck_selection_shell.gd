@@ -116,8 +116,8 @@ static func apply_core_layout(
 	return layout
 
 
-static func style_bottom_status(status_label: Label) -> void:
-	DuelBackdropData.style_bottom_status(status_label)
+static func style_bottom_status(status_label: Label, inspector: CanvasItem = null) -> void:
+	DuelBackdropData.style_bottom_status(status_label, inspector)
 
 
 static func style_header(

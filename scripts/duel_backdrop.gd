@@ -43,12 +43,14 @@ static func fit_duel_rect(viewport_size: Vector2) -> Rect2:
 	return Rect2((viewport_size - fitted_size) * 0.5, fitted_size)
 
 
-static func style_bottom_status(label: Label) -> void:
+static func style_bottom_status(label: Label, inspector: CanvasItem = null) -> void:
 	if label == null:
 		return
 	label.add_theme_color_override("font_color", BOTTOM_STATUS_COLOR)
 	label.modulate = Color.WHITE
 	label.self_modulate = Color.WHITE
+	if inspector != null:
+		label.z_index = inspector.z_index + 1
 
 
 static func classify_layout(viewport_size: Vector2) -> int:

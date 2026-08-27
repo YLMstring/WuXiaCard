@@ -159,7 +159,7 @@ var _replay_delay_remaining: float = 0.0
 
 
 func _ready() -> void:
-	DuelBackdropData.style_bottom_status(turn_status)
+	DuelBackdropData.style_bottom_status(turn_status, card_inspector)
 	board_cards.resize(9)
 	board_cards.fill(null)
 	_create_board_cells()

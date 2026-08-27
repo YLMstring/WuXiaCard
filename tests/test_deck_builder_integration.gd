@@ -67,10 +67,15 @@ func _run() -> void:
 	var go_first := canvas.get_node("GoFirstButton") as Button
 	var go_second := canvas.get_node("GoSecondButton") as Button
 	var status_label := canvas.get_node("Status") as Label
+	var card_inspector := canvas.get_node("CardInspector") as Control
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Deck builder bottom status uses unified black text"
+		"Deck builder bottom status uses the card flavor text color"
+	)
+	_check(
+		status_label.z_index > card_inspector.z_index,
+		"Deck builder bottom status renders above the inspector dimming backdrop"
 	)
 	_check(canvas.find_child("ScoreOverlay", true, false) == null, "Deck builder has no score panels")
 	_check(opponent_hand.get_child_count() == 5, "Opponent hand keeps five slots")
@@ -198,7 +203,7 @@ func _run() -> void:
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Blocked go-first status remains unified black"
+		"Blocked go-first status keeps the card flavor text color"
 	)
 	go_second.pressed.emit()
 	_check(_duel_requests == [DuelRules.OPPONENT_OWNER], "Go-second choice requests an opponent opening turn")

@@ -37,10 +37,15 @@ func _run() -> void:
 	var left_difficulty_button := canvas.get_node_or_null("DifficultyLeftButton") as TextureButton
 	var right_difficulty_button := canvas.get_node_or_null("DifficultyRightButton") as TextureButton
 	var status_label := canvas.get_node("Status") as Label
+	var card_inspector := canvas.get_node("CardInspector") as Control
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Sect selection bottom status uses unified black text"
+		"Sect selection bottom status uses the card flavor text color"
+	)
+	_check(
+		status_label.z_index > card_inspector.z_index,
+		"Sect selection bottom status renders above the inspector dimming backdrop"
 	)
 	_check(selector.upcoming_enemy_name == "测试对手", "Selector accepts the upcoming enemy name")
 	_check((canvas.get_node("TopBar/OpponentName") as Label).text == "测试对手", "Header shows the upcoming enemy name")
@@ -190,7 +195,7 @@ func _run() -> void:
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
-		"Locked sect status remains unified black"
+		"Locked sect status keeps the card flavor text color"
 	)
 	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 1, "A locked hold pulses exactly once")
 	locked_slot.debug_begin_pointer(locked_center)

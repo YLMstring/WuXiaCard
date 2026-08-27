@@ -125,6 +125,7 @@ func _check_layout(duel: Node) -> void:
 	var player_hand := duel.get_node("DuelCanvas/PlayerHand") as HBoxContainer
 	var board_grid := duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
 	var turn_status := duel.get_node("DuelCanvas/TurnStatus") as Label
+	var card_inspector := duel.get_node("DuelCanvas/CardInspector") as Control
 	var top_gap: float = board_grid.position.y - (opponent_hand.position.y + opponent_hand.size.y)
 	var bottom_gap: float = player_hand.position.y - (board_grid.position.y + board_grid.size.y)
 	var board_center_x: float = board_grid.position.x + board_grid.size.x * 0.5
@@ -137,7 +138,11 @@ func _check_layout(duel: Node) -> void:
 	_check(
 		turn_status.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and turn_status.modulate.is_equal_approx(Color.WHITE),
-		"Battle bottom status uses unified black text"
+		"Battle bottom status uses the card flavor text color"
+	)
+	_check(
+		turn_status.z_index > card_inspector.z_index,
+		"Battle bottom status renders above the inspector dimming backdrop"
 	)
 
 
@@ -1372,7 +1377,7 @@ func _check_testing_mode_manual_turns() -> void:
 		.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and (test_duel.get_node("DuelCanvas/TurnStatus") as Label)
 		.modulate.is_equal_approx(Color.WHITE),
-		"Battle status stays black after the active side changes"
+		"Battle status keeps the card flavor text color after the active side changes"
 	)
 
 	var opponent_card: Control = opponent_cards[0]
