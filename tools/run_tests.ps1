@@ -80,6 +80,7 @@ $testScripts = @(
     "test_duel_card_selector.gd",
     "test_duel_simulator.gd",
     "test_duel_search.gd",
+	"test_duel_ai_benchmark.gd",
 	"test_activation_targeting_swap_presentation.gd",
 	"test_taishan_wudafu.gd",
 	"test_taishan_wudafu_integration.gd",

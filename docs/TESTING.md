@@ -53,7 +53,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
-- `test_duel_search.gd` — evaluation/search, deadlines, determinism, fallback, and state keys.
+- `test_duel_search.gd` — evaluation/search, deadlines, deterministic ordering,
+  lazy-transition/PVS exactness, bounded tactical extension,
+  opt-in evaluation caching, fallback, and state keys.
+- `test_duel_ai_benchmark.gd` — versioned AI fixture validation, deterministic
+  rebuilds, mutable-state isolation, and a tiny paired-runner smoke test. Formal
+  matches are intentionally excluded from the daily full suite.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 - `test_duel_replay_record.gd` — independent initial/final state snapshots,
   immutable ordered action copies, readiness, access isolation, and reset.
@@ -165,6 +170,20 @@ next snapshot member.
 ### Search
 
 Run simulator and search suites. Check deterministic action selection and deadline fallback. Play with the production 10-second budget and inspect `AI_SEARCH` logs.
+
+Run paired AI strength samples separately with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
+```
+
+`Quick` uses four fixtures and 1,500 nodes per decision. `Extended` uses 16
+fixtures and 10,000 nodes, and `Production` uses two fixtures with the real
+10-second decision budget and Dummy audio. Every fixture is played twice with
+enhanced/baseline owners swapped. Extended Final requires at least 55% match
+points, 75% initial-depth non-regression, no worse fallback rate, and no
+incomplete games. Results are written under `.summer/local/ai-benchmarks/` and
+must not be committed.
 
 ### UI
 

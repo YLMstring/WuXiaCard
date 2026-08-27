@@ -1209,6 +1209,16 @@ func _check_inspector_holds_completed_ai_move() -> void:
 		frames_waited += 1
 	_check(ai_duel.debug_get_board_occupancy() >= 2, "Opponent result applies after inspection closes")
 	_check(ai_duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Opponent result returns control to the player")
+	var search_report: Dictionary = ai_duel.debug_get_last_search_report()
+	for field: String in [
+		"max_tactical_depth",
+		"generated_actions",
+		"applied_transitions",
+		"pvs_probes",
+		"pvs_researches",
+		"evaluation_cache_hits",
+	]:
+		_check(search_report.has(field), "Production search report includes %s" % field)
 	for _settle_frame: int in range(10):
 		await process_frame
 	ai_duel.queue_free()

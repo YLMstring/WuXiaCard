@@ -235,7 +235,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   opponent, including created cards, copies, fresh board returns, and the same
   instance returning from discard. Newly public instances emit
   `card_revealed` immediately after their addition/return event.
-- The AI sees both hands and exact deck order.
+- The AI sees both hands and exact deck order. Production uses the enhanced
+  iterative-deepening profile: deterministic generic ordering, lazy simulator
+  transitions, PVS, and a bounded two-ply tactical
+  extension (scan 12/search 4). `baseline` remains available for paired
+  benchmarks. Search stays card-agnostic; the measured-slower evaluation cache
+  and unproven candidate evaluator terms are off by default.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live
@@ -396,7 +401,7 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   triggers; only their action phase is skipped. Five occurrences of the same
   nine-cell catalog-ID/current-owner signature end the duel by score at the
   end-to-start boundary. The action-count fallback is `max_turns = 100`.
-- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation.
+- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation. Use `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production evidence rather than judging strength from one game.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.

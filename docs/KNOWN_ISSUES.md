@@ -19,6 +19,9 @@ Updated: 2026-08-14
 - The transposition key uses two hashes plus encoded length and has a theoretical collision risk.
 - Evaluation is generic and will need extension as new reusable effect semantics appear.
 - Search is perfect-information by design; it is not suitable for a future hidden-information ruleset without a product decision.
+- The opt-in evaluation cache and candidate enhanced evaluator were measured but
+  are disabled by default: neither improved paired strength, and the cache
+  reduced throughput in the current Dictionary-heavy state representation.
 - There is no cross-session opening/endgame database.
 
 ## UI and Mobile

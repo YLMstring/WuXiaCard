@@ -1880,12 +1880,20 @@ func _print_search_report(result: Dictionary) -> void:
 	var action: ActionData = result.get("action", null) as ActionData
 	var action_key: String = action.canonical_key() if action != null else "none"
 	print(
-		"AI_SEARCH elapsed=%.3f depth=%d nodes=%d cutoffs=%d cache_hits=%d reason=%s fallback=%s action=%s" % [
+		"AI_SEARCH elapsed=%.3f depth=%d tactical_depth=%d tactical_scanned=%d tactical_searched=%d nodes=%d generated=%d applied=%d cutoffs=%d cache_hits=%d eval_cache_hits=%d pvs_probes=%d pvs_researches=%d reason=%s fallback=%s action=%s" % [
 			float(result.get("elapsed_seconds", 0.0)),
 			int(result.get("completed_depth", 0)),
+			int(result.get("max_tactical_depth", 0)),
+			int(result.get("tactical_candidates_scanned", 0)),
+			int(result.get("tactical_actions_searched", 0)),
 			int(result.get("nodes", 0)),
+			int(result.get("generated_actions", 0)),
+			int(result.get("applied_transitions", 0)),
 			int(result.get("cutoffs", 0)),
 			int(result.get("transposition_hits", 0)),
+			int(result.get("evaluation_cache_hits", 0)),
+			int(result.get("pvs_probes", 0)),
+			int(result.get("pvs_researches", 0)),
 			String(result.get("completion_reason", &"unknown")),
 			str(bool(result.get("used_fallback", false))),
 			action_key,

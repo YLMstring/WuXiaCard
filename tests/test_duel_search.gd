@@ -4,8 +4,12 @@ const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Evaluator = preload("res://scripts/duel_evaluator.gd")
+const EvaluationCache = preload("res://scripts/duel_evaluation_cache.gd")
+const Profile = preload("res://scripts/duel_search_profile.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Search = preload("res://scripts/duel_search.gd")
+const SearchOrdering = preload("res://scripts/duel_search_ordering.gd")
+const SearchTactics = preload("res://scripts/duel_search_tactics.gd")
 const Session = preload("res://scripts/duel_search_session.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -26,7 +30,15 @@ func _run() -> void:
 		quit(_failures)
 		return
 	_test_action_and_state_keys()
+	_test_search_profiles_and_stats()
+	_test_action_ordering()
+	_test_lazy_transition_equivalence()
+	_test_pvs_equivalence()
+	_test_tactical_transition_classification()
+	_test_tactical_extension_bounds()
+	_test_leaf_evaluation_cache()
 	_test_evaluator_terminal_priority()
+	_test_enhanced_evaluator_features()
 	_test_iterative_depth_and_interruption()
 	_test_search_inherits_summon_reactions()
 	await _test_search_session()
@@ -156,6 +168,338 @@ func _test_action_and_state_keys() -> void:
 	)
 
 
+func _test_search_profiles_and_stats() -> void:
+	var baseline: Dictionary = Profile.normalize({"profile": &"baseline"})
+	_check(StringName(baseline.get("name", &"")) == &"baseline", "Baseline search profile is selectable")
+	_check(not bool(baseline.get("use_lazy_transitions", true)), "Baseline keeps eager transitions")
+	_check(not bool(baseline.get("use_pvs", true)), "Baseline disables PVS")
+	_check(not bool(baseline.get("use_tactical_extension", true)), "Baseline disables tactical extension")
+
+	var enhanced: Dictionary = Profile.normalize({})
+	_check(StringName(enhanced.get("name", &"")) == &"enhanced", "Enhanced is the deterministic default profile")
+	_check(bool(enhanced.get("use_lazy_transitions", false)), "Enhanced enables lazy transitions")
+	_check(bool(enhanced.get("use_pvs", false)), "Enhanced enables PVS")
+	_check(bool(enhanced.get("use_tactical_extension", false)), "Enhanced enables tactical extension")
+	_check(int(enhanced.get("max_tactical_depth", -1)) == 2, "Enhanced tactical depth defaults to two")
+	_check(int(enhanced.get("tactical_scan_limit", -1)) == 12, "Enhanced tactical scan defaults to twelve")
+	_check(int(enhanced.get("tactical_action_limit", -1)) == 4, "Enhanced tactical action limit defaults to four")
+
+	var normalized: Dictionary = Profile.normalize({
+		"profile": &"unknown",
+		"evaluator_profile": &"unknown",
+		"max_tactical_depth": -4,
+		"tactical_scan_limit": -3,
+		"tactical_action_limit": -2,
+	})
+	_check(StringName(normalized.get("name", &"")) == &"enhanced", "Unknown profiles fall back deterministically")
+	_check(not bool(normalized.get("requested_profile_valid", true)), "Unknown profiles are reported as invalid")
+	_check(
+		StringName(normalized.get("evaluator_profile", &"")) == &"baseline",
+		"Unknown evaluator profiles retain the production baseline evaluator"
+	)
+	_check(int(normalized.get("max_tactical_depth", -1)) == 0, "Negative tactical depth is clamped")
+	_check(int(normalized.get("tactical_scan_limit", -1)) == 0, "Negative tactical scan limit is clamped")
+	_check(int(normalized.get("tactical_action_limit", -1)) == 0, "Negative tactical action limit is clamped")
+
+	var result: Dictionary = Search.find_best_action_iterative(
+		_make_opening_state(),
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "profile": &"baseline"}
+	)
+	for field: String in [
+		"max_tactical_depth",
+		"generated_actions",
+		"applied_transitions",
+		"pvs_probes",
+		"pvs_researches",
+		"evaluation_cache_hits",
+	]:
+		_check(result.has(field), "Search result includes %s" % field)
+	_check(
+		int(result.get("generated_actions", -1)) == int(result.get("applied_transitions", -2)),
+		"Baseline eager search applies every generated action"
+	)
+	_check(int(result.get("pvs_probes", -1)) == 0, "Baseline reports zero PVS probes")
+	_check(int(result.get("evaluation_cache_hits", -1)) == 0, "Baseline reports zero evaluation-cache hits")
+
+
+func _test_action_ordering() -> void:
+	var state: State = _make_opening_state()
+	var actions: Array[Action] = Simulator.get_legal_actions(state)
+	var pv_action: Action = actions[3]
+	var tt_action: Action = actions[2]
+	var history_action: Action = actions[1]
+	var history: Dictionary = {SearchOrdering.history_key(history_action, state): 999_999}
+	var ordered: Array[Action] = SearchOrdering.order_actions(
+		state,
+		actions,
+		pv_action.canonical_key(),
+		tt_action.canonical_key(),
+		history
+	)
+	_check(ordered[0].is_same_as(pv_action), "Previous principal variation has first ordering priority")
+	_check(ordered[1].is_same_as(tt_action), "Transposition-table best action has second ordering priority")
+	_check(ordered[2].is_same_as(history_action), "History score follows PV and TT priorities")
+
+	var structurally_same_a: Action = Action.make_play(0, 0, &"first_runtime_copy")
+	var structurally_same_b: Action = Action.make_play(0, 0, &"second_runtime_copy")
+	_check(
+		SearchOrdering.history_key(structurally_same_a) == SearchOrdering.history_key(structurally_same_b),
+		"History keys omit exact runtime identity"
+	)
+	var different_source_state: State = state.duplicate_state()
+	different_source_state.get_hand(different_source_state.active_player)[0]["powers"] = [9, 9, 9, 9]
+	_check(
+		SearchOrdering.history_key(actions[0], state)
+		!= SearchOrdering.history_key(actions[0], different_source_state),
+		"History keys separate generic source-card shapes without using card identity"
+	)
+	var state_key_before: String = StateKey.build(state)
+	SearchOrdering.structural_score(state, actions[0])
+	_check(StateKey.build(state) == state_key_before, "Structural ordering never applies a transition")
+	var tactical_board: Array = Rules.empty_board()
+	var weak_enemy: Dictionary = Rules.make_card("Weak", "弱", [0, 0, 0, 0], [], Rules.PLAYER_OWNER)
+	weak_enemy["instance_id"] = &"ordering_weak"
+	tactical_board[4] = {"owner": Rules.PLAYER_OWNER, "card": weak_enemy}
+	var strong_card: Dictionary = Rules.make_card("Strong", "强", [8, 8, 8, 8], [], Rules.OPPONENT_OWNER)
+	strong_card["instance_id"] = &"ordering_strong"
+	var tactical_state := State.new(tactical_board, [], [strong_card], Rules.OPPONENT_OWNER)
+	_check(
+		SearchOrdering.structural_score(
+			tactical_state,
+			Action.make_play(0, 1, &"ordering_strong")
+		)
+		> SearchOrdering.structural_score(
+			tactical_state,
+			Action.make_play(0, 8, &"ordering_strong")
+		),
+		"Generic structural ordering prioritizes a standard play with more legal flips"
+	)
+	var symmetric_actions: Array[Action] = [
+		Action.make_play(0, 2, actions[0].source_instance_id),
+		Action.make_play(0, 0, actions[0].source_instance_id),
+	]
+	var symmetric_order: Array[Action] = SearchOrdering.order_actions(
+		state,
+		symmetric_actions,
+		"",
+		"",
+		{}
+	)
+	_check(
+		symmetric_order[0].canonical_key() < symmetric_order[1].canonical_key(),
+		"Equal structural priorities use canonical deterministic order"
+	)
+
+
+func _test_lazy_transition_equivalence() -> void:
+	var state: State = _make_opening_state()
+	var baseline: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 3, "profile": &"baseline"}
+	)
+	var enhanced: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 3,
+			"profile": &"enhanced",
+			"use_pvs": false,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+			"evaluator_profile": &"baseline",
+		}
+	)
+	var baseline_action: Action = baseline.get("action") as Action
+	var enhanced_action: Action = enhanced.get("action") as Action
+	_check(int(baseline.get("score", 1)) == int(enhanced.get("score", 0)), "Lazy search preserves the fixed-depth minimax score")
+	_check(baseline_action.is_same_as(enhanced_action), "Lazy search preserves the fixed-depth root action")
+	_check(
+		int(baseline.get("generated_actions", -1)) == int(baseline.get("applied_transitions", -2)),
+		"Baseline remains an eager transition reference"
+	)
+	_check(
+		int(enhanced.get("applied_transitions", 0)) < int(enhanced.get("generated_actions", 0)),
+		"Lazy search skips transition work after cutoffs"
+	)
+
+
+func _test_pvs_equivalence() -> void:
+	var state: State = _make_opening_state()
+	var lazy_only: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 3,
+			"profile": &"enhanced",
+			"use_pvs": false,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+		}
+	)
+	var with_pvs: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 3,
+			"profile": &"enhanced",
+			"use_pvs": true,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+		}
+	)
+	var lazy_action: Action = lazy_only.get("action") as Action
+	var pvs_action: Action = with_pvs.get("action") as Action
+	_check(int(lazy_only.get("score", 1)) == int(with_pvs.get("score", 0)), "PVS preserves the fixed-depth minimax score")
+	_check(lazy_action.is_same_as(pvs_action), "PVS preserves the fixed-depth root action")
+	_check(int(with_pvs.get("pvs_probes", 0)) > 0, "PVS probes later ordered children with a narrow window")
+	_check(int(with_pvs.get("pvs_researches", -1)) >= 0, "PVS reports full-window researches")
+	_check(int(lazy_only.get("pvs_probes", -1)) == 0, "PVS-disabled search reports zero probes")
+
+
+func _test_tactical_transition_classification() -> void:
+	var before: State = _make_opening_state()
+	var after: State = before.duplicate_state()
+	var quiet: Dictionary = {
+		"state": after,
+		"captures": [],
+		"exiles": [],
+		"events": [{"type": &"card_drawn"}],
+	}
+	_check(not SearchTactics.is_volatile(before, quiet), "A pure draw is quiet")
+	quiet["events"] = [{"type": &"card_moved"}]
+	_check(not SearchTactics.is_volatile(before, quiet), "A pure movement is quiet")
+
+	var capture: Dictionary = quiet.duplicate(true)
+	capture["captures"] = [4]
+	_check(SearchTactics.is_volatile(before, capture), "A real capture is volatile")
+	var exile: Dictionary = quiet.duplicate(true)
+	exile["exiles"] = [4]
+	_check(SearchTactics.is_volatile(before, exile), "A real exile is volatile")
+	var extra_play: Dictionary = quiet.duplicate(true)
+	extra_play["events"] = [{"type": &"extra_card_play_granted"}]
+	_check(SearchTactics.is_volatile(before, extra_play), "An extra card play is volatile")
+	var resummon: Dictionary = quiet.duplicate(true)
+	resummon["events"] = [{"type": &"card_summoned"}]
+	_check(SearchTactics.is_volatile(before, resummon), "A generated summon is volatile")
+
+	var ownership_after: State = before.duplicate_state()
+	var ownership_card: Dictionary = Rules.make_card("Owner Shift", "转", [1, 1, 1, 1])
+	ownership_card["instance_id"] = &"owner_shift"
+	before.board[4] = {"owner": Rules.PLAYER_OWNER, "card": ownership_card}
+	ownership_after = before.duplicate_state()
+	(ownership_after.board[4] as Dictionary)["owner"] = Rules.OPPONENT_OWNER
+	_check(
+		SearchTactics.is_volatile(before, {
+			"state": ownership_after,
+			"captures": [],
+			"exiles": [],
+			"events": [],
+		}),
+		"A generic ownership change is volatile even without a presentation event"
+	)
+
+
+func _test_tactical_extension_bounds() -> void:
+	var board: Array = Rules.empty_board()
+	for cell_index: int in range(7):
+		var owner_id: int = Rules.PLAYER_OWNER if cell_index % 2 == 0 else Rules.OPPONENT_OWNER
+		var board_card: Dictionary = Rules.make_card("Board %d" % cell_index, "局", [1, 1, 1, 1], [], owner_id)
+		board_card["instance_id"] = StringName("tactical_board_%d" % cell_index)
+		board[cell_index] = {"owner": owner_id, "card": board_card}
+	var player_card: Dictionary = Rules.make_card("Player Fill", "填", [2, 2, 2, 2], [], Rules.PLAYER_OWNER)
+	player_card["instance_id"] = &"tactical_player"
+	var opponent_card: Dictionary = Rules.make_card("Opponent Fill", "终", [9, 9, 9, 9], [], Rules.OPPONENT_OWNER)
+	opponent_card["instance_id"] = &"tactical_opponent"
+	var state := State.new(board, [player_card], [opponent_card], Rules.PLAYER_OWNER)
+	var result: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.PLAYER_OWNER,
+		{
+			"max_depth": 1,
+			"profile": &"enhanced",
+			"use_tactical_extension": true,
+			"max_tactical_depth": 2,
+			"tactical_scan_limit": 12,
+			"tactical_action_limit": 4,
+		}
+	)
+	_check(int(result.get("max_tactical_depth", 0)) > 0, "Volatile leaf actions extend beyond the ordinary horizon")
+	_check(int(result.get("max_tactical_depth", 99)) <= 2, "Tactical extension never exceeds two plies")
+	_check(int(result.get("tactical_candidates_scanned", 0)) > 0, "Tactical extension reports scanned candidates")
+	_check(
+		int(result.get("tactical_actions_searched", 0)) <= int(result.get("tactical_candidates_scanned", 0)),
+		"Tactical search never exceeds its scanned candidates"
+	)
+	_check(int(result.get("max_tactical_candidates_per_node", 99)) <= 12, "Tactical candidate scan respects its per-node cap")
+	_check(int(result.get("max_tactical_actions_per_node", 99)) <= 4, "Tactical volatile-action search respects its per-node cap")
+	var disabled: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.PLAYER_OWNER,
+		{
+			"max_depth": 1,
+			"profile": &"enhanced",
+			"use_tactical_extension": false,
+		}
+	)
+	_check(int(disabled.get("max_tactical_depth", -1)) == 0, "Disabled tactical search remains at the ordinary horizon")
+
+
+func _test_leaf_evaluation_cache() -> void:
+	var state: State = _make_opening_state()
+	var cache: Dictionary = {}
+	var first: Dictionary = EvaluationCache.lookup_or_evaluate(
+		cache,
+		state,
+		Rules.PLAYER_OWNER,
+		&"baseline"
+	)
+	var repeated: Dictionary = EvaluationCache.lookup_or_evaluate(
+		cache,
+		state,
+		Rules.PLAYER_OWNER,
+		&"baseline"
+	)
+	_check(not bool(first.get("hit", true)), "First leaf evaluation populates the cache")
+	_check(bool(repeated.get("hit", false)), "Repeated leaf evaluation hits the cache")
+	_check(int(first.get("score", 1)) == int(repeated.get("score", 0)), "Cached evaluation preserves the exact score")
+	var other_owner: Dictionary = EvaluationCache.lookup_or_evaluate(
+		cache,
+		state,
+		Rules.OPPONENT_OWNER,
+		&"baseline"
+	)
+	_check(not bool(other_owner.get("hit", true)), "Root owner participates in the evaluation cache key")
+	var other_profile: Dictionary = EvaluationCache.lookup_or_evaluate(
+		cache,
+		state,
+		Rules.PLAYER_OWNER,
+		&"enhanced"
+	)
+	_check(not bool(other_profile.get("hit", true)), "Evaluator profile participates in the cache key")
+	var fresh_cache: Dictionary = {}
+	var next_search: Dictionary = EvaluationCache.lookup_or_evaluate(
+		fresh_cache,
+		state,
+		Rules.PLAYER_OWNER,
+		&"baseline"
+	)
+	_check(not bool(next_search.get("hit", true)), "A new top-level search starts with an empty evaluation cache")
+
+	var disabled: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 2,
+			"profile": &"enhanced",
+			"use_evaluation_cache": false,
+			"use_tactical_extension": false,
+		}
+	)
+	_check(int(disabled.get("evaluation_cache_hits", -1)) == 0, "Cache-disabled search reports zero evaluation hits")
+
+
 func _test_evaluator_terminal_priority() -> void:
 	var board: Array = Rules.empty_board()
 	for index: int in range(9):
@@ -165,6 +509,52 @@ func _test_evaluator_terminal_priority() -> void:
 	_check(Simulator.is_terminal(state), "Full evaluator fixture is terminal")
 	_check(Evaluator.evaluate(state, Rules.PLAYER_OWNER) >= Evaluator.WIN_SCORE, "Terminal victory outranks heuristic scores")
 	_check(Evaluator.evaluate(state, Rules.OPPONENT_OWNER) <= -Evaluator.WIN_SCORE, "Terminal loss outranks heuristic scores")
+
+
+func _test_enhanced_evaluator_features() -> void:
+	var no_use_card: Dictionary = Rules.make_card("Stored Ki", "气", [2, 2, 2, 2], [], Rules.PLAYER_OWNER)
+	no_use_card["instance_id"] = &"eval_no_use"
+	no_use_card["ki"] = 2
+	var usable_card: Dictionary = no_use_card.duplicate(true)
+	usable_card["instance_id"] = &"eval_usable"
+	usable_card["active_abilities"] = [{
+		"activation": {
+			"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [],
+		},
+	}]
+	var opponent_card: Dictionary = Rules.make_card("Opponent", "敌", [2, 2, 2, 2], [], Rules.OPPONENT_OWNER)
+	opponent_card["instance_id"] = &"eval_opponent"
+	var no_use_board: Array = Rules.empty_board()
+	no_use_board[4] = {"owner": Rules.PLAYER_OWNER, "card": no_use_card}
+	no_use_board[0] = {"owner": Rules.OPPONENT_OWNER, "card": opponent_card}
+	var usable_board: Array = no_use_board.duplicate(true)
+	usable_board[4] = {"owner": Rules.PLAYER_OWNER, "card": usable_card}
+	var reserve: Dictionary = Rules.make_card("Reserve", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)
+	reserve["instance_id"] = &"eval_reserve"
+	var no_use_state := State.new(no_use_board, [reserve], [], Rules.PLAYER_OWNER)
+	var usable_state := State.new(usable_board, [reserve], [], Rules.PLAYER_OWNER)
+	_check(
+		Evaluator.evaluate(usable_state, Rules.PLAYER_OWNER, &"enhanced")
+		> Evaluator.evaluate(no_use_state, Rules.PLAYER_OWNER, &"enhanced"),
+		"Enhanced evaluation values ki that has a generic spending path"
+	)
+
+	var early_state: State = usable_state.duplicate_state()
+	early_state.turn_count = 5
+	var late_state: State = usable_state.duplicate_state()
+	late_state.turn_count = 95
+	_check(
+		Evaluator.endgame_pressure(late_state) > Evaluator.endgame_pressure(early_state),
+		"Endgame pressure rises near the action boundary"
+	)
+	_check(
+		Evaluator.attack_potential(usable_state, Rules.PLAYER_OWNER) >= 0,
+		"Attack structure is measured through generic rules"
+	)
+	var enhanced_score: int = Evaluator.evaluate(usable_state, Rules.PLAYER_OWNER, &"enhanced")
+	_check(absi(enhanced_score) < Evaluator.WIN_SCORE, "Nonterminal enhanced evaluation remains below terminal scores")
 
 
 func _test_iterative_depth_and_interruption() -> void:
