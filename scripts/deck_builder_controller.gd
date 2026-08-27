@@ -7,13 +7,15 @@ signal duel_requested(starting_owner_id: int)
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
 const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
-const GO_FIRST_BLOCKED_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
+const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
+const GO_FIRST_STRICTLY_LOWER_NOTICE: String = "卡组总品阶低于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
@@ -308,7 +310,7 @@ func _on_back_pressed() -> void:
 
 func _on_go_first_pressed() -> void:
 	if not _go_first_allowed:
-		status_label.text = GO_FIRST_BLOCKED_NOTICE
+		status_label.text = _get_go_first_blocked_notice()
 		_play_blocked_choice_feedback()
 		return
 	duel_requested.emit(DuelRules.PLAYER_OWNER)
@@ -394,7 +396,13 @@ func _refresh_start_controls() -> void:
 		return
 	var player_total: int = _get_tier_total(_get_player_main_deck_ids())
 	var enemy_total: int = _get_tier_total(_effective_enemy_card_ids)
-	_go_first_allowed = player_total <= enemy_total
+	_go_first_allowed = (
+		player_total < enemy_total
+		if Difficulty.player_must_be_strictly_lower_to_go_first(
+			_profile_store.get_run_difficulty(profile)
+		)
+		else player_total <= enemy_total
+	)
 	if _go_first_ink_material != null:
 		_go_first_ink_material.set_shader_parameter(
 			"ink_color",
@@ -405,6 +413,14 @@ func _refresh_start_controls() -> void:
 	go_first_button.modulate = Color.WHITE
 	go_second_button.modulate = Color.WHITE
 	go_first_button.tooltip_text = ""
+
+
+func _get_go_first_blocked_notice() -> String:
+	if Difficulty.player_must_be_strictly_lower_to_go_first(
+		_profile_store.get_run_difficulty(profile)
+	):
+		return GO_FIRST_STRICTLY_LOWER_NOTICE
+	return GO_FIRST_NOT_HIGHER_NOTICE
 
 
 func _set_start_controls_visible(controls_visible: bool) -> void:

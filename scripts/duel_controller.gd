@@ -68,6 +68,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var player_hand_shuffle_seed: int = 0
 @export var opponent_hand_shuffle_seed: int = 0
 @export var opening_layout_seed: int = 0
+@export var difficulty_effect_seed: int = 0
 @export var opponent_think_delay: float = 0.55
 @export var opponent_search_budget_seconds: float = 10.0
 @export_range(0.0, 10.0, 0.05) var replay_turn_delay: float = 2.0
@@ -80,6 +81,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var opponent_card_ids: Array[StringName] = []
 @export var opponent_self_castration_enabled: bool = true
 @export var remembered_enemy_glyphs: Array[String] = []
+@export_range(0, 9) var run_difficulty: int = 0
 
 var turn_state: TurnState = TurnState.PLAYER
 var testing_mode: bool = Settings.TESTING_MODE
@@ -174,6 +176,11 @@ func _ready() -> void:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
 	_shuffle_hand_ids(effective_opponent_ids, opponent_hand_shuffle_seed)
 	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
+	OpeningSetup.apply_enemy_opening_hand_buff(
+		opponent_cards,
+		run_difficulty,
+		_make_seeded_rng(difficulty_effect_seed)
+	)
 	var player_side_deck: Array = _create_card_instances(
 		Decks.get_side_deck_card_ids(player_card_ids),
 		DuelRules.PLAYER_OWNER,
@@ -194,7 +201,8 @@ func _ready() -> void:
 		opening_owner,
 		0,
 		player_side_deck,
-		opponent_side_deck
+		opponent_side_deck,
+		run_difficulty
 	)
 	duel_state.enabled_effect_gates_by_owner[DuelRules.PLAYER_OWNER] = (
 		Decks.get_player_enabled_effect_gates(deck_profile_path, testing_mode)
@@ -251,7 +259,16 @@ func _build_opening_board(opening_owner: int) -> Array:
 		rng.randomize()
 	else:
 		rng.seed = opening_layout_seed
-	return OpeningSetup.build_opening_board(opening_owner, rng)
+	return OpeningSetup.build_opening_board(opening_owner, rng, run_difficulty)
+
+
+func _make_seeded_rng(seed_value: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	if seed_value == 0:
+		rng.randomize()
+	else:
+		rng.seed = seed_value
+	return rng
 
 
 func _begin_opening_opponent_turn() -> void:

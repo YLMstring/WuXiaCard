@@ -27,6 +27,8 @@ var future_draw_reveal_audiences: Dictionary = {}
 var last_hand_play_by_owner: Dictionary = {}
 var pending_non_retained_suppression_by_owner: Dictionary = {}
 var enabled_effect_gates_by_owner: Dictionary = {}
+var run_difficulty: int = 0
+var difficulty_eight_draw_consumed: bool = false
 var state_version: int = 0
 
 
@@ -37,7 +39,9 @@ func _init(
 	new_active_player: int = Rules.PLAYER_OWNER,
 	new_turn_count: int = 0,
 	player_deck: Array = [],
-	opponent_deck: Array = []
+	opponent_deck: Array = [],
+	new_run_difficulty: int = 0,
+	new_difficulty_eight_draw_consumed: bool = false
 ) -> void:
 	board = new_board.duplicate(true)
 	hands = {
@@ -76,6 +80,8 @@ func _init(
 	}
 	active_player = new_active_player
 	turn_count = new_turn_count
+	run_difficulty = clampi(new_run_difficulty, 0, 9)
+	difficulty_eight_draw_consumed = new_difficulty_eight_draw_consumed
 
 
 func get_hand(owner_id: int) -> Array:
@@ -183,7 +189,9 @@ func duplicate_state():
 		active_player,
 		turn_count,
 		decks.get(Rules.PLAYER_OWNER, []),
-		decks.get(Rules.OPPONENT_OWNER, [])
+		decks.get(Rules.OPPONENT_OWNER, []),
+		run_difficulty,
+		difficulty_eight_draw_consumed
 	)
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)

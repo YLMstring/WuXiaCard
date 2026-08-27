@@ -32,8 +32,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks,
   discard/removed zones, active player, turn count, owner-turn serial,
   remaining extra card plays, end-boundary state, queued-effect scaffolding,
-  last successful hand plays, persistent pending suppression counts, and state
-  version.
+  last successful hand plays, active-run difficulty, the difficulty-eight
+  one-card-draw latch, persistent pending suppression counts, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
   independent initial/final `DuelState` snapshots, ordered duplicate
@@ -51,9 +51,13 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 ### Rules
 
+- `difficulty_rules.gd` — the single pure-data table for difficulty prompt text,
+  completion thresholds, first-player deck restriction, opening Bagua setup,
+  and difficulty-eight/nine feature gates.
 - `duel_opening_setup.gd` — pure initial-board construction. It owns the stable
-  12-pair orthogonal adjacency space, seeded uniform selection, and the two
-  fresh later-owner `BaGuaFangWei` instances. It emits no gameplay events.
+  12-pair orthogonal adjacency space, seeded uniform selection, difficulty-aware
+  fresh `BaGuaFangWei` instances, and the difficulty-nine enemy-hand power
+  increase. It emits no gameplay events.
 - `duel_simulator.gd` — legal-action enumeration, legality checks, action application, attacks, turns, terminal checks, scoring, and greedy fallback.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
@@ -73,10 +77,16 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 `DuelSimulator.apply_action()` mutates the supplied state and returns a transition dictionary containing pure-data events. Tests and AI use this exact path.
 
 Before constructing `DuelState`, the controller chooses the first owner and
-passes it plus a dedicated layout RNG to `DuelOpeningSetup`. The returned board
-already contains the two later-owner Bagua cards. Board views reconcile from
-that state without a summon transition, and the replay record snapshots it
-before the first action.
+passes it, the active difficulty, and a dedicated layout RNG to
+`DuelOpeningSetup`. Before difficulty 3, the returned board contains two
+later-owner Bagua cards. A later player instead receives one uniformly random
+Bagua at difficulties 3–5 and none at difficulties 6–9. A later opponent still
+receives two adjacent Bagua; their four powers are set directly to 2 at
+difficulties 4–6 and to 4 at difficulties 7–9. The setup is static: board views
+reconcile without summon transitions, and replay snapshots it before the first
+action. Difficulty 9 uses an independent RNG to increase every power of one
+uniformly selected legal enemy opening-hand card by one; all-four-`-1` cards
+are excluded and the change has no presentation event.
 
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most
@@ -116,6 +126,13 @@ is no separate replacement subsystem. The initial attack cue remains even when
 one of those rules prevents the flip.
 
 An action with stale or missing context returns `NO_EFFECT` and later actions continue. Only a declaration with `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
+
+At difficulty 8 and above, every authoritative enemy-hand mutation reports its
+atomic before/after size to the simulator. The first actual transition whose
+final size is exactly one consumes a state latch and performs one ordinary
+draw. A batch discard reports only its completed boundary, so `3 -> 0` does not
+trigger while `3 -> 1` does. The latch and difficulty are serialized in the
+search key and copied into replay state.
 
 ### Search
 

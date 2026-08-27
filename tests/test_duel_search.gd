@@ -138,6 +138,22 @@ func _test_action_and_state_keys() -> void:
 		state.repetition_hashes.is_empty(),
 		"Search-state copies do not alias repetition history"
 	)
+	copied = state.duplicate_state()
+	copied.run_difficulty = 8
+	_check(
+		StateKey.build(state) != StateKey.build(copied),
+		"Active run difficulty participates in the canonical state key"
+	)
+	copied = state.duplicate_state()
+	copied.difficulty_eight_draw_consumed = true
+	_check(
+		StateKey.build(state) != StateKey.build(copied),
+		"Difficulty-eight one-card draw usage participates in the state key"
+	)
+	_check(
+		not state.difficulty_eight_draw_consumed,
+		"Search-state copies do not alias difficulty runtime flags"
+	)
 
 
 func _test_evaluator_terminal_priority() -> void:

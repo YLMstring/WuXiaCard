@@ -4,6 +4,7 @@ extends RefCounted
 const ActionData = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
@@ -167,6 +168,52 @@ static func other_owner(owner_id: int) -> int:
 	return Rules.OPPONENT_OWNER if owner_id == Rules.PLAYER_OWNER else Rules.PLAYER_OWNER
 
 
+static func _resolve_difficulty_hand_change(
+	state: StateData,
+	owner_id: int,
+	previous_size: int,
+	current_size: int,
+	source_cell: int
+) -> Dictionary:
+	var result: Dictionary = _empty_resolution()
+	if (
+		state == null
+		or owner_id != Rules.OPPONENT_OWNER
+		or previous_size == current_size
+		or current_size != 1
+		or state.difficulty_eight_draw_consumed
+		or not Difficulty.enemy_draws_on_first_one_card_hand(state.run_difficulty)
+	):
+		return result
+	state.difficulty_eight_draw_consumed = true
+	var event_resolver: Callable = func(
+		event_id: StringName,
+		context: Dictionary
+	) -> Dictionary:
+		return _resolve_trigger_event(state, event_id, context)
+	var hand_change_resolver: Callable = func(
+		changed_owner_id: int,
+		changed_previous_size: int,
+		changed_current_size: int,
+		hand_source_cell: int
+	) -> Dictionary:
+		return _resolve_difficulty_hand_change(
+			state,
+			changed_owner_id,
+			changed_previous_size,
+			changed_current_size,
+			hand_source_cell
+		)
+	return Executor.draw_cards_for_owner(
+		state,
+		Rules.OPPONENT_OWNER,
+		1,
+		source_cell,
+		event_resolver,
+		hand_change_resolver
+	)
+
+
 static func _is_play_action_legal(state: StateData, action: ActionData) -> bool:
 	if (
 		action.source_zone != ActionData.SOURCE_HAND
@@ -231,6 +278,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		next_state.extra_card_plays_remaining -= 1
 	var extra_card_play_requests: Array = []
 	var hand: Array = next_state.get_hand(summoning_owner)
+	var previous_hand_size: int = hand.size()
 	var card: Dictionary = (hand[action.source_index] as Dictionary).duplicate(true)
 	hand.remove_at(action.source_index)
 	card.erase(StateData.HAND_SLOT_INDEX_KEY)
@@ -247,6 +295,14 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 		"owner_id": summoning_owner,
 		"instance_id": instance_id,
 	}]
+	var hand_change_result: Dictionary = _resolve_difficulty_hand_change(
+		next_state,
+		summoning_owner,
+		previous_hand_size,
+		hand.size(),
+		action.target_index
+	)
+	events.append_array(hand_change_result.get("events", []) as Array)
 	var suppression_events: Array[Dictionary] = _consume_pending_hand_play_suppression(
 		next_state,
 		card,
@@ -256,6 +312,9 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	)
 	var captures: Array[int] = []
 	var exiles: Array[int] = []
+	_append_unique_indices(captures, hand_change_result.get("captures", []) as Array)
+	_append_unique_indices(exiles, hand_change_result.get("exiles", []) as Array)
+	_append_extra_card_play_requests(extra_card_play_requests, hand_change_result)
 	var summon_context: Dictionary = {
 		"trigger_cell": action.target_index,
 		"trigger_instance_id": instance_id,
@@ -416,7 +475,20 @@ static func _apply_activate_action(state: StateData, action: ActionData) -> Dict
 		flip_resolver,
 		summon_resolver,
 		before_move_resolver,
-		event_resolver
+		event_resolver,
+		func(
+			owner_id: int,
+			previous_size: int,
+			current_size: int,
+			hand_source_cell: int
+		) -> Dictionary:
+			return _resolve_difficulty_hand_change(
+				next_state,
+				owner_id,
+				previous_size,
+				current_size,
+				hand_source_cell
+			)
 	)
 	if not bool(activation_result.get("valid", false)):
 		return _invalid_transition(state)
@@ -928,7 +1000,25 @@ static func _resolve_trigger_event(
 ) -> Dictionary:
 	var result: Dictionary = _empty_resolution()
 	result["extra_turn_requests"] = []
-	var groups: Array[Dictionary] = Triggers.discover(state, event_id, context)
+	var resolved_context: Dictionary = context.duplicate(true)
+	resolved_context["hand_change_resolver"] = func(
+		owner_id: int,
+		previous_size: int,
+		current_size: int,
+		hand_source_cell: int
+	) -> Dictionary:
+		return _resolve_difficulty_hand_change(
+			state,
+			owner_id,
+			previous_size,
+			current_size,
+			hand_source_cell
+		)
+	var groups: Array[Dictionary] = Triggers.discover(
+		state,
+		event_id,
+		resolved_context
+	)
 	var attack_resolver: Callable = func(request: Dictionary) -> Dictionary:
 		return _resolve_attack_request(state, request)
 	var flip_resolver: Callable = func(request: Dictionary) -> Dictionary:
@@ -1113,8 +1203,10 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 	):
 		return result
 	var summoned_card: Dictionary
+	var previous_hand_size: int = -1
 	if existing_hand_index >= 0:
 		var source_hand: Array = state.get_hand(source_owner)
+		previous_hand_size = source_hand.size()
 		summoned_card = source_hand[existing_hand_index]
 		source_hand.remove_at(existing_hand_index)
 		summoned_card.erase(StateData.HAND_SLOT_INDEX_KEY)
@@ -1153,6 +1245,26 @@ static func _resolve_summon_request(state: StateData, request: Dictionary) -> Di
 		"from_discard_instance_id": existing_discard_instance_id,
 		"summon_reason": StringName(request.get("reason", &"ability_fresh_copy")),
 	})
+	if previous_hand_size >= 0:
+		var hand_change_result: Dictionary = _resolve_difficulty_hand_change(
+			state,
+			source_owner,
+			previous_hand_size,
+			state.get_hand(source_owner).size(),
+			target_cell
+		)
+		_merge_resolution(
+			result["captures"],
+			result["exiles"],
+			result["events"],
+			hand_change_result
+		)
+		result["extra_turn_requests"].append_array(
+			hand_change_result.get("extra_turn_requests", []) as Array
+		)
+		result["flip_prevention_requests"].append_array(
+			hand_change_result.get("flip_prevention_requests", []) as Array
+		)
 	var summon_context: Dictionary = {
 		"trigger_cell": target_cell,
 		"trigger_instance_id": instance_id,
@@ -1949,6 +2061,7 @@ static func _empty_resolution() -> Dictionary:
 		"exiles": [],
 		"events": [],
 		"flip_prevention_requests": [],
+		"extra_turn_requests": [],
 		"attack_flips": [],
 	}
 

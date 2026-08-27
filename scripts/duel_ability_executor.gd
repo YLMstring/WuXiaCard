@@ -50,7 +50,8 @@ static func execute_activation(
 	flip_resolver: Callable = Callable(),
 	summon_resolver: Callable = Callable(),
 	before_move_resolver: Callable = Callable(),
-	event_resolver: Callable = Callable()
+	event_resolver: Callable = Callable(),
+	hand_change_resolver: Callable = Callable()
 ) -> Dictionary:
 	var empty_result: Dictionary = _empty_result()
 	empty_result["valid"] = false
@@ -70,6 +71,8 @@ static func execute_activation(
 		"ability_source_owner_id": owner_id,
 		"card_reference_snapshots": {},
 	}
+	if hand_change_resolver.is_valid():
+		context["hand_change_resolver"] = hand_change_resolver
 	var snapshots: Dictionary = context["card_reference_snapshots"] as Dictionary
 	snapshots[Catalog.CARD_REF_ABILITY_SOURCE] = _snapshot_card_reference(
 		state,
@@ -572,7 +575,8 @@ static func _execute_action(
 			expected_owner,
 			added_card_id,
 			StringName(declaration.get("recipient", &"")),
-			perfect_copy_card
+			perfect_copy_card,
+			context
 		)
 	if action_type == Catalog.ACTION_REVEAL_HAND_CARDS:
 		return _reveal_hand_cards(
@@ -1382,6 +1386,7 @@ static func _draw_cards(
 		)
 		if hand_slot_index < 0:
 			break
+		var previous_hand_size: int = hand.size()
 		hand.append(drawn_card)
 		var logical_hand_index: int = hand.size() - 1
 		var drawn_instance_id := StringName(drawn_card.get("instance_id", &""))
@@ -1408,6 +1413,16 @@ static func _draw_cards(
 					"instance_id": drawn_instance_id,
 					"logical_hand_index": logical_hand_index,
 				})
+		_merge_action_resolution(
+			result,
+			_resolve_hand_size_change(
+				state,
+				owner_id,
+				previous_hand_size,
+				source_cell,
+				context
+			)
+		)
 		if event_resolver.is_valid():
 			var drawn_context: Dictionary = context.duplicate(true)
 			drawn_context["trigger_cell"] = -1
@@ -1428,6 +1443,42 @@ static func _draw_cards(
 			if resolution_value is Dictionary:
 				_merge_action_resolution(result, resolution_value as Dictionary)
 	return result
+
+
+static func draw_cards_for_owner(
+	state: StateData,
+	owner_id: int,
+	requested_count: int,
+	source_cell: int = -1,
+	event_resolver: Callable = Callable(),
+	hand_change_resolver: Callable = Callable()
+) -> Dictionary:
+	if state == null or owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		return _no_effect(source_cell)
+	var hand: Array = state.get_hand(owner_id)
+	if hand.is_empty() or not hand[0] is Dictionary:
+		return _no_effect(source_cell)
+	var source_card: Dictionary = hand[0]
+	var source_instance_id := StringName(source_card.get("instance_id", &""))
+	if source_instance_id == &"":
+		return _no_effect(source_cell)
+	var context: Dictionary = {
+		"ability_source_instance_id": source_instance_id,
+		"ability_source_owner_id": owner_id,
+		"card_reference_snapshots": {},
+	}
+	if hand_change_resolver.is_valid():
+		context["hand_change_resolver"] = hand_change_resolver
+	return _draw_cards(
+		state,
+		source_cell,
+		source_instance_id,
+		owner_id,
+		requested_count,
+		"",
+		context,
+		event_resolver
+	)
 
 
 static func _reveal_hand_cards(
@@ -1807,6 +1858,7 @@ static func _discard_locked_instances(
 	context["last_discard_batch_size"] = subjects.size()
 	if subjects.is_empty() or owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
 		return _no_effect(source_cell)
+	var previous_hand_size: int = state.get_hand(owner_id).size()
 	var batch_id := StringName(
 		"discard:%s:%d:%d:%d"
 		% [
@@ -1886,6 +1938,16 @@ static func _discard_locked_instances(
 			"moves": moves,
 		})
 	var result: Dictionary = _applied(current_source_cell, events)
+	_merge_action_resolution(
+		result,
+		_resolve_hand_size_change(
+			state,
+			owner_id,
+			previous_hand_size,
+			current_source_cell,
+			context
+		)
+	)
 	if event_resolver.is_valid():
 		for record: Dictionary in discarded_records:
 			var target_instance_id := StringName(record.get("instance_id", &""))
@@ -2152,7 +2214,8 @@ static func _add_card_to_hand(
 	expected_owner: int,
 	card_id: StringName,
 	recipient: StringName,
-	perfect_copy_card: Dictionary = {}
+	perfect_copy_card: Dictionary = {},
+	context: Dictionary = {}
 ) -> Dictionary:
 	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
 	if (
@@ -2186,6 +2249,7 @@ static func _add_card_to_hand(
 	)
 	if hand_slot_index < 0:
 		return _no_effect(source_cell)
+	var previous_hand_size: int = hand.size()
 	hand.append(added_card)
 	var add_event: Dictionary = {
 		"type": &"card_added_to_hand",
@@ -2197,10 +2261,21 @@ static func _add_card_to_hand(
 		"logical_hand_index": hand.size() - 1,
 		"hand_slot_index": hand_slot_index,
 	}
-	return _applied(
+	var result: Dictionary = _applied(
 		source_cell,
 		_public_hand_addition_events(added_card, recipient_owner, add_event)
 	)
+	_merge_action_resolution(
+		result,
+		_resolve_hand_size_change(
+			state,
+			recipient_owner,
+			previous_hand_size,
+			source_cell,
+			context
+		)
+	)
+	return result
 
 
 static func _resolve_add_card_to_hand_id(
@@ -2435,6 +2510,7 @@ static func _return_card_to_hand(
 		if returned_hand_slot_index < 0:
 			discard_pile.insert(discard_index, returned_same_card)
 			return _no_effect(source_current_cell)
+		var same_instance_previous_size: int = hand.size()
 		hand.append(returned_same_card)
 		var same_instance_return_event: Dictionary = {
 			"type": &"card_returned_to_hand",
@@ -2448,7 +2524,7 @@ static func _return_card_to_hand(
 			"logical_hand_index": hand.size() - 1,
 			"hand_slot_index": returned_hand_slot_index,
 		}
-		return _applied(
+		var same_instance_result: Dictionary = _applied(
 			source_current_cell,
 			_public_hand_addition_events(
 				returned_same_card,
@@ -2456,6 +2532,17 @@ static func _return_card_to_hand(
 				same_instance_return_event
 			)
 		)
+		_merge_action_resolution(
+			same_instance_result,
+			_resolve_hand_size_change(
+				state,
+				recipient_owner,
+				same_instance_previous_size,
+				source_current_cell,
+				context
+			)
+		)
+		return same_instance_result
 	if not Catalog.has_card(card_id):
 		return _no_effect(source_cell)
 	var new_instance_id: StringName = _make_generated_instance_id(state, card_id)
@@ -2472,6 +2559,7 @@ static func _return_card_to_hand(
 	if fresh_hand_slot_index < 0:
 		state.board[target_cell] = {"card": old_card, "owner": int(subject.get("owner_id", 0))}
 		return _no_effect(source_current_cell)
+	var fresh_instance_previous_size: int = hand.size()
 	hand.append(returned_card)
 	var fresh_return_event: Dictionary = {
 		"type": &"card_returned_to_hand",
@@ -2485,10 +2573,21 @@ static func _return_card_to_hand(
 		"logical_hand_index": hand.size() - 1,
 		"hand_slot_index": fresh_hand_slot_index,
 	}
-	return _applied(
+	var fresh_result: Dictionary = _applied(
 		source_current_cell,
 		_public_hand_addition_events(returned_card, recipient_owner, fresh_return_event)
 	)
+	_merge_action_resolution(
+		fresh_result,
+		_resolve_hand_size_change(
+			state,
+			recipient_owner,
+			fresh_instance_previous_size,
+			source_current_cell,
+			context
+		)
+	)
+	return fresh_result
 
 
 static func _public_hand_addition_events(
@@ -2867,6 +2966,11 @@ static func _exile_subject(
 	var current_owner: int = int(current_subject.get("owner_id", 0))
 	target_card = current_subject.get("card", {})
 	var exiled_snapshot: Dictionary = _snapshot_location(current_subject)
+	var previous_hand_size: int = (
+		state.get_hand(current_owner).size()
+		if zone == Catalog.CARD_ZONE_HAND
+		else -1
+	)
 	if zone == Catalog.CARD_ZONE_BOARD:
 		if (
 			logical_index < 0
@@ -2920,6 +3024,17 @@ static func _exile_subject(
 		"exile_reason": exile_reason,
 	}])
 	_merge_action_resolution(result, exile_result)
+	if zone == Catalog.CARD_ZONE_HAND:
+		_merge_action_resolution(
+			result,
+			_resolve_hand_size_change(
+				state,
+				current_owner,
+				previous_hand_size,
+				source_cell,
+				context
+			)
+		)
 	if event_resolver.is_valid():
 		var after_context: Dictionary = context.duplicate(true)
 		after_context.erase("ability_source_instance_id")
@@ -2950,6 +3065,34 @@ static func _exile_subject(
 		)
 		if after_value is Dictionary:
 			_merge_action_resolution(result, after_value as Dictionary)
+	return result
+
+
+static func _resolve_hand_size_change(
+	state: StateData,
+	owner_id: int,
+	previous_hand_size: int,
+	source_cell: int,
+	context: Dictionary
+) -> Dictionary:
+	var result: Dictionary = _no_effect(source_cell)
+	if (
+		state == null
+		or owner_id not in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]
+		or previous_hand_size == state.get_hand(owner_id).size()
+	):
+		return result
+	var resolver: Callable = context.get("hand_change_resolver", Callable())
+	if not resolver.is_valid():
+		return result
+	var resolution_value: Variant = resolver.call(
+		owner_id,
+		previous_hand_size,
+		state.get_hand(owner_id).size(),
+		source_cell
+	)
+	if resolution_value is Dictionary:
+		return resolution_value as Dictionary
 	return result
 
 

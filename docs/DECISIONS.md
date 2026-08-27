@@ -6,11 +6,12 @@ These decisions were explicitly established during development and should not be
 
 - The game is portrait-first and intended for mobile.
 - Board cells use row-major order, left-to-right then top-to-bottom.
-- Once the first actor is known, the later side starts with two fresh
+- Once the first actor is known, the later side normally starts with two fresh
   `BaGuaFangWei` cards on one uniformly selected orthogonally adjacent cell
-  pair. All 12 unordered pairs are equally likely. These are static initial
-  cards, not summons: they emit no entrance events or attacks and appear
-  immediately when the duel screen opens.
+  pair. All 12 unordered pairs are equally likely. Difficulty can reduce a
+  later player's count or replace a later opponent's Bagua powers. These are
+  static initial cards, not summons: they emit no entrance events or attacks
+  and appear immediately when the duel screen opens.
 - Card powers are top, right, bottom, left.
 - The center board is visually separated from two five-slot hands. Runtime
   `hand_slot_index`, not compact array order, defines physical left-to-right
@@ -366,21 +367,38 @@ respectively, in row-major order. The source itself is eligible.
   and 2 unlocked, difficulty 2 selected, and any preserved active run assigned
   difficulty 2. Older active runs already closed by history migration remain
   inactive.
-- Difficulty currently changes sect-selection text and selects an independent
-  per-sect score bucket. It still has no enemy, deck, AI, reward, or duel-rule
-  effect.
+- Difficulty effects are cumulative, while sect selection displays only the
+  exact current tier's text. Difficulty 0/1/2 require 13/14/15 victories.
+  Difficulties 1 and 2 describe the sect-master and martial-myth encounters.
+- At difficulty 3, a later player starts with one Bagua in one uniformly random
+  board cell. At difficulty 6, a later player starts with none. A later enemy
+  continues to receive two adjacent Bagua.
+- At difficulty 4, a later enemy's Bagua powers are set to `[2, 2, 2, 2]`; at
+  difficulty 7 they are set to `[4, 4, 4, 4]`. These are absolute replacements
+  for the catalog's all-`-1` powers, not additions, and have no animation.
+- At difficulty 5, the player may choose to act first only when the five-card
+  main deck's total tier is strictly lower than the opponent's. Lower
+  difficulties retain the not-higher rule.
+- At difficulty 8, the first atomic enemy-hand mutation ending at exactly one
+  card consumes the effect and makes the enemy draw one normally. Intermediate
+  sizes inside a batch are not observed, so `3 -> 0` does not trigger and
+  `3 -> 1` does.
+- At difficulty 9, one uniformly random legal enemy opening-hand card has all
+  four powers increased by one in the initial state. All-four-`-1` cards are
+  excluded; if none is legal, nothing happens. It emits no animation and uses
+  an RNG independent of hand shuffle and Bagua placement.
 
 ## Run Completion and Score
 
-- A run ends after a configurable number of victories; the production value is
-  15.
+- A run ends after a configurable number of victories. Production difficulty
+  0 ends after 13 wins, difficulty 1 after 14, and difficulties 2–9 after 15.
 - Only completed wins and completed losses are effective duels. Abandoning a
   duel changes neither score inputs nor defeated-enemy history.
 - Every victory appends the exact current enemy ID in chronological order.
 - Raw final score is `floor(15000 / effective_duel_count)`. Difficulty 0 and 1
   cap the actual ending score at 500; difficulty 2 through 9 keep the raw
-  value. Fifteen straight wins therefore score 500 on difficulties 0 and 1,
-  and 1000 on higher difficulties; losses lower the result.
+  value. A flawless run therefore scores 500 at difficulties 0 and 1 and 1000
+  at difficulty 2 or above; losses lower the result.
 - Final victory bypasses reward selection. The ending receives immutable sect,
   score, duel-count, defeated-enemy, and flawless data.
 - Completion uses the same card/run reset as `闭关重修`: it restores the two

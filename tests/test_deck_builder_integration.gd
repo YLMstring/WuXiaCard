@@ -285,6 +285,69 @@ func _run() -> void:
 
 	testing_builder.queue_free()
 	await process_frame
+	var strict_base: Dictionary = fixture_store.create_default_profile()
+	strict_base["max_unlocked_difficulty"] = 5
+	strict_base["last_selected_difficulty"] = 4
+	var difficulty_four_begin: Dictionary = fixture_store.begin_run_and_save(
+		strict_base,
+		&"HuaShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		4
+	)
+	var equal_enemy_ids: Array[StringName] = fixture_store.get_main_deck_ids(
+		difficulty_four_begin.get("profile", {})
+	)
+	var difficulty_four_builder: Variant = BUILDER_SCENE.instantiate()
+	difficulty_four_builder.profile_path = _save_path
+	difficulty_four_builder.upcoming_enemy_card_ids = equal_enemy_ids
+	root.add_child(difficulty_four_builder)
+	await process_frame
+	_check(
+		difficulty_four_builder.debug_get_tier_totals().x
+		== difficulty_four_builder.debug_get_tier_totals().y
+		and difficulty_four_builder.debug_can_go_first(),
+		"Difficulty four still permits equal total tiers to go first"
+	)
+	difficulty_four_builder.queue_free()
+	await process_frame
+	var reset_result: Dictionary = fixture_store.reset_run_and_save(
+		difficulty_four_begin.get("profile", {})
+	)
+	var difficulty_five_base: Dictionary = reset_result.get("profile", {})
+	difficulty_five_base["last_selected_difficulty"] = 5
+	var difficulty_five_begin: Dictionary = fixture_store.begin_run_and_save(
+		difficulty_five_base,
+		&"HuaShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		5
+	)
+	_check(bool(difficulty_five_begin.get("ok", false)), "Difficulty-five strict-tier fixture begins")
+	var difficulty_five_builder: Variant = BUILDER_SCENE.instantiate()
+	difficulty_five_builder.profile_path = _save_path
+	difficulty_five_builder.upcoming_enemy_card_ids = fixture_store.get_main_deck_ids(
+		difficulty_five_begin.get("profile", {})
+	)
+	root.add_child(difficulty_five_builder)
+	await process_frame
+	_check(
+		not difficulty_five_builder.debug_can_go_first(),
+		"Difficulty five blocks equal total tiers from going first"
+	)
+	var strict_go_first := difficulty_five_builder.get_node("DuelCanvas/GoFirstButton") as Button
+	strict_go_first.pressed.emit()
+	_check(
+		difficulty_five_builder.debug_get_status()
+		== "卡组总品阶低于对手时方可选择先攻",
+		"Difficulty-five blocked press shows the strict lower-tier notice"
+	)
+	difficulty_five_builder.queue_free()
+	await process_frame
 	_cleanup()
 	_finish()
 

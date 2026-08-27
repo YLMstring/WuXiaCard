@@ -5,6 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
 
 const SCHEMA_VERSION: int = 11
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
@@ -1005,7 +1006,14 @@ func record_completed_duel_and_save(
 	var defeated_enemy_id: StringName = get_current_enemy_id(candidate)
 	(candidate["defeated_enemy_ids"] as Array).append(String(defeated_enemy_id))
 	_unlock_enemy_sect(candidate, defeated_enemy_id)
-	if (candidate["defeated_enemy_ids"] as Array).size() >= victories_required:
+	var effective_victories_required: int = mini(
+		victories_required,
+		Difficulty.get_victories_required(get_run_difficulty(candidate))
+	)
+	if (
+		(candidate["defeated_enemy_ids"] as Array).size()
+		>= effective_victories_required
+	):
 		_unlock_next_difficulty(candidate)
 		var summary: Dictionary = _build_ending_summary(candidate)
 		_record_best_score(candidate, summary)

@@ -29,6 +29,8 @@ static func build(state: StateData) -> String:
 		"last_hand_play_by_owner": state.last_hand_play_by_owner,
 		"pending_non_retained_suppression_by_owner": state.pending_non_retained_suppression_by_owner,
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+		"run_difficulty": state.run_difficulty,
+		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
 	})
 
 

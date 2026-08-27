@@ -18,6 +18,8 @@ func _init() -> void:
 func _run() -> void:
 	_test_exact_adjacent_pair_space()
 	_test_seeded_layout_and_ownership()
+	_test_difficulty_bagua_layouts()
+	_test_enemy_opening_hand_buff()
 	_test_bagua_exiles_before_flip()
 	_finish()
 
@@ -151,6 +153,120 @@ func _test_bagua_exiles_before_flip() -> void:
 	_check(&"attack_started" in event_types, "Bagua attack begins normally")
 	_check(&"card_exiled" in event_types, "Bagua emits the normal exile event")
 	_check(&"card_flipped" not in event_types, "Bagua exile prevents the pending flip")
+
+
+func _test_difficulty_bagua_layouts() -> void:
+	var observed_single_cells: Dictionary = {}
+	for seed_value: int in range(1, 500):
+		var single_board: Array = OpeningSetup.build_opening_board(
+			Rules.OPPONENT_OWNER,
+			_seeded_rng(seed_value),
+			3
+		)
+		var occupied: Array[int] = _occupied_cells(single_board)
+		_check(occupied.size() == 1, "Difficulty three gives a later player one Bagua")
+		if occupied.size() == 1:
+			observed_single_cells[occupied[0]] = true
+		if observed_single_cells.size() == 9:
+			break
+	_check(observed_single_cells.size() == 9, "Single-Bagua setup can select every board cell")
+	var no_bagua_board: Array = OpeningSetup.build_opening_board(
+		Rules.OPPONENT_OWNER,
+		_seeded_rng(8192),
+		6
+	)
+	_check(_occupied_cells(no_bagua_board).is_empty(), "Difficulty six gives a later player no Bagua")
+
+	for fixture: Dictionary in [
+		{"difficulty": 3, "power": -1},
+		{"difficulty": 4, "power": 2},
+		{"difficulty": 6, "power": 2},
+		{"difficulty": 7, "power": 4},
+	]:
+		var enemy_bagua_board: Array = OpeningSetup.build_opening_board(
+			Rules.PLAYER_OWNER,
+			_seeded_rng(8192),
+			int(fixture["difficulty"])
+		)
+		_check(
+			_occupied_cells(enemy_bagua_board).size() == 2
+			and _cells_are_adjacent(_occupied_cells(enemy_bagua_board)),
+			"Player-first difficulty %d keeps two adjacent enemy Bagua"
+			% int(fixture["difficulty"])
+		)
+		for cell: int in _occupied_cells(enemy_bagua_board):
+			var card: Dictionary = (enemy_bagua_board[cell] as Dictionary).get("card", {})
+			var expected_power: int = int(fixture["power"])
+			_check(
+				card.get("powers", []) == [
+					expected_power,
+					expected_power,
+					expected_power,
+					expected_power,
+				],
+				"Difficulty %d statically sets enemy Bagua powers to %d"
+				% [int(fixture["difficulty"]), expected_power]
+			)
+
+
+func _test_enemy_opening_hand_buff() -> void:
+	var special_negative: Dictionary = Catalog.create_instance(
+		&"BaGuaFangWei",
+		Rules.OPPONENT_OWNER,
+		&"opening_buff_negative"
+	)
+	var legal_first: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.OPPONENT_OWNER,
+		&"opening_buff_first"
+	)
+	var legal_second: Dictionary = Catalog.create_instance(
+		&"TuNaShu1",
+		Rules.OPPONENT_OWNER,
+		&"opening_buff_second"
+	)
+	var difficulty_eight_hand: Array = [
+		special_negative.duplicate(true),
+		legal_first.duplicate(true),
+		legal_second.duplicate(true),
+	]
+	_check(
+		OpeningSetup.apply_enemy_opening_hand_buff(
+			difficulty_eight_hand,
+			8,
+			_seeded_rng(7)
+		) == &"",
+		"Difficulty eight does not buff an opening hand card"
+	)
+	var difficulty_nine_hand: Array = [special_negative, legal_first, legal_second]
+	var selected_id: StringName = OpeningSetup.apply_enemy_opening_hand_buff(
+		difficulty_nine_hand,
+		9,
+		_seeded_rng(7)
+	)
+	_check(selected_id in [&"opening_buff_first", &"opening_buff_second"], "Difficulty nine skips special-negative cards")
+	_check(special_negative.get("powers", []) == [-1, -1, -1, -1], "Special-negative opening card remains unchanged")
+	var changed_count: int = 0
+	for card: Dictionary in [legal_first, legal_second]:
+		var original: Array = (
+			Catalog.get_definition(StringName(card.get("card_id", &""))).get("powers", [])
+			as Array
+		)
+		var expected: Array = []
+		for power_value: Variant in original:
+			expected.append(int(power_value) + 1)
+		if card.get("powers", []) == expected:
+			changed_count += 1
+	_check(changed_count == 1, "Difficulty nine buffs exactly one legal opening hand card on all sides")
+	var all_negative_hand: Array = [special_negative.duplicate(true)]
+	_check(
+		OpeningSetup.apply_enemy_opening_hand_buff(
+			all_negative_hand,
+			9,
+			_seeded_rng(7)
+		) == &"",
+		"Difficulty nine is inert when every opening hand card is special-negative"
+	)
 
 
 func _bagua_cards_are_owned_by(board: Array, expected_owner: int) -> bool:

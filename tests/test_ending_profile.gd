@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Store = preload("res://scripts/deck_profile_store.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -321,6 +322,53 @@ func _run() -> void:
 		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 9) == 15000,
 		"Difficulty-nine completion keeps its full score and propagates through every lower difficulty"
 	)
+
+	for threshold_fixture: Dictionary in [
+		{"difficulty": 0, "prior_wins": 12, "level": 13},
+		{"difficulty": 1, "prior_wins": 13, "level": 14},
+		{"difficulty": 2, "prior_wins": 14, "level": 15},
+	]:
+		var threshold_base: Dictionary = store.create_default_profile()
+		threshold_base["max_unlocked_difficulty"] = 2
+		threshold_base["last_selected_difficulty"] = int(
+			threshold_fixture["difficulty"]
+		)
+		var threshold_begin: Dictionary = store.begin_run_and_save(
+			threshold_base,
+			&"HuaShanPai",
+			[],
+			&"qingfeng_xuedi",
+			null,
+			false,
+			int(threshold_fixture["difficulty"])
+		)
+		var threshold_profile: Dictionary = threshold_begin.get("profile", {})
+		var prior_wins: int = int(threshold_fixture["prior_wins"])
+		var defeated_ids: Array = []
+		for _win_index: int in range(prior_wins):
+			defeated_ids.append("qingfeng_xuedi")
+		threshold_profile["defeated_enemy_ids"] = defeated_ids
+		threshold_profile["effective_duel_count"] = prior_wins
+		var final_level: int = int(threshold_fixture["level"])
+		threshold_profile["level"] = final_level
+		threshold_profile["current_enemy_id"] = String(
+			Enemies.get_enemy_ids_for_level(final_level)[0]
+		)
+		_check(
+			store.is_profile_valid(threshold_profile),
+			"Difficulty %d enemy-count threshold fixture is valid"
+			% int(threshold_fixture["difficulty"])
+		)
+		var threshold_finish: Dictionary = store.record_completed_duel_and_save(
+			threshold_profile,
+			Store.REWARD_VICTORY,
+			Store.DEFAULT_VICTORIES_REQUIRED
+		)
+		_check(
+			bool(threshold_finish.get("completed", false)),
+			"Difficulty %d completes on enemy %d"
+			% [int(threshold_fixture["difficulty"]), prior_wins + 1]
+		)
 
 	var legacy_active: Dictionary = active.duplicate(true)
 	legacy_active["schema_version"] = 6

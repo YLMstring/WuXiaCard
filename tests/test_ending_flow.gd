@@ -34,13 +34,14 @@ func _run() -> void:
 	root.add_child(flow)
 	await process_frame
 	await process_frame
+	flow.debug_get_music_director().debug_set_fade_durations(0.0, 0.0)
 
 	var menu := flow.debug_get_current_screen() as MenuController
 	(menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
 	await process_frame
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "An active final-flow fixture resumes deck building")
-	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	(builder.get_node("DuelCanvas/GoFirstButton") as Button).pressed.emit()
 	await process_frame
 	var duel := flow.debug_get_current_screen() as DuelController
 	_check(duel != null, "Final-flow fixture enters the duel")
@@ -100,6 +101,7 @@ func _run() -> void:
 
 	flow.queue_free()
 	await process_frame
+	await create_timer(0.25).timeout
 	_cleanup()
 	_finish()
 

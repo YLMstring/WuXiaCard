@@ -69,11 +69,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 ## Implemented Rules Snapshot
 
 - Board indices are row-major: `0,1,2` top row; `3,4,5` middle; `6,7,8` bottom.
-- After the first owner is chosen, `DuelOpeningSetup` selects one of the 12
-  orthogonally adjacent unordered cell pairs with exact `1/12` probability and
-  places two fresh `BaGuaFangWei` instances for the later owner. They are
-  static initial state: no summon events, standard attacks, action count, or
-  opening animation. Replay snapshots the selected pair instead of rerolling.
+- After the first owner is chosen, `DuelOpeningSetup` normally selects one of
+  the 12 orthogonally adjacent unordered cell pairs with exact `1/12`
+  probability and places two fresh `BaGuaFangWei` instances for the later
+  owner. Difficulty 3 reduces a later player's Bagua to one uniformly random
+  cell; difficulty 6 removes it. A later enemy still receives the pair, with
+  powers set to 2 from difficulty 4 and 4 from difficulty 7. They are static
+  initial state: no summon events, standard attacks, action count, opening
+  animation, or power-change animation. Replay snapshots the result instead of
+  rerolling.
 - Power arrays are `[top, right, bottom, left]`.
 - A higher opposing power captures; ties do not.
 - Player owner ID is `1`; opponent owner ID is `2`.
@@ -167,7 +171,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
   sect before reward selection. Tier 5 remains the cap through level 15.
-- Completed wins and losses increment schema-7 run history atomically. Schema
+- Completed wins and losses increment schema-7 run history atomically. A run
+  completes at 13 victories on difficulty 0, 14 on difficulty 1, and 15 on
+  difficulties 2–9. Schema
   11 stores a sparse difficulty `0..9` score dictionary for each sect; earlier
   scalar sect scores migrate into difficulties 0, 1, and 2, with difficulties
   0 and 1 capped at 500. A final victory at the configurable threshold (15 by
@@ -190,7 +196,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and
   `闭关重修` clear only active-run difficulty, while `封剑归隐` resets all
   difficulty data. Legacy saves unlock and select difficulty 2, and preserved
-  active runs migrate as difficulty 2. Difficulty currently has no duel effect.
+  active runs migrate as difficulty 2. `DifficultyRules` is the central table
+  for all cumulative effects and exact current-tier prompt text.
+- Difficulty 5 changes the go-first gate from total tier `<=` to `<` the
+  opponent. Difficulty 8 stores a one-use simulator latch: the first atomic
+  enemy-hand change ending at one card draws one normally; batches expose only
+  their final size. Difficulty 9 statically increases all four powers of one
+  uniformly chosen legal enemy opening-hand card, excluding all-four-`-1`
+  cards and emitting no animation.
 - Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
   left copy is flipped, both wrap through the unlocked range, and each change
   saves immediately. They remain hidden when only difficulty 0 is unlocked.

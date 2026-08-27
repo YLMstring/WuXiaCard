@@ -132,6 +132,7 @@ func _show_duel(starting_owner_id: int) -> void:
 		true
 	))
 	duel.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
+	duel.run_difficulty = store.get_run_difficulty(profile)
 	duel.testing_mode = testing_mode
 	duel.opponent_card_played.connect(_on_opponent_card_played)
 	duel.return_requested.connect(_on_duel_return_requested)

@@ -26,6 +26,7 @@ func _run() -> void:
 	)
 	_check(fixture_store.save_profile(fixture_profile), "Duel integration fixture saves")
 	await _check_opening_bagua_layout()
+	await _check_difficulty_opening_effects()
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
@@ -734,6 +735,96 @@ func _check_opening_bagua_layout() -> void:
 		"Replay snapshots the exact initialized Bagua layout"
 	)
 	opening_duel.queue_free()
+	await process_frame
+
+
+func _check_difficulty_opening_effects() -> void:
+	for fixture: Dictionary in [
+		{"difficulty": 3, "starting_owner": Rules.OPPONENT_OWNER, "count": 1, "power": -1},
+		{"difficulty": 6, "starting_owner": Rules.OPPONENT_OWNER, "count": 0, "power": -1},
+		{"difficulty": 4, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 2},
+		{"difficulty": 7, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 4},
+	]:
+		var difficulty_duel: Node = DUEL_SCENE.instantiate()
+		difficulty_duel.set("deck_profile_path", TEST_PROFILE_PATH)
+		difficulty_duel.set("testing_mode", true)
+		difficulty_duel.set("opening_layout_seed", 8192)
+		difficulty_duel.set("run_difficulty", int(fixture["difficulty"]))
+		difficulty_duel.set("starting_owner_id", int(fixture["starting_owner"]))
+		root.add_child(difficulty_duel)
+		await process_frame
+		await process_frame
+		var state: Variant = difficulty_duel.get("duel_state")
+		var occupied: Array[int] = []
+		for cell: int in range(state.board.size()):
+			if state.board[cell] != null:
+				occupied.append(cell)
+		_check(
+			occupied.size() == int(fixture["count"]),
+			"Production difficulty %d starts with %d Bagua"
+			% [int(fixture["difficulty"]), int(fixture["count"])]
+		)
+		for cell: int in occupied:
+			var card: Dictionary = (state.board[cell] as Dictionary).get("card", {})
+			var expected_power: int = int(fixture["power"])
+			_check(
+				card.get("powers", []) == [
+					expected_power,
+					expected_power,
+					expected_power,
+					expected_power,
+				],
+				"Production difficulty %d uses the final static Bagua powers"
+				% int(fixture["difficulty"])
+			)
+		_check(
+			difficulty_duel.debug_get_presentation_trace().is_empty(),
+			"Difficulty opening effects emit no presentation events"
+		)
+		difficulty_duel.queue_free()
+		await process_frame
+
+	var buff_duel: Node = DUEL_SCENE.instantiate()
+	buff_duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	buff_duel.set("testing_mode", true)
+	buff_duel.set("opening_layout_seed", -1)
+	buff_duel.set("difficulty_effect_seed", 7)
+	buff_duel.set("run_difficulty", 9)
+	buff_duel.set("opponent_card_ids", [
+		&"BaGuaFangWei",
+		&"TaiZuChangQuan",
+		&"TuNaShu1",
+		&"CangSongYingKe1",
+		&"TaiShan18Pan1",
+	])
+	root.add_child(buff_duel)
+	await process_frame
+	await process_frame
+	var buff_state: Variant = buff_duel.get("duel_state")
+	var changed_count: int = 0
+	for card_value: Variant in buff_state.get_hand(Rules.OPPONENT_OWNER):
+		var card: Dictionary = card_value as Dictionary
+		var card_id := StringName(card.get("card_id", &""))
+		var catalog_powers: Array = Catalog.get_definition(card_id).get("powers", [])
+		if card_id == &"BaGuaFangWei":
+			_check(card.get("powers", []) == [-1, -1, -1, -1], "Production opening buff skips special-negative enemy cards")
+			continue
+		var expected_buffed: Array = []
+		for power_value: Variant in catalog_powers:
+			expected_buffed.append(int(power_value) + 1)
+		if card.get("powers", []) == expected_buffed:
+			changed_count += 1
+	_check(changed_count == 1, "Production difficulty nine buffs exactly one enemy opening hand card")
+	_check(buff_duel.debug_get_presentation_trace().is_empty(), "Opening hand buff emits no power-change presentation")
+	var buff_replay_record: Variant = buff_duel.get("_replay_record")
+	var buff_replay_initial_state: Variant = buff_replay_record.get_initial_state()
+	_check(
+		buff_replay_initial_state != null
+		and buff_replay_initial_state.get_hand(Rules.OPPONENT_OWNER)
+		== buff_state.get_hand(Rules.OPPONENT_OWNER),
+		"Replay snapshots the statically buffed enemy opening hand"
+	)
+	buff_duel.queue_free()
 	await process_frame
 
 
