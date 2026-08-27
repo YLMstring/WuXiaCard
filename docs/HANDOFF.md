@@ -242,7 +242,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   its stand-pat result can violate mandatory-action semantics. `baseline`
   remains available for paired benchmarks. Search stays card-agnostic; the
   measured-slower evaluation cache and unproven candidate evaluator terms are
-  off by default.
+  off by default. Root canonical tie-breaking verifies apparent alpha-beta
+  ties in a narrow window before replacing the proven best action, so a cutoff
+  bound cannot select an objectively worse move.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live

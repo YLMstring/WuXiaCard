@@ -71,6 +71,12 @@ Do not add named-card knowledge to the evaluator. If an effect creates a generic
 
 Legal actions have canonical keys and deterministic ordering. Equal results use stable tie-breaking. This makes tests and repeated debugging meaningful.
 
+At the root, an apparent equal score from a later alpha-beta child may be only
+a fail-low/fail-high bound. Before a smaller canonical key replaces the proven
+best action, search verifies that candidate in the integer window immediately
+around the current best score. This preserves stable tie-breaking without
+allowing a bound-equal but objectively worse action to become the played move.
+
 Ordering priority is previous principal variation, transposition-table best
 action, generic history score, generic structural score, then canonical key.
 History keys describe action shape plus generic source-card powers, ki, and

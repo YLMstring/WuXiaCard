@@ -171,11 +171,28 @@ static func _search_root(
 		if bool(context["aborted"]):
 			return {}
 		first_child = false
+		var action_key: String = action.canonical_key()
 		var is_better_tie: bool = (
 			best_action != null
 			and score == best_score
-			and action.canonical_key() < best_action.canonical_key()
+			and action_key < best_action.canonical_key()
 		)
+		if is_better_tie:
+			# A later alpha-beta child may return the current root score as a
+			# fail-low/fail-high bound. Verify the narrow equality interval before
+			# allowing canonical tie-breaking to replace the proven best action.
+			score = _search(
+				next_state,
+				depth - 1,
+				best_score - 1,
+				best_score + 1,
+				root_owner,
+				context,
+				table
+			)
+			if bool(context["aborted"]):
+				return {}
+			is_better_tie = score == best_score
 		if best_action == null or (maximizing and score > best_score) or (not maximizing and score < best_score) or is_better_tie:
 			best_score = score
 			best_action = action
