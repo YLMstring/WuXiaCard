@@ -159,6 +159,7 @@ var _replay_delay_remaining: float = 0.0
 
 
 func _ready() -> void:
+	DuelBackdropData.style_bottom_status(turn_status)
 	board_cards.resize(9)
 	board_cards.fill(null)
 	_create_board_cells()
@@ -1523,13 +1524,11 @@ func _power_total(powers: Array) -> int:
 func _present_extra_card_play_event(_event: Dictionary) -> void:
 	_presentation_trace.append(&"extra_card_play_granted")
 	turn_status.text = "额外出牌"
-	turn_status.modulate = extra_card_play_effect_color
 	await extra_turn_vfx.play_pulse(
 		board_grid.get_global_rect(),
 		extra_card_play_status_duration,
 		extra_card_play_effect_color
 	)
-	turn_status.modulate = Color.WHITE
 
 
 func _present_hand_addition_event(
@@ -2850,7 +2849,7 @@ func _start_replay() -> bool:
 	turn_state = TurnState.COMPLETE
 	_match_outcome = _replay_record.get_outcome()
 	turn_status.text = _replay_record.get_final_status()
-	turn_status.modulate = Color("3b211d")
+	turn_status.modulate = Color.WHITE
 	_sync_hand_playability()
 	_update_score()
 	return true
@@ -2883,7 +2882,7 @@ func _restore_completed_replay_state(reason: String) -> void:
 	turn_state = TurnState.COMPLETE
 	_match_outcome = _replay_record.get_outcome()
 	turn_status.text = _replay_record.get_final_status()
-	turn_status.modulate = Color("3b211d")
+	turn_status.modulate = Color.WHITE
 	_sync_hand_playability()
 	_update_score()
 

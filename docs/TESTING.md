@@ -122,6 +122,10 @@ These are `SceneTree` scripts run with:
 
 Each suite must emit its `_PASSED` marker, return exit code zero, and produce no `ERROR:`, `SCRIPT ERROR`, `_FAILED`, or `CHECK_FAILED` output.
 
+Agent-run visible or device playtests must be silent. Start them with a dummy
+audio driver or mute the master audio bus before entering the game. Do not
+change production music or sound-effect defaults for test convenience.
+
 Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of its own AuthManager lifecycle. The runner does not fail on warnings alone. Investigate any actual `ERROR:` line.
 
 ## Expected Baseline

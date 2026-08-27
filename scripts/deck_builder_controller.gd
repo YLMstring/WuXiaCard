@@ -72,6 +72,7 @@ func _ready() -> void:
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
 	_style_header()
+	SelectionShell.style_bottom_status(status_label)
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
 	_refresh_library_grid()

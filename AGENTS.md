@@ -101,6 +101,10 @@ Current suites:
 
 A feature is not complete merely because scripts compile. For gameplay or visual changes, run the game and walk the affected user flow at a portrait viewport. Android-specific UI fixes need a device or Android build check.
 
+Agent-run visible or device playtests must mute music and sound effects before
+starting. Prefer a dummy audio driver or a muted master bus; never change the
+player's normal audio defaults merely to silence a test run.
+
 ## Handoff Entry Points
 
 - Current state and next steps: `docs/HANDOFF.md`

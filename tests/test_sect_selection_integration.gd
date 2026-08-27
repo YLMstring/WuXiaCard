@@ -36,6 +36,12 @@ func _run() -> void:
 	var title_image := grid.get_node("Body/Margin/Layout/Title/Image") as TextureRect
 	var left_difficulty_button := canvas.get_node_or_null("DifficultyLeftButton") as TextureButton
 	var right_difficulty_button := canvas.get_node_or_null("DifficultyRightButton") as TextureButton
+	var status_label := canvas.get_node("Status") as Label
+	_check(
+		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		and status_label.modulate.is_equal_approx(Color.WHITE),
+		"Sect selection bottom status uses unified black text"
+	)
 	_check(selector.upcoming_enemy_name == "测试对手", "Selector accepts the upcoming enemy name")
 	_check((canvas.get_node("TopBar/OpponentName") as Label).text == "测试对手", "Header shows the upcoming enemy name")
 	_check(
@@ -181,6 +187,11 @@ func _run() -> void:
 	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
 	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")
 	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked hold reports its status")
+	_check(
+		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		and status_label.modulate.is_equal_approx(Color.WHITE),
+		"Locked sect status remains unified black"
+	)
 	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 1, "A locked hold pulses exactly once")
 	locked_slot.debug_begin_pointer(locked_center)
 	locked_slot.debug_force_hold_timeout()

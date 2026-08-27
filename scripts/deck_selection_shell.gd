@@ -116,6 +116,10 @@ static func apply_core_layout(
 	return layout
 
 
+static func style_bottom_status(status_label: Label) -> void:
+	DuelBackdropData.style_bottom_status(status_label)
+
+
 static func style_header(
 	top_wash: ColorRect,
 	top_wash_tint: TextureRect,

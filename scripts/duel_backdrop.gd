@@ -12,6 +12,7 @@ const RIDGE_BACK_COLOR: Color = Color(0.325, 0.365, 0.341, 0.22)
 const RIDGE_FRONT_COLOR: Color = Color(0.212, 0.278, 0.247, 0.15)
 const INK_WASH_COLOR: Color = Color(0.18, 0.25, 0.22, 0.12)
 const MIST_COLOR: Color = Color(0.96, 0.94, 0.85, 0.18)
+const BOTTOM_STATUS_COLOR: Color = Color.BLACK
 
 enum LayoutMode {
 	MODE_EXACT,
@@ -40,6 +41,14 @@ static func fit_duel_rect(viewport_size: Vector2) -> Rect2:
 	else:
 		fitted_size = Vector2(viewport_size.y * DUEL_ASPECT, viewport_size.y)
 	return Rect2((viewport_size - fitted_size) * 0.5, fitted_size)
+
+
+static func style_bottom_status(label: Label) -> void:
+	if label == null:
+		return
+	label.add_theme_color_override("font_color", BOTTOM_STATUS_COLOR)
+	label.modulate = Color.WHITE
+	label.self_modulate = Color.WHITE
 
 
 static func classify_layout(viewport_size: Vector2) -> int:

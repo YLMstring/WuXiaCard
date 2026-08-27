@@ -66,6 +66,12 @@ func _run() -> void:
 	var grid: Variant = canvas.get_node("DeckLibraryGrid")
 	var go_first := canvas.get_node("GoFirstButton") as Button
 	var go_second := canvas.get_node("GoSecondButton") as Button
+	var status_label := canvas.get_node("Status") as Label
+	_check(
+		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		and status_label.modulate.is_equal_approx(Color.WHITE),
+		"Deck builder bottom status uses unified black text"
+	)
 	_check(canvas.find_child("ScoreOverlay", true, false) == null, "Deck builder has no score panels")
 	_check(opponent_hand.get_child_count() == 5, "Opponent hand keeps five slots")
 	_check(player_hand.get_child_count() == 5, "Player main deck keeps five slots")
@@ -189,6 +195,11 @@ func _run() -> void:
 	go_first.pressed.emit()
 	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
 	_check(builder.debug_get_status() == "卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
+	_check(
+		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		and status_label.modulate.is_equal_approx(Color.WHITE),
+		"Blocked go-first status remains unified black"
+	)
 	go_second.pressed.emit()
 	_check(_duel_requests == [DuelRules.OPPONENT_OWNER], "Go-second choice requests an opponent opening turn")
 
