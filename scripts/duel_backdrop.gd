@@ -12,7 +12,7 @@ const RIDGE_BACK_COLOR: Color = Color(0.325, 0.365, 0.341, 0.22)
 const RIDGE_FRONT_COLOR: Color = Color(0.212, 0.278, 0.247, 0.15)
 const INK_WASH_COLOR: Color = Color(0.18, 0.25, 0.22, 0.12)
 const MIST_COLOR: Color = Color(0.96, 0.94, 0.85, 0.18)
-const BOTTOM_STATUS_COLOR: Color = Color.BLACK
+const BOTTOM_STATUS_COLOR: Color = Color(0.42, 0.34, 0.27, 1.0)
 
 enum LayoutMode {
 	MODE_EXACT,

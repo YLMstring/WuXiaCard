@@ -38,7 +38,7 @@ func _run() -> void:
 	var right_difficulty_button := canvas.get_node_or_null("DifficultyRightButton") as TextureButton
 	var status_label := canvas.get_node("Status") as Label
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Sect selection bottom status uses unified black text"
 	)
@@ -188,7 +188,7 @@ func _run() -> void:
 	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")
 	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked hold reports its status")
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Locked sect status remains unified black"
 	)

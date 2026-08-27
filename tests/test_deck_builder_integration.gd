@@ -68,7 +68,7 @@ func _run() -> void:
 	var go_second := canvas.get_node("GoSecondButton") as Button
 	var status_label := canvas.get_node("Status") as Label
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Deck builder bottom status uses unified black text"
 	)
@@ -196,7 +196,7 @@ func _run() -> void:
 	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
 	_check(builder.debug_get_status() == "卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
 	_check(
-		status_label.get_theme_color("font_color").is_equal_approx(Color.BLACK)
+		status_label.get_theme_color("font_color").is_equal_approx(Color(0.42, 0.34, 0.27, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Blocked go-first status remains unified black"
 	)
