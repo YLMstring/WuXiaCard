@@ -19,7 +19,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
-const OpeningSetup = preload("res://scripts/duel_opening_setup.gd")
+const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
@@ -170,53 +170,31 @@ func _ready() -> void:
 		testing_mode
 	)
 	_set_mastery_eligible_card_ids(player_card_ids)
-	_shuffle_hand_ids(player_card_ids, player_hand_shuffle_seed)
-	var player_cards: Array = _create_card_instances(player_card_ids, DuelRules.PLAYER_OWNER, "main")
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
-	_shuffle_hand_ids(effective_opponent_ids, opponent_hand_shuffle_seed)
-	var opponent_cards: Array = _create_card_instances(effective_opponent_ids, DuelRules.OPPONENT_OWNER, "main")
-	OpeningSetup.apply_enemy_opening_hand_buff(
-		opponent_cards,
-		run_difficulty,
-		_make_seeded_rng(difficulty_effect_seed)
-	)
-	var player_side_deck: Array = _create_card_instances(
-		Decks.get_side_deck_card_ids(player_card_ids),
-		DuelRules.PLAYER_OWNER,
-		"side"
-	)
-	var opponent_side_deck: Array = _create_card_instances(
-		Decks.get_side_deck_card_ids(effective_opponent_ids),
-		DuelRules.OPPONENT_OWNER,
-		"side"
-	)
-	_shuffle_side_decks(player_side_deck, opponent_side_deck)
 	var opening_owner: int = _get_valid_starting_owner()
-	board = _build_opening_board(opening_owner)
-	duel_state = StateData.new(
-		board,
-		player_cards,
-		opponent_cards,
-		opening_owner,
-		0,
-		player_side_deck,
-		opponent_side_deck,
-		run_difficulty
-	)
-	duel_state.enabled_effect_gates_by_owner[DuelRules.PLAYER_OWNER] = (
-		Decks.get_player_enabled_effect_gates(deck_profile_path, testing_mode)
-	)
-	duel_state.enabled_effect_gates_by_owner[DuelRules.OPPONENT_OWNER] = (
-		[DuelRules.EFFECT_GATE_SELF_CASTRATION]
-		if opponent_self_castration_enabled
-		else []
-	)
-	duel_state.remembered_glyphs_by_owner = {
-		DuelRules.PLAYER_OWNER: remembered_enemy_glyphs.duplicate(),
-		DuelRules.OPPONENT_OWNER: _unique_card_glyphs(player_cards),
-	}
+	duel_state = InitialStateFactory.build({
+		"player_main_card_ids": player_card_ids,
+		"opponent_main_card_ids": effective_opponent_ids,
+		"player_hand_shuffle_seed": player_hand_shuffle_seed,
+		"opponent_hand_shuffle_seed": opponent_hand_shuffle_seed,
+		"side_deck_shuffle_seed": side_deck_shuffle_seed,
+		"opening_layout_seed": opening_layout_seed,
+		"difficulty_effect_seed": difficulty_effect_seed,
+		"opening_owner": opening_owner,
+		"run_difficulty": run_difficulty,
+		"player_enabled_effect_gates": Decks.get_player_enabled_effect_gates(
+			deck_profile_path,
+			testing_mode
+		),
+		"opponent_enabled_effect_gates": (
+			[DuelRules.EFFECT_GATE_SELF_CASTRATION]
+			if opponent_self_castration_enabled
+			else []
+		),
+		"player_remembered_enemy_glyphs": remembered_enemy_glyphs,
+	})
 	_replay_record.begin(duel_state)
 	board = duel_state.board
 	_create_hands()
@@ -250,26 +228,6 @@ func _get_valid_starting_owner() -> int:
 	if starting_owner_id == DuelRules.OPPONENT_OWNER:
 		return DuelRules.OPPONENT_OWNER
 	return DuelRules.PLAYER_OWNER
-
-
-func _build_opening_board(opening_owner: int) -> Array:
-	if opening_layout_seed < 0:
-		return DuelRules.empty_board()
-	var rng := RandomNumberGenerator.new()
-	if opening_layout_seed == 0:
-		rng.randomize()
-	else:
-		rng.seed = opening_layout_seed
-	return OpeningSetup.build_opening_board(opening_owner, rng, run_difficulty)
-
-
-func _make_seeded_rng(seed_value: int) -> RandomNumberGenerator:
-	var rng := RandomNumberGenerator.new()
-	if seed_value == 0:
-		rng.randomize()
-	else:
-		rng.seed = seed_value
-	return rng
 
 
 func _begin_opening_opponent_turn() -> void:
@@ -643,54 +601,6 @@ func _create_hands() -> void:
 		var player_slot: PanelContainer = _get_hand_slot_by_index(player_hand, hand_slot_index)
 		if player_slot != null:
 			_spawn_card_in_slot(player_slot, card_data, DuelRules.PLAYER_OWNER, false)
-
-
-func _create_card_instances(card_ids: Array[StringName], owner_id: int, zone: String) -> Array:
-	var instances: Array = []
-	for card_index: int in range(card_ids.size()):
-		var instance_id := StringName("%s_%d_%d" % [zone, owner_id, card_index])
-		instances.append(Catalog.create_instance(card_ids[card_index], owner_id, instance_id))
-	return instances
-
-
-func _unique_card_glyphs(cards: Array) -> Array[String]:
-	var glyphs: Array[String] = []
-	for card_value: Variant in cards:
-		if not card_value is Dictionary:
-			continue
-		var glyph := String((card_value as Dictionary).get("glyph", ""))
-		if not glyph.is_empty() and glyph not in glyphs:
-			glyphs.append(glyph)
-	return glyphs
-
-
-func _shuffle_side_decks(player_deck: Array, opponent_deck: Array) -> void:
-	var random := RandomNumberGenerator.new()
-	if side_deck_shuffle_seed == 0:
-		random.randomize()
-	else:
-		random.seed = side_deck_shuffle_seed
-	_shuffle_with_rng(player_deck, random)
-	_shuffle_with_rng(opponent_deck, random)
-
-
-func _shuffle_hand_ids(card_ids: Array[StringName], shuffle_seed: int) -> void:
-	if shuffle_seed < 0:
-		return
-	var random := RandomNumberGenerator.new()
-	if shuffle_seed == 0:
-		random.randomize()
-	else:
-		random.seed = shuffle_seed
-	_shuffle_with_rng(card_ids, random)
-
-
-func _shuffle_with_rng(cards: Array, random: RandomNumberGenerator) -> void:
-	for card_index: int in range(cards.size() - 1, 0, -1):
-		var swap_index: int = random.randi_range(0, card_index)
-		var temporary: Variant = cards[card_index]
-		cards[card_index] = cards[swap_index]
-		cards[swap_index] = temporary
 
 
 func _create_hand_slots(container: HBoxContainer) -> void:

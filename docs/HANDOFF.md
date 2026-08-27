@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-27
+Updated: 2026-08-28
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -237,10 +237,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order. Production uses the enhanced
   iterative-deepening profile: deterministic generic ordering, lazy simulator
-  transitions, PVS, and a bounded two-ply tactical
-  extension (scan 12/search 4). `baseline` remains available for paired
-  benchmarks. Search stays card-agnostic; the measured-slower evaluation cache
-  and unproven candidate evaluator terms are off by default.
+  transitions, and PVS. The bounded two-ply tactical extension (scan 12/search
+  4) remains available by explicit override but is disabled by default because
+  its stand-pat result can violate mandatory-action semantics. `baseline`
+  remains available for paired benchmarks. Search stays card-agnostic; the
+  measured-slower evaluation cache and unproven candidate evaluator terms are
+  off by default.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live

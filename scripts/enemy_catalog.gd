@@ -36,8 +36,6 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"bailu_shanzhang",
 	&"bailu_shanzhang2",
 	&"tianmen_yishi",
-	#&"wulin_sanren",
-	#&"wulin_sanren2",
 	&"wulin_sanren3",
 ]
 
@@ -73,9 +71,12 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"bailu_shanzhang", "name": "五岳掌门·岳不群", "level": 13, "deck": [&"SanQinFeng3", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"ZiXiaGong4"]},
 	{"id": &"bailu_shanzhang2", "name": "笑傲江湖·令狐冲", "level": 13, "deck": [&"YouFenLaiYi4", &"DuGu9Jian1", &"DuGu9Jian2", &"YiJJ5", &"HenShanJianZhen4"]},
 	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"DuGu9Jian1", &"DuGu9Jian2", &"DuGu9Jian3", &"DuGu9Jian1", &"CangSongYingKe4"]},
-	#{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"]},
-	#{"id": &"wulin_sanren2", "name": "张三丰", "level": 15, "sect_id": &"WuDangPai", "deck": [&"TaiJiLuanHuan5", &"TaiJiYinYang5", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"DuGu9Jian1"]},
 	{"id": &"wulin_sanren3", "name": "无名老僧", "level": 15, "sect_id": &"ShaoLinPai", "deck": [&"YiKongDaoDi5", &"SanRuDiYu2", &"JinGangBuHuai4", &"JinGangBuHuai4", &"JinGangBuHuai4"]},
+]
+
+const _BENCHMARK_ONLY_ENEMY_ROWS: Array[Dictionary] = [
+	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"]},
+	{"id": &"wulin_sanren2", "name": "张三丰", "level": 15, "sect_id": &"WuDangPai", "deck": [&"TaiJiLuanHuan5", &"TaiJiYinYang5", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"DuGu9Jian1"]},
 ]
 
 static var _enemy_definitions: Dictionary = _build_definition_map()
@@ -92,6 +93,15 @@ static func get_all_enemy_ids() -> Array[StringName]:
 static func get_definition(enemy_id: StringName) -> Dictionary:
 	assert(has_enemy(enemy_id), "Unknown enemy ID: %s" % enemy_id)
 	return (_enemy_definitions[enemy_id] as Dictionary).duplicate(true)
+
+
+static func get_ai_benchmark_definitions() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for row: Dictionary in _ENEMY_ROWS:
+		result.append(_normalized_definition(row))
+	for row: Dictionary in _BENCHMARK_ONLY_ENEMY_ROWS:
+		result.append(_normalized_definition(row))
+	return result
 
 
 static func get_enemy_ids_for_level(level: int) -> Array[StringName]:
@@ -153,6 +163,22 @@ static func validate_catalog() -> Array[String]:
 		var enemy_id := StringName(raw_key)
 		if not observed.has(enemy_id):
 			errors.append("Enemy definition is absent from ALL_ENEMY_IDS: %s" % enemy_id)
+	for row: Dictionary in _BENCHMARK_ONLY_ENEMY_ROWS:
+		var enemy_id := StringName(row.get("id", &""))
+		if observed.has(enemy_id):
+			errors.append("Duplicate AI benchmark enemy ID: %s" % enemy_id)
+			continue
+		observed[enemy_id] = true
+		_validate_definition(enemy_id, row, errors)
+		var signature: String = _deck_signature(row.get("deck", []))
+		if not signature.is_empty():
+			if observed_decks.has(signature):
+				errors.append(
+					"AI benchmark enemy %s shares a deck with %s"
+					% [enemy_id, StringName(observed_decks[signature])]
+				)
+			else:
+				observed_decks[signature] = enemy_id
 	return errors
 
 
@@ -216,4 +242,10 @@ static func _build_definition_map() -> Dictionary:
 	for row: Dictionary in _ENEMY_ROWS:
 		var enemy_id := StringName(row.get("id", &""))
 		result[enemy_id] = row.duplicate(true)
+	return result
+
+
+static func _normalized_definition(row: Dictionary) -> Dictionary:
+	var result: Dictionary = row.duplicate(true)
+	result["self_castration_enabled"] = bool(row.get("self_castration_enabled", true))
 	return result

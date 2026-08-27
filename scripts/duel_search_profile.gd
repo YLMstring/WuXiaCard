@@ -19,7 +19,7 @@ static func normalize(limits: Dictionary = {}) -> Dictionary:
 		"requested_profile_valid": requested_profile_valid,
 		"use_lazy_transitions": is_enhanced,
 		"use_pvs": is_enhanced,
-		"use_tactical_extension": is_enhanced,
+		"use_tactical_extension": false,
 		"use_evaluation_cache": false,
 		"evaluator_profile": BASELINE,
 		"max_tactical_depth": DEFAULT_TACTICAL_DEPTH if is_enhanced else 0,

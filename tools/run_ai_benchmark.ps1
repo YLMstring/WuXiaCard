@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("Quick", "Extended", "Production")]
+    [ValidateSet("Quick", "Pilot", "Extended", "Production")]
     [string]$Mode = "Quick",
     [ValidateSet("Final", "BaselineEvaluator", "NoTactics", "SearchOnly", "LazyOnly", "EvalOnly")]
     [string]$Variant = "Final",

@@ -7,9 +7,11 @@ The opponent is a perfect-information deterministic search player. It sees both 
 `DuelSearch.find_best_action_iterative()` performs iterative-deepening minimax
 with alpha-beta pruning. The production `enhanced` profile adds deterministic
 generic action ordering, lazy transition application, principal-variation
-search (PVS), and a bounded tactical extension. Completed
-depths publish progress. The final move is taken from the deepest fully
-completed depth; partially searched deeper work is discarded.
+search (PVS). Its bounded tactical extension remains available by explicit
+profile override, but is disabled in production until it can preserve mandatory
+action semantics instead of treating stand-pat evaluation as a legal pass.
+Completed depths publish progress. The final move is taken from the deepest
+fully completed depth; partially searched deeper work is discarded.
 
 The `baseline` profile preserves the pre-strengthening eager alpha-beta path for
 paired comparison. It disables PVS and tactical extension.
@@ -82,12 +84,15 @@ with a null window, repeating a child with the full window only when required.
 It is an exact alpha-beta optimization and has fixed-depth score/action
 equivalence tests.
 
-At an ordinary depth boundary, the tactical extension first evaluates the
+When explicitly enabled, the tactical extension first evaluates the
 stand-pat state, scans at most 12 ordered actions, and searches at most four
 volatile transitions for at most two extra plies. Volatility is defined only by
 generic transition facts such as capture, exile, ownership change, terminal
 state, summon/resummon/return, or extra-play grant. Pure draw and movement are
 quiet. These bounds are intentional safeguards against effect-chain explosion.
+It is not production-safe yet: a nonterminal owner must execute a legal action,
+so stand-pat cannot remain a competing outcome when every legal continuation is
+worse.
 
 The transposition table is capped at 50,000 entries. `DuelStateKey.build_compact()` currently returns a length plus forward/reverse hashes derived from a canonical serialization. This saves key memory but is not a compact state implementation and has a theoretical collision risk.
 
@@ -139,6 +144,8 @@ When implementing it:
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
 - No compact-state parity harness.
+- Tactical extension needs a forced-action-correct redesign before it can be
+  restored as an `enhanced` default.
 - No difficulty profiles beyond budget.
 - No persistent opening/endgame database.
 - No stochastic/hidden-information policy because perfect information is intentional.

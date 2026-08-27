@@ -14,6 +14,13 @@ func _init() -> void:
 
 func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
+	_check(Catalog.get_all_enemy_ids().size() == 32, "Normal enemy roster stays at 32 enemies")
+	_check(
+		not Catalog.has_enemy(&"wulin_sanren")
+		and not Catalog.has_enemy(&"wulin_sanren2"),
+		"Benchmark-only enemies stay outside the normal enemy lookup"
+	)
+	_check_benchmark_roster()
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
 	var observed_decks: Dictionary = {}
 	var observed_enemy_ids: Dictionary = {}
@@ -122,6 +129,60 @@ func _run() -> void:
 		"Enemy sect declarations must be StringName values"
 	)
 	_finish()
+
+
+func _check_benchmark_roster() -> void:
+	var roster: Array[Dictionary] = Catalog.get_ai_benchmark_definitions()
+	_check(roster.size() == 34, "AI benchmark roster contains 34 enemy definitions")
+	_check(
+		StringName(roster[32].get("id", &"")) == &"wulin_sanren"
+		and StringName(roster[33].get("id", &"")) == &"wulin_sanren2",
+		"Benchmark-only enemies follow the 32 normal enemies in catalog order"
+	)
+	var dongfang: Dictionary = roster[32]
+	var zhang: Dictionary = roster[33]
+	_check(
+		dongfang.get("deck", []) == [
+			&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"
+		],
+		"Dongfang Bubai preserves the approved benchmark deck"
+	)
+	_check(
+		zhang.get("deck", []) == [
+			&"TaiJiLuanHuan5",
+			&"TaiJiYinYang5",
+			&"TaiJiSanHuan5",
+			&"TaiJiDaKui5",
+			&"DuGu9Jian1",
+		],
+		"Zhang Sanfeng preserves the approved benchmark deck"
+	)
+	_check(
+		typeof(dongfang.get("self_castration_enabled")) == TYPE_BOOL
+		and bool(dongfang.get("self_castration_enabled")),
+		"Benchmark-only enemies normalize self-castration to an explicit Boolean"
+	)
+	_check(
+		&"wulin_sanren" not in Catalog.get_enemy_ids_for_level(15)
+		and &"wulin_sanren2" not in Catalog.get_enemy_ids_for_level(15),
+		"Benchmark-only enemies cannot enter normal level selection"
+	)
+	var observed_ids: Dictionary = {}
+	for definition: Dictionary in roster:
+		var enemy_id := StringName(definition.get("id", &""))
+		_check(not observed_ids.has(enemy_id), "%s appears once in benchmark roster" % enemy_id)
+		observed_ids[enemy_id] = true
+		_check(
+			Catalog.validate_definition(definition).is_empty(),
+			"%s is a valid benchmark enemy definition" % enemy_id
+		)
+	var original_name: String = String(roster[0].get("name", ""))
+	roster[0]["name"] = "mutated"
+	var fresh: Array[Dictionary] = Catalog.get_ai_benchmark_definitions()
+	_check(
+		String(fresh[0].get("name", "")) == original_name,
+		"Benchmark roster returns deep-copied definitions"
+	)
 
 
 func _finish() -> void:

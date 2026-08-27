@@ -1,9 +1,12 @@
 extends SceneTree
 
 const OpeningSetup = preload("res://scripts/duel_opening_setup.gd")
+const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const DeckRules = preload("res://scripts/deck_rules.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
+const StateKey = preload("res://scripts/duel_state_key.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 
@@ -20,6 +23,8 @@ func _run() -> void:
 	_test_seeded_layout_and_ownership()
 	_test_difficulty_bagua_layouts()
 	_test_enemy_opening_hand_buff()
+	_test_initial_state_factory_determinism_and_isolation()
+	_test_initial_state_factory_complete_opening()
 	_test_bagua_exiles_before_flip()
 	_finish()
 
@@ -267,6 +272,134 @@ func _test_enemy_opening_hand_buff() -> void:
 		) == &"",
 		"Difficulty nine is inert when every opening hand card is special-negative"
 	)
+
+
+func _test_initial_state_factory_determinism_and_isolation() -> void:
+	var config: Dictionary = {
+		"player_main_card_ids": [
+			&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2",
+		],
+		"opponent_main_card_ids": [
+			&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2",
+		],
+		"player_hand_shuffle_seed": 201,
+		"opponent_hand_shuffle_seed": 202,
+		"side_deck_shuffle_seed": 203,
+		"opening_layout_seed": 204,
+		"difficulty_effect_seed": 205,
+		"opening_owner": Rules.PLAYER_OWNER,
+		"run_difficulty": 0,
+		"player_enabled_effect_gates": [&"player_gate"],
+		"opponent_enabled_effect_gates": [&"opponent_gate"],
+		"remembered_glyphs_by_owner": {
+			Rules.PLAYER_OWNER: ["enemy-memory"],
+			Rules.OPPONENT_OWNER: ["player-memory"],
+		},
+	}
+	var first: State = InitialStateFactory.build(config)
+	var second: State = InitialStateFactory.build(config)
+	_check(StateKey.build(first) == StateKey.build(second), "Initial-state factory is deterministic for fixed seeds")
+	(first.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary)["powers"][0] = 999
+	(first.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] as Array).append(&"mutated")
+	_check(
+		int((second.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("powers", [])[0]) != 999,
+		"Repeated factory states do not share card data"
+	)
+	_check(
+		&"mutated" not in second.get_enabled_effect_gates(Rules.PLAYER_OWNER),
+		"Repeated factory states do not share effect-gate arrays"
+	)
+
+
+func _test_initial_state_factory_complete_opening() -> void:
+	var player_ids: Array[StringName] = [
+		&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2",
+	]
+	var opponent_ids: Array[StringName] = [
+		&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2",
+	]
+	var state: State = InitialStateFactory.build({
+		"player_main_card_ids": player_ids,
+		"opponent_main_card_ids": opponent_ids,
+		"player_hand_shuffle_seed": -1,
+		"opponent_hand_shuffle_seed": -1,
+		"side_deck_shuffle_seed": 501,
+		"opening_layout_seed": 502,
+		"difficulty_effect_seed": 503,
+		"opening_owner": Rules.PLAYER_OWNER,
+		"run_difficulty": 0,
+		"player_enabled_effect_gates": [&"player_gate"],
+		"opponent_enabled_effect_gates": [],
+		"player_remembered_enemy_glyphs": ["known-enemy"],
+	})
+	_check(_occupied_cells(state.board).size() == 2, "Factory creates two static difficulty-zero Bagua for the later owner")
+	_check(state.turn_count == 0 and state.effect_queue.is_empty(), "Factory opening consumes no actions or presentation events")
+	_check(
+		_card_id_set(state.decks[Rules.PLAYER_OWNER] as Array)
+		== _string_name_set(DeckRules.build_side_deck_card_ids(player_ids)),
+		"Factory derives the player side deck through DeckRules"
+	)
+	_check(
+		_card_id_set(state.decks[Rules.OPPONENT_OWNER] as Array)
+		== _string_name_set(DeckRules.build_side_deck_card_ids(opponent_ids)),
+		"Factory derives the opponent side deck through DeckRules"
+	)
+	_check(
+		state.get_enabled_effect_gates(Rules.PLAYER_OWNER) == [&"player_gate"]
+		and state.get_enabled_effect_gates(Rules.OPPONENT_OWNER).is_empty(),
+		"Factory preserves explicit effect gates for both owners"
+	)
+	_check(
+		state.remembered_glyphs_by_owner[Rules.PLAYER_OWNER] == ["known-enemy"],
+		"Factory preserves player enemy memory"
+	)
+	_check(
+		state.remembered_glyphs_by_owner[Rules.OPPONENT_OWNER]
+		== InitialStateFactory.unique_card_glyphs(state.get_hand(Rules.PLAYER_OWNER)),
+		"Factory remembers the player's opening main-deck glyphs for the opponent"
+	)
+	_check(_all_runtime_instance_ids_are_unique(state), "Factory assigns unique runtime IDs across opening zones")
+
+
+func _card_id_set(cards: Array) -> Array[StringName]:
+	var result: Array[StringName] = []
+	for card_value: Variant in cards:
+		if card_value is Dictionary:
+			result.append(StringName((card_value as Dictionary).get("card_id", &"")))
+	result.sort()
+	return result
+
+
+func _string_name_set(values: Array[StringName]) -> Array[StringName]:
+	var result: Array[StringName] = values.duplicate()
+	result.sort()
+	return result
+
+
+func _all_runtime_instance_ids_are_unique(state: State) -> bool:
+	var observed: Dictionary = {}
+	for zone: Array in [
+		state.get_hand(Rules.PLAYER_OWNER),
+		state.get_hand(Rules.OPPONENT_OWNER),
+		state.decks[Rules.PLAYER_OWNER] as Array,
+		state.decks[Rules.OPPONENT_OWNER] as Array,
+	]:
+		for card_value: Variant in zone:
+			if not card_value is Dictionary:
+				continue
+			var instance_id := StringName((card_value as Dictionary).get("instance_id", &""))
+			if instance_id == &"" or observed.has(instance_id):
+				return false
+			observed[instance_id] = true
+	for slot_value: Variant in state.board:
+		if slot_value == null:
+			continue
+		var card: Dictionary = (slot_value as Dictionary).get("card", {})
+		var instance_id := StringName(card.get("instance_id", &""))
+		if instance_id == &"" or observed.has(instance_id):
+			return false
+		observed[instance_id] = true
+	return true
 
 
 func _bagua_cards_are_owned_by(board: Array, expected_owner: int) -> bool:

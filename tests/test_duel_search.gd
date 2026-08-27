@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_lazy_transition_equivalence()
 	_test_pvs_equivalence()
 	_test_tactical_transition_classification()
+	_test_forced_loss_does_not_use_production_tactical_extension()
 	_test_tactical_extension_bounds()
 	_test_leaf_evaluation_cache()
 	_test_evaluator_terminal_priority()
@@ -179,10 +180,15 @@ func _test_search_profiles_and_stats() -> void:
 	_check(StringName(enhanced.get("name", &"")) == &"enhanced", "Enhanced is the deterministic default profile")
 	_check(bool(enhanced.get("use_lazy_transitions", false)), "Enhanced enables lazy transitions")
 	_check(bool(enhanced.get("use_pvs", false)), "Enhanced enables PVS")
-	_check(bool(enhanced.get("use_tactical_extension", false)), "Enhanced enables tactical extension")
+	_check(not bool(enhanced.get("use_tactical_extension", true)), "Enhanced disables tactical extension by default")
 	_check(int(enhanced.get("max_tactical_depth", -1)) == 2, "Enhanced tactical depth defaults to two")
 	_check(int(enhanced.get("tactical_scan_limit", -1)) == 12, "Enhanced tactical scan defaults to twelve")
 	_check(int(enhanced.get("tactical_action_limit", -1)) == 4, "Enhanced tactical action limit defaults to four")
+	var tactical_opt_in: Dictionary = Profile.normalize({
+		"profile": &"enhanced",
+		"use_tactical_extension": true,
+	})
+	_check(bool(tactical_opt_in.get("use_tactical_extension", false)), "Enhanced tactical extension remains available by explicit opt-in")
 
 	var normalized: Dictionary = Profile.normalize({
 		"profile": &"unknown",
@@ -444,6 +450,45 @@ func _test_tactical_extension_bounds() -> void:
 		}
 	)
 	_check(int(disabled.get("max_tactical_depth", -1)) == 0, "Disabled tactical search remains at the ordinary horizon")
+
+
+func _test_forced_loss_does_not_use_production_tactical_extension() -> void:
+	var board: Array = Rules.empty_board()
+	for cell_index: int in range(8):
+		var owner_id: int = Rules.PLAYER_OWNER if cell_index in [0, 2, 4] else Rules.OPPONENT_OWNER
+		var board_card: Dictionary = Rules.make_card(
+			"Forced Board %d" % cell_index,
+			"迫",
+			[1, 1, 1, 1],
+			[],
+			owner_id
+		)
+		board_card["instance_id"] = StringName("forced_board_%d" % cell_index)
+		board[cell_index] = {"owner": owner_id, "card": board_card}
+	var forced_card: Dictionary = Rules.make_card(
+		"Forced Loss",
+		"败",
+		[0, 0, 0, 0],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	forced_card["instance_id"] = &"forced_loss_card"
+	var state := State.new(board, [forced_card], [], Rules.PLAYER_OWNER)
+	var legal_actions: Array[Action] = Simulator.get_legal_actions(state)
+	_check(legal_actions.size() == 1, "Forced-loss fixture has exactly one legal action")
+	if legal_actions.size() != 1:
+		return
+	var stand_pat_score: int = Evaluator.evaluate(state, Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(state, legal_actions[0])
+	var forced_state: State = transition.get("state") as State
+	_check(Simulator.is_terminal(forced_state), "The only legal action ends the duel")
+	var forced_score: int = Evaluator.evaluate(forced_state, Rules.PLAYER_OWNER)
+	_check(forced_score < stand_pat_score, "The mandatory action is a loss that stand-pat would conceal")
+	var enhanced: Dictionary = Profile.normalize({"profile": &"enhanced"})
+	_check(
+		not bool(enhanced.get("use_tactical_extension", true)),
+		"Production Enhanced cannot retain stand-pat instead of the mandatory loss"
+	)
 
 
 func _test_leaf_evaluation_cache() -> void:

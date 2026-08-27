@@ -5,6 +5,8 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
+const StateKey = preload("res://scripts/duel_state_key.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
@@ -703,12 +705,35 @@ func _check_opening_bagua_layout() -> void:
 	opening_duel.set("testing_mode", true)
 	opening_duel.set("player_hand_shuffle_seed", -1)
 	opening_duel.set("opponent_hand_shuffle_seed", -1)
+	opening_duel.set("side_deck_shuffle_seed", 8191)
 	opening_duel.set("opening_layout_seed", 8192)
+	opening_duel.set("difficulty_effect_seed", 8193)
 	opening_duel.set("starting_owner_id", Rules.PLAYER_OWNER)
 	root.add_child(opening_duel)
 	await process_frame
 	await process_frame
 	var state: Variant = opening_duel.get("duel_state")
+	var factory_state: Variant = InitialStateFactory.build({
+		"player_main_card_ids": Decks.get_player_card_ids(TEST_PROFILE_PATH, true),
+		"opponent_main_card_ids": Decks.get_opponent_card_ids(),
+		"player_hand_shuffle_seed": -1,
+		"opponent_hand_shuffle_seed": -1,
+		"side_deck_shuffle_seed": 8191,
+		"opening_layout_seed": 8192,
+		"difficulty_effect_seed": 8193,
+		"opening_owner": Rules.PLAYER_OWNER,
+		"run_difficulty": 0,
+		"player_enabled_effect_gates": Decks.get_player_enabled_effect_gates(
+			TEST_PROFILE_PATH,
+			true
+		),
+		"opponent_enabled_effect_gates": [Rules.EFFECT_GATE_SELF_CASTRATION],
+		"player_remembered_enemy_glyphs": [],
+	})
+	_check(
+		StateKey.build(state) == StateKey.build(factory_state),
+		"Production controller opening exactly matches the shared initial-state factory"
+	)
 	var occupied: Array[int] = []
 	for cell: int in range(state.board.size()):
 		if state.board[cell] != null:
