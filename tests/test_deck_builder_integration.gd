@@ -188,7 +188,7 @@ func _run() -> void:
 		_check(blocked_ink.r >= 0.45 and blocked_ink.g >= 0.45 and blocked_ink.b >= 0.45, "Blocked go-first strokes become clearly grey")
 	go_first.pressed.emit()
 	_check(_duel_requests.is_empty(), "Blocked go-first press does not request a duel")
-	_check(builder.debug_get_status() == "主卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
+	_check(builder.debug_get_status() == "卡组总品阶不高于对手时方可选择先攻", "Blocked go-first press shows the exact rule notice")
 	go_second.pressed.emit()
 	_check(_duel_requests == [DuelRules.OPPONENT_OWNER], "Go-second choice requests an opponent opening turn")
 

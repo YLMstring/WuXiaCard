@@ -13,7 +13,7 @@ const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
 const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
-const GO_FIRST_BLOCKED_NOTICE: String = "主卡组总品阶不高于对手时方可选择先攻"
+const GO_FIRST_BLOCKED_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
