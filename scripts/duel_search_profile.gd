@@ -18,7 +18,7 @@ static func normalize(limits: Dictionary = {}) -> Dictionary:
 		"name": profile_name,
 		"requested_profile_valid": requested_profile_valid,
 		"use_lazy_transitions": is_enhanced,
-		"use_pvs": is_enhanced,
+		"use_pvs": false,
 		"use_tactical_extension": false,
 		"use_evaluation_cache": false,
 		"evaluator_profile": BASELINE,

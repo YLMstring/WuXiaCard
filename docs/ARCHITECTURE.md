@@ -136,8 +136,14 @@ search key and copied into replay state.
 
 ### Search
 
-- `duel_search.gd` — deterministic iterative deepening, minimax/alpha-beta, move ordering, and a capped transposition table.
-- `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation, failure conversion, and join.
+- `duel_search.gd` — deterministic complete-round iterative deepening,
+  minimax/alpha-beta, move ordering, a capped transposition table, and extraction
+  of the root owner's same-turn principal-line actions. One public depth unit is
+  two authoritative `owner_turn_serial` boundaries; action count is not depth.
+- `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation,
+  failure conversion, join, and deep-copy transport of pure-data turn plans.
+- `duel_turn_plan.gd` — exact state/owner/owner-turn validation and copying for
+  a searched same-turn continuation. Any mismatch invalidates the remainder.
 - `duel_evaluator.gd` — card-agnostic heuristic.
 - `duel_state_key.gd` — canonical serialization and transposition key.
 
@@ -153,7 +159,9 @@ The worker receives an isolated state copy. Scene objects must never cross the t
 - `duel_controller.gd` — creates the encounter, translates drag gestures into
   actions, calls the simulator, and presents transition events. Logical event
   order stays sequential; visible power changes sharing one transition batch
-  animate in parallel behind one barrier.
+  animate in parallel behind one barrier. An AI extra play consumes a validated
+  same-turn search plan without another thinking delay; stale or absent plans
+  fall back to a normal fresh search.
 - `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand slots, library-to-hand exchange, inspection, and the navigation-neutral `back_requested` signal.
 - `deck_library_grid.gd` / `deck_library_grid.tscn` — four-column, 1,000-slot virtualized and scrollable library surface.
 - `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.

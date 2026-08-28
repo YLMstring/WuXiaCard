@@ -7,6 +7,8 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
+const Action = preload("res://scripts/duel_action.gd")
+const Simulator = preload("res://scripts/duel_simulator.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
@@ -53,6 +55,7 @@ func _run() -> void:
 	_check_normal_opponent_concealment(duel)
 	await _check_card_inspector_modal()
 	await _check_inspector_holds_completed_ai_move()
+	await _check_opponent_turn_plan_consumption()
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
 	await _check_aspect_ratio_input_paths()
@@ -1249,6 +1252,63 @@ func _check_inspector_holds_completed_ai_move() -> void:
 	ai_duel.queue_free()
 	for _free_frame: int in range(3):
 		await process_frame
+
+
+func _check_opponent_turn_plan_consumption() -> void:
+	var plan_duel: Node = _instantiate_duel()
+	root.add_child(plan_duel)
+	await process_frame
+	await process_frame
+	plan_duel.debug_set_fast_mode(true)
+	var initial_state: Variant = plan_duel.get("duel_state")
+	var opponent_state: Variant = null
+	for candidate: Action in Simulator.get_legal_actions(initial_state):
+		var transition: Dictionary = Simulator.apply_action(
+			initial_state.duplicate_state(),
+			candidate
+		)
+		if (
+			bool(transition.get("valid", false))
+			and int((transition.get("state") as Object).get("active_player"))
+			== Rules.OPPONENT_OWNER
+		):
+			opponent_state = transition.get("state")
+			break
+	_check(opponent_state != null, "Controller plan fixture reaches an opponent action")
+	if opponent_state == null:
+		plan_duel.queue_free()
+		await process_frame
+		return
+	plan_duel.set("duel_state", opponent_state)
+	var opponent_actions: Array[Action] = Simulator.get_legal_actions(opponent_state)
+	_check(not opponent_actions.is_empty(), "Controller plan fixture has a legal opponent action")
+	if opponent_actions.is_empty():
+		plan_duel.queue_free()
+		await process_frame
+		return
+	var planned_action: Action = opponent_actions[0]
+	plan_duel.debug_set_opponent_turn_plan([{
+		"state_key": StateKey.build_compact(opponent_state),
+		"owner_turn_serial": int(opponent_state.get("owner_turn_serial")),
+		"owner_id": Rules.OPPONENT_OWNER,
+		"action": planned_action.duplicate_action(),
+	}])
+	var searches_before: int = plan_duel.debug_get_opponent_search_start_count()
+	var selected: Action = plan_duel.call("_take_planned_opponent_action") as Action
+	_check(
+		selected != null and selected.canonical_key() == planned_action.canonical_key(),
+		"Controller consumes an exact-state opponent continuation action"
+	)
+	_check(
+		plan_duel.debug_get_opponent_search_start_count() == searches_before,
+		"Consuming a continuation action does not start another search"
+	)
+	_check(
+		plan_duel.debug_get_opponent_turn_plan_size() == 0,
+		"Consumed continuation action is removed from the controller plan"
+	)
+	plan_duel.queue_free()
+	await process_frame
 
 
 func _check_focus_loss_return() -> void:

@@ -9,6 +9,7 @@ const StateKey = preload("res://scripts/duel_state_key.gd")
 
 var _failures: int = 0
 var _checks: int = 0
+var _progress_records: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -18,6 +19,7 @@ func _init() -> void:
 func _run() -> void:
 	_check_enemy_manifest()
 	_check_enemy_state_factory()
+	_check_mode_configs()
 	var fixtures: Array[Dictionary] = Fixtures.quick()
 	_check(fixtures.size() == 4, "Quick benchmark exposes four versioned fixtures")
 	_check(Fixtures.VERSION == 1, "Benchmark fixture schema is versioned")
@@ -71,8 +73,13 @@ func _run() -> void:
 	]
 	var enemy_smoke: Dictionary = Runner.run_enemy_matchups(
 		enemy_smoke_matchups,
-		{"max_depth": 1},
-		1
+		{"max_nodes": 1, "min_completed_depth": 1},
+		1,
+		{},
+		{},
+		false,
+		Callable(self, "_capture_progress_record"),
+		{"mode": "Extended", "variant": "LazyOnly"}
 	)
 	_check(int(enemy_smoke.get("game_count", 0)) == 4, "Enemy smoke executes one four-game crossover")
 	_check(int(enemy_smoke.get("incomplete_games", 0)) == 4, "One-action smoke reports every watchdog stop as incomplete")
@@ -80,6 +87,24 @@ func _run() -> void:
 	_check((enemy_smoke.get("missing_game_ids", []) as Array).is_empty(), "Enemy smoke schedules every required assignment")
 	_check((enemy_smoke.get("duplicate_game_ids", []) as Array).is_empty(), "Enemy smoke schedules no duplicate game IDs")
 	_check((enemy_smoke.get("depth_samples", []) as Array).size() == 2, "Four-game crossover creates two paired initial-depth samples")
+	_check(_progress_records.size() == 4, "Enemy smoke emits one progress record after every completed game")
+	for index: int in range(_progress_records.size()):
+		var record: Dictionary = _progress_records[index]
+		_check(int(record.get("game_index", 0)) == index + 1, "Progress record uses one-based game index %d" % (index + 1))
+		_check(int(record.get("total_games", 0)) == 4, "Progress record keeps the pre-expanded total game count")
+		_check(String(record.get("mode", "")) == "Extended", "Progress record preserves benchmark mode")
+		_check(String(record.get("variant", "")) == "LazyOnly", "Progress record preserves benchmark variant")
+		_check(not record.has("decisions"), "Progress record stays compact without full decisions")
+		var round_trip: Variant = JSON.parse_string(JSON.stringify(record))
+		_check(round_trip is Dictionary, "Progress record independently round-trips through JSON")
+	var diagnostics: Dictionary = enemy_smoke.get("profile_diagnostics", {}) as Dictionary
+	_check(diagnostics.has("enhanced") and diagnostics.has("baseline"), "Benchmark summary reports diagnostics for both profiles")
+	for profile_name: String in ["enhanced", "baseline"]:
+		var profile_diagnostics: Dictionary = diagnostics.get(profile_name, {}) as Dictionary
+		_check(int(profile_diagnostics.get("decisions", 0)) > 0, "%s diagnostics count decisions" % profile_name)
+		_check(int(profile_diagnostics.get("minimum_depth_guard_uses", 0)) > 0, "%s diagnostics count protected-depth use" % profile_name)
+		_check(int(profile_diagnostics.get("nodes_over_limit_total", 0)) > 0, "%s diagnostics total node overruns" % profile_name)
+	_check_progress_checkpoint()
 
 	if _failures == 0:
 		print("DUEL_AI_BENCHMARK_TESTS_PASSED checks=%d" % _checks)
@@ -139,6 +164,50 @@ func _check_enemy_manifest() -> void:
 		)
 		_check(selected.size() == int(mode_fixture["matchups"]), "%s selects the approved matchup count" % mode_fixture["mode"])
 		_check(EnemyManifest.expand_matchups(selected).size() == int(mode_fixture["games"]), "%s selects the approved game count" % mode_fixture["mode"])
+
+
+func _check_mode_configs() -> void:
+	for mode: StringName in [&"quick", &"extended"]:
+		var config: Dictionary = Runner.mode_config(mode)
+		var limits: Dictionary = config.get("limits", {}) as Dictionary
+		_check(int(limits.get("max_nodes", 0)) == 1_500, "%s keeps the fixed 1500-node tier" % mode)
+		_check(int(limits.get("min_completed_depth", 0)) == 1, "%s protects complete depth one" % mode)
+	var production: Dictionary = Runner.mode_config(&"production")
+	var production_limits: Dictionary = production.get("limits", {}) as Dictionary
+	_check(is_equal_approx(float(production_limits.get("budget_seconds", 0.0)), 10.0), "Production keeps the ten-second deadline")
+	_check(not production_limits.has("min_completed_depth"), "Production does not opt into the benchmark minimum depth")
+	var pilot: Dictionary = Runner.node_benchmark_limits(3_000)
+	_check(int(pilot.get("max_nodes", 0)) == 3_000, "Pilot helper preserves the selected node tier")
+	_check(int(pilot.get("min_completed_depth", 0)) == 1, "Pilot helper protects complete depth one")
+
+
+func _capture_progress_record(record: Dictionary) -> void:
+	_progress_records.append(record.duplicate(true))
+
+
+func _check_progress_checkpoint() -> void:
+	var checkpoint_path: String = ProjectSettings.globalize_path(
+		"user://duel_ai_benchmark_progress_test.jsonl"
+	)
+	DirAccess.remove_absolute(checkpoint_path)
+	_check(Runner.initialize_progress_checkpoint(checkpoint_path), "Progress checkpoint initializes as an empty file")
+	for record: Dictionary in _progress_records:
+		_check(Runner.append_progress_record(checkpoint_path, record), "Progress checkpoint appends one complete record")
+	var file := FileAccess.open(checkpoint_path, FileAccess.READ)
+	_check(file != null, "Progress checkpoint reopens for verification")
+	var parsed_records: Array[Dictionary] = []
+	if file != null:
+		while not file.eof_reached():
+			var line: String = file.get_line()
+			if line.is_empty():
+				continue
+			var parsed: Variant = JSON.parse_string(line)
+			_check(parsed is Dictionary, "Every checkpoint line is independently valid JSON")
+			if parsed is Dictionary:
+				parsed_records.append(parsed as Dictionary)
+		file.close()
+	_check(parsed_records.size() == _progress_records.size(), "Checkpoint contains exactly one line per completed game")
+	DirAccess.remove_absolute(checkpoint_path)
 
 
 func _assignment_is_balanced(games: Array[Dictionary], enemy_id: StringName) -> bool:

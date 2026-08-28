@@ -10,6 +10,9 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 
 const EXTENDED_NODE_LIMIT: int = 1_500
 const SUCCESSFUL_ACTION_WATCHDOG: int = 256
+const PROGRESS_SCHEMA_VERSION: int = 1
+
+var _checkpoint_write_failed: bool = false
 
 
 func _init() -> void:
@@ -194,6 +197,9 @@ static func run_game(
 			"action_key": action.canonical_key(),
 			"score": int(result.get("score", 0)),
 			"completed_depth": int(result.get("completed_depth", 0)),
+			"min_completed_depth": int(result.get("min_completed_depth", 0)),
+			"minimum_depth_guard_used": bool(result.get("minimum_depth_guard_used", false)),
+			"nodes_over_limit": int(result.get("nodes_over_limit", 0)),
 			"max_tactical_depth": int(result.get("max_tactical_depth", 0)),
 			"tactical_candidates_scanned": int(result.get("tactical_candidates_scanned", 0)),
 			"tactical_actions_searched": int(result.get("tactical_actions_searched", 0)),
@@ -241,12 +247,17 @@ static func run_enemy_matchups(
 	max_actions: int = SUCCESSFUL_ACTION_WATCHDOG,
 	enhanced_overrides: Dictionary = {},
 	baseline_overrides: Dictionary = {},
-	report_progress: bool = false
+	report_progress: bool = false,
+	on_game_completed: Callable = Callable(),
+	progress_metadata: Dictionary = {}
 ) -> Dictionary:
 	var games: Array[Dictionary] = []
+	var total_games: int = EnemyManifest.expand_matchups(matchups).size()
+	var run_started_usec: int = Time.get_ticks_usec()
 	for matchup: Dictionary in matchups:
 		var matchup_games: Array[Dictionary] = []
 		for game_spec: Dictionary in EnemyManifest.expand_matchup(matchup):
+			var game_started_usec: int = Time.get_ticks_usec()
 			var game: Dictionary = run_enemy_game(
 				game_spec,
 				matchup,
@@ -257,6 +268,18 @@ static func run_enemy_matchups(
 			)
 			games.append(game)
 			matchup_games.append(game)
+			if on_game_completed.is_valid():
+				var cumulative_elapsed_seconds: float = (
+					float(Time.get_ticks_usec() - run_started_usec) / 1_000_000.0
+				)
+				on_game_completed.call(build_game_progress_record(
+					games,
+					game,
+					float(Time.get_ticks_usec() - game_started_usec) / 1_000_000.0,
+					cumulative_elapsed_seconds,
+					total_games,
+					progress_metadata
+				))
 		if report_progress:
 			var matchup_points: float = 0.0
 			var matchup_incomplete: int = 0
@@ -269,6 +292,48 @@ static func run_enemy_matchups(
 				% [matchup.get("id", "missing"), matchup_points, matchup_incomplete]
 			)
 	return aggregate_enemy_games(games, matchups)
+
+
+static func build_game_progress_record(
+	completed_games: Array[Dictionary],
+	latest_game: Dictionary,
+	game_elapsed_seconds: float,
+	cumulative_elapsed_seconds: float,
+	total_games: int,
+	metadata: Dictionary = {}
+) -> Dictionary:
+	var cumulative_points: float = 0.0
+	for game: Dictionary in completed_games:
+		cumulative_points += float(game.get("enhanced_match_points", 0.0))
+	var completed_count: int = completed_games.size()
+	var latest_only: Array[Dictionary] = [latest_game]
+	return {
+		"schema_version": PROGRESS_SCHEMA_VERSION,
+		"mode": String(metadata.get("mode", "")),
+		"variant": String(metadata.get("variant", "")),
+		"game_index": completed_count,
+		"total_games": total_games,
+		"game_id": StringName(latest_game.get("game_id", &"missing")),
+		"matchup_id": StringName(latest_game.get("matchup_id", &"missing")),
+		"terminal": bool(latest_game.get("terminal", false)),
+		"invalid_reason": StringName(latest_game.get("invalid_reason", &"")),
+		"actions": int(latest_game.get("actions", 0)),
+		"enhanced_match_points": float(latest_game.get("enhanced_match_points", 0.0)),
+		"cumulative_enhanced_match_points": cumulative_points,
+		"cumulative_enhanced_match_points_percent": (
+			cumulative_points * 100.0 / float(completed_count)
+			if completed_count > 0
+			else 0.0
+		),
+		"game_elapsed_seconds": game_elapsed_seconds,
+		"cumulative_elapsed_seconds": cumulative_elapsed_seconds,
+		"projected_total_seconds": (
+			cumulative_elapsed_seconds * float(total_games) / float(completed_count)
+			if completed_count > 0
+			else 0.0
+		),
+		"profile_diagnostics": profile_diagnostics_for_games(latest_only),
+	}
 
 
 static func run_enemy_game(
@@ -468,6 +533,7 @@ static func aggregate_enemy_games(
 		"depth_non_regression_percent": depth_percent,
 		"enhanced_fallback_rate": enhanced_fallback_rate,
 		"baseline_fallback_rate": baseline_fallback_rate,
+		"profile_diagnostics": profile_diagnostics_for_games(games),
 		"incomplete_games": incomplete_games,
 		"invalid_games": invalid_games,
 		"missing_game_ids": missing_game_ids,
@@ -480,6 +546,74 @@ static func aggregate_enemy_games(
 		},
 		"card_id_coverage": EnemyManifest.get_card_id_coverage(matchups),
 		"passed_gate": passed_gate,
+	}
+
+
+static func profile_diagnostics_for_games(games: Array[Dictionary]) -> Dictionary:
+	var diagnostics: Dictionary = {
+		"enhanced": _empty_profile_diagnostics(),
+		"baseline": _empty_profile_diagnostics(),
+	}
+	for game: Dictionary in games:
+		for decision: Dictionary in game.get("decisions", []):
+			var profile_name: String = String(decision.get("profile", &"baseline"))
+			var entry: Dictionary = diagnostics.get(
+				profile_name,
+				_empty_profile_diagnostics()
+			) as Dictionary
+			entry["decisions"] = int(entry.get("decisions", 0)) + 1
+			if bool(decision.get("used_fallback", false)):
+				entry["fallbacks"] = int(entry.get("fallbacks", 0)) + 1
+			if bool(decision.get("minimum_depth_guard_used", false)):
+				entry["minimum_depth_guard_uses"] = (
+					int(entry.get("minimum_depth_guard_uses", 0)) + 1
+				)
+			var nodes_over_limit: int = int(decision.get("nodes_over_limit", 0))
+			entry["nodes_over_limit_total"] = (
+				int(entry.get("nodes_over_limit_total", 0)) + nodes_over_limit
+			)
+			entry["nodes_over_limit_max"] = maxi(
+				int(entry.get("nodes_over_limit_max", 0)),
+				nodes_over_limit
+			)
+			entry["nodes_total"] = (
+				int(entry.get("nodes_total", 0)) + int(decision.get("nodes", 0))
+			)
+			var depth_key: String = str(int(decision.get("completed_depth", 0)))
+			var depth_distribution: Dictionary = (
+				entry.get("completed_depth_distribution", {}) as Dictionary
+			)
+			depth_distribution[depth_key] = int(depth_distribution.get(depth_key, 0)) + 1
+			entry["completed_depth_distribution"] = depth_distribution
+			diagnostics[profile_name] = entry
+	for profile_name: Variant in diagnostics:
+		var entry: Dictionary = diagnostics[profile_name] as Dictionary
+		var decision_count: int = int(entry.get("decisions", 0))
+		entry["fallback_rate"] = (
+			float(entry.get("fallbacks", 0)) / float(decision_count)
+			if decision_count > 0
+			else 0.0
+		)
+		entry["minimum_depth_guard_rate"] = (
+			float(entry.get("minimum_depth_guard_uses", 0)) / float(decision_count)
+			if decision_count > 0
+			else 0.0
+		)
+		diagnostics[profile_name] = entry
+	return diagnostics
+
+
+static func _empty_profile_diagnostics() -> Dictionary:
+	return {
+		"decisions": 0,
+		"fallbacks": 0,
+		"fallback_rate": 0.0,
+		"completed_depth_distribution": {},
+		"minimum_depth_guard_uses": 0,
+		"minimum_depth_guard_rate": 0.0,
+		"nodes_over_limit_total": 0,
+		"nodes_over_limit_max": 0,
+		"nodes_total": 0,
 	}
 
 
@@ -496,6 +630,9 @@ static func _decision_record(
 		"action_key": action.canonical_key(),
 		"score": int(search_result.get("score", 0)),
 		"completed_depth": int(search_result.get("completed_depth", 0)),
+		"min_completed_depth": int(search_result.get("min_completed_depth", 0)),
+		"minimum_depth_guard_used": bool(search_result.get("minimum_depth_guard_used", false)),
+		"nodes_over_limit": int(search_result.get("nodes_over_limit", 0)),
 		"max_tactical_depth": int(search_result.get("max_tactical_depth", 0)),
 		"tactical_candidates_scanned": int(search_result.get("tactical_candidates_scanned", 0)),
 		"tactical_actions_searched": int(search_result.get("tactical_actions_searched", 0)),
@@ -591,11 +728,24 @@ func _run_command_line() -> void:
 		quit(1)
 		return
 	var enhanced_overrides: Dictionary = _variant_overrides(variant)
+	var artifact_paths: Dictionary = {}
+	var progress_callback: Callable = Callable()
+	var progress_metadata: Dictionary = {"mode": mode, "variant": variant}
+	if mode_key == &"extended":
+		artifact_paths = _make_artifact_paths(mode, variant)
+		var checkpoint_path: String = String(artifact_paths.get("checkpoint", ""))
+		if not initialize_progress_checkpoint(checkpoint_path):
+			push_error("AI_BENCHMARK_FAILED unable_to_initialize=%s" % checkpoint_path)
+			quit(1)
+			return
+		progress_callback = Callable(self, "_record_extended_progress").bind(
+			checkpoint_path
+		)
 	var summary: Dictionary
 	if mode_key == &"pilot":
 		summary = _run_pilot(enhanced_overrides)
 	else:
-		var config: Dictionary = _mode_config(mode_key)
+		var config: Dictionary = mode_config(mode_key)
 		var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(mode_key)
 		var started_usec: int = Time.get_ticks_usec()
 		summary = run_enemy_matchups(
@@ -604,7 +754,9 @@ func _run_command_line() -> void:
 			SUCCESSFUL_ACTION_WATCHDOG,
 			enhanced_overrides,
 			{},
-			true
+			mode_key != &"extended",
+			progress_callback,
+			progress_metadata
 		)
 		summary["elapsed_seconds"] = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
 		summary["limits"] = (config.get("limits", {}) as Dictionary).duplicate(true)
@@ -612,13 +764,21 @@ func _run_command_line() -> void:
 		summary["matchups"] = matchups
 	summary["mode"] = mode
 	summary["variant"] = variant
-	var output_path: String = _write_report(summary, mode, variant)
+	if mode_key == &"extended":
+		summary["checkpoint_path"] = String(artifact_paths.get("checkpoint", ""))
+		summary["progress_schema_version"] = PROGRESS_SCHEMA_VERSION
+	var output_path: String = (
+		_write_report_to_path(summary, String(artifact_paths.get("report", "")))
+		if mode_key == &"extended"
+		else _write_report(summary, mode, variant)
+	)
 	if output_path.is_empty():
 		quit(1)
 		return
 	var enforce_gate: bool = mode_key == &"extended" and variant.to_lower() == "final"
 	var passed: bool = bool(summary.get("passed_gate", false))
-	var status: String = "FAILED" if enforce_gate and not passed else "PASSED"
+	var failed: bool = _checkpoint_write_failed or (enforce_gate and not passed)
+	var status: String = "FAILED" if failed else "PASSED"
 	print(
 		"AI_BENCHMARK_%s mode=%s variant=%s matchups=%d games=%d points=%.1f%% depth=%.1f%% enhanced_fallback=%.3f baseline_fallback=%.3f incomplete=%d invalid=%d elapsed=%.1fs output=%s"
 		% [
@@ -637,7 +797,7 @@ func _run_command_line() -> void:
 			output_path,
 		]
 	)
-	quit(1 if enforce_gate and not passed else 0)
+	quit(1 if failed else 0)
 
 
 func _run_pilot(enhanced_overrides: Dictionary) -> Dictionary:
@@ -649,7 +809,7 @@ func _run_pilot(enhanced_overrides: Dictionary) -> Dictionary:
 		var started_usec: int = Time.get_ticks_usec()
 		var attempt: Dictionary = run_enemy_matchups(
 			matchups,
-			{"max_nodes": node_limit},
+			node_benchmark_limits(node_limit),
 			SUCCESSFUL_ACTION_WATCHDOG,
 			enhanced_overrides,
 			{},
@@ -681,27 +841,118 @@ func _run_pilot(enhanced_overrides: Dictionary) -> Dictionary:
 	return result
 
 
-func _mode_config(mode: StringName) -> Dictionary:
+static func node_benchmark_limits(node_limit: int) -> Dictionary:
+	return {
+		"max_nodes": maxi(node_limit, 0),
+		"min_completed_depth": 1,
+	}
+
+
+static func mode_config(mode: StringName) -> Dictionary:
 	match mode:
 		&"quick":
-			return {"limits": {"max_nodes": 1_500}}
+			return {"limits": node_benchmark_limits(1_500)}
 		&"extended":
-			return {"limits": {"max_nodes": EXTENDED_NODE_LIMIT}}
+			return {"limits": node_benchmark_limits(EXTENDED_NODE_LIMIT)}
 		&"production":
 			return {"limits": {"budget_seconds": 10.0}}
 	return {}
 
 
-func _write_report(summary: Dictionary, mode: String, variant: String) -> String:
+static func initialize_progress_checkpoint(checkpoint_path: String) -> bool:
+	if checkpoint_path.is_empty():
+		return false
+	DirAccess.make_dir_recursive_absolute(checkpoint_path.get_base_dir())
+	var file := FileAccess.open(checkpoint_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.close()
+	return true
+
+
+static func append_progress_record(
+	checkpoint_path: String,
+	record: Dictionary
+) -> bool:
+	var file := FileAccess.open(checkpoint_path, FileAccess.READ_WRITE)
+	if file == null:
+		return false
+	file.seek_end()
+	file.store_line(JSON.stringify(record))
+	file.flush()
+	file.close()
+	return true
+
+
+func _record_extended_progress(record: Dictionary, checkpoint_path: String) -> void:
+	if not append_progress_record(checkpoint_path, record):
+		_checkpoint_write_failed = true
+		push_error("AI_BENCHMARK_FAILED unable_to_append=%s" % checkpoint_path)
+		return
+	var enhanced: Dictionary = (
+		(record.get("profile_diagnostics", {}) as Dictionary).get("enhanced", {})
+		as Dictionary
+	)
+	var baseline: Dictionary = (
+		(record.get("profile_diagnostics", {}) as Dictionary).get("baseline", {})
+		as Dictionary
+	)
+	var cumulative_elapsed: float = float(record.get("cumulative_elapsed_seconds", 0.0))
+	var projected_total: float = float(record.get("projected_total_seconds", 0.0))
+	print(
+		"AI_BENCHMARK_GAME game=%d/%d id=%s matchup=%s terminal=%s invalid=%s points=%.1f cumulative=%.1f%% game_elapsed=%.1fs elapsed=%.1fs eta=%.1fs enhanced_decisions=%d enhanced_depths=%s enhanced_fallback=%d enhanced_guard=%d enhanced_overrun=%d/%d baseline_decisions=%d baseline_depths=%s baseline_fallback=%d baseline_guard=%d baseline_overrun=%d/%d"
+		% [
+			int(record.get("game_index", 0)),
+			int(record.get("total_games", 0)),
+			String(record.get("game_id", &"missing")),
+			String(record.get("matchup_id", &"missing")),
+			str(bool(record.get("terminal", false))),
+			String(record.get("invalid_reason", &"")),
+			float(record.get("enhanced_match_points", 0.0)),
+			float(record.get("cumulative_enhanced_match_points_percent", 0.0)),
+			float(record.get("game_elapsed_seconds", 0.0)),
+			cumulative_elapsed,
+			maxf(projected_total - cumulative_elapsed, 0.0),
+			int(enhanced.get("decisions", 0)),
+			JSON.stringify(enhanced.get("completed_depth_distribution", {})),
+			int(enhanced.get("fallbacks", 0)),
+			int(enhanced.get("minimum_depth_guard_uses", 0)),
+			int(enhanced.get("nodes_over_limit_total", 0)),
+			int(enhanced.get("nodes_over_limit_max", 0)),
+			int(baseline.get("decisions", 0)),
+			JSON.stringify(baseline.get("completed_depth_distribution", {})),
+			int(baseline.get("fallbacks", 0)),
+			int(baseline.get("minimum_depth_guard_uses", 0)),
+			int(baseline.get("nodes_over_limit_total", 0)),
+			int(baseline.get("nodes_over_limit_max", 0)),
+		]
+	)
+
+
+static func _make_artifact_paths(mode: String, variant: String) -> Dictionary:
 	var output_directory: String = ProjectSettings.globalize_path(
 		"res://.summer/local/ai-benchmarks"
 	)
 	DirAccess.make_dir_recursive_absolute(output_directory)
 	var timestamp: String = Time.get_datetime_string_from_system().replace(":", "-")
-	var output_path: String = output_directory.path_join(
-		"%s-%s-v%d-%s.json"
-		% [mode.to_lower(), variant.to_lower(), EnemyStateFactory.VERSION, timestamp]
-	)
+	var stem: String = "%s-%s-v%d-%s" % [
+		mode.to_lower(),
+		variant.to_lower(),
+		EnemyStateFactory.VERSION,
+		timestamp,
+	]
+	return {
+		"report": output_directory.path_join("%s.json" % stem),
+		"checkpoint": output_directory.path_join("%s.progress.jsonl" % stem),
+	}
+
+
+func _write_report(summary: Dictionary, mode: String, variant: String) -> String:
+	var output_path: String = String(_make_artifact_paths(mode, variant).get("report", ""))
+	return _write_report_to_path(summary, output_path)
+
+
+func _write_report_to_path(summary: Dictionary, output_path: String) -> String:
 	var file := FileAccess.open(output_path, FileAccess.WRITE)
 	if file == null:
 		push_error("AI_BENCHMARK_FAILED unable_to_write=%s" % output_path)

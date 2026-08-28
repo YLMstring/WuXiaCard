@@ -6,15 +6,27 @@ The opponent is a perfect-information deterministic search player. It sees both 
 
 `DuelSearch.find_best_action_iterative()` performs iterative-deepening minimax
 with alpha-beta pruning. The production `enhanced` profile adds deterministic
-generic action ordering, lazy transition application, principal-variation
-search (PVS). Its bounded tactical extension remains available by explicit
-profile override, but is disabled in production until it can preserve mandatory
-action semantics instead of treating stand-pat evaluation as a legal pass.
+generic action ordering and lazy transition application. Principal-variation
+search (PVS) remains available by explicit profile override. The bounded
+tactical extension is also opt-in and remains disabled in production until it
+can preserve mandatory action semantics instead of treating stand-pat
+evaluation as a legal pass.
 Completed depths publish progress. The final move is taken from the deepest
 fully completed depth; partially searched deeper work is discarded.
 
+Depth is measured in complete rounds, not individual actions. Complete-round
+depth one contains the remainder of the root owner's current owner turn and the
+opponent's following owner turn. Internally that is a budget of two authoritative
+`owner_turn_serial` boundaries. Every transition subtracts the serial increase
+reported by `DuelSimulator`: extra plays in the same owner turn cost zero
+boundaries, while automatically resolved empty turns may consume more than one.
+Terminal states are still scored before the horizon check.
+
 The `baseline` profile preserves the pre-strengthening eager alpha-beta path for
 paired comparison. It disables PVS and tactical extension.
+Production Enhanced therefore runs the same configuration as the benchmark
+`LazyOnly` variant: lazy transitions on, PVS/tactics/evaluation cache off, and
+the baseline evaluator.
 Both profiles call the same authoritative `DuelSimulator`; neither contains
 named-card branches.
 
@@ -31,15 +43,27 @@ A deterministic greedy action is computed before deep search and serves as fallb
 
 The deadline is a maximum. A solved/terminal result may return early. Search
 follows `state.active_player`, so a granted extra card play keeps the same owner
-and exposes only legal hand plays. The controller starts a fresh search session
-with the full configured budget for every AI extra-play opportunity.
+and exposes only legal hand plays. The deepest completed iteration also returns
+the chosen same-owner-turn continuation as pure-data actions. After the first AI
+action, the controller reuses the next action immediately when owner, owner-turn
+serial, exact compact state key, and legality all still match. A fallback or any
+mismatch clears the whole plan and starts a fresh ordinary search if another AI
+action is still required.
 
-The controller logs elapsed time, ordinary/tactical depth, generated versus
+Node-limited benchmark callers may opt into `min_completed_depth = 1`. In that
+mode, `max_nodes` is a soft shared total until complete-round depth one finishes:
+the node counter is never reset, and a deeper iteration stops as soon as it
+observes the already-reached limit. Explicit cancellation, worker failure, and
+any supplied deadline remain hard stops. Production supplies only its ten-second
+deadline and never enables this benchmark guard. Results expose
+`minimum_depth_guard_used` and `nodes_over_limit` so the extra work is visible.
+
+The controller logs elapsed time, complete-round/tactical depth, generated versus
 actually applied actions, cache/PVS counters, completion reason, and
 fallback use:
 
 ```text
-AI_SEARCH elapsed=... depth=... tactical_depth=... nodes=... generated=... applied=... pvs_probes=... reason=... fallback=... action=...
+AI_SEARCH elapsed=... round_depth=... tactical_depth=... nodes=... generated=... applied=... pvs_probes=... reason=... fallback=... action=...
 ```
 
 Use this line for profiling regressions.
@@ -87,7 +111,7 @@ asks the simulator for a transition only if the branch is actually visited.
 
 PVS searches the first ordered child with the full window and later children
 with a null window, repeating a child with the full window only when required.
-It is an exact alpha-beta optimization and has fixed-depth score/action
+It is an exact alpha-beta optimization and has fixed complete-round-depth score/action
 equivalence tests.
 
 When explicitly enabled, the tactical extension first evaluates the
@@ -131,6 +155,63 @@ Even moderate branching compounds exponentially. A 3×3 board does not imply a t
 - Add generic pruning bounds that preserve exact results.
 - Keep event production minimal but complete.
 
+## Historical Action-Depth Opening Profile (2026-08-28)
+
+Before the complete-round migration, the production Enhanced/LazyOnly profile
+was measured on the 14 unique real Quick openings using ordinary action-ply
+depth. This is historical evidence only. The current profiler uses Dummy audio,
+records every completed iterative-deepening layer, preserves partial root
+progress from the interrupted layer, runs three opt-in timing probes, and writes
+JSON evidence under `.summer/local/ai-benchmarks/`.
+
+With a ten-second budget on the development machine:
+
+- no opening completed ordinary action depth four;
+- nine openings completed depth three and five completed only depth two;
+- mean completed depth was `2.643`;
+- among the nine depth-three completions, mean time to finish depth three was
+  `6.214s`;
+- the searches visited 38,730 nodes over 140.039 seconds, or about 277 nodes/s;
+- all openings had 35 legal root plays;
+- two of the nine depth-four attempts completed 17/35 and 19/35 root actions;
+  linear estimates put those complete depth-four searches at `16.01s` and
+  `15.33s`, requiring about `1.60x` and `1.53x` speedups respectively;
+- the other seven depth-four attempts were still inside their first root
+  action when the deadline expired, so their required speedups cannot be
+  estimated safely from root-action fractions.
+
+Three 5,000-node opt-in timing probes attributed approximately 43.6% of search
+time to authoritative simulator transitions, 36.0% to canonical state-key
+construction, 10.0% to leaf evaluation, 3.8% to legal-action ordering, and
+6.5% to remaining search control. The timers are disabled in production. This
+identifies transition/state-copy work and state keys as the first optimization
+targets; evaluator or ordering tweaks alone cannot supply the needed gain.
+
+Run the migrated profiler with
+`tools/run_production_opening_profile.ps1`. Its report has
+`depth_unit = complete_round`, `target_depth = 2`, and generic target-depth
+estimates so old action-ply data cannot be mistaken for current search depth.
+
+## Complete-Round Opening Profile (2026-08-28)
+
+The first migrated 14-opening production run used the same ten-second
+Enhanced/LazyOnly configuration:
+
+- all 14 openings completed complete-round depth one without fallback;
+- no opening completed complete-round depth two;
+- mean time to complete depth one was `1.365s`;
+- the searches visited 35,788 nodes over 140.078 seconds, about 255.5 nodes/s;
+- the closest depth-two attempt completed 34/35 root actions and was linearly
+  estimated at `10.28s` total;
+- the other partial depth-two attempts varied widely, including branches still
+  inside their first root action, so a single average speedup target would be
+  misleading.
+
+Three 5,000-node timing probes attributed approximately 38.1% of time to
+simulator transitions, 43.8% to canonical state keys, 8.2% to evaluation, 3.9%
+to ordering, and 6.0% to remaining search control. State-key construction and
+authoritative transition/state-copy work remain the main performance targets.
+
 ## Deferred Optimization
 
 A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and hashing cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
@@ -159,14 +240,25 @@ When implementing it:
 
 ## Paired Strength Benchmark
 
-`tests/benchmarks/ai_benchmark_fixtures.gd` defines immutable versioned
-fixtures. Every fixture is played twice, swapping which owner receives the
-enhanced profile, so first-player and owner bias do not decide the comparison.
-The AI continues to see both complete hands and exact deck order.
+The formal harness uses the 34-deck enemy benchmark roster and deterministic
+four-game crossover assignments. Each matchup gives both profiles each enemy
+deck and each owner/initiative position once. The AI continues to see both
+complete hands and exact deck order.
 
-Run the harness with `tools/run_ai_benchmark.ps1`. `Quick` uses four fixtures
-and 1,500 nodes per decision; `Extended` uses 16 fixtures and 10,000 nodes;
-`Production` uses two fixtures and the real ten-second budget. Extended Final
-requires at least 55% match points, at least 75% initial-depth non-regression,
-no worse fallback rate, and no incomplete games. JSON evidence is written to
-`.summer/local/ai-benchmarks/` and is intentionally ignored by Git.
+Run it with `tools/run_ai_benchmark.ps1`. `Quick` uses 7 matchups/28 games;
+`Extended` uses all 28 matchups/112 games. Both use the fixed nominal 1,500-node
+limit plus `min_completed_depth = 1` for both profiles. `Production` uses 4
+matchups/16 games with the real ten-second deadline and no minimum-depth guard.
+Pilot remains an optional diagnostic mode, not a prerequisite for Extended.
+
+Extended writes one `AI_BENCHMARK_GAME` console line and appends one compact
+JSONL checkpoint record after every completed game. The checkpoint is named
+`extended-<variant>-v<version>-<timestamp>.progress.jsonl`; it survives an
+interrupted later game, while only the final 112-game JSON is eligible for the
+benchmark result. The PowerShell wrapper forwards child output during the run
+instead of buffering it until exit.
+
+Extended Final requires at least 55% match points, at least 75% initial-depth
+non-regression, no worse fallback rate, and no incomplete games. JSON evidence
+is written to `.summer/local/ai-benchmarks/` and is intentionally ignored by
+Git.

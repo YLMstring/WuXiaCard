@@ -41,17 +41,29 @@ static func find_best_action_iterative(
 ) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var profile: Dictionary = Profile.normalize(limits)
+	var max_nodes: int = int(limits.get("max_nodes", 0))
+	var min_completed_depth: int = maxi(int(limits.get("min_completed_depth", 0)), 0)
+	var initial_context: Dictionary = {
+		"profile": profile,
+		"max_nodes": max_nodes,
+		"min_completed_depth": min_completed_depth,
+		"completed_depth": 0,
+		"minimum_depth_guard_used": false,
+	}
 	if state == null:
-		return _make_result(null, 0, 0, {"profile": profile}, started_usec, true, &"no_legal_action", false)
+		return _make_result(null, 0, 0, initial_context, started_usec, true, &"no_legal_action", false)
 	var legal_actions: Array[ActionData] = Simulator.get_legal_actions(state)
 	if legal_actions.is_empty():
-		return _make_result(null, 0, 0, {}, started_usec, true, &"no_legal_action", false)
+		return _make_result(null, 0, 0, initial_context, started_usec, true, &"no_legal_action", false)
 	if root_owner < 0:
 		root_owner = state.active_player
 
 	var context: Dictionary = {
 		"deadline_usec": int(limits.get("deadline_usec", 0)),
-		"max_nodes": int(limits.get("max_nodes", 0)),
+		"max_nodes": max_nodes,
+		"min_completed_depth": min_completed_depth,
+		"completed_depth": 0,
+		"minimum_depth_guard_used": false,
 		"nodes": 0,
 		"cutoffs": 0,
 		"transposition_hits": 0,
@@ -70,6 +82,18 @@ static func find_best_action_iterative(
 		"aborted": false,
 		"stop_reason": &"",
 		"horizon_reached": false,
+		"iteration_depth": 0,
+		"iteration_started_nodes": 0,
+		"root_actions_total": 0,
+		"root_actions_started": 0,
+		"root_actions_completed": 0,
+		"root_current_action_started_nodes": 0,
+		"collect_timings": bool(limits.get("collect_timings", false)),
+		"time_order_usec": 0,
+		"time_apply_usec": 0,
+		"time_key_usec": 0,
+		"time_evaluate_usec": 0,
+		"turn_plan": [],
 		"should_cancel": should_cancel,
 		"profile": profile,
 	}
@@ -87,9 +111,15 @@ static func find_best_action_iterative(
 		context["aborted"] = false
 		context["stop_reason"] = &""
 		context["horizon_reached"] = false
+		context["iteration_depth"] = depth
+		context["iteration_started_nodes"] = int(context["nodes"])
+		context["root_actions_total"] = 0
+		context["root_actions_started"] = 0
+		context["root_actions_completed"] = 0
+		context["root_current_action_started_nodes"] = int(context["nodes"])
 		var iteration: Dictionary = _search_root(
 			state,
-			depth,
+			depth * 2,
 			root_owner,
 			context,
 			table,
@@ -100,7 +130,19 @@ static func find_best_action_iterative(
 		best_action = (iteration.get("action") as ActionData).duplicate_action()
 		best_score = int(iteration.get("score", 0))
 		completed_depth = depth
+		if (
+			max_nodes > 0
+			and int(context.get("nodes", 0)) >= max_nodes
+			and depth <= min_completed_depth
+		):
+			context["minimum_depth_guard_used"] = true
+		context["completed_depth"] = completed_depth
 		previous_best_key = best_action.canonical_key()
+		context["turn_plan"] = _build_same_turn_plan(
+			state,
+			best_action,
+			table
+		)
 		solved = not bool(context["horizon_reached"])
 		if on_progress.is_valid():
 			on_progress.call(_make_result(
@@ -134,7 +176,7 @@ static func find_best_action_iterative(
 
 static func _search_root(
 	state: StateData,
-	depth: int,
+	remaining_owner_turn_boundaries: int,
 	root_owner: int,
 	context: Dictionary,
 	table: Dictionary,
@@ -152,14 +194,22 @@ static func _search_root(
 		"",
 		context
 	)
+	context["root_actions_total"] = records.size()
 	for record: Dictionary in records:
 		if _should_stop(context):
 			return {}
+		context["root_actions_started"] = int(context["root_actions_started"]) + 1
+		context["root_current_action_started_nodes"] = int(context["nodes"])
 		var action: ActionData = record["action"] as ActionData
 		var next_state: StateData = _next_state_for_record(state, record, context)
+		var child_remaining: int = _remaining_after_transition(
+			state,
+			next_state,
+			remaining_owner_turn_boundaries
+		)
 		var score: int = _search_child(
 			next_state,
-			depth - 1,
+			child_remaining,
 			alpha,
 			beta,
 			root_owner,
@@ -183,7 +233,7 @@ static func _search_root(
 			# allowing canonical tie-breaking to replace the proven best action.
 			score = _search(
 				next_state,
-				depth - 1,
+				child_remaining,
 				best_score - 1,
 				best_score + 1,
 				root_owner,
@@ -193,6 +243,7 @@ static func _search_root(
 			if bool(context["aborted"]):
 				return {}
 			is_better_tie = score == best_score
+		context["root_actions_completed"] = int(context["root_actions_completed"]) + 1
 		if best_action == null or (maximizing and score > best_score) or (not maximizing and score < best_score) or is_better_tie:
 			best_score = score
 			best_action = action
@@ -234,7 +285,18 @@ static func _search(
 			)
 		return _evaluate_state(state, root_owner, context)
 
+	var key_started_usec: int = (
+		Time.get_ticks_usec()
+		if bool(context.get("collect_timings", false))
+		else 0
+	)
 	var key: String = StateKey.build_compact(state)
+	if key_started_usec > 0:
+		context["time_key_usec"] = (
+			int(context.get("time_key_usec", 0))
+			+ Time.get_ticks_usec()
+			- key_started_usec
+		)
 	var original_alpha: int = alpha_value
 	var original_beta: int = beta_value
 	var alpha: int = alpha_value
@@ -269,9 +331,14 @@ static func _search(
 			return 0
 		var action: ActionData = record["action"] as ActionData
 		var next_state: StateData = _next_state_for_record(state, record, context)
+		var child_remaining: int = _remaining_after_transition(
+			state,
+			next_state,
+			depth_remaining
+		)
 		var child_score: int = _search_child(
 			next_state,
-			depth_remaining - 1,
+			child_remaining,
 			alpha,
 			beta,
 			root_owner,
@@ -311,6 +378,20 @@ static func _search(
 			"horizon": bool(context["horizon_reached"]) and not horizon_before,
 		}
 	return best_score
+
+
+static func _remaining_after_transition(
+	state: StateData,
+	next_state: StateData,
+	remaining_owner_turn_boundaries: int
+) -> int:
+	if state == null or next_state == null:
+		return remaining_owner_turn_boundaries
+	var completed_owner_turns: int = maxi(
+		next_state.owner_turn_serial - state.owner_turn_serial,
+		0
+	)
+	return remaining_owner_turn_boundaries - completed_owner_turns
 
 
 static func _search_child(
@@ -527,6 +608,11 @@ static func _ordered_records(
 	transposition_key: String,
 	context: Dictionary
 ) -> Array[Dictionary]:
+	var timing_started_usec: int = (
+		Time.get_ticks_usec()
+		if bool(context.get("collect_timings", false))
+		else 0
+	)
 	var profile: Dictionary = context.get("profile", {}) as Dictionary
 	if not bool(profile.get("use_lazy_transitions", false)):
 		var preferred_key: String = (
@@ -534,7 +620,9 @@ static func _ordered_records(
 			if not principal_variation_key.is_empty()
 			else transposition_key
 		)
-		return _ordered_transitions(state, preferred_key, context)
+		var eager_records: Array[Dictionary] = _ordered_transitions(state, preferred_key, context)
+		_record_elapsed_timing(context, "time_order_usec", timing_started_usec)
+		return eager_records
 	var legal_actions: Array[ActionData] = Simulator.get_legal_actions(state)
 	context["generated_actions"] = int(context.get("generated_actions", 0)) + legal_actions.size()
 	var ordered_actions: Array[ActionData] = Ordering.order_actions(
@@ -547,6 +635,7 @@ static func _ordered_records(
 	var records: Array[Dictionary] = []
 	for action: ActionData in ordered_actions:
 		records.append({"action": action})
+	_record_elapsed_timing(context, "time_order_usec", timing_started_usec)
 	return records
 
 
@@ -557,7 +646,13 @@ static func _next_state_for_record(
 ) -> StateData:
 	if record.has("transition"):
 		return (record["transition"] as Dictionary)["state"] as StateData
+	var timing_started_usec: int = (
+		Time.get_ticks_usec()
+		if bool(context.get("collect_timings", false))
+		else 0
+	)
 	var transition: Dictionary = Simulator.apply_action(state, record["action"] as ActionData)
+	_record_elapsed_timing(context, "time_apply_usec", timing_started_usec)
 	context["applied_transitions"] = int(context.get("applied_transitions", 0)) + 1
 	return transition["state"] as StateData
 
@@ -578,13 +673,20 @@ static func _evaluate_state(
 	root_owner: int,
 	context: Dictionary
 ) -> int:
+	var timing_started_usec: int = (
+		Time.get_ticks_usec()
+		if bool(context.get("collect_timings", false))
+		else 0
+	)
 	var profile: Dictionary = context.get("profile", {}) as Dictionary
 	if not bool(profile.get("use_evaluation_cache", false)):
-		return Evaluator.evaluate(
+		var score: int = Evaluator.evaluate(
 			state,
 			root_owner,
 			StringName(profile.get("evaluator_profile", Profile.ENHANCED))
 		)
+		_record_elapsed_timing(context, "time_evaluate_usec", timing_started_usec)
+		return score
 	var lookup: Dictionary = EvaluationCache.lookup_or_evaluate(
 		context.get("evaluation_cache", {}) as Dictionary,
 		state,
@@ -593,7 +695,18 @@ static func _evaluate_state(
 	)
 	if bool(lookup.get("hit", false)):
 		context["evaluation_cache_hits"] = int(context.get("evaluation_cache_hits", 0)) + 1
+	_record_elapsed_timing(context, "time_evaluate_usec", timing_started_usec)
 	return int(lookup.get("score", 0))
+
+
+static func _record_elapsed_timing(
+	context: Dictionary,
+	field: String,
+	started_usec: int
+) -> void:
+	if started_usec <= 0:
+		return
+	context[field] = int(context.get(field, 0)) + Time.get_ticks_usec() - started_usec
 
 
 static func _ordered_transitions(
@@ -647,15 +760,95 @@ static func _should_stop(context: Dictionary) -> bool:
 		return true
 	var max_nodes: int = int(context.get("max_nodes", 0))
 	if max_nodes > 0 and int(context.get("nodes", 0)) >= max_nodes:
-		context["aborted"] = true
-		context["stop_reason"] = &"node_limit"
-		return true
+		var completed_depth: int = int(context.get("completed_depth", 0))
+		var min_completed_depth: int = int(context.get("min_completed_depth", 0))
+		if completed_depth < min_completed_depth:
+			context["minimum_depth_guard_used"] = true
+		else:
+			context["aborted"] = true
+			context["stop_reason"] = &"node_limit"
+			return true
 	var deadline_usec: int = int(context.get("deadline_usec", 0))
 	if deadline_usec > 0 and Time.get_ticks_usec() >= deadline_usec:
 		context["aborted"] = true
 		context["stop_reason"] = &"deadline"
 		return true
 	return false
+
+
+static func _build_same_turn_plan(
+	state: StateData,
+	first_action: ActionData,
+	table: Dictionary
+) -> Array[Dictionary]:
+	var plan: Array[Dictionary] = []
+	if state == null or first_action == null or first_action.action_type == &"":
+		return plan
+	var root_owner: int = state.active_player
+	var root_owner_turn_serial: int = state.owner_turn_serial
+	var current_state: StateData = state
+	var current_action: ActionData = first_action
+	var observed_state_keys: Dictionary = {}
+	while (
+		current_state != null
+		and current_state.active_player == root_owner
+		and current_state.owner_turn_serial == root_owner_turn_serial
+	):
+		var current_key: String = StateKey.build_compact(current_state)
+		if observed_state_keys.has(current_key):
+			break
+		observed_state_keys[current_key] = true
+		if not Simulator.is_action_legal(current_state, current_action):
+			break
+		plan.append({
+			"state_key": current_key,
+			"owner_turn_serial": root_owner_turn_serial,
+			"owner_id": root_owner,
+			"action": current_action.duplicate_action(),
+		})
+		var transition: Dictionary = Simulator.apply_action(current_state, current_action)
+		if not bool(transition.get("valid", false)):
+			break
+		current_state = transition.get("state") as StateData
+		if (
+			current_state == null
+			or Simulator.is_terminal(current_state)
+			or current_state.active_player != root_owner
+			or current_state.owner_turn_serial != root_owner_turn_serial
+		):
+			break
+		var next_key: String = StateKey.build_compact(current_state)
+		var cached: Dictionary = table.get(next_key, {}) as Dictionary
+		var next_action_key: String = String(cached.get("best_action_key", ""))
+		if next_action_key.is_empty():
+			break
+		current_action = _find_legal_action_by_key(current_state, next_action_key)
+		if current_action == null:
+			break
+	return plan
+
+
+static func _find_legal_action_by_key(
+	state: StateData,
+	action_key: String
+) -> ActionData:
+	for action: ActionData in Simulator.get_legal_actions(state):
+		if action.canonical_key() == action_key:
+			return action
+	return null
+
+
+static func _duplicate_turn_plan(source: Array) -> Array[Dictionary]:
+	var copied_plan: Array[Dictionary] = []
+	for entry_value: Variant in source:
+		if not entry_value is Dictionary:
+			continue
+		var entry: Dictionary = (entry_value as Dictionary).duplicate(true)
+		var action: ActionData = (entry_value as Dictionary).get("action", null) as ActionData
+		if action != null:
+			entry["action"] = action.duplicate_action()
+		copied_plan.append(entry)
+	return copied_plan
 
 
 static func _make_result(
@@ -668,11 +861,16 @@ static func _make_result(
 	completion_reason: StringName,
 	has_completed_depth: bool
 ) -> Dictionary:
+	var nodes: int = int(context.get("nodes", 0))
+	var max_nodes: int = int(context.get("max_nodes", 0))
 	return {
 		"action": action.duplicate_action() if action != null else ActionData.new(),
 		"score": score,
 		"completed_depth": completed_depth,
-		"nodes": int(context.get("nodes", 0)),
+		"nodes": nodes,
+		"min_completed_depth": maxi(int(context.get("min_completed_depth", 0)), 0),
+		"minimum_depth_guard_used": bool(context.get("minimum_depth_guard_used", false)),
+		"nodes_over_limit": maxi(nodes - max_nodes, 0) if max_nodes > 0 else 0,
 		"cutoffs": int(context.get("cutoffs", 0)),
 		"transposition_hits": int(context.get("transposition_hits", 0)),
 		"generated_actions": int(context.get("generated_actions", 0)),
@@ -680,6 +878,29 @@ static func _make_result(
 		"pvs_probes": int(context.get("pvs_probes", 0)),
 		"pvs_researches": int(context.get("pvs_researches", 0)),
 		"evaluation_cache_hits": int(context.get("evaluation_cache_hits", 0)),
+		"iteration_depth": int(context.get("iteration_depth", 0)),
+		"iteration_nodes": maxi(
+			int(context.get("nodes", 0)) - int(context.get("iteration_started_nodes", 0)),
+			0
+		),
+		"root_actions_total": int(context.get("root_actions_total", 0)),
+		"root_actions_started": int(context.get("root_actions_started", 0)),
+		"root_actions_completed": int(context.get("root_actions_completed", 0)),
+		"current_root_action_nodes": (
+			maxi(
+				int(context.get("nodes", 0))
+				- int(context.get("root_current_action_started_nodes", 0)),
+				0
+			)
+			if int(context.get("root_actions_started", 0))
+			> int(context.get("root_actions_completed", 0))
+			else 0
+		),
+		"time_order_usec": int(context.get("time_order_usec", 0)),
+		"time_apply_usec": int(context.get("time_apply_usec", 0)),
+		"time_key_usec": int(context.get("time_key_usec", 0)),
+		"time_evaluate_usec": int(context.get("time_evaluate_usec", 0)),
+		"turn_plan": _duplicate_turn_plan(context.get("turn_plan", []) as Array),
 		"max_tactical_depth": int(context.get("max_tactical_depth", 0)),
 		"tactical_candidates_scanned": int(context.get("tactical_candidates_scanned", 0)),
 		"tactical_actions_searched": int(context.get("tactical_actions_searched", 0)),

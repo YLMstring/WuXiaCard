@@ -25,6 +25,8 @@ const StateData = preload("res://scripts/duel_state.gd")
 const ActionData = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
+const StateKey = preload("res://scripts/duel_state_key.gd")
+const TurnPlan = preload("res://scripts/duel_turn_plan.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 const AttackVfxData = preload("res://scripts/attack_vfx.gd")
@@ -110,6 +112,8 @@ var _movement_sound_count: int = 0
 var _opponent_search_session: SearchSession = null
 var _opponent_search_started_usec: int = 0
 var _opponent_search_test_limits: Dictionary = {}
+var _opponent_turn_plan: Array[Dictionary] = []
+var _opponent_search_start_count: int = 0
 var _last_search_report: Dictionary = {}
 var _inspection_open: bool = false
 var _board_visible_before_inspection: bool = true
@@ -436,6 +440,18 @@ func debug_get_search_budget_seconds() -> float:
 
 func debug_get_last_search_report() -> Dictionary:
 	return _last_search_report.duplicate(true)
+
+
+func debug_get_opponent_turn_plan_size() -> int:
+	return _opponent_turn_plan.size()
+
+
+func debug_set_opponent_turn_plan(plan: Array) -> void:
+	_opponent_turn_plan = TurnPlan.copy_entries(plan)
+
+
+func debug_get_opponent_search_start_count() -> int:
+	return _opponent_search_start_count
 
 
 func debug_is_search_running() -> bool:
@@ -802,10 +818,12 @@ func _commit_action(
 	_update_score()
 
 	if Simulator.is_terminal(duel_state):
+		_opponent_turn_plan.clear()
 		_finish_match()
 		return
 
 	if duel_state.active_player == DuelRules.PLAYER_OWNER:
+		_opponent_turn_plan.clear()
 		turn_state = TurnState.PLAYER
 		_sync_hand_playability()
 		_update_turn_status()
@@ -816,6 +834,11 @@ func _commit_action(
 	_update_turn_status()
 	if testing_mode or not continue_automatically:
 		return
+	var planned_choice: ActionData = _take_planned_opponent_action()
+	if planned_choice != null:
+		if await _commit_opponent_choice(planned_choice):
+			return
+		_opponent_turn_plan.clear()
 	if opponent_think_delay > 0.0:
 		await get_tree().create_timer(opponent_think_delay).timeout
 	await _perform_opponent_turn()
@@ -1725,8 +1748,10 @@ func _perform_opponent_turn() -> void:
 		_finish_match()
 		return
 	var session: SearchSession = SearchSession.new()
+	_opponent_turn_plan.clear()
 	_opponent_search_session = session
 	_opponent_search_started_usec = Time.get_ticks_usec()
+	_opponent_search_start_count += 1
 	var started: bool = session.start(
 		duel_state,
 		DuelRules.OPPONENT_OWNER,
@@ -1739,7 +1764,7 @@ func _perform_opponent_turn() -> void:
 			var progress: Dictionary = session.get_progress()
 			var elapsed: float = float(Time.get_ticks_usec() - _opponent_search_started_usec) / 1_000_000.0
 			if not _inspection_open:
-				turn_status.text = "对手正在思考… %.1fs · 深度 %d" % [
+				turn_status.text = "对手正在思考… %.1fs · 轮次深度 %d" % [
 					elapsed,
 					int(progress.get("completed_depth", 0)),
 				]
@@ -1773,24 +1798,68 @@ func _perform_opponent_turn() -> void:
 		_finish_match()
 		return
 	search_result["action"] = choice.duplicate_action()
+	_opponent_turn_plan = TurnPlan.remaining_after_selected_action(
+		search_result.get("turn_plan", []) as Array,
+		duel_state,
+		choice,
+		bool(search_result.get("used_fallback", false))
+	)
 	_last_search_report = search_result.duplicate(true)
 	_print_search_report(search_result)
+	if not await _commit_opponent_choice(choice):
+		_finish_match()
+
+
+func _take_planned_opponent_action() -> ActionData:
+	var taken: Dictionary = TurnPlan.take_next(
+		_opponent_turn_plan,
+		duel_state,
+		DuelRules.OPPONENT_OWNER
+	)
+	_opponent_turn_plan = TurnPlan.copy_entries(
+		taken.get("remaining_plan", []) as Array
+	)
+	if not bool(taken.get("matched", false)):
+		return null
+	var action: ActionData = taken.get("action", null) as ActionData
+	if action == null:
+		return null
+	_last_search_report["continuation_actions_reused"] = (
+		int(_last_search_report.get("continuation_actions_reused", 0)) + 1
+	)
+	print(
+		"AI_SEARCH_CONTINUATION serial=%d state=%s action=%s"
+		% [
+			duel_state.owner_turn_serial,
+			StateKey.build_compact(duel_state),
+			action.canonical_key(),
+		]
+	)
+	return action
+
+
+func _commit_opponent_choice(choice: ActionData) -> bool:
+	if choice == null or choice.target_index < 0:
+		return false
 	var opponent_card: CardView = null
 	if choice.action_type == ActionData.TYPE_PLAY:
-		opponent_card = _get_card_view_for_logical_index(DuelRules.OPPONENT_OWNER, choice.source_index)
+		opponent_card = _get_card_view_for_logical_index(
+			DuelRules.OPPONENT_OWNER,
+			choice.source_index
+		)
 	elif choice.action_type == ActionData.TYPE_ACTIVATE and debug_has_board_card_view(choice.source_index):
 		opponent_card = board_cards[choice.source_index] as CardView
-	if opponent_card == null or choice.target_index < 0:
-		_finish_match()
-		return
+	if opponent_card == null:
+		return false
 	await _commit_action(opponent_card, choice, DuelRules.OPPONENT_OWNER)
+	return true
 
 
 func _print_search_report(result: Dictionary) -> void:
 	var action: ActionData = result.get("action", null) as ActionData
 	var action_key: String = action.canonical_key() if action != null else "none"
 	print(
-		"AI_SEARCH elapsed=%.3f depth=%d tactical_depth=%d tactical_scanned=%d tactical_searched=%d nodes=%d generated=%d applied=%d cutoffs=%d cache_hits=%d eval_cache_hits=%d pvs_probes=%d pvs_researches=%d reason=%s fallback=%s action=%s" % [
+		"AI_SEARCH elapsed=%.3f round_depth=%d tactical_depth=%d tactical_scanned=%d tactical_searched=%d nodes=%d generated=%d applied=%d cutoffs=%d cache_hits=%d eval_cache_hits=%d pvs_probes=%d pvs_researches=%d reason=%s fallback=%s action=%s" % [
 			float(result.get("elapsed_seconds", 0.0)),
 			int(result.get("completed_depth", 0)),
 			int(result.get("max_tactical_depth", 0)),
@@ -1812,6 +1881,7 @@ func _print_search_report(result: Dictionary) -> void:
 
 
 func _cancel_opponent_search() -> void:
+	_opponent_turn_plan.clear()
 	if _opponent_search_session == null:
 		return
 	_opponent_search_session.cancel_and_join()

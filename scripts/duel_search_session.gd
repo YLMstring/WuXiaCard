@@ -45,6 +45,7 @@ func start(
 		"tactical_actions_searched": 0,
 		"max_tactical_candidates_per_node": 0,
 		"max_tactical_actions_per_node": 0,
+		"turn_plan": [],
 		"completion_reason": &"searching",
 	}
 	_result = {}
@@ -130,6 +131,7 @@ func _run_worker(
 	var use_fallback: bool = not has_completed_depth or selected_action == null or selected_action.action_type == &""
 	if use_fallback:
 		selected_action = greedy_fallback.duplicate_action()
+		search_result["turn_plan"] = []
 	search_result["action"] = selected_action.duplicate_action()
 	search_result["used_fallback"] = use_fallback
 	_publish_final(search_result)
@@ -179,6 +181,7 @@ func _publish_failure(fallback: ActionData, reason: StringName) -> void:
 		"completion_reason": reason,
 		"has_completed_depth": false,
 		"used_fallback": true,
+		"turn_plan": [],
 	})
 
 
@@ -187,4 +190,15 @@ func _copy_result(source: Dictionary) -> Dictionary:
 	var action: ActionData = source.get("action", null) as ActionData
 	if action != null:
 		copied["action"] = action.duplicate_action()
+	var copied_plan: Array[Dictionary] = []
+	for entry_value: Variant in source.get("turn_plan", []):
+		if not entry_value is Dictionary:
+			continue
+		var source_entry: Dictionary = entry_value as Dictionary
+		var copied_entry: Dictionary = source_entry.duplicate(true)
+		var planned_action: ActionData = source_entry.get("action", null) as ActionData
+		if planned_action != null:
+			copied_entry["action"] = planned_action.duplicate_action()
+		copied_plan.append(copied_entry)
+	copied["turn_plan"] = copied_plan
 	return copied

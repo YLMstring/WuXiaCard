@@ -1,6 +1,6 @@
 extends SceneTree
 
-const FIXED_DEPTH: int = 3
+const FIXED_COMPLETE_ROUND_DEPTH: int = 1
 const EXACT_ROOT_ACTION_GAME_IDS: Array[StringName] = [
 	&"qingfeng_xuedi__dukou_xiaoke__g1",
 	&"luoxia_jianji__heisha_xingzhe__g1",
@@ -61,8 +61,13 @@ func _run() -> void:
 		)
 	if _failures == 0:
 		print(
-			"REAL_QUICK_SEARCH_EQUIVALENCE_PASSED openings=%d comparisons=%d depth=%d checks=%d"
-			% [openings.size(), openings.size() * 2, FIXED_DEPTH, _checks]
+			"REAL_QUICK_SEARCH_EQUIVALENCE_PASSED openings=%d comparisons=%d complete_round_depth=%d checks=%d"
+			% [
+				openings.size(),
+				openings.size() * 2,
+				FIXED_COMPLETE_ROUND_DEPTH,
+				_checks,
+			]
 		)
 	else:
 		push_error(
@@ -226,7 +231,7 @@ func _search(state: State, overrides: Dictionary) -> Dictionary:
 
 func _search_limits(overrides: Dictionary) -> Dictionary:
 	var limits: Dictionary = {
-		"max_depth": FIXED_DEPTH,
+		"max_depth": FIXED_COMPLETE_ROUND_DEPTH,
 		"use_tactical_extension": false,
 		"use_evaluation_cache": false,
 		"evaluator_profile": &"baseline",
@@ -248,9 +253,14 @@ func _score_root_action_exact(
 	var limits: Dictionary = _search_limits(overrides)
 	var context: Dictionary = _make_search_context(Profile.normalize(limits))
 	var next_state: State = transition.get("state") as State
+	var remaining_owner_turn_boundaries: int = Search._remaining_after_transition(
+		state,
+		next_state,
+		FIXED_COMPLETE_ROUND_DEPTH * 2
+	)
 	var score: int = Search._search(
 		next_state,
-		FIXED_DEPTH - 1,
+		remaining_owner_turn_boundaries,
 		-Search.INFINITY,
 		Search.INFINITY,
 		state.active_player,
@@ -298,9 +308,13 @@ func _check_result(opening: Dictionary, label: String, result: Dictionary) -> vo
 		"%s %s returns an action" % [opening.get("game_id", &"missing"), label]
 	)
 	_check(
-		int(result.get("completed_depth", 0)) == FIXED_DEPTH,
-		"%s %s completes fixed depth %d"
-		% [opening.get("game_id", &"missing"), label, FIXED_DEPTH]
+		int(result.get("completed_depth", 0)) == FIXED_COMPLETE_ROUND_DEPTH,
+		"%s %s completes fixed complete-round depth %d"
+		% [
+			opening.get("game_id", &"missing"),
+			label,
+			FIXED_COMPLETE_ROUND_DEPTH,
+		]
 	)
 	_check(
 		bool(result.get("has_completed_depth", false)),

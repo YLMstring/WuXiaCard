@@ -236,8 +236,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   instance returning from discard. Newly public instances emit
   `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order. Production uses the enhanced
-  iterative-deepening profile: deterministic generic ordering, lazy simulator
-  transitions, and PVS. The bounded two-ply tactical extension (scan 12/search
+  iterative-deepening LazyOnly profile: deterministic generic ordering and lazy
+  simulator transitions, with PVS available only by explicit override. The
+  bounded two-ply tactical extension (scan 12/search
   4) remains available by explicit override but is disabled by default because
   its stand-pat result can violate mandatory-action semantics. `baseline`
   remains available for paired benchmarks. Search stays card-agnostic; the
@@ -245,6 +246,32 @@ The creator has made several direct UI and localization edits. Preserve those ed
   off by default. Root canonical tie-breaking verifies apparent alpha-beta
   ties in a narrow window before replacing the proven best action, so a cutoff
   bound cannot select an objectively worse move.
+- Search depth is measured in complete rounds. Depth one finishes the current
+  owner's remaining owner turn and the opponent's following owner turn by
+  consuming two authoritative `owner_turn_serial` boundaries. Same-turn extra
+  plays cost no boundary and are searched fully; simulator-resolved empty turns
+  consume however many boundaries they actually cross. Only a fully completed
+  round iteration is published. The completed principal line also carries the
+  AI's remaining same-owner-turn actions; the controller reuses them without a
+  second thinking pause only while exact state key, owner, serial, and legality
+  match, otherwise it clears the plan and searches normally.
+- Node-limited Quick, Pilot, and Extended benchmarks set
+  `min_completed_depth = 1`. Their nominal node limit is ignored only until a
+  complete depth one exists; total nodes never reset, while cancellation and
+  deadlines remain hard. Search and benchmark reports expose guard use and
+  node overruns. Production keeps its hard ten-second deadline without this
+  benchmark-only guard.
+- Extended runs all 112 real enemy-catalog crossover games at the fixed soft
+  1,500-node tier. Every completed game is immediately printed and appended to
+  a timestamped `.progress.jsonl` checkpoint; the PowerShell wrapper streams
+  those lines live. The final JSON shares the same artifact stem and references
+  the checkpoint. A partial checkpoint survives interruption but is not a final
+  benchmark result, so a separate Pilot is no longer required before Extended.
+- The first 14-opening ten-second profile after this migration completed
+  complete-round depth one in every opening and depth two in none. Mean depth-one
+  time was `1.365s`; the closest depth-two attempt completed 34/35 root actions
+  with a `10.28s` linear estimate. Current timing probes still point first to
+  canonical state keys and simulator transition/state-copy cost.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live
@@ -405,7 +432,7 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   triggers; only their action phase is skipped. Five occurrences of the same
   nine-cell catalog-ID/current-owner signature end the duel by score at the
   end-to-start boundary. The action-count fallback is `max_turns = 100`.
-- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation. Use `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production evidence rather than judging strength from one game.
+- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation. `completed_depth` and benchmark depth settings now mean complete rounds, not action plies. Use `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production evidence rather than judging strength from one game. Node-limited reports must include minimum-depth guard and overrun diagnostics instead of describing 1,500 as a hard cap.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.

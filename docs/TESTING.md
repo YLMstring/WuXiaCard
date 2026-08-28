@@ -53,12 +53,14 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
-- `test_duel_search.gd` — evaluation/search, deadlines, deterministic ordering,
+- `test_duel_search.gd` — evaluation/search, deadlines, minimum completed-depth
+  node guards, deterministic ordering,
   lazy-transition/PVS exactness, bounded tactical extension,
   opt-in evaluation caching, fallback, and state keys.
-- `test_duel_ai_benchmark.gd` — versioned AI fixture validation, deterministic
-  rebuilds, mutable-state isolation, and a tiny paired-runner smoke test. Formal
-  matches are intentionally excluded from the daily full suite.
+- `test_duel_ai_benchmark.gd` — versioned enemy roster/manifest validation,
+  deterministic rebuilds, mutable-state isolation, minimum-depth mode wiring,
+  per-game progress/checkpoint serialization, and a tiny four-game runner
+  smoke. Formal matches are intentionally excluded from the daily full suite.
 - `test_duel_integration.gd` — scene/controller presentation and live-path synchronization.
 - `test_duel_replay_record.gd` — independent initial/final state snapshots,
   immutable ordered action copies, readiness, access isolation, and reset.
@@ -177,13 +179,35 @@ Run paired AI strength samples separately with:
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 ```
 
-`Quick` uses four fixtures and 1,500 nodes per decision. `Extended` uses 16
-fixtures and 10,000 nodes, and `Production` uses two fixtures with the real
-10-second decision budget and Dummy audio. Every fixture is played twice with
-enhanced/baseline owners swapped. Extended Final requires at least 55% match
-points, 75% initial-depth non-regression, no worse fallback rate, and no
-incomplete games. Results are written under `.summer/local/ai-benchmarks/` and
-must not be committed.
+`Quick` uses 7 enemy matchups/28 games and `Extended` uses all 28
+matchups/112 games. Both use a nominal 1,500 nodes per decision and protect
+complete-round depth one with `min_completed_depth = 1`; nodes are not reset
+after depth one, so reports must inspect guard-use and overrun diagnostics.
+`Production` uses 4 matchups/16 games with the real 10-second decision budget,
+no minimum-depth guard, and Dummy audio. Each matchup is a balanced four-game
+crossover of deck, owner/initiative, and enhanced/baseline profile. Pilot is
+optional and is not required before Extended.
+
+Extended emits one `AI_BENCHMARK_GAME` line per completed game. It also appends
+one independently parseable record to a sibling `.progress.jsonl` checkpoint;
+an interrupted run retains completed lines, but that partial file is not a
+final strength result. The final JSON references the checkpoint. Extended Final
+requires at least 55% match points, 75% initial-depth non-regression, no worse
+fallback rate, and no incomplete games. All results live under
+`.summer/local/ai-benchmarks/` and must not be committed.
+
+Profile production LazyOnly complete-round opening depth separately with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
+```
+
+This runs the 14 unique real Quick openings with the production ten-second
+budget, Dummy audio, per-complete-round-depth and partial-root diagnostics,
+plus three node-limited timing probes. The current target is complete-round
+depth two; the JSON report explicitly records `depth_unit = complete_round` so
+it cannot be compared as if it were an old action-ply result. Its report is written under
+`.summer/local/ai-benchmarks/` and must not be committed.
 
 ### UI
 
