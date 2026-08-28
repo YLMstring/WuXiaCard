@@ -138,10 +138,105 @@ The fixed Extended constant remains 1,500. Quick, Pilot, and Extended add
 `min_completed_depth = 1` beside their node limit. Production adds nothing.
 
 The previously aborted 1,500-node Extended LazyOnly run is not evidence and
-produced no final JSON. After implementation and focused verification, run a
-small Pilot first to measure the real overrun distribution and projected
-Extended duration. Report that evidence to the user before launching another
-112-game Extended run.
+produced no final JSON. The next benchmark is the real Extended LazyOnly run;
+there is no separate Pilot prerequisite. Extended exposes enough evidence after
+every completed game to observe actual overruns and estimate remaining runtime
+without running a second calibration schedule.
+
+## Extended Per-Game Progress
+
+Extended reports progress after each individual game, not only after each
+four-game matchup. The total game count is calculated before play by expanding
+the selected matchup manifest, so every progress record can show `game_index`
+and `total_games` even if the manifest changes later.
+
+After a game returns a complete result, the benchmark performs these steps in
+order:
+
+1. add the game to the in-memory final report;
+2. append one compact JSON object to the progress checkpoint and close it;
+3. print one stable `AI_BENCHMARK_GAME` progress line;
+4. continue to the next game.
+
+The progress line includes:
+
+- completed and total games;
+- game and matchup identifiers;
+- this game's elapsed time, cumulative elapsed time, and a simple projected
+  remaining duration based on completed games;
+- this game's Enhanced match points and cumulative match-point percentage;
+- terminal and invalid status;
+- per-profile decision count, fallback count, completed-depth distribution,
+  minimum-depth-guard count, and total/max node overrun.
+
+The line is diagnostic only. It does not apply the Extended pass gate early,
+change the schedule, stop the run, or alter the fixed soft 1,500-node tier.
+
+## Incremental Checkpoint
+
+At process startup, Extended chooses one timestamped artifact stem shared by
+the final report and checkpoint. The checkpoint is newline-delimited JSON at:
+
+```text
+.summer/local/ai-benchmarks/extended-<variant>-v<version>-<timestamp>.progress.jsonl
+```
+
+Each line is an independently parseable record for exactly one completed game.
+It contains:
+
+```text
+schema_version
+mode
+variant
+game_index
+total_games
+game_id
+matchup_id
+terminal
+invalid_reason
+actions
+enhanced_match_points
+cumulative_enhanced_match_points
+cumulative_enhanced_match_points_percent
+game_elapsed_seconds
+cumulative_elapsed_seconds
+projected_total_seconds
+profile_diagnostics
+```
+
+`profile_diagnostics` stores the same compact per-profile counts used by the
+console line: decisions, fallbacks, completed-depth distribution, guard uses,
+total nodes over the nominal limit, maximum nodes over the limit, and total
+visited nodes. It does not duplicate full decision records or serialized game
+states; those remain in the final report.
+
+The checkpoint append happens only after the full game result exists. Opening,
+appending one line, and closing the file is the durability boundary, preventing
+an interrupted later game from corrupting earlier records. A terminally invalid
+or watchdog-limited game is still a completed result and receives a checkpoint
+line. A crash before a game returns produces no line for that game.
+
+On successful completion, the full JSON report is written once under the same
+artifact stem and records the checkpoint path and progress schema version. The
+checkpoint is retained as an audit trail. If the process is interrupted, the
+checkpoint remains useful progress evidence, but a partial checkpoint is never
+treated as a final benchmark or used to evaluate the Extended pass gate.
+
+## Live Console Delivery
+
+The current PowerShell launcher redirects both child streams to temporary
+files and prints them only after Summer exits. Therefore Godot-side per-game
+`print()` calls alone are insufficient.
+
+The launcher keeps redirection for reliable exit/error inspection but tails the
+growing output files while the child is running and forwards each newly
+completed line immediately. It waits without a tight busy loop, drains both
+streams after process exit, and preserves the existing nonzero-exit and
+`AI_BENCHMARK_FAILED`/script-error detection. It must not print any line twice.
+
+This gives an interactive console immediate per-game output. The JSONL file is
+the authoritative source for detached or externally monitored runs because it
+is structured and survives interruption.
 
 ## Verification
 
@@ -167,20 +262,32 @@ Extended duration. Report that evidence to the user before launching another
 11. Decision records and summaries preserve guard-use and overrun diagnostics.
 12. A focused benchmark fixture that previously fell back at a tiny node limit
     completes depth one for both profiles.
+13. Extended appends exactly one independently parseable checkpoint record per
+    completed game, including terminally invalid results.
+14. Extended prints one `AI_BENCHMARK_GAME` line per completed game with the
+    correct index, cumulative points, timing estimate, and profile diagnostics.
+15. A deliberately interrupted run leaves every previously appended line valid
+    and writes no partial record for the interrupted game.
+16. A completed run writes its final JSON under the checkpoint's artifact stem
+    and references that checkpoint.
+17. The PowerShell launcher exposes a child progress line before process exit,
+    drains the final lines, and emits no duplicates.
 
 ### Regression
 
-13. Search, benchmark, simulator, and integration suites pass.
-14. The canonical full suite passes.
-15. A post-change Pilot reports zero ordinary node-limit fallback unless a
-    hard stop or invalid state occurs, and provides enough timing evidence to
-    estimate the next Extended run before it is launched.
+18. Search, benchmark, simulator, and integration suites pass.
+19. The canonical full suite passes.
+20. The real Extended LazyOnly run is launched directly after verification. Its
+    per-game checkpoint and console records provide overrun and ETA evidence;
+    no separate Pilot is required.
 
 ## Expected Implementation Surface
 
 - `scripts/duel_search.gd`: minimum-depth-aware node stop and diagnostics;
-- `tests/benchmarks/duel_ai_benchmark.gd`: benchmark limits and aggregate
-  reporting;
+- `tests/benchmarks/duel_ai_benchmark.gd`: benchmark limits, aggregate
+  reporting, per-game progress records, and checkpoint output;
+- `tools/run_ai_benchmark.ps1`: live child-output forwarding while retaining
+  complete error detection;
 - `tests/test_duel_search.gd`: protected-depth and hard-stop coverage;
 - `tests/test_duel_ai_benchmark.gd`: mode and report coverage;
 - `docs/AI_SEARCH.md`, `docs/TESTING.md`, and `docs/HANDOFF.md`: durable behavior
