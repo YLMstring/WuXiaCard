@@ -1,5 +1,10 @@
 # Dynamic Initiative Evaluation Design
 
+> **Superseded on 2026-08-28.** Do not implement this evaluator change. The
+> approved replacement is
+> `2026-08-28-complete-round-search-depth-design.md`, which removes the parity
+> problem by searching to complete-round boundaries.
+
 ## Problem
 
 The nonterminal evaluator values one point of board-card ownership difference at
