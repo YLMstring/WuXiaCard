@@ -265,6 +265,33 @@ its one terminal query per transition underrepresents the search-wide benefit:
 `is_terminal()` runs at every visited node, including nodes that do not apply a
 child transition.
 
+## Read-Only Modifier Query Profile (2026-08-29)
+
+Attack validation and generic effect evaluation repeatedly inspect active card
+modifiers. The public `DuelAbilities.get_modifiers()` still returns independent
+deep copies, preserving its existing caller contract. Internal read-only query
+helpers now use private modifier views instead, avoiding deep-copying every
+modifier dictionary merely to compare its type or read a value. No card ID or
+ability-specific search branch was introduced.
+
+An attempted search-only transition result that skipped top-level presentation
+aggregation matched all `1024/1024` measured real actions, but improved the
+transition microbenchmark by only `1.2%`; it was reverted rather than adding a
+second simulator mode for negligible gain.
+
+For the retained modifier-query change, the 512-state/1,024-action transition
+microbenchmark improved from an interleaved old-path median of about `5.044s`
+to `4.804s`, approximately `4.8%`. Against the preceding 14-opening production
+report:
+
+- aggregate throughput increased from `490.18` to `547.48` nodes/s (`+11.69%`);
+- mean complete-round depth-one time fell from `0.629s` to `0.572s` (`-9.12%`);
+- depth two remained `2/14`; every opening completed depth one with zero fallback;
+- all 14 depth-one scores, root actions, and exact opening-state digests matched.
+
+The retained report is
+`.summer/local/ai-benchmarks/production-opening-depth-1787978600.json`.
+
 ## Deferred Optimization
 
 A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.

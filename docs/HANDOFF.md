@@ -246,6 +246,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   off by default. Root canonical tie-breaking verifies apparent alpha-beta
   ties in a narrow window before replacing the proven best action, so a cutoff
   bound cannot select an objectively worse move.
+- Internal modifier checks use read-only views rather than deep-copying every
+  modifier dictionary. The public copying API is unchanged. The 2026-08-29
+  14-opening production profile reached `547.48` nodes/s versus `490.18`
+  previously, with identical depth-one scores, actions, and opening digests;
+  mean complete-round depth-one time fell from `0.629s` to `0.572s`.
 - Search depth is measured in complete rounds. Depth one finishes the current
   owner's remaining owner turn and the opponent's following owner turn by
   consuming two authoritative `owner_turn_serial` boundaries. Same-turn extra

@@ -225,6 +225,13 @@ depth two; the JSON report explicitly records `depth_unit = complete_round` so
 it cannot be compared as if it were an old action-ply result. Its report is written under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
+Run the 512-state/1,024-action simulator transition microbenchmark with Dummy
+audio through:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_transition_microbenchmark.ps1
+```
+
 ### UI
 
 Run inspector/integration and full suite. Manually test at 540×960 and Android-like aspect ratios with mouse and touch. Automated headless checks do not prove visual correctness.

@@ -497,7 +497,7 @@ static func has_modifier(
 	modifier_type: StringName,
 	enabled_effect_gates: Variant = null
 ) -> bool:
-	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
+	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
 		if StringName(modifier.get("type", &"")) == modifier_type:
 			return true
 	return false
@@ -516,6 +516,22 @@ static func get_modifiers(
 		for modifier_value: Variant in (ability_value as Dictionary).get("modifiers", []):
 			if modifier_value is Dictionary:
 				result.append((modifier_value as Dictionary).duplicate(true))
+	return result
+
+
+static func _get_modifier_views(
+	card: Dictionary,
+	enabled_effect_gates: Variant = null
+) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if not card_effects_enabled(card, enabled_effect_gates):
+		return result
+	for ability_value: Variant in card.get("active_abilities", []):
+		if not ability_value is Dictionary:
+			continue
+		for modifier_value: Variant in (ability_value as Dictionary).get("modifiers", []):
+			if modifier_value is Dictionary:
+				result.append(modifier_value as Dictionary)
 	return result
 
 
@@ -542,7 +558,7 @@ static func allows_intervening_ally_at_orthogonal_distance_two_with_gates(
 	card: Dictionary,
 	enabled_effect_gates: Variant
 ) -> bool:
-	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
+	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
 		if (
 			StringName(modifier.get("type", &""))
 			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
@@ -556,7 +572,7 @@ static func allows_intervening_enemy_at_orthogonal_distance_two_with_gates(
 	card: Dictionary,
 	enabled_effect_gates: Variant
 ) -> bool:
-	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
+	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
 		if (
 			StringName(modifier.get("type", &""))
 			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
@@ -573,7 +589,7 @@ static func get_effective_defending_power(
 	enabled_effect_gates: Variant = null
 ) -> int:
 	var result: int = base_power
-	for modifier: Dictionary in get_modifiers(card, enabled_effect_gates):
+	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
 		if StringName(modifier.get("type", &"")) == Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE:
 			result = int(modifier.get("value", result))
 	return result
