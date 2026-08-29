@@ -326,6 +326,16 @@ The board is an Array of nine entries. An empty cell is `null`; an occupied entr
 - `ki`
 - `active_abilities`
 
+Runtime card dictionaries, their `powers`, revelation audiences, temporary
+suppression state, and the `active_abilities` array are mutable state and must
+be isolated between `DuelState` copies. Ability declarations stored inside the
+array—including their nested triggers, conditions, actions, and modifiers—are
+immutable after normalization. Gaining, losing, replacing, or suppressing an
+ability changes the card's array or installs a newly normalized declaration;
+resolution code must never edit a declaration in place. State copies may
+therefore share declaration dictionaries while keeping every mutable container
+independent.
+
 Use `instance_id` whenever an action or view must identify a specific copy. Logical hand arrays compact when a card leaves, while five visual hand slots remain fixed; indices alone are therefore unsafe across presentation delays.
 
 ## Transition Events

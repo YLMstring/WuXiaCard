@@ -181,8 +181,37 @@ func _normalize_hand_slots(hand: Array) -> void:
 			break
 
 
-func duplicate_state():
-	var copied = get_script().new(
+func duplicate_state() -> DuelState:
+	var copied: DuelState = get_script().new() as DuelState
+	copied.board = _duplicate_board(board)
+	copied.hands = _duplicate_card_zones(hands)
+	copied.decks = _duplicate_card_zones(decks)
+	copied.discard_piles = _duplicate_card_zones(discard_piles)
+	copied.removed_cards = _duplicate_card_zones(removed_cards)
+	copied.active_player = active_player
+	copied.turn_count = turn_count
+	copied.run_difficulty = run_difficulty
+	copied.difficulty_eight_draw_consumed = difficulty_eight_draw_consumed
+	copied.max_turns = max_turns
+	copied.active_abilities = active_abilities.duplicate()
+	copied.effect_queue = effect_queue.duplicate(true)
+	copied.pending_choice = pending_choice.duplicate(true)
+	copied.repetition_hashes = repetition_hashes.duplicate(true)
+	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
+	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
+	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
+	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
+	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
+	copied.owner_turn_serial = owner_turn_serial
+	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
+	copied.extra_card_plays_remaining = extra_card_plays_remaining
+	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
+	copied.state_version = state_version
+	return copied
+
+
+func duplicate_state_deep_reference() -> DuelState:
+	var copied: DuelState = get_script().new(
 		board,
 		get_hand(Rules.PLAYER_OWNER),
 		get_hand(Rules.OPPONENT_OWNER),
@@ -192,7 +221,7 @@ func duplicate_state():
 		decks.get(Rules.OPPONENT_OWNER, []),
 		run_difficulty,
 		difficulty_eight_draw_consumed
-	)
+	) as DuelState
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)
 	copied.max_turns = max_turns
@@ -210,6 +239,60 @@ func duplicate_state():
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
+	return copied
+
+
+func _duplicate_board(source: Array) -> Array:
+	var copied: Array = []
+	copied.resize(source.size())
+	for cell: int in range(source.size()):
+		var slot_value: Variant = source[cell]
+		if slot_value == null:
+			continue
+		var source_slot: Dictionary = slot_value as Dictionary
+		var copied_slot: Dictionary = source_slot.duplicate()
+		copied_slot["card"] = _duplicate_runtime_card(
+			source_slot.get("card", {}) as Dictionary
+		)
+		copied[cell] = copied_slot
+	return copied
+
+
+func _duplicate_card_zones(source: Dictionary) -> Dictionary:
+	return {
+		Rules.PLAYER_OWNER: _duplicate_card_array(
+			source.get(Rules.PLAYER_OWNER, []) as Array
+		),
+		Rules.OPPONENT_OWNER: _duplicate_card_array(
+			source.get(Rules.OPPONENT_OWNER, []) as Array
+		),
+	}
+
+
+func _duplicate_card_array(source: Array) -> Array:
+	var copied: Array = []
+	copied.resize(source.size())
+	for index: int in range(source.size()):
+		copied[index] = _duplicate_runtime_card(source[index] as Dictionary)
+	return copied
+
+
+func _duplicate_runtime_card(source: Dictionary) -> Dictionary:
+	var copied: Dictionary = source.duplicate()
+	if source.has("powers"):
+		copied["powers"] = (source.get("powers", []) as Array).duplicate()
+	if source.has("active_abilities"):
+		copied["active_abilities"] = (
+			source.get("active_abilities", []) as Array
+		).duplicate()
+	if source.has("revealed_to_owner_ids"):
+		copied["revealed_to_owner_ids"] = (
+			source.get("revealed_to_owner_ids", []) as Array
+		).duplicate()
+	if source.has("temporary_suppression_batches"):
+		copied["temporary_suppression_batches"] = (
+			source.get("temporary_suppression_batches", []) as Array
+		).duplicate(true)
 	return copied
 
 

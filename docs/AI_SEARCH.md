@@ -154,6 +154,19 @@ The branching factor includes every hand-card/cell pairing plus activations. Dra
 
 Even moderate branching compounds exponentially. A 3×3 board does not imply a tiny game tree when hands, decks, effects, and repeated movement exist.
 
+## State-Copy Contract
+
+Search branches receive independent runtime state. Card dictionaries, powers,
+ability-membership arrays, revelation audiences, temporary suppression batches,
+and all state-level queues/maps are copied. Normalized ability declarations and
+their nested trigger/action/condition data are immutable and may be shared
+between branches. Gameplay code may add, remove, replace, suppress, or restore
+whole ability declarations, but must never mutate a declaration in place.
+
+`DuelState.duplicate_state_deep_reference()` retains the former fully deep
+copying path as a test and benchmark oracle; production transitions use the
+selective runtime copy.
+
 ## Safe Optimizations Now
 
 - Reuse transposition results carefully.
@@ -291,6 +304,33 @@ report:
 
 The retained report is
 `.summer/local/ai-benchmarks/production-opening-depth-1787978600.json`.
+
+## Selective Runtime State-Copy Profile (2026-08-29)
+
+`DuelState.duplicate_state()` now copies the runtime card dictionary plus every
+mutable nested container: powers, ability membership, revelation audiences,
+and temporary suppression batches. Normalized ability declarations and their
+nested contents are immutable and shared. The former fully deep-copying path is
+retained as `duplicate_state_deep_reference()` for parity checks and timing.
+
+The 512-state/1,024-action transition microbenchmark compared the two copy
+paths directly. Selective copying reduced 3,072 copies from `0.914s` to
+`0.616s` (`1.483x` throughput), with all 512 canonical state keys equal. The
+complete transition pass fell from the pre-change `4.733s` to `4.478s`, about
+`5.4%`.
+
+Against the preceding 14-opening production report, using the same real Quick
+openings and ten-second budget:
+
+- aggregate throughput increased from `547.48` to `592.05` nodes/s (`+8.14%`);
+- mean complete-round depth-one time fell from `0.572s` to `0.512s` (`-10.51%`);
+- complete-round depth two increased from `2/14` to `3/14` openings;
+- all openings completed depth one with zero fallback;
+- all 14 depth-one scores, root actions, and exact opening-state digests
+  matched the preceding report.
+
+The retained report is
+`.summer/local/ai-benchmarks/production-opening-depth-1787994355.json`.
 
 ## Deferred Optimization
 

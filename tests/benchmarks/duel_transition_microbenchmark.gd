@@ -37,10 +37,22 @@ func _run() -> void:
 		)
 		quit(1)
 		return
+	var copy_parity: Dictionary = _verify_duplicate_parity(states)
+	if int(copy_parity.get("mismatches", 0)) > 0:
+		push_error(
+			"TRANSITION_MICROBENCHMARK_FAILED copy_checks=%d mismatches=%d"
+			% [int(copy_parity.get("checks", 0)), int(copy_parity.get("mismatches", 0))]
+		)
+		quit(1)
+		return
 	_warm_up(pairs)
+	var reference_duplicate_result: Dictionary = _measure_reference_duplicates(pairs)
 	var duplicate_result: Dictionary = _measure_duplicates(pairs)
 	var apply_result: Dictionary = _measure_apply(pairs)
 	var duplicate_seconds: float = float(duplicate_result.get("seconds", 0.0))
+	var reference_duplicate_seconds: float = float(
+		reference_duplicate_result.get("seconds", 0.0)
+	)
 	var apply_seconds: float = float(apply_result.get("seconds", 0.0))
 	var duplicate_share: float = (
 		duplicate_seconds / apply_seconds
@@ -54,7 +66,8 @@ func _run() -> void:
 	print(
 		(
 			"TRANSITION_MICROBENCHMARK_COMPLETE states=%d pairs=%d passes=%d calls=%d "
-			+ "play_pairs=%d activate_pairs=%d duplicate_seconds=%.6f "
+			+ "play_pairs=%d activate_pairs=%d reference_duplicate_seconds=%.6f "
+			+ "duplicate_seconds=%.6f duplicate_speedup=%.3f "
 			+ "apply_seconds=%.6f duplicate_share=%.3f "
 			+ "estimated_resolution_seconds=%.6f duplicate_calls_per_second=%.1f "
 			+ "apply_calls_per_second=%.1f legal_query_checks=%d "
@@ -67,7 +80,13 @@ func _run() -> void:
 			int(apply_result.get("calls", 0)),
 			int(corpus.get("play_pairs", 0)),
 			int(corpus.get("activate_pairs", 0)),
+			reference_duplicate_seconds,
 			duplicate_seconds,
+			(
+				reference_duplicate_seconds / duplicate_seconds
+				if duplicate_seconds > 0.0
+				else 0.0
+			),
 			apply_seconds,
 			duplicate_share,
 			estimated_resolution_seconds,
@@ -88,6 +107,18 @@ func _warm_up(pairs: Array[Dictionary]) -> void:
 		var action: Action = pair.get("action") as Action
 		state.duplicate_state()
 		Simulator.apply_action(state, action)
+		state.duplicate_state_deep_reference()
+
+
+func _verify_duplicate_parity(states: Array[State]) -> Dictionary:
+	var mismatches: int = 0
+	for state: State in states:
+		var copied: State = state.duplicate_state() as State
+		var reference: State = state.duplicate_state_deep_reference() as State
+		if StateKey.build(copied) != StateKey.build(reference):
+			mismatches += 1
+			print("DUPLICATE_STATE_MISMATCH state=%s" % StateKey.build_compact(state))
+	return {"checks": states.size(), "mismatches": mismatches}
 
 
 func _verify_legal_action_query(states: Array[State]) -> Dictionary:
@@ -118,6 +149,24 @@ func _measure_duplicates(pairs: Array[Dictionary]) -> Dictionary:
 		for pair: Dictionary in pairs:
 			var state: State = pair.get("state") as State
 			var copied: State = state.duplicate_state() as State
+			sink = sink ^ copied.board.size() ^ copied.owner_turn_serial ^ pass_index
+	var seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
+	return {
+		"seconds": seconds,
+		"calls": calls,
+		"calls_per_second": float(calls) / seconds if seconds > 0.0 else 0.0,
+		"sink": sink,
+	}
+
+
+func _measure_reference_duplicates(pairs: Array[Dictionary]) -> Dictionary:
+	var sink: int = 0
+	var calls: int = pairs.size() * MEASURED_PASSES
+	var started_usec: int = Time.get_ticks_usec()
+	for pass_index: int in range(MEASURED_PASSES):
+		for pair: Dictionary in pairs:
+			var state: State = pair.get("state") as State
+			var copied: State = state.duplicate_state_deep_reference() as State
 			sink = sink ^ copied.board.size() ^ copied.owner_turn_serial ^ pass_index
 	var seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
 	return {

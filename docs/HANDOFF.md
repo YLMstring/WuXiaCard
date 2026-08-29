@@ -251,6 +251,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   14-opening production profile reached `547.48` nodes/s versus `490.18`
   previously, with identical depth-one scores, actions, and opening digests;
   mean complete-round depth-one time fell from `0.629s` to `0.572s`.
+- Runtime state copies isolate card dictionaries and every mutable card
+  container, while sharing immutable normalized ability declarations. The
+  2026-08-29 14-opening production profile reached `592.05` nodes/s versus
+  `547.48` previously, with identical depth-one scores, actions, and opening
+  digests; mean complete-round depth-one time fell from `0.572s` to `0.512s`,
+  and complete-round depth two finished in `3/14` openings instead of `2/14`.
 - Search depth is measured in complete rounds. Depth one finishes the current
   owner's remaining owner turn and the opponent's following owner turn by
   consuming two authoritative `owner_turn_serial` boundaries. Same-turn extra

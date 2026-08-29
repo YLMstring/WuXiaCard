@@ -2718,19 +2718,39 @@ func _test_state_copy_is_isolated() -> void:
 	var copied_player_deck: Array = copied.decks[Rules.PLAYER_OWNER]
 	((copied_player_deck[0] as Dictionary)["powers"] as Array)[0] = 99
 	var copied_abilities: Array = (copied_player_deck[0] as Dictionary)["active_abilities"]
-	var copied_triggers: Array = (copied_abilities[0] as Dictionary)["triggers"]
-	(copied_triggers[0] as Dictionary)["actions"] = [
-		{"type": Catalog.ACTION_DRAW_CARDS, "amount": 9},
-	]
+	copied_abilities.clear()
+	((copied_player_deck[0] as Dictionary)["revealed_to_owner_ids"] as Array).append(
+		Rules.OPPONENT_OWNER
+	)
+	(copied_player_deck[0] as Dictionary)["temporary_suppression_batches"] = [{
+		"expires_after_turn": 2,
+		"entries": [],
+	}]
+	var second_copy = copied.duplicate_state()
+	(
+		(second_copy.decks[Rules.PLAYER_OWNER][0] as Dictionary)[
+			"temporary_suppression_batches"
+		] as Array
+	).clear()
 	_check(original.board[0] == null, "Duplicating state isolates board mutation")
 	_check(original.get_hand(Rules.PLAYER_OWNER).size() == 1, "Duplicating state isolates hand mutation")
 	var original_top: Dictionary = (original.decks[Rules.PLAYER_OWNER] as Array)[0]
 	_check(int((original_top["powers"] as Array)[0]) == 1, "Duplicating state isolates nested side-deck powers")
-	var original_abilities: Array = original_top["active_abilities"]
-	var original_triggers: Array = (original_abilities[0] as Dictionary)["triggers"]
-	var original_actions: Array = (original_triggers[0] as Dictionary)["actions"]
-	var original_draw_action: Dictionary = original_actions[0]
-	_check(int(original_draw_action.get("amount", 0)) == 2, "Duplicating state isolates nested side-deck abilities")
+	_check(
+		(original_top["active_abilities"] as Array).size() == 1,
+		"Duplicating state isolates side-deck ability membership"
+	)
+	_check(
+		original_top["revealed_to_owner_ids"] == [Rules.PLAYER_OWNER],
+		"Duplicating state isolates side-deck revelation audiences"
+	)
+	_check(
+		(
+			(copied_player_deck[0] as Dictionary)["temporary_suppression_batches"]
+			as Array
+		).size() == 1,
+		"Duplicating state isolates temporary suppression batches"
+	)
 
 
 func _test_legal_move_generation() -> void:
