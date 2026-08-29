@@ -334,7 +334,10 @@ immutable after normalization. Gaining, losing, replacing, or suppressing an
 ability changes the card's array or installs a newly normalized declaration;
 resolution code must never edit a declaration in place. State copies may
 therefore share declaration dictionaries while keeping every mutable container
-independent.
+independent. Trigger-group ability snapshots also share those declarations.
+After a state has been copied for a transition, playing a hand card moves that
+already isolated runtime card into the copied board instead of cloning it a
+second time.
 
 Use `instance_id` whenever an action or view must identify a specific copy. Logical hand arrays compact when a card leaves, while five visual hand slots remain fixed; indices alone are therefore unsafe across presentation delays.
 

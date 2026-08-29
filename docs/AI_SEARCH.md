@@ -332,6 +332,30 @@ openings and ten-second budget:
 The retained report is
 `.summer/local/ai-benchmarks/production-opening-depth-1787994355.json`.
 
+## Immutable Trigger Snapshot and Played-Card Move Profile (2026-08-29)
+
+Two remaining redundant deep copies were removed under the immutable ability
+declaration contract. Playing a hand card now moves the already isolated
+runtime card from the copied hand onto the copied board. Trigger groups and
+their resolving contexts share the immutable ability declaration used as the
+snapshot; the surrounding mutable context is still deep-copied.
+
+An in-process interleaved old/new comparison covered 1,024 real actions. All
+resulting state keys, captures, exiles, events, and source states matched. The
+three-pass transition time fell from `4.174s` to `4.061s`, about `2.8%`.
+
+The same 14-opening production profile showed a smaller, near-noise real-search
+change: throughput rose from `592.05` to `597.47` nodes/s (`+0.92%`), while the
+three fixed 5,000-node probes improved only `0.29%`. Complete-round depth two
+remained `3/14`; mean depth-one time fluctuated from `0.512s` to `0.518s`.
+All 14 depth-one scores, actions, and exact opening-state digests still matched.
+The change is retained because it removes work without adding runtime state,
+branches, or maintenance machinery—not because the production profile proves
+a large speedup.
+
+The retained report is
+`.summer/local/ai-benchmarks/production-opening-depth-1788002470.json`.
+
 ## Deferred Optimization
 
 A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.

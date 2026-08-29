@@ -257,6 +257,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `547.48` previously, with identical depth-one scores, actions, and opening
   digests; mean complete-round depth-one time fell from `0.572s` to `0.512s`,
   and complete-round depth two finished in `3/14` openings instead of `2/14`.
+- Playing a hand card now moves the already isolated card inside the copied
+  state, and trigger groups share immutable ability snapshots. An interleaved
+  1,024-action comparison matched every resulting state and event while making
+  transitions about `2.8%` faster. The 14-opening production profile showed a
+  smaller `+0.92%` throughput change (`592.05` to `597.47` nodes/s), unchanged
+  `3/14` depth-two completion, and identical depth-one decisions; treat this as
+  a low-complexity cleanup with modest measured benefit.
 - Search depth is measured in complete rounds. Depth one finishes the current
   owner's remaining owner turn and the opponent's following owner turn by
   consuming two authoritative `owner_turn_serial` boundaries. Same-turn extra

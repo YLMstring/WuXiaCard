@@ -65,7 +65,7 @@ static func resolve_group(
 	context["resolving_ability_index"] = int(group.get("ability_index", -1))
 	context["resolving_trigger_index"] = int(group.get("trigger_index", -1))
 	context["resolving_event_id"] = StringName(group.get("event_id", &""))
-	context["resolving_ability_snapshot"] = group.get("ability_snapshot", {}).duplicate(true)
+	context["resolving_ability_snapshot"] = group.get("ability_snapshot", {}) as Dictionary
 	if not _conditions_match(state, source_cell, card, rule.get("conditions", []), context):
 		return result
 	var action_result: Dictionary = Executor.execute_actions(
@@ -140,7 +140,7 @@ static func _discover_from_cell(
 				"source_cell": source_cell,
 				"source_instance_id": instance_id,
 				"ability_index": ability_index,
-				"ability_snapshot": ability.duplicate(true),
+				"ability_snapshot": ability,
 				"trigger_index": trigger_index,
 				"context": context.duplicate(true),
 			})
@@ -187,7 +187,7 @@ static func _discover_discarded_trigger_card(
 				"source_zone": Catalog.CARD_ZONE_DISCARD,
 				"source_instance_id": trigger_instance_id,
 				"ability_index": ability_index,
-				"ability_snapshot": ability.duplicate(true),
+				"ability_snapshot": ability,
 				"trigger_index": trigger_index,
 				"context": context.duplicate(true),
 			})

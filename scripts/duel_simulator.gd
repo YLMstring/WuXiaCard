@@ -321,7 +321,7 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	var extra_card_play_requests: Array = []
 	var hand: Array = next_state.get_hand(summoning_owner)
 	var previous_hand_size: int = hand.size()
-	var card: Dictionary = (hand[action.source_index] as Dictionary).duplicate(true)
+	var card: Dictionary = hand[action.source_index] as Dictionary
 	hand.remove_at(action.source_index)
 	card.erase(StateData.HAND_SLOT_INDEX_KEY)
 	_normalize_runtime_card(card, summoning_owner, next_state.turn_count, action.source_index)
