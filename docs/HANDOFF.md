@@ -267,6 +267,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
   those lines live. The final JSON shares the same artifact stem and references
   the checkpoint. A partial checkpoint survives interruption but is not a final
   benchmark result, so a separate Pilot is no longer required before Extended.
+- `LazyPVS` is the pure PVS benchmark variant: both sides use Lazy transitions,
+  baseline evaluation, no tactics, and no evaluation cache; only Enhanced turns
+  on PVS. Production remains `LazyOnly`. The 14-real-opening fixed-depth oracle
+  must preserve every score and root action before the 112-game Extended
+  `LazyPVS` run is allowed; no Quick/Pilot screening or automatic production
+  enablement is part of that evaluation. The completed 2026-08-29 run scored
+  `55/112` (`49.1%`) for Lazy+PVS, reduced nodes by only `0.7%`, and took `5.0%`
+  more search time than LazyOnly. It produced no fallback, incomplete, or
+  invalid games, but missed the adoption gate; keep production PVS disabled.
 - The first 14-opening ten-second profile after this migration completed
   complete-round depth one in every opening and depth two in none. Mean depth-one
   time was `1.365s`; the closest depth-two attempt completed 34/35 root actions

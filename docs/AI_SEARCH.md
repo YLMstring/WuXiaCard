@@ -262,3 +262,31 @@ Extended Final requires at least 55% match points, at least 75% initial-depth
 non-regression, no worse fallback rate, and no incomplete games. JSON evidence
 is written to `.summer/local/ai-benchmarks/` and is intentionally ignored by
 Git.
+
+`LazyPVS` is an explicit pure-ablation variant. Its Enhanced side uses Lazy
+transitions plus PVS; its control side also uses Lazy transitions but disables
+PVS. Both sides disable tactics/evaluation cache and use the baseline evaluator.
+Production remains `LazyOnly`. Before a `LazyPVS` Extended run, both the focused
+search suite and the 14-opening fixed-complete-round-depth equivalence script
+must return identical scores and root actions. Run the formal ablation directly
+with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant LazyPVS
+```
+
+This is a 112-game run using the same soft 1,500-node/minimum-depth-one rules;
+it does not require Quick or Pilot. Below 50% is observed net loss, 50% to below
+55% is neutral strength, and 55% or above reaches the declared gain line. The
+result never enables production PVS automatically.
+
+The 2026-08-29 Extended `LazyPVS` ablation completed all 112 games without
+fallbacks, incomplete games, or invalid games. Lazy+PVS scored `55/112`
+(`49.1%`) against LazyOnly and therefore missed the declared gain line. It
+searched `747,415` nodes in `4,920.7s`, compared with LazyOnly's `752,789`
+nodes in `4,686.0s`: PVS reduced nodes by only `0.7%` while increasing search
+time by `5.0%` and reducing node throughput by `5.45%`. Its `532,646`
+null-window probes caused `5,872` full-window re-searches (`1.10%`). All 56
+paired initial-depth samples completed the same depth. Production therefore
+keeps PVS disabled; the complete ignored report is
+`.summer/local/ai-benchmarks/extended-lazypvs-v2-2026-08-28T23-29-44.json`.

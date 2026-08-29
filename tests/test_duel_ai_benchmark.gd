@@ -5,6 +5,7 @@ const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifes
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Runner = preload("res://tests/benchmarks/duel_ai_benchmark.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const SearchProfile = preload("res://scripts/duel_search_profile.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
 var _failures: int = 0
@@ -71,12 +72,13 @@ func _run() -> void:
 	var enemy_smoke_matchups: Array[Dictionary] = [
 		EnemyManifest.get_matchups_for_mode(&"quick")[0]
 	]
+	var pvs_ablation: Dictionary = Runner.variant_config("LazyPVS")
 	var enemy_smoke: Dictionary = Runner.run_enemy_matchups(
 		enemy_smoke_matchups,
 		{"max_nodes": 1, "min_completed_depth": 1},
 		1,
-		{},
-		{},
+		pvs_ablation.get("enhanced_overrides", {}) as Dictionary,
+		pvs_ablation.get("baseline_overrides", {}) as Dictionary,
 		false,
 		Callable(self, "_capture_progress_record"),
 		{"mode": "Extended", "variant": "LazyOnly"}
@@ -104,6 +106,30 @@ func _run() -> void:
 		_check(int(profile_diagnostics.get("decisions", 0)) > 0, "%s diagnostics count decisions" % profile_name)
 		_check(int(profile_diagnostics.get("minimum_depth_guard_uses", 0)) > 0, "%s diagnostics count protected-depth use" % profile_name)
 		_check(int(profile_diagnostics.get("nodes_over_limit_total", 0)) > 0, "%s diagnostics total node overruns" % profile_name)
+		_check(float(profile_diagnostics.get("elapsed_seconds", -1.0)) >= 0.0, "%s diagnostics report search time" % profile_name)
+		_check(int(profile_diagnostics.get("generated_actions_total", 0)) > 0, "%s diagnostics report generated actions" % profile_name)
+		_check(int(profile_diagnostics.get("applied_transitions_total", 0)) > 0, "%s diagnostics report applied transitions" % profile_name)
+	_check(
+		int((diagnostics.get("enhanced", {}) as Dictionary).get("pvs_probes", 0)) > 0,
+		"Lazy+PVS summary reports narrow-window probes"
+	)
+	_check(
+		int((diagnostics.get("baseline", {}) as Dictionary).get("pvs_probes", -1)) == 0,
+		"LazyOnly summary reports zero PVS probes"
+	)
+	var enhanced_pvs_probes: int = 0
+	for game: Dictionary in enemy_smoke.get("games", []):
+		for decision: Dictionary in game.get("decisions", []):
+			_check(
+				int(decision.get("applied_transitions", 0))
+				< int(decision.get("generated_actions", 0)),
+				"Both PVS ablation profiles use lazy transitions"
+			)
+			if StringName(decision.get("profile", &"")) == &"enhanced":
+				enhanced_pvs_probes += int(decision.get("pvs_probes", 0))
+			else:
+				_check(int(decision.get("pvs_probes", -1)) == 0, "LazyOnly control emits no PVS probes")
+	_check(enhanced_pvs_probes > 0, "Lazy+PVS candidate emits narrow-window probes")
 	_check_progress_checkpoint()
 
 	if _failures == 0:
@@ -179,6 +205,38 @@ func _check_mode_configs() -> void:
 	var pilot: Dictionary = Runner.node_benchmark_limits(3_000)
 	_check(int(pilot.get("max_nodes", 0)) == 3_000, "Pilot helper preserves the selected node tier")
 	_check(int(pilot.get("min_completed_depth", 0)) == 1, "Pilot helper protects complete depth one")
+	var lazy_pvs: Dictionary = Runner.variant_config("LazyPVS")
+	var enhanced_overrides: Dictionary = (
+		lazy_pvs.get("enhanced_overrides", {}) as Dictionary
+	)
+	var baseline_overrides: Dictionary = (
+		lazy_pvs.get("baseline_overrides", {}) as Dictionary
+	)
+	var enhanced_limits: Dictionary = enhanced_overrides.duplicate(true)
+	enhanced_limits["profile"] = &"enhanced"
+	var baseline_limits: Dictionary = baseline_overrides.duplicate(true)
+	baseline_limits["profile"] = &"baseline"
+	var enhanced_profile: Dictionary = SearchProfile.normalize(enhanced_limits)
+	var baseline_profile: Dictionary = SearchProfile.normalize(baseline_limits)
+	_check(bool(enhanced_profile.get("use_pvs", false)), "LazyPVS candidate enables PVS")
+	_check(not bool(baseline_profile.get("use_pvs", true)), "LazyPVS control disables PVS")
+	for field: String in [
+		"use_lazy_transitions",
+		"use_tactical_extension",
+		"use_evaluation_cache",
+		"evaluator_profile",
+	]:
+		_check(
+			enhanced_profile.get(field) == baseline_profile.get(field),
+			"LazyPVS candidate and control match effective field %s" % field
+		)
+	_check(bool(enhanced_profile.get("use_lazy_transitions", false)), "LazyPVS candidate uses lazy transitions")
+	_check(bool(baseline_profile.get("use_lazy_transitions", false)), "LazyPVS control uses lazy transitions")
+	var lazy_only: Dictionary = Runner.variant_config("LazyOnly")
+	_check(
+		(lazy_only.get("baseline_overrides", {"unexpected": true}) as Dictionary).is_empty(),
+		"Existing LazyOnly variant keeps the eager baseline control"
+	)
 
 
 func _capture_progress_record(record: Dictionary) -> void:

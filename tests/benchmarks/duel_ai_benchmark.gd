@@ -10,7 +10,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 
 const EXTENDED_NODE_LIMIT: int = 1_500
 const SUCCESSFUL_ACTION_WATCHDOG: int = 256
-const PROGRESS_SCHEMA_VERSION: int = 1
+const PROGRESS_SCHEMA_VERSION: int = 2
 
 var _checkpoint_write_failed: bool = false
 
@@ -579,6 +579,25 @@ static func profile_diagnostics_for_games(games: Array[Dictionary]) -> Dictionar
 			entry["nodes_total"] = (
 				int(entry.get("nodes_total", 0)) + int(decision.get("nodes", 0))
 			)
+			entry["generated_actions_total"] = (
+				int(entry.get("generated_actions_total", 0))
+				+ int(decision.get("generated_actions", 0))
+			)
+			entry["applied_transitions_total"] = (
+				int(entry.get("applied_transitions_total", 0))
+				+ int(decision.get("applied_transitions", 0))
+			)
+			entry["pvs_probes"] = (
+				int(entry.get("pvs_probes", 0)) + int(decision.get("pvs_probes", 0))
+			)
+			entry["pvs_researches"] = (
+				int(entry.get("pvs_researches", 0))
+				+ int(decision.get("pvs_researches", 0))
+			)
+			entry["elapsed_seconds"] = (
+				float(entry.get("elapsed_seconds", 0.0))
+				+ float(decision.get("elapsed_seconds", 0.0))
+			)
 			var depth_key: String = str(int(decision.get("completed_depth", 0)))
 			var depth_distribution: Dictionary = (
 				entry.get("completed_depth_distribution", {}) as Dictionary
@@ -614,6 +633,11 @@ static func _empty_profile_diagnostics() -> Dictionary:
 		"nodes_over_limit_total": 0,
 		"nodes_over_limit_max": 0,
 		"nodes_total": 0,
+		"generated_actions_total": 0,
+		"applied_transitions_total": 0,
+		"pvs_probes": 0,
+		"pvs_researches": 0,
+		"elapsed_seconds": 0.0,
 	}
 
 
@@ -727,7 +751,13 @@ func _run_command_line() -> void:
 		push_error("AI_BENCHMARK_FAILED unknown_mode=%s" % mode)
 		quit(1)
 		return
-	var enhanced_overrides: Dictionary = _variant_overrides(variant)
+	var selected_variant: Dictionary = variant_config(variant)
+	var enhanced_overrides: Dictionary = (
+		selected_variant.get("enhanced_overrides", {}) as Dictionary
+	)
+	var baseline_overrides: Dictionary = (
+		selected_variant.get("baseline_overrides", {}) as Dictionary
+	)
 	var artifact_paths: Dictionary = {}
 	var progress_callback: Callable = Callable()
 	var progress_metadata: Dictionary = {"mode": mode, "variant": variant}
@@ -743,7 +773,7 @@ func _run_command_line() -> void:
 		)
 	var summary: Dictionary
 	if mode_key == &"pilot":
-		summary = _run_pilot(enhanced_overrides)
+		summary = _run_pilot(enhanced_overrides, baseline_overrides)
 	else:
 		var config: Dictionary = mode_config(mode_key)
 		var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(mode_key)
@@ -753,7 +783,7 @@ func _run_command_line() -> void:
 			config.get("limits", {}) as Dictionary,
 			SUCCESSFUL_ACTION_WATCHDOG,
 			enhanced_overrides,
-			{},
+			baseline_overrides,
 			mode_key != &"extended",
 			progress_callback,
 			progress_metadata
@@ -800,7 +830,10 @@ func _run_command_line() -> void:
 	quit(1 if failed else 0)
 
 
-func _run_pilot(enhanced_overrides: Dictionary) -> Dictionary:
+func _run_pilot(
+	enhanced_overrides: Dictionary,
+	baseline_overrides: Dictionary = {}
+) -> Dictionary:
 	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"pilot")
 	var attempts: Array[Dictionary] = []
 	var chosen_node_limit: int = 0
@@ -812,7 +845,7 @@ func _run_pilot(enhanced_overrides: Dictionary) -> Dictionary:
 			node_benchmark_limits(node_limit),
 			SUCCESSFUL_ACTION_WATCHDOG,
 			enhanced_overrides,
-			{},
+			baseline_overrides,
 			true
 		)
 		var elapsed_seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
@@ -900,7 +933,7 @@ func _record_extended_progress(record: Dictionary, checkpoint_path: String) -> v
 	var cumulative_elapsed: float = float(record.get("cumulative_elapsed_seconds", 0.0))
 	var projected_total: float = float(record.get("projected_total_seconds", 0.0))
 	print(
-		"AI_BENCHMARK_GAME game=%d/%d id=%s matchup=%s terminal=%s invalid=%s points=%.1f cumulative=%.1f%% game_elapsed=%.1fs elapsed=%.1fs eta=%.1fs enhanced_decisions=%d enhanced_depths=%s enhanced_fallback=%d enhanced_guard=%d enhanced_overrun=%d/%d baseline_decisions=%d baseline_depths=%s baseline_fallback=%d baseline_guard=%d baseline_overrun=%d/%d"
+		"AI_BENCHMARK_GAME game=%d/%d id=%s matchup=%s terminal=%s invalid=%s points=%.1f cumulative=%.1f%% game_elapsed=%.1fs elapsed=%.1fs eta=%.1fs enhanced_decisions=%d enhanced_depths=%s enhanced_fallback=%d enhanced_guard=%d enhanced_overrun=%d/%d enhanced_pvs=%d/%d enhanced_transitions=%d/%d enhanced_search=%.1fs baseline_decisions=%d baseline_depths=%s baseline_fallback=%d baseline_guard=%d baseline_overrun=%d/%d baseline_pvs=%d/%d baseline_transitions=%d/%d baseline_search=%.1fs"
 		% [
 			int(record.get("game_index", 0)),
 			int(record.get("total_games", 0)),
@@ -919,12 +952,22 @@ func _record_extended_progress(record: Dictionary, checkpoint_path: String) -> v
 			int(enhanced.get("minimum_depth_guard_uses", 0)),
 			int(enhanced.get("nodes_over_limit_total", 0)),
 			int(enhanced.get("nodes_over_limit_max", 0)),
+			int(enhanced.get("pvs_probes", 0)),
+			int(enhanced.get("pvs_researches", 0)),
+			int(enhanced.get("applied_transitions_total", 0)),
+			int(enhanced.get("generated_actions_total", 0)),
+			float(enhanced.get("elapsed_seconds", 0.0)),
 			int(baseline.get("decisions", 0)),
 			JSON.stringify(baseline.get("completed_depth_distribution", {})),
 			int(baseline.get("fallbacks", 0)),
 			int(baseline.get("minimum_depth_guard_uses", 0)),
 			int(baseline.get("nodes_over_limit_total", 0)),
 			int(baseline.get("nodes_over_limit_max", 0)),
+			int(baseline.get("pvs_probes", 0)),
+			int(baseline.get("pvs_researches", 0)),
+			int(baseline.get("applied_transitions_total", 0)),
+			int(baseline.get("generated_actions_total", 0)),
+			float(baseline.get("elapsed_seconds", 0.0)),
 		]
 	)
 
@@ -962,29 +1005,46 @@ func _write_report_to_path(summary: Dictionary, output_path: String) -> String:
 	return output_path
 
 
-func _variant_overrides(variant: String) -> Dictionary:
+static func variant_config(variant: String) -> Dictionary:
+	var enhanced_overrides: Dictionary = {}
+	var baseline_overrides: Dictionary = {}
 	match variant.to_lower():
 		"baselineevaluator":
-			return {"evaluator_profile": &"baseline"}
+			enhanced_overrides = {"evaluator_profile": &"baseline"}
 		"notactics":
-			return {"use_tactical_extension": false}
+			enhanced_overrides = {"use_tactical_extension": false}
 		"searchonly":
-			return {
+			enhanced_overrides = {
 				"use_tactical_extension": false,
 				"evaluator_profile": &"baseline",
 			}
 		"lazyonly":
-			return {
+			enhanced_overrides = {
 				"use_pvs": false,
 				"use_tactical_extension": false,
 				"evaluator_profile": &"baseline",
 			}
+		"lazypvs":
+			enhanced_overrides = _lazy_ablation_overrides(true)
+			baseline_overrides = _lazy_ablation_overrides(false)
 		"evalonly":
-			return {
+			enhanced_overrides = {
 				"use_lazy_transitions": false,
 				"use_pvs": false,
 				"use_tactical_extension": false,
 				"evaluator_profile": &"enhanced",
 			}
-		_:
-			return {}
+	return {
+		"enhanced_overrides": enhanced_overrides,
+		"baseline_overrides": baseline_overrides,
+	}
+
+
+static func _lazy_ablation_overrides(use_pvs: bool) -> Dictionary:
+	return {
+		"use_lazy_transitions": true,
+		"use_pvs": use_pvs,
+		"use_tactical_extension": false,
+		"use_evaluation_cache": false,
+		"evaluator_profile": &"baseline",
+	}

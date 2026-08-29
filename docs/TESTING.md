@@ -196,6 +196,22 @@ requires at least 55% match points, 75% initial-depth non-regression, no worse
 fallback rate, and no incomplete games. All results live under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
+For the isolated PVS ablation, first run the search suite and the real-opening
+fixed-depth oracle. The oracle script is
+`res://tests/benchmarks/real_quick_search_equivalence.gd`; run it headless with
+Dummy audio after the ordinary suite. It must report identical fixed-depth
+scores/actions for LazyOnly and Lazy+PVS across all 14 openings.
+
+Then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant LazyPVS
+```
+
+This variant configures both sides identically except for PVS and goes directly
+to all 112 games; do not insert Quick or Pilot. Production PVS stays disabled
+until the creator reviews the final evidence.
+
 Profile production LazyOnly complete-round opening depth separately with:
 
 ```powershell
