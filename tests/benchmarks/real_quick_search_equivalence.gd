@@ -27,6 +27,10 @@ func _run() -> void:
 	if "--exact-root-actions" in OS.get_cmdline_user_args():
 		_run_exact_root_actions()
 		return
+	var expected_report_path: String = _expected_report_path()
+	if not expected_report_path.is_empty():
+		_run_expected_report_equivalence(expected_report_path)
+		return
 	var openings: Array[Dictionary] = _build_unique_openings()
 	_check(openings.size() == 14, "Quick manifest produces exactly fourteen unique openings")
 	for opening_index: int in range(openings.size()):
@@ -75,6 +79,115 @@ func _run() -> void:
 			% [_failures, _checks]
 		)
 	quit(_failures)
+
+
+func _expected_report_path() -> String:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--expected-report="):
+			return argument.trim_prefix("--expected-report=")
+	return ""
+
+
+func _run_expected_report_equivalence(report_path: String) -> void:
+	var file := FileAccess.open(report_path, FileAccess.READ)
+	_check(file != null, "Expected report can be opened: %s" % report_path)
+	if file == null:
+		quit(_failures)
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	_check(parsed is Dictionary, "Expected report contains a JSON object")
+	if not parsed is Dictionary:
+		quit(_failures)
+		return
+	var report: Dictionary = parsed as Dictionary
+	var expected_by_game: Dictionary = {}
+	for expected_variant: Variant in report.get("openings", []):
+		var expected: Dictionary = expected_variant as Dictionary
+		var game_id := StringName(expected.get("game_id", &"missing"))
+		_check(not expected_by_game.has(game_id), "Expected report game is unique: %s" % game_id)
+		expected_by_game[game_id] = expected
+	var openings: Array[Dictionary] = _build_unique_openings()
+	_check(openings.size() == 14, "Quick manifest produces exactly fourteen unique openings")
+	_check(expected_by_game.size() == openings.size(), "Expected report contains every opening")
+	var observed_games: Dictionary = {}
+	for opening_index: int in range(openings.size()):
+		var opening: Dictionary = openings[opening_index]
+		var game_id := StringName(opening.get("game_id", &"missing"))
+		observed_games[game_id] = true
+		_check(expected_by_game.has(game_id), "Expected report contains %s" % game_id)
+		if not expected_by_game.has(game_id):
+			continue
+		var state: State = opening.get("state") as State
+		_check(state != null, "%s rebuilds a valid state" % game_id)
+		if state == null:
+			continue
+		var expected: Dictionary = expected_by_game[game_id] as Dictionary
+		var expected_snapshot: Dictionary = _depth_snapshot(
+			expected.get("depth_snapshots", []) as Array,
+			FIXED_COMPLETE_ROUND_DEPTH
+		)
+		_check(
+			not expected_snapshot.is_empty(),
+			"%s expected report contains depth %d"
+			% [game_id, FIXED_COMPLETE_ROUND_DEPTH]
+		)
+		var exact_digest: String = StateKey.build(state).sha256_text()
+		_check(
+			exact_digest == String(expected.get("exact_state_key_digest", "")),
+			"%s exact opening state matches the expected report" % game_id
+		)
+		var current: Dictionary = _search(state, {
+			"profile": &"enhanced",
+			"use_lazy_transitions": true,
+			"use_pvs": false,
+		})
+		_check_result(opening, "Current Lazy-only", current)
+		var action: Action = current.get("action") as Action
+		var action_key: String = action.canonical_key() if action != null else "<missing>"
+		_check(
+			int(current.get("score", 0)) == int(expected_snapshot.get("score", 1)),
+			"%s score matches expected report expected=%d current=%d"
+			% [
+				game_id,
+				int(expected_snapshot.get("score", 1)),
+				int(current.get("score", 0)),
+			]
+		)
+		_check(
+			action_key == String(expected_snapshot.get("action_key", "<missing>")),
+			"%s action matches expected report expected=%s current=%s"
+			% [
+				game_id,
+				String(expected_snapshot.get("action_key", "<missing>")),
+				action_key,
+			]
+		)
+		print(
+			"REAL_QUICK_EXPECTED_EQUIVALENCE_PROGRESS opening=%d/14 game=%s"
+			% [opening_index + 1, game_id]
+		)
+	for expected_game: Variant in expected_by_game.keys():
+		_check(observed_games.has(expected_game), "Current manifest contains %s" % expected_game)
+	if _failures == 0:
+		print(
+			"REAL_QUICK_EXPECTED_EQUIVALENCE_PASSED openings=%d depth=%d checks=%d report=%s"
+			% [openings.size(), FIXED_COMPLETE_ROUND_DEPTH, _checks, report_path]
+		)
+	else:
+		push_error(
+			"REAL_QUICK_EXPECTED_EQUIVALENCE_FAILED failures=%d checks=%d"
+			% [_failures, _checks]
+		)
+	quit(_failures)
+
+
+func _depth_snapshot(snapshots: Array, target_depth: int) -> Dictionary:
+	for snapshot_variant: Variant in snapshots:
+		var snapshot: Dictionary = snapshot_variant as Dictionary
+		if int(snapshot.get("depth", 0)) == target_depth:
+			return snapshot
+	return {}
 
 
 func _run_exact_root_actions() -> void:

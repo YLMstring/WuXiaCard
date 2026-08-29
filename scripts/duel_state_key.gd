@@ -2,12 +2,47 @@ class_name DuelStateKey
 extends RefCounted
 
 const StateData = preload("res://scripts/duel_state.gd")
+const VariantFingerprint = preload("res://scripts/duel_variant_fingerprint.gd")
 
 
 static func build(state: StateData) -> String:
 	if state == null:
 		return "nil"
-	return _encode({
+	return _encode(_state_payload(state))
+
+
+static func build_compact(state: StateData) -> String:
+	if state == null:
+		return build_variant_compact(null)
+	return _build_state_binary_fingerprint(_state_payload(state))
+
+
+static func build_variant_compact(value: Variant) -> String:
+	return VariantFingerprint.build(value, Callable(DuelStateKey, "_encode"))
+
+
+static func build_compact_legacy_for_benchmark(state: StateData) -> String:
+	var canonical: String = build(state)
+	return "%d:%d:%d" % [canonical.length(), canonical.hash(), canonical.reverse().hash()]
+
+
+static func _build_state_binary_fingerprint(payload: Dictionary) -> String:
+	var bytes: PackedByteArray = var_to_bytes(payload)
+	var context := HashingContext.new()
+	var start_error: Error = context.start(HashingContext.HASH_SHA256)
+	if start_error != OK:
+		push_error("Failed to start state fingerprint hashing: %s" % start_error)
+		return build_variant_compact(payload)
+	var update_error: Error = context.update(bytes)
+	if update_error != OK:
+		push_error("Failed to update state fingerprint hashing: %s" % update_error)
+		return build_variant_compact(payload)
+	var digest: PackedByteArray = context.finish()
+	return "v2:%d:%s" % [bytes.size(), digest.slice(0, 16).hex_encode()]
+
+
+static func _state_payload(state: StateData) -> Dictionary:
+	return {
 		"board": state.board,
 		"hands": state.hands,
 		"decks": state.decks,
@@ -31,12 +66,7 @@ static func build(state: StateData) -> String:
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
 		"run_difficulty": state.run_difficulty,
 		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
-	})
-
-
-static func build_compact(state: StateData) -> String:
-	var canonical: String = build(state)
-	return "%d:%d:%d" % [canonical.length(), canonical.hash(), canonical.reverse().hash()]
+	}
 
 
 static func _encode(value: Variant) -> String:

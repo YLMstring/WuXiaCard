@@ -124,7 +124,14 @@ It is not production-safe yet: a nonterminal owner must execute a legal action,
 so stand-pat cannot remain a competing outcome when every legal continuation is
 worse.
 
-The transposition table is capped at 50,000 entries. `DuelStateKey.build_compact()` currently returns a length plus forward/reverse hashes derived from a canonical serialization. This saves key memory but is not a compact state implementation and has a theoretical collision risk.
+The transposition table is capped at 50,000 entries. `DuelStateKey.build()`
+retains the exact canonical serialization used by fixtures and diagnostics.
+Production `DuelStateKey.build_compact()` serializes the same complete explicit
+state payload with Godot's native Variant binary encoder, hashes it with
+SHA-256, and uses the first 128 bits plus the encoded byte length as a `v2`
+fingerprint. No gameplay or presentation fields are intentionally omitted. It
+is still a finite fingerprint with a theoretical collision risk, not a compact
+simulation representation.
 
 Runtime power arrays and every owner's removed zone are part of canonical
 state. A zero-power removal therefore produces a distinct search state and
@@ -212,9 +219,31 @@ simulator transitions, 43.8% to canonical state keys, 8.2% to evaluation, 3.9%
 to ordering, and 6.0% to remaining search control. State-key construction and
 authoritative transition/state-copy work remain the main performance targets.
 
+## Full-State Fingerprint Profile (2026-08-29)
+
+The full-state `v2` fingerprint was compared against a fresh legacy run on the
+same 14 real Quick openings, with Enhanced/LazyOnly search, a ten-second budget
+per opening, complete-round depth, and Dummy audio:
+
+- aggregate throughput increased from `246.09` to `411.09` nodes/s, a `67.05%`
+  improvement;
+- key timing fell from `1695.08` to `114.69` microseconds per probe node, a
+  `93.23%` reduction;
+- mean depth-one completion time fell from `1.416s` to `0.798s`;
+- depth two completed in `2/14` openings instead of `0/14`;
+- all openings still completed depth one with zero fallback;
+- all 14 depth-one scores, root action keys, and exact-state digests matched the
+  legacy report.
+
+The standalone 512-state microbenchmark measured `1328.7` new keys/s versus
+`80.6` legacy keys/s (`16.49x`) with zero observed collisions. An initial
+all-GDScript recursive accumulator measured only `0.543x` legacy speed, so the
+production path deliberately uses native binary encoding and native SHA-256;
+the generic recursive fingerprinter remains only for fixed structural vectors.
+
 ## Deferred Optimization
 
-A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and hashing cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
+A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
 
 When implementing it:
 

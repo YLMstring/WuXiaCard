@@ -7,6 +7,7 @@ const TARGET_COMPLETE_ROUND_DEPTH: int = 2
 const BASELINE_COMPLETE_ROUND_DEPTH: int = 1
 const OUTPUT_DIRECTORY: String = "res://.summer/local/ai-benchmarks"
 
+const Action = preload("res://scripts/duel_action.gd")
 const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Search = preload("res://scripts/duel_search.gd")
@@ -66,7 +67,7 @@ func _run() -> void:
 			"evaluator_profile": "baseline",
 			"opening_count": openings.size(),
 		},
-		"summary": _summarize(samples, budget_seconds),
+		"summary": _summarize(samples, timing_samples, budget_seconds),
 		"openings": samples,
 		"timing_probes": timing_samples,
 	}
@@ -147,6 +148,8 @@ func _profile_opening(opening: Dictionary, budget_seconds: float) -> Dictionary:
 		"game_id": String(opening.get("game_id", &"missing")),
 		"matchup_id": String(opening.get("matchup_id", &"missing")),
 		"state_key": String(opening.get("state_key", "")),
+		"state_key_length": String(opening.get("state_key", "")).length(),
+		"exact_state_key_digest": StateKey.build(state).sha256_text(),
 		"root_legal_actions": int(opening.get("root_legal_actions", 0)),
 		"completed_depth": int(result.get("completed_depth", 0)),
 		"attempted_depth": int(result.get("iteration_depth", 0)),
@@ -162,6 +165,7 @@ func _profile_opening(opening: Dictionary, budget_seconds: float) -> Dictionary:
 		"root_actions_completed": int(result.get("root_actions_completed", 0)),
 		"current_root_action_nodes": int(result.get("current_root_action_nodes", 0)),
 		"completion_reason": String(result.get("completion_reason", &"")),
+		"used_fallback": not bool(result.get("has_completed_depth", false)),
 		"depth_snapshots": _depth_snapshots.duplicate(true),
 		"estimated_target_depth_seconds": estimated_required_seconds,
 		"estimated_speedup_for_target_depth": estimated_speedup,
@@ -169,8 +173,11 @@ func _profile_opening(opening: Dictionary, budget_seconds: float) -> Dictionary:
 
 
 func _record_depth_progress(progress: Dictionary) -> void:
+	var action: Action = progress.get("action") as Action
 	_depth_snapshots.append({
 		"depth": int(progress.get("completed_depth", 0)),
+		"score": int(progress.get("score", 0)),
+		"action_key": action.canonical_key() if action != null else "",
 		"elapsed_seconds": float(progress.get("elapsed_seconds", 0.0)),
 		"nodes": int(progress.get("nodes", 0)),
 		"generated_actions": int(progress.get("generated_actions", 0)),
@@ -234,19 +241,33 @@ func _run_timing_probes(openings: Array[Dictionary]) -> Array[Dictionary]:
 	return result
 
 
-func _summarize(samples: Array[Dictionary], budget_seconds: float) -> Dictionary:
+func _summarize(
+	samples: Array[Dictionary],
+	timing_samples: Array[Dictionary],
+	budget_seconds: float
+) -> Dictionary:
 	var depth_histogram: Dictionary = {}
 	var depth_total: int = 0
 	var target_depth_completed: int = 0
 	var baseline_depth_seconds_total: float = 0.0
 	var baseline_depth_count: int = 0
+	var baseline_snapshot_count: int = 0
 	var estimated_speedup_total: float = 0.0
 	var estimated_speedup_count: int = 0
+	var total_nodes: int = 0
+	var total_search_seconds: float = 0.0
+	var compact_key_length_total: int = 0
+	var fallback_count: int = 0
 	for sample: Dictionary in samples:
 		var completed_depth: int = int(sample.get("completed_depth", 0))
 		var depth_key: String = str(completed_depth)
 		depth_histogram[depth_key] = int(depth_histogram.get(depth_key, 0)) + 1
 		depth_total += completed_depth
+		total_nodes += int(sample.get("nodes", 0))
+		total_search_seconds += float(sample.get("elapsed_seconds", 0.0))
+		compact_key_length_total += int(sample.get("state_key_length", 0))
+		if bool(sample.get("used_fallback", false)):
+			fallback_count += 1
 		if completed_depth >= TARGET_COMPLETE_ROUND_DEPTH:
 			target_depth_completed += 1
 		for snapshot_value: Variant in sample.get("depth_snapshots", []):
@@ -256,11 +277,22 @@ func _summarize(samples: Array[Dictionary], budget_seconds: float) -> Dictionary
 					snapshot.get("elapsed_seconds", 0.0)
 				)
 				baseline_depth_count += 1
+				if not String(snapshot.get("action_key", "")).is_empty():
+					baseline_snapshot_count += 1
 				break
 		var speedup_value: Variant = sample.get("estimated_speedup_for_target_depth")
 		if speedup_value != null:
 			estimated_speedup_total += float(speedup_value)
 			estimated_speedup_count += 1
+	var timing_probe_nodes: int = 0
+	var timing_probe_elapsed_seconds: float = 0.0
+	var timing_probe_key_usec: int = 0
+	for timing_sample: Dictionary in timing_samples:
+		timing_probe_nodes += int(timing_sample.get("nodes", 0))
+		timing_probe_elapsed_seconds += float(
+			timing_sample.get("elapsed_seconds", 0.0)
+		)
+		timing_probe_key_usec += int(timing_sample.get("time_key_usec", 0))
 	return {
 		"depth_unit": "complete_round",
 		"target_depth": TARGET_COMPLETE_ROUND_DEPTH,
@@ -280,6 +312,28 @@ func _summarize(samples: Array[Dictionary], budget_seconds: float) -> Dictionary
 			estimated_speedup_total / float(estimated_speedup_count)
 			if estimated_speedup_count > 0
 			else null
+		),
+		"total_nodes": total_nodes,
+		"total_search_seconds": total_search_seconds,
+		"nodes_per_second": (
+			float(total_nodes) / total_search_seconds
+			if total_search_seconds > 0.0
+			else 0.0
+		),
+		"baseline_snapshot_count": baseline_snapshot_count,
+		"fallback_count": fallback_count,
+		"average_initial_compact_key_length": (
+			float(compact_key_length_total) / float(samples.size())
+			if not samples.is_empty()
+			else 0.0
+		),
+		"timing_probe_nodes": timing_probe_nodes,
+		"timing_probe_elapsed_seconds": timing_probe_elapsed_seconds,
+		"timing_probe_key_usec": timing_probe_key_usec,
+		"timing_probe_key_usec_per_node": (
+			float(timing_probe_key_usec) / float(timing_probe_nodes)
+			if timing_probe_nodes > 0
+			else 0.0
 		),
 		"budget_seconds": budget_seconds,
 	}

@@ -145,7 +145,9 @@ search key and copied into replay state.
 - `duel_turn_plan.gd` — exact state/owner/owner-turn validation and copying for
   a searched same-turn continuation. Any mismatch invalidates the remainder.
 - `duel_evaluator.gd` — card-agnostic heuristic.
-- `duel_state_key.gd` — canonical serialization and transposition key.
+- `duel_state_key.gd` — exact canonical serialization plus the production
+  full-state binary SHA-256/128 transposition fingerprint. Both paths consume
+  the same explicit top-level state payload.
 
 The worker receives an isolated state copy. Scene objects must never cross the thread boundary.
 

@@ -441,7 +441,17 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   triggers; only their action phase is skipped. Five occurrences of the same
   nine-cell catalog-ID/current-owner signature end the duel by score at the
   end-to-start boundary. The action-count fallback is `max_turns = 100`.
-- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()` is a hashed canonical string, not a compact simulation representation. `completed_depth` and benchmark depth settings now mean complete rounds, not action plies. Use `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production evidence rather than judging strength from one game. Node-limited reports must include minimum-depth guard and overrun diagnostics instead of describing 1,500 as a hard cap.
+- The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()`
+  now uses the complete explicit state payload, Godot native Variant binary
+  encoding, and a SHA-256/128 `v2` fingerprint; it is faster but is not a compact
+  simulation representation. The 2026-08-29 14-opening production comparison
+  improved aggregate throughput from `246.09` to `411.09` nodes/s with unchanged
+  depth-one scores/actions and zero fallback. `completed_depth` and benchmark
+  depth settings mean complete rounds, not action plies. Use
+  `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production strength
+  evidence rather than judging strength from one game. Node-limited reports must
+  include minimum-depth guard and overrun diagnostics instead of describing
+  1,500 as a hard cap.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.
