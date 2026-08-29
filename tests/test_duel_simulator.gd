@@ -22,6 +22,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_state_copy_is_isolated()
 	_test_legal_move_generation()
+	_test_fast_legal_action_query_matches_full_generation()
 	_test_move_application_and_capture_parity()
 	_test_attack_started_event_semantics()
 	_test_exile_effect_removes_every_target()
@@ -2746,6 +2747,67 @@ func _test_legal_move_generation() -> void:
 	_check(moves.size() == 18, "Two cards on an empty board generate eighteen legal moves")
 	_check((moves[0] as Object).source_index == 0 and (moves[0] as Object).target_index == 0, "Legal actions use deterministic card-then-cell ordering")
 	_check((moves[17] as Object).source_index == 1 and (moves[17] as Object).target_index == 8, "Legal action ordering reaches the second card's final cell")
+
+
+func _test_fast_legal_action_query_matches_full_generation() -> void:
+	var placement_state := State.new(
+		Rules.empty_board(),
+		[Rules.make_card("Player", "我", [1, 1, 1, 1])],
+		[Rules.make_card("Opponent", "敌", [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_legal_action_query_parity(placement_state, Rules.PLAYER_OWNER, "player placement")
+	_check_legal_action_query_parity(placement_state, Rules.OPPONENT_OWNER, "opponent placement")
+
+	var stuck_state := State.new(Rules.empty_board(), [], [], Rules.PLAYER_OWNER)
+	_check_legal_action_query_parity(stuck_state, Rules.PLAYER_OWNER, "player stuck")
+	_check_legal_action_query_parity(stuck_state, Rules.OPPONENT_OWNER, "opponent stuck")
+
+	var activation_ability: Dictionary = {
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ADJACENT_ALLY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [{"type": Catalog.ACTION_SWAP_SELF_WITH_TARGET}],
+		},
+	}
+	var activator: Dictionary = _make_runtime_card(
+		"Activator",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"fast_query_activator",
+		[activation_ability]
+	)
+	activator["ki"] = 1
+	var activation_board: Array = Rules.empty_board()
+	activation_board[4] = {"card": activator, "owner": Rules.PLAYER_OWNER}
+	activation_board[5] = {
+		"card": _make_runtime_card(
+			"Ally",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			&"fast_query_ally"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var activation_state := State.new(activation_board, [], [], Rules.PLAYER_OWNER)
+	_check_legal_action_query_parity(activation_state, Rules.PLAYER_OWNER, "activation")
+	activation_state.extra_card_plays_remaining = 1
+	_check_legal_action_query_parity(
+		activation_state,
+		Rules.PLAYER_OWNER,
+		"activation blocked during extra play"
+	)
+
+
+func _check_legal_action_query_parity(
+	state: State,
+	owner_id: int,
+	label: String
+) -> void:
+	var expected: bool = not Simulator.get_legal_actions_for_owner(state, owner_id).is_empty()
+	var actual: bool = Simulator.has_legal_action_for_owner(state, owner_id)
+	_check(actual == expected, "Fast legal-action query matches full generation: %s" % label)
 
 
 func _test_move_application_and_capture_parity() -> void:

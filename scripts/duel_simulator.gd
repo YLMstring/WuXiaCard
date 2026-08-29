@@ -75,6 +75,48 @@ static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Arra
 	return actions
 
 
+static func has_legal_action_for_owner(state: StateData, owner_id: int) -> bool:
+	if state == null or state.board.size() != 9:
+		return false
+	var hand: Array = state.get_hand(owner_id)
+	if not hand.is_empty():
+		for cell_index: int in range(9):
+			if Rules.can_place(state.board, cell_index):
+				return true
+	if owner_id == state.active_player and state.extra_card_plays_remaining > 0:
+		return false
+	for source_cell: int in range(state.board.size()):
+		var source_slot_value: Variant = state.board[source_cell]
+		if (
+			source_slot_value == null
+			or int((source_slot_value as Dictionary).get("owner", 0)) != owner_id
+		):
+			continue
+		var source_card: Dictionary = (source_slot_value as Dictionary).get("card", {})
+		var source_instance_id := StringName(source_card.get("instance_id", &""))
+		var activate_abilities: Array[Dictionary] = Abilities.get_activate_abilities(
+			source_card,
+			state.get_enabled_effect_gates(owner_id)
+		)
+		for activation_entry: Dictionary in activate_abilities:
+			var activation: Dictionary = activation_entry.get("activation", {}) as Dictionary
+			if not Executor.can_pay_costs(
+				state,
+				source_cell,
+				source_instance_id,
+				activation.get("costs", []) as Array
+			):
+				continue
+			if not Targeting.get_valid_targets(
+				state,
+				owner_id,
+				source_cell,
+				activation
+			).is_empty():
+				return true
+	return false
+
+
 static func is_action_legal(state: StateData, action: ActionData) -> bool:
 	if state == null or action == null:
 		return false
@@ -134,8 +176,8 @@ static func is_terminal(state: StateData) -> bool:
 	if _board_is_full(state.board):
 		return true
 	return (
-		get_legal_actions_for_owner(state, Rules.PLAYER_OWNER).is_empty()
-		and get_legal_actions_for_owner(state, Rules.OPPONENT_OWNER).is_empty()
+		not has_legal_action_for_owner(state, Rules.PLAYER_OWNER)
+		and not has_legal_action_for_owner(state, Rules.OPPONENT_OWNER)
 	)
 
 
@@ -1707,7 +1749,8 @@ static func _advance_across_empty_owner_turns(
 			result["events"],
 			start_result
 		)
-		if not get_legal_actions(state).is_empty():
+		var has_legal_actions: bool = has_legal_action_for_owner(state, turn_owner)
+		if has_legal_actions:
 			return
 
 		var end_result: Dictionary = _resolve_trigger_event(

@@ -446,7 +446,10 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   encoding, and a SHA-256/128 `v2` fingerprint; it is faster but is not a compact
   simulation representation. The 2026-08-29 14-opening production comparison
   improved aggregate throughput from `246.09` to `411.09` nodes/s with unchanged
-  depth-one scores/actions and zero fallback. `completed_depth` and benchmark
+  depth-one scores/actions and zero fallback. A subsequent Boolean
+  legal-action-existence query for terminal and empty-turn checks raised the
+  same profile again to `490.18` nodes/s (`+19.24%`) while matching full action
+  generation on 1,024 real-state/owner checks. `completed_depth` and benchmark
   depth settings mean complete rounds, not action plies. Use
   `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production strength
   evidence rather than judging strength from one game. Node-limited reports must

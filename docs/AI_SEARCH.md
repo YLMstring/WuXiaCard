@@ -241,6 +241,30 @@ all-GDScript recursive accumulator measured only `0.543x` legacy speed, so the
 production path deliberately uses native binary encoding and native SHA-256;
 the generic recursive fingerprinter remains only for fixed structural vectors.
 
+## Legal-Action Existence Profile (2026-08-29)
+
+Terminal checks and empty-turn advancement only need to know whether an owner
+has at least one legal action. They now call
+`DuelSimulator.has_legal_action_for_owner()`, which returns after the first
+legal placement or activation instead of allocating the complete action list.
+Ordered search expansion still uses the authoritative full action generator.
+
+The fast Boolean query matched full generation for both owners across 512 real
+Quick-derived states (`1024/1024`). Against the preceding full-state fingerprint
+profile on the same 14 openings and ten-second budget:
+
+- aggregate throughput increased from `411.09` to `490.18` nodes/s (`+19.24%`);
+- mean depth-one completion time fell from `0.798s` to `0.629s` (`-21.19%`);
+- the three 5,000-node timing probes completed `1.203x` faster;
+- depth two remained `2/14`, all openings completed depth one, and fallback
+  remained zero;
+- all depth-one scores, root actions, and exact-state digests remained equal.
+
+The standalone transition microbenchmark improved only about `0.7%`, because
+its one terminal query per transition underrepresents the search-wide benefit:
+`is_terminal()` runs at every visited node, including nodes that do not apply a
+child transition.
+
 ## Deferred Optimization
 
 A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
