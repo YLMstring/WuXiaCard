@@ -71,6 +71,7 @@ func _run() -> void:
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
+	_test_selector_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
@@ -567,6 +568,389 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		nested_unknown_state,
 		&"native_nested_unknown_source",
 		"Unsupported nested action is rejected atomically"
+	)
+
+
+func _test_selector_transition_parity(kernel: Object) -> void:
+	var zone_source: Dictionary = _make_selector_source(
+		&"native_selector_zone_source",
+		{
+			"zones": [
+				Catalog.CARD_ZONE_HAND,
+				Catalog.CARD_ZONE_BOARD,
+				Catalog.CARD_ZONE_DISCARD,
+				Catalog.CARD_ZONE_REMOVED,
+				Catalog.CARD_ZONE_HAND,
+			],
+			"conditions": [],
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var zone_player_hand: Dictionary = _make_plain_card(
+		&"区域玩家手牌",
+		&"native_selector_zone_player_hand",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	zone_player_hand[State.HAND_SLOT_INDEX_KEY] = 4
+	var zone_enemy_hand: Dictionary = _make_plain_card(
+		&"区域敌方手牌",
+		&"native_selector_zone_enemy_hand",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	zone_enemy_hand[State.HAND_SLOT_INDEX_KEY] = 3
+	var zone_board: Array = Rules.empty_board()
+	zone_board[8] = _slot(
+		_make_plain_card(&"区域场上牌", &"native_selector_zone_board", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var zone_state := State.new(
+		zone_board,
+		[zone_source, zone_player_hand],
+		[zone_enemy_hand],
+		Rules.PLAYER_OWNER
+	)
+	zone_state.discard_piles[Rules.PLAYER_OWNER] = [
+		_make_plain_card(&"区域弃牌", &"native_selector_zone_discard", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+	]
+	zone_state.removed_cards[Rules.OPPONENT_OWNER] = [
+		_make_plain_card(&"区域移除牌", &"native_selector_zone_removed", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+	]
+	_check_transition_parity(
+		kernel,
+		zone_state,
+		0,
+		4,
+		&"native_selector_zone_source",
+		"Selector scans four zones once and survives source exile"
+	)
+
+	var left: Dictionary = _make_plain_card(&"左侧", &"native_selector_left", Rules.PLAYER_OWNER, [1, 1, 1, 1])
+	left[State.HAND_SLOT_INDEX_KEY] = 0
+	var middle: Dictionary = _make_plain_card(&"中间", &"native_selector_middle", Rules.PLAYER_OWNER, [1, 1, 1, 1])
+	middle[State.HAND_SLOT_INDEX_KEY] = 2
+	var right: Dictionary = _make_plain_card(&"右侧", &"native_selector_right", Rules.PLAYER_OWNER, [1, 1, 1, 1])
+	right[State.HAND_SLOT_INDEX_KEY] = 4
+	var reverse_source: Dictionary = _make_selector_source(
+		&"native_selector_reverse_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"order": Catalog.SELECT_ORDER_HAND_RIGHT_TO_LEFT,
+			"limit": 2,
+			"required_count": 2,
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	reverse_source[State.HAND_SLOT_INDEX_KEY] = 1
+	var reverse_state := State.new(
+		Rules.empty_board(),
+		[left, reverse_source, right, middle],
+		[_make_plain_card(&"敌手", &"native_selector_reverse_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_selector_exile_order(
+		kernel,
+		reverse_state,
+		1,
+		&"native_selector_reverse_source",
+		[&"native_selector_right", &"native_selector_middle"],
+		"Selector uses physical hand slots right-to-left"
+	)
+
+	var required_source: Dictionary = _make_selector_source(
+		&"native_selector_required_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 2,
+			"required_count": 3,
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var required_state := State.new(
+		Rules.empty_board(),
+		[
+			required_source,
+			_make_plain_card(&"不足一", &"native_selector_required_one", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"不足二", &"native_selector_required_two", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		],
+		[_make_plain_card(&"敌手", &"native_selector_required_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_selector_exile_order(
+		kernel,
+		required_state,
+		0,
+		&"native_selector_required_source",
+		[],
+		"Selector clears a limit snapshot that misses required_count"
+	)
+
+	var flip_target: Dictionary = _make_plain_card(
+		&"攻击翻面目标",
+		&"native_selector_flip_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	var flip_board: Array = Rules.empty_board()
+	flip_board[1] = _slot(flip_target, Rules.OPPONENT_OWNER)
+	var flip_source: Dictionary = _make_plain_card(
+		&"攻击翻面选择器",
+		&"native_selector_flip_source",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2]
+	)
+	flip_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK}],
+				},
+				"actions": [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}],
+			}],
+		}],
+	}]
+	var flip_state := State.new(
+		flip_board,
+		[flip_source],
+		[_make_plain_card(&"敌手", &"native_selector_flip_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		flip_state,
+		0,
+		4,
+		&"native_selector_flip_source",
+		"Selector identifies the exact card flipped by the current attack"
+	)
+
+	var compound_board: Array = Rules.empty_board()
+	var compound_target: Dictionary = _make_plain_card(
+		&"复合条件目标",
+		&"native_selector_compound_target",
+		Rules.OPPONENT_OWNER,
+		[2, 1, 2, 1]
+	)
+	compound_target["weapon"] = "验证剑法"
+	compound_board[4] = _slot(compound_target, Rules.OPPONENT_OWNER)
+	for cell: int in [3, 5, 7]:
+		compound_board[cell] = _slot(
+			_make_plain_card(
+				StringName("包围友方%d" % cell),
+				StringName("native_selector_surround_%d" % cell),
+				Rules.PLAYER_OWNER,
+				[1, 1, 1, 1]
+			),
+			Rules.PLAYER_OWNER
+		)
+	var compound_source: Dictionary = _make_selector_source(
+		&"native_selector_compound_source",
+		{
+			"zones": [Catalog.CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_WEAPON_IS, "weapon": "验证剑法"},
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+				{"type": Catalog.CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				{"type": Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES},
+				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+				{"type": Catalog.CONDITION_SELECTED_CARD_HAS_NONZERO_POWER},
+			],
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var compound_state := State.new(
+		compound_board,
+		[compound_source],
+		[_make_plain_card(&"敌手", &"native_selector_compound_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_selector_exile_order(
+		kernel,
+		compound_state,
+		0,
+		&"native_selector_compound_source",
+		[&"native_selector_compound_target"],
+		"Selector composes board relationship and card-state conditions",
+		1
+	)
+
+	var previous_board: Array = Rules.empty_board()
+	previous_board[8] = _slot(
+		_make_plain_card(&"上一张牌", &"native_selector_previous_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var previous_source: Dictionary = _make_selector_source(
+		&"native_selector_previous_source",
+		{
+			"zones": [Catalog.CARD_ZONE_BOARD],
+			"conditions": [{
+				"type": Catalog.CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+				"played_by": Catalog.OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			}],
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var previous_state := State.new(
+		previous_board,
+		[previous_source],
+		[_make_plain_card(&"敌手", &"native_selector_previous_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	previous_state.last_hand_play_by_owner[Rules.OPPONENT_OWNER] = {
+		"played_by_owner_id": Rules.OPPONENT_OWNER,
+		"card_id": &"上一张牌",
+		"instance_id": &"native_selector_previous_target",
+	}
+	_check_selector_exile_order(
+		kernel,
+		previous_state,
+		0,
+		&"native_selector_previous_source",
+		[&"native_selector_previous_target"],
+		"Selector resolves previous hand play by relative owner"
+	)
+
+	var spend_candidate: Dictionary = _make_plain_card(
+		&"可耗内力",
+		&"native_selector_spend_candidate",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	spend_candidate["ki"] = 2
+	spend_candidate["active_abilities"] = [{
+		"activation": {
+			"actions": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+		},
+	}]
+	var spend_source: Dictionary = _make_selector_source(
+		&"native_selector_spend_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_CAN_SPEND_KI},
+				{
+					"type": Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+					"resource": Catalog.RESOURCE_KI,
+					"fallback_resource": Catalog.RESOURCE_POWERS,
+					"amount": 2,
+				},
+			],
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var spend_state := State.new(
+		Rules.empty_board(),
+		[spend_source, spend_candidate],
+		[_make_plain_card(&"敌手", &"native_selector_spend_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_selector_exile_order(
+		kernel,
+		spend_state,
+		0,
+		&"native_selector_spend_source",
+		[&"native_selector_spend_candidate"],
+		"Selector detects automatic or active ki spending and transferable resources"
+	)
+
+	var negative_candidate: Dictionary = _make_plain_card(
+		&"不可改点资源",
+		&"native_selector_negative_candidate",
+		Rules.PLAYER_OWNER,
+		[-1, -1, -1, -1]
+	)
+	var power_candidate: Dictionary = _make_plain_card(
+		&"点数后备资源",
+		&"native_selector_power_candidate",
+		Rules.PLAYER_OWNER,
+		[0, 2, 0, 0]
+	)
+	var resource_source: Dictionary = _make_selector_source(
+		&"native_selector_resource_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},
+				{"type": Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+				{
+					"type": Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+					"resource": Catalog.RESOURCE_KI,
+					"fallback_resource": Catalog.RESOURCE_POWERS,
+					"amount": 3,
+				},
+			],
+			"limit": 1,
+		},
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var resource_state := State.new(
+		Rules.empty_board(),
+		[resource_source, negative_candidate, power_candidate],
+		[_make_plain_card(&"敌手", &"native_selector_resource_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_selector_exile_order(
+		kernel,
+		resource_state,
+		0,
+		&"native_selector_resource_source",
+		[&"native_selector_power_candidate"],
+		"Selector skips four-sided negative powers and accepts fallback power resources"
+	)
+
+	var revalidate_board: Array = Rules.empty_board()
+	for cell: int in [1, 2, 3, 4, 5, 7, 8]:
+		var support_card: Dictionary = _make_plain_card(
+			StringName("重验牌%d" % cell),
+			StringName("native_selector_revalidate_%d" % cell),
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1]
+		)
+		if cell in [4, 5, 8]:
+			support_card["weapon"] = "重验目标"
+		revalidate_board[cell] = _slot(support_card, Rules.PLAYER_OWNER)
+	var revalidate_source: Dictionary = _make_selector_source(
+		&"native_selector_revalidate_source",
+		{
+			"zones": [Catalog.CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_WEAPON_IS, "weapon": "重验目标"},
+				{"type": Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES},
+			],
+			"limit": 2,
+		},
+		[
+			{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD},
+			{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1},
+		]
+	)
+	var revalidate_state := State.new(
+		revalidate_board,
+		[revalidate_source],
+		[_make_plain_card(&"敌手", &"native_selector_revalidate_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"重验抽牌", &"native_selector_revalidate_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_selector_exile_order(
+		kernel,
+		revalidate_state,
+		0,
+		&"native_selector_revalidate_source",
+		[&"native_selector_revalidate_4"],
+		"Selector skips a stale second target without refilling from a third",
+		0
 	)
 
 
@@ -1434,6 +1818,12 @@ func _check_transition_parity(
 		actual.get("exiles", []) == expected.get("exiles", []),
 		"%s exiles exactly match DuelSimulator" % label
 	)
+	if actual.get("exiles", []) != expected.get("exiles", []):
+		print("NATIVE_EXILE_DIFFERENCE label=%s expected=%s actual=%s" % [
+			label,
+			expected.get("exiles", []),
+			actual.get("exiles", []),
+		])
 	_check(
 		actual.get("events", []) == expected.get("events", []),
 		"%s events exactly match DuelSimulator" % label
@@ -1480,6 +1870,30 @@ func _check_modifier_transition(
 		"%s exercises the intended captures" % label
 	)
 	_check_transition_parity(kernel, state, 0, target_cell, instance_id, label)
+
+
+func _check_selector_exile_order(
+	kernel: Object,
+	state: State,
+	hand_index: int,
+	instance_id: StringName,
+	expected_instance_ids: Array,
+	label: String,
+	target_cell: int = 4
+) -> void:
+	var expected: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(hand_index, target_cell, instance_id)
+	)
+	var actual_ids: Array[StringName] = []
+	for event_value: Variant in expected.get("events", []):
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == &"card_exiled"
+		):
+			actual_ids.append(StringName((event_value as Dictionary).get("instance_id", &"")))
+	_check(actual_ids == expected_instance_ids, "%s exercises the intended selected order" % label)
+	_check_transition_parity(kernel, state, hand_index, target_cell, instance_id, label)
 
 
 func _check_transition_rejected(
@@ -1540,6 +1954,21 @@ func _make_after_summoned_card(instance_id: StringName, action: Dictionary) -> D
 		}],
 	}]
 	return card
+
+
+func _make_selector_source(
+	instance_id: StringName,
+	selector: Dictionary,
+	actions: Array
+) -> Dictionary:
+	return _make_after_summoned_card(
+		instance_id,
+		{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": selector,
+			"actions": actions,
+		}
+	)
 
 
 func _make_modifier_card(

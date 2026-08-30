@@ -75,9 +75,48 @@ class DuelNativeCompactKernel : public RefCounted {
 	};
 
 	enum class CardRefOpcode : uint8_t {
+		SELECTED_CARD,
 		TRIGGER_CARD,
 		ABILITY_SOURCE,
 		ATTACKER_CARD,
+		UNSUPPORTED,
+	};
+
+	enum class SelectorZoneOpcode : uint8_t {
+		HAND,
+		BOARD,
+		DISCARD,
+		REMOVED,
+	};
+
+	enum class SelectorConditionOpcode : uint8_t {
+		IS_ALLY,
+		IS_ENEMY,
+		WEAPON_IS,
+		IS_NOT_SOURCE,
+		ADJACENT_TO_SOURCE,
+		SURROUNDED_BY_ALLIES,
+		ORIGINAL_OWNER_IS_SELF,
+		ORIGINAL_OWNER_IS_ENEMY,
+		FLIPPED_BY_CURRENT_ATTACK,
+		POWERS_CAN_CHANGE,
+		HAS_NONZERO_POWER,
+		IS_PREVIOUS_HAND_PLAY,
+		CAN_SPEND_KI,
+		CAN_TRANSFER_RESOURCE,
+		UNSUPPORTED,
+	};
+
+	enum class RelativeOwnerOpcode : uint8_t {
+		ABILITY_SOURCE,
+		OPPONENT_OF_ABILITY_SOURCE,
+		UNSUPPORTED,
+	};
+
+	enum class ResourceOpcode : uint8_t {
+		KI,
+		POWERS,
+		NONE,
 		UNSUPPORTED,
 	};
 
@@ -107,6 +146,25 @@ class DuelNativeCompactKernel : public RefCounted {
 		ConditionOpcode opcode = ConditionOpcode::UNSUPPORTED;
 	};
 
+	struct CompiledSelectorCondition {
+		bool declaration_valid = true;
+		SelectorConditionOpcode opcode = SelectorConditionOpcode::UNSUPPORTED;
+		String weapon;
+		RelativeOwnerOpcode relative_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		ResourceOpcode resource = ResourceOpcode::NONE;
+		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
+		int32_t amount = 0;
+	};
+
+	struct CompiledSelector {
+		bool declaration_valid = true;
+		std::vector<SelectorZoneOpcode> zones;
+		std::vector<CompiledSelectorCondition> conditions;
+		int32_t limit = 0;
+		int32_t required_count = 0;
+		bool hand_right_to_left = false;
+	};
+
 	struct CompiledAction {
 		bool declaration_valid = true;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
@@ -114,7 +172,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t amount = 0;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
-		Dictionary selector_declaration;
+		CompiledSelector selector;
 		std::vector<CompiledAction> child_actions;
 	};
 
@@ -164,6 +222,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t new_owner = 0;
 		bool trigger_was_on_board = false;
 		bool attack_flipped_enemy = false;
+		struct AttackFlipRecord {
+			int32_t card_index = -1;
+			int32_t previous_owner = 0;
+		};
+		std::vector<AttackFlipRecord> attack_flips;
 		StringName attack_reason;
 		StringName flip_reason;
 		StringName exile_reason;
@@ -180,17 +243,21 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	struct ActionContext {
 		int32_t ability_source_cell = -1;
+		int32_t ability_source_zone = -1;
+		int32_t ability_source_logical_index = -1;
 		int32_t ability_source_card_index = -1;
 		int32_t ability_source_owner = 0;
 		int32_t action_subject_card_index = -1;
 		int32_t action_subject_owner = 0;
+		int32_t action_subject_zone = -1;
+		int32_t action_subject_logical_index = -1;
 		int32_t selected_card_index = -1;
 		int32_t trigger_card_index = -1;
 		int32_t attacker_card_index = -1;
 		StringName event_id;
 		int32_t discovery_ability_index = -1;
 		int32_t trigger_index = -1;
-		std::vector<int32_t> attack_flipped_card_indices;
+		std::vector<EventContext::AttackFlipRecord> attack_flips;
 	};
 
 	struct Resolution {
@@ -228,6 +295,8 @@ private:
 	bool validate_shape();
 	void compile_ability_sets();
 	CompiledCondition compile_condition(const Variant &value) const;
+	CompiledSelectorCondition compile_selector_condition(const Variant &value) const;
+	CompiledSelector compile_selector(const Variant &value) const;
 	CompiledAction compile_action(const Variant &value) const;
 	CompiledModifier compile_modifier(const Variant &value) const;
 	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid) const;
@@ -388,6 +457,40 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
+	ActionOutcome execute_for_each_selected_card(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	bool selector_conditions_match(
+		const NativeState &value,
+		int32_t candidate_card_index,
+		int32_t candidate_zone,
+		int32_t candidate_owner,
+		int32_t candidate_logical_index,
+		const CompiledSelector &selector,
+		const ActionContext &context,
+		bool &supported
+	) const;
+	std::vector<int32_t> snapshot_selected_cards(
+		const NativeState &value,
+		const CompiledSelector &selector,
+		const ActionContext &context,
+		bool &supported
+	) const;
+	bool resolve_selector_source(
+		const NativeState &value,
+		const ActionContext &context,
+		int32_t &zone,
+		int32_t &owner,
+		int32_t &logical_index
+	) const;
+	bool card_declarations_can_spend_ki(const NativeState &value, int32_t card_index) const;
+	bool action_declarations_can_spend_ki(const Variant &value) const;
 	bool draw_cards(
 		NativeState &value,
 		int32_t owner_id,
