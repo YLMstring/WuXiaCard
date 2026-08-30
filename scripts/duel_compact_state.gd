@@ -202,7 +202,7 @@ func duplicate_compact() -> RefCounted:
 
 func is_structurally_valid() -> bool:
 	var card_count: int = card_instance_ids.size()
-	return (
+	var fixed_shapes_valid: bool = (
 		capture_error.is_empty()
 		and scalars.size() == SCALAR_COUNT
 		and board_card_indices.size() == board_owners.size()
@@ -218,6 +218,32 @@ func is_structurally_valid() -> bool:
 		and card_suppression_set_indices.size() == card_count
 		and card_hand_slots.size() == card_count
 	)
+	if not fixed_shapes_valid:
+		return false
+	for card_index: int in range(card_count):
+		var template_index: int = card_template_indices[card_index]
+		if template_index < 0 or template_index >= card_template_pool.size():
+			return false
+		var flags: int = card_runtime_flags[card_index]
+		if flags & FLAG_ACTIVE_ABILITIES:
+			var ability_set_index: int = card_active_ability_set_indices[card_index]
+			if ability_set_index < 0 or ability_set_index >= active_ability_set_pool.size():
+				return false
+		if flags & FLAG_SUPPRESSION_BATCHES:
+			var suppression_set_index: int = card_suppression_set_indices[card_index]
+			if (
+				suppression_set_index < 0
+				or suppression_set_index >= suppression_set_pool.size()
+			):
+				return false
+	for board_card_index: int in board_card_indices:
+		if board_card_index < EMPTY_CARD_INDEX or board_card_index >= card_count:
+			return false
+	for zone: PackedInt32Array in zone_card_indices:
+		for zone_card_index: int in zone:
+			if zone_card_index < 0 or zone_card_index >= card_count:
+				return false
+	return true
 
 
 func to_variant_payload() -> Dictionary:
@@ -251,6 +277,99 @@ func to_mutable_variant_payload() -> Dictionary:
 		"card_hand_slots": card_hand_slots,
 		"side_payload": side_payload,
 	}
+
+
+static func from_variant_payload(payload: Dictionary) -> DuelCompactState:
+	var compact := DuelCompactState.new()
+	if not compact.load_variant_payload(payload):
+		return null
+	return compact
+
+
+func load_variant_payload(payload: Dictionary) -> bool:
+	capture_error = ""
+	if int(payload.get("format_version", 0)) != FORMAT_VERSION:
+		return _fail("Unsupported compact-state format version")
+
+	scalars = (payload.get("scalars", PackedInt32Array()) as PackedInt32Array).duplicate()
+	board_card_indices = (
+		payload.get("board_card_indices", PackedInt32Array()) as PackedInt32Array
+	).duplicate()
+	board_owners = (
+		payload.get("board_owners", PackedByteArray()) as PackedByteArray
+	).duplicate()
+	board_slot_extras = []
+	var source_board_extras: Array = payload.get("board_slot_extras", []) as Array
+	for extra_value: Variant in source_board_extras:
+		if not extra_value is Dictionary:
+			return _fail("Compact board-slot extras contain a non-Dictionary value")
+		board_slot_extras.append((extra_value as Dictionary).duplicate(true))
+
+	zone_card_indices = []
+	var source_zones: Array = payload.get("zones", []) as Array
+	for zone_value: Variant in source_zones:
+		if not zone_value is PackedInt32Array:
+			return _fail("Compact zones contain a non-packed array")
+		zone_card_indices.append((zone_value as PackedInt32Array).duplicate())
+
+	card_instance_ids = []
+	for instance_id_value: Variant in payload.get("card_instance_ids", []) as Array:
+		card_instance_ids.append(StringName(instance_id_value))
+	card_template_indices = (
+		payload.get("card_template_indices", PackedInt32Array()) as PackedInt32Array
+	).duplicate()
+	card_runtime_flags = (
+		payload.get("card_runtime_flags", PackedByteArray()) as PackedByteArray
+	).duplicate()
+	card_powers = (
+		payload.get("card_powers", PackedInt32Array()) as PackedInt32Array
+	).duplicate()
+	card_original_owners = (
+		payload.get("card_original_owners", PackedByteArray()) as PackedByteArray
+	).duplicate()
+	card_ki = (payload.get("card_ki", PackedInt32Array()) as PackedInt32Array).duplicate()
+	card_active_ability_set_indices = (
+		payload.get(
+			"card_active_ability_set_indices",
+			PackedInt32Array()
+		) as PackedInt32Array
+	).duplicate()
+	card_reveal_codes = (
+		payload.get("card_reveal_codes", PackedByteArray()) as PackedByteArray
+	).duplicate()
+	card_suppression_set_indices = (
+		payload.get(
+			"card_suppression_set_indices",
+			PackedInt32Array()
+		) as PackedInt32Array
+	).duplicate()
+	card_hand_slots = (
+		payload.get("card_hand_slots", PackedInt32Array()) as PackedInt32Array
+	).duplicate()
+
+	card_template_pool = []
+	for template_value: Variant in payload.get("card_template_pool", []) as Array:
+		if not template_value is Dictionary:
+			return _fail("Compact card-template pool contains a non-Dictionary value")
+		card_template_pool.append((template_value as Dictionary).duplicate(true))
+	active_ability_set_pool = []
+	for ability_set_value: Variant in payload.get("active_ability_set_pool", []) as Array:
+		if not ability_set_value is Array:
+			return _fail("Compact ability-set pool contains a non-Array value")
+		active_ability_set_pool.append((ability_set_value as Array).duplicate(true))
+	suppression_set_pool = []
+	for suppression_set_value: Variant in payload.get("suppression_set_pool", []) as Array:
+		if not suppression_set_value is Array:
+			return _fail("Compact suppression-set pool contains a non-Array value")
+		suppression_set_pool.append((suppression_set_value as Array).duplicate(true))
+
+	var side_value: Variant = payload.get("side_payload", {})
+	if not side_value is Dictionary:
+		return _fail("Compact side payload is not a Dictionary")
+	side_payload = (side_value as Dictionary).duplicate(true)
+	if not is_structurally_valid():
+		return _fail("Compact variant payload has an invalid array shape")
+	return true
 
 
 static func exact_state_payload(state: StateData) -> Dictionary:

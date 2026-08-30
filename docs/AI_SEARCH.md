@@ -455,24 +455,51 @@ The first opt-in Windows GDExtension probe is now present under
 and keeps its DLL, generated `.gdextension`, and CMake intermediates out of
 version control. Production scripts do not reference the extension.
 
-`DuelNativeCompactKernel` accepts one mutable compact payload, converts its
-packed arrays into owned C++ vectors, validates all fixed array lengths, and
-clones the native core without returning to GDScript. On the first real Quick
-opening, an optimized Windows build cloned the 12-card/48-power core 100,000
-times in `102,774` microseconds, about `973,009` core clones/second. This number
-excludes the mutable side payload and does not predict transition or search
-speed; it proves only that the coarse boundary loads correctly and that native
-compact cloning itself is cheap enough not to be the limiting design concern.
-
-The next native milestone is a representative generic transition slice with
-exact `DuelSimulator` parity. Production integration remains forbidden until
+`DuelNativeCompactKernel` accepts both the original mutable clone-probe payload
+and a complete compact payload with immutable metadata pools. It converts the
+packed runtime arrays into owned C++ vectors, validates all fixed lengths, and
+keeps branch cloning native. Production integration remains forbidden until
 complete transition semantics and Windows/Android packaging are both proven.
+
+### First native transition slice
+
+The opt-in kernel now implements the first complete, deliberately narrow rule
+slice. It accepts only normalized cards with no active abilities and resolves a
+normal hand play through placement, orthogonal power comparison, standard
+adjacent attacks, ownership flips, `last_hand_play_by_owner`, action/state
+version increments, owner-turn boundaries, empty-turn advancement, attack-count
+reset, repetition recording, and action-limit/full-board/fivefold terminal
+checks. The result is a complete compact payload plus capture, exile, and event
+arrays suitable for one boundary restore.
+
+Unsupported semantics are never approximated. The prototype rejects the whole
+state when it contains card or state abilities, temporary suppression, queued
+effects, a pending choice, extra plays, a partially resolved turn end, pending
+hand-play suppression, special all-negative powers, or difficulty 8/9 hand
+rules. Production still never references the extension.
+
+The native probe covers five exact oracle transitions: multi-target adjacent
+capture, opponent empty-turn advancement, action-limit terminal, full-board
+terminal, and fivefold-repetition terminal. It also checks explicit rejection
+of an ability-bearing state. Across 59 assertions, restored canonical state
+keys, live state versions, captures, exiles, and every event matched
+`DuelSimulator`.
+
+On the retained 5,000-transition plain-card probe, the native boundary returned
+full compact payloads and events in `219,143` microseconds versus `4,089,964`
+microseconds for the authoritative GDScript transition loop, about `18.66x`
+faster. This is evidence that a coarse native transition can be worthwhile, not
+a production-search forecast: it excludes compact-to-`DuelState` restoration,
+general declarations/triggers, state keys, evaluation, and tree traversal. The
+100,000-branch core clone probe in the same run completed at about `754,000`
+clones/second after immutable metadata handles and card IDs were added.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- No compact-state parity harness.
+- No broad generated native-transition parity corpus beyond the first plain-card
+  fixture slice.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
 - No difficulty profiles beyond budget.

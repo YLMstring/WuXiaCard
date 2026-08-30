@@ -24,6 +24,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_nonempty_runtime_payload_round_trip()
+	_test_variant_payload_load_round_trip()
 	_test_compact_copy_isolation()
 	_test_real_quick_state_corpus()
 	if _failures == 0:
@@ -123,6 +124,28 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 	if restored == null:
 		return
 	_check_exact_state(state, restored, "Nonempty runtime state round-trips exactly")
+
+
+func _test_variant_payload_load_round_trip() -> void:
+	var built: Dictionary = _first_real_opening()
+	var state: State = built.get("state") as State
+	_check(state != null, "A real opening exists for variant-payload loading")
+	if state == null:
+		return
+	var captured: CompactState = _capture(state)
+	_check(captured != null, "Real opening can be captured before variant-payload loading")
+	if captured == null:
+		return
+	var loaded: CompactState = CompactState.from_variant_payload(
+		captured.to_variant_payload()
+	)
+	_check(loaded != null, "Full compact variant payload can be loaded")
+	if loaded == null:
+		return
+	var restored: State = loaded.restore()
+	_check(restored != null, "Loaded compact variant payload can be restored")
+	if restored != null:
+		_check_exact_state(state, restored, "Loaded compact variant payload stays lossless")
 
 
 func _test_compact_copy_isolation() -> void:

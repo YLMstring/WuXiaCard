@@ -22,12 +22,23 @@ so Godot never mistakes MSVC `.obj` files for importable Wavefront models.
 
 Current scope:
 
-- accepts one coarse compact-state payload;
+- accepts one coarse full compact-state payload while retaining the earlier
+  mutable-core clone probe;
 - converts packed Godot arrays into owned C++ vectors;
 - validates the documented array shape;
-- measures native core cloning without crossing the language boundary per
-  iteration.
+- resolves one test-only generic transition slice: normalized, ability-free
+  hand play, ordinary orthogonal power comparison, standard attack, ownership
+  flip, hand-play memory, turn boundary, empty-turn advancement, action-limit,
+  full-board, and fivefold-repetition terminal checks;
+- returns a full compact payload plus the same capture/exile/event arrays as
+  `DuelSimulator`;
+- explicitly rejects states with abilities, temporary suppression, extra
+  plays, pending choices/effects, special negative powers, or difficulty 8/9
+  hand rules instead of approximating them;
+- measures native core cloning and the covered transition slice.
 
-It deliberately does not implement legal actions, triggers, card declarations,
-state keys, evaluation, or transitions yet. The existing simulator remains the
-oracle for every future native primitive.
+It deliberately does not implement the general ability executor, targeting,
+draw/discard/exile/movement primitives, state keys, evaluation, or search yet.
+Production does not call it. The probe compares every covered state field and
+event against `DuelSimulator`, which remains the oracle for every native
+primitive.
