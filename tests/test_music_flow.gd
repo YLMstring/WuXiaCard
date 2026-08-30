@@ -23,7 +23,7 @@ func _run() -> void:
 	await _test_testing_unlock_does_not_trigger_bixie()
 	_cleanup_path(NORMAL_SAVE_PATH)
 	_cleanup_path(TESTING_SAVE_PATH)
-	await process_frame
+	await create_timer(0.1).timeout
 	await process_frame
 	_finish()
 
