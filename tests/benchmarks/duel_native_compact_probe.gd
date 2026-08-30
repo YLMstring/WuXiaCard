@@ -71,6 +71,8 @@ func _run() -> void:
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
+	_test_attack_lifecycle_transition_parity(kernel)
+	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
 		push_error(
 			"DUEL_NATIVE_COMPACT_PROBE_FAILED parity_failures=%d checks=%d"
@@ -129,6 +131,89 @@ func _first_opening() -> State:
 		return null
 	var built: Dictionary = EnemyStateFactory.build(games[0], matchups[0])
 	return built.get("state") as State
+
+
+func _report_real_quick_native_coverage(kernel: Object) -> void:
+	var unique_openings: Dictionary = {}
+	var total_legal: int = 0
+	var supported: int = 0
+	var exact_parity: int = 0
+	var mismatches: int = 0
+	var rejection_reasons: Dictionary = {}
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	for matchup: Dictionary in matchups:
+		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
+			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			var opening: State = built.get("state") as State
+			if opening == null:
+				continue
+			var opening_key: String = StateKey.build(opening)
+			if unique_openings.has(opening_key):
+				continue
+			unique_openings[opening_key] = true
+			var compact := CompactState.new()
+			if not compact.capture_state(opening):
+				mismatches += 1
+				continue
+			if not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+				mismatches += 1
+				continue
+			for action: Action in Simulator.get_legal_actions(opening):
+				if action.action_type != Action.TYPE_PLAY:
+					continue
+				total_legal += 1
+				var actual: Dictionary = kernel.call(
+					"apply_play_transition",
+					action.source_index,
+					action.target_index,
+					action.source_instance_id
+				) as Dictionary
+				if not bool(actual.get("supported", false)):
+					var reason: String = String(actual.get("reason", "unspecified"))
+					rejection_reasons[reason] = int(rejection_reasons.get(reason, 0)) + 1
+					_check(
+						not bool(actual.get("valid", false))
+						and (actual.get("events", []) as Array).is_empty()
+						and (actual.get("captures", []) as Array).is_empty()
+						and (actual.get("exiles", []) as Array).is_empty(),
+						"Unsupported Quick branch leaves no partial transition"
+					)
+					continue
+				supported += 1
+				var expected: Dictionary = Simulator.apply_action(opening, action)
+				var matches: bool = bool(actual.get("valid", false)) == bool(expected.get("valid", false))
+				if matches and bool(actual.get("valid", false)):
+					var result_compact: CompactState = CompactState.from_variant_payload(
+						actual.get("payload", {}) as Dictionary
+					)
+					var actual_state: State = result_compact.restore() if result_compact != null else null
+					var expected_state: State = expected.get("state") as State
+					matches = (
+						actual_state != null
+						and expected_state != null
+						and StateKey.build(actual_state) == StateKey.build(expected_state)
+						and actual_state.state_version == expected_state.state_version
+						and actual.get("captures", []) == expected.get("captures", [])
+						and actual.get("exiles", []) == expected.get("exiles", [])
+						and actual.get("events", []) == expected.get("events", [])
+					)
+				if matches:
+					exact_parity += 1
+				else:
+					mismatches += 1
+	_check(unique_openings.size() == 14, "Quick coverage uses 14 unique real openings")
+	_check(mismatches == 0, "Every supported Quick root action has exact oracle parity")
+	print(
+		"DUEL_NATIVE_QUICK_COVERAGE openings=%d total_legal=%d supported=%d exact_parity=%d mismatches=%d rejection_reasons=%s"
+		% [
+			unique_openings.size(),
+			total_legal,
+			supported,
+			exact_parity,
+			mismatches,
+			JSON.stringify(rejection_reasons),
+		]
+	)
 
 
 func _test_basic_transition_parity(kernel: Object) -> void:
@@ -454,6 +539,290 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 	)
 
 
+func _test_attack_lifecycle_transition_parity(kernel: Object) -> void:
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var other_owner: int = (
+			Rules.OPPONENT_OWNER if owner_id == Rules.PLAYER_OWNER else Rules.PLAYER_OWNER
+		)
+		var bagua_board: Array = Rules.empty_board()
+		bagua_board[1] = _slot(
+			Catalog.create_instance(&"BaGuaFangWei", other_owner, StringName("native_bagua_%d" % owner_id)),
+			other_owner
+		)
+		var bagua_state := State.new(
+			bagua_board,
+			[_make_plain_card(&"八卦攻方", StringName("native_bagua_attacker_%d" % owner_id), owner_id, [1, 1, 1, 1])] if owner_id == Rules.PLAYER_OWNER else [_make_plain_card(&"八卦守方手牌", &"native_bagua_player_hand", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+			[_make_plain_card(&"八卦攻方", StringName("native_bagua_attacker_%d" % owner_id), owner_id, [1, 1, 1, 1])] if owner_id == Rules.OPPONENT_OWNER else [_make_plain_card(&"八卦守方手牌", &"native_bagua_enemy_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+			owner_id
+		)
+		_check_transition_parity(
+			kernel,
+			bagua_state,
+			0,
+			4,
+			StringName("native_bagua_attacker_%d" % owner_id),
+			"BaGua pre-flip exile owner %d" % owner_id
+		)
+
+	for tier: int in range(1, 4):
+		var lei_board: Array = Rules.empty_board()
+		lei_board[1] = _slot(
+			Catalog.create_instance(
+				StringName("LeiZHenJian%d" % tier),
+				Rules.OPPONENT_OWNER,
+				StringName("native_lei_target_%d" % tier)
+			),
+			Rules.OPPONENT_OWNER
+		)
+		var lei_state := State.new(
+			lei_board,
+			[_make_plain_card(&"雷震攻方", StringName("native_lei_attacker_%d" % tier), Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+			[_make_plain_card(&"雷震敌手", StringName("native_lei_enemy_hand_%d" % tier), Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+			Rules.PLAYER_OWNER,
+			0,
+			[],
+			[_make_plain_card(&"雷震抽牌", StringName("native_lei_draw_%d" % tier), Rules.OPPONENT_OWNER, [1, 1, 1, 1])]
+		)
+		_check_transition_parity(
+			kernel,
+			lei_state,
+			0,
+			4,
+			StringName("native_lei_attacker_%d" % tier),
+			"LeiZhen tier %d defense and exile" % tier
+		)
+
+	var all_board: Array = Rules.empty_board()
+	all_board[3] = _slot(
+		_make_plain_card(&"友方目标", &"native_lei_all_ally", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		Rules.PLAYER_OWNER
+	)
+	all_board[1] = _slot(
+		_make_plain_card(&"敌方目标", &"native_lei_all_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0]),
+		Rules.OPPONENT_OWNER
+	)
+	all_board[8] = _slot(
+		Catalog.create_instance(&"LeiZHenJian3", Rules.OPPONENT_OWNER, &"native_lei_all_source"),
+		Rules.OPPONENT_OWNER
+	)
+	var all_state := State.new(
+		all_board,
+		[_make_plain_card(&"不分敌我攻方", &"native_lei_all_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_lei_all_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		all_state,
+		0,
+		4,
+		&"native_lei_all_attacker",
+		"LeiZhen enemy-attacks-all policy"
+	)
+
+	var remove_attacker_board: Array = Rules.empty_board()
+	var remove_attacker_target: Dictionary = _make_plain_card(
+		&"移除攻击者",
+		&"native_remove_attacker_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	remove_attacker_target["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_ATTACKER_CARD}],
+		}],
+	}]
+	remove_attacker_board[1] = _slot(remove_attacker_target, Rules.OPPONENT_OWNER)
+	var remove_attacker_state := State.new(
+		remove_attacker_board,
+		[_make_plain_card(&"被移除攻方", &"native_removed_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_remove_attacker_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		remove_attacker_state,
+		0,
+		4,
+		&"native_removed_attacker",
+		"Attacker exile stops locked-target loop"
+	)
+
+	var cleanup_board: Array = Rules.empty_board()
+	var cleanup_target: Dictionary = _make_plain_card(
+		&"翻面能力清理",
+		&"native_flip_cleanup_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	cleanup_target["active_abilities"] = [
+		{"retained_on_flip": true, "triggers": [{"event": Catalog.CARD_BEFORE_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}]}]},
+		{"triggers": [{"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}]}]},
+		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "actions": [{"type": Catalog.ACTION_PREVENT_TRIGGER_FLIP}]}]},
+	]
+	cleanup_board[1] = _slot(cleanup_target, Rules.OPPONENT_OWNER)
+	var cleanup_state := State.new(
+		cleanup_board,
+		[_make_plain_card(&"翻面攻方", &"native_flip_cleanup_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_flip_cleanup_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		cleanup_state,
+		0,
+		4,
+		&"native_flip_cleanup_attacker",
+		"Retained ordinary and deferred flip cleanup"
+	)
+
+	var prevent_board: Array = Rules.empty_board()
+	var prevent_target: Dictionary = _make_plain_card(
+		&"阻止翻面",
+		&"native_prevent_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	prevent_target["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_PREVENT_TRIGGER_FLIP}],
+		}],
+	}]
+	prevent_board[1] = _slot(prevent_target, Rules.OPPONENT_OWNER)
+	var prevent_state := State.new(
+		prevent_board,
+		[_make_plain_card(&"阻止攻方", &"native_prevent_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_prevent_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		prevent_state,
+		0,
+		4,
+		&"native_prevent_attacker",
+		"Before-flip prevention and prevented event"
+	)
+
+	var after_attack_board: Array = Rules.empty_board()
+	after_attack_board[1] = _slot(
+		_make_plain_card(&"攻击目标", &"native_after_attack_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0]),
+		Rules.OPPONENT_OWNER
+	)
+	var after_attack_source: Dictionary = _make_plain_card(
+		&"攻击后失去能力",
+		&"native_after_attack_source",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2]
+	)
+	after_attack_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}],
+		}],
+	}]
+	var after_attack_state := State.new(
+		after_attack_board,
+		[after_attack_source],
+		[_make_plain_card(&"敌手", &"native_after_attack_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		after_attack_state,
+		0,
+		4,
+		&"native_after_attack_source",
+		"After-attack self condition removes current ability"
+	)
+
+	var after_exile_board: Array = Rules.empty_board()
+	var exiled_target: Dictionary = _make_plain_card(
+		&"受击移除目标",
+		&"native_after_exile_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	exiled_target["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	after_exile_board[1] = _slot(exiled_target, Rules.OPPONENT_OWNER)
+	var exile_watcher: Dictionary = _make_plain_card(
+		&"移除后监听",
+		&"native_after_exile_watcher",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	exile_watcher["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_EXILED,
+			"conditions": [
+				{"type": Catalog.CONDITION_TRIGGER_CARD_WAS_ON_BOARD},
+				{"type": Catalog.CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE},
+			],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		}],
+	}]
+	after_exile_board[8] = _slot(exile_watcher, Rules.OPPONENT_OWNER)
+	var after_exile_state := State.new(
+		after_exile_board,
+		[_make_plain_card(&"移除攻方", &"native_after_exile_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_after_exile_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[],
+		[_make_plain_card(&"移除后抽牌", &"native_after_exile_draw", Rules.OPPONENT_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_parity(
+		kernel,
+		after_exile_state,
+		0,
+		4,
+		&"native_after_exile_attacker",
+		"After-exile snapshot conditions and draw"
+	)
+
+	var nested_board: Array = Rules.empty_board()
+	var nested_target: Dictionary = _make_plain_card(
+		&"嵌套攻击拒绝",
+		&"native_nested_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	nested_target["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_ATTACK_TRIGGER_CARD}],
+		}],
+	}]
+	nested_board[1] = _slot(nested_target, Rules.OPPONENT_OWNER)
+	var nested_state := State.new(
+		nested_board,
+		[_make_plain_card(&"嵌套攻方", &"native_nested_attacker", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"敌手", &"native_nested_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_rejected(
+		kernel,
+		nested_state,
+		&"native_nested_attacker",
+		"Relevant nested attack reaction"
+	)
+
+
 func _benchmark_basic_transition(kernel: Object) -> Dictionary:
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(
@@ -581,7 +950,16 @@ func _check_transition_parity(
 		])
 	var draw_event_index: int = _first_event_index(actual.get("events", []) as Array, &"card_drawn")
 	var attack_event_index: int = _first_event_index(actual.get("events", []) as Array, &"attack_started")
-	if draw_event_index >= 0 and attack_event_index >= 0:
+	var draw_event: Dictionary = (
+		(actual.get("events", []) as Array)[draw_event_index] as Dictionary
+		if draw_event_index >= 0
+		else {}
+	)
+	if (
+		draw_event_index >= 0
+		and attack_event_index >= 0
+		and int(draw_event.get("source_cell", -1)) == target_cell
+	):
 		_check(
 			draw_event_index < attack_event_index,
 			"%s draw events precede the standard attack" % label

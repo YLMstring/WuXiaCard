@@ -26,6 +26,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<uint8_t> card_original_owners;
 		std::vector<int32_t> card_ki;
 		std::vector<int32_t> card_active_ability_set_indices;
+		std::vector<std::vector<uint8_t>> card_ability_enabled;
 		std::vector<uint8_t> card_reveal_codes;
 		std::vector<int32_t> card_suppression_set_indices;
 		std::vector<int32_t> card_hand_slots;
@@ -38,17 +39,109 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool has_rule_metadata = false;
 	};
 
+	enum class ConditionOpcode : uint8_t {
+		TRIGGER_CARD_IS_SELF,
+		ATTACKED_CARD_IS_SELF,
+		ATTACKER_CARD_IS_SELF,
+		ATTACKER_CARD_IS_ENEMY,
+		TRIGGER_CARD_WAS_ON_BOARD,
+		ATTACK_FLIPPED_ENEMY,
+		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		UNSUPPORTED,
+	};
+
+	enum class ActionOpcode : uint8_t {
+		DRAW_CARDS,
+		EXILE_CARD,
+		EXILE_SELF,
+		PREVENT_TRIGGER_FLIP,
+		REMOVE_THIS_ABILITY,
+		UNSUPPORTED,
+	};
+
+	enum class CardRefOpcode : uint8_t {
+		TRIGGER_CARD,
+		ABILITY_SOURCE,
+		ATTACKER_CARD,
+		UNSUPPORTED,
+	};
+
+	enum class ModifierOpcode : uint8_t {
+		DEFENDING_POWER_OVERRIDE,
+		ENEMY_ATTACKS_ALL,
+		UNSUPPORTED,
+	};
+
+	struct CompiledCondition {
+		ConditionOpcode opcode = ConditionOpcode::UNSUPPORTED;
+	};
+
+	struct CompiledAction {
+		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
+		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
+		int32_t amount = 0;
+	};
+
+	struct CompiledModifier {
+		ModifierOpcode opcode = ModifierOpcode::UNSUPPORTED;
+		int32_t value = 0;
+	};
+
 	struct CompiledTriggerRule {
 		StringName event_id;
-		bool supports_self_after_summoned_draw = false;
-		int32_t draw_count = 0;
+		std::vector<CompiledCondition> conditions;
+		std::vector<CompiledAction> actions;
+	};
+
+	struct CompiledAbility {
+		bool declaration_valid = true;
+		bool retained_on_flip = false;
+		bool has_activation = false;
+		bool isolated_self_after_flip = false;
+		std::vector<CompiledTriggerRule> triggers;
+		std::vector<CompiledModifier> modifiers;
 	};
 
 	struct CompiledAbilitySet {
 		bool declaration_valid = true;
-		bool has_activation = false;
-		bool has_modifiers = false;
-		std::vector<CompiledTriggerRule> triggers;
+		std::vector<CompiledAbility> abilities;
+	};
+
+	struct EventContext {
+		int32_t trigger_cell = -1;
+		int32_t trigger_card_index = -1;
+		int32_t trigger_owner = 0;
+		int32_t trigger_zone = -1;
+		int32_t trigger_logical_index = -1;
+		int32_t attacker_cell = -1;
+		int32_t attacker_card_index = -1;
+		int32_t attacker_owner = 0;
+		int32_t attacked_cell = -1;
+		int32_t attacked_card_index = -1;
+		int32_t attacked_owner = 0;
+		int32_t new_owner = 0;
+		bool trigger_was_on_board = false;
+		bool attack_flipped_enemy = false;
+		StringName attack_reason;
+		StringName flip_reason;
+		StringName exile_reason;
+	};
+
+	struct EventGroup {
+		int32_t source_cell = -1;
+		int32_t source_card_index = -1;
+		int32_t source_owner = 0;
+		int32_t ability_index = -1;
+		int32_t trigger_index = -1;
+	};
+
+	struct Resolution {
+		bool supported = true;
+		String reason;
+		Array events;
+		Array captures;
+		Array exiles;
+		bool flip_prevented = false;
 	};
 
 	NativeState state;
@@ -79,7 +172,6 @@ private:
 		const NativeState &value,
 		int32_t played_card_index,
 		int32_t target_cell,
-		std::vector<int32_t> &draw_counts,
 		String &reason
 	) const;
 	bool card_effects_enabled(
@@ -88,6 +180,7 @@ private:
 		int32_t owner_id
 	) const;
 	bool card_has_abilities(const NativeState &value, int32_t card_index) const;
+	bool ability_enabled(const NativeState &value, int32_t card_index, int32_t ability_index) const;
 	bool card_has_enabled_activation(
 		const NativeState &value,
 		int32_t card_index,
@@ -111,6 +204,102 @@ private:
 	bool board_has_enabled_activation_for_owner(
 		const NativeState &value,
 		int32_t owner_id
+	) const;
+	bool card_has_unsupported_enabled_modifier(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id
+	) const;
+	bool card_has_modifier(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		ModifierOpcode opcode,
+		int32_t *out_value = nullptr
+	) const;
+	bool conditions_match(
+		const NativeState &value,
+		const EventGroup &group,
+		const CompiledTriggerRule &rule,
+		const EventContext &context,
+		bool &supported
+	) const;
+	std::vector<EventGroup> discover_event(
+		const NativeState &value,
+		const StringName &event_id,
+		const EventContext &context,
+		bool &supported,
+		String &reason
+	) const;
+	Resolution resolve_event(
+		NativeState &value,
+		const StringName &event_id,
+		const EventContext &context,
+		std::vector<int32_t> &exile_stack
+	) const;
+	bool execute_action(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	bool draw_cards(
+		NativeState &value,
+		int32_t owner_id,
+		int32_t source_cell,
+		int32_t amount,
+		Resolution &resolution
+	) const;
+	bool exile_card(
+		NativeState &value,
+		int32_t card_index,
+		int32_t source_cell,
+		int32_t ability_source_card_index,
+		bool self_removal,
+		const StringName &exile_reason,
+		const EventContext &parent_context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	int32_t find_board_card(const NativeState &value, int32_t card_index, int32_t hint = -1) const;
+	bool locate_card(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t &zone_kind,
+		int32_t &owner_id,
+		int32_t &logical_index
+	) const;
+	bool is_special_negative(const NativeState &value, int32_t card_index) const;
+	bool powers_supported(const NativeState &value, int32_t card_index) const;
+	bool can_change_powers(const NativeState &value, int32_t card_index) const;
+	int32_t effective_defending_power(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		int32_t direction
+	) const;
+	void remove_ability_with_event(
+		NativeState &value,
+		int32_t card_index,
+		int32_t ability_index,
+		int32_t source_cell,
+		int32_t source_card_index,
+		int32_t target_cell,
+		int32_t owner_id,
+		Array &events
+	) const;
+	bool flip_card(
+		NativeState &value,
+		int32_t attacker_cell,
+		int32_t attacker_card_index,
+		int32_t target_cell,
+		int32_t target_card_index,
+		int32_t new_owner,
+		const EventContext &context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
 	) const;
 	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;

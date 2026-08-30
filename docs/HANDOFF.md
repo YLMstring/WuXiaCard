@@ -475,9 +475,13 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   1,500 as a hard cap.
 - The opt-in `DuelNativeCompactKernel` remains test-only and absent from every
   production path. It now compiles immutable ability declarations once per
-  compact root and exactly matches the simulator for the generic self-after-
-  summoned constant draw shape used by `TuNaShu1`–`TuNaShu3`; all other
-  relevant draw/summon/attack/turn semantics are conservatively rejected.
+  compact root, tracks branch-local enabled abilities without copying nested
+  declarations, and implements the generic summon/attack/flip/exile lifecycle
+  used by `TuNaShu1`–`TuNaShu3`, `BaGuaFangWei`, and
+  `LeiZHenJian1`–`LeiZHenJian3`. The 14 real Quick openings currently expose
+  490 legal root plays: 199 are supported with exact full-state/event parity and
+  291 are conservatively rejected with categorized reasons. Production adoption
+  remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

@@ -464,58 +464,90 @@ complete transition semantics and Windows/Android packaging are both proven.
 ### Native play-transition slices
 
 The opt-in kernel implements a deliberately narrow generic play path. Its first
-slice resolves normalized ability-free hand plays through placement, orthogonal
-power comparison, standard adjacent attacks, ownership flips,
+slice resolves normalized hand plays through placement, orthogonal power
+comparison, standard adjacent attacks, ownership flips,
 `last_hand_play_by_owner`, action/state version increments, owner-turn
 boundaries, empty-turn advancement, attack-count reset, repetition recording,
 and action-limit/full-board/fivefold terminal checks. The result is a complete
 compact payload plus capture, exile, and event arrays suitable for one boundary
 restore.
 
-Unsupported semantics are never approximated. The prototype rejects the whole
-action when a relevant declaration or runtime feature lies outside the covered
-slice. State abilities, temporary suppression, queued effects, pending choices,
-extra plays, a partially resolved turn end, pending hand-play suppression,
-special negative powers, and difficulty 8/9 hand rules remain unsupported.
+Unsupported semantics are never approximated. The prototype resolves each
+action on a private native branch and rejects the whole branch when a relevant
+declaration or runtime feature lies outside the covered slice; rejected results
+contain no payload, events, captures, or exiles. State abilities, temporary
+suppression, queued effects, pending choices, extra plays, a partially resolved
+turn end, pending hand-play suppression, mixed negative powers, and difficulty
+8/9 hand rules remain unsupported. Exact four-sided `-1` cards are supported as
+the generic special-negative shape: they can be attacked, cannot win an attack,
+and are not legal power-change subjects.
 
 The second slice compiles every interned immutable ability set once when the
-compact root is loaded. Search nodes consult the compiled event/action summaries
-instead of walking nested `Dictionary` declarations. It generically supports
-the exact declaration shape “self `card_after_summoned` → unfiltered
-`draw_cards` with a positive constant amount”, including the real catalog
-`TuNaShu1`–`TuNaShu3` cards for either owner. Draws consume the exact deck front
-one card at a time, fill the physical leftmost empty hand slot, reconstruct the
-complete runtime card snapshot in each `card_drawn` event, obey the five-card
-hand cap, and finish before the standard summon attack.
+compact root is loaded. Search nodes consult typed event, condition, action, and
+modifier opcodes instead of walking nested `Dictionary` declarations. Each
+runtime card carries a branch-local enabled-ability bitmap over that immutable
+root set. `remove_this_ability` and flip cleanup only mutate the bitmap; derived
+`active_abilities` arrays are interned at the output boundary. Draws consume the
+exact deck front one card at a time, fill the physical leftmost empty hand slot,
+reconstruct the complete runtime card snapshot in each `card_drawn` event, obey
+the five-card hand cap, and finish before the standard summon attack.
+
+The current lifecycle slice supports `card_be_attacked`,
+`card_before_flipped`, `card_flip_prevented`, `card_after_flipped`,
+`card_before_exiled`, `card_after_exiled`, and `card_after_attack`, in addition
+to `card_after_summoned`. Trigger groups are discovered in board row-major order
+as snapshots and revalidated immediately before resolution. Supported generic
+actions are constant unfiltered draws, trigger/source/attacker exile, self
+exile, flip prevention, and removal of the resolving ability. Supported
+modifiers are constant defending-power override and global
+`enemy_attacks_all`, including allied targets and its capture-owner rule.
+
+Normal flip changes ownership, emits the canonical flip and ability-loss
+events, preserves `retained_on_flip`, defers isolated self-after-flip abilities
+until their event has resolved, and then removes those deferred abilities.
+Exile preserves the exact runtime instance, dispatches before/after events,
+removes board/hand/discard subjects without repacking hand slots, returns the
+instance to its valid original owner's removed zone, and guards recursive exile.
+These declarations are card-agnostic; the real `BaGuaFangWei` and
+`LeiZHenJian1`–`LeiZHenJian3` work through the same opcodes as synthetic probes.
 
 The support gate is action-specific: abilities in hand/deck remain dormant, an
-unrelated board self-draw listener is provably false for another summoned card,
-and only events/modifiers that can affect this play cause rejection. Filtered
-draws, empty-deck generated cards, future draw revelation, after-draw listeners,
-unsupported summon reactions, attack/flip reactions, and flips of
-ability-bearing targets are rejected rather than approximated.
+unrelated listener whose supported conditions are false remains dormant, and
+only declarations reached by the current event cause mid-branch rejection.
+Filtered draws, empty-deck generated cards, future draw revelation, after-draw
+listeners, movement, nested attacks, runtime ability grants/replacement, and
+unsupported selectors remain rejected rather than approximated.
 
-The native probe now covers the original five oracle transitions plus
-`TuNaShu1`–`TuNaShu3` for both owners, gapped physical hand slots, hand-cap
-truncation, draw-before-attack ordering, and explicit unsupported cases. Across
-173 assertions, restored canonical state keys, live state versions, captures,
-exiles, and every event matched `DuelSimulator`.
+The native probe covers the original five oracle transitions,
+`TuNaShu1`–`TuNaShu3` for both owners, both-owner Bagua exile, all three LeiZhen
+tiers, defending-power override, indiscriminate attacks, attacker/target exile,
+flip prevention, retained/ordinary/deferred flip cleanup, after-attack ability
+removal, after-exile snapshot conditions, recursive-safety rejection, gapped
+physical hand slots, hand-cap truncation, and draw ordering. Across 602 checks,
+restored canonical state keys, live state versions, captures, exiles, and every
+event matched `DuelSimulator`.
+
+The same probe enumerates every legal root play in the 14 unique real Quick
+openings. On 2026-08-30 it found 490 legal plays: 199 were supported and all 199
+had exact full-state/event parity; 291 were explicitly rejected with categorized
+reasons and zero partial results. This is a coverage report, not an adoption
+threshold.
 
 The latest retained 5,000-transition plain-card probe returned full compact
-payloads and events in `262,978` microseconds versus `4,014,176` microseconds
-for the authoritative GDScript transition loop, about `15.26x` faster. This is
+payloads and events in `323,929` microseconds versus `4,035,626` microseconds
+for the authoritative GDScript transition loop, about `12.46x` faster. This is
 evidence that a coarse native transition can be worthwhile, not a
 production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `824,000` clones per
+same run completed 100,000 native branch clones at about `779,000` clones per
 second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- No broad generated native-transition parity corpus beyond the plain-card and
-  self-after-summoned draw slices.
+- Native root-action coverage is still 199/490 on the real Quick openings; the
+  categorized rejections identify the next generic declaration slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
 - No difficulty profiles beyond budget.
