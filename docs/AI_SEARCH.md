@@ -387,19 +387,86 @@ openings and ten-second budget:
 The retained report is
 `.summer/local/ai-benchmarks/production-opening-depth-1788048800.json`.
 
-## Deferred Optimization
+## Compact-State Foundation (2026-08-30)
 
-A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.
+`DuelCompactState` is an experimental, lossless snapshot boundary for a future
+native simulator. It is not a second rules engine and production search does
+not use it yet. `DuelSimulator` remains authoritative.
 
-When implementing it:
+The compact layout stores:
 
-1. preserve one rules semantics contract;
-2. compare compact transitions against `DuelSimulator` on generated states;
-3. encode every mutable field, including effect retention, ki, deck order,
-   owner-turn serial, extra-card-play allowance, end-boundary state, and pending
-   choices;
-4. keep the existing simulator as an oracle until parity tests are broad;
-5. benchmark nodes/second and search depth, not just allocation size.
+- board occupancy as nine card indices plus owner bytes;
+- hand, deck, discard, and removed-zone order as packed card-index arrays;
+- each runtime instance ID once;
+- four powers in one contiguous integer array;
+- original owner, ki, hand slot, and runtime-field presence in packed arrays;
+- reveal audiences in a five-state byte code that preserves both membership
+  and the observable `[1, 2]` versus `[2, 1]` order;
+- immutable card templates, active-ability sets, and suppression sets in
+  interned pools shared by branch copies;
+- uncommon state-level containers in a lossless mutable side payload until
+  each receives a proven native representation.
+
+The codec restores a complete `DuelState`, including live-only `state_version`.
+Its regression suite covers a deliberately nonempty edge state plus 512 exact
+states derived from all 14 real Quick openings. Exact canonical state keys and
+state versions match after every round trip. This coverage caught and fixed an
+initial reveal-order loss that a simple visibility bitmask would have hidden.
+
+The retained 512-state microbenchmark reports:
+
+- average full source payload: `41,604.4` encoded bytes;
+- average standalone compact snapshot including immutable pools: `26,322.2`
+  bytes (`63.3%` of source);
+- average mutable branch payload excluding shared immutable pools: `5,295.9`
+  bytes (`12.7%` of source);
+- 2,560 ordinary state copies: `0.495s`;
+- 2,560 compact branch copies: `0.069s`, about `7.19x` faster;
+- 512 captures: `0.676s`; 512 full restores: `10.958s`;
+- zero round-trip mismatches.
+
+The capture/restore result fixes the native boundary: conversion may happen
+once when search starts and once for the selected result, but never once per
+node. The whole searched tree must remain compact and native. Porting only
+state copying would leave most trigger and action-resolution cost in GDScript
+and cannot justify the extension maintenance burden.
+
+The first C++ GDExtension prototype should therefore:
+
+1. consume the documented compact root layout in one coarse call;
+2. keep branch states, cloning, keys, and representative transitions native;
+3. return complete pure-data states/events only at the boundary;
+4. compare every native transition against `DuelSimulator` on generated real
+   states before it can enter production;
+5. remain disabled in production until the same authoritative transition path
+   can serve human play, testing mode, greedy fallback, and deep AI;
+6. benchmark transition throughput, nodes/second, completed depth, Windows
+   loading, and Android ARM64 packaging—not merely native loop speed.
+
+The existing simulator remains the oracle throughout migration. No named-card
+branch may enter native search code; catalog declarations and generic rules
+remain the semantic source of truth.
+
+### Native boundary probe
+
+The first opt-in Windows GDExtension probe is now present under
+`native/duel_core/`. It pins official `godot-cpp` commit
+`101ae38034304346a46ea9ea84ae156d3e860496`, generates bindings for API 4.6,
+and keeps its DLL, generated `.gdextension`, and CMake intermediates out of
+version control. Production scripts do not reference the extension.
+
+`DuelNativeCompactKernel` accepts one mutable compact payload, converts its
+packed arrays into owned C++ vectors, validates all fixed array lengths, and
+clones the native core without returning to GDScript. On the first real Quick
+opening, an optimized Windows build cloned the 12-card/48-power core 100,000
+times in `102,774` microseconds, about `973,009` core clones/second. This number
+excludes the mutable side payload and does not predict transition or search
+speed; it proves only that the coarse boundary loads correctly and that native
+compact cloning itself is cheap enough not to be the limiting design concern.
+
+The next native milestone is a representative generic transition slice with
+exact `DuelSimulator` parity. Production integration remains forbidden until
+complete transition semantics and Windows/Android packaging are both proven.
 
 ## Missing AI Work
 

@@ -1,0 +1,3 @@
+[submodule "native/duel_core/godot-cpp"]
+	path = native/duel_core/godot-cpp
+	url = https://github.com/godotengine/godot-cpp.git

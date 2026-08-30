@@ -15,3 +15,7 @@ WuxiaCard/
 # Generated artifact conversion workspaces
 /outputs/
 /music/
+
+# Local GDExtension build products
+/native/duel_core/build/
+/native/duel_core/bin/

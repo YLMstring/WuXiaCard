@@ -1,0 +1,9 @@
+[configuration]
+
+entry_symbol = "duel_native_library_init"
+compatibility_minimum = "4.6"
+reloadable = false
+
+[libraries]
+
+windows.debug.x86_64 = "./duel_native.windows.template_debug.x86_64.dll"
