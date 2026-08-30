@@ -356,6 +356,37 @@ a large speedup.
 The retained report is
 `.summer/local/ai-benchmarks/production-opening-depth-1788002470.json`.
 
+## Selective Runtime Action-Context Copy Profile (2026-08-30)
+
+`DuelAbilityExecutor.execute_actions()` and its generic selected-card loop now
+isolate runtime contexts with a shallow top-level copy. The
+`card_reference_snapshots` mapping is copied separately because actions add and
+replace reference keys. Snapshot payloads, selector conditions, ability
+declarations, and the other nested context values remain shared under their
+read-only contract. Top-level fields such as discard-batch size remain isolated
+by the outer copy.
+
+The 512-state/1,024-action transition benchmark measured 3,072 calls per mode.
+An in-process interleaved old/new comparison reduced transition time from
+`4.482s` to `4.192s` (`+6.92%` throughput). All 3,072 resulting exact state
+keys, captures, exiles, and event arrays matched. A separate ordinary before/
+after run moved from `3.936s` to `3.769s` (`+4.23%`). The simulator regression
+suite also verifies that nested selected-card execution cannot add reference
+snapshots to its caller's context.
+
+Against the preceding 14-opening production report, with the same real Quick
+openings and ten-second budget:
+
+- aggregate throughput increased from `597.47` to `629.57` nodes/s (`+5.37%`);
+- mean complete-round depth-one time fell from `0.518s` to `0.481s` (`-7.22%`);
+- the fixed 15,000-node timing probe fell from `23.531s` to `22.022s` (`-6.41%`);
+- complete-round depth two remained `3/14`, and every opening completed depth
+  one without fallback;
+- all 14 depth-one scores, actions, and exact opening-state digests matched.
+
+The retained report is
+`.summer/local/ai-benchmarks/production-opening-depth-1788048800.json`.
+
 ## Deferred Optimization
 
 A true compact simulator could store indexed cards and packed primitive arrays instead of nested Dictionaries. It would improve copy and transition cost, but every gameplay primitive would then need a faithful compact implementation. The creator chose to establish reusable ability primitives first, then revisit this optimization to avoid duplicated maintenance churn.

@@ -374,6 +374,12 @@ func _test_generic_selection_wrapper_modifies_hand_and_board() -> void:
 	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
 	board[8] = {"card": enemy_sword, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [hand_sword], [])
+	var caller_context: Dictionary = {
+		"card_reference_snapshots": {
+			&"sentinel": {"instance_id": &"untouched"},
+		},
+	}
+	var caller_context_before: Dictionary = caller_context.duplicate(true)
 	var result: Dictionary = Executor.execute_actions(
 		state,
 		4,
@@ -402,7 +408,11 @@ func _test_generic_selection_wrapper_modifies_hand_and_board() -> void:
 				],
 			},
 		],
-		{}
+		caller_context
+	)
+	_check(
+		caller_context == caller_context_before,
+		"Selection wrapper isolates caller runtime context while adding nested references"
 	)
 	var events: Array = result.get("events", [])
 	_check(

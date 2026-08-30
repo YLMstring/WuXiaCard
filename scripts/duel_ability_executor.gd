@@ -177,7 +177,7 @@ static func execute_actions(
 	result["source_cell"] = source_cell
 	if state == null:
 		return result
-	var action_context: Dictionary = context.duplicate(true)
+	var action_context: Dictionary = _duplicate_action_context(context)
 	if not action_context.has("ability_source_instance_id"):
 		action_context["ability_source_instance_id"] = source_instance_id
 		action_context["ability_source_owner_id"] = expected_owner
@@ -1160,9 +1160,9 @@ static func _for_each_selected_card(
 			if StringName(selected.get("zone", &"")) == Catalog.CARD_ZONE_BOARD
 			else -1
 		)
-		var nested_context: Dictionary = context.duplicate(true)
+		var nested_context: Dictionary = _duplicate_action_context(context)
 		nested_context["defer_power_change_batch"] = true
-		nested_context["selected_card_conditions"] = conditions.duplicate(true)
+		nested_context["selected_card_conditions"] = conditions
 		nested_context["selected_card_instance_id"] = selected_instance_id
 		var nested_snapshots: Dictionary = nested_context.get(
 			"card_reference_snapshots",
@@ -3870,6 +3870,15 @@ static func _get_reference_snapshot(
 	var snapshots: Dictionary = context.get("card_reference_snapshots", {})
 	var snapshot_value: Variant = snapshots.get(card_reference, {})
 	return snapshot_value as Dictionary if snapshot_value is Dictionary else {}
+
+
+static func _duplicate_action_context(context: Dictionary) -> Dictionary:
+	var isolated: Dictionary = context.duplicate(false)
+	var snapshots_value: Variant = context.get("card_reference_snapshots", null)
+	if snapshots_value is Dictionary:
+		# Actions add and replace reference keys, but snapshot payloads are immutable.
+		isolated["card_reference_snapshots"] = (snapshots_value as Dictionary).duplicate(false)
+	return isolated
 
 
 static func _get_action_subject_snapshot(context: Dictionary) -> Dictionary:
