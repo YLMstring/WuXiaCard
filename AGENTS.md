@@ -37,7 +37,9 @@ Never implement a historical plan merely because it exists. Confirm that it stil
 - Search code must remain card-agnostic. It may evaluate generic powers, ownership, zones, ki, legal actions, and active-ability counts; it must not check named card IDs.
 - Card definitions live in `scripts/card_catalog.gd`. Encounter hands live in `scripts/duel_decks.gd`.
 - Runtime card identity uses `instance_id`. Never rely on visual child order after cards are drawn into fixed hand slots.
-- A card can have at most one activation. Replacing its ability entry removes the previous activation while preserving passive abilities.
+- A card may have multiple innate catalog activations in array order. Dynamically
+  granting a new activation removes every current activation-bearing ability,
+  preserves passive abilities, and appends the newly granted activation.
 - Activating any ability costs one ki. Ki is independent state and survives ownership flips.
 - Abilities are lost on flip unless the catalog ability explicitly sets `retained_on_flip = true`.
 - New abilities must emit pure-data events for presentation and must be covered by simulator tests before UI work.
