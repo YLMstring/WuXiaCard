@@ -632,6 +632,229 @@ bool DuelNativeCompactKernel::validate_shape() {
 	return true;
 }
 
+// Native declarations are compiled once at root load. Runtime cards only retain
+// small indices into these immutable structures.
+DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_condition(
+	const Variant &value
+) const {
+	CompiledCondition compiled;
+	if (value.get_type() != Variant::DICTIONARY) return compiled;
+	const Dictionary condition = value;
+	if (condition.size() != 1) return compiled;
+	const StringName type = condition.get("type", StringName());
+	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
+	else if (type == StringName("attacked_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
+	else if (type == StringName("attacker_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_SELF;
+	else if (type == StringName("attacker_card_is_enemy")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_ENEMY;
+	else if (type == StringName("trigger_card_was_on_board")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ON_BOARD;
+	else if (type == StringName("attack_flipped_enemy")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ENEMY;
+	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
+	return compiled;
+}
+
+DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
+	const Variant &value
+) const {
+	CompiledAction compiled;
+	if (value.get_type() != Variant::DICTIONARY) {
+		compiled.declaration_valid = false;
+		return compiled;
+	}
+	const Dictionary action = value;
+	const StringName type = action.get("type", StringName());
+	const Variant invalid_policy = action.get("on_invalid_context", Variant());
+	if (invalid_policy.get_type() != Variant::NIL) {
+		if (invalid_policy.get_type() != Variant::STRING_NAME || StringName(invalid_policy) != StringName("stop_rule")) {
+			compiled.declaration_valid = false;
+			return compiled;
+		}
+		compiled.stop_rule_on_invalid_context = true;
+	}
+	const Variant batch_group = action.get("power_change_batch_group", Variant());
+	if (batch_group.get_type() != Variant::NIL) {
+		if (batch_group.get_type() != Variant::STRING_NAME && batch_group.get_type() != Variant::STRING) {
+			compiled.declaration_valid = false;
+			return compiled;
+		}
+		compiled.power_change_batch_group = StringName(batch_group);
+	}
+
+	const int64_t generic_field_count = (
+		(action.has("on_invalid_context") ? 1 : 0)
+		+ (action.has("power_change_batch_group") ? 1 : 0)
+	);
+	if (
+		type == StringName("draw_cards")
+		&& action.size() == 2 + generic_field_count
+		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
+		&& static_cast<int64_t>(action.get("amount", 0)) > 0
+	) {
+		compiled.opcode = ActionOpcode::DRAW_CARDS;
+		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
+	} else if (type == StringName("exile_card") && action.size() == 2 + generic_field_count) {
+		compiled.opcode = ActionOpcode::EXILE_CARD;
+		const StringName card_ref = action.get("card", StringName());
+		if (card_ref == StringName("trigger_card")) compiled.card_ref = CardRefOpcode::TRIGGER_CARD;
+		else if (card_ref == StringName("ability_source")) compiled.card_ref = CardRefOpcode::ABILITY_SOURCE;
+		else if (card_ref == StringName("attacker_card")) compiled.card_ref = CardRefOpcode::ATTACKER_CARD;
+	} else if (type == StringName("exile_self") && action.size() == 1 + generic_field_count) {
+		compiled.opcode = ActionOpcode::EXILE_SELF;
+	} else if (type == StringName("prevent_trigger_flip") && action.size() == 1 + generic_field_count) {
+		compiled.opcode = ActionOpcode::PREVENT_TRIGGER_FLIP;
+	} else if (type == StringName("remove_this_ability") && action.size() == 1 + generic_field_count) {
+		compiled.opcode = ActionOpcode::REMOVE_THIS_ABILITY;
+	} else if (
+		type == StringName("for_each_selected_card")
+		&& action.size() == 3 + generic_field_count
+		&& Variant(action.get("selector", Variant())).get_type() == Variant::DICTIONARY
+		&& Variant(action.get("actions", Variant())).get_type() == Variant::ARRAY
+	) {
+		compiled.opcode = ActionOpcode::FOR_EACH_SELECTED_CARD;
+		compiled.selector_declaration = action.get("selector", Dictionary());
+		const Array children = action.get("actions", Array());
+		compiled.child_actions.reserve(static_cast<size_t>(children.size()));
+		for (int64_t child_index = 0; child_index < children.size(); ++child_index) {
+			compiled.child_actions.push_back(compile_action(children[child_index]));
+		}
+	}
+	return compiled;
+}
+
+DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modifier(
+	const Variant &value
+) const {
+	CompiledModifier compiled;
+	if (value.get_type() != Variant::DICTIONARY) return compiled;
+	const Dictionary modifier = value;
+	const StringName type = modifier.get("type", StringName());
+	if (
+		type == StringName("defending_power_override")
+		&& modifier.size() == 2
+		&& Variant(modifier.get("value", 0)).get_type() == Variant::INT
+	) {
+		compiled.opcode = ModifierOpcode::DEFENDING_POWER_OVERRIDE;
+		compiled.value = static_cast<int32_t>(static_cast<int64_t>(modifier.get("value", 0)));
+	} else if (
+		type == StringName("orthogonal_attack_range_two")
+		&& (modifier.size() == 2 || modifier.size() == 3)
+		&& Variant(modifier.get("allow_intervening_ally", false)).get_type() == Variant::BOOL
+		&& (
+			!modifier.has("allow_intervening_enemy")
+			|| Variant(modifier.get("allow_intervening_enemy", false)).get_type() == Variant::BOOL
+		)
+	) {
+		compiled.opcode = ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO;
+		compiled.value = (
+			(static_cast<bool>(modifier.get("allow_intervening_ally", false)) ? 1 : 0)
+			| (static_cast<bool>(modifier.get("allow_intervening_enemy", false)) ? 2 : 0)
+		);
+	} else if (type == StringName("enemy_attacks_all") && modifier.size() == 1) {
+		compiled.opcode = ModifierOpcode::ENEMY_ATTACKS_ALL;
+	} else if (modifier.size() == 1) {
+		if (type == StringName("attack_requires_other_ally")) compiled.opcode = ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY;
+		else if (type == StringName("defending_power_uses_minimum_side")) compiled.opcode = ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE;
+		else if (type == StringName("power_comparison_reversed")) compiled.opcode = ModifierOpcode::POWER_COMPARISON_REVERSED;
+		else if (type == StringName("adjacent_enemy_summon_attacks_allies")) compiled.opcode = ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES;
+		else if (type == StringName("unlimited_attack_range")) compiled.opcode = ModifierOpcode::UNLIMITED_ATTACK_RANGE;
+		else if (type == StringName("non_orthogonal_attack_any_axis")) compiled.opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
+		else if (type == StringName("standard_attack_first_legal_target")) compiled.opcode = ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET;
+		else if (type == StringName("enemy_cannot_attack_during_owner_turn")) compiled.opcode = ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN;
+		else if (type == StringName("self_attacks_all")) compiled.opcode = ModifierOpcode::SELF_ATTACKS_ALL;
+	}
+	return compiled;
+}
+
+DuelNativeCompactKernel::CompiledTriggerRule DuelNativeCompactKernel::compile_trigger_rule(
+	const Variant &value,
+	bool &valid
+) const {
+	CompiledTriggerRule compiled;
+	if (value.get_type() != Variant::DICTIONARY) {
+		valid = false;
+		return compiled;
+	}
+	const Dictionary rule = value;
+	compiled.event_id = rule.get("event", StringName());
+	const Variant conditions_value = rule.get("conditions", Array());
+	const Variant actions_value = rule.get("actions", Array());
+	if (conditions_value.get_type() != Variant::ARRAY || actions_value.get_type() != Variant::ARRAY) {
+		valid = false;
+		return compiled;
+	}
+	const Array conditions = conditions_value;
+	for (int64_t index = 0; index < conditions.size(); ++index) {
+		compiled.conditions.push_back(compile_condition(conditions[index]));
+	}
+	const Array actions = actions_value;
+	for (int64_t index = 0; index < actions.size(); ++index) {
+		const CompiledAction action = compile_action(actions[index]);
+		if (!action.declaration_valid) valid = false;
+		compiled.actions.push_back(action);
+	}
+	return compiled;
+}
+
+DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_ability(
+	const Variant &value
+) const {
+	CompiledAbility compiled;
+	if (value.get_type() != Variant::DICTIONARY) {
+		compiled.declaration_valid = false;
+		return compiled;
+	}
+	const Dictionary ability = value;
+	compiled.retained_on_flip = static_cast<bool>(ability.get("retained_on_flip", false));
+	if (ability.has("activation")) {
+		const Variant activation = ability["activation"];
+		if (activation.get_type() != Variant::DICTIONARY) compiled.declaration_valid = false;
+		else compiled.has_activation = !Dictionary(activation).is_empty();
+	}
+	if (ability.has("modifiers")) {
+		const Variant modifiers_value = ability["modifiers"];
+		if (modifiers_value.get_type() != Variant::ARRAY) {
+			compiled.declaration_valid = false;
+		} else {
+			const Array modifiers = modifiers_value;
+			for (int64_t index = 0; index < modifiers.size(); ++index) {
+				compiled.modifiers.push_back(compile_modifier(modifiers[index]));
+			}
+		}
+	}
+	const Variant triggers_value = ability.get("triggers", Array());
+	if (triggers_value.get_type() != Variant::ARRAY) {
+		compiled.declaration_valid = false;
+		return compiled;
+	}
+	const Array triggers = triggers_value;
+	for (int64_t index = 0; index < triggers.size(); ++index) {
+		compiled.triggers.push_back(compile_trigger_rule(triggers[index], compiled.declaration_valid));
+	}
+	compiled.isolated_self_after_flip = (
+		!compiled.has_activation
+		&& compiled.modifiers.empty()
+		&& compiled.triggers.size() == 1
+		&& compiled.triggers[0].event_id == StringName("card_after_flipped")
+	);
+	if (compiled.isolated_self_after_flip) {
+		bool has_self_condition = false;
+		for (const CompiledCondition &condition : compiled.triggers[0].conditions) {
+			has_self_condition = has_self_condition || condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_SELF;
+		}
+		compiled.isolated_self_after_flip = has_self_condition;
+	}
+	return compiled;
+}
+
+int32_t DuelNativeCompactKernel::intern_compiled_ability(const Variant &value) {
+	for (size_t index = 0; index < ability_declaration_pool.size(); ++index) {
+		if (ability_declaration_pool[index] == value) return static_cast<int32_t>(index);
+	}
+	const int32_t index = static_cast<int32_t>(compiled_ability_pool.size());
+	ability_declaration_pool.push_back(value);
+	compiled_ability_pool.push_back(compile_ability(value));
+	return index;
+}
+
 void DuelNativeCompactKernel::compile_ability_sets() {
 	compiled_ability_sets.clear();
 	compiled_ability_pool.clear();
@@ -647,196 +870,9 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 		}
 		const Array abilities = set_value;
 		for (int64_t ability_index = 0; ability_index < abilities.size(); ++ability_index) {
-			CompiledAbility compiled_ability;
-			const Variant ability_value = abilities[ability_index];
-			int32_t interned_index = -1;
-			for (size_t pool_index = 0; pool_index < ability_declaration_pool.size(); ++pool_index) {
-				if (ability_declaration_pool[pool_index] == ability_value) {
-					interned_index = static_cast<int32_t>(pool_index);
-					break;
-				}
-			}
-			if (interned_index >= 0) {
-				compiled.ability_pool_indices.push_back(interned_index);
-				if (!compiled_ability_pool[interned_index].declaration_valid) {
-					compiled.declaration_valid = false;
-				}
-				continue;
-			}
-			if (ability_value.get_type() != Variant::DICTIONARY) {
-				compiled.declaration_valid = false;
-				compiled_ability.declaration_valid = false;
-				compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
-				compiled_ability_pool.push_back(compiled_ability);
-				ability_declaration_pool.push_back(ability_value);
-				continue;
-			}
-			const Dictionary ability = ability_value;
-			compiled_ability.retained_on_flip = static_cast<bool>(
-				ability.get("retained_on_flip", false)
-			);
-			if (ability.has("activation")) {
-				const Variant activation_value = ability["activation"];
-				if (activation_value.get_type() != Variant::DICTIONARY) {
-					compiled.declaration_valid = false;
-					compiled_ability.declaration_valid = false;
-				} else if (!Dictionary(activation_value).is_empty()) {
-					compiled_ability.has_activation = true;
-				}
-			}
-			if (ability.has("modifiers")) {
-				const Variant modifiers_value = ability["modifiers"];
-				if (modifiers_value.get_type() != Variant::ARRAY) {
-					compiled.declaration_valid = false;
-					compiled_ability.declaration_valid = false;
-				} else {
-					const Array modifiers = modifiers_value;
-					for (int64_t modifier_index = 0; modifier_index < modifiers.size(); ++modifier_index) {
-						CompiledModifier compiled_modifier;
-						const Variant modifier_value = modifiers[modifier_index];
-						if (modifier_value.get_type() == Variant::DICTIONARY) {
-							const Dictionary modifier = modifier_value;
-							const StringName type = modifier.get("type", StringName());
-							if (
-								type == StringName("defending_power_override")
-								&& modifier.size() == 2
-								&& Variant(modifier.get("value", 0)).get_type() == Variant::INT
-							) {
-								compiled_modifier.opcode = ModifierOpcode::DEFENDING_POWER_OVERRIDE;
-								compiled_modifier.value = static_cast<int32_t>(
-									static_cast<int64_t>(modifier.get("value", 0))
-								);
-							} else if (
-								type == StringName("orthogonal_attack_range_two")
-								&& (modifier.size() == 2 || modifier.size() == 3)
-								&& Variant(modifier.get("allow_intervening_ally", false)).get_type() == Variant::BOOL
-								&& (
-									!modifier.has("allow_intervening_enemy")
-									|| Variant(modifier.get("allow_intervening_enemy", false)).get_type() == Variant::BOOL
-								)
-							) {
-								compiled_modifier.opcode = ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO;
-								compiled_modifier.value = (
-									(static_cast<bool>(modifier.get("allow_intervening_ally", false)) ? 1 : 0)
-									| (static_cast<bool>(modifier.get("allow_intervening_enemy", false)) ? 2 : 0)
-								);
-							} else if (
-								type == StringName("enemy_attacks_all")
-								&& modifier.size() == 1
-							) {
-								compiled_modifier.opcode = ModifierOpcode::ENEMY_ATTACKS_ALL;
-							} else if (modifier.size() == 1) {
-								if (type == StringName("attack_requires_other_ally")) compiled_modifier.opcode = ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY;
-								else if (type == StringName("defending_power_uses_minimum_side")) compiled_modifier.opcode = ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE;
-								else if (type == StringName("power_comparison_reversed")) compiled_modifier.opcode = ModifierOpcode::POWER_COMPARISON_REVERSED;
-								else if (type == StringName("adjacent_enemy_summon_attacks_allies")) compiled_modifier.opcode = ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES;
-								else if (type == StringName("unlimited_attack_range")) compiled_modifier.opcode = ModifierOpcode::UNLIMITED_ATTACK_RANGE;
-								else if (type == StringName("non_orthogonal_attack_any_axis")) compiled_modifier.opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
-								else if (type == StringName("standard_attack_first_legal_target")) compiled_modifier.opcode = ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET;
-								else if (type == StringName("enemy_cannot_attack_during_owner_turn")) compiled_modifier.opcode = ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN;
-								else if (type == StringName("self_attacks_all")) compiled_modifier.opcode = ModifierOpcode::SELF_ATTACKS_ALL;
-							}
-						}
-						compiled_ability.modifiers.push_back(compiled_modifier);
-					}
-				}
-			}
-			const Variant triggers_value = ability.get("triggers", Array());
-			if (triggers_value.get_type() != Variant::ARRAY) {
-				compiled.declaration_valid = false;
-				compiled_ability.declaration_valid = false;
-				compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
-				compiled_ability_pool.push_back(compiled_ability);
-				ability_declaration_pool.push_back(ability_value);
-				continue;
-			}
-			const Array triggers = triggers_value;
-			for (int64_t trigger_index = 0; trigger_index < triggers.size(); ++trigger_index) {
-				CompiledTriggerRule compiled_rule;
-				const Variant rule_value = triggers[trigger_index];
-				if (rule_value.get_type() != Variant::DICTIONARY) {
-					compiled.declaration_valid = false;
-					compiled_ability.declaration_valid = false;
-					compiled_ability.triggers.push_back(compiled_rule);
-					continue;
-				}
-				const Dictionary rule = rule_value;
-				compiled_rule.event_id = rule.get("event", StringName());
-				const Variant conditions_value = rule.get("conditions", Array());
-				const Variant actions_value = rule.get("actions", Array());
-				if (conditions_value.get_type() == Variant::ARRAY) {
-					const Array conditions = conditions_value;
-					for (int64_t condition_index = 0; condition_index < conditions.size(); ++condition_index) {
-						CompiledCondition compiled_condition;
-						const Variant condition_value = conditions[condition_index];
-						if (condition_value.get_type() == Variant::DICTIONARY) {
-							const Dictionary condition = condition_value;
-							const StringName type = condition.get("type", StringName());
-							if (condition.size() == 1) {
-								if (type == StringName("trigger_card_is_self")) compiled_condition.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
-								else if (type == StringName("attacked_card_is_self")) compiled_condition.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
-								else if (type == StringName("attacker_card_is_self")) compiled_condition.opcode = ConditionOpcode::ATTACKER_CARD_IS_SELF;
-								else if (type == StringName("attacker_card_is_enemy")) compiled_condition.opcode = ConditionOpcode::ATTACKER_CARD_IS_ENEMY;
-								else if (type == StringName("trigger_card_was_on_board")) compiled_condition.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ON_BOARD;
-								else if (type == StringName("attack_flipped_enemy")) compiled_condition.opcode = ConditionOpcode::ATTACK_FLIPPED_ENEMY;
-								else if (type == StringName("trigger_card_powers_could_change")) compiled_condition.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
-							}
-						}
-						compiled_rule.conditions.push_back(compiled_condition);
-					}
-				} else {
-					compiled_ability.declaration_valid = false;
-				}
-				if (actions_value.get_type() == Variant::ARRAY) {
-					const Array actions = actions_value;
-					for (int64_t action_index = 0; action_index < actions.size(); ++action_index) {
-						CompiledAction compiled_action;
-						const Variant action_value = actions[action_index];
-						if (action_value.get_type() == Variant::DICTIONARY) {
-							const Dictionary action = action_value;
-							const StringName type = action.get("type", StringName());
-							if (type == StringName("draw_cards") && action.size() == 2 && Variant(action.get("amount", 0)).get_type() == Variant::INT && static_cast<int64_t>(action.get("amount", 0)) > 0) {
-								compiled_action.opcode = ActionOpcode::DRAW_CARDS;
-								compiled_action.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
-							} else if (type == StringName("exile_card") && action.size() == 2) {
-								compiled_action.opcode = ActionOpcode::EXILE_CARD;
-							} else if (type == StringName("exile_self") && action.size() == 1) {
-								compiled_action.opcode = ActionOpcode::EXILE_SELF;
-							} else if (type == StringName("prevent_trigger_flip") && action.size() == 1) {
-								compiled_action.opcode = ActionOpcode::PREVENT_TRIGGER_FLIP;
-							} else if (type == StringName("remove_this_ability") && action.size() == 1) {
-								compiled_action.opcode = ActionOpcode::REMOVE_THIS_ABILITY;
-							}
-							if (compiled_action.opcode == ActionOpcode::EXILE_CARD) {
-								const StringName card_ref = action.get("card", StringName());
-								if (card_ref == StringName("trigger_card")) compiled_action.card_ref = CardRefOpcode::TRIGGER_CARD;
-								else if (card_ref == StringName("ability_source")) compiled_action.card_ref = CardRefOpcode::ABILITY_SOURCE;
-								else if (card_ref == StringName("attacker_card")) compiled_action.card_ref = CardRefOpcode::ATTACKER_CARD;
-							}
-						}
-						compiled_rule.actions.push_back(compiled_action);
-					}
-				} else {
-					compiled_ability.declaration_valid = false;
-				}
-				compiled_ability.triggers.push_back(compiled_rule);
-			}
-			compiled_ability.isolated_self_after_flip = (
-				!compiled_ability.has_activation
-				&& compiled_ability.modifiers.empty()
-				&& compiled_ability.triggers.size() == 1
-				&& compiled_ability.triggers[0].event_id == StringName("card_after_flipped")
-			);
-			if (compiled_ability.isolated_self_after_flip) {
-				bool has_self_condition = false;
-				for (const CompiledCondition &condition : compiled_ability.triggers[0].conditions) {
-					has_self_condition = has_self_condition || condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_SELF;
-				}
-				compiled_ability.isolated_self_after_flip = has_self_condition;
-			}
-			compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
-			compiled_ability_pool.push_back(compiled_ability);
-			ability_declaration_pool.push_back(ability_value);
+			const int32_t pool_index = intern_compiled_ability(abilities[ability_index]);
+			compiled.ability_pool_indices.push_back(pool_index);
+			if (!compiled_ability_pool[pool_index].declaration_valid) compiled.declaration_valid = false;
 		}
 		compiled_ability_sets.push_back(compiled);
 	}
@@ -1887,12 +1923,30 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		triggered["source_instance_id"] = value.card_instance_ids[group.source_card_index];
 		triggered["source_owner_id"] = group.source_owner;
 		resolution.events.append(triggered);
-		for (const CompiledAction &action : rule.actions) {
-			if (!execute_action(value, group, action, context, exile_stack, resolution)) {
-				resolution.supported = false;
-				if (resolution.reason.is_empty()) resolution.reason = "Relevant event uses an unsupported action";
-				return resolution;
-			}
+		ActionContext action_context;
+		action_context.ability_source_cell = group.source_cell;
+		action_context.ability_source_card_index = group.source_card_index;
+		action_context.ability_source_owner = group.source_owner;
+		action_context.action_subject_card_index = group.source_card_index;
+		action_context.action_subject_owner = group.source_owner;
+		action_context.trigger_card_index = context.trigger_card_index;
+		action_context.attacker_card_index = context.attacker_card_index;
+		action_context.event_id = event_id;
+		action_context.discovery_ability_index = group.ability_index;
+		action_context.trigger_index = group.trigger_index;
+		const ActionOutcome outcome = execute_actions(
+			value,
+			group,
+			rule.actions,
+			context,
+			action_context,
+			exile_stack,
+			resolution
+		);
+		if (outcome == ActionOutcome::UNSUPPORTED) {
+			resolution.supported = false;
+			if (resolution.reason.is_empty()) resolution.reason = "Relevant event uses an unsupported action";
+			return resolution;
 		}
 	}
 	return resolution;
@@ -1972,40 +2026,91 @@ void DuelNativeCompactKernel::remove_ability_with_event(
 	events.append(event);
 }
 
-bool DuelNativeCompactKernel::execute_action(
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	NativeState &value,
 	const EventGroup &group,
-	const CompiledAction &action,
-	const EventContext &context,
+	const std::vector<CompiledAction> &actions,
+	const EventContext &event_context,
+	const ActionContext &action_context,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
+	for (const CompiledAction &action : actions) {
+		ActionOutcome outcome = execute_action(
+			value,
+			group,
+			action,
+			event_context,
+			action_context,
+			exile_stack,
+			resolution
+		);
+		if (outcome == ActionOutcome::UNSUPPORTED) return outcome;
+		if (outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
+		if (outcome == ActionOutcome::NO_EFFECT && action.stop_rule_on_invalid_context) {
+			return ActionOutcome::INVALID_CONTEXT;
+		}
+		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
+	}
+	return aggregate;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	if (!action.declaration_valid) return ActionOutcome::UNSUPPORTED;
 	switch (action.opcode) {
 		case ActionOpcode::DRAW_CARDS:
-			return draw_cards(value, group.source_owner, group.source_cell, action.amount, resolution);
+			return draw_cards(value, action_context.action_subject_owner, group.source_cell, action.amount, resolution)
+				? ActionOutcome::APPLIED
+				: ActionOutcome::UNSUPPORTED;
 		case ActionOpcode::EXILE_SELF:
-			return exile_card(value, group.source_card_index, group.source_cell, group.source_card_index, true, StringName("ability_exile_self"), context, exile_stack, resolution);
+			return exile_card(value, action_context.action_subject_card_index, group.source_cell, group.source_card_index, action_context.action_subject_card_index == group.source_card_index, StringName("ability_exile_self"), event_context, exile_stack, resolution)
+				? ActionOutcome::APPLIED
+				: ActionOutcome::UNSUPPORTED;
 		case ActionOpcode::EXILE_CARD: {
 			int32_t target = -1;
-			if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = context.trigger_card_index;
+			if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = event_context.trigger_card_index;
 			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = group.source_card_index;
-			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = context.attacker_card_index;
-			else return false;
-			if (target < 0) return true;
-			return exile_card(value, target, group.source_cell, group.source_card_index, target == group.source_card_index, StringName("ability_exile_card"), context, exile_stack, resolution);
+			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
+			else return ActionOutcome::UNSUPPORTED;
+			if (target < 0) return ActionOutcome::NO_EFFECT;
+			return exile_card(value, target, group.source_cell, group.source_card_index, target == group.source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution)
+				? ActionOutcome::APPLIED
+				: ActionOutcome::UNSUPPORTED;
 		}
 		case ActionOpcode::PREVENT_TRIGGER_FLIP:
-			if (context.trigger_card_index >= 0 && context.new_owner >= 1 && context.new_owner <= 2) resolution.flip_prevented = true;
-			return true;
+			if (event_context.trigger_card_index < 0 || event_context.new_owner < 1 || event_context.new_owner > 2) {
+				return ActionOutcome::NO_EFFECT;
+			}
+			resolution.flip_prevented = true;
+			return ActionOutcome::APPLIED;
 		case ActionOpcode::REMOVE_THIS_ABILITY: {
 			const int32_t current_cell = find_board_card(value, group.source_card_index, group.source_cell);
 			if (current_cell >= 0 && value.board_owners[current_cell] == group.source_owner) {
+				const int32_t current_ability_index = find_runtime_ability_index(
+					value,
+					group.source_card_index,
+					group.ability_handle,
+					group.ability_index
+				);
+				if (current_ability_index < 0) return ActionOutcome::NO_EFFECT;
 				remove_ability_with_event(value, group.source_card_index, group.ability_handle, current_cell, group.source_card_index, current_cell, group.source_owner, resolution.events);
+				return ActionOutcome::APPLIED;
 			}
-			return true;
+			return ActionOutcome::NO_EFFECT;
 		}
+		case ActionOpcode::FOR_EACH_SELECTED_CARD:
+			return ActionOutcome::UNSUPPORTED;
 		default:
-			return false;
+			return ActionOutcome::UNSUPPORTED;
 	}
 }
 

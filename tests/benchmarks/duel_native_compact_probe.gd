@@ -539,6 +539,36 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		"Unsupported after-summoned action"
 	)
 
+	var nested_unknown_source: Dictionary = _make_after_summoned_card(
+		&"native_nested_unknown_source",
+		{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [Catalog.CARD_ZONE_BOARD],
+				"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1},
+				{"type": &"native_unknown_nested_action"},
+			],
+		}
+	)
+	var nested_unknown_state := State.new(
+		Rules.empty_board(),
+		[nested_unknown_source],
+		[_make_plain_card(&"敌手", &"native_nested_unknown_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"不可泄漏抽牌", &"native_nested_unknown_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_rejected(
+		kernel,
+		nested_unknown_state,
+		&"native_nested_unknown_source",
+		"Unsupported nested action is rejected atomically"
+	)
+
 
 func _test_attack_lifecycle_transition_parity(kernel: Object) -> void:
 	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
@@ -1474,6 +1504,13 @@ func _check_transition_rejected(
 	) as Dictionary
 	_check(not bool(result.get("supported", true)), "%s is explicitly unsupported" % label)
 	_check(not bool(result.get("valid", true)), "%s does not produce a transition" % label)
+	_check(
+		not result.has("payload")
+		and (result.get("events", []) as Array).is_empty()
+		and (result.get("captures", []) as Array).is_empty()
+		and (result.get("exiles", []) as Array).is_empty(),
+		"%s rejection exposes no partial native branch" % label
+	)
 
 
 func _first_event_index(events: Array, event_type: StringName) -> int:

@@ -63,6 +63,14 @@ class DuelNativeCompactKernel : public RefCounted {
 		EXILE_SELF,
 		PREVENT_TRIGGER_FLIP,
 		REMOVE_THIS_ABILITY,
+		FOR_EACH_SELECTED_CARD,
+		UNSUPPORTED,
+	};
+
+	enum class ActionOutcome : uint8_t {
+		APPLIED,
+		NO_EFFECT,
+		INVALID_CONTEXT,
 		UNSUPPORTED,
 	};
 
@@ -100,9 +108,14 @@ class DuelNativeCompactKernel : public RefCounted {
 	};
 
 	struct CompiledAction {
+		bool declaration_valid = true;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
 		int32_t amount = 0;
+		bool stop_rule_on_invalid_context = false;
+		StringName power_change_batch_group;
+		Dictionary selector_declaration;
+		std::vector<CompiledAction> child_actions;
 	};
 
 	struct CompiledModifier {
@@ -165,6 +178,21 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t trigger_index = -1;
 	};
 
+	struct ActionContext {
+		int32_t ability_source_cell = -1;
+		int32_t ability_source_card_index = -1;
+		int32_t ability_source_owner = 0;
+		int32_t action_subject_card_index = -1;
+		int32_t action_subject_owner = 0;
+		int32_t selected_card_index = -1;
+		int32_t trigger_card_index = -1;
+		int32_t attacker_card_index = -1;
+		StringName event_id;
+		int32_t discovery_ability_index = -1;
+		int32_t trigger_index = -1;
+		std::vector<int32_t> attack_flipped_card_indices;
+	};
+
 	struct Resolution {
 		bool supported = true;
 		String reason;
@@ -199,6 +227,12 @@ public:
 private:
 	bool validate_shape();
 	void compile_ability_sets();
+	CompiledCondition compile_condition(const Variant &value) const;
+	CompiledAction compile_action(const Variant &value) const;
+	CompiledModifier compile_modifier(const Variant &value) const;
+	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid) const;
+	CompiledAbility compile_ability(const Variant &value) const;
+	int32_t intern_compiled_ability(const Variant &value);
 	bool validate_play_support(const NativeState &value, String &reason) const;
 	bool validate_action_rule_support(
 		const NativeState &value,
@@ -336,11 +370,21 @@ private:
 		const EventContext &context,
 		std::vector<int32_t> &exile_stack
 	) const;
-	bool execute_action(
+	ActionOutcome execute_actions(
+		NativeState &value,
+		const EventGroup &group,
+		const std::vector<CompiledAction> &actions,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome execute_action(
 		NativeState &value,
 		const EventGroup &group,
 		const CompiledAction &action,
-		const EventContext &context,
+		const EventContext &event_context,
+		const ActionContext &action_context,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
