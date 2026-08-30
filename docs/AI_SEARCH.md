@@ -485,12 +485,15 @@ and are not legal power-change subjects.
 The second slice compiles every interned immutable ability set once when the
 compact root is loaded. Search nodes consult typed event, condition, action, and
 modifier opcodes instead of walking nested `Dictionary` declarations. Each
-runtime card carries a branch-local enabled-ability bitmap over that immutable
-root set. `remove_this_ability` and flip cleanup only mutate the bitmap; derived
-`active_abilities` arrays are interned at the output boundary. Draws consume the
-exact deck front one card at a time, fill the physical leftmost empty hand slot,
-reconstruct the complete runtime card snapshot in each `card_drawn` event, obey
-the five-card hand cap, and finish before the standard summon attack.
+runtime card carries an ordered branch-local list of compiled ability entries
+with stable transient handles. Real removal erases an entry; trigger discovery
+snapshots handles rather than array positions, so deleting an earlier ability
+does not invalidate an already discovered later trigger merely because it
+shifts index. Derived `active_abilities` arrays are interned at the output
+boundary. Draws consume the exact deck front one card at a time, fill the
+physical leftmost empty hand slot, reconstruct the complete runtime card
+snapshot in each `card_drawn` event, obey the five-card hand cap, and finish
+before the standard summon attack.
 
 The current lifecycle slice supports `card_be_attacked`,
 `card_before_flipped`, `card_flip_prevented`, `card_after_flipped`,
@@ -527,12 +530,28 @@ instance to its valid original owner's removed zone, and guards recursive exile.
 These declarations are card-agnostic; the real `BaGuaFangWei` and
 `LeiZHenJian1`–`LeiZHenJian3` work through the same opcodes as synthetic probes.
 
+The medium generic-executor slice recursively compiles nested action lists and
+passes an explicit immutable action context through selection and execution.
+Selectors cover board, hand, deck, and discard with the catalog's ordering,
+owner, power, ability, and geometry conditions. Selection snapshots exact
+instances; each chosen target is revalidated before use and an invalid target
+is skipped without refilling the selection. Nested actions include
+`for_each_selected_card`; power changes support fixed and hand-count amounts,
+batch event assignment, and canonical four-zero exile. Ki gain/spend emits and
+immediately resolves `card_ki_changed`; non-attack self-flips use the same
+before/prevented/after lifecycle as other flips. Dynamic passive grants append
+once, while a granted activation replaces every existing activation and
+preserves passive abilities. Newly granted declaration trees are recursively
+interned, so an unsupported future branch is rejected only if execution
+actually reaches it.
+
 The support gate is action-specific: abilities in hand/deck remain dormant, an
 unrelated listener whose supported conditions are false remains dormant, and
 only declarations reached by the current event cause mid-branch rejection.
-Filtered draws, empty-deck generated cards, future draw revelation, after-draw
-listeners, movement, nested attacks, runtime ability grants/replacement, and
-unsupported selectors remain rejected rather than approximated.
+Empty-deck generated cards, future draw revelation, after-draw listeners,
+movement, discard/return flows, nested or extra attacks, start/end-turn
+lifecycle, and still-uncompiled condition/action variants remain rejected
+rather than approximated.
 
 The native probe covers the original five oracle transitions,
 `TuNaShu1`–`TuNaShu3` for both owners, both-owner Bagua exile, all three LeiZhen
@@ -544,30 +563,37 @@ generic-attack fixtures additionally cover all remaining attack
 modifiers, policy precedence, both intervening-card permissions, special
 negative powers under reversal, summon-redirect source revalidation, and
 unlimited/non-orthogonal first-target locking, post-reaction other-ally
-revalidation, and first-target exile without fallback. Across 754 checks, restored
-canonical state keys, live state versions, captures, exiles, and every event
-matched `DuelSimulator`.
+revalidation, and first-target exile without fallback. Selector/nested-action
+fixtures additionally cover all four zones, ordering and owner filters,
+no-refill revalidation, dynamic and batched power changes, four-zero exile,
+immediate ki-change dispatch, non-attack flip, passive-grant deduplication,
+activation replacement, and declarations containing unsupported future
+branches. Across 883 checks, restored canonical state keys, live state versions,
+captures, exiles, and every event matched `DuelSimulator`.
 
 The same probe enumerates every legal root play in the 14 unique real Quick
-openings. On 2026-08-30 it found 490 legal plays: 271 were supported and all 271
-had exact full-state/event parity; 219 were explicitly rejected with categorized
-reasons and zero partial results. This is a coverage report, not an adoption
-threshold.
+openings. On 2026-08-31 it found 490 legal plays: 341 were supported and all 341
+had exact full-state/event parity; 149 were explicitly rejected with zero
+partial results. The first rejection reasons were 46 unsupported actions, 35
+start-turn rules, 28 end-turn rules, 19 unsupported trigger conditions, 14
+before-summoned rules, and 7 empty-deck fallback draws. The probe also prints
+the corresponding reason counts by source card ID, currently covering 22
+cards. This is a coverage report, not an adoption threshold.
 
 The latest retained 5,000-transition plain-card probe returned full compact
-payloads and events in `404,691` microseconds versus `4,249,517` microseconds
-for the authoritative GDScript transition loop, about `10.50x` faster. This is
+payloads and events in `440,136` microseconds versus `4,114,537` microseconds
+for the authoritative GDScript transition loop, about `9.35x` faster. This is
 evidence that a coarse native transition can be worthwhile, not a
 production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `759,152` clones per
+same run completed 100,000 native branch clones at about `670,511` clones per
 second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- Native root-action coverage is still 271/490 on the real Quick openings; the
+- Native root-action coverage is still 341/490 on the real Quick openings; the
   categorized rejections identify the next generic declaration slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.

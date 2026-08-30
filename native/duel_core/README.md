@@ -30,22 +30,30 @@ Current scope:
   orthogonal power comparison, standard attack, ownership flip, hand-play
   memory, turn boundaries, empty-turn advancement, and terminal checks;
 - compiles immutable ability declarations once per loaded compact root and
-  supports the exact generic self-after-summoned unfiltered constant draw
-  shape used by `TuNaShu1`–`TuNaShu3`;
+  stores each runtime card's ordered ability entries with transient trigger
+  handles, so real removal and later-entry index shifts preserve oracle trigger
+  semantics;
 - executes those draws sequentially from the deck front, fills the physical
   leftmost hand slot, and reconstructs complete `card_drawn` snapshots before
   standard attacks;
+- recursively compiles nested actions and executes generic selectors over the
+  board, hand, deck, and discard using snapshot-then-revalidate/no-refill
+  targeting;
+- resolves fixed and dynamic power changes, power-change batches, four-zero
+  exile, ki gain/spend and immediate ki-change triggers, non-attack flips, and
+  dynamic passive or activation grants;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
 - uses an action-specific conservative gate and explicitly rejects relevant
-  unsupported summon/draw/attack/turn declarations, filtered or generated
-  draws, temporary suppression, extra plays, pending choices/effects, special
-  negative powers, or difficulty 8/9 hand rules instead of approximating them;
+  unsupported summon/draw/attack/turn declarations, generated empty-deck
+  draws, temporary suppression, extra/nested attacks, movement/discard/return,
+  pending choices/effects, or difficulty 8/9 hand rules instead of
+  approximating them;
 - measures native core cloning and the covered transition slice.
 
-It deliberately does not implement the general ability executor, targeting,
-filtered/generated draws, discard/exile/movement primitives, state keys,
-evaluation, or search yet.
+It deliberately does not implement the remaining action/condition vocabulary,
+generated empty-deck draws, discard/return/movement primitives, start/end-turn
+lifecycle, state keys, evaluation, or search yet.
 Production does not call it. The probe compares every covered state field and
 event against `DuelSimulator`, which remains the oracle for every native
 primitive.
