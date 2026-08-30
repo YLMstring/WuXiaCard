@@ -54,6 +54,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_WAS_ON_BOARD,
 		ATTACK_FLIPPED_ENEMY,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		KI_AT_LEAST,
+		KI_CHANGED_CARD_IS_SELF,
+		KI_REACHED_ZERO,
 		UNSUPPORTED,
 	};
 
@@ -65,6 +68,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		REMOVE_THIS_ABILITY,
 		FOR_EACH_SELECTED_CARD,
 		CHANGE_POWERS,
+		GAIN_KI,
+		SPEND_KI,
+		FLIP_SELF,
+		GRANT_ABILITY_TO_SELF,
 		UNSUPPORTED,
 	};
 
@@ -146,6 +153,7 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	struct CompiledCondition {
 		ConditionOpcode opcode = ConditionOpcode::UNSUPPORTED;
+		int32_t amount = 0;
 	};
 
 	struct CompiledSelectorCondition {
@@ -171,9 +179,12 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool declaration_valid = true;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
+		bool card_ref_explicit = false;
 		int32_t amount = 0;
 		bool amount_is_hand_count = false;
 		RelativeOwnerOpcode amount_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		RelativeOwnerOpcode new_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		int32_t granted_ability_index = -1;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		CompiledSelector selector;
@@ -226,6 +237,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t new_owner = 0;
 		bool trigger_was_on_board = false;
 		bool attack_flipped_enemy = false;
+		int32_t previous_ki = 0;
+		int32_t ki = -1;
 		struct AttackFlipRecord {
 			int32_t card_index = -1;
 			int32_t previous_owner = 0;
@@ -301,10 +314,10 @@ private:
 	CompiledCondition compile_condition(const Variant &value) const;
 	CompiledSelectorCondition compile_selector_condition(const Variant &value) const;
 	CompiledSelector compile_selector(const Variant &value) const;
-	CompiledAction compile_action(const Variant &value) const;
+	CompiledAction compile_action(const Variant &value);
 	CompiledModifier compile_modifier(const Variant &value) const;
-	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid) const;
-	CompiledAbility compile_ability(const Variant &value) const;
+	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid);
+	CompiledAbility compile_ability(const Variant &value);
 	int32_t intern_compiled_ability(const Variant &value);
 	bool validate_play_support(const NativeState &value, String &reason) const;
 	bool validate_action_rule_support(
@@ -513,6 +526,33 @@ private:
 		const CompiledAction &action,
 		const ActionContext &context,
 		int32_t action_index
+	) const;
+	ActionOutcome change_ki(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		int32_t source_cell,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome flip_action_subject(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome grant_ability_to_subject(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const ActionContext &action_context,
+		int32_t source_cell,
+		Resolution &resolution
 	) const;
 	bool draw_cards(
 		NativeState &value,

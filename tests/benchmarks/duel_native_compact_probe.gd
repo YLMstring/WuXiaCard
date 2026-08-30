@@ -73,6 +73,7 @@ func _run() -> void:
 	_test_draw_trigger_rejections(kernel)
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
+	_test_ki_flip_and_grant_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
@@ -534,11 +535,13 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		[_make_plain_card(&"敌手", &"native_unsupported_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER
 	)
-	_check_transition_rejected(
+	_check_transition_parity(
 		kernel,
 		unsupported_state,
+		0,
+		4,
 		&"native_unsupported_source",
-		"Unsupported after-summoned action"
+		"After-summoned ki gain"
 	)
 
 	var nested_unknown_source: Dictionary = _make_after_summoned_card(
@@ -1058,6 +1061,116 @@ func _test_power_change_transition_parity(kernel: Object) -> void:
 		1,
 		"Power reduction emits before zero-power exile with one shared batch",
 		4
+	)
+
+
+func _test_ki_flip_and_grant_transition_parity(kernel: Object) -> void:
+	var ki_source: Dictionary = _make_plain_card(
+		&"内力翻面链",
+		&"native_ki_flip_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	ki_source["active_abilities"] = [
+		{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [
+					{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF},
+					{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 0},
+				],
+				"actions": [
+					{"type": Catalog.ACTION_GAIN_KI, "amount": 2},
+					{"type": Catalog.ACTION_SPEND_KI, "amount": 2},
+				],
+			}],
+		},
+		{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.CARD_KI_CHANGED,
+				"conditions": [
+					{"type": Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF},
+					{"type": Catalog.CONDITION_KI_REACHED_ZERO},
+				],
+				"actions": [{
+					"type": Catalog.ACTION_FLIP_SELF,
+					"new_owner": Catalog.OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				}],
+			}],
+		},
+	]
+	var ki_state := State.new(
+		Rules.empty_board(),
+		[ki_source],
+		[_make_plain_card(&"敌手", &"native_ki_flip_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		ki_state,
+		0,
+		4,
+		&"native_ki_flip_source",
+		"Ki changes resolve zero trigger and non-attack flip before the next action"
+	)
+
+	var future_passive: Dictionary = {
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": &"native_future_event",
+			"conditions": [],
+			"actions": [{"type": &"native_future_action"}],
+		}],
+	}
+	var replacement_activation: Dictionary = {
+		"retained_on_flip": false,
+		"activation": {
+			"actions": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+		},
+	}
+	var grant_source: Dictionary = _make_plain_card(
+		&"动态授予链",
+		&"native_grant_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	grant_source["active_abilities"] = [
+		{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [
+					{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": future_passive},
+					{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": future_passive},
+					{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": replacement_activation},
+				],
+			}],
+		},
+		{
+			"retained_on_flip": false,
+			"activation": {"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]},
+		},
+		{
+			"retained_on_flip": true,
+			"activation": {"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 2}]},
+		},
+	]
+	var grant_state := State.new(
+		Rules.empty_board(),
+		[grant_source],
+		[_make_plain_card(&"敌手", &"native_grant_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		grant_state,
+		0,
+		4,
+		&"native_grant_source",
+		"Passive grant deduplicates and dynamic activation replaces all innate activations"
 	)
 
 
