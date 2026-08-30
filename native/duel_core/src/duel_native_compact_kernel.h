@@ -68,8 +68,24 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	enum class ModifierOpcode : uint8_t {
 		DEFENDING_POWER_OVERRIDE,
+		ATTACK_REQUIRES_OTHER_ALLY,
+		DEFENDING_POWER_USES_MINIMUM_SIDE,
+		ORTHOGONAL_ATTACK_RANGE_TWO,
 		ENEMY_ATTACKS_ALL,
+		POWER_COMPARISON_REVERSED,
+		ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+		UNLIMITED_ATTACK_RANGE,
+		NON_ORTHOGONAL_ATTACK_ANY_AXIS,
+		STANDARD_ATTACK_FIRST_LEGAL_TARGET,
+		ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
+		SELF_ATTACKS_ALL,
 		UNSUPPORTED,
+	};
+
+	enum class AttackTargetPolicy : uint8_t {
+		ENEMIES_ONLY,
+		ALLIES_ONLY,
+		ALL,
 	};
 
 	struct CompiledCondition {
@@ -105,6 +121,12 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct CompiledAbilitySet {
 		bool declaration_valid = true;
 		std::vector<CompiledAbility> abilities;
+	};
+
+	struct AttackPolicy {
+		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
+		int32_t capture_owner_id = 0;
+		bool specified = false;
 	};
 
 	struct EventContext {
@@ -217,6 +239,62 @@ private:
 		ModifierOpcode opcode,
 		int32_t *out_value = nullptr
 	) const;
+	bool card_modifier_has_flag(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		ModifierOpcode opcode,
+		int32_t flag
+	) const;
+	int32_t count_owned(const NativeState &value, int32_t owner_id) const;
+	bool attack_is_prohibited(const NativeState &value, int32_t attacker_owner) const;
+	std::vector<int32_t> snapshot_summon_attack_redirect_sources(
+		const NativeState &value,
+		int32_t summon_cell,
+		int32_t summoning_owner
+	) const;
+	AttackPolicy get_summon_attack_policy(
+		const NativeState &value,
+		int32_t summoned_cell,
+		int32_t summoning_owner,
+		const std::vector<int32_t> &source_card_indices
+	) const;
+	AttackPolicy get_standard_attack_policy(
+		const NativeState &value,
+		int32_t attacker_cell,
+		int32_t attacker_card_index,
+		int32_t attacker_owner,
+		const AttackPolicy &requested_policy
+	) const;
+	std::vector<int32_t> get_attack_targets(
+		const NativeState &value,
+		int32_t source_cell,
+		const AttackPolicy &policy
+	) const;
+	bool can_attack_target(
+		const NativeState &value,
+		int32_t source_cell,
+		int32_t target_cell,
+		const AttackPolicy &policy,
+		bool skip_power_comparison
+	) const;
+	bool is_target_in_attack_range(
+		const NativeState &value,
+		int32_t source_cell,
+		int32_t target_cell,
+		const AttackPolicy &policy,
+		bool skip_power_comparison
+	) const;
+	bool power_pair_wins(
+		const NativeState &value,
+		int32_t source_card_index,
+		int32_t source_owner,
+		int32_t target_card_index,
+		int32_t target_owner,
+		int32_t attacking_direction,
+		int32_t defending_direction,
+		bool comparison_reversed
+	) const;
 	bool conditions_match(
 		const NativeState &value,
 		const EventGroup &group,
@@ -279,6 +357,11 @@ private:
 		int32_t card_index,
 		int32_t owner_id,
 		int32_t direction
+	) const;
+	int32_t minimum_effective_defending_power(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id
 	) const;
 	void remove_ability_with_event(
 		NativeState &value,

@@ -106,6 +106,50 @@ func _test_committed_attack_does_not_compare_powers_twice() -> void:
 		"A target that raises defense during CARD_BE_ATTACKED is still flipped by the committed attack"
 	)
 
+	var first_target_ability: Dictionary = {
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_FLIPPED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY}],
+					"limit": 1,
+					"required_count": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_CHANGE_POWERS,
+					"amount": 9,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				}],
+			}],
+		}],
+	}
+	var multi_board: Array = Rules.empty_board()
+	multi_board[1] = _slot(
+		_plain(&"first_committed_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, [first_target_ability]),
+		Rules.OPPONENT_OWNER
+	)
+	multi_board[5] = _slot(
+		_plain(&"later_strengthened_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	var multi_transition: Dictionary = Simulator.apply_action(
+		State.new(
+			multi_board,
+			[_plain(&"multi_committed_attacker", [5, 5, 5, 5], Rules.PLAYER_OWNER)],
+			[],
+			Rules.PLAYER_OWNER
+		),
+		Action.make_play(0, 4, &"multi_committed_attacker")
+	)
+	var multi_state: State = multi_transition.get("state") as State
+	_check(
+		int((multi_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"A later locked target remains committed after an earlier target raises its powers"
+	)
+
 
 func _test_raozhi_commits_without_fallback_and_targeted_attacks_stay_explicit() -> void:
 	var exile_on_attack: Dictionary = {

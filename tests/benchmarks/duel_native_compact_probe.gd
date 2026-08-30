@@ -72,6 +72,7 @@ func _run() -> void:
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
+	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
 		push_error(
@@ -823,6 +824,430 @@ func _test_attack_lifecycle_transition_parity(kernel: Object) -> void:
 	)
 
 
+func _test_attack_modifier_transition_parity(kernel: Object) -> void:
+	var enemy_hand: Array = [
+		_make_plain_card(&"修正器敌手", &"native_modifier_enemy_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+	]
+
+	var requires_board: Array = Rules.empty_board()
+	requires_board[1] = _slot(
+		_make_plain_card(&"孤立目标", &"native_requires_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var requires_source: Dictionary = _make_modifier_card(
+		&"需要友方攻方",
+		&"native_requires_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(requires_board, [requires_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_requires_source",
+		[],
+		"Other-ally requirement blocks an isolated attacker"
+	)
+
+	var minimum_board: Array = Rules.empty_board()
+	minimum_board[8] = _slot(
+		_make_plain_card(&"所需友方", &"native_minimum_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	minimum_board[5] = _slot(
+		_make_plain_card(&"最小防守目标", &"native_minimum_target", Rules.OPPONENT_OWNER, [1, 1, 1, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	var minimum_source: Dictionary = _make_modifier_card(
+		&"取最小防守攻方",
+		&"native_minimum_source",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2],
+		[
+			{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY},
+			{"type": Catalog.MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE},
+		]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(minimum_board, [minimum_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_minimum_source",
+		[5],
+		"Other-ally and minimum-defense modifiers combine"
+	)
+
+	var lost_ally_board: Array = Rules.empty_board()
+	lost_ally_board[1] = _slot(
+		_make_plain_card(&"失友目标", &"native_lost_ally_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var departing_ally: Dictionary = _make_plain_card(
+		&"受击时离场友方",
+		&"native_departing_ally",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	departing_ally["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	lost_ally_board[8] = _slot(departing_ally, Rules.PLAYER_OWNER)
+	var lost_ally_source: Dictionary = _make_modifier_card(
+		&"失友攻方",
+		&"native_lost_ally_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(lost_ally_board, [lost_ally_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_lost_ally_source",
+		[],
+		"Other-ally requirement is revalidated after CARD_BE_ATTACKED"
+	)
+
+	var override_board: Array = Rules.empty_board()
+	var override_target: Dictionary = _make_modifier_card(
+		&"覆写防守目标",
+		&"native_override_target",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1],
+		[{"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 7}]
+	)
+	override_board[5] = _slot(override_target, Rules.OPPONENT_OWNER)
+	_check_modifier_transition(
+		kernel,
+		State.new(
+			override_board,
+			[_make_plain_card(&"覆写攻方", &"native_override_source", Rules.PLAYER_OWNER, [5, 5, 5, 5])],
+			enemy_hand.duplicate(true),
+			Rules.PLAYER_OWNER
+		),
+		4,
+		&"native_override_source",
+		[],
+		"Defending-power override uses the generic comparison path"
+	)
+
+	var ally_range_board: Array = Rules.empty_board()
+	ally_range_board[4] = _slot(
+		_make_plain_card(&"隔位友方", &"native_range_ally", Rules.PLAYER_OWNER, [9, 9, 9, 9]),
+		Rules.PLAYER_OWNER
+	)
+	ally_range_board[1] = _slot(
+		_make_plain_card(&"隔友方目标", &"native_range_ally_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var ally_range_source: Dictionary = _make_modifier_card(
+		&"隔友方攻方",
+		&"native_range_ally_source",
+		Rules.PLAYER_OWNER,
+		[5, 1, 1, 1],
+		[{
+			"type": Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+			"allow_intervening_ally": true,
+		}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(ally_range_board, [ally_range_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		7,
+		&"native_range_ally_source",
+		[1],
+		"Range-two modifier permits an intervening ally"
+	)
+
+	var enemy_range_board: Array = Rules.empty_board()
+	enemy_range_board[4] = _slot(
+		_make_plain_card(&"隔位敌方", &"native_range_enemy", Rules.OPPONENT_OWNER, [9, 9, 9, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	enemy_range_board[1] = _slot(
+		_make_plain_card(&"隔敌方目标", &"native_range_enemy_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var enemy_range_source: Dictionary = _make_modifier_card(
+		&"隔敌方攻方",
+		&"native_range_enemy_source",
+		Rules.PLAYER_OWNER,
+		[5, 1, 1, 1],
+		[{
+			"type": Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+			"allow_intervening_ally": false,
+			"allow_intervening_enemy": true,
+		}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(enemy_range_board, [enemy_range_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		7,
+		&"native_range_enemy_source",
+		[1],
+		"Range-two modifier permits an intervening enemy"
+	)
+
+	var reversed_board: Array = Rules.empty_board()
+	reversed_board[1] = _slot(
+		_make_plain_card(&"反转高点目标", &"native_reversed_target", Rules.OPPONENT_OWNER, [9, 9, 9, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	var reversed_source: Dictionary = _make_modifier_card(
+		&"反转攻方",
+		&"native_reversed_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[{"type": Catalog.MODIFIER_POWER_COMPARISON_REVERSED}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(reversed_board, [reversed_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_reversed_source",
+		[1],
+		"Reversed comparison attacks a larger ordinary power"
+	)
+
+	var negative_defender_board: Array = Rules.empty_board()
+	negative_defender_board[1] = _slot(
+		_make_plain_card(&"负点目标", &"native_negative_defender", Rules.OPPONENT_OWNER, [-1, -1, -1, -1]),
+		Rules.OPPONENT_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(negative_defender_board, [reversed_source.duplicate(true)], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_reversed_source",
+		[1],
+		"Reversal cannot protect a four-sided negative defender"
+	)
+
+	var negative_attacker_board: Array = Rules.empty_board()
+	negative_attacker_board[1] = _slot(
+		_make_plain_card(&"普通目标", &"native_negative_target", Rules.OPPONENT_OWNER, [9, 9, 9, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	var negative_attacker: Dictionary = _make_modifier_card(
+		&"负点攻方",
+		&"native_negative_source",
+		Rules.PLAYER_OWNER,
+		[-1, -1, -1, -1],
+		[{"type": Catalog.MODIFIER_POWER_COMPARISON_REVERSED}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(negative_attacker_board, [negative_attacker], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_negative_source",
+		[],
+		"Reversal cannot make a four-sided negative attacker win"
+	)
+
+	var redirect_board: Array = Rules.empty_board()
+	var redirect_source: Dictionary = _make_modifier_card(
+		&"相邻改向来源",
+		&"native_redirect_source",
+		Rules.OPPONENT_OWNER,
+		[9, 9, 9, 9],
+		[{"type": Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}]
+	)
+	redirect_source["active_abilities"][0]["triggers"] = [{
+		"event": Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_ENEMY}],
+		"actions": [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}],
+	}]
+	redirect_board[1] = _slot(redirect_source, Rules.OPPONENT_OWNER)
+	redirect_board[3] = _slot(
+		_make_plain_card(&"改向友方目标", &"native_redirect_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(
+			redirect_board,
+			[_make_plain_card(&"改向攻方", &"native_redirect_attacker", Rules.PLAYER_OWNER, [1, 1, 1, 5])],
+			enemy_hand.duplicate(true),
+			Rules.PLAYER_OWNER
+		),
+		4,
+		&"native_redirect_attacker",
+		[3],
+		"Adjacent summon redirect attacks an ally and removes its source ability"
+	)
+
+	var invalidated_redirect_board: Array = Rules.empty_board()
+	var invalidated_source: Dictionary = _make_modifier_card(
+		&"失效改向来源",
+		&"native_invalidated_redirect_source",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1],
+		[{"type": Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES}]
+	)
+	invalidated_source["active_abilities"][0]["triggers"] = [{
+		"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [],
+		"actions": [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}],
+	}]
+	invalidated_redirect_board[1] = _slot(invalidated_source, Rules.OPPONENT_OWNER)
+	invalidated_redirect_board[3] = _slot(
+		_make_plain_card(&"不再改向的友方", &"native_invalidated_redirect_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(
+			invalidated_redirect_board,
+			[_make_plain_card(&"失效改向攻方", &"native_invalidated_redirect_attacker", Rules.PLAYER_OWNER, [5, 1, 1, 1])],
+			enemy_hand.duplicate(true),
+			Rules.PLAYER_OWNER
+		),
+		4,
+		&"native_invalidated_redirect_attacker",
+		[1],
+		"Summon redirect revalidates that the original source ability remains enabled"
+	)
+
+	var first_legal_board: Array = Rules.empty_board()
+	first_legal_board[0] = _slot(
+		_make_plain_card(&"首个斜向目标", &"native_first_diagonal", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	first_legal_board[1] = _slot(
+		_make_plain_card(&"后续目标", &"native_first_later", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var first_legal_source: Dictionary = _make_modifier_card(
+		&"首个合法攻方",
+		&"native_first_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[
+			{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE},
+			{"type": Catalog.MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
+			{"type": Catalog.MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET},
+		]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(first_legal_board, [first_legal_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_first_source",
+		[0],
+		"Unlimited non-orthogonal attack locks the first row-major legal target"
+	)
+
+	var removed_first_board: Array = Rules.empty_board()
+	var removed_first_target: Dictionary = _make_plain_card(
+		&"移除首目标",
+		&"native_removed_first_target",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	removed_first_target["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	removed_first_board[0] = _slot(removed_first_target, Rules.OPPONENT_OWNER)
+	removed_first_board[1] = _slot(
+		_make_plain_card(&"不顺延目标", &"native_no_fallback_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(removed_first_board, [first_legal_source.duplicate(true)], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_first_source",
+		[],
+		"First-legal attack does not fall through after its locked target is exiled"
+	)
+
+	var orthogonal_only_source: Dictionary = _make_modifier_card(
+		&"仅无限距离攻方",
+		&"native_orthogonal_only_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE}]
+	)
+	var diagonal_only_board: Array = Rules.empty_board()
+	diagonal_only_board[0] = _slot(
+		_make_plain_card(&"不可斜攻目标", &"native_diagonal_only_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(diagonal_only_board, [orthogonal_only_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_orthogonal_only_source",
+		[],
+		"Unlimited range alone does not permit a non-orthogonal attack"
+	)
+
+	var self_all_board: Array = Rules.empty_board()
+	self_all_board[1] = _slot(
+		_make_plain_card(&"不分敌我敌方", &"native_self_all_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	self_all_board[3] = _slot(
+		_make_plain_card(&"不分敌我友方", &"native_self_all_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	var self_all_source: Dictionary = _make_modifier_card(
+		&"自身不分敌我攻方",
+		&"native_self_all_source",
+		Rules.PLAYER_OWNER,
+		[5, 5, 5, 5],
+		[{"type": Catalog.MODIFIER_SELF_ATTACKS_ALL}]
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(self_all_board, [self_all_source], enemy_hand.duplicate(true), Rules.PLAYER_OWNER),
+		4,
+		&"native_self_all_source",
+		[1, 3],
+		"Self-attacks-all flips both enemy and allied targets"
+	)
+
+	var lock_board: Array = Rules.empty_board()
+	lock_board[0] = _slot(
+		_make_modifier_card(
+			&"回合攻击锁",
+			&"native_turn_lock_source",
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1],
+			[{"type": Catalog.MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN}]
+		),
+		Rules.PLAYER_OWNER
+	)
+	lock_board[1] = _slot(
+		_make_plain_card(&"锁定规则敌方", &"native_turn_lock_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	_check_modifier_transition(
+		kernel,
+		State.new(
+			lock_board,
+			[_make_plain_card(&"本方正常攻方", &"native_turn_lock_attacker", Rules.PLAYER_OWNER, [5, 5, 5, 5])],
+			enemy_hand.duplicate(true),
+			Rules.PLAYER_OWNER
+		),
+		4,
+		&"native_turn_lock_attacker",
+		[1],
+		"Owner-turn attack lock does not prohibit the active owner's own attack"
+	)
+
+
 func _benchmark_basic_transition(kernel: Object) -> Dictionary:
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(
@@ -966,6 +1391,26 @@ func _check_transition_parity(
 		)
 
 
+func _check_modifier_transition(
+	kernel: Object,
+	state: State,
+	target_cell: int,
+	instance_id: StringName,
+	expected_captures: Array,
+	label: String
+) -> void:
+	var expected: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, target_cell, instance_id)
+	)
+	_check(bool(expected.get("valid", false)), "%s oracle transition is valid before parity" % label)
+	_check(
+		expected.get("captures", []) == expected_captures,
+		"%s exercises the intended captures" % label
+	)
+	_check_transition_parity(kernel, state, 0, target_cell, instance_id, label)
+
+
 func _check_transition_rejected(
 	kernel: Object,
 	state: State,
@@ -1015,6 +1460,21 @@ func _make_after_summoned_card(instance_id: StringName, action: Dictionary) -> D
 			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
 			"actions": [action],
 		}],
+	}]
+	return card
+
+
+func _make_modifier_card(
+	card_id: StringName,
+	instance_id: StringName,
+	owner_id: int,
+	powers: Array[int],
+	modifiers: Array
+) -> Dictionary:
+	var card: Dictionary = _make_plain_card(card_id, instance_id, owner_id, powers)
+	card["active_abilities"] = [{
+		"retained_on_flip": false,
+		"modifiers": modifiers.duplicate(true),
 	}]
 	return card
 

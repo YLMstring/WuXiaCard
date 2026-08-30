@@ -328,6 +328,11 @@ static func _power_pair_wins(
 	target_gates: Array,
 	comparison_reversed: bool
 ) -> bool:
+	var source_is_special_negative: bool = _has_four_negative_one_powers(source_powers)
+	if source_is_special_negative:
+		return false
+	if _has_four_negative_one_powers(target_powers):
+		return int(source_powers[attacking_direction]) >= 0
 	var defending_power: int
 	if Abilities.has_modifier(
 		source_card,
@@ -349,6 +354,10 @@ static func _power_pair_wins(
 		)
 	var attacking_power: int = int(source_powers[attacking_direction])
 	return attacking_power < defending_power if comparison_reversed else attacking_power > defending_power
+
+
+static func _has_four_negative_one_powers(powers: Array) -> bool:
+	return powers.size() == 4 and powers.all(func(value: Variant) -> bool: return int(value) == -1)
 
 
 static func _get_effect_gates(context: Dictionary, owner_id: int) -> Array:

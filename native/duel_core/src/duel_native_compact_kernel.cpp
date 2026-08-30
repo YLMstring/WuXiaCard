@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <limits>
 
 #include <godot_cpp/core/class_db.hpp>
@@ -332,6 +333,12 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 	events.append(placed_event);
 
 	std::vector<int32_t> exile_stack;
+	const std::vector<int32_t> summon_attack_redirect_sources =
+		snapshot_summon_attack_redirect_sources(
+			next,
+			static_cast<int32_t>(target_cell),
+			moving_owner
+		);
 	EventContext summon_context;
 	summon_context.trigger_cell = static_cast<int32_t>(target_cell);
 	summon_context.trigger_card_index = played_card_index;
@@ -354,46 +361,39 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 	Array exiles;
 	captures.append_array(after_summoned.captures);
 	exiles.append_array(after_summoned.exiles);
-	if (next.scalars[moving_owner == 1 ? 3 : 4] < 20) {
-		static constexpr int32_t opposite[4] = {2, 3, 0, 1};
-		std::vector<int32_t> target_cells;
-		bool attacks_all = false;
-		int32_t capture_owner = moving_owner;
-		for (size_t cell = 0; cell < next.board_card_indices.size(); ++cell) {
-			const int32_t source_index = next.board_card_indices[cell];
-			if (source_index < 0 || next.board_owners[cell] == moving_owner) continue;
-			if (card_has_modifier(next, source_index, next.board_owners[cell], ModifierOpcode::ENEMY_ATTACKS_ALL)) {
-				attacks_all = true;
-				capture_owner = next.board_owners[cell];
-				break;
-			}
-		}
-		for (int32_t direction = 0; direction < 4; ++direction) {
-			const int32_t attacked_cell = neighbor_index(static_cast<int32_t>(target_cell), direction);
-			if (attacked_cell < 0) {
-				continue;
-			}
-			const int32_t attacked_card_index = next.board_card_indices[attacked_cell];
-			if (
-				attacked_card_index < 0
-				|| (!attacks_all && next.board_owners[attacked_cell] == moving_owner)
-			) {
-				continue;
-			}
-			const int32_t attacking_power = next.card_powers[played_card_index * 4 + direction];
-			const int32_t defending_power = effective_defending_power(
-				next,
-				attacked_card_index,
-				next.board_owners[attacked_cell],
-				opposite[direction]
-			);
-			if (attacking_power > defending_power) {
-				target_cells.push_back(attacked_cell);
-			}
-		}
+	const int32_t initial_attack_cell = find_board_card(
+		next,
+		played_card_index,
+		static_cast<int32_t>(target_cell)
+	);
+	if (
+		initial_attack_cell >= 0
+		&& next.board_owners[initial_attack_cell] == moving_owner
+		&& next.scalars[moving_owner == 1 ? 3 : 4] < 20
+		&& !attack_is_prohibited(next, moving_owner)
+	) {
+		const AttackPolicy requested_policy = get_summon_attack_policy(
+			next,
+			initial_attack_cell,
+			moving_owner,
+			summon_attack_redirect_sources
+		);
+		const AttackPolicy attack_policy = get_standard_attack_policy(
+			next,
+			initial_attack_cell,
+			played_card_index,
+			moving_owner,
+			requested_policy
+		);
+		const std::vector<int32_t> target_cells = get_attack_targets(
+			next,
+			initial_attack_cell,
+			attack_policy
+		);
 		if (!target_cells.empty()) {
 			next.scalars[moving_owner == 1 ? 3 : 4] += 1;
 		}
+		bool attack_started = false;
 		bool attack_flipped_enemy = false;
 		for (const int32_t locked_cell : target_cells) {
 			const int32_t attacker_cell = find_board_card(next, played_card_index, static_cast<int32_t>(target_cell));
@@ -401,6 +401,7 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 			const int32_t attacked_card_index = next.board_card_indices[locked_cell];
 			if (attacked_card_index < 0) continue;
 			const int32_t attacked_cell = locked_cell;
+			if (!can_attack_target(next, attacker_cell, attacked_cell, attack_policy, true)) continue;
 			const int32_t attacked_owner = next.board_owners[attacked_cell];
 			const StringName attacked_instance_id = next.card_instance_ids[attacked_card_index];
 
@@ -414,6 +415,7 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 			attack_event["target_owner_id"] = attacked_owner;
 			attack_event["attack_reason"] = StringName("summon_standard_attack");
 			events.append(attack_event);
+			attack_started = true;
 
 			EventContext attack_context;
 			attack_context.attacker_cell = attacker_cell;
@@ -438,12 +440,17 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 			exiles.append_array(be_attacked.exiles);
 			const int32_t current_attacker_cell = find_board_card(next, played_card_index, attacker_cell);
 			const int32_t current_attacked_cell = find_board_card(next, attacked_card_index, attacked_cell);
-			if (
-				current_attacker_cell < 0 || current_attacked_cell < 0
-				|| next.board_owners[current_attacker_cell] != moving_owner
-			) continue;
+			if (current_attacker_cell < 0 || next.board_owners[current_attacker_cell] != moving_owner) break;
+			if (current_attacked_cell < 0) continue;
+			if (!can_attack_target(next, current_attacker_cell, current_attacked_cell, attack_policy, true)) continue;
 			int32_t resolved_capture_owner = moving_owner;
-			if (next.board_owners[current_attacked_cell] == moving_owner) resolved_capture_owner = capture_owner;
+			if (next.board_owners[current_attacked_cell] == moving_owner) {
+				resolved_capture_owner = (
+					attack_policy.capture_owner_id != 0
+					? attack_policy.capture_owner_id
+					: other_owner(moving_owner)
+				);
+			}
 			if (resolved_capture_owner == next.board_owners[current_attacked_cell]) continue;
 			EventContext before_context = attack_context;
 			before_context.attacker_cell = current_attacker_cell;
@@ -493,7 +500,7 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 			exiles.append_array(flip_resolution.exiles);
 			attack_flipped_enemy = attack_flipped_enemy || attacked_owner != moving_owner;
 		}
-		if (!target_cells.empty()) {
+		if (attack_started) {
 			EventContext after_attack_context;
 			after_attack_context.attacker_cell = find_board_card(next, played_card_index, static_cast<int32_t>(target_cell));
 			after_attack_context.attacker_card_index = played_card_index;
@@ -671,10 +678,34 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 									static_cast<int64_t>(modifier.get("value", 0))
 								);
 							} else if (
+								type == StringName("orthogonal_attack_range_two")
+								&& (modifier.size() == 2 || modifier.size() == 3)
+								&& Variant(modifier.get("allow_intervening_ally", false)).get_type() == Variant::BOOL
+								&& (
+									!modifier.has("allow_intervening_enemy")
+									|| Variant(modifier.get("allow_intervening_enemy", false)).get_type() == Variant::BOOL
+								)
+							) {
+								compiled_modifier.opcode = ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO;
+								compiled_modifier.value = (
+									(static_cast<bool>(modifier.get("allow_intervening_ally", false)) ? 1 : 0)
+									| (static_cast<bool>(modifier.get("allow_intervening_enemy", false)) ? 2 : 0)
+								);
+							} else if (
 								type == StringName("enemy_attacks_all")
 								&& modifier.size() == 1
 							) {
 								compiled_modifier.opcode = ModifierOpcode::ENEMY_ATTACKS_ALL;
+							} else if (modifier.size() == 1) {
+								if (type == StringName("attack_requires_other_ally")) compiled_modifier.opcode = ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY;
+								else if (type == StringName("defending_power_uses_minimum_side")) compiled_modifier.opcode = ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE;
+								else if (type == StringName("power_comparison_reversed")) compiled_modifier.opcode = ModifierOpcode::POWER_COMPARISON_REVERSED;
+								else if (type == StringName("adjacent_enemy_summon_attacks_allies")) compiled_modifier.opcode = ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES;
+								else if (type == StringName("unlimited_attack_range")) compiled_modifier.opcode = ModifierOpcode::UNLIMITED_ATTACK_RANGE;
+								else if (type == StringName("non_orthogonal_attack_any_axis")) compiled_modifier.opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
+								else if (type == StringName("standard_attack_first_legal_target")) compiled_modifier.opcode = ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET;
+								else if (type == StringName("enemy_cannot_attack_during_owner_turn")) compiled_modifier.opcode = ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN;
+								else if (type == StringName("self_attacks_all")) compiled_modifier.opcode = ModifierOpcode::SELF_ATTACKS_ALL;
 							}
 						}
 						compiled_ability.modifiers.push_back(compiled_modifier);
@@ -1125,6 +1156,388 @@ bool DuelNativeCompactKernel::card_has_modifier(
 	return found;
 }
 
+bool DuelNativeCompactKernel::card_modifier_has_flag(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id,
+	ModifierOpcode opcode,
+	int32_t flag
+) const {
+	if (!card_effects_enabled(value, card_index, owner_id)) return false;
+	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
+	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
+		if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
+		for (const CompiledModifier &modifier : set.abilities[ability_index].modifiers) {
+			if (modifier.opcode == opcode && (modifier.value & flag) != 0) return true;
+		}
+	}
+	return false;
+}
+
+int32_t DuelNativeCompactKernel::count_owned(
+	const NativeState &value,
+	int32_t owner_id
+) const {
+	int32_t count = 0;
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		if (value.board_card_indices[cell] >= 0 && value.board_owners[cell] == owner_id) ++count;
+	}
+	return count;
+}
+
+bool DuelNativeCompactKernel::attack_is_prohibited(
+	const NativeState &value,
+	int32_t attacker_owner
+) const {
+	if (attacker_owner != 1 && attacker_owner != 2) return true;
+	const int32_t turn_owner = value.scalars[0];
+	if (turn_owner == attacker_owner) return false;
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t source_card_index = value.board_card_indices[cell];
+		if (source_card_index < 0 || value.board_owners[cell] != turn_owner) continue;
+		if (card_has_modifier(
+			value,
+			source_card_index,
+			turn_owner,
+			ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN
+		)) return true;
+	}
+	return false;
+}
+
+std::vector<int32_t> DuelNativeCompactKernel::snapshot_summon_attack_redirect_sources(
+	const NativeState &value,
+	int32_t summon_cell,
+	int32_t summoning_owner
+) const {
+	std::vector<int32_t> sources;
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		const int32_t source_cell = neighbor_index(summon_cell, direction);
+		if (source_cell < 0) continue;
+		const int32_t source_card_index = value.board_card_indices[source_cell];
+		const int32_t source_owner = value.board_owners[source_cell];
+		if (source_card_index < 0 || source_owner == summoning_owner) continue;
+		if (card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		)) sources.push_back(source_card_index);
+	}
+	return sources;
+}
+
+DuelNativeCompactKernel::AttackPolicy DuelNativeCompactKernel::get_summon_attack_policy(
+	const NativeState &value,
+	int32_t summoned_cell,
+	int32_t summoning_owner,
+	const std::vector<int32_t> &source_card_indices
+) const {
+	AttackPolicy policy;
+	for (const int32_t source_card_index : source_card_indices) {
+		const int32_t source_cell = find_board_card(value, source_card_index);
+		if (source_cell < 0) continue;
+		const int32_t row_delta = std::abs(source_cell / 3 - summoned_cell / 3);
+		const int32_t column_delta = std::abs(source_cell % 3 - summoned_cell % 3);
+		if (row_delta + column_delta != 1) continue;
+		const int32_t source_owner = value.board_owners[source_cell];
+		if (source_owner == summoning_owner) continue;
+		if (!card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES
+		)) continue;
+		policy.target_policy = AttackTargetPolicy::ALLIES_ONLY;
+		policy.specified = true;
+		return policy;
+	}
+	return policy;
+}
+
+DuelNativeCompactKernel::AttackPolicy DuelNativeCompactKernel::get_standard_attack_policy(
+	const NativeState &value,
+	int32_t attacker_cell,
+	int32_t attacker_card_index,
+	int32_t attacker_owner,
+	const AttackPolicy &requested_policy
+) const {
+	if (
+		attacker_cell >= 0
+		&& attacker_cell < static_cast<int32_t>(value.board_card_indices.size())
+		&& value.board_card_indices[attacker_cell] == attacker_card_index
+		&& card_has_modifier(
+			value,
+			attacker_card_index,
+			attacker_owner,
+			ModifierOpcode::SELF_ATTACKS_ALL
+		)
+	) {
+		AttackPolicy policy;
+		policy.target_policy = AttackTargetPolicy::ALL;
+		policy.specified = true;
+		return policy;
+	}
+	if (requested_policy.specified) return requested_policy;
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t source_card_index = value.board_card_indices[cell];
+		const int32_t source_owner = value.board_owners[cell];
+		if (source_card_index < 0 || source_owner == attacker_owner) continue;
+		if (!card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::ENEMY_ATTACKS_ALL
+		)) continue;
+		AttackPolicy policy;
+		policy.target_policy = AttackTargetPolicy::ALL;
+		policy.capture_owner_id = source_owner;
+		policy.specified = true;
+		return policy;
+	}
+	return AttackPolicy();
+}
+
+std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
+	const NativeState &value,
+	int32_t source_cell,
+	const AttackPolicy &policy
+) const {
+	std::vector<int32_t> targets;
+	if (
+		source_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| value.board_card_indices[source_cell] < 0
+	) return targets;
+	const int32_t source_card_index = value.board_card_indices[source_cell];
+	const int32_t source_owner = value.board_owners[source_cell];
+	const bool unlimited_range = card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::UNLIMITED_ATTACK_RANGE
+	);
+	std::vector<int32_t> candidates;
+	if (unlimited_range) {
+		for (int32_t cell = 0; cell < static_cast<int32_t>(value.board_card_indices.size()); ++cell) {
+			if (cell != source_cell) candidates.push_back(cell);
+		}
+	} else {
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			const int32_t adjacent_cell = neighbor_index(source_cell, direction);
+			if (adjacent_cell < 0) continue;
+			candidates.push_back(adjacent_cell);
+			const int32_t distance_two_cell = neighbor_index(adjacent_cell, direction);
+			if (distance_two_cell >= 0) candidates.push_back(distance_two_cell);
+		}
+	}
+	const bool first_legal_only = card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET
+	);
+	for (const int32_t target_cell : candidates) {
+		if (!can_attack_target(value, source_cell, target_cell, policy, false)) continue;
+		targets.push_back(target_cell);
+		if (first_legal_only) break;
+	}
+	return targets;
+}
+
+bool DuelNativeCompactKernel::can_attack_target(
+	const NativeState &value,
+	int32_t source_cell,
+	int32_t target_cell,
+	const AttackPolicy &policy,
+	bool skip_power_comparison
+) const {
+	if (
+		source_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| value.board_card_indices[source_cell] < 0
+	) return false;
+	const int32_t source_card_index = value.board_card_indices[source_cell];
+	const int32_t source_owner = value.board_owners[source_cell];
+	if (
+		card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY
+		)
+		&& count_owned(value, source_owner) < 2
+	) return false;
+	return is_target_in_attack_range(
+		value,
+		source_cell,
+		target_cell,
+		policy,
+		skip_power_comparison
+	);
+}
+
+bool DuelNativeCompactKernel::is_target_in_attack_range(
+	const NativeState &value,
+	int32_t source_cell,
+	int32_t target_cell,
+	const AttackPolicy &policy,
+	bool skip_power_comparison
+) const {
+	if (
+		source_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| target_cell < 0
+		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| source_cell == target_cell
+		|| value.board_card_indices[source_cell] < 0
+		|| value.board_card_indices[target_cell] < 0
+	) return false;
+	const int32_t source_card_index = value.board_card_indices[source_cell];
+	const int32_t target_card_index = value.board_card_indices[target_cell];
+	const int32_t source_owner = value.board_owners[source_cell];
+	const int32_t target_owner = value.board_owners[target_cell];
+	if (
+		(policy.target_policy == AttackTargetPolicy::ENEMIES_ONLY && source_owner == target_owner)
+		|| (policy.target_policy == AttackTargetPolicy::ALLIES_ONLY && source_owner != target_owner)
+	) return false;
+
+	const int32_t source_row = source_cell / 3;
+	const int32_t source_column = source_cell % 3;
+	const int32_t target_row = target_cell / 3;
+	const int32_t target_column = target_cell % 3;
+	const int32_t row_delta = target_row - source_row;
+	const int32_t column_delta = target_column - source_column;
+	const bool same_axis = row_delta == 0 || column_delta == 0;
+	const bool unlimited_range = card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::UNLIMITED_ATTACK_RANGE
+	);
+	if (!same_axis && !unlimited_range) return false;
+	if (
+		!same_axis
+		&& !card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS
+		)
+	) return false;
+
+	int32_t direction = -1;
+	int32_t distance = 0;
+	if (same_axis) {
+		if (row_delta < 0) direction = 0;
+		else if (column_delta > 0) direction = 1;
+		else if (row_delta > 0) direction = 2;
+		else if (column_delta < 0) direction = 3;
+		distance = std::max(std::abs(row_delta), std::abs(column_delta));
+	}
+	if (!unlimited_range && distance > 2) return false;
+	if (!unlimited_range && distance == 2) {
+		if (!card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO
+		)) return false;
+		const int32_t intervening_cell = neighbor_index(source_cell, direction);
+		const int32_t intervening_card_index = value.board_card_indices[intervening_cell];
+		if (intervening_card_index >= 0) {
+			const bool intervening_is_ally = value.board_owners[intervening_cell] == source_owner;
+			const int32_t required_flag = intervening_is_ally ? 1 : 2;
+			if (!card_modifier_has_flag(
+				value,
+				source_card_index,
+				source_owner,
+				ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO,
+				required_flag
+			)) return false;
+		}
+	}
+	if (skip_power_comparison) return true;
+
+	const bool comparison_reversed = (
+		card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::POWER_COMPARISON_REVERSED
+		)
+		|| card_has_modifier(
+			value,
+			target_card_index,
+			target_owner,
+			ModifierOpcode::POWER_COMPARISON_REVERSED
+		)
+	);
+	static constexpr int32_t opposite[4] = {2, 3, 0, 1};
+	if (same_axis) {
+		return power_pair_wins(
+			value,
+			source_card_index,
+			source_owner,
+			target_card_index,
+			target_owner,
+			direction,
+			opposite[direction],
+			comparison_reversed
+		);
+	}
+	const int32_t vertical_direction = row_delta < 0 ? 0 : 2;
+	const int32_t horizontal_direction = column_delta < 0 ? 3 : 1;
+	return (
+		power_pair_wins(
+			value,
+			source_card_index,
+			source_owner,
+			target_card_index,
+			target_owner,
+			vertical_direction,
+			opposite[vertical_direction],
+			comparison_reversed
+		)
+		|| power_pair_wins(
+			value,
+			source_card_index,
+			source_owner,
+			target_card_index,
+			target_owner,
+			horizontal_direction,
+			opposite[horizontal_direction],
+			comparison_reversed
+		)
+	);
+}
+
+bool DuelNativeCompactKernel::power_pair_wins(
+	const NativeState &value,
+	int32_t source_card_index,
+	int32_t source_owner,
+	int32_t target_card_index,
+	int32_t target_owner,
+	int32_t attacking_direction,
+	int32_t defending_direction,
+	bool comparison_reversed
+) const {
+	if (is_special_negative(value, source_card_index)) return false;
+	const int32_t attacking_power = value.card_powers[source_card_index * 4 + attacking_direction];
+	if (is_special_negative(value, target_card_index)) return attacking_power >= 0;
+	const int32_t defending_power = (
+		card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE
+		)
+		? minimum_effective_defending_power(value, target_card_index, target_owner)
+		: effective_defending_power(value, target_card_index, target_owner, defending_direction)
+	);
+	return comparison_reversed ? attacking_power < defending_power : attacking_power > defending_power;
+}
+
 bool DuelNativeCompactKernel::board_has_enabled_event(
 	const NativeState &value,
 	const StringName &event_id
@@ -1201,6 +1614,21 @@ int32_t DuelNativeCompactKernel::effective_defending_power(
 		ModifierOpcode::DEFENDING_POWER_OVERRIDE,
 		&result
 	);
+	return result;
+}
+
+int32_t DuelNativeCompactKernel::minimum_effective_defending_power(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id
+) const {
+	int32_t result = effective_defending_power(value, card_index, owner_id, 0);
+	for (int32_t direction = 1; direction < 4; ++direction) {
+		result = std::min(
+			result,
+			effective_defending_power(value, card_index, owner_id, direction)
+		);
+	}
 	return result;
 }
 

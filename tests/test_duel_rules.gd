@@ -1,5 +1,6 @@
 extends SceneTree
 
+const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 
 var _failures: int = 0
@@ -14,6 +15,7 @@ func _run() -> void:
 	_test_four_direction_capture()
 	_test_would_flip_query_is_pure()
 	_test_contextual_attack_eligibility()
+	_test_negative_powers_take_precedence_over_reversed_comparison()
 	_test_equal_power_does_not_capture()
 	_test_illegal_placement_is_rejected()
 	_test_score_and_full_board()
@@ -84,6 +86,49 @@ func _test_contextual_attack_eligibility() -> void:
 	wrap_board[2] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
 	wrap_board[3] = {"card": weak_enemy, "owner": Rules.OPPONENT_OWNER}
 	_check(not Rules.can_attack_target(wrap_board, 2, 3), "Horizontal row wrapping is not adjacency")
+
+
+func _test_negative_powers_take_precedence_over_reversed_comparison() -> void:
+	var reversed_ability: Dictionary = {
+		"modifiers": [{"type": Catalog.MODIFIER_POWER_COMPARISON_REVERSED}],
+	}
+	var numbered: Dictionary = Rules.make_card("Numbered", "数", [5, 5, 5, 5])
+	var reversed_numbered: Dictionary = Rules.make_card(
+		"Reversed Numbered",
+		"逆",
+		[5, 5, 5, 5],
+		[reversed_ability]
+	)
+	var negative: Dictionary = Rules.make_card("Negative", "负", [-1, -1, -1, -1])
+	var reversed_negative: Dictionary = Rules.make_card(
+		"Reversed Negative",
+		"反",
+		[-1, -1, -1, -1],
+		[reversed_ability]
+	)
+	var board: Array = Rules.empty_board()
+	board[4] = {"card": reversed_numbered, "owner": Rules.PLAYER_OWNER}
+	board[5] = {"card": negative, "owner": Rules.OPPONENT_OWNER}
+	_check(
+		Rules.can_attack_target(board, 4, 5),
+		"Reversal does not stop an ordinary numbered card from attacking four-sided -1"
+	)
+	(board[5] as Dictionary)["card"] = reversed_negative
+	_check(
+		Rules.can_attack_target(board, 4, 5),
+		"Defender reversal does not protect a four-sided -1 card"
+	)
+	(board[4] as Dictionary)["card"] = reversed_negative
+	(board[5] as Dictionary)["card"] = numbered
+	_check(
+		not Rules.can_attack_target(board, 4, 5),
+		"Reversal does not let a four-sided -1 card attack an ordinary numbered card"
+	)
+	(board[5] as Dictionary)["card"] = reversed_negative.duplicate(true)
+	_check(
+		not Rules.can_attack_target(board, 4, 5),
+		"Reversal does not let one four-sided -1 card attack another"
+	)
 
 
 func _test_equal_power_does_not_capture() -> void:

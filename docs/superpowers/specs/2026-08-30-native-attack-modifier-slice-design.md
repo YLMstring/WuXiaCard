@@ -75,8 +75,9 @@ requirements in the card text.
 When a card is initially placed for a summon, before summon-triggered effects
 resolve, the transition snapshots the instance IDs of adjacent enemy cards
 that currently provide this modifier. Immediately before the summoned card's
-standard attack, those exact source instances are checked again in row-major
-source order. A source redirects the attack to allies only if it:
+standard attack, those exact source instances are checked again in their
+top-right-bottom-left snapshot order. A source redirects the attack to allies
+only if it:
 
 - is still on the board;
 - is still adjacent to the summoned attacker;
@@ -214,9 +215,11 @@ every modifier listed in this document, including:
   each permission combination;
 - ordinary and four-sided `-1` comparisons with reversal on the attacker,
   defender, or both;
-- adjacent-summon redirection where the source remains valid, moves away,
-  changes owner, loses its ability, leaves play, or is replaced by a new
-  same-ID instance;
+- adjacent-summon redirection where the source remains valid or loses its
+  ability in an accepted native branch; authoritative GDScript coverage also
+  checks movement, ownership changes, leaving play, and replacement by a new
+  same-ID instance, while native branches that reach those still-unsupported
+  mutations remain conservatively rejected;
 - unlimited and non-orthogonal geometry at board edges and corners;
 - first-legal-only target locking and loss of the locked target during
   `CARD_BE_ATTACKED`;

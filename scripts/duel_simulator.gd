@@ -693,7 +693,7 @@ static func _resolve_attack_target(
 		attacker_instance_id,
 		attacked_cell,
 		attacked_instance_id,
-		true,
+		false,
 		attack_policy
 	):
 		return result

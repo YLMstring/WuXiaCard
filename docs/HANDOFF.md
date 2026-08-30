@@ -478,9 +478,15 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   compact root, tracks branch-local enabled abilities without copying nested
   declarations, and implements the generic summon/attack/flip/exile lifecycle
   used by `TuNaShu1`–`TuNaShu3`, `BaGuaFangWei`, and
-  `LeiZHenJian1`–`LeiZHenJian3`. The 14 real Quick openings currently expose
-  490 legal root plays: 199 are supported with exact full-state/event parity and
-  291 are conservatively rejected with categorized reasons. Production adoption
+  `LeiZHenJian1`–`LeiZHenJian3`. Its generic attack module now compiles all
+  catalog attack modifiers, including distance/intervening rules, comparison
+  reversal, summon redirection, unlimited/non-orthogonal first-target locking,
+  and both indiscriminate target policies. Four-sided `-1` semantics override
+  comparison reversal, and locked attacks compare powers only during initial
+  selection in both GDScript and native paths. The 14 real Quick openings
+  currently expose 490 legal root plays: 271 are supported with exact
+  full-state/event parity and 219 are conservatively rejected with categorized
+  reasons. The expanded probe passes 754 parity checks. Production adoption
   remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.

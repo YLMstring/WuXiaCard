@@ -499,8 +499,24 @@ to `card_after_summoned`. Trigger groups are discovered in board row-major order
 as snapshots and revalidated immediately before resolution. Supported generic
 actions are constant unfiltered draws, trigger/source/attacker exile, self
 exile, flip prevention, and removal of the resolving ability. Supported
-modifiers are constant defending-power override and global
-`enemy_attacks_all`, including allied targets and its capture-owner rule.
+modifiers now include constant defending-power override, other-ally attack
+requirements, minimum-side defense, configurable orthogonal range two,
+comparison reversal, adjacent-summon allies-only redirection, unlimited range,
+non-orthogonal axes, first-legal target locking, owner-turn enemy attack
+prohibition, attacker-local indiscriminate attacks, and global
+`enemy_attacks_all` with its capture-owner rule.
+
+The generic native attack module resolves policy precedence, generates
+candidates in the same directional or row-major order as `DuelRules`, applies
+geometry/intervening-card permissions, compares powers once, locks the target
+cells, and revalidates only non-power legality after `card_be_attacked`.
+Adjacent-summon redirection snapshots exact source instances when the card
+enters and requires the same source to remain adjacent, hostile, present, and
+enabled immediately before the standard attack. The authoritative GDScript
+path now also enforces the previously approved one-comparison rule for locked
+targets. Four-sided `-1` semantics take precedence over comparison reversal in
+both implementations: an ordinary numbered card can still attack such a
+defender, while such an attacker cannot win by reversing the comparison.
 
 Normal flip changes ownership, emits the canonical flip and ability-loss
 events, preserves `retained_on_flip`, defers isolated self-after-flip abilities
@@ -523,30 +539,35 @@ The native probe covers the original five oracle transitions,
 tiers, defending-power override, indiscriminate attacks, attacker/target exile,
 flip prevention, retained/ordinary/deferred flip cleanup, after-attack ability
 removal, after-exile snapshot conditions, recursive-safety rejection, gapped
-physical hand slots, hand-cap truncation, and draw ordering. Across 602 checks,
-restored canonical state keys, live state versions, captures, exiles, and every
-event matched `DuelSimulator`.
+physical hand slots, hand-cap truncation, and draw ordering. The expanded
+generic-attack fixtures additionally cover all remaining attack
+modifiers, policy precedence, both intervening-card permissions, special
+negative powers under reversal, summon-redirect source revalidation, and
+unlimited/non-orthogonal first-target locking, post-reaction other-ally
+revalidation, and first-target exile without fallback. Across 754 checks, restored
+canonical state keys, live state versions, captures, exiles, and every event
+matched `DuelSimulator`.
 
 The same probe enumerates every legal root play in the 14 unique real Quick
-openings. On 2026-08-30 it found 490 legal plays: 199 were supported and all 199
-had exact full-state/event parity; 291 were explicitly rejected with categorized
+openings. On 2026-08-30 it found 490 legal plays: 271 were supported and all 271
+had exact full-state/event parity; 219 were explicitly rejected with categorized
 reasons and zero partial results. This is a coverage report, not an adoption
 threshold.
 
 The latest retained 5,000-transition plain-card probe returned full compact
-payloads and events in `323,929` microseconds versus `4,035,626` microseconds
-for the authoritative GDScript transition loop, about `12.46x` faster. This is
+payloads and events in `404,691` microseconds versus `4,249,517` microseconds
+for the authoritative GDScript transition loop, about `10.50x` faster. This is
 evidence that a coarse native transition can be worthwhile, not a
 production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `779,000` clones per
+same run completed 100,000 native branch clones at about `759,152` clones per
 second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- Native root-action coverage is still 199/490 on the real Quick openings; the
+- Native root-action coverage is still 271/490 on the real Quick openings; the
   categorized rejections identify the next generic declaration slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
