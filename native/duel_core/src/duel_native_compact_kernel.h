@@ -64,6 +64,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		PREVENT_TRIGGER_FLIP,
 		REMOVE_THIS_ABILITY,
 		FOR_EACH_SELECTED_CARD,
+		CHANGE_POWERS,
 		UNSUPPORTED,
 	};
 
@@ -110,6 +111,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	enum class RelativeOwnerOpcode : uint8_t {
 		ABILITY_SOURCE,
 		OPPONENT_OF_ABILITY_SOURCE,
+		CARD_CURRENT,
 		UNSUPPORTED,
 	};
 
@@ -170,6 +172,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
 		int32_t amount = 0;
+		bool amount_is_hand_count = false;
+		RelativeOwnerOpcode amount_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		CompiledSelector selector;
@@ -446,7 +450,8 @@ private:
 		const EventContext &event_context,
 		const ActionContext &action_context,
 		std::vector<int32_t> &exile_stack,
-		Resolution &resolution
+		Resolution &resolution,
+		bool defer_power_change_batch = false
 	) const;
 	ActionOutcome execute_action(
 		NativeState &value,
@@ -491,6 +496,24 @@ private:
 	) const;
 	bool card_declarations_can_spend_ki(const NativeState &value, int32_t card_index) const;
 	bool action_declarations_can_spend_ki(const Variant &value) const;
+	ActionOutcome change_powers(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		int32_t source_cell,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	void assign_power_change_batch(
+		Resolution &resolution,
+		int64_t first_event_index,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const ActionContext &context,
+		int32_t action_index
+	) const;
 	bool draw_cards(
 		NativeState &value,
 		int32_t owner_id,

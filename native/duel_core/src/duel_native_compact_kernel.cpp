@@ -809,6 +809,13 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		(action.has("on_invalid_context") ? 1 : 0)
 		+ (action.has("power_change_batch_group") ? 1 : 0)
 	);
+	auto compile_card_ref = [](const StringName &card_ref) {
+		if (card_ref == StringName("selected_card")) return CardRefOpcode::SELECTED_CARD;
+		if (card_ref == StringName("trigger_card")) return CardRefOpcode::TRIGGER_CARD;
+		if (card_ref == StringName("ability_source")) return CardRefOpcode::ABILITY_SOURCE;
+		if (card_ref == StringName("attacker_card")) return CardRefOpcode::ATTACKER_CARD;
+		return CardRefOpcode::UNSUPPORTED;
+	};
 	if (
 		type == StringName("draw_cards")
 		&& action.size() == 2 + generic_field_count
@@ -819,11 +826,7 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
 	} else if (type == StringName("exile_card") && action.size() == 2 + generic_field_count) {
 		compiled.opcode = ActionOpcode::EXILE_CARD;
-		const StringName card_ref = action.get("card", StringName());
-		if (card_ref == StringName("selected_card")) compiled.card_ref = CardRefOpcode::SELECTED_CARD;
-		else if (card_ref == StringName("trigger_card")) compiled.card_ref = CardRefOpcode::TRIGGER_CARD;
-		else if (card_ref == StringName("ability_source")) compiled.card_ref = CardRefOpcode::ABILITY_SOURCE;
-		else if (card_ref == StringName("attacker_card")) compiled.card_ref = CardRefOpcode::ATTACKER_CARD;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
 	} else if (type == StringName("exile_self") && action.size() == 1 + generic_field_count) {
 		compiled.opcode = ActionOpcode::EXILE_SELF;
 	} else if (type == StringName("prevent_trigger_flip") && action.size() == 1 + generic_field_count) {
@@ -843,6 +846,25 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.child_actions.reserve(static_cast<size_t>(children.size()));
 		for (int64_t child_index = 0; child_index < children.size(); ++child_index) {
 			compiled.child_actions.push_back(compile_action(children[child_index]));
+		}
+	} else if (type == StringName("change_powers") && action.size() == 3 + generic_field_count) {
+		compiled.opcode = ActionOpcode::CHANGE_POWERS;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		const Variant amount = action.get("amount", Variant());
+		if (amount.get_type() == Variant::INT && static_cast<int64_t>(amount) != 0) {
+			compiled.amount = static_cast<int32_t>(static_cast<int64_t>(amount));
+		} else if (amount.get_type() == Variant::DICTIONARY) {
+			const Dictionary spec = amount;
+			if (
+				spec.size() == 3
+				&& StringName(spec.get("type", StringName())) == StringName("card_count")
+				&& StringName(spec.get("zone", StringName())) == StringName("hand")
+			) {
+				compiled.amount_is_hand_count = true;
+				const StringName owner = spec.get("owner", StringName());
+				if (owner == StringName("ability_source")) compiled.amount_owner = RelativeOwnerOpcode::ABILITY_SOURCE;
+				else if (owner == StringName("card_current_owner")) compiled.amount_owner = RelativeOwnerOpcode::CARD_CURRENT;
+			}
 		}
 	}
 	return compiled;
@@ -2461,6 +2483,147 @@ std::vector<int32_t> DuelNativeCompactKernel::snapshot_selected_cards(
 	return selected;
 }
 
+void DuelNativeCompactKernel::assign_power_change_batch(
+	Resolution &resolution,
+	int64_t first_event_index,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const ActionContext &context,
+	int32_t action_index
+) const {
+	bool has_power_change = false;
+	for (int64_t index = first_event_index; index < resolution.events.size(); ++index) {
+		const Variant event_value = resolution.events[index];
+		if (
+			event_value.get_type() == Variant::DICTIONARY
+			&& StringName(Dictionary(event_value).get("type", StringName())) == StringName("powers_changed")
+		) {
+			has_power_change = true;
+			break;
+		}
+	}
+	if (!has_power_change) return;
+	const String suffix = (
+		action.power_change_batch_group.is_empty()
+		? String::num_int64(action_index)
+		: String(action.power_change_batch_group)
+	);
+	const StringName batch_id = StringName(
+		String(state.card_instance_ids[group.source_card_index]) + "|"
+		+ String(context.event_id.is_empty() ? StringName("direct") : context.event_id) + "|"
+		+ String::num_int64(context.discovery_ability_index) + "|"
+		+ String::num_int64(context.trigger_index) + "|" + suffix
+	);
+	for (int64_t index = first_event_index; index < resolution.events.size(); ++index) {
+		const Variant event_value = resolution.events[index];
+		if (event_value.get_type() != Variant::DICTIONARY) continue;
+		Dictionary event = event_value;
+		const StringName type = event.get("type", StringName());
+		if (type == StringName("powers_changed") || type == StringName("card_exiled")) {
+			event["power_change_batch_id"] = batch_id;
+		}
+	}
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	int32_t source_cell,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	int32_t target_card_index = -1;
+	int32_t expected_owner = 0;
+	if (action.card_ref == CardRefOpcode::SELECTED_CARD) {
+		target_card_index = action_context.selected_card_index;
+		expected_owner = action_context.action_subject_owner;
+	} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
+		target_card_index = action_context.ability_source_card_index;
+		expected_owner = action_context.ability_source_owner;
+	} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
+		target_card_index = event_context.trigger_card_index;
+		expected_owner = event_context.trigger_owner;
+	} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
+		target_card_index = event_context.attacker_card_index;
+		expected_owner = event_context.attacker_owner;
+	} else {
+		return ActionOutcome::UNSUPPORTED;
+	}
+	int32_t zone = -1;
+	int32_t owner = 0;
+	int32_t logical_index = -1;
+	if (
+		target_card_index < 0
+		|| !locate_card(value, target_card_index, zone, owner, logical_index)
+		|| zone == 2
+		|| (expected_owner != 0 && owner != expected_owner)
+		|| !can_change_powers(value, target_card_index)
+	) return ActionOutcome::NO_EFFECT;
+
+	int32_t amount = action.amount;
+	if (action.amount_is_hand_count) {
+		int32_t count_owner = 0;
+		if (action.amount_owner == RelativeOwnerOpcode::CARD_CURRENT) {
+			count_owner = owner;
+		} else if (action.amount_owner == RelativeOwnerOpcode::ABILITY_SOURCE) {
+			int32_t source_zone = -1;
+			int32_t source_index = -1;
+			if (
+				!locate_card(value, action_context.ability_source_card_index, source_zone, count_owner, source_index)
+				|| source_zone == 2
+			) return ActionOutcome::NO_EFFECT;
+		} else {
+			return ActionOutcome::UNSUPPORTED;
+		}
+		amount = static_cast<int32_t>(value.zones[count_owner - 1].size());
+	}
+	if (amount == 0) {
+		return action.amount_is_hand_count ? ActionOutcome::NO_EFFECT : ActionOutcome::UNSUPPORTED;
+	}
+	Array previous_powers;
+	Array resulting_powers;
+	bool all_zero = true;
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		const int32_t previous = value.card_powers[target_card_index * 4 + direction];
+		const int32_t resulting = std::max(0, previous + amount);
+		previous_powers.append(previous);
+		resulting_powers.append(resulting);
+		value.card_powers[target_card_index * 4 + direction] = resulting;
+		all_zero = all_zero && resulting == 0;
+	}
+	Dictionary event;
+	event["type"] = StringName("powers_changed");
+	event["source_cell"] = source_cell;
+	event["target_cell"] = zone == 0 ? logical_index : -1;
+	event["owner_id"] = owner;
+	event["instance_id"] = value.card_instance_ids[target_card_index];
+	event["ability_source_instance_id"] = value.card_instance_ids[group.source_card_index];
+	event["previous_powers"] = previous_powers;
+	event["powers"] = resulting_powers;
+	event["amount"] = amount;
+	event["change_reason"] = StringName("change_powers");
+	event["zone"] = zone == 0 ? StringName("board") : (zone == 1 ? StringName("hand") : (zone == 3 ? StringName("discard") : StringName("removed")));
+	event["logical_index"] = logical_index;
+	resolution.events.append(event);
+	if (amount < 0 && all_zero) {
+		if (!exile_card(
+			value,
+			target_card_index,
+			source_cell,
+			group.source_card_index,
+			target_card_index == group.source_card_index,
+			StringName("power_reached_zero"),
+			event_context,
+			exile_stack,
+			resolution
+		)) return ActionOutcome::UNSUPPORTED;
+	}
+	return ActionOutcome::APPLIED;
+}
+
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	NativeState &value,
 	const EventGroup &group,
@@ -2468,10 +2631,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	const EventContext &event_context,
 	const ActionContext &action_context,
 	std::vector<int32_t> &exile_stack,
-	Resolution &resolution
+	Resolution &resolution,
+	bool defer_power_change_batch
 ) const {
 	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
-	for (const CompiledAction &action : actions) {
+	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
+		const CompiledAction &action = actions[action_index];
+		const int64_t first_event_index = resolution.events.size();
 		ActionOutcome outcome = execute_action(
 			value,
 			group,
@@ -2481,6 +2647,16 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 			exile_stack,
 			resolution
 		);
+		if (!defer_power_change_batch) {
+			assign_power_change_batch(
+				resolution,
+				first_event_index,
+				group,
+				action,
+				action_context,
+				static_cast<int32_t>(action_index)
+			);
+		}
 		if (outcome == ActionOutcome::UNSUPPORTED) return outcome;
 		if (outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
 		if (outcome == ActionOutcome::NO_EFFECT && action.stop_rule_on_invalid_context) {
@@ -2541,7 +2717,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 			event_context,
 			nested_context,
 			exile_stack,
-			resolution
+			resolution,
+			true
 		);
 		if (outcome == ActionOutcome::UNSUPPORTED || outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
 		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
@@ -2608,6 +2785,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		}
 		case ActionOpcode::FOR_EACH_SELECTED_CARD:
 			return execute_for_each_selected_card(value, group, action, event_context, action_context, exile_stack, resolution);
+		case ActionOpcode::CHANGE_POWERS:
+			return change_powers(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}

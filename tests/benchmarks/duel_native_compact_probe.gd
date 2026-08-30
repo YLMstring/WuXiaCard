@@ -72,6 +72,7 @@ func _run() -> void:
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
 	_test_selector_transition_parity(kernel)
+	_test_power_change_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
@@ -951,6 +952,112 @@ func _test_selector_transition_parity(kernel: Object) -> void:
 		[&"native_selector_revalidate_4"],
 		"Selector skips a stale second target without refilling from a third",
 		0
+	)
+
+
+func _test_power_change_transition_parity(kernel: Object) -> void:
+	var dynamic_source: Dictionary = _make_plain_card(
+		&"动态改点来源",
+		&"native_power_dynamic_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	dynamic_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [
+				{
+					"type": Catalog.ACTION_CHANGE_POWERS,
+					"card": Catalog.CARD_REF_ABILITY_SOURCE,
+					"amount": {
+						"type": Catalog.VALUE_CARD_COUNT,
+						"zone": Catalog.CARD_ZONE_HAND,
+						"owner": Catalog.OWNER_ABILITY_SOURCE,
+					},
+					"power_change_batch_group": &"native_dynamic_source",
+				},
+				{
+					"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [Catalog.CARD_ZONE_HAND],
+						"conditions": [
+							{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+							{"type": Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+						],
+					},
+					"actions": [{
+						"type": Catalog.ACTION_CHANGE_POWERS,
+						"card": Catalog.CARD_REF_SELECTED_CARD,
+						"amount": {
+							"type": Catalog.VALUE_CARD_COUNT,
+							"zone": Catalog.CARD_ZONE_HAND,
+							"owner": Catalog.OWNER_CARD_CURRENT,
+						},
+					}],
+				},
+			],
+		}],
+	}]
+	var dynamic_state := State.new(
+		Rules.empty_board(),
+		[
+			dynamic_source,
+			_make_plain_card(&"动态手牌一", &"native_power_dynamic_one", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"动态手牌二", &"native_power_dynamic_two", Rules.PLAYER_OWNER, [2, 2, 2, 2]),
+		],
+		[_make_plain_card(&"敌手", &"native_power_dynamic_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_power_change_fixture(
+		kernel,
+		dynamic_state,
+		&"native_power_dynamic_source",
+		3,
+		0,
+		2,
+		"Dynamic hand counts and selector batch sharing"
+	)
+
+	var zero_board: Array = Rules.empty_board()
+	zero_board[0] = _slot(
+		_make_plain_card(&"负点跳过", &"native_power_negative", Rules.OPPONENT_OWNER, [-1, -1, -1, -1]),
+		Rules.OPPONENT_OWNER
+	)
+	zero_board[1] = _slot(
+		_make_plain_card(&"归零目标", &"native_power_zero_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var zero_source: Dictionary = _make_selector_source(
+		&"native_power_zero_source",
+		{
+			"zones": [Catalog.CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+			],
+		},
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"card": Catalog.CARD_REF_SELECTED_CARD,
+			"amount": -1,
+		}]
+	)
+	var zero_state := State.new(
+		zero_board,
+		[zero_source],
+		[_make_plain_card(&"敌手", &"native_power_zero_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_power_change_fixture(
+		kernel,
+		zero_state,
+		&"native_power_zero_source",
+		1,
+		1,
+		1,
+		"Power reduction emits before zero-power exile with one shared batch",
+		4
 	)
 
 
@@ -1894,6 +2001,50 @@ func _check_selector_exile_order(
 			actual_ids.append(StringName((event_value as Dictionary).get("instance_id", &"")))
 	_check(actual_ids == expected_instance_ids, "%s exercises the intended selected order" % label)
 	_check_transition_parity(kernel, state, hand_index, target_cell, instance_id, label)
+
+
+func _check_power_change_fixture(
+	kernel: Object,
+	state: State,
+	instance_id: StringName,
+	expected_power_changes: int,
+	expected_zero_exiles: int,
+	expected_batch_count: int,
+	label: String,
+	target_cell: int = 4
+) -> void:
+	var expected: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, target_cell, instance_id)
+	)
+	var power_count: int = 0
+	var zero_exile_count: int = 0
+	var batch_ids: Dictionary = {}
+	var first_power_index: int = -1
+	var first_zero_exile_index: int = -1
+	var events: Array = expected.get("events", []) as Array
+	for event_index: int in range(events.size()):
+		var event: Dictionary = events[event_index] as Dictionary
+		var event_type := StringName(event.get("type", &""))
+		if event_type == &"powers_changed":
+			power_count += 1
+			if first_power_index < 0:
+				first_power_index = event_index
+			batch_ids[StringName(event.get("power_change_batch_id", &""))] = true
+		elif (
+			event_type == &"card_exiled"
+			and StringName(event.get("exile_reason", &"")) == &"power_reached_zero"
+		):
+			zero_exile_count += 1
+			if first_zero_exile_index < 0:
+				first_zero_exile_index = event_index
+			batch_ids[StringName(event.get("power_change_batch_id", &""))] = true
+	_check(power_count == expected_power_changes, "%s exercises the intended power changes" % label)
+	_check(zero_exile_count == expected_zero_exiles, "%s exercises the intended zero-power exiles" % label)
+	_check(batch_ids.size() == expected_batch_count and not batch_ids.has(&""), "%s assigns the intended power batches" % label)
+	if expected_zero_exiles > 0:
+		_check(first_power_index >= 0 and first_power_index < first_zero_exile_index, "%s changes powers before exile" % label)
+	_check_transition_parity(kernel, state, 0, target_cell, instance_id, label)
 
 
 func _check_transition_rejected(
