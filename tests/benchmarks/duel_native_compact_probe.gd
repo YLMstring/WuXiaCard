@@ -144,6 +144,7 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 	var exact_parity: int = 0
 	var mismatches: int = 0
 	var rejection_reasons: Dictionary = {}
+	var rejection_reasons_by_card: Dictionary = {}
 	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
 	for matchup: Dictionary in matchups:
 		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
@@ -175,6 +176,15 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 				if not bool(actual.get("supported", false)):
 					var reason: String = String(actual.get("reason", "unspecified"))
 					rejection_reasons[reason] = int(rejection_reasons.get(reason, 0)) + 1
+					var source_card_id: String = "unknown"
+					var active_hand: Array = opening.get_hand(opening.active_player)
+					if action.source_index >= 0 and action.source_index < active_hand.size():
+						var source_value: Variant = active_hand[action.source_index]
+						if source_value is Dictionary:
+							source_card_id = String((source_value as Dictionary).get("card_id", &"unknown"))
+					var card_rejections: Dictionary = rejection_reasons_by_card.get(source_card_id, {})
+					card_rejections[reason] = int(card_rejections.get(reason, 0)) + 1
+					rejection_reasons_by_card[source_card_id] = card_rejections
 					_check(
 						not bool(actual.get("valid", false))
 						and (actual.get("events", []) as Array).is_empty()
@@ -208,7 +218,7 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 	_check(unique_openings.size() == 14, "Quick coverage uses 14 unique real openings")
 	_check(mismatches == 0, "Every supported Quick root action has exact oracle parity")
 	print(
-		"DUEL_NATIVE_QUICK_COVERAGE openings=%d total_legal=%d supported=%d exact_parity=%d mismatches=%d rejection_reasons=%s"
+		"DUEL_NATIVE_QUICK_COVERAGE openings=%d total_legal=%d supported=%d exact_parity=%d mismatches=%d rejection_reasons=%s rejection_reasons_by_card=%s"
 		% [
 			unique_openings.size(),
 			total_legal,
@@ -216,6 +226,7 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 			exact_parity,
 			mismatches,
 			JSON.stringify(rejection_reasons),
+			JSON.stringify(rejection_reasons_by_card),
 		]
 	)
 
