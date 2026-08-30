@@ -8,11 +8,17 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 namespace godot {
 
 class DuelNativeCompactKernel : public RefCounted {
 	GDCLASS(DuelNativeCompactKernel, RefCounted)
+
+	struct RuntimeAbilityEntry {
+		int32_t compiled_ability_index = -1;
+		uint64_t handle = 0;
+	};
 
 	struct NativeState {
 		std::vector<int32_t> scalars;
@@ -26,7 +32,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<uint8_t> card_original_owners;
 		std::vector<int32_t> card_ki;
 		std::vector<int32_t> card_active_ability_set_indices;
-		std::vector<std::vector<uint8_t>> card_ability_enabled;
+		std::vector<std::vector<RuntimeAbilityEntry>> card_runtime_abilities;
 		std::vector<uint8_t> card_reveal_codes;
 		std::vector<int32_t> card_suppression_set_indices;
 		std::vector<int32_t> card_hand_slots;
@@ -37,6 +43,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array suppression_set_pool;
 		Dictionary side_payload;
 		bool has_rule_metadata = false;
+		uint64_t next_ability_handle = 1;
 	};
 
 	enum class ConditionOpcode : uint8_t {
@@ -120,7 +127,7 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	struct CompiledAbilitySet {
 		bool declaration_valid = true;
-		std::vector<CompiledAbility> abilities;
+		std::vector<int32_t> ability_pool_indices;
 	};
 
 	struct AttackPolicy {
@@ -154,6 +161,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t source_card_index = -1;
 		int32_t source_owner = 0;
 		int32_t ability_index = -1;
+		uint64_t ability_handle = 0;
 		int32_t trigger_index = -1;
 	};
 
@@ -168,6 +176,8 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	NativeState state;
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
+	std::vector<CompiledAbility> compiled_ability_pool;
+	std::vector<Variant> ability_declaration_pool;
 	bool loaded = false;
 	String last_error;
 
@@ -203,6 +213,17 @@ private:
 	) const;
 	bool card_has_abilities(const NativeState &value, int32_t card_index) const;
 	bool ability_enabled(const NativeState &value, int32_t card_index, int32_t ability_index) const;
+	const CompiledAbility *runtime_ability(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t ability_index
+	) const;
+	int32_t find_runtime_ability_index(
+		const NativeState &value,
+		int32_t card_index,
+		uint64_t ability_handle,
+		int32_t preferred_index = -1
+	) const;
 	bool card_has_enabled_activation(
 		const NativeState &value,
 		int32_t card_index,
@@ -366,7 +387,7 @@ private:
 	void remove_ability_with_event(
 		NativeState &value,
 		int32_t card_index,
-		int32_t ability_index,
+		uint64_t ability_handle,
 		int32_t source_cell,
 		int32_t source_card_index,
 		int32_t target_cell,

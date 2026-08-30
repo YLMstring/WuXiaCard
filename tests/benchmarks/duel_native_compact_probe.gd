@@ -744,6 +744,47 @@ func _test_attack_lifecycle_transition_parity(kernel: Object) -> void:
 		"After-attack self condition removes current ability"
 	)
 
+	var shifted_board: Array = Rules.empty_board()
+	var shifted_listener: Dictionary = _make_plain_card(
+		&"能力换位监听",
+		&"native_shifted_listener",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	shifted_listener["active_abilities"] = [
+		{
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}],
+			}],
+		},
+		{
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			}],
+		},
+	]
+	shifted_board[0] = _slot(shifted_listener, Rules.PLAYER_OWNER)
+	var shifted_state := State.new(
+		shifted_board,
+		[_make_plain_card(&"换位进场牌", &"native_shifted_source", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"敌手", &"native_shifted_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"换位后抽牌", &"native_shifted_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_parity(
+		kernel,
+		shifted_state,
+		0,
+		4,
+		&"native_shifted_source",
+		"Removing an earlier ability preserves a discovered later ability"
+	)
+
 	var after_exile_board: Array = Rules.empty_board()
 	var exiled_target: Dictionary = _make_plain_card(
 		&"受击移除目标",

@@ -195,16 +195,27 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	loaded = validate_shape();
 	if (loaded) {
 		compile_ability_sets();
-		state.card_ability_enabled.clear();
-		state.card_ability_enabled.reserve(state.card_instance_ids.size());
+		state.next_ability_handle = 1;
+		state.card_runtime_abilities.clear();
+		state.card_runtime_abilities.reserve(state.card_instance_ids.size());
 		for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
 			const int32_t set_index = state.card_active_ability_set_indices[card_index];
-			const size_t ability_count = (
+			const std::vector<int32_t> *ability_indices = (
 				set_index >= 0 && set_index < static_cast<int32_t>(compiled_ability_sets.size())
-				? compiled_ability_sets[set_index].abilities.size()
-				: 0
+				? &compiled_ability_sets[set_index].ability_pool_indices
+				: nullptr
 			);
-			state.card_ability_enabled.emplace_back(ability_count, 1);
+			std::vector<RuntimeAbilityEntry> runtime_entries;
+			if (ability_indices != nullptr) {
+				runtime_entries.reserve(ability_indices->size());
+				for (const int32_t compiled_index : *ability_indices) {
+					RuntimeAbilityEntry entry;
+					entry.compiled_ability_index = compiled_index;
+					entry.handle = state.next_ability_handle++;
+					runtime_entries.push_back(entry);
+				}
+			}
+			state.card_runtime_abilities.push_back(runtime_entries);
 		}
 	}
 	return loaded;
@@ -623,6 +634,8 @@ bool DuelNativeCompactKernel::validate_shape() {
 
 void DuelNativeCompactKernel::compile_ability_sets() {
 	compiled_ability_sets.clear();
+	compiled_ability_pool.clear();
+	ability_declaration_pool.clear();
 	compiled_ability_sets.reserve(static_cast<size_t>(state.active_ability_set_pool.size()));
 	for (int64_t set_index = 0; set_index < state.active_ability_set_pool.size(); ++set_index) {
 		CompiledAbilitySet compiled;
@@ -636,10 +649,26 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 		for (int64_t ability_index = 0; ability_index < abilities.size(); ++ability_index) {
 			CompiledAbility compiled_ability;
 			const Variant ability_value = abilities[ability_index];
+			int32_t interned_index = -1;
+			for (size_t pool_index = 0; pool_index < ability_declaration_pool.size(); ++pool_index) {
+				if (ability_declaration_pool[pool_index] == ability_value) {
+					interned_index = static_cast<int32_t>(pool_index);
+					break;
+				}
+			}
+			if (interned_index >= 0) {
+				compiled.ability_pool_indices.push_back(interned_index);
+				if (!compiled_ability_pool[interned_index].declaration_valid) {
+					compiled.declaration_valid = false;
+				}
+				continue;
+			}
 			if (ability_value.get_type() != Variant::DICTIONARY) {
 				compiled.declaration_valid = false;
 				compiled_ability.declaration_valid = false;
-				compiled.abilities.push_back(compiled_ability);
+				compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
+				compiled_ability_pool.push_back(compiled_ability);
+				ability_declaration_pool.push_back(ability_value);
 				continue;
 			}
 			const Dictionary ability = ability_value;
@@ -716,7 +745,9 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 			if (triggers_value.get_type() != Variant::ARRAY) {
 				compiled.declaration_valid = false;
 				compiled_ability.declaration_valid = false;
-				compiled.abilities.push_back(compiled_ability);
+				compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
+				compiled_ability_pool.push_back(compiled_ability);
+				ability_declaration_pool.push_back(ability_value);
 				continue;
 			}
 			const Array triggers = triggers_value;
@@ -803,7 +834,9 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 				}
 				compiled_ability.isolated_self_after_flip = has_self_condition;
 			}
-			compiled.abilities.push_back(compiled_ability);
+			compiled.ability_pool_indices.push_back(static_cast<int32_t>(compiled_ability_pool.size()));
+			compiled_ability_pool.push_back(compiled_ability);
+			ability_declaration_pool.push_back(ability_value);
 		}
 		compiled_ability_sets.push_back(compiled);
 	}
@@ -1044,13 +1077,11 @@ bool DuelNativeCompactKernel::card_has_abilities(
 	const NativeState &value,
 	int32_t card_index
 ) const {
-	if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_ability_enabled.size())) {
-		return false;
-	}
-	for (const uint8_t enabled : value.card_ability_enabled[card_index]) {
-		if (enabled != 0) return true;
-	}
-	return false;
+	return (
+		card_index >= 0
+		&& card_index < static_cast<int32_t>(value.card_runtime_abilities.size())
+		&& !value.card_runtime_abilities[card_index].empty()
+	);
 }
 
 bool DuelNativeCompactKernel::ability_enabled(
@@ -1058,13 +1089,54 @@ bool DuelNativeCompactKernel::ability_enabled(
 	int32_t card_index,
 	int32_t ability_index
 ) const {
-	return (
-		card_index >= 0
-		&& card_index < static_cast<int32_t>(value.card_ability_enabled.size())
-		&& ability_index >= 0
-		&& ability_index < static_cast<int32_t>(value.card_ability_enabled[card_index].size())
-		&& value.card_ability_enabled[card_index][ability_index] != 0
-	);
+	return runtime_ability(value, card_index, ability_index) != nullptr;
+}
+
+const DuelNativeCompactKernel::CompiledAbility *DuelNativeCompactKernel::runtime_ability(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t ability_index
+) const {
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
+		|| ability_index < 0
+		|| ability_index >= static_cast<int32_t>(value.card_runtime_abilities[card_index].size())
+	) {
+		return nullptr;
+	}
+	const int32_t compiled_index = value.card_runtime_abilities[card_index][ability_index].compiled_ability_index;
+	if (compiled_index < 0 || compiled_index >= static_cast<int32_t>(compiled_ability_pool.size())) {
+		return nullptr;
+	}
+	return &compiled_ability_pool[compiled_index];
+}
+
+int32_t DuelNativeCompactKernel::find_runtime_ability_index(
+	const NativeState &value,
+	int32_t card_index,
+	uint64_t ability_handle,
+	int32_t preferred_index
+) const {
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
+		|| ability_handle == 0
+	) {
+		return -1;
+	}
+	const std::vector<RuntimeAbilityEntry> &entries = value.card_runtime_abilities[card_index];
+	if (
+		preferred_index >= 0
+		&& preferred_index < static_cast<int32_t>(entries.size())
+		&& entries[preferred_index].handle == ability_handle
+	) {
+		return preferred_index;
+	}
+	for (size_t index = 0; index < entries.size(); ++index) {
+		if (entries[index].handle == ability_handle) return static_cast<int32_t>(index);
+	}
+	return -1;
 }
 
 bool DuelNativeCompactKernel::card_has_enabled_activation(
@@ -1075,9 +1147,9 @@ bool DuelNativeCompactKernel::card_has_enabled_activation(
 	if (!card_effects_enabled(value, card_index, owner_id)) {
 		return false;
 	}
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (ability_enabled(value, card_index, static_cast<int32_t>(ability_index)) && set.abilities[ability_index].has_activation) return true;
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability != nullptr && ability->has_activation) return true;
 	}
 	return false;
 }
@@ -1090,9 +1162,9 @@ bool DuelNativeCompactKernel::card_has_enabled_modifiers(
 	if (!card_effects_enabled(value, card_index, owner_id)) {
 		return false;
 	}
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (ability_enabled(value, card_index, static_cast<int32_t>(ability_index)) && !set.abilities[ability_index].modifiers.empty()) return true;
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability != nullptr && !ability->modifiers.empty()) return true;
 	}
 	return false;
 }
@@ -1106,12 +1178,10 @@ bool DuelNativeCompactKernel::card_has_enabled_event(
 	if (!card_effects_enabled(value, card_index, owner_id)) {
 		return false;
 	}
-	const CompiledAbilitySet &ability_set = compiled_ability_sets[
-		value.card_active_ability_set_indices[card_index]
-	];
-	for (size_t ability_index = 0; ability_index < ability_set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
-		for (const CompiledTriggerRule &rule : ability_set.abilities[ability_index].triggers) {
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability == nullptr) continue;
+		for (const CompiledTriggerRule &rule : ability->triggers) {
 			if (rule.event_id == event_id) return true;
 		}
 	}
@@ -1124,10 +1194,10 @@ bool DuelNativeCompactKernel::card_has_unsupported_enabled_modifier(
 	int32_t owner_id
 ) const {
 	if (!card_effects_enabled(value, card_index, owner_id)) return false;
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
-		for (const CompiledModifier &modifier : set.abilities[ability_index].modifiers) {
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability == nullptr) continue;
+		for (const CompiledModifier &modifier : ability->modifiers) {
 			if (modifier.opcode == ModifierOpcode::UNSUPPORTED) return true;
 		}
 	}
@@ -1142,11 +1212,11 @@ bool DuelNativeCompactKernel::card_has_modifier(
 	int32_t *out_value
 ) const {
 	if (!card_effects_enabled(value, card_index, owner_id)) return false;
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
 	bool found = false;
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
-		for (const CompiledModifier &modifier : set.abilities[ability_index].modifiers) {
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability == nullptr) continue;
+		for (const CompiledModifier &modifier : ability->modifiers) {
 			if (modifier.opcode == opcode) {
 				found = true;
 				if (out_value != nullptr) *out_value = modifier.value;
@@ -1164,10 +1234,10 @@ bool DuelNativeCompactKernel::card_modifier_has_flag(
 	int32_t flag
 ) const {
 	if (!card_effects_enabled(value, card_index, owner_id)) return false;
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
-		for (const CompiledModifier &modifier : set.abilities[ability_index].modifiers) {
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+		if (ability == nullptr) continue;
+		for (const CompiledModifier &modifier : ability->modifiers) {
 			if (modifier.opcode == opcode && (modifier.value & flag) != 0) return true;
 		}
 	}
@@ -1730,18 +1800,18 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 		if (card_index < 0) continue;
 		const int32_t owner_id = value.board_owners[cell];
 		if (!card_effects_enabled(value, card_index, owner_id)) continue;
-		const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[card_index]];
-		for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-			if (!ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) continue;
-			const CompiledAbility &ability = set.abilities[ability_index];
-			for (size_t trigger_index = 0; trigger_index < ability.triggers.size(); ++trigger_index) {
-				const CompiledTriggerRule &rule = ability.triggers[trigger_index];
+		for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+			const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+			if (ability == nullptr) continue;
+			for (size_t trigger_index = 0; trigger_index < ability->triggers.size(); ++trigger_index) {
+				const CompiledTriggerRule &rule = ability->triggers[trigger_index];
 				if (rule.event_id != event_id) continue;
 				EventGroup group;
 				group.source_cell = static_cast<int32_t>(cell);
 				group.source_card_index = card_index;
 				group.source_owner = owner_id;
 				group.ability_index = static_cast<int32_t>(ability_index);
+				group.ability_handle = value.card_runtime_abilities[card_index][ability_index].handle;
 				group.trigger_index = static_cast<int32_t>(trigger_index);
 				bool condition_supported = true;
 				if (conditions_match(value, group, rule, context, condition_supported)) {
@@ -1779,18 +1849,29 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		return resolution;
 	}
 	for (const EventGroup &group : groups) {
+		const int32_t current_ability_index = find_runtime_ability_index(
+			value,
+			group.source_card_index,
+			group.ability_handle,
+			group.ability_index
+		);
 		if (
 			find_board_card(value, group.source_card_index, group.source_cell) != group.source_cell
 			|| value.board_owners[group.source_cell] != group.source_owner
 			|| !card_effects_enabled(value, group.source_card_index, group.source_owner)
-			|| !ability_enabled(value, group.source_card_index, group.ability_index)
+			|| current_ability_index < 0
 		) continue;
-		const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[group.source_card_index]];
+		const CompiledAbility *ability = runtime_ability(
+			value,
+			group.source_card_index,
+			current_ability_index
+		);
 		if (
-			group.ability_index < 0 || group.ability_index >= static_cast<int32_t>(set.abilities.size())
-			|| group.trigger_index < 0 || group.trigger_index >= static_cast<int32_t>(set.abilities[group.ability_index].triggers.size())
+			ability == nullptr
+			|| group.trigger_index < 0
+			|| group.trigger_index >= static_cast<int32_t>(ability->triggers.size())
 		) continue;
-		const CompiledTriggerRule &rule = set.abilities[group.ability_index].triggers[group.trigger_index];
+		const CompiledTriggerRule &rule = ability->triggers[group.trigger_index];
 		bool condition_supported = true;
 		if (!conditions_match(value, group, rule, context, condition_supported)) {
 			if (!condition_supported) {
@@ -1866,15 +1947,21 @@ bool DuelNativeCompactKernel::draw_cards(
 void DuelNativeCompactKernel::remove_ability_with_event(
 	NativeState &value,
 	int32_t card_index,
-	int32_t ability_index,
+	uint64_t ability_handle,
 	int32_t source_cell,
 	int32_t source_card_index,
 	int32_t target_cell,
 	int32_t owner_id,
 	Array &events
 ) const {
-	if (!ability_enabled(value, card_index, ability_index)) return;
-	value.card_ability_enabled[card_index][ability_index] = 0;
+	const int32_t ability_index = find_runtime_ability_index(
+		value,
+		card_index,
+		ability_handle
+	);
+	if (ability_index < 0) return;
+	std::vector<RuntimeAbilityEntry> &entries = value.card_runtime_abilities[card_index];
+	entries.erase(entries.begin() + ability_index);
 	Dictionary event;
 	event["type"] = StringName("ability_lost");
 	event["source_instance_id"] = source_card_index >= 0 ? value.card_instance_ids[source_card_index] : StringName();
@@ -1913,7 +2000,7 @@ bool DuelNativeCompactKernel::execute_action(
 		case ActionOpcode::REMOVE_THIS_ABILITY: {
 			const int32_t current_cell = find_board_card(value, group.source_card_index, group.source_cell);
 			if (current_cell >= 0 && value.board_owners[current_cell] == group.source_owner) {
-				remove_ability_with_event(value, group.source_card_index, group.ability_index, current_cell, group.source_card_index, current_cell, group.source_owner, resolution.events);
+				remove_ability_with_event(value, group.source_card_index, group.ability_handle, current_cell, group.source_card_index, current_cell, group.source_owner, resolution.events);
 			}
 			return true;
 		}
@@ -2032,12 +2119,17 @@ bool DuelNativeCompactKernel::flip_card(
 ) const {
 	const int32_t current_target_cell = find_board_card(value, target_card_index, target_cell);
 	if (current_target_cell < 0 || value.board_owners[current_target_cell] == new_owner) return true;
-	std::vector<int32_t> deferred;
-	const CompiledAbilitySet &set = compiled_ability_sets[value.card_active_ability_set_indices[target_card_index]];
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, target_card_index, static_cast<int32_t>(ability_index))) continue;
-		const CompiledAbility &ability = set.abilities[ability_index];
-		if (!ability.retained_on_flip && ability.isolated_self_after_flip) deferred.push_back(static_cast<int32_t>(ability_index));
+	std::vector<uint64_t> remove_before_after_flip;
+	std::vector<uint64_t> remove_after_after_flip;
+	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[target_card_index].size(); ++ability_index) {
+		const CompiledAbility *ability = runtime_ability(value, target_card_index, static_cast<int32_t>(ability_index));
+		if (ability == nullptr || ability->retained_on_flip) continue;
+		const uint64_t handle = value.card_runtime_abilities[target_card_index][ability_index].handle;
+		if (ability->isolated_self_after_flip) {
+			remove_after_after_flip.push_back(handle);
+		} else {
+			remove_before_after_flip.push_back(handle);
+		}
 	}
 	value.board_owners[current_target_cell] = static_cast<uint8_t>(new_owner);
 	Dictionary flipped;
@@ -2047,12 +2139,8 @@ bool DuelNativeCompactKernel::flip_card(
 	flipped["owner_id"] = new_owner;
 	flipped["instance_id"] = value.card_instance_ids[target_card_index];
 	resolution.events.append(flipped);
-	for (size_t ability_index = 0; ability_index < set.abilities.size(); ++ability_index) {
-		if (!ability_enabled(value, target_card_index, static_cast<int32_t>(ability_index))) continue;
-		const CompiledAbility &ability = set.abilities[ability_index];
-		if (!ability.retained_on_flip && !ability.isolated_self_after_flip) {
-			remove_ability_with_event(value, target_card_index, static_cast<int32_t>(ability_index), attacker_cell, attacker_card_index, current_target_cell, new_owner, resolution.events);
-		}
+	for (const uint64_t ability_handle : remove_before_after_flip) {
+		remove_ability_with_event(value, target_card_index, ability_handle, attacker_cell, attacker_card_index, current_target_cell, new_owner, resolution.events);
 	}
 	resolution.captures.append(current_target_cell);
 	EventContext after_context = context;
@@ -2069,8 +2157,8 @@ bool DuelNativeCompactKernel::flip_card(
 	resolution.exiles.append_array(after.exiles);
 	const int32_t post_cell = find_board_card(value, target_card_index, current_target_cell);
 	if (post_cell >= 0) {
-		for (const int32_t ability_index : deferred) {
-			remove_ability_with_event(value, target_card_index, ability_index, attacker_cell, attacker_card_index, post_cell, new_owner, resolution.events);
+		for (const uint64_t ability_handle : remove_after_after_flip) {
+			remove_ability_with_event(value, target_card_index, ability_handle, attacker_cell, attacker_card_index, post_cell, new_owner, resolution.events);
 		}
 	}
 	return true;
@@ -2100,12 +2188,13 @@ Dictionary DuelNativeCompactKernel::restore_runtime_card(
 		card["ki"] = value.card_ki[card_index];
 	}
 	if ((flags & (1 << 4)) != 0) {
-		const int32_t set_index = value.card_active_ability_set_indices[card_index];
-		const Array root_abilities = value.active_ability_set_pool[set_index];
 		Array active_abilities;
-		for (int64_t ability_index = 0; ability_index < root_abilities.size(); ++ability_index) {
-			if (ability_enabled(value, card_index, static_cast<int32_t>(ability_index))) {
-				active_abilities.append(root_abilities[ability_index]);
+		for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[card_index]) {
+			if (
+				entry.compiled_ability_index >= 0
+				&& entry.compiled_ability_index < static_cast<int32_t>(ability_declaration_pool.size())
+			) {
+				active_abilities.append(ability_declaration_pool[entry.compiled_ability_index]);
 			}
 		}
 		card["active_abilities"] = active_abilities;
@@ -2262,18 +2351,15 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	Array materialized_pool = value.active_ability_set_pool.duplicate();
 	std::vector<int32_t> materialized_indices = value.card_active_ability_set_indices;
 	for (size_t card_index = 0; card_index < value.card_instance_ids.size(); ++card_index) {
-		const int32_t root_set_index = value.card_active_ability_set_indices[card_index];
-		const Array root_set = value.active_ability_set_pool[root_set_index];
-		bool all_enabled = root_set.size() == static_cast<int64_t>(value.card_ability_enabled[card_index].size());
 		Array derived;
-		for (int64_t ability_index = 0; ability_index < root_set.size(); ++ability_index) {
-			if (ability_enabled(value, static_cast<int32_t>(card_index), static_cast<int32_t>(ability_index))) {
-				derived.append(root_set[ability_index]);
-			} else {
-				all_enabled = false;
+		for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[card_index]) {
+			if (
+				entry.compiled_ability_index >= 0
+				&& entry.compiled_ability_index < static_cast<int32_t>(ability_declaration_pool.size())
+			) {
+				derived.append(ability_declaration_pool[entry.compiled_ability_index]);
 			}
 		}
-		if (all_enabled) continue;
 		int32_t derived_index = -1;
 		for (int64_t pool_index = 0; pool_index < materialized_pool.size(); ++pool_index) {
 			if (Variant(materialized_pool[pool_index]) == Variant(derived)) {
@@ -2313,9 +2399,11 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 	hash_values(hash, value.card_powers);
 	hash_values(hash, value.card_original_owners);
 	hash_values(hash, value.card_ki);
-	hash_values(hash, value.card_active_ability_set_indices);
-	for (const std::vector<uint8_t> &abilities : value.card_ability_enabled) {
-		hash_values(hash, abilities);
+	for (const std::vector<RuntimeAbilityEntry> &abilities : value.card_runtime_abilities) {
+		for (const RuntimeAbilityEntry &entry : abilities) {
+			hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
+			hash *= 1099511628211ULL;
+		}
 	}
 	hash_values(hash, value.card_reveal_codes);
 	hash_values(hash, value.card_suppression_set_indices);
