@@ -334,7 +334,7 @@ static func replace_activate_ability(card: Dictionary, new_ability: Dictionary) 
 			continue
 		var ability: Dictionary = ability_value
 		if not is_activate_ability(ability):
-			retained_abilities.append(ability.duplicate(true))
+			retained_abilities.append(ability)
 	if not new_ability.is_empty():
 		retained_abilities.append(new_ability.duplicate(true))
 	card["active_abilities"] = retained_abilities
@@ -348,7 +348,7 @@ static func remove_non_retained_abilities(card: Dictionary) -> int:
 			continue
 		var ability: Dictionary = ability_value
 		if bool(ability.get("retained_on_flip", false)):
-			retained_abilities.append(ability.duplicate(true))
+			retained_abilities.append(ability)
 		else:
 			removed_count += 1
 	card["active_abilities"] = retained_abilities
@@ -366,7 +366,7 @@ static func get_deferred_self_after_flip_abilities(card: Dictionary) -> Array[Di
 			not bool(ability.get("retained_on_flip", false))
 			and is_isolated_self_after_flip_ability(ability)
 		):
-			deferred.append(ability.duplicate(true))
+			deferred.append(ability)
 	return deferred
 
 
@@ -398,7 +398,7 @@ static func remove_deferred_self_after_flip_abilities(
 	for snapshot: Dictionary in deferred_snapshots:
 		for ability_index: int in range(active_abilities.size()):
 			var ability_value: Variant = active_abilities[ability_index]
-			if ability_value is Dictionary and (ability_value as Dictionary) == snapshot:
+			if ability_value is Dictionary and is_same(ability_value, snapshot):
 				active_abilities.remove_at(ability_index)
 				removed_count += 1
 				break
@@ -434,7 +434,7 @@ static func temporarily_remove_non_retained_abilities(
 			continue
 		var ability: Dictionary = ability_value
 		if bool(ability.get("retained_on_flip", false)):
-			retained_abilities.append(ability.duplicate(true))
+			retained_abilities.append(ability)
 		else:
 			removed_entries.append({
 				"index": ability_index,

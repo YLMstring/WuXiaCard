@@ -78,6 +78,7 @@ $testScripts = @(
     "test_duel_rules.gd",
 	"test_duel_opening_setup.gd",
     "test_duel_card_selector.gd",
+	"test_duel_trigger_revalidation.gd",
 	"test_duel_simulator.gd",
 	"test_duel_state_key.gd",
 	"test_duel_compact_state.gd",

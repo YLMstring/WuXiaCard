@@ -1643,7 +1643,7 @@ static func _grant_ability_to_location(
 	if Abilities.is_activate_ability(normalized):
 		Abilities.replace_activate_ability(target_card, normalized)
 	else:
-		active = active.duplicate(true)
+		active = active.duplicate(false)
 		active.append(normalized)
 		target_card["active_abilities"] = active
 	return _applied(source_cell, [{
@@ -1693,11 +1693,19 @@ static func _remove_this_ability(
 		return _no_effect(source_cell)
 	var card: Dictionary = source.get("card", {})
 	var abilities: Array = card.get("active_abilities", [])
-	var ability_index: int = int(context.get("resolving_ability_index", -1))
+	var ability_index: int = int(context.get(
+		"resolving_ability_current_index",
+		context.get("resolving_ability_index", -1)
+	))
 	var snapshot: Dictionary = context.get("resolving_ability_snapshot", {})
-	if ability_index < 0 or ability_index >= abilities.size() or abilities[ability_index] != snapshot:
+	if (
+		ability_index < 0
+		or ability_index >= abilities.size()
+		or not abilities[ability_index] is Dictionary
+		or not is_same(abilities[ability_index], snapshot)
+	):
 		return _no_effect(source_cell)
-	abilities = abilities.duplicate(true)
+	abilities = abilities.duplicate(false)
 	abilities.remove_at(ability_index)
 	card["active_abilities"] = abilities
 	var current_cell: int = _get_location_cell(source)

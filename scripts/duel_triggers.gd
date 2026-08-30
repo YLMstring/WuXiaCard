@@ -63,6 +63,9 @@ static func resolve_group(
 	var context: Dictionary = group.get("context", {})
 	context = context.duplicate(true)
 	context["resolving_ability_index"] = int(group.get("ability_index", -1))
+	context["resolving_ability_current_index"] = int(
+		resolved.get("ability_index", group.get("ability_index", -1))
+	)
 	context["resolving_trigger_index"] = int(group.get("trigger_index", -1))
 	context["resolving_event_id"] = StringName(group.get("event_id", &""))
 	context["resolving_ability_snapshot"] = group.get("ability_snapshot", {}) as Dictionary
@@ -230,15 +233,18 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 	):
 		return {}
 	var active_abilities: Array = card.get("active_abilities", [])
-	var ability_index: int = int(group.get("ability_index", -1))
-	if ability_index < 0 or ability_index >= active_abilities.size():
+	var ability_snapshot_value: Variant = group.get("ability_snapshot", null)
+	if not ability_snapshot_value is Dictionary:
 		return {}
-	var ability_value: Variant = active_abilities[ability_index]
-	if not ability_value is Dictionary:
+	var ability_snapshot: Dictionary = ability_snapshot_value
+	var ability_index: int = _find_runtime_ability_index(
+		active_abilities,
+		int(group.get("ability_index", -1)),
+		ability_snapshot
+	)
+	if ability_index < 0:
 		return {}
-	var ability: Dictionary = ability_value
-	if ability != group.get("ability_snapshot", {}):
-		return {}
+	var ability: Dictionary = active_abilities[ability_index]
 	var triggers: Array = ability.get("triggers", [])
 	var trigger_index: int = int(group.get("trigger_index", -1))
 	if trigger_index < 0 or trigger_index >= triggers.size():
@@ -249,7 +255,26 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 	var rule: Dictionary = rule_value
 	if StringName(rule.get("event", &"")) != StringName(group.get("event_id", &"")):
 		return {}
-	return {"card": card, "rule": rule}
+	return {"card": card, "rule": rule, "ability_index": ability_index}
+
+
+static func _find_runtime_ability_index(
+	active_abilities: Array,
+	preferred_index: int,
+	ability_snapshot: Dictionary
+) -> int:
+	if (
+		preferred_index >= 0
+		and preferred_index < active_abilities.size()
+		and active_abilities[preferred_index] is Dictionary
+		and is_same(active_abilities[preferred_index], ability_snapshot)
+	):
+		return preferred_index
+	for ability_index: int in range(active_abilities.size()):
+		var ability_value: Variant = active_abilities[ability_index]
+		if ability_value is Dictionary and is_same(ability_value, ability_snapshot):
+			return ability_index
+	return -1
 
 
 static func _conditions_match(
