@@ -5,6 +5,7 @@ const TRANSITION_ITERATIONS: int = 5_000
 
 const CompactState = preload("res://scripts/duel_compact_state.gd")
 const Action = preload("res://scripts/duel_action.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -68,7 +69,8 @@ func _run() -> void:
 		quit(1)
 		return
 	_test_basic_transition_parity(kernel)
-	_test_basic_transition_rejects_abilities(kernel)
+	_test_draw_trigger_transition_parity(kernel)
+	_test_draw_trigger_rejections(kernel)
 	if _failures > 0:
 		push_error(
 			"DUEL_NATIVE_COMPACT_PROBE_FAILED parity_failures=%d checks=%d"
@@ -261,36 +263,195 @@ func _test_basic_transition_parity(kernel: Object) -> void:
 	)
 
 
-func _test_basic_transition_rejects_abilities(kernel: Object) -> void:
-	var ability_card: Dictionary = _make_plain_card(
-		&"带能力",
-		&"native_ability",
+func _test_draw_trigger_transition_parity(kernel: Object) -> void:
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		for tier: int in range(1, 4):
+			var prefix: String = "native_tuna_%d_%d" % [owner_id, tier]
+			var source_id := StringName("TuNaShu%d" % tier)
+			var source: Dictionary = Catalog.create_instance(
+				source_id,
+				owner_id,
+				StringName("%s_source" % prefix)
+			)
+			var remaining: Dictionary = _make_plain_card(
+				&"吐纳余牌",
+				StringName("%s_remaining" % prefix),
+				owner_id,
+				[1, 1, 1, 1]
+			)
+			var active_hand: Array = [remaining, source]
+			if tier == 2:
+				remaining[State.HAND_SLOT_INDEX_KEY] = 2
+				source[State.HAND_SLOT_INDEX_KEY] = 4
+			var active_deck: Array = []
+			for draw_index: int in range(3):
+				active_deck.append(_make_plain_card(
+					StringName("吐纳抽牌%d" % draw_index),
+					StringName("%s_draw_%d" % [prefix, draw_index]),
+					owner_id,
+					[1, 1, 1, 1]
+				))
+			if owner_id == Rules.PLAYER_OWNER and tier == 1:
+				var dormant_drawn_card: Dictionary = _make_after_summoned_card(
+					StringName("%s_draw_0" % prefix),
+					{"type": Catalog.ACTION_GAIN_KI, "amount": 1}
+				)
+				dormant_drawn_card["card_id"] = &"吐纳抽牌0"
+				active_deck[0] = dormant_drawn_card
+			var other_owner: int = (
+				Rules.OPPONENT_OWNER if owner_id == Rules.PLAYER_OWNER else Rules.PLAYER_OWNER
+			)
+			var other_hand: Array = [_make_plain_card(
+				&"吐纳敌手",
+				StringName("%s_other" % prefix),
+				other_owner,
+				[1, 1, 1, 1]
+			)]
+			var state := State.new(
+				Rules.empty_board(),
+				active_hand if owner_id == Rules.PLAYER_OWNER else other_hand,
+				active_hand if owner_id == Rules.OPPONENT_OWNER else other_hand,
+				owner_id,
+				0,
+				active_deck if owner_id == Rules.PLAYER_OWNER else [],
+				active_deck if owner_id == Rules.OPPONENT_OWNER else []
+			)
+			if tier == 2:
+				remaining[State.HAND_SLOT_INDEX_KEY] = 2
+				source[State.HAND_SLOT_INDEX_KEY] = 4
+				var stored_hand: Array = state.get_hand(owner_id)
+				(stored_hand[0] as Dictionary)[State.HAND_SLOT_INDEX_KEY] = 2
+				(stored_hand[1] as Dictionary)[State.HAND_SLOT_INDEX_KEY] = 4
+			_check_transition_parity(
+				kernel,
+				state,
+				1,
+				4,
+				StringName("%s_source" % prefix),
+				"TuNaShu%d owner %d draw parity" % [tier, owner_id]
+			)
+
+	var cap_hand: Array = []
+	for hand_index: int in range(4):
+		cap_hand.append(_make_plain_card(
+			StringName("上限余牌%d" % hand_index),
+			StringName("native_tuna_cap_%d" % hand_index),
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1]
+		))
+	cap_hand.append(Catalog.create_instance(
+		&"TuNaShu3",
+		Rules.PLAYER_OWNER,
+		&"native_tuna_cap_source"
+	))
+	var cap_state := State.new(
+		Rules.empty_board(),
+		cap_hand,
+		[_make_plain_card(&"上限敌手", &"native_tuna_cap_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[
+			_make_plain_card(&"上限抽一", &"native_tuna_cap_draw_1", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"上限抽二", &"native_tuna_cap_draw_2", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		]
+	)
+	_check_transition_parity(
+		kernel,
+		cap_state,
+		4,
+		4,
+		&"native_tuna_cap_source",
+		"TuNaShu3 hand-cap truncation"
+	)
+
+	var attack_board: Array = Rules.empty_board()
+	attack_board[1] = _slot(
+		_make_plain_card(&"吐纳受击", &"native_tuna_attack_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0]),
+		Rules.OPPONENT_OWNER
+	)
+	var attack_state := State.new(
+		attack_board,
+		[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"native_tuna_attack_source")],
+		[_make_plain_card(&"吐纳敌手", &"native_tuna_attack_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"吐纳先抽", &"native_tuna_attack_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_parity(
+		kernel,
+		attack_state,
+		0,
+		4,
+		&"native_tuna_attack_source",
+		"Draw events precede standard attack"
+	)
+
+
+func _test_draw_trigger_rejections(kernel: Object) -> void:
+	var empty_deck_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"native_empty_draw")],
+		[_make_plain_card(&"敌手", &"native_empty_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_rejected(kernel, empty_deck_state, &"native_empty_draw", "Empty-deck fallback")
+
+	var listener_board: Array = Rules.empty_board()
+	var draw_listener: Dictionary = _make_plain_card(
+		&"抽牌监听",
+		&"native_draw_listener",
 		Rules.PLAYER_OWNER,
 		[1, 1, 1, 1]
 	)
-	ability_card["active_abilities"] = [{"trigger": &"fixture"}]
-	var state := State.new(
+	draw_listener["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DRAWN,
+			"conditions": [],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	listener_board[0] = _slot(draw_listener, Rules.PLAYER_OWNER)
+	var listener_state := State.new(
+		listener_board,
+		[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"native_listener_source")],
+		[_make_plain_card(&"敌手", &"native_listener_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"待抽", &"native_listener_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_rejected(kernel, listener_state, &"native_listener_source", "After-drawn listener")
+
+	var filtered_source: Dictionary = _make_after_summoned_card(
+		&"native_filtered_source",
+		{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1, "weapon": "剑法"}
+	)
+	var filtered_state := State.new(
 		Rules.empty_board(),
-		[ability_card],
-		[_make_plain_card(&"敌手", &"native_reject_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		[filtered_source],
+		[_make_plain_card(&"敌手", &"native_filtered_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"待抽", &"native_filtered_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_rejected(kernel, filtered_state, &"native_filtered_source", "Filtered draw")
+
+	var unsupported_source: Dictionary = _make_after_summoned_card(
+		&"native_unsupported_source",
+		{"type": Catalog.ACTION_GAIN_KI, "amount": 1}
+	)
+	var unsupported_state := State.new(
+		Rules.empty_board(),
+		[unsupported_source],
+		[_make_plain_card(&"敌手", &"native_unsupported_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER
 	)
-	var compact := CompactState.new()
-	_check(compact.capture_state(state), "Ability rejection fixture can be captured")
-	if not compact.is_structurally_valid():
-		return
-	_check(
-		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
-		"Ability rejection fixture loads into native state"
+	_check_transition_rejected(
+		kernel,
+		unsupported_state,
+		&"native_unsupported_source",
+		"Unsupported after-summoned action"
 	)
-	var result: Dictionary = kernel.call(
-		"apply_basic_play_transition",
-		0,
-		4,
-		&"native_ability"
-	) as Dictionary
-	_check(not bool(result.get("supported", true)), "Ability-bearing state is explicitly unsupported")
-	_check(not bool(result.get("valid", true)), "Unsupported state does not produce a transition")
 
 
 func _benchmark_basic_transition(kernel: Object) -> Dictionary:
@@ -319,7 +480,7 @@ func _benchmark_basic_transition(kernel: Object) -> Dictionary:
 	var native_started_usec: int = Time.get_ticks_usec()
 	for _iteration: int in range(TRANSITION_ITERATIONS):
 		var transition: Dictionary = kernel.call(
-			"apply_basic_play_transition",
+			"apply_play_transition",
 			0,
 			4,
 			&"native_bench_play"
@@ -367,8 +528,14 @@ func _check_transition_parity(
 		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
 		"%s compact source loads natively" % label
 	)
+	var compiled_layout: Dictionary = kernel.call("inspect_layout") as Dictionary
+	_check(
+		int(compiled_layout.get("compiled_ability_set_count", -1))
+		== compact.active_ability_set_pool.size(),
+		"%s immutable ability sets compile once at root load" % label
+	)
 	var actual: Dictionary = kernel.call(
-		"apply_basic_play_transition",
+		"apply_play_transition",
 		hand_index,
 		target_cell,
 		instance_id
@@ -412,6 +579,66 @@ func _check_transition_parity(
 			expected.get("events", []),
 			actual.get("events", []),
 		])
+	var draw_event_index: int = _first_event_index(actual.get("events", []) as Array, &"card_drawn")
+	var attack_event_index: int = _first_event_index(actual.get("events", []) as Array, &"attack_started")
+	if draw_event_index >= 0 and attack_event_index >= 0:
+		_check(
+			draw_event_index < attack_event_index,
+			"%s draw events precede the standard attack" % label
+		)
+
+
+func _check_transition_rejected(
+	kernel: Object,
+	state: State,
+	instance_id: StringName,
+	label: String
+) -> void:
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s fixture can be compacted" % label)
+	if not compact.is_structurally_valid():
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"%s compact source loads natively" % label
+	)
+	var result: Dictionary = kernel.call(
+		"apply_play_transition",
+		0,
+		4,
+		instance_id
+	) as Dictionary
+	_check(not bool(result.get("supported", true)), "%s is explicitly unsupported" % label)
+	_check(not bool(result.get("valid", true)), "%s does not produce a transition" % label)
+
+
+func _first_event_index(events: Array, event_type: StringName) -> int:
+	for event_index: int in range(events.size()):
+		var event_value: Variant = events[event_index]
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_index
+	return -1
+
+
+func _make_after_summoned_card(instance_id: StringName, action: Dictionary) -> Dictionary:
+	var card: Dictionary = _make_plain_card(
+		&"原生能力夹具",
+		instance_id,
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	card["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [action],
+		}],
+	}]
+	return card
 
 
 func _make_plain_card(

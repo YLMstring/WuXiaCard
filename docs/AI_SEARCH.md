@@ -461,45 +461,61 @@ packed runtime arrays into owned C++ vectors, validates all fixed lengths, and
 keeps branch cloning native. Production integration remains forbidden until
 complete transition semantics and Windows/Android packaging are both proven.
 
-### First native transition slice
+### Native play-transition slices
 
-The opt-in kernel now implements the first complete, deliberately narrow rule
-slice. It accepts only normalized cards with no active abilities and resolves a
-normal hand play through placement, orthogonal power comparison, standard
-adjacent attacks, ownership flips, `last_hand_play_by_owner`, action/state
-version increments, owner-turn boundaries, empty-turn advancement, attack-count
-reset, repetition recording, and action-limit/full-board/fivefold terminal
-checks. The result is a complete compact payload plus capture, exile, and event
-arrays suitable for one boundary restore.
+The opt-in kernel implements a deliberately narrow generic play path. Its first
+slice resolves normalized ability-free hand plays through placement, orthogonal
+power comparison, standard adjacent attacks, ownership flips,
+`last_hand_play_by_owner`, action/state version increments, owner-turn
+boundaries, empty-turn advancement, attack-count reset, repetition recording,
+and action-limit/full-board/fivefold terminal checks. The result is a complete
+compact payload plus capture, exile, and event arrays suitable for one boundary
+restore.
 
 Unsupported semantics are never approximated. The prototype rejects the whole
-state when it contains card or state abilities, temporary suppression, queued
-effects, a pending choice, extra plays, a partially resolved turn end, pending
-hand-play suppression, special all-negative powers, or difficulty 8/9 hand
-rules. Production still never references the extension.
+action when a relevant declaration or runtime feature lies outside the covered
+slice. State abilities, temporary suppression, queued effects, pending choices,
+extra plays, a partially resolved turn end, pending hand-play suppression,
+special negative powers, and difficulty 8/9 hand rules remain unsupported.
 
-The native probe covers five exact oracle transitions: multi-target adjacent
-capture, opponent empty-turn advancement, action-limit terminal, full-board
-terminal, and fivefold-repetition terminal. It also checks explicit rejection
-of an ability-bearing state. Across 59 assertions, restored canonical state
-keys, live state versions, captures, exiles, and every event matched
-`DuelSimulator`.
+The second slice compiles every interned immutable ability set once when the
+compact root is loaded. Search nodes consult the compiled event/action summaries
+instead of walking nested `Dictionary` declarations. It generically supports
+the exact declaration shape “self `card_after_summoned` → unfiltered
+`draw_cards` with a positive constant amount”, including the real catalog
+`TuNaShu1`–`TuNaShu3` cards for either owner. Draws consume the exact deck front
+one card at a time, fill the physical leftmost empty hand slot, reconstruct the
+complete runtime card snapshot in each `card_drawn` event, obey the five-card
+hand cap, and finish before the standard summon attack.
 
-On the retained 5,000-transition plain-card probe, the native boundary returned
-full compact payloads and events in `219,143` microseconds versus `4,089,964`
-microseconds for the authoritative GDScript transition loop, about `18.66x`
-faster. This is evidence that a coarse native transition can be worthwhile, not
-a production-search forecast: it excludes compact-to-`DuelState` restoration,
+The support gate is action-specific: abilities in hand/deck remain dormant, an
+unrelated board self-draw listener is provably false for another summoned card,
+and only events/modifiers that can affect this play cause rejection. Filtered
+draws, empty-deck generated cards, future draw revelation, after-draw listeners,
+unsupported summon reactions, attack/flip reactions, and flips of
+ability-bearing targets are rejected rather than approximated.
+
+The native probe now covers the original five oracle transitions plus
+`TuNaShu1`–`TuNaShu3` for both owners, gapped physical hand slots, hand-cap
+truncation, draw-before-attack ordering, and explicit unsupported cases. Across
+173 assertions, restored canonical state keys, live state versions, captures,
+exiles, and every event matched `DuelSimulator`.
+
+The latest retained 5,000-transition plain-card probe returned full compact
+payloads and events in `262,978` microseconds versus `4,014,176` microseconds
+for the authoritative GDScript transition loop, about `15.26x` faster. This is
+evidence that a coarse native transition can be worthwhile, not a
+production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-100,000-branch core clone probe in the same run completed at about `754,000`
-clones/second after immutable metadata handles and card IDs were added.
+same run completed 100,000 native branch clones at about `824,000` clones per
+second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- No broad generated native-transition parity corpus beyond the first plain-card
-  fixture slice.
+- No broad generated native-transition parity corpus beyond the plain-card and
+  self-after-summoned draw slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
 - No difficulty profiles beyond budget.

@@ -473,6 +473,12 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   evidence rather than judging strength from one game. Node-limited reports must
   include minimum-depth guard and overrun diagnostics instead of describing
   1,500 as a hard cap.
+- The opt-in `DuelNativeCompactKernel` remains test-only and absent from every
+  production path. It now compiles immutable ability declarations once per
+  compact root and exactly matches the simulator for the generic self-after-
+  summoned constant draw shape used by `TuNaShu1`–`TuNaShu3`; all other
+  relevant draw/summon/attack/turn semantics are conservatively rejected.
+  See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.

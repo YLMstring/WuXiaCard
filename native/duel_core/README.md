@@ -26,19 +26,26 @@ Current scope:
   mutable-core clone probe;
 - converts packed Godot arrays into owned C++ vectors;
 - validates the documented array shape;
-- resolves one test-only generic transition slice: normalized, ability-free
-  hand play, ordinary orthogonal power comparison, standard attack, ownership
-  flip, hand-play memory, turn boundary, empty-turn advancement, action-limit,
-  full-board, and fivefold-repetition terminal checks;
+- resolves test-only generic normalized hand plays, including ordinary
+  orthogonal power comparison, standard attack, ownership flip, hand-play
+  memory, turn boundaries, empty-turn advancement, and terminal checks;
+- compiles immutable ability declarations once per loaded compact root and
+  supports the exact generic self-after-summoned unfiltered constant draw
+  shape used by `TuNaShu1`–`TuNaShu3`;
+- executes those draws sequentially from the deck front, fills the physical
+  leftmost hand slot, and reconstructs complete `card_drawn` snapshots before
+  standard attacks;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
-- explicitly rejects states with abilities, temporary suppression, extra
-  plays, pending choices/effects, special negative powers, or difficulty 8/9
-  hand rules instead of approximating them;
+- uses an action-specific conservative gate and explicitly rejects relevant
+  unsupported summon/draw/attack/turn declarations, filtered or generated
+  draws, temporary suppression, extra plays, pending choices/effects, special
+  negative powers, or difficulty 8/9 hand rules instead of approximating them;
 - measures native core cloning and the covered transition slice.
 
 It deliberately does not implement the general ability executor, targeting,
-draw/discard/exile/movement primitives, state keys, evaluation, or search yet.
+filtered/generated draws, discard/exile/movement primitives, state keys,
+evaluation, or search yet.
 Production does not call it. The probe compares every covered state field and
 event against `DuelSimulator`, which remains the oracle for every native
 primitive.

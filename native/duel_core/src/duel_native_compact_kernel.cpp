@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <limits>
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -102,12 +103,12 @@ void DuelNativeCompactKernel::_bind_methods() {
 	);
 	ClassDB::bind_method(
 		D_METHOD(
-			"apply_basic_play_transition",
+			"apply_play_transition",
 			"hand_index",
 			"target_cell",
 			"expected_instance_id"
 		),
-		&DuelNativeCompactKernel::apply_basic_play_transition,
+		&DuelNativeCompactKernel::apply_play_transition,
 		DEFVAL(StringName())
 	);
 }
@@ -191,6 +192,9 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	}
 
 	loaded = validate_shape();
+	if (loaded) {
+		compile_ability_sets();
+	}
 	return loaded;
 }
 
@@ -211,11 +215,14 @@ Dictionary DuelNativeCompactKernel::inspect_layout() const {
 	result["zone_count"] = static_cast<int64_t>(state.zones.size());
 	result["card_count"] = static_cast<int64_t>(state.card_instance_ids.size());
 	result["power_count"] = static_cast<int64_t>(state.card_powers.size());
+	result["compiled_ability_set_count"] = static_cast<int64_t>(
+		compiled_ability_sets.size()
+	);
 	result["checksum"] = static_cast<int64_t>(checksum(state) & 0x7fffffffffffffffULL);
 	return result;
 }
 
-Dictionary DuelNativeCompactKernel::apply_basic_play_transition(
+Dictionary DuelNativeCompactKernel::apply_play_transition(
 	int64_t hand_index,
 	int64_t target_cell,
 	const StringName &expected_instance_id
@@ -232,7 +239,7 @@ Dictionary DuelNativeCompactKernel::apply_basic_play_transition(
 	}
 
 	String support_reason;
-	if (!validate_basic_play_support(state, support_reason)) {
+	if (!validate_play_support(state, support_reason)) {
 		result["reason"] = support_reason;
 		return result;
 	}
@@ -267,6 +274,18 @@ Dictionary DuelNativeCompactKernel::apply_basic_play_transition(
 		result["reason"] = "Expected instance ID does not match the hand card";
 		return result;
 	}
+	std::vector<int32_t> draw_counts;
+	if (!validate_action_rule_support(
+			state,
+			played_card_index,
+			static_cast<int32_t>(target_cell),
+			draw_counts,
+			support_reason
+		)) {
+		result["supported"] = false;
+		result["reason"] = support_reason;
+		return result;
+	}
 
 	NativeState next = state;
 	next.board_slot_extras = state.board_slot_extras.duplicate(true);
@@ -275,6 +294,19 @@ Dictionary DuelNativeCompactKernel::apply_basic_play_transition(
 	next_hand.erase(next_hand.begin() + hand_index);
 	next.card_runtime_flags[played_card_index] &= static_cast<uint8_t>(~(1 << 7));
 	next.card_hand_slots[played_card_index] = -1;
+	if (moving_owner == 1) {
+		if (next.card_reveal_codes[played_card_index] == 0) {
+			next.card_reveal_codes[played_card_index] = 1;
+		} else if (next.card_reveal_codes[played_card_index] == 2) {
+			next.card_reveal_codes[played_card_index] = 4;
+		}
+	} else if (moving_owner == 2) {
+		if (next.card_reveal_codes[played_card_index] == 0) {
+			next.card_reveal_codes[played_card_index] = 2;
+		} else if (next.card_reveal_codes[played_card_index] == 1) {
+			next.card_reveal_codes[played_card_index] = 3;
+		}
+	}
 	next.board_card_indices[static_cast<size_t>(target_cell)] = played_card_index;
 	next.board_owners[static_cast<size_t>(target_cell)] = static_cast<uint8_t>(moving_owner);
 	if (target_cell < next.board_slot_extras.size()) {
@@ -289,6 +321,44 @@ Dictionary DuelNativeCompactKernel::apply_basic_play_transition(
 	placed_event["owner_id"] = moving_owner;
 	placed_event["instance_id"] = played_instance_id;
 	events.append(placed_event);
+
+	const int32_t deck_zone_index = moving_owner + 1;
+	std::vector<int32_t> &next_deck = next.zones[deck_zone_index];
+	for (const int32_t requested_draw_count : draw_counts) {
+		Dictionary ability_event;
+		ability_event["type"] = StringName("ability_triggered");
+		ability_event["source_cell"] = target_cell;
+		ability_event["source_instance_id"] = played_instance_id;
+		ability_event["source_owner_id"] = moving_owner;
+		events.append(ability_event);
+
+		for (int32_t draw_index = 0; draw_index < requested_draw_count; ++draw_index) {
+			if (next_hand.size() >= 5) {
+				break;
+			}
+			const int32_t drawn_card_index = next_deck.front();
+			next_deck.erase(next_deck.begin());
+			const int32_t hand_slot_index = leftmost_empty_hand_slot(next, moving_owner);
+			if (hand_slot_index < 0) {
+				break;
+			}
+			next.card_runtime_flags[drawn_card_index] |= static_cast<uint8_t>(1 << 7);
+			next.card_hand_slots[drawn_card_index] = hand_slot_index;
+			next_hand.push_back(drawn_card_index);
+			const int32_t logical_hand_index = static_cast<int32_t>(next_hand.size()) - 1;
+
+			Dictionary draw_event;
+			draw_event["type"] = StringName("card_drawn");
+			draw_event["source_cell"] = target_cell;
+			draw_event["owner_id"] = moving_owner;
+			draw_event["card_id"] = next.card_ids[drawn_card_index];
+			draw_event["instance_id"] = next.card_instance_ids[drawn_card_index];
+			draw_event["logical_hand_index"] = logical_hand_index;
+			draw_event["hand_slot_index"] = hand_slot_index;
+			draw_event["card"] = restore_runtime_card(next, drawn_card_index);
+			events.append(draw_event);
+		}
+	}
 
 	Array captures;
 	if (next.scalars[moving_owner == 1 ? 3 : 4] < 20) {
@@ -447,28 +517,126 @@ bool DuelNativeCompactKernel::validate_shape() {
 	return true;
 }
 
-bool DuelNativeCompactKernel::validate_basic_play_support(
+void DuelNativeCompactKernel::compile_ability_sets() {
+	compiled_ability_sets.clear();
+	compiled_ability_sets.reserve(static_cast<size_t>(state.active_ability_set_pool.size()));
+	for (int64_t set_index = 0; set_index < state.active_ability_set_pool.size(); ++set_index) {
+		CompiledAbilitySet compiled;
+		const Variant set_value = state.active_ability_set_pool[set_index];
+		if (set_value.get_type() != Variant::ARRAY) {
+			compiled.declaration_valid = false;
+			compiled_ability_sets.push_back(compiled);
+			continue;
+		}
+		const Array abilities = set_value;
+		for (int64_t ability_index = 0; ability_index < abilities.size(); ++ability_index) {
+			const Variant ability_value = abilities[ability_index];
+			if (ability_value.get_type() != Variant::DICTIONARY) {
+				compiled.declaration_valid = false;
+				continue;
+			}
+			const Dictionary ability = ability_value;
+			if (ability.has("activation")) {
+				const Variant activation_value = ability["activation"];
+				if (activation_value.get_type() != Variant::DICTIONARY) {
+					compiled.declaration_valid = false;
+				} else if (!Dictionary(activation_value).is_empty()) {
+					compiled.has_activation = true;
+				}
+			}
+			if (ability.has("modifiers")) {
+				const Variant modifiers_value = ability["modifiers"];
+				if (modifiers_value.get_type() != Variant::ARRAY) {
+					compiled.declaration_valid = false;
+				} else if (!Array(modifiers_value).is_empty()) {
+					compiled.has_modifiers = true;
+				}
+			}
+			const Variant triggers_value = ability.get("triggers", Array());
+			if (triggers_value.get_type() != Variant::ARRAY) {
+				compiled.declaration_valid = false;
+				continue;
+			}
+			const Array triggers = triggers_value;
+			for (int64_t trigger_index = 0; trigger_index < triggers.size(); ++trigger_index) {
+				CompiledTriggerRule compiled_rule;
+				const Variant rule_value = triggers[trigger_index];
+				if (rule_value.get_type() != Variant::DICTIONARY) {
+					compiled.declaration_valid = false;
+					compiled.triggers.push_back(compiled_rule);
+					continue;
+				}
+				const Dictionary rule = rule_value;
+				compiled_rule.event_id = rule.get("event", StringName());
+				const Variant conditions_value = rule.get("conditions", Array());
+				const Variant actions_value = rule.get("actions", Array());
+				if (
+					compiled_rule.event_id == StringName("card_after_summoned")
+					&& rule.size() == 3
+					&& conditions_value.get_type() == Variant::ARRAY
+					&& actions_value.get_type() == Variant::ARRAY
+				) {
+					const Array conditions = conditions_value;
+					const Array actions = actions_value;
+					if (conditions.size() == 1 && actions.size() == 1) {
+						const Variant condition_value = conditions[0];
+						const Variant action_value = actions[0];
+						if (
+							condition_value.get_type() == Variant::DICTIONARY
+							&& action_value.get_type() == Variant::DICTIONARY
+						) {
+							const Dictionary condition = condition_value;
+							const Dictionary action = action_value;
+							const Variant amount_value = action.get("amount", 0);
+							if (
+								condition.size() == 1
+								&& StringName(condition.get("type", StringName()))
+									== StringName("trigger_card_is_self")
+								&& action.size() == 2
+								&& StringName(action.get("type", StringName()))
+									== StringName("draw_cards")
+								&& amount_value.get_type() == Variant::INT
+								&& static_cast<int64_t>(amount_value) > 0
+								&& static_cast<int64_t>(amount_value)
+									<= std::numeric_limits<int32_t>::max()
+							) {
+								compiled_rule.supports_self_after_summoned_draw = true;
+								compiled_rule.draw_count = static_cast<int32_t>(
+									static_cast<int64_t>(amount_value)
+								);
+							}
+						}
+					}
+				}
+				compiled.triggers.push_back(compiled_rule);
+			}
+		}
+		compiled_ability_sets.push_back(compiled);
+	}
+}
+
+bool DuelNativeCompactKernel::validate_play_support(
 	const NativeState &value,
 	String &reason
 ) const {
 	if (!value.has_rule_metadata) {
-		reason = "Basic transition requires immutable compact metadata pools";
+		reason = "Play transition requires immutable compact metadata pools";
 		return false;
 	}
 	if (value.board_card_indices.size() != 9 || value.board_slot_extras.size() != 9) {
-		reason = "Basic transition requires the canonical nine-cell board";
+		reason = "Play transition requires the canonical nine-cell board";
 		return false;
 	}
 	if (value.scalars[5] != 0 || value.scalars[6] != 0) {
-		reason = "Basic transition does not cover extra plays or a partially resolved turn end";
+		reason = "Play transition does not cover extra plays or a partially resolved turn end";
 		return false;
 	}
 	if (value.scalars[8] != 0 || value.scalars[9] != 0) {
-		reason = "Basic transition does not cover pending hand-play suppression";
+		reason = "Play transition does not cover pending hand-play suppression";
 		return false;
 	}
 	if (value.scalars[10] >= 8) {
-		reason = "Basic transition does not cover difficulty-eight or difficulty-nine hand rules";
+		reason = "Play transition does not cover difficulty-eight or difficulty-nine hand rules";
 		return false;
 	}
 
@@ -476,11 +644,11 @@ bool DuelNativeCompactKernel::validate_basic_play_support(
 	const Array effect_queue = value.side_payload.get("effect_queue", Array());
 	const Dictionary pending_choice = value.side_payload.get("pending_choice", Dictionary());
 	if (!state_abilities.is_empty() || !effect_queue.is_empty() || !pending_choice.is_empty()) {
-		reason = "Basic transition requires no state abilities, queued effects, or pending choice";
+		reason = "Play transition requires no state abilities, queued effects, or pending choice";
 		return false;
 	}
 	if (value.card_ids.size() != value.card_instance_ids.size()) {
-		reason = "Basic transition is missing card IDs";
+		reason = "Play transition is missing card IDs";
 		return false;
 	}
 	for (size_t card_index = 0; card_index < value.card_instance_ids.size(); ++card_index) {
@@ -488,16 +656,16 @@ bool DuelNativeCompactKernel::validate_basic_play_support(
 			(1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5)
 		);
 		if ((value.card_runtime_flags[card_index] & required_flags) != required_flags) {
-			reason = "Basic transition requires normalized runtime cards";
+			reason = "Play transition requires normalized runtime cards";
 			return false;
 		}
 		if (value.card_ids[card_index].is_empty()) {
-			reason = "Basic transition requires every card to have a card ID";
+			reason = "Play transition requires every card to have a card ID";
 			return false;
 		}
 		for (int32_t direction = 0; direction < 4; ++direction) {
 			if (value.card_powers[card_index * 4 + direction] < 0) {
-				reason = "Basic transition does not cover special negative powers";
+				reason = "Play transition does not cover special negative powers";
 				return false;
 			}
 		}
@@ -506,9 +674,9 @@ bool DuelNativeCompactKernel::validate_basic_play_support(
 			ability_set_index < 0
 			|| ability_set_index >= value.active_ability_set_pool.size()
 			|| Variant(value.active_ability_set_pool[ability_set_index]).get_type() != Variant::ARRAY
-			|| !Array(value.active_ability_set_pool[ability_set_index]).is_empty()
+			|| ability_set_index >= static_cast<int32_t>(compiled_ability_sets.size())
 		) {
-			reason = "Basic transition requires every runtime card to have no abilities";
+			reason = "Play transition has an invalid runtime ability-set reference";
 			return false;
 		}
 		if ((value.card_runtime_flags[card_index] & (1 << 6)) != 0) {
@@ -519,12 +687,455 @@ bool DuelNativeCompactKernel::validate_basic_play_support(
 				|| Variant(value.suppression_set_pool[suppression_index]).get_type() != Variant::ARRAY
 				|| !Array(value.suppression_set_pool[suppression_index]).is_empty()
 			) {
-				reason = "Basic transition does not cover temporary ability suppression";
+				reason = "Play transition does not cover temporary ability suppression";
 				return false;
 			}
 		}
 	}
 	return true;
+}
+
+bool DuelNativeCompactKernel::validate_action_rule_support(
+	const NativeState &value,
+	int32_t played_card_index,
+	int32_t target_cell,
+	std::vector<int32_t> &draw_counts,
+	String &reason
+) const {
+	draw_counts.clear();
+	const int32_t moving_owner = value.scalars[0];
+	const bool source_enabled = card_effects_enabled(value, played_card_index, moving_owner);
+	const int32_t played_set_index = value.card_active_ability_set_indices[played_card_index];
+	const CompiledAbilitySet &played_set = compiled_ability_sets[played_set_index];
+	if (source_enabled && card_has_enabled_modifiers(value, played_card_index, moving_owner)) {
+		reason = "Play transition does not cover active board modifiers";
+		return false;
+	}
+	if (
+		source_enabled
+		&& card_has_enabled_event(
+			value,
+			played_card_index,
+			moving_owner,
+			StringName("card_before_summoned")
+		)
+	) {
+		reason = "Played card has an unsupported before-summoned rule";
+		return false;
+	}
+
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (card_index < 0) {
+			continue;
+		}
+		const int32_t owner_id = value.board_owners[cell];
+		if (card_has_enabled_modifiers(value, card_index, owner_id)) {
+			reason = "Play transition does not cover active board modifiers";
+			return false;
+		}
+	}
+
+	if (
+		board_has_enabled_event(value, StringName("card_summoned"))
+		|| (source_enabled && card_has_enabled_event(
+			value,
+			played_card_index,
+			moving_owner,
+			StringName("card_summoned")
+		))
+	) {
+		reason = "Play transition does not cover summoned-event rules";
+		return false;
+	}
+
+	if (source_enabled) {
+		for (const CompiledTriggerRule &rule : played_set.triggers) {
+			if (rule.event_id != StringName("card_after_summoned")) {
+				continue;
+			}
+			if (!rule.supports_self_after_summoned_draw) {
+				reason = "Played card has an unsupported after-summoned rule";
+				return false;
+			}
+			draw_counts.push_back(rule.draw_count);
+		}
+	}
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (card_index < 0 || !card_effects_enabled(value, card_index, value.board_owners[cell])) {
+			continue;
+		}
+		const CompiledAbilitySet &ability_set = compiled_ability_sets[
+			value.card_active_ability_set_indices[card_index]
+		];
+		for (const CompiledTriggerRule &rule : ability_set.triggers) {
+			if (
+				rule.event_id == StringName("card_after_summoned")
+				&& !rule.supports_self_after_summoned_draw
+			) {
+				reason = "Board contains an unsupported after-summoned listener";
+				return false;
+			}
+		}
+	}
+
+	int32_t requested_draws = 0;
+	for (const int32_t amount : draw_counts) {
+		requested_draws += amount;
+	}
+	const int32_t hand_zone_index = moving_owner - 1;
+	const int32_t hand_size_after_play = static_cast<int32_t>(value.zones[hand_zone_index].size()) - 1;
+	const int32_t actual_draws = std::min(requested_draws, std::max(0, 5 - hand_size_after_play));
+	if (actual_draws > 0) {
+		const int32_t deck_zone_index = moving_owner + 1;
+		if (static_cast<int32_t>(value.zones[deck_zone_index].size()) < actual_draws) {
+			reason = "Draw would require the generated empty-deck fallback card";
+			return false;
+		}
+		const Dictionary audiences_by_owner = value.side_payload.get(
+			"future_draw_reveal_audiences",
+			Dictionary()
+		);
+		const Variant audiences_value = audiences_by_owner.get(moving_owner, Array());
+		if (
+			audiences_value.get_type() != Variant::ARRAY
+			|| !Array(audiences_value).is_empty()
+		) {
+			reason = "Draw would emit unsupported future-reveal events";
+			return false;
+		}
+		if (
+			board_has_enabled_event(value, StringName("card_after_drawn"))
+			|| (source_enabled && card_has_enabled_event(
+				value,
+				played_card_index,
+				moving_owner,
+				StringName("card_after_drawn")
+			))
+		) {
+			reason = "Draw would trigger an unsupported after-drawn listener";
+			return false;
+		}
+	}
+
+	std::vector<int32_t> attacked_cells;
+	if (value.scalars[moving_owner == 1 ? 3 : 4] < 20) {
+		static constexpr int32_t opposite[4] = {2, 3, 0, 1};
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			const int32_t attacked_cell = neighbor_index(target_cell, direction);
+			if (attacked_cell < 0) {
+				continue;
+			}
+			const int32_t attacked_card_index = value.board_card_indices[attacked_cell];
+			if (attacked_card_index < 0 || value.board_owners[attacked_cell] == moving_owner) {
+				continue;
+			}
+			if (
+				value.card_powers[played_card_index * 4 + direction]
+				> value.card_powers[attacked_card_index * 4 + opposite[direction]]
+			) {
+				attacked_cells.push_back(attacked_cell);
+			}
+		}
+	}
+	if (!attacked_cells.empty()) {
+		static const StringName attack_events[] = {
+			StringName("card_be_attacked"),
+			StringName("card_before_flipped"),
+			StringName("card_after_flipped"),
+			StringName("card_after_attack"),
+		};
+		for (const StringName &event_id : attack_events) {
+			if (
+				board_has_enabled_event(value, event_id)
+				|| (source_enabled && card_has_enabled_event(
+					value,
+					played_card_index,
+					moving_owner,
+					event_id
+				))
+			) {
+				reason = "Attack would trigger an unsupported reaction rule";
+				return false;
+			}
+		}
+		for (const int32_t attacked_cell : attacked_cells) {
+			if (card_has_abilities(value, value.board_card_indices[attacked_cell])) {
+				reason = "Attack would flip an ability-bearing card";
+				return false;
+			}
+		}
+	}
+
+	if (
+		board_has_enabled_event(value, StringName("end_owner_turn"))
+		|| (source_enabled && card_has_enabled_event(
+			value,
+			played_card_index,
+			moving_owner,
+			StringName("end_owner_turn")
+		))
+	) {
+		reason = "Play transition does not cover end-turn trigger rules";
+		return false;
+	}
+	if (
+		board_has_enabled_event(value, StringName("start_owner_turn"))
+		|| (source_enabled && card_has_enabled_event(
+			value,
+			played_card_index,
+			moving_owner,
+			StringName("start_owner_turn")
+		))
+	) {
+		reason = "Play transition does not cover start-turn trigger rules";
+		return false;
+	}
+	const int32_t empty_cells_before = static_cast<int32_t>(std::count(
+		value.board_card_indices.begin(),
+		value.board_card_indices.end(),
+		-1
+	));
+	if (
+		empty_cells_before == 1
+		&& (
+			board_has_enabled_event(value, StringName("before_duel_end"))
+			|| (source_enabled && card_has_enabled_event(
+				value,
+				played_card_index,
+				moving_owner,
+				StringName("before_duel_end")
+			))
+		)
+	) {
+		reason = "Full board would trigger an unsupported before-duel-end rule";
+		return false;
+	}
+
+	if (empty_cells_before > 1) {
+		const int32_t next_owner = other_owner(moving_owner);
+		if (
+			value.zones[next_owner - 1].empty()
+			&& board_has_enabled_activation_for_owner(value, next_owner)
+		) {
+			reason = "Empty-turn advancement would require activation legality";
+			return false;
+		}
+		if (
+			value.zones[next_owner - 1].empty()
+			&& hand_size_after_play + actual_draws == 0
+			&& board_has_enabled_activation_for_owner(value, moving_owner)
+		) {
+			reason = "Terminal detection would require activation legality";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool DuelNativeCompactKernel::card_effects_enabled(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id
+) const {
+	if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_template_indices.size())) {
+		return false;
+	}
+	const int32_t template_index = value.card_template_indices[card_index];
+	if (template_index < 0 || template_index >= value.card_template_pool.size()) {
+		return false;
+	}
+	const Dictionary card_template = value.card_template_pool[template_index];
+	const StringName gate = card_template.get("effect_gate", StringName());
+	if (gate.is_empty()) {
+		return true;
+	}
+	const Dictionary gates_by_owner = value.side_payload.get(
+		"enabled_effect_gates_by_owner",
+		Dictionary()
+	);
+	const Variant gates_value = gates_by_owner.get(owner_id, Array());
+	if (gates_value.get_type() != Variant::ARRAY) {
+		return false;
+	}
+	const Array gates = gates_value;
+	for (int64_t index = 0; index < gates.size(); ++index) {
+		if (StringName(gates[index]) == gate) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool DuelNativeCompactKernel::card_has_abilities(
+	const NativeState &value,
+	int32_t card_index
+) const {
+	if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_active_ability_set_indices.size())) {
+		return false;
+	}
+	const int32_t set_index = value.card_active_ability_set_indices[card_index];
+	return (
+		set_index >= 0
+		&& set_index < value.active_ability_set_pool.size()
+		&& !Array(value.active_ability_set_pool[set_index]).is_empty()
+	);
+}
+
+bool DuelNativeCompactKernel::card_has_enabled_activation(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id
+) const {
+	if (!card_effects_enabled(value, card_index, owner_id)) {
+		return false;
+	}
+	return compiled_ability_sets[value.card_active_ability_set_indices[card_index]].has_activation;
+}
+
+bool DuelNativeCompactKernel::card_has_enabled_modifiers(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id
+) const {
+	if (!card_effects_enabled(value, card_index, owner_id)) {
+		return false;
+	}
+	return compiled_ability_sets[value.card_active_ability_set_indices[card_index]].has_modifiers;
+}
+
+bool DuelNativeCompactKernel::card_has_enabled_event(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id,
+	const StringName &event_id
+) const {
+	if (!card_effects_enabled(value, card_index, owner_id)) {
+		return false;
+	}
+	const CompiledAbilitySet &ability_set = compiled_ability_sets[
+		value.card_active_ability_set_indices[card_index]
+	];
+	for (const CompiledTriggerRule &rule : ability_set.triggers) {
+		if (rule.event_id == event_id) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool DuelNativeCompactKernel::board_has_enabled_event(
+	const NativeState &value,
+	const StringName &event_id
+) const {
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (
+			card_index >= 0
+			&& card_has_enabled_event(value, card_index, value.board_owners[cell], event_id)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool DuelNativeCompactKernel::board_has_enabled_activation_for_owner(
+	const NativeState &value,
+	int32_t owner_id
+) const {
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (
+			card_index >= 0
+			&& value.board_owners[cell] == owner_id
+			&& card_has_enabled_activation(value, card_index, owner_id)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+Dictionary DuelNativeCompactKernel::restore_runtime_card(
+	const NativeState &value,
+	int32_t card_index
+) const {
+	const int32_t template_index = value.card_template_indices[card_index];
+	Dictionary card = Dictionary(value.card_template_pool[template_index]).duplicate(true);
+	const uint8_t flags = value.card_runtime_flags[card_index];
+	if ((flags & (1 << 0)) != 0) {
+		card["instance_id"] = value.card_instance_ids[card_index];
+	}
+	if ((flags & (1 << 1)) != 0) {
+		Array powers;
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			powers.append(value.card_powers[card_index * 4 + direction]);
+		}
+		card["powers"] = powers;
+	}
+	if ((flags & (1 << 2)) != 0) {
+		card["original_owner"] = value.card_original_owners[card_index];
+	}
+	if ((flags & (1 << 3)) != 0) {
+		card["ki"] = value.card_ki[card_index];
+	}
+	if ((flags & (1 << 4)) != 0) {
+		const int32_t set_index = value.card_active_ability_set_indices[card_index];
+		card["active_abilities"] = Array(value.active_ability_set_pool[set_index]).duplicate();
+	}
+	if ((flags & (1 << 5)) != 0) {
+		Array audiences;
+		switch (value.card_reveal_codes[card_index]) {
+			case 1:
+				audiences.append(1);
+				break;
+			case 2:
+				audiences.append(2);
+				break;
+			case 3:
+				audiences.append(1);
+				audiences.append(2);
+				break;
+			case 4:
+				audiences.append(2);
+				audiences.append(1);
+				break;
+			default:
+				break;
+		}
+		card["revealed_to_owner_ids"] = audiences;
+	}
+	if ((flags & (1 << 6)) != 0) {
+		const int32_t suppression_index = value.card_suppression_set_indices[card_index];
+		card["temporary_suppression_batches"] = Array(
+			value.suppression_set_pool[suppression_index]
+		).duplicate(true);
+	}
+	if ((flags & (1 << 7)) != 0) {
+		card["hand_slot_index"] = value.card_hand_slots[card_index];
+	}
+	return card;
+}
+
+int32_t DuelNativeCompactKernel::leftmost_empty_hand_slot(
+	const NativeState &value,
+	int32_t owner_id
+) const {
+	bool occupied[5] = {false, false, false, false, false};
+	for (const int32_t card_index : value.zones[owner_id - 1]) {
+		const int32_t slot = value.card_hand_slots[card_index];
+		if (slot >= 0 && slot < 5) {
+			occupied[slot] = true;
+		}
+	}
+	for (int32_t slot = 0; slot < 5; ++slot) {
+		if (!occupied[slot]) {
+			return slot;
+		}
+	}
+	return -1;
 }
 
 bool DuelNativeCompactKernel::owner_has_legal_play(

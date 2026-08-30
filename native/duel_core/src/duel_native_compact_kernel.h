@@ -38,7 +38,21 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool has_rule_metadata = false;
 	};
 
+	struct CompiledTriggerRule {
+		StringName event_id;
+		bool supports_self_after_summoned_draw = false;
+		int32_t draw_count = 0;
+	};
+
+	struct CompiledAbilitySet {
+		bool declaration_valid = true;
+		bool has_activation = false;
+		bool has_modifiers = false;
+		std::vector<CompiledTriggerRule> triggers;
+	};
+
 	NativeState state;
+	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	bool loaded = false;
 	String last_error;
 
@@ -51,7 +65,7 @@ public:
 	String get_last_error() const;
 	Dictionary inspect_layout() const;
 	Dictionary benchmark_core_clone(int64_t iterations) const;
-	Dictionary apply_basic_play_transition(
+	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,
 		const StringName &expected_instance_id = StringName()
@@ -59,7 +73,47 @@ public:
 
 private:
 	bool validate_shape();
-	bool validate_basic_play_support(const NativeState &value, String &reason) const;
+	void compile_ability_sets();
+	bool validate_play_support(const NativeState &value, String &reason) const;
+	bool validate_action_rule_support(
+		const NativeState &value,
+		int32_t played_card_index,
+		int32_t target_cell,
+		std::vector<int32_t> &draw_counts,
+		String &reason
+	) const;
+	bool card_effects_enabled(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id
+	) const;
+	bool card_has_abilities(const NativeState &value, int32_t card_index) const;
+	bool card_has_enabled_activation(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id
+	) const;
+	bool card_has_enabled_modifiers(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id
+	) const;
+	bool card_has_enabled_event(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		const StringName &event_id
+	) const;
+	bool board_has_enabled_event(
+		const NativeState &value,
+		const StringName &event_id
+	) const;
+	bool board_has_enabled_activation_for_owner(
+		const NativeState &value,
+		int32_t owner_id
+	) const;
+	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
+	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;
 	bool owner_has_legal_play(const NativeState &value, int32_t owner_id) const;
 	bool is_terminal(const NativeState &value) const;
 	void complete_owner_turn_boundary(NativeState &value) const;
