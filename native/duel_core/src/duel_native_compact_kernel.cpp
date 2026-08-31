@@ -1030,6 +1030,19 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (granted.get_type() == Variant::DICTIONARY && !Dictionary(granted).is_empty()) {
 			compiled.granted_ability_index = intern_compiled_ability(granted);
 		}
+	} else if (type == StringName("transform_card") && action.size() == 3 + generic_field_count) {
+		compiled.opcode = ActionOpcode::TRANSFORM_CARD;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		const Variant card_id_value = action.get("card_id", Variant());
+		if (
+			card_id_value.get_type() != Variant::STRING_NAME
+			&& card_id_value.get_type() != Variant::STRING
+		) {
+			compiled.declaration_valid = false;
+		} else {
+			compiled.card_id = StringName(card_id_value);
+			if (compiled.card_id.is_empty()) compiled.declaration_valid = false;
+		}
 	} else if (
 		type == StringName("return_card_to_hand")
 		&& (
@@ -2340,11 +2353,19 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		triggered["source_owner_id"] = group.source_owner;
 		resolution.events.append(triggered);
 		ActionContext action_context;
-		action_context.ability_source_cell = group.source_cell;
-		action_context.ability_source_zone = group.source_zone;
-		action_context.ability_source_logical_index = current_logical_index;
-		action_context.ability_source_card_index = group.source_card_index;
-		action_context.ability_source_owner = group.source_owner;
+		if (context.ability_source_card_index >= 0) {
+			action_context.ability_source_cell = context.ability_source_cell;
+			action_context.ability_source_zone = context.ability_source_zone;
+			action_context.ability_source_logical_index = context.ability_source_logical_index;
+			action_context.ability_source_card_index = context.ability_source_card_index;
+			action_context.ability_source_owner = context.ability_source_owner;
+		} else {
+			action_context.ability_source_cell = group.source_cell;
+			action_context.ability_source_zone = group.source_zone;
+			action_context.ability_source_logical_index = current_logical_index;
+			action_context.ability_source_card_index = group.source_card_index;
+			action_context.ability_source_owner = group.source_owner;
+		}
 		action_context.action_subject_card_index = group.source_card_index;
 		action_context.action_subject_owner = group.source_owner;
 		action_context.action_subject_zone = group.source_zone;
@@ -2569,6 +2590,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 			trigger_logical_index
 		)) continue;
 		EventContext discard_context = event_context;
+		discard_context.ability_source_cell = action_context.ability_source_cell;
+		discard_context.ability_source_zone = action_context.ability_source_zone;
+		discard_context.ability_source_logical_index = action_context.ability_source_logical_index;
+		discard_context.ability_source_card_index = action_context.ability_source_card_index;
+		discard_context.ability_source_owner = action_context.ability_source_owner;
 		discard_context.trigger_cell = -1;
 		discard_context.trigger_card_index = record.card_index;
 		discard_context.trigger_owner = owner_id;
@@ -2593,6 +2619,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 	}
 
 	EventContext batch_context;
+	batch_context.ability_source_cell = action_context.ability_source_cell;
+	batch_context.ability_source_zone = action_context.ability_source_zone;
+	batch_context.ability_source_logical_index = action_context.ability_source_logical_index;
+	batch_context.ability_source_card_index = action_context.ability_source_card_index;
+	batch_context.ability_source_owner = action_context.ability_source_owner;
 	batch_context.discard_owner = owner_id;
 	batch_context.discard_batch_id = batch_id;
 	batch_context.discard_batch_size = static_cast<int32_t>(records.size());
@@ -2609,6 +2640,95 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 	resolution.events.append_array(batch_finished.events);
 	resolution.captures.append_array(batch_finished.captures);
 	resolution.exiles.append_array(batch_finished.exiles);
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	const ActionExecutionState &execution_state,
+	Resolution &resolution
+) const {
+	int32_t target = -1;
+	if (action.card_ref == CardRefOpcode::SELECTED_CARD) target = action_context.selected_card_index;
+	else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = event_context.trigger_card_index;
+	else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = action_context.ability_source_card_index;
+	else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
+	else return ActionOutcome::UNSUPPORTED;
+	if (target < 0) return ActionOutcome::NO_EFFECT;
+
+	const FreshCardPrototype *prototype = nullptr;
+	for (const FreshCardPrototype &candidate : value.fresh_card_prototypes) {
+		if (candidate.card_id == action.card_id) {
+			prototype = &candidate;
+			break;
+		}
+	}
+	if (prototype == nullptr) {
+		resolution.reason = "Transform target has no reachable fresh-card prototype";
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		prototype->active_ability_set_index < 0
+		|| prototype->active_ability_set_index >= static_cast<int32_t>(compiled_ability_sets.size())
+		|| !compiled_ability_sets[prototype->active_ability_set_index].declaration_valid
+	) {
+		resolution.reason = "Transform target has an invalid compiled ability set";
+		return ActionOutcome::UNSUPPORTED;
+	}
+
+	int32_t zone = -1;
+	int32_t owner_id = 0;
+	int32_t logical_index = -1;
+	if (!locate_card(value, target, zone, owner_id, logical_index)) return ActionOutcome::NO_EFFECT;
+	const StringName old_card_id = value.card_ids[target];
+	value.card_template_indices[target] = prototype->template_index;
+	value.card_ids[target] = prototype->card_id;
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		value.card_powers[target * 4 + direction] = prototype->powers[direction];
+	}
+	value.card_ki[target] = prototype->ki;
+	value.card_active_ability_set_indices[target] = prototype->active_ability_set_index;
+	value.card_runtime_abilities[target].clear();
+	for (const int32_t compiled_ability_index : compiled_ability_sets[prototype->active_ability_set_index].ability_pool_indices) {
+		RuntimeAbilityEntry entry;
+		entry.compiled_ability_index = compiled_ability_index;
+		entry.handle = value.next_ability_handle++;
+		value.card_runtime_abilities[target].push_back(entry);
+	}
+	value.card_runtime_flags[target] &= static_cast<uint8_t>(~(1 << 6));
+	value.card_suppression_set_indices[target] = -1;
+	uint8_t &reveal_code = value.card_reveal_codes[target];
+	if (owner_id == 1 && reveal_code == 0) reveal_code = 1;
+	else if (owner_id == 1 && reveal_code == 2) reveal_code = 4;
+	else if (owner_id == 2 && reveal_code == 0) reveal_code = 2;
+	else if (owner_id == 2 && reveal_code == 1) reveal_code = 3;
+
+	Dictionary transformed;
+	transformed["type"] = StringName("card_transformed");
+	transformed["source_cell"] = execution_state.current_source_cell;
+	transformed["source_instance_id"] = (
+		action_context.ability_source_card_index >= 0
+		? value.card_instance_ids[action_context.ability_source_card_index]
+		: StringName()
+	);
+	transformed["target_cell"] = zone == 0 ? logical_index : -1;
+	transformed["owner_id"] = owner_id;
+	transformed["zone"] = (
+		zone == 0 ? StringName("board")
+		: (zone == 1 ? StringName("hand")
+		: (zone == 2 ? StringName("deck")
+		: (zone == 3 ? StringName("discard") : StringName("removed"))))
+	);
+	transformed["logical_index"] = logical_index;
+	transformed["instance_id"] = value.card_instance_ids[target];
+	transformed["old_card_id"] = old_card_id;
+	transformed["card_id"] = prototype->card_id;
+	transformed["card"] = restore_runtime_card(value, target);
+	resolution.events.append(transformed);
 	return ActionOutcome::APPLIED;
 }
 
@@ -3465,7 +3585,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			int32_t target = -1;
 			if (action.card_ref == CardRefOpcode::SELECTED_CARD) target = action_context.selected_card_index;
 			else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = event_context.trigger_card_index;
-			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = group.source_card_index;
+			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = action_context.ability_source_card_index;
 			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
 			else return ActionOutcome::UNSUPPORTED;
 			return discard_locked_cards(
@@ -3501,18 +3621,18 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			);
 		}
 		case ActionOpcode::EXILE_SELF:
-			return exile_card(value, action_context.action_subject_card_index, action_source_cell, group.source_card_index, true, StringName("ability_exile_self"), event_context, exile_stack, resolution)
+			return exile_card(value, action_context.action_subject_card_index, action_source_cell, action_context.ability_source_card_index, true, StringName("ability_exile_self"), event_context, exile_stack, resolution)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		case ActionOpcode::EXILE_CARD: {
 			int32_t target = -1;
 			if (action.card_ref == CardRefOpcode::SELECTED_CARD) target = action_context.selected_card_index;
 			else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = event_context.trigger_card_index;
-			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = group.source_card_index;
+			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = action_context.ability_source_card_index;
 			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
 			else return ActionOutcome::UNSUPPORTED;
 			if (target < 0) return ActionOutcome::NO_EFFECT;
-			return exile_card(value, target, action_source_cell, group.source_card_index, target == group.source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution)
+			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		}
@@ -3570,6 +3690,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return flip_action_subject(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::GRANT_ABILITY_TO_SELF:
 			return grant_ability_to_subject(value, group, action, action_context, action_source_cell, resolution);
+		case ActionOpcode::TRANSFORM_CARD:
+			return transform_card(value, group, action, event_context, action_context, execution_state, resolution);
 		case ActionOpcode::RETURN_CARD_TO_HAND:
 			return return_card_to_hand(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE:

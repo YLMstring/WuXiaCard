@@ -91,6 +91,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SPEND_KI,
 		FLIP_SELF,
 		GRANT_ABILITY_TO_SELF,
+		TRANSFORM_CARD,
 		RETURN_CARD_TO_HAND,
 		SELF_SWAPPED_WITH_ABILITY_SOURCE,
 		UNSUPPORTED,
@@ -210,6 +211,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t granted_ability_index = -1;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
+		StringName card_id;
 		CompiledSelector selector;
 		std::vector<CompiledCondition> conditions;
 		std::vector<CompiledAction> child_actions;
@@ -252,6 +254,11 @@ class DuelNativeCompactKernel : public RefCounted {
 	};
 
 	struct EventContext {
+		int32_t ability_source_cell = -1;
+		int32_t ability_source_zone = -1;
+		int32_t ability_source_logical_index = -1;
+		int32_t ability_source_card_index = -1;
+		int32_t ability_source_owner = 0;
 		int32_t trigger_cell = -1;
 		int32_t trigger_card_index = -1;
 		int32_t trigger_owner = 0;
@@ -655,6 +662,15 @@ private:
 		const ActionContext &action_context,
 		ActionExecutionState &execution_state,
 		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome transform_card(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		const ActionExecutionState &execution_state,
 		Resolution &resolution
 	) const;
 	bool exile_card(

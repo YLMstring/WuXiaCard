@@ -74,6 +74,7 @@ func _run() -> void:
 	_test_draw_trigger_rejections(kernel)
 	_test_if_transition_parity(kernel)
 	_test_discard_transition_parity(kernel)
+	_test_transform_transition_parity(kernel)
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
@@ -799,6 +800,56 @@ func _test_discard_transition_parity(kernel: Object) -> void:
 		4,
 		&"native_discard_batch_source",
 		"Batch discard, one-time hand shift, and batch-size IF"
+	)
+
+
+func _test_transform_transition_parity(kernel: Object) -> void:
+	var transform_target: Dictionary = Catalog.create_instance(
+		&"SanRuDiYu1",
+		Rules.PLAYER_OWNER,
+		&"native_transform_target"
+	)
+	transform_target["powers"] = [9, 8, 7, 6]
+	transform_target["ki"] = 5
+	transform_target["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DISCARDED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_TRANSFORM_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+				"card_id": &"SanRuDiYu2",
+			}],
+		}],
+	}]
+	var discard_source: Dictionary = _make_selector_source(
+		&"native_transform_discard_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 1,
+		},
+		[{"type": Catalog.ACTION_DISCARD_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var transform_state := State.new(
+		Rules.empty_board(),
+		[discard_source, transform_target],
+		[_make_plain_card(
+			&"变形敌手",
+			&"native_transform_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		transform_state,
+		0,
+		4,
+		&"native_transform_discard_source",
+		"Discarded card transforms in place from a reachable fresh prototype"
 	)
 
 
