@@ -762,6 +762,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
 	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;
 	else if (type == StringName("source_owner_hand_empty")) compiled.opcode = ConditionOpcode::SOURCE_OWNER_HAND_EMPTY;
+	else if (type == StringName("discard_owner_is_self")) compiled.opcode = ConditionOpcode::DISCARD_OWNER_IS_SELF;
 	return compiled;
 }
 
@@ -931,6 +932,17 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 	) {
 		compiled.opcode = ActionOpcode::DRAW_CARDS;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
+	} else if (type == StringName("discard_card") && action.size() == 2 + generic_field_count) {
+		compiled.opcode = ActionOpcode::DISCARD_CARD;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+	} else if (
+		type == StringName("discard_cards")
+		&& action.size() == 2 + generic_field_count
+		&& Variant(action.get("selector", Variant())).get_type() == Variant::DICTIONARY
+	) {
+		compiled.opcode = ActionOpcode::DISCARD_CARDS;
+		compiled.selector = compile_selector(action.get("selector", Dictionary()));
+		if (!compiled.selector.declaration_valid) compiled.declaration_valid = false;
 	} else if (type == StringName("exile_card") && action.size() == 2 + generic_field_count) {
 		compiled.opcode = ActionOpcode::EXILE_CARD;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
@@ -2167,6 +2179,9 @@ bool DuelNativeCompactKernel::conditions_match(
 					&& context.moving_owner == group.source_owner
 				);
 				break;
+			case ConditionOpcode::DISCARD_OWNER_IS_SELF:
+				matched = context.discard_owner != 0 && context.discard_owner == group.source_owner;
+				break;
 			default:
 				supported = false;
 				return false;
@@ -2185,11 +2200,8 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 ) const {
 	std::vector<EventGroup> groups;
 	supported = true;
-	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-		const int32_t card_index = value.board_card_indices[cell];
-		if (card_index < 0) continue;
-		const int32_t owner_id = value.board_owners[cell];
-		if (!card_effects_enabled(value, card_index, owner_id)) continue;
+	auto discover_card = [&](int32_t card_index, int32_t owner_id, int32_t source_cell, int32_t source_zone, int32_t logical_index) -> bool {
+		if (!card_effects_enabled(value, card_index, owner_id)) return true;
 		for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
 			const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
 			if (ability == nullptr) continue;
@@ -2197,7 +2209,9 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 				const CompiledTriggerRule &rule = ability->triggers[trigger_index];
 				if (rule.event_id != event_id) continue;
 				EventGroup group;
-				group.source_cell = static_cast<int32_t>(cell);
+				group.source_cell = source_cell;
+				group.source_zone = source_zone;
+				group.source_logical_index = logical_index;
 				group.source_card_index = card_index;
 				group.source_owner = owner_id;
 				group.ability_index = static_cast<int32_t>(ability_index);
@@ -2209,10 +2223,37 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 				} else if (!condition_supported) {
 					supported = false;
 					reason = "Relevant event uses an unsupported trigger condition";
-					return groups;
+					return false;
 				}
 			}
 		}
+		return true;
+	};
+	if (event_id == StringName("card_after_discarded")) {
+		int32_t zone = -1;
+		int32_t owner_id = 0;
+		int32_t logical_index = -1;
+		if (
+			context.trigger_card_index >= 0
+			&& locate_card(value, context.trigger_card_index, zone, owner_id, logical_index)
+			&& zone == 3
+			&& owner_id == context.trigger_owner
+		) {
+			discover_card(context.trigger_card_index, owner_id, -1, 3, logical_index);
+		}
+		return groups;
+	}
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (card_index < 0) continue;
+		discover_card(
+			card_index,
+			value.board_owners[cell],
+			static_cast<int32_t>(cell),
+			0,
+			static_cast<int32_t>(cell)
+		);
+		if (!supported) return groups;
 	}
 	return groups;
 }
@@ -2245,9 +2286,30 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 			group.ability_handle,
 			group.ability_index
 		);
+		bool source_is_current = false;
+		int32_t current_logical_index = group.source_logical_index;
+		if (group.source_zone == 3) {
+			int32_t current_zone = -1;
+			int32_t current_owner = 0;
+			source_is_current = (
+				locate_card(
+					value,
+					group.source_card_index,
+					current_zone,
+					current_owner,
+					current_logical_index
+				)
+				&& current_zone == 3
+				&& current_owner == group.source_owner
+			);
+		} else {
+			source_is_current = (
+				find_board_card(value, group.source_card_index, group.source_cell) == group.source_cell
+				&& value.board_owners[group.source_cell] == group.source_owner
+			);
+		}
 		if (
-			find_board_card(value, group.source_card_index, group.source_cell) != group.source_cell
-			|| value.board_owners[group.source_cell] != group.source_owner
+			!source_is_current
 			|| !card_effects_enabled(value, group.source_card_index, group.source_owner)
 			|| current_ability_index < 0
 		) continue;
@@ -2279,14 +2341,14 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		resolution.events.append(triggered);
 		ActionContext action_context;
 		action_context.ability_source_cell = group.source_cell;
-		action_context.ability_source_zone = 0;
-		action_context.ability_source_logical_index = group.source_cell;
+		action_context.ability_source_zone = group.source_zone;
+		action_context.ability_source_logical_index = current_logical_index;
 		action_context.ability_source_card_index = group.source_card_index;
 		action_context.ability_source_owner = group.source_owner;
 		action_context.action_subject_card_index = group.source_card_index;
 		action_context.action_subject_owner = group.source_owner;
-		action_context.action_subject_zone = 0;
-		action_context.action_subject_logical_index = group.source_cell;
+		action_context.action_subject_zone = group.source_zone;
+		action_context.action_subject_logical_index = current_logical_index;
 		action_context.trigger_card_index = context.trigger_card_index;
 		action_context.attacker_card_index = context.attacker_card_index;
 		action_context.event_id = event_id;
@@ -2355,6 +2417,199 @@ bool DuelNativeCompactKernel::draw_cards(
 		resolution.events.append(event);
 	}
 	return true;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_cards(
+	NativeState &value,
+	const EventGroup &group,
+	const std::vector<int32_t> &locked_card_indices,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	execution_state.last_discard_batch_size = 0;
+	struct DiscardRecord {
+		int32_t card_index = -1;
+		int32_t logical_hand_index = -1;
+		int32_t hand_slot_index = -1;
+	};
+	std::vector<int32_t> candidates;
+	int32_t owner_id = 0;
+	for (const int32_t card_index : locked_card_indices) {
+		int32_t zone = -1;
+		int32_t candidate_owner = 0;
+		int32_t logical_index = -1;
+		if (!locate_card(value, card_index, zone, candidate_owner, logical_index) || zone != 1) continue;
+		if (owner_id == 0) owner_id = candidate_owner;
+		if (candidate_owner != owner_id) continue;
+		candidates.push_back(card_index);
+	}
+	if (owner_id < 1 || owner_id > 2 || candidates.empty()) return ActionOutcome::NO_EFFECT;
+
+	std::vector<int32_t> &hand = value.zones[owner_id - 1];
+	std::vector<int32_t> &discard_pile = value.zones[owner_id + 3];
+	const int32_t discard_size_before = static_cast<int32_t>(discard_pile.size());
+	const StringName source_instance_id = (
+		action_context.ability_source_card_index >= 0
+		? value.card_instance_ids[action_context.ability_source_card_index]
+		: StringName()
+	);
+	const StringName batch_id = StringName(
+		String("discard:")
+		+ String(source_instance_id)
+		+ ":" + String::num_int64(owner_id)
+		+ ":" + String::num_int64(value.scalars[1])
+		+ ":" + String::num_int64(discard_size_before)
+	);
+	std::vector<DiscardRecord> records;
+	std::vector<int32_t> discarded_slots;
+	for (const int32_t card_index : candidates) {
+		int32_t zone = -1;
+		int32_t current_owner = 0;
+		int32_t logical_index = -1;
+		if (
+			!locate_card(value, card_index, zone, current_owner, logical_index)
+			|| zone != 1
+			|| current_owner != owner_id
+			|| logical_index < 0
+			|| logical_index >= static_cast<int32_t>(hand.size())
+			|| hand[logical_index] != card_index
+		) continue;
+		DiscardRecord record;
+		record.card_index = card_index;
+		record.logical_hand_index = logical_index;
+		record.hand_slot_index = value.card_hand_slots[card_index] >= 0
+			? value.card_hand_slots[card_index]
+			: logical_index;
+		hand.erase(hand.begin() + logical_index);
+		value.card_runtime_flags[card_index] &= static_cast<uint8_t>(~(1 << 7));
+		value.card_hand_slots[card_index] = -1;
+		discard_pile.push_back(card_index);
+		records.push_back(record);
+		discarded_slots.push_back(record.hand_slot_index);
+	}
+	execution_state.last_discard_batch_size = static_cast<int32_t>(records.size());
+	if (records.empty()) return ActionOutcome::NO_EFFECT;
+
+	int32_t source_cell = find_board_card(
+		value,
+		action_context.ability_source_card_index,
+		action_context.ability_source_cell
+	);
+	if (source_cell < 0) source_cell = execution_state.current_source_cell;
+	execution_state.current_source_cell = source_cell;
+	for (const DiscardRecord &record : records) {
+		Dictionary discarded;
+		discarded["type"] = StringName("card_discarded");
+		discarded["source_cell"] = source_cell;
+		discarded["source_instance_id"] = source_instance_id;
+		discarded["owner_id"] = owner_id;
+		discarded["instance_id"] = value.card_instance_ids[record.card_index];
+		discarded["zone"] = StringName("hand");
+		discarded["logical_hand_index"] = record.logical_hand_index;
+		discarded["hand_slot_index"] = record.hand_slot_index;
+		discarded["discard_batch_id"] = batch_id;
+		discarded["discard_batch_size"] = static_cast<int32_t>(records.size());
+		discarded["card"] = restore_runtime_card(value, record.card_index);
+		resolution.events.append(discarded);
+	}
+
+	std::sort(discarded_slots.begin(), discarded_slots.end());
+	struct SlotMove {
+		int32_t card_index = -1;
+		int32_t from_slot = -1;
+		int32_t to_slot = -1;
+	};
+	std::vector<SlotMove> slot_moves;
+	for (const int32_t card_index : hand) {
+		const int32_t from_slot = value.card_hand_slots[card_index];
+		if (from_slot < 0) continue;
+		const int32_t removed_before = static_cast<int32_t>(std::count_if(
+			discarded_slots.begin(),
+			discarded_slots.end(),
+			[&](int32_t discarded_slot) { return discarded_slot < from_slot; }
+		));
+		const int32_t to_slot = from_slot - removed_before;
+		if (to_slot == from_slot) continue;
+		slot_moves.push_back({card_index, from_slot, to_slot});
+		value.card_hand_slots[card_index] = to_slot;
+	}
+	std::sort(slot_moves.begin(), slot_moves.end(), [](const SlotMove &left, const SlotMove &right) {
+		return left.from_slot < right.from_slot;
+	});
+	if (!slot_moves.empty()) {
+		Array moves;
+		for (const SlotMove &move : slot_moves) {
+			Dictionary move_payload;
+			move_payload["instance_id"] = value.card_instance_ids[move.card_index];
+			move_payload["from_slot"] = move.from_slot;
+			move_payload["to_slot"] = move.to_slot;
+			moves.append(move_payload);
+		}
+		Dictionary shifted;
+		shifted["type"] = StringName("hand_cards_shifted");
+		shifted["source_cell"] = source_cell;
+		shifted["source_instance_id"] = source_instance_id;
+		shifted["owner_id"] = owner_id;
+		shifted["moves"] = moves;
+		resolution.events.append(shifted);
+	}
+
+	for (const DiscardRecord &record : records) {
+		int32_t trigger_zone = -1;
+		int32_t trigger_owner = 0;
+		int32_t trigger_logical_index = -1;
+		if (!locate_card(
+			value,
+			record.card_index,
+			trigger_zone,
+			trigger_owner,
+			trigger_logical_index
+		)) continue;
+		EventContext discard_context = event_context;
+		discard_context.trigger_cell = -1;
+		discard_context.trigger_card_index = record.card_index;
+		discard_context.trigger_owner = owner_id;
+		discard_context.trigger_zone = trigger_zone;
+		discard_context.trigger_logical_index = trigger_logical_index;
+		discard_context.discard_owner = owner_id;
+		discard_context.discard_batch_id = batch_id;
+		discard_context.discard_batch_size = static_cast<int32_t>(records.size());
+		Resolution after_discard = resolve_event(
+			value,
+			StringName("card_after_discarded"),
+			discard_context,
+			exile_stack
+		);
+		if (!after_discard.supported) {
+			resolution.reason = after_discard.reason;
+			return ActionOutcome::UNSUPPORTED;
+		}
+		resolution.events.append_array(after_discard.events);
+		resolution.captures.append_array(after_discard.captures);
+		resolution.exiles.append_array(after_discard.exiles);
+	}
+
+	EventContext batch_context;
+	batch_context.discard_owner = owner_id;
+	batch_context.discard_batch_id = batch_id;
+	batch_context.discard_batch_size = static_cast<int32_t>(records.size());
+	Resolution batch_finished = resolve_event(
+		value,
+		StringName("discard_batch_finished"),
+		batch_context,
+		exile_stack
+	);
+	if (!batch_finished.supported) {
+		resolution.reason = batch_finished.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	resolution.events.append_array(batch_finished.events);
+	resolution.captures.append_array(batch_finished.captures);
+	resolution.exiles.append_array(batch_finished.exiles);
+	return ActionOutcome::APPLIED;
 }
 
 void DuelNativeCompactKernel::remove_ability_with_event(
@@ -3005,6 +3260,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	bool defer_power_change_batch
 ) const {
 	ActionExecutionState execution_state;
+	execution_state.current_source_cell = group.source_cell;
 	return execute_actions_with_state(
 		value,
 		group,
@@ -3135,6 +3391,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 		nested_context.action_subject_logical_index = logical_index;
 		nested_context.selected_card_index = selected_card_index;
 		ActionExecutionState nested_execution_state = execution_state;
+		nested_execution_state.current_source_cell = zone == 0 ? logical_index : -1;
 		const ActionOutcome outcome = execute_actions_with_state(
 			value,
 			group,
@@ -3197,16 +3454,52 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 	Resolution &resolution
 ) const {
 	if (!action.declaration_valid) return ActionOutcome::UNSUPPORTED;
-	const int32_t action_source_cell = (
-		action_context.action_subject_zone == 0
-		? action_context.action_subject_logical_index
-		: -1
-	);
+	const int32_t action_source_cell = execution_state.current_source_cell;
 	switch (action.opcode) {
 		case ActionOpcode::DRAW_CARDS:
 			return draw_cards(value, action_context.action_subject_owner, action_source_cell, action.amount, resolution)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
+		case ActionOpcode::DISCARD_CARD: {
+			execution_state.last_discard_batch_size = 0;
+			int32_t target = -1;
+			if (action.card_ref == CardRefOpcode::SELECTED_CARD) target = action_context.selected_card_index;
+			else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) target = event_context.trigger_card_index;
+			else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) target = group.source_card_index;
+			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
+			else return ActionOutcome::UNSUPPORTED;
+			return discard_locked_cards(
+				value,
+				group,
+				target >= 0 ? std::vector<int32_t>{target} : std::vector<int32_t>{},
+				event_context,
+				action_context,
+				execution_state,
+				exile_stack,
+				resolution
+			);
+		}
+		case ActionOpcode::DISCARD_CARDS: {
+			execution_state.last_discard_batch_size = 0;
+			bool selection_supported = true;
+			const std::vector<int32_t> selected = snapshot_selected_cards(
+				value,
+				action.selector,
+				action_context,
+				selection_supported
+			);
+			if (!selection_supported) return ActionOutcome::UNSUPPORTED;
+			return discard_locked_cards(
+				value,
+				group,
+				selected,
+				event_context,
+				action_context,
+				execution_state,
+				exile_stack,
+				resolution
+			);
+		}
 		case ActionOpcode::EXILE_SELF:
 			return exile_card(value, action_context.action_subject_card_index, action_source_cell, group.source_card_index, true, StringName("ability_exile_self"), event_context, exile_stack, resolution)
 				? ActionOutcome::APPLIED

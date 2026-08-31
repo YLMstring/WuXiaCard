@@ -73,6 +73,7 @@ func _run() -> void:
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
 	_test_if_transition_parity(kernel)
+	_test_discard_transition_parity(kernel)
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
@@ -716,6 +717,88 @@ func _test_if_transition_parity(kernel: Object) -> void:
 		4,
 		&"native_if_false_source",
 		"IF no-effect does not stop later transition phases"
+	)
+
+
+func _test_discard_transition_parity(kernel: Object) -> void:
+	var single_source: Dictionary = Catalog.create_instance(
+		&"LiJingRuLai3",
+		Rules.PLAYER_OWNER,
+		&"native_discard_single_source"
+	)
+	var single_state := State.new(
+		Rules.empty_board(),
+		[
+			single_source,
+			_make_plain_card(
+				&"单弃目标",
+				&"native_discard_single_target",
+				Rules.PLAYER_OWNER,
+				[1, 1, 1, 1]
+			),
+		],
+		[_make_plain_card(
+			&"单弃敌手",
+			&"native_discard_single_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		single_state,
+		0,
+		4,
+		&"native_discard_single_source",
+		"Single discard transaction"
+	)
+
+	var first: Dictionary = _make_plain_card(
+		&"批弃一",
+		&"native_discard_batch_first",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	var source: Dictionary = Catalog.create_instance(
+		&"LiJingRuLai4",
+		Rules.PLAYER_OWNER,
+		&"native_discard_batch_source"
+	)
+	var second: Dictionary = _make_plain_card(
+		&"批弃二",
+		&"native_discard_batch_second",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	var remaining: Dictionary = _make_plain_card(
+		&"批弃留手",
+		&"native_discard_batch_remaining",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	first[State.HAND_SLOT_INDEX_KEY] = 0
+	source[State.HAND_SLOT_INDEX_KEY] = 1
+	second[State.HAND_SLOT_INDEX_KEY] = 3
+	remaining[State.HAND_SLOT_INDEX_KEY] = 4
+	var batch_state := State.new(
+		Rules.empty_board(),
+		[remaining, source, second, first],
+		[_make_plain_card(
+			&"批弃敌手",
+			&"native_discard_batch_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		batch_state,
+		1,
+		4,
+		&"native_discard_batch_source",
+		"Batch discard, one-time hand shift, and batch-size IF"
 	)
 
 

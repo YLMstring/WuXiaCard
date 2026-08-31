@@ -72,11 +72,14 @@ class DuelNativeCompactKernel : public RefCounted {
 		MOVING_CARD_IS_ALLY,
 		SOURCE_OWNER_HAND_EMPTY,
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
+		DISCARD_OWNER_IS_SELF,
 		UNSUPPORTED,
 	};
 
 	enum class ActionOpcode : uint8_t {
 		DRAW_CARDS,
+		DISCARD_CARD,
+		DISCARD_CARDS,
 		EXILE_CARD,
 		EXILE_SELF,
 		PREVENT_TRIGGER_FLIP,
@@ -214,6 +217,7 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
+		int32_t current_source_cell = -1;
 	};
 
 	struct CompiledModifier {
@@ -269,6 +273,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t moving_target_cell = -1;
 		int32_t moving_card_index = -1;
 		int32_t moving_owner = 0;
+		int32_t discard_owner = 0;
+		int32_t discard_batch_size = 0;
 		struct AttackFlipRecord {
 			int32_t card_index = -1;
 			int32_t previous_owner = 0;
@@ -277,10 +283,13 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName attack_reason;
 		StringName flip_reason;
 		StringName exile_reason;
+		StringName discard_batch_id;
 	};
 
 	struct EventGroup {
 		int32_t source_cell = -1;
+		int32_t source_zone = 0;
+		int32_t source_logical_index = -1;
 		int32_t source_card_index = -1;
 		int32_t source_owner = 0;
 		int32_t ability_index = -1;
@@ -636,6 +645,16 @@ private:
 		int32_t owner_id,
 		int32_t source_cell,
 		int32_t amount,
+		Resolution &resolution
+	) const;
+	ActionOutcome discard_locked_cards(
+		NativeState &value,
+		const EventGroup &group,
+		const std::vector<int32_t> &locked_card_indices,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
+		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
 	bool exile_card(
