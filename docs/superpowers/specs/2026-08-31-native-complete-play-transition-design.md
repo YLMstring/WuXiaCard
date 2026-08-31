@@ -61,8 +61,9 @@ fresh in-place re-summon. It must preserve the oracle order:
 3. dispatch `TRIGGER_CARD_BEFORE_SUMMONED` and emit its results before the
    buffered placement/summon event;
 4. dispatch `TRIGGER_CARD_SUMMONED` globally;
-5. if the exact instance still exists, dispatch
-   `TRIGGER_CARD_AFTER_SUMMONED` using its current cell and owner;
+5. if the exact summoned instance still exists on the board, dispatch
+   `TRIGGER_CARD_AFTER_SUMMONED` to every current board listener in row-major
+   order, using that trigger instance's current cell and owner;
 6. if the exact instance still exists and still belongs to its summoning owner,
    resolve its standard summon attack.
 
@@ -70,6 +71,13 @@ If the card leaves the board during an earlier stage, later self-dependent
 stages do not run. If its owner changes during summon resolution, its standard
 attack is cancelled by the existing general ownership rule; no card-specific
 exception is added.
+
+`TRIGGER_CARD_AFTER_SUMMONED` is a global board event, not a self-only callback.
+The exact summoned instance merely supplies the trigger context. Every enabled
+board ability listening to that event is discovered in cell order and receives
+the same context, including abilities on cards other than the summoned card.
+The event is omitted only when that exact trigger instance is no longer on the
+board.
 
 The placement/summon event shape remains source-sensitive: a hand play emits
 `card_placed`, while an ability-created fresh card emits `card_summoned` with
@@ -200,12 +208,13 @@ unsupported branch, never an approximation.
 
 ## Draws and Empty-Deck Fallback
 
-Draw actions remain sequential. When a requested draw reaches an empty deck,
-the draw primitive creates two fresh `TaiZuChangQuan` cards in deck order and
-then draws the current top card. A multi-card draw may therefore refill more
-than once. Every generated card receives a collision-free instance ID and the
-same owner, hand slot, reveal state, difficulty hand-change processing, and
-draw events as the oracle.
+Draw actions remain sequential. Whenever one requested draw reaches an empty
+deck, the draw primitive directly creates and draws one fresh
+`TaiZuChangQuan`; it does not insert spare fallback cards into the deck. A
+two-card draw from an empty deck therefore creates and draws two fresh fallback
+cards one at a time, and the deck remains empty. Every generated card receives
+a collision-free instance ID and the same owner, hand slot, reveal state,
+difficulty hand-change processing, and draw events as the oracle.
 
 `DuelCompactState` explicitly includes the fallback prototype in the immutable
 fresh-card table; the native executor never calls the catalog or checks the
