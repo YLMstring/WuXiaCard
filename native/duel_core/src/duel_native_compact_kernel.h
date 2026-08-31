@@ -83,6 +83,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SPEND_KI,
 		FLIP_SELF,
 		GRANT_ABILITY_TO_SELF,
+		RETURN_CARD_TO_HAND,
 		UNSUPPORTED,
 	};
 
@@ -130,6 +131,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ABILITY_SOURCE,
 		OPPONENT_OF_ABILITY_SOURCE,
 		CARD_CURRENT,
+		CARD_ORIGINAL,
 		UNSUPPORTED,
 	};
 
@@ -195,6 +197,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool amount_is_hand_count = false;
 		RelativeOwnerOpcode amount_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode new_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		RelativeOwnerOpcode recipient_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		int32_t granted_ability_index = -1;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
@@ -563,6 +566,15 @@ private:
 		const CompiledAction &action,
 		const ActionContext &action_context,
 		int32_t source_cell,
+		Resolution &resolution
+	) const;
+	ActionOutcome return_card_to_hand(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
 	bool draw_cards(

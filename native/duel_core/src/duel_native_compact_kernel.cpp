@@ -981,6 +981,30 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (granted.get_type() == Variant::DICTIONARY && !Dictionary(granted).is_empty()) {
 			compiled.granted_ability_index = intern_compiled_ability(granted);
 		}
+	} else if (
+		type == StringName("return_card_to_hand")
+		&& (
+			action.size() == 3 + generic_field_count
+			|| action.size() == 4 + generic_field_count
+		)
+		&& (
+			!action.has("preserve_instance")
+			|| (
+				Variant(action.get("preserve_instance", false)).get_type() == Variant::BOOL
+				&& !static_cast<bool>(action.get("preserve_instance", false))
+			)
+		)
+	) {
+		compiled.opcode = ActionOpcode::RETURN_CARD_TO_HAND;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		const StringName recipient = action.get("recipient", StringName());
+		if (recipient == StringName("card_current_owner")) {
+			compiled.recipient_owner = RelativeOwnerOpcode::CARD_CURRENT;
+		} else if (recipient == StringName("card_original_owner")) {
+			compiled.recipient_owner = RelativeOwnerOpcode::CARD_ORIGINAL;
+		} else if (recipient == StringName("ability_source")) {
+			compiled.recipient_owner = RelativeOwnerOpcode::ABILITY_SOURCE;
+		}
 	}
 	return compiled;
 }
@@ -3112,9 +3136,205 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return flip_action_subject(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::GRANT_ABILITY_TO_SELF:
 			return grant_ability_to_subject(value, group, action, action_context, action_source_cell, resolution);
+		case ActionOpcode::RETURN_CARD_TO_HAND:
+			return return_card_to_hand(value, group, action, event_context, action_context, exile_stack, resolution);
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_hand(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	int32_t target_card_index = -1;
+	if (action.card_ref == CardRefOpcode::SELECTED_CARD) {
+		target_card_index = action_context.selected_card_index;
+	} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
+		target_card_index = event_context.trigger_card_index;
+	} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
+		target_card_index = group.source_card_index;
+	} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
+		target_card_index = event_context.attacker_card_index;
+	} else {
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		target_card_index < 0
+		|| target_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) {
+		return ActionOutcome::NO_EFFECT;
+	}
+
+	int32_t target_zone = -1;
+	int32_t target_owner = 0;
+	int32_t target_cell = -1;
+	if (
+		!locate_card(value, target_card_index, target_zone, target_owner, target_cell)
+		|| target_zone != 0
+	) {
+		return ActionOutcome::NO_EFFECT;
+	}
+
+	int32_t recipient_owner = 0;
+	if (action.recipient_owner == RelativeOwnerOpcode::CARD_CURRENT) {
+		recipient_owner = target_owner;
+	} else if (action.recipient_owner == RelativeOwnerOpcode::CARD_ORIGINAL) {
+		recipient_owner = value.card_original_owners[target_card_index];
+	} else if (action.recipient_owner == RelativeOwnerOpcode::ABILITY_SOURCE) {
+		recipient_owner = action_context.ability_source_owner;
+	} else {
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (recipient_owner != 1 && recipient_owner != 2) {
+		return ActionOutcome::NO_EFFECT;
+	}
+
+	const int32_t source_current_cell = [&]() {
+		const int32_t current = find_board_card(
+			value,
+			group.source_card_index,
+			group.source_cell
+		);
+		return current >= 0 ? current : group.source_cell;
+	}();
+	std::vector<int32_t> &recipient_hand = value.zones[recipient_owner - 1];
+	if (recipient_hand.size() >= 5) {
+		const int64_t previous_event_count = resolution.events.size();
+		if (!exile_card(
+			value,
+			target_card_index,
+			source_current_cell,
+			group.source_card_index,
+			target_card_index == group.source_card_index,
+			StringName("return_to_full_hand"),
+			event_context,
+			exile_stack,
+			resolution
+		)) {
+			return ActionOutcome::UNSUPPORTED;
+		}
+		return resolution.events.size() > previous_event_count
+			? ActionOutcome::APPLIED
+			: ActionOutcome::NO_EFFECT;
+	}
+
+	const StringName card_id = value.card_ids[target_card_index];
+	const FreshCardPrototype *prototype = nullptr;
+	for (const FreshCardPrototype &candidate : value.fresh_card_prototypes) {
+		if (candidate.card_id == card_id) {
+			prototype = &candidate;
+			break;
+		}
+	}
+	if (prototype == nullptr) {
+		resolution.reason = "Return card has no fresh-card prototype";
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		prototype->active_ability_set_index < 0
+		|| prototype->active_ability_set_index >= static_cast<int32_t>(compiled_ability_sets.size())
+	) {
+		resolution.reason = "Return card prototype has no compiled ability set";
+		return ActionOutcome::UNSUPPORTED;
+	}
+
+	auto instance_id_is_located = [&](const StringName &candidate) {
+		for (const int32_t card_index : value.board_card_indices) {
+			if (card_index >= 0 && value.card_instance_ids[card_index] == candidate) return true;
+		}
+		for (const std::vector<int32_t> &zone : value.zones) {
+			for (const int32_t card_index : zone) {
+				if (value.card_instance_ids[card_index] == candidate) return true;
+			}
+		}
+		return false;
+	};
+	StringName new_instance_id;
+	for (int64_t serial = 1; ; ++serial) {
+		const StringName candidate(
+			String("generated_") + String(card_id) + "_" + String::num_int64(serial)
+		);
+		if (!instance_id_is_located(candidate)) {
+			new_instance_id = candidate;
+			break;
+		}
+	}
+	const int32_t hand_slot = leftmost_empty_hand_slot(value, recipient_owner);
+	if (hand_slot < 0) return ActionOutcome::NO_EFFECT;
+
+	value.board_card_indices[target_cell] = -1;
+	value.board_owners[target_cell] = 0;
+	if (target_cell < value.board_slot_extras.size()) {
+		value.board_slot_extras[target_cell] = Dictionary();
+	}
+
+	const int32_t new_card_index = static_cast<int32_t>(value.card_instance_ids.size());
+	value.card_instance_ids.push_back(new_instance_id);
+	value.card_template_indices.push_back(prototype->template_index);
+	static constexpr uint8_t fresh_runtime_flags = (
+		(1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+		| (1 << 4) | (1 << 5) | (1 << 7)
+	);
+	value.card_runtime_flags.push_back(fresh_runtime_flags);
+	for (const int32_t power : prototype->powers) value.card_powers.push_back(power);
+	value.card_original_owners.push_back(static_cast<uint8_t>(recipient_owner));
+	value.card_ki.push_back(prototype->ki);
+	value.card_active_ability_set_indices.push_back(prototype->active_ability_set_index);
+	std::vector<RuntimeAbilityEntry> runtime_entries;
+	const std::vector<int32_t> &ability_indices = compiled_ability_sets[
+		prototype->active_ability_set_index
+	].ability_pool_indices;
+	runtime_entries.reserve(ability_indices.size());
+	for (const int32_t compiled_ability_index : ability_indices) {
+		RuntimeAbilityEntry entry;
+		entry.compiled_ability_index = compiled_ability_index;
+		entry.handle = value.next_ability_handle++;
+		runtime_entries.push_back(entry);
+	}
+	value.card_runtime_abilities.push_back(runtime_entries);
+	value.card_reveal_codes.push_back(static_cast<uint8_t>(recipient_owner == 1 ? 3 : 4));
+	value.card_suppression_set_indices.push_back(-1);
+	value.card_hand_slots.push_back(hand_slot);
+	value.card_ids.push_back(card_id);
+	recipient_hand.push_back(new_card_index);
+
+	const StringName source_instance_id = (
+		group.source_card_index >= 0
+		&& group.source_card_index < static_cast<int32_t>(value.card_instance_ids.size())
+		? value.card_instance_ids[group.source_card_index]
+		: StringName()
+	);
+	Dictionary returned;
+	returned["type"] = StringName("card_returned_to_hand");
+	returned["source_cell"] = source_current_cell;
+	returned["source_instance_id"] = source_instance_id;
+	returned["target_cell"] = target_cell;
+	returned["old_instance_id"] = value.card_instance_ids[target_card_index];
+	returned["owner_id"] = recipient_owner;
+	returned["card_id"] = card_id;
+	returned["instance_id"] = new_instance_id;
+	returned["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
+	returned["hand_slot_index"] = hand_slot;
+	returned["card"] = restore_runtime_card(value, new_card_index);
+	resolution.events.append(returned);
+
+	Dictionary revealed;
+	revealed["type"] = StringName("card_revealed");
+	revealed["source_cell"] = source_current_cell;
+	revealed["source_instance_id"] = source_instance_id;
+	revealed["owner_id"] = recipient_owner;
+	revealed["observer_owner_id"] = other_owner(recipient_owner);
+	revealed["card_id"] = card_id;
+	revealed["instance_id"] = new_instance_id;
+	revealed["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
+	resolution.events.append(revealed);
+	return ActionOutcome::APPLIED;
 }
 
 bool DuelNativeCompactKernel::exile_card(

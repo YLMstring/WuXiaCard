@@ -75,6 +75,7 @@ func _run() -> void:
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
+	_test_return_to_hand_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
@@ -1235,6 +1236,96 @@ func _test_ki_flip_and_grant_transition_parity(kernel: Object) -> void:
 		4,
 		&"native_grant_source",
 		"Passive grant deduplicates and dynamic activation replaces all innate activations"
+	)
+
+
+func _test_return_to_hand_transition_parity(kernel: Object) -> void:
+	var returned_target: Dictionary = Catalog.create_instance(
+		&"TuNaShu3",
+		Rules.OPPONENT_OWNER,
+		&"generated_TuNaShu3_1"
+	)
+	returned_target["powers"] = [9, 8, 7, 6]
+	returned_target["ki"] = 4
+	returned_target["active_abilities"] = []
+	var board: Array = Rules.empty_board()
+	board[1] = _slot(returned_target, Rules.OPPONENT_OWNER)
+	var occupied_id: Dictionary = Catalog.create_instance(
+		&"TuNaShu3",
+		Rules.OPPONENT_OWNER,
+		&"generated_TuNaShu3_2"
+	)
+	occupied_id[State.HAND_SLOT_INDEX_KEY] = 3
+	var return_state := State.new(
+		board,
+		[Catalog.create_instance(&"NianhuaWeiXiao4", Rules.PLAYER_OWNER, &"native_return_source")],
+		[occupied_id],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		return_state,
+		0,
+		4,
+		&"native_return_source",
+		"Board return creates a public catalog-fresh instance in the leftmost slot"
+	)
+
+	var full_board: Array = Rules.empty_board()
+	full_board[1] = _slot(
+		Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"native_full_return_target"),
+		Rules.OPPONENT_OWNER
+	)
+	var full_hand: Array = []
+	for hand_index: int in range(5):
+		var hand_card: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			StringName("native_full_return_hand_%d" % hand_index)
+		)
+		hand_card[State.HAND_SLOT_INDEX_KEY] = hand_index
+		full_hand.append(hand_card)
+	var full_state := State.new(
+		full_board,
+		[Catalog.create_instance(&"NianhuaWeiXiao3", Rules.PLAYER_OWNER, &"native_full_return_source")],
+		full_hand,
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		full_state,
+		0,
+		4,
+		&"native_full_return_source",
+		"Board return to a full hand uses the ordinary external exile lifecycle"
+	)
+
+	var compact := CompactState.new()
+	_check(compact.capture_state(return_state), "Missing-prototype return fixture captures")
+	var missing_payload: Dictionary = compact.to_variant_payload()
+	var retained_prototypes: Array = []
+	for prototype_value: Variant in missing_payload.get("fresh_card_prototypes", []) as Array:
+		var prototype: Dictionary = prototype_value as Dictionary
+		if StringName(prototype.get("card_id", &"")) != &"TuNaShu3":
+			retained_prototypes.append(prototype)
+	missing_payload["fresh_card_prototypes"] = retained_prototypes
+	_check(
+		bool(kernel.call("load_compact_payload", missing_payload)),
+		"Native kernel loads a root missing an optional target prototype"
+	)
+	var rejected: Dictionary = kernel.call(
+		"apply_play_transition",
+		0,
+		4,
+		&"native_return_source"
+	) as Dictionary
+	_check(
+		not bool(rejected.get("supported", false))
+		and not bool(rejected.get("valid", false))
+		and (rejected.get("events", []) as Array).is_empty()
+		and (rejected.get("captures", []) as Array).is_empty()
+		and (rejected.get("exiles", []) as Array).is_empty(),
+		"A reached return without a fresh prototype rejects atomically"
 	)
 
 
