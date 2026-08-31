@@ -499,7 +499,8 @@ func _capture_state(state: StateData) -> bool:
 
 func _capture_fresh_card_prototypes() -> bool:
 	fresh_card_prototypes = []
-	var observed_card_ids: Dictionary = {}
+	var pending_card_ids: Array[StringName] = []
+	var queued_card_ids: Dictionary = {}
 	for card_index: int in range(card_instance_ids.size()):
 		var runtime_template_index: int = card_template_indices[card_index]
 		if runtime_template_index < 0 or runtime_template_index >= card_template_pool.size():
@@ -507,9 +508,15 @@ func _capture_fresh_card_prototypes() -> bool:
 		var card_id := StringName(
 			(card_template_pool[runtime_template_index] as Dictionary).get("card_id", &"")
 		)
-		if card_id == &"" or observed_card_ids.has(card_id):
+		if card_id == &"" or queued_card_ids.has(card_id):
 			continue
-		observed_card_ids[card_id] = true
+		queued_card_ids[card_id] = true
+		pending_card_ids.append(card_id)
+
+	var next_card_index: int = 0
+	while next_card_index < pending_card_ids.size():
+		var card_id: StringName = pending_card_ids[next_card_index]
+		next_card_index += 1
 		if not Catalog.has_card(card_id):
 			continue
 		var fresh: Dictionary = Catalog.create_instance(
@@ -537,7 +544,36 @@ func _capture_fresh_card_prototypes() -> bool:
 			"ki": int(fresh.get("ki", 0)),
 			"active_ability_set_index": active_ability_set_index,
 		})
+
+		var transform_targets: Array[StringName] = []
+		_collect_transform_target_card_ids(
+			fresh.get("active_abilities", []) as Array,
+			transform_targets
+		)
+		for target_card_id: StringName in transform_targets:
+			if target_card_id == &"" or queued_card_ids.has(target_card_id):
+				continue
+			queued_card_ids[target_card_id] = true
+			pending_card_ids.append(target_card_id)
 	return true
+
+
+func _collect_transform_target_card_ids(
+	value: Variant,
+	target_card_ids: Array[StringName]
+) -> void:
+	if value is Array:
+		for item: Variant in value as Array:
+			_collect_transform_target_card_ids(item, target_card_ids)
+		return
+	if not value is Dictionary:
+		return
+
+	var value_dictionary := value as Dictionary
+	if StringName(value_dictionary.get("type", &"")) == Catalog.ACTION_TRANSFORM_CARD:
+		target_card_ids.append(StringName(value_dictionary.get("card_id", &"")))
+	for nested_value: Variant in value_dictionary.values():
+		_collect_transform_target_card_ids(nested_value, target_card_ids)
 
 
 func _capture_card(card: Dictionary) -> int:

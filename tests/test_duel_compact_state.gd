@@ -25,6 +25,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_nonempty_runtime_payload_round_trip()
 	_test_fresh_card_prototype_metadata()
+	_test_transform_reachable_fresh_prototypes()
 	_test_variant_payload_load_round_trip()
 	_test_compact_copy_isolation()
 	_test_real_quick_state_corpus()
@@ -196,6 +197,30 @@ func _test_fresh_card_prototype_metadata() -> void:
 		_check(restored != null, "Legacy payload without prototypes remains restorable")
 		if restored != null:
 			_check_exact_state(state, restored, "Prototype metadata does not alter restored duel state")
+
+
+func _test_transform_reachable_fresh_prototypes() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(
+			&"SanRuDiYu1",
+			Rules.PLAYER_OWNER,
+			&"compact_transform_prototype_source"
+		)],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var compact: CompactState = _capture(state)
+	_check(compact != null, "Transform-prototype root can be captured")
+	if compact == null:
+		return
+	var prototype_ids: Array[StringName] = []
+	for prototype_value: Variant in compact.fresh_card_prototypes:
+		prototype_ids.append(StringName((prototype_value as Dictionary).get("card_id", &"")))
+	_check(
+		prototype_ids == [&"SanRuDiYu1", &"SanRuDiYu2", &"SanRuDiYu3"],
+		"Fresh prototypes include the deterministic transitive transform closure only"
+	)
 
 
 func _test_variant_payload_load_round_trip() -> void:
