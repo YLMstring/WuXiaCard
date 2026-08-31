@@ -739,6 +739,16 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(condition.get("amount", 0)));
 		return compiled;
 	}
+	if (
+		type == StringName("last_discard_batch_size_at_least")
+		&& condition.size() == 2
+		&& Variant(condition.get("amount", 0)).get_type() == Variant::INT
+		&& static_cast<int64_t>(condition.get("amount", 0)) > 0
+	) {
+		compiled.opcode = ConditionOpcode::LAST_DISCARD_BATCH_SIZE_AT_LEAST;
+		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(condition.get("amount", 0)));
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
 	else if (type == StringName("attacked_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
@@ -751,6 +761,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("ki_reached_zero")) compiled.opcode = ConditionOpcode::KI_REACHED_ZERO;
 	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
 	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;
+	else if (type == StringName("source_owner_hand_empty")) compiled.opcode = ConditionOpcode::SOURCE_OWNER_HAND_EMPTY;
 	return compiled;
 }
 
@@ -941,7 +952,31 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		const Array children = action.get("actions", Array());
 		compiled.child_actions.reserve(static_cast<size_t>(children.size()));
 		for (int64_t child_index = 0; child_index < children.size(); ++child_index) {
-			compiled.child_actions.push_back(compile_action(children[child_index]));
+			const CompiledAction child = compile_action(children[child_index]);
+			if (!child.declaration_valid) compiled.declaration_valid = false;
+			compiled.child_actions.push_back(child);
+		}
+	} else if (
+		type == StringName("if")
+		&& action.size() == 3 + generic_field_count
+		&& Variant(action.get("conditions", Variant())).get_type() == Variant::ARRAY
+		&& Variant(action.get("actions", Variant())).get_type() == Variant::ARRAY
+	) {
+		compiled.opcode = ActionOpcode::IF;
+		const Array conditions = action.get("conditions", Array());
+		const Array children = action.get("actions", Array());
+		if (conditions.is_empty() || children.is_empty()) compiled.declaration_valid = false;
+		compiled.conditions.reserve(static_cast<size_t>(conditions.size()));
+		for (int64_t condition_index = 0; condition_index < conditions.size(); ++condition_index) {
+			const CompiledCondition condition = compile_condition(conditions[condition_index]);
+			if (condition.opcode == ConditionOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+			compiled.conditions.push_back(condition);
+		}
+		compiled.child_actions.reserve(static_cast<size_t>(children.size()));
+		for (int64_t child_index = 0; child_index < children.size(); ++child_index) {
+			const CompiledAction child = compile_action(children[child_index]);
+			if (!child.declaration_valid) compiled.declaration_valid = false;
+			compiled.child_actions.push_back(child);
 		}
 	} else if (type == StringName("change_powers") && action.size() == 3 + generic_field_count) {
 		compiled.opcode = ActionOpcode::CHANGE_POWERS;
@@ -2969,6 +3004,31 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	Resolution &resolution,
 	bool defer_power_change_batch
 ) const {
+	ActionExecutionState execution_state;
+	return execute_actions_with_state(
+		value,
+		group,
+		actions,
+		event_context,
+		action_context,
+		execution_state,
+		exile_stack,
+		resolution,
+		defer_power_change_batch
+	);
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_with_state(
+	NativeState &value,
+	const EventGroup &group,
+	const std::vector<CompiledAction> &actions,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution,
+	bool defer_power_change_batch
+) const {
 	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
@@ -2979,6 +3039,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 			action,
 			event_context,
 			action_context,
+			execution_state,
 			exile_stack,
 			resolution
 		);
@@ -3035,6 +3096,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 	const CompiledAction &action,
 	const EventContext &event_context,
 	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
@@ -3072,12 +3134,14 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 		nested_context.action_subject_zone = zone;
 		nested_context.action_subject_logical_index = logical_index;
 		nested_context.selected_card_index = selected_card_index;
-		const ActionOutcome outcome = execute_actions(
+		ActionExecutionState nested_execution_state = execution_state;
+		const ActionOutcome outcome = execute_actions_with_state(
 			value,
 			group,
 			action.child_actions,
 			event_context,
 			nested_context,
+			nested_execution_state,
 			exile_stack,
 			resolution,
 			true
@@ -3088,12 +3152,47 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 	return aggregate;
 }
 
+bool DuelNativeCompactKernel::action_conditions_match(
+	const NativeState &value,
+	const std::vector<CompiledCondition> &conditions,
+	const ActionContext &action_context,
+	const ActionExecutionState &execution_state,
+	bool &supported
+) const {
+	supported = true;
+	if (conditions.empty()) return false;
+	for (const CompiledCondition &condition : conditions) {
+		bool matched = false;
+		switch (condition.opcode) {
+			case ConditionOpcode::SOURCE_OWNER_HAND_EMPTY:
+				if (
+					action_context.ability_source_owner < 1
+					|| action_context.ability_source_owner > 2
+				) {
+					supported = false;
+					return false;
+				}
+				matched = value.zones[action_context.ability_source_owner - 1].empty();
+				break;
+			case ConditionOpcode::LAST_DISCARD_BATCH_SIZE_AT_LEAST:
+				matched = execution_state.last_discard_batch_size >= condition.amount;
+				break;
+			default:
+				supported = false;
+				return false;
+		}
+		if (!matched) return false;
+	}
+	return true;
+}
+
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 	NativeState &value,
 	const EventGroup &group,
 	const CompiledAction &action,
 	const EventContext &event_context,
 	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
@@ -3146,7 +3245,29 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return ActionOutcome::NO_EFFECT;
 		}
 		case ActionOpcode::FOR_EACH_SELECTED_CARD:
-			return execute_for_each_selected_card(value, group, action, event_context, action_context, exile_stack, resolution);
+			return execute_for_each_selected_card(value, group, action, event_context, action_context, execution_state, exile_stack, resolution);
+		case ActionOpcode::IF: {
+			bool conditions_supported = true;
+			if (!action_conditions_match(
+				value,
+				action.conditions,
+				action_context,
+				execution_state,
+				conditions_supported
+			)) {
+				return conditions_supported ? ActionOutcome::NO_EFFECT : ActionOutcome::UNSUPPORTED;
+			}
+			return execute_actions_with_state(
+				value,
+				group,
+				action.child_actions,
+				event_context,
+				action_context,
+				execution_state,
+				exile_stack,
+				resolution
+			);
+		}
 		case ActionOpcode::CHANGE_POWERS:
 			return change_powers(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
 		case ActionOpcode::GAIN_KI:

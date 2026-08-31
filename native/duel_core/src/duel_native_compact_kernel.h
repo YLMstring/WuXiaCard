@@ -70,6 +70,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		KI_REACHED_ZERO,
 		MOVING_CARD_IS_SELF,
 		MOVING_CARD_IS_ALLY,
+		SOURCE_OWNER_HAND_EMPTY,
+		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 		UNSUPPORTED,
 	};
 
@@ -80,6 +82,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		PREVENT_TRIGGER_FLIP,
 		REMOVE_THIS_ABILITY,
 		FOR_EACH_SELECTED_CARD,
+		IF,
 		CHANGE_POWERS,
 		GAIN_KI,
 		SPEND_KI,
@@ -205,7 +208,12 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		CompiledSelector selector;
+		std::vector<CompiledCondition> conditions;
 		std::vector<CompiledAction> child_actions;
+	};
+
+	struct ActionExecutionState {
+		int32_t last_discard_batch_size = 0;
 	};
 
 	struct CompiledModifier {
@@ -488,12 +496,24 @@ private:
 		Resolution &resolution,
 		bool defer_power_change_batch = false
 	) const;
+	ActionOutcome execute_actions_with_state(
+		NativeState &value,
+		const EventGroup &group,
+		const std::vector<CompiledAction> &actions,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution,
+		bool defer_power_change_batch = false
+	) const;
 	ActionOutcome execute_action(
 		NativeState &value,
 		const EventGroup &group,
 		const CompiledAction &action,
 		const EventContext &event_context,
 		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
@@ -503,8 +523,16 @@ private:
 		const CompiledAction &action,
 		const EventContext &event_context,
 		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
+	) const;
+	bool action_conditions_match(
+		const NativeState &value,
+		const std::vector<CompiledCondition> &conditions,
+		const ActionContext &action_context,
+		const ActionExecutionState &execution_state,
+		bool &supported
 	) const;
 	bool selector_conditions_match(
 		const NativeState &value,

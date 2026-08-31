@@ -72,6 +72,7 @@ func _run() -> void:
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
+	_test_if_transition_parity(kernel)
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
@@ -638,6 +639,83 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		nested_unknown_state,
 		&"native_nested_unknown_source",
 		"Unsupported nested action is rejected atomically"
+	)
+
+
+func _test_if_transition_parity(kernel: Object) -> void:
+	var conditional_action: Dictionary = {
+		"type": Catalog.ACTION_IF,
+		"conditions": [{"type": Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+		"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+	}
+	var true_source: Dictionary = _make_after_summoned_card(
+		&"native_if_true_source",
+		conditional_action
+	)
+	var true_state := State.new(
+		Rules.empty_board(),
+		[true_source],
+		[_make_plain_card(
+			&"条件敌手",
+			&"native_if_true_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(
+			&"条件抽牌",
+			&"native_if_true_draw",
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1]
+		)]
+	)
+	_check_transition_parity(
+		kernel,
+		true_state,
+		0,
+		4,
+		&"native_if_true_source",
+		"IF executes children when the source owner's hand is empty"
+	)
+
+	var false_source: Dictionary = _make_after_summoned_card(
+		&"native_if_false_source",
+		conditional_action
+	)
+	var false_state := State.new(
+		Rules.empty_board(),
+		[
+			false_source,
+			_make_plain_card(
+				&"条件留手",
+				&"native_if_false_remain",
+				Rules.PLAYER_OWNER,
+				[1, 1, 1, 1]
+			),
+		],
+		[_make_plain_card(
+			&"条件敌手",
+			&"native_if_false_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(
+			&"不应抽到",
+			&"native_if_false_draw",
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1]
+		)]
+	)
+	_check_transition_parity(
+		kernel,
+		false_state,
+		0,
+		4,
+		&"native_if_false_source",
+		"IF no-effect does not stop later transition phases"
 	)
 
 
