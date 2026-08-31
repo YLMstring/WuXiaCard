@@ -75,6 +75,7 @@ func _run() -> void:
 	_test_if_transition_parity(kernel)
 	_test_discard_transition_parity(kernel)
 	_test_transform_transition_parity(kernel)
+	_test_preserved_return_transition_parity(kernel)
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
@@ -850,6 +851,145 @@ func _test_transform_transition_parity(kernel: Object) -> void:
 		4,
 		&"native_transform_discard_source",
 		"Discarded card transforms in place from a reachable fresh prototype"
+	)
+
+
+func _test_preserved_return_transition_parity(kernel: Object) -> void:
+	var discard_source: Dictionary = _make_selector_source(
+		&"native_preserved_return_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 1,
+		},
+		[{"type": Catalog.ACTION_DISCARD_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var returned_target: Dictionary = Catalog.create_instance(
+		&"SanRuDiYu1",
+		Rules.PLAYER_OWNER,
+		&"native_preserved_return_target"
+	)
+	var return_state := State.new(
+		Rules.empty_board(),
+		[discard_source, returned_target],
+		[_make_plain_card(
+			&"回手敌手",
+			&"native_preserved_return_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		return_state,
+		0,
+		4,
+		&"native_preserved_return_source",
+		"Transformed discard card returns as the same publicly revealed instance"
+	)
+
+	var public_source: Dictionary = _make_selector_source(
+		&"native_public_return_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 1,
+		},
+		[{"type": Catalog.ACTION_DISCARD_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var public_target: Dictionary = Catalog.create_instance(
+		&"SanRuDiYu1",
+		Rules.PLAYER_OWNER,
+		&"native_public_return_target"
+	)
+	public_target["revealed_to_owner_ids"] = [
+		Rules.PLAYER_OWNER,
+		Rules.OPPONENT_OWNER,
+	]
+	_check_transition_parity(
+		kernel,
+		State.new(
+			Rules.empty_board(),
+			[public_source, public_target],
+			[_make_plain_card(
+				&"公开回手敌手",
+				&"native_public_return_enemy",
+				Rules.OPPONENT_OWNER,
+				[1, 1, 1, 1]
+			)],
+			Rules.PLAYER_OWNER
+		),
+		0,
+		4,
+		&"native_public_return_source",
+		"Already-public preserved return emits no duplicate reveal"
+	)
+
+	var full_source: Dictionary = _make_selector_source(
+		&"native_full_return_source",
+		{
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 1,
+		},
+		[{"type": Catalog.ACTION_DISCARD_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}]
+	)
+	var full_target: Dictionary = Catalog.create_instance(
+		&"SanRuDiYu1",
+		Rules.PLAYER_OWNER,
+		&"native_full_return_target"
+	)
+	full_target["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DISCARDED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [
+				{
+					"type": Catalog.ACTION_TRANSFORM_CARD,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+					"card_id": &"SanRuDiYu2",
+				},
+				{"type": Catalog.ACTION_DRAW_CARDS, "amount": 2},
+				{
+					"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+					"recipient": Catalog.OWNER_CARD_CURRENT,
+					"preserve_instance": true,
+				},
+			],
+		}],
+	}]
+	var full_state := State.new(
+		Rules.empty_board(),
+		[
+			full_source,
+			full_target,
+			_make_plain_card(&"满手一", &"native_full_return_one", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"满手二", &"native_full_return_two", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"满手三", &"native_full_return_three", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		],
+		[_make_plain_card(
+			&"满手回手敌手",
+			&"native_full_return_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[
+			_make_plain_card(&"补满一", &"native_full_return_draw_one", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"补满二", &"native_full_return_draw_two", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		]
+	)
+	_check_transition_parity(
+		kernel,
+		full_state,
+		0,
+		4,
+		&"native_full_return_source",
+		"Full-hand preserved return exiles the same transformed instance"
 	)
 
 

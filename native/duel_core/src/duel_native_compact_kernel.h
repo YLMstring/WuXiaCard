@@ -209,6 +209,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		RelativeOwnerOpcode new_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode recipient_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		int32_t granted_ability_index = -1;
+		bool preserve_instance = false;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		StringName card_id;

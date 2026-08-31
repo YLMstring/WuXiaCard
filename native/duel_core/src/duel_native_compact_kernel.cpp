@@ -1051,14 +1051,12 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		)
 		&& (
 			!action.has("preserve_instance")
-			|| (
-				Variant(action.get("preserve_instance", false)).get_type() == Variant::BOOL
-				&& !static_cast<bool>(action.get("preserve_instance", false))
-			)
+			|| Variant(action.get("preserve_instance", false)).get_type() == Variant::BOOL
 		)
 	) {
 		compiled.opcode = ActionOpcode::RETURN_CARD_TO_HAND;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		compiled.preserve_instance = static_cast<bool>(action.get("preserve_instance", false));
 		const StringName recipient = action.get("recipient", StringName());
 		if (recipient == StringName("card_current_owner")) {
 			compiled.recipient_owner = RelativeOwnerOpcode::CARD_CURRENT;
@@ -3716,7 +3714,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
 		target_card_index = event_context.trigger_card_index;
 	} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
-		target_card_index = group.source_card_index;
+		target_card_index = action_context.ability_source_card_index;
 	} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
 		target_card_index = event_context.attacker_card_index;
 	} else {
@@ -3734,7 +3732,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	int32_t target_cell = -1;
 	if (
 		!locate_card(value, target_card_index, target_zone, target_owner, target_cell)
-		|| target_zone != 0
+		|| (action.preserve_instance ? target_zone != 3 : target_zone != 0)
 	) {
 		return ActionOutcome::NO_EFFECT;
 	}
@@ -3756,10 +3754,10 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	const int32_t source_current_cell = [&]() {
 		const int32_t current = find_board_card(
 			value,
-			group.source_card_index,
-			group.source_cell
+			action_context.ability_source_card_index,
+			action_context.ability_source_cell
 		);
-		return current >= 0 ? current : group.source_cell;
+		return current >= 0 ? current : action_context.ability_source_cell;
 	}();
 	std::vector<int32_t> &recipient_hand = value.zones[recipient_owner - 1];
 	if (recipient_hand.size() >= 5) {
@@ -3768,8 +3766,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 			value,
 			target_card_index,
 			source_current_cell,
-			group.source_card_index,
-			target_card_index == group.source_card_index,
+			action_context.ability_source_card_index,
+			target_card_index == action_context.ability_source_card_index,
 			StringName("return_to_full_hand"),
 			event_context,
 			exile_stack,
@@ -3783,6 +3781,63 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	}
 
 	const StringName card_id = value.card_ids[target_card_index];
+	if (action.preserve_instance) {
+		std::vector<int32_t> &discard_pile = value.zones[target_owner + 3];
+		if (
+			target_cell < 0
+			|| target_cell >= static_cast<int32_t>(discard_pile.size())
+			|| discard_pile[target_cell] != target_card_index
+		) return ActionOutcome::NO_EFFECT;
+		const int32_t hand_slot = leftmost_empty_hand_slot(value, recipient_owner);
+		if (hand_slot < 0) return ActionOutcome::NO_EFFECT;
+		discard_pile.erase(discard_pile.begin() + target_cell);
+		value.card_runtime_flags[target_card_index] |= static_cast<uint8_t>(1 << 7);
+		value.card_hand_slots[target_card_index] = hand_slot;
+		recipient_hand.push_back(target_card_index);
+
+		const int32_t observer_owner = other_owner(recipient_owner);
+		uint8_t &reveal_code = value.card_reveal_codes[target_card_index];
+		const bool already_revealed = (
+			(observer_owner == 1 && (reveal_code == 1 || reveal_code == 3 || reveal_code == 4))
+			|| (observer_owner == 2 && (reveal_code == 2 || reveal_code == 3 || reveal_code == 4))
+		);
+		if (!already_revealed) {
+			if (observer_owner == 1) reveal_code = reveal_code == 2 ? 4 : 1;
+			else reveal_code = reveal_code == 1 ? 3 : 2;
+		}
+		const StringName source_instance_id = (
+			action_context.ability_source_card_index >= 0
+			? value.card_instance_ids[action_context.ability_source_card_index]
+			: StringName()
+		);
+		Dictionary returned;
+		returned["type"] = StringName("card_returned_to_hand");
+		returned["source_cell"] = source_current_cell;
+		returned["source_instance_id"] = source_instance_id;
+		returned["target_cell"] = -1;
+		returned["old_instance_id"] = value.card_instance_ids[target_card_index];
+		returned["owner_id"] = recipient_owner;
+		returned["card_id"] = card_id;
+		returned["instance_id"] = value.card_instance_ids[target_card_index];
+		returned["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
+		returned["hand_slot_index"] = hand_slot;
+		returned["card"] = restore_runtime_card(value, target_card_index);
+		resolution.events.append(returned);
+		if (!already_revealed) {
+			Dictionary revealed;
+			revealed["type"] = StringName("card_revealed");
+			revealed["source_cell"] = source_current_cell;
+			revealed["source_instance_id"] = source_instance_id;
+			revealed["owner_id"] = recipient_owner;
+			revealed["observer_owner_id"] = observer_owner;
+			revealed["card_id"] = card_id;
+			revealed["instance_id"] = value.card_instance_ids[target_card_index];
+			revealed["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
+			resolution.events.append(revealed);
+		}
+		return ActionOutcome::APPLIED;
+	}
+
 	const FreshCardPrototype *prototype = nullptr;
 	for (const FreshCardPrototype &candidate : value.fresh_card_prototypes) {
 		if (candidate.card_id == card_id) {
@@ -3863,9 +3918,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	recipient_hand.push_back(new_card_index);
 
 	const StringName source_instance_id = (
-		group.source_card_index >= 0
-		&& group.source_card_index < static_cast<int32_t>(value.card_instance_ids.size())
-		? value.card_instance_ids[group.source_card_index]
+		action_context.ability_source_card_index >= 0
+		&& action_context.ability_source_card_index < static_cast<int32_t>(value.card_instance_ids.size())
+		? value.card_instance_ids[action_context.ability_source_card_index]
 		: StringName()
 	);
 	Dictionary returned;
