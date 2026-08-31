@@ -72,18 +72,32 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	enum class ConditionOpcode : uint8_t {
 		TRIGGER_CARD_IS_SELF,
+		TRIGGER_CARD_IS_ALLY,
+		TRIGGER_CARD_IS_ENEMY,
+		TRIGGER_CARD_IN_RANGE,
+		TRIGGER_CARD_ADJACENT_TO_SOURCE,
+		TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
+		TRIGGER_CARD_WAS_ENEMY,
+		TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
 		ATTACKED_CARD_IS_SELF,
 		ATTACKER_CARD_IS_SELF,
 		ATTACKER_CARD_IS_ENEMY,
+		ATTACKER_CARD_IS_OTHER_ALLY,
+		ATTACK_IS_NOT_REPEAT,
 		TRIGGER_CARD_WAS_ON_BOARD,
 		ATTACK_FLIPPED_ENEMY,
+		ATTACK_FLIPPED_ALLY_IN_RANGE,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		TURN_OWNER_IS_SELF,
+		OWNER_DID_NOT_WIN,
 		KI_AT_LEAST,
 		KI_CHANGED_CARD_IS_SELF,
 		KI_REACHED_ZERO,
 		MOVING_CARD_IS_SELF,
 		MOVING_CARD_IS_ALLY,
 		SOURCE_OWNER_HAND_EMPTY,
+		SOURCE_HAS_ADJACENT_EMPTY_CELL,
+		SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 		DISCARD_OWNER_IS_SELF,
 		UNSUPPORTED,
@@ -107,6 +121,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRANSFORM_CARD,
 		RETURN_CARD_TO_HAND,
 		SELF_SWAPPED_WITH_ABILITY_SOURCE,
+		ATTACK_TRIGGER_CARD,
+		STANDARD_ATTACK_WITH_SELF,
+		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
+		TRANSFER_CARD_RESOURCE,
 		UNSUPPORTED,
 	};
 
@@ -215,6 +233,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool declaration_valid = true;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
+		CardRefOpcode from_card_ref = CardRefOpcode::UNSUPPORTED;
+		CardRefOpcode to_card_ref = CardRefOpcode::UNSUPPORTED;
 		bool card_ref_explicit = false;
 		int32_t amount = 0;
 		bool amount_is_hand_count = false;
@@ -223,6 +243,12 @@ class DuelNativeCompactKernel : public RefCounted {
 		RelativeOwnerOpcode recipient_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		int32_t granted_ability_index = -1;
 		bool preserve_instance = false;
+		bool repeat_attack = false;
+		bool target_policy_specified = false;
+		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
+		ResourceOpcode resource = ResourceOpcode::NONE;
+		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
+		StringName change_reason;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		StringName card_id;
@@ -272,6 +298,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t attacker_card_index = -1;
 		int32_t attacker_owner = 0;
 		AttackPolicy requested_policy;
+		bool targeted = false;
+		int32_t locked_target_cell = -1;
+		int32_t locked_target_card_index = -1;
+		int32_t locked_target_owner = 0;
+		bool repeat_attack = false;
 		StringName reason;
 	};
 
@@ -290,6 +321,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t trigger_cell = -1;
 		int32_t trigger_card_index = -1;
 		int32_t trigger_owner = 0;
+		int32_t trigger_previous_owner = 0;
 		int32_t trigger_zone = -1;
 		int32_t trigger_logical_index = -1;
 		int32_t attacker_cell = -1;
@@ -310,6 +342,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t moving_owner = 0;
 		int32_t discard_owner = 0;
 		int32_t discard_batch_size = 0;
+		int32_t turn_owner = 0;
+		int32_t activation_owner = 0;
+		bool repeat_attack = false;
+		std::vector<int32_t> winning_owners;
 		struct AttackFlipRecord {
 			int32_t card_index = -1;
 			int32_t previous_owner = 0;

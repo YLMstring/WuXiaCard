@@ -599,17 +599,31 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
+	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
+	else if (type == StringName("trigger_card_is_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ENEMY;
+	else if (type == StringName("trigger_card_in_range")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IN_RANGE;
+	else if (type == StringName("trigger_card_adjacent_to_source")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE;
+	else if (type == StringName("trigger_card_outside_source_owner_hand")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND;
+	else if (type == StringName("trigger_card_was_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ENEMY;
+	else if (type == StringName("trigger_card_original_owner_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF;
 	else if (type == StringName("attacked_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
 	else if (type == StringName("attacker_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_SELF;
 	else if (type == StringName("attacker_card_is_enemy")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_ENEMY;
+	else if (type == StringName("attacker_card_is_other_ally")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_OTHER_ALLY;
+	else if (type == StringName("attack_is_not_repeat")) compiled.opcode = ConditionOpcode::ATTACK_IS_NOT_REPEAT;
 	else if (type == StringName("trigger_card_was_on_board")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ON_BOARD;
 	else if (type == StringName("attack_flipped_enemy")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ENEMY;
+	else if (type == StringName("attack_flipped_ally_in_range")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE;
 	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
+	else if (type == StringName("turn_owner_is_self")) compiled.opcode = ConditionOpcode::TURN_OWNER_IS_SELF;
+	else if (type == StringName("owner_did_not_win")) compiled.opcode = ConditionOpcode::OWNER_DID_NOT_WIN;
 	else if (type == StringName("ki_changed_card_is_self")) compiled.opcode = ConditionOpcode::KI_CHANGED_CARD_IS_SELF;
 	else if (type == StringName("ki_reached_zero")) compiled.opcode = ConditionOpcode::KI_REACHED_ZERO;
 	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
 	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;
 	else if (type == StringName("source_owner_hand_empty")) compiled.opcode = ConditionOpcode::SOURCE_OWNER_HAND_EMPTY;
+	else if (type == StringName("source_has_adjacent_empty_cell")) compiled.opcode = ConditionOpcode::SOURCE_HAS_ADJACENT_EMPTY_CELL;
+	else if (type == StringName("source_has_empty_between_enemy")) compiled.opcode = ConditionOpcode::SOURCE_HAS_EMPTY_BETWEEN_ENEMY;
 	else if (type == StringName("discard_owner_is_self")) compiled.opcode = ConditionOpcode::DISCARD_OWNER_IS_SELF;
 	return compiled;
 }
@@ -772,6 +786,12 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (card_ref == StringName("attacker_card")) return CardRefOpcode::ATTACKER_CARD;
 		return CardRefOpcode::UNSUPPORTED;
 	};
+	auto compile_resource = [](const StringName &resource) {
+		if (resource == StringName("ki")) return ResourceOpcode::KI;
+		if (resource == StringName("powers")) return ResourceOpcode::POWERS;
+		if (resource.is_empty()) return ResourceOpcode::NONE;
+		return ResourceOpcode::UNSUPPORTED;
+	};
 	if (
 		type == StringName("draw_cards")
 		&& action.size() == 2 + generic_field_count
@@ -918,6 +938,72 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		&& action.size() == 1 + generic_field_count
 	) {
 		compiled.opcode = ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE;
+	} else if (
+		type == StringName("attack_trigger_card")
+		&& action.size() == 1 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::ATTACK_TRIGGER_CARD;
+	} else if (
+		type == StringName("standard_attack_with_self")
+		&& action.size() >= 1 + generic_field_count
+		&& action.size() <= 3 + generic_field_count
+		&& (
+			!action.has("repeat_attack")
+			|| Variant(action.get("repeat_attack", false)).get_type() == Variant::BOOL
+		)
+		&& (
+			!action.has("target_policy")
+			|| Variant(action.get("target_policy", Variant())).get_type() == Variant::STRING_NAME
+			|| Variant(action.get("target_policy", Variant())).get_type() == Variant::STRING
+		)
+	) {
+		compiled.opcode = ActionOpcode::STANDARD_ATTACK_WITH_SELF;
+		const Array keys = action.keys();
+		for (int64_t key_index = 0; key_index < keys.size(); ++key_index) {
+			const StringName key = keys[key_index];
+			if (
+				key != StringName("type")
+				&& key != StringName("repeat_attack")
+				&& key != StringName("target_policy")
+				&& key != StringName("on_invalid_context")
+				&& key != StringName("power_change_batch_group")
+			) compiled.declaration_valid = false;
+		}
+		compiled.repeat_attack = static_cast<bool>(action.get("repeat_attack", false));
+		if (action.has("target_policy")) {
+			compiled.target_policy_specified = true;
+			const StringName policy = action.get("target_policy", StringName());
+			if (policy == StringName("enemies_only")) compiled.target_policy = AttackTargetPolicy::ENEMIES_ONLY;
+			else if (policy == StringName("allies_only")) compiled.target_policy = AttackTargetPolicy::ALLIES_ONLY;
+			else if (policy == StringName("all")) compiled.target_policy = AttackTargetPolicy::ALL;
+			else compiled.declaration_valid = false;
+		}
+	} else if (
+		type == StringName("move_self_to_first_empty_between_enemy")
+		&& action.size() == 1 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY;
+	} else if (
+		type == StringName("transfer_card_resource")
+		&& action.size() == 6 + generic_field_count
+		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
+		&& static_cast<int64_t>(action.get("amount", 0)) > 0
+	) {
+		compiled.opcode = ActionOpcode::TRANSFER_CARD_RESOURCE;
+		compiled.from_card_ref = compile_card_ref(action.get("from", StringName()));
+		compiled.to_card_ref = compile_card_ref(action.get("to", StringName()));
+		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
+		compiled.resource = compile_resource(action.get("resource", StringName()));
+		compiled.fallback_resource = compile_resource(action.get("fallback_resource", StringName()));
+		if (
+			compiled.from_card_ref == CardRefOpcode::UNSUPPORTED
+			|| compiled.to_card_ref == CardRefOpcode::UNSUPPORTED
+			|| compiled.resource == ResourceOpcode::NONE
+			|| compiled.resource == ResourceOpcode::UNSUPPORTED
+			|| compiled.fallback_resource == ResourceOpcode::NONE
+			|| compiled.fallback_resource == ResourceOpcode::UNSUPPORTED
+			|| compiled.resource == compiled.fallback_resource
+		) compiled.declaration_valid = false;
 	}
 	return compiled;
 }
@@ -1909,8 +1995,14 @@ void DuelNativeCompactKernel::append_resolution(
 	const Resolution &addition
 ) const {
 	destination.events.append_array(addition.events);
-	destination.captures.append_array(addition.captures);
-	destination.exiles.append_array(addition.exiles);
+	for (int64_t index = 0; index < addition.captures.size(); ++index) {
+		const Variant value = addition.captures[index];
+		if (destination.captures.find(value) < 0) destination.captures.append(value);
+	}
+	for (int64_t index = 0; index < addition.exiles.size(); ++index) {
+		const Variant value = addition.exiles[index];
+		if (destination.exiles.find(value) < 0) destination.exiles.append(value);
+	}
 	destination.flip_prevented = destination.flip_prevented || addition.flip_prevented;
 }
 
@@ -1948,11 +2040,32 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		request.attacker_owner,
 		request.requested_policy
 	);
-	const std::vector<int32_t> target_cells = get_attack_targets(
-		value,
-		initial_attack_cell,
-		attack_policy
-	);
+	std::vector<int32_t> target_cells;
+	if (request.targeted) {
+		const int32_t target_cell = find_board_card(
+			value,
+			request.locked_target_card_index,
+			request.locked_target_cell
+		);
+		if (
+			target_cell == request.locked_target_cell
+			&& target_cell >= 0
+			&& value.board_owners[target_cell] == request.locked_target_owner
+			&& can_attack_target(
+				value,
+				initial_attack_cell,
+				target_cell,
+				attack_policy,
+				false
+			)
+		) target_cells.push_back(target_cell);
+	} else {
+		target_cells = get_attack_targets(
+			value,
+			initial_attack_cell,
+			attack_policy
+		);
+	}
 	if (!target_cells.empty()) {
 		value.scalars[request.attacker_owner == 1 ? 3 : 4] += 1;
 	}
@@ -1998,6 +2111,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		attack_context.trigger_cell = attacked_cell;
 		attack_context.trigger_card_index = attacked_card_index;
 		attack_context.trigger_owner = attacked_owner;
+		attack_context.trigger_previous_owner = attacked_owner;
+		attack_context.trigger_zone = 0;
+		attack_context.trigger_logical_index = attacked_cell;
 		attack_context.trigger_was_on_board = true;
 		attack_context.attack_reason = request.reason;
 		Resolution be_attacked = resolve_event(
@@ -2107,6 +2223,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		after_attack_context.attacker_owner = request.attacker_owner;
 		after_attack_context.attack_flipped_enemy = attack_flipped_enemy;
 		after_attack_context.attack_flips = attack_flips;
+		after_attack_context.repeat_attack = request.repeat_attack;
 		Resolution after_attack = resolve_event(
 			value,
 			StringName("card_after_attack"),
@@ -2135,6 +2252,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 	summon_context.trigger_cell = request.summon_cell;
 	summon_context.trigger_card_index = request.card_index;
 	summon_context.trigger_owner = request.owner_id;
+	summon_context.trigger_previous_owner = request.owner_id;
+	summon_context.trigger_zone = 0;
+	summon_context.trigger_logical_index = request.summon_cell;
 	summon_context.trigger_was_on_board = true;
 	Resolution after_summoned = resolve_event(
 		value,
@@ -2322,7 +2442,75 @@ bool DuelNativeCompactKernel::conditions_match(
 		bool matched = false;
 		switch (condition.opcode) {
 			case ConditionOpcode::TRIGGER_CARD_IS_SELF:
-				matched = context.trigger_card_index == group.source_card_index;
+				matched = (
+					context.trigger_card_index == group.source_card_index
+					&& context.trigger_cell == group.source_cell
+				);
+				break;
+			case ConditionOpcode::TRIGGER_CARD_IS_ALLY:
+			case ConditionOpcode::TRIGGER_CARD_IS_ENEMY: {
+				const int32_t trigger_cell = find_board_card(
+					value,
+					context.trigger_card_index,
+					context.trigger_cell
+				);
+				matched = (
+					trigger_cell == context.trigger_cell
+					&& trigger_cell >= 0
+					&& (
+						(value.board_owners[trigger_cell] == group.source_owner)
+						== (condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_ALLY)
+					)
+				);
+				break;
+			}
+			case ConditionOpcode::TRIGGER_CARD_IN_RANGE: {
+				const int32_t trigger_cell = find_board_card(
+					value,
+					context.trigger_card_index,
+					context.trigger_cell
+				);
+				AttackPolicy policy;
+				matched = (
+					trigger_cell == context.trigger_cell
+					&& trigger_cell >= 0
+					&& is_target_in_attack_range(
+						value,
+						group.source_cell,
+						trigger_cell,
+						policy,
+						false
+					)
+				);
+				break;
+			}
+			case ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE:
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					if (neighbor_index(group.source_cell, direction) == context.trigger_cell) {
+						matched = true;
+						break;
+					}
+				}
+				break;
+			case ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND:
+				matched = !(context.trigger_zone == 1 && context.trigger_owner == group.source_owner);
+				break;
+			case ConditionOpcode::TRIGGER_CARD_WAS_ENEMY: {
+				const int32_t previous_owner = (
+					context.trigger_previous_owner != 0
+					? context.trigger_previous_owner
+					: context.trigger_owner
+				);
+				matched = previous_owner != 0 && previous_owner != group.source_owner;
+				break;
+			}
+			case ConditionOpcode::TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF:
+				matched = (
+					context.trigger_card_index >= 0
+					&& context.trigger_card_index < static_cast<int32_t>(value.card_original_owners.size())
+					&& find_board_card(value, context.trigger_card_index, context.trigger_cell) >= 0
+					&& value.card_original_owners[context.trigger_card_index] == group.source_owner
+				);
 				break;
 			case ConditionOpcode::ATTACKED_CARD_IS_SELF:
 				matched = context.attacked_card_index == group.source_card_index;
@@ -2333,14 +2521,55 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::ATTACKER_CARD_IS_ENEMY:
 				matched = context.attacker_owner != 0 && context.attacker_owner != group.source_owner;
 				break;
+			case ConditionOpcode::ATTACKER_CARD_IS_OTHER_ALLY:
+				matched = (
+					context.attacker_card_index >= 0
+					&& context.attacker_card_index != group.source_card_index
+					&& context.attacker_owner == group.source_owner
+				);
+				break;
+			case ConditionOpcode::ATTACK_IS_NOT_REPEAT:
+				matched = !context.repeat_attack;
+				break;
 			case ConditionOpcode::TRIGGER_CARD_WAS_ON_BOARD:
 				matched = context.trigger_was_on_board;
 				break;
 			case ConditionOpcode::ATTACK_FLIPPED_ENEMY:
 				matched = context.attack_flipped_enemy;
 				break;
+			case ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE: {
+				AttackPolicy policy;
+				for (const EventContext::AttackFlipRecord &record : context.attack_flips) {
+					if (record.previous_owner != group.source_owner) continue;
+					const int32_t target_cell = find_board_card(value, record.card_index, -1);
+					if (
+						target_cell >= 0
+						&& is_target_in_attack_range(
+							value,
+							group.source_cell,
+							target_cell,
+							policy,
+							false
+						)
+					) {
+						matched = true;
+						break;
+					}
+				}
+				break;
+			}
 			case ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE:
 				matched = context.trigger_card_index >= 0 && can_change_powers(value, context.trigger_card_index);
+				break;
+			case ConditionOpcode::TURN_OWNER_IS_SELF:
+				matched = context.turn_owner != 0 && context.turn_owner == group.source_owner;
+				break;
+			case ConditionOpcode::OWNER_DID_NOT_WIN:
+				matched = std::find(
+					context.winning_owners.begin(),
+					context.winning_owners.end(),
+					group.source_owner
+				) == context.winning_owners.end();
 				break;
 			case ConditionOpcode::KI_AT_LEAST:
 				matched = value.card_ki[group.source_card_index] >= condition.amount;
@@ -2366,6 +2595,30 @@ bool DuelNativeCompactKernel::conditions_match(
 				break;
 			case ConditionOpcode::DISCARD_OWNER_IS_SELF:
 				matched = context.discard_owner != 0 && context.discard_owner == group.source_owner;
+				break;
+			case ConditionOpcode::SOURCE_HAS_ADJACENT_EMPTY_CELL:
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					const int32_t candidate = neighbor_index(group.source_cell, direction);
+					if (candidate >= 0 && value.board_card_indices[candidate] < 0) {
+						matched = true;
+						break;
+					}
+				}
+				break;
+			case ConditionOpcode::SOURCE_HAS_EMPTY_BETWEEN_ENEMY:
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					const int32_t middle = neighbor_index(group.source_cell, direction);
+					if (middle < 0 || value.board_card_indices[middle] >= 0) continue;
+					const int32_t far = neighbor_index(middle, direction);
+					if (
+						far >= 0
+						&& value.board_card_indices[far] >= 0
+						&& value.board_owners[far] != group.source_owner
+					) {
+						matched = true;
+						break;
+					}
+				}
 				break;
 			default:
 				supported = false;
@@ -3705,7 +3958,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_ki(
 	event["instance_id"] = value.card_instance_ids[target];
 	event["previous_ki"] = previous;
 	event["ki"] = value.card_ki[target];
-	event["change_reason"] = action.opcode == ActionOpcode::SPEND_KI ? StringName("spend_ki") : StringName("gain_ki");
+	event["change_reason"] = !action.change_reason.is_empty()
+		? action.change_reason
+		: (action.opcode == ActionOpcode::SPEND_KI ? StringName("spend_ki") : StringName("gain_ki"));
 	event["zone"] = zone == 0 ? StringName("board") : (zone == 1 ? StringName("hand") : (zone == 3 ? StringName("discard") : StringName("removed")));
 	event["logical_index"] = logical_index;
 	resolution.events.append(event);
@@ -4148,6 +4403,185 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return return_card_to_hand(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE:
 			return swap_action_subject_with_ability_source(value, group, event_context, action_context, exile_stack, resolution);
+		case ActionOpcode::ATTACK_TRIGGER_CARD:
+		case ActionOpcode::STANDARD_ATTACK_WITH_SELF: {
+			int32_t source_zone = -1;
+			int32_t source_owner = 0;
+			int32_t source_logical_index = -1;
+			if (
+				action_context.action_subject_card_index < 0
+				|| !locate_card(
+					value,
+					action_context.action_subject_card_index,
+					source_zone,
+					source_owner,
+					source_logical_index
+				)
+				|| source_zone != 0
+				|| source_owner != action_context.action_subject_owner
+			) return ActionOutcome::NO_EFFECT;
+			AttackRequest request;
+			request.attacker_cell = source_logical_index;
+			request.attacker_card_index = action_context.action_subject_card_index;
+			request.attacker_owner = source_owner;
+			if (action.opcode == ActionOpcode::ATTACK_TRIGGER_CARD) {
+				const int32_t target_cell = find_board_card(
+					value,
+					event_context.trigger_card_index,
+					event_context.trigger_cell
+				);
+				if (target_cell != event_context.trigger_cell || target_cell < 0) {
+					return ActionOutcome::NO_EFFECT;
+				}
+				request.targeted = true;
+				request.locked_target_cell = target_cell;
+				request.locked_target_card_index = event_context.trigger_card_index;
+				request.locked_target_owner = value.board_owners[target_cell];
+				request.reason = StringName("card_summoned_reaction");
+			} else {
+				request.repeat_attack = action.repeat_attack;
+				request.reason = StringName("activated_ability");
+				if (action.target_policy_specified) {
+					request.requested_policy.specified = true;
+					request.requested_policy.target_policy = action.target_policy;
+				}
+			}
+			Resolution nested = resolve_attack_request(value, request, exile_stack);
+			if (!nested.supported) {
+				resolution.reason = nested.reason;
+				return ActionOutcome::UNSUPPORTED;
+			}
+			const bool applied = resolution_has_output(nested);
+			append_resolution(resolution, nested);
+			return applied ? ActionOutcome::APPLIED : ActionOutcome::NO_EFFECT;
+		}
+		case ActionOpcode::MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: {
+			int32_t source_zone = -1;
+			int32_t source_owner = 0;
+			int32_t current_cell = -1;
+			const int32_t moving_card_index = action_context.action_subject_card_index;
+			if (
+				moving_card_index < 0
+				|| !locate_card(value, moving_card_index, source_zone, source_owner, current_cell)
+				|| source_zone != 0
+				|| source_owner != action_context.action_subject_owner
+			) return ActionOutcome::NO_EFFECT;
+			for (int32_t middle_cell = 0; middle_cell < static_cast<int32_t>(value.board_card_indices.size()); ++middle_cell) {
+				if (value.board_card_indices[middle_cell] >= 0) continue;
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					if (neighbor_index(current_cell, direction) != middle_cell) continue;
+					const int32_t far_cell = neighbor_index(middle_cell, direction);
+					if (
+						far_cell < 0
+						|| value.board_card_indices[far_cell] < 0
+						|| value.board_owners[far_cell] == source_owner
+					) continue;
+					const ActionOutcome outcome = move_card_between_cells(
+						value,
+						current_cell,
+						current_cell,
+						middle_cell,
+						moving_card_index,
+						source_owner,
+						true,
+						exile_stack,
+						resolution
+					);
+					if (outcome == ActionOutcome::APPLIED) {
+						execution_state.current_source_cell = find_board_card(value, group.source_card_index, middle_cell);
+					}
+					return outcome;
+				}
+			}
+			return ActionOutcome::NO_EFFECT;
+		}
+		case ActionOpcode::TRANSFER_CARD_RESOURCE: {
+			auto resolve_ref = [&](CardRefOpcode reference) -> int32_t {
+				if (reference == CardRefOpcode::SELECTED_CARD) return action_context.selected_card_index;
+				if (reference == CardRefOpcode::TRIGGER_CARD) return event_context.trigger_card_index;
+				if (reference == CardRefOpcode::ABILITY_SOURCE) return action_context.ability_source_card_index;
+				if (reference == CardRefOpcode::ATTACKER_CARD) return event_context.attacker_card_index;
+				return -1;
+			};
+			const int32_t donor = resolve_ref(action.from_card_ref);
+			const int32_t receiver = resolve_ref(action.to_card_ref);
+			if (donor < 0 || receiver < 0 || donor == receiver) return ActionOutcome::NO_EFFECT;
+			int32_t donor_zone = -1;
+			int32_t donor_owner = 0;
+			int32_t donor_index = -1;
+			int32_t receiver_zone = -1;
+			int32_t receiver_owner = 0;
+			int32_t receiver_index = -1;
+			if (
+				!locate_card(value, donor, donor_zone, donor_owner, donor_index)
+				|| !locate_card(value, receiver, receiver_zone, receiver_owner, receiver_index)
+				|| donor_zone == 2
+				|| receiver_zone == 2
+			) return ActionOutcome::NO_EFFECT;
+			auto can_donate = [&](ResourceOpcode resource) {
+				if (resource == ResourceOpcode::KI) return value.card_ki[donor] >= action.amount;
+				if (resource != ResourceOpcode::POWERS || !can_change_powers(value, donor)) return false;
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					if (value.card_powers[donor * 4 + direction] > 0) return true;
+				}
+				return false;
+			};
+			auto can_receive = [&](ResourceOpcode resource) {
+				return resource == ResourceOpcode::KI
+					|| (resource == ResourceOpcode::POWERS && can_change_powers(value, receiver));
+			};
+			for (const ResourceOpcode resource : {action.resource, action.fallback_resource}) {
+				if (!can_donate(resource)) continue;
+				if (!can_receive(resource)) return ActionOutcome::NO_EFFECT;
+				if (resource == ResourceOpcode::KI) {
+					CompiledAction donor_action;
+					donor_action.opcode = ActionOpcode::SPEND_KI;
+					donor_action.card_ref_explicit = true;
+					donor_action.card_ref = CardRefOpcode::SELECTED_CARD;
+					donor_action.amount = action.amount;
+					donor_action.change_reason = StringName("transfer_card_resource");
+					ActionContext donor_context = action_context;
+					donor_context.selected_card_index = donor;
+					donor_context.action_subject_owner = donor_owner;
+					const ActionOutcome donor_outcome = change_ki(
+						value, group, donor_action, event_context, donor_context,
+						action_source_cell, exile_stack, resolution
+					);
+					if (donor_outcome != ActionOutcome::APPLIED) return donor_outcome;
+					CompiledAction receiver_action = donor_action;
+					receiver_action.opcode = ActionOpcode::GAIN_KI;
+					ActionContext receiver_context = action_context;
+					receiver_context.selected_card_index = receiver;
+					receiver_context.action_subject_owner = receiver_owner;
+					return change_ki(
+						value, group, receiver_action, event_context, receiver_context,
+						action_source_cell, exile_stack, resolution
+					);
+				}
+				CompiledAction donor_action;
+				donor_action.opcode = ActionOpcode::CHANGE_POWERS;
+				donor_action.card_ref = CardRefOpcode::SELECTED_CARD;
+				donor_action.amount = -action.amount;
+				ActionContext donor_context = action_context;
+				donor_context.selected_card_index = donor;
+				donor_context.action_subject_owner = donor_owner;
+				const ActionOutcome donor_outcome = change_powers(
+					value, group, donor_action, event_context, donor_context,
+					action_source_cell, exile_stack, resolution
+				);
+				if (donor_outcome != ActionOutcome::APPLIED) return donor_outcome;
+				CompiledAction receiver_action = donor_action;
+				receiver_action.amount = action.amount;
+				ActionContext receiver_context = action_context;
+				receiver_context.selected_card_index = receiver;
+				receiver_context.action_subject_owner = receiver_owner;
+				return change_powers(
+					value, group, receiver_action, event_context, receiver_context,
+					action_source_cell, exile_stack, resolution
+				);
+			}
+			return ActionOutcome::NO_EFFECT;
+		}
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}
@@ -4811,7 +5245,10 @@ bool DuelNativeCompactKernel::flip_card(
 	EventContext after_context = context;
 	after_context.trigger_cell = current_target_cell;
 	after_context.trigger_card_index = target_card_index;
-	after_context.trigger_owner = new_owner;
+	after_context.trigger_previous_owner = context.trigger_owner;
+	after_context.trigger_owner = context.trigger_owner;
+	after_context.trigger_zone = 0;
+	after_context.trigger_logical_index = current_target_cell;
 	Resolution after = resolve_event(value, StringName("card_after_flipped"), after_context, exile_stack);
 	if (!after.supported) {
 		resolution.reason = after.reason;

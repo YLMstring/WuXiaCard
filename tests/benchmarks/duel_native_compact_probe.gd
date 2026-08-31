@@ -84,6 +84,7 @@ func _run() -> void:
 	_test_swap_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
+	_test_event_reaction_primitive_parity(kernel)
 	_test_suppression_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
@@ -2714,11 +2715,440 @@ func _test_attack_lifecycle_transition_parity(kernel: Object) -> void:
 		[_make_plain_card(&"敌手", &"native_nested_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER
 	)
-	_check_transition_rejected(
+	_check_transition_parity(
 		kernel,
 		nested_state,
+		0,
+		4,
 		&"native_nested_attacker",
-		"Relevant nested attack reaction"
+		"Relevant nested attack reaction resolves through the shared attack path"
+	)
+
+
+func _test_event_reaction_primitive_parity(kernel: Object) -> void:
+	var reaction_board: Array = Rules.empty_board()
+	var reaction_source: Dictionary = _make_plain_card(
+		&"全场进场反应",
+		&"native_reaction_source",
+		Rules.PLAYER_OWNER,
+		[3, 3, 3, 3]
+	)
+	reaction_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IN_RANGE},
+			],
+			"actions": [{"type": Catalog.ACTION_ATTACK_TRIGGER_CARD}],
+		}],
+	}]
+	reaction_board[0] = _slot(reaction_source, Rules.PLAYER_OWNER)
+	var reaction_state := State.new(
+		reaction_board,
+		[_make_plain_card(&"玩家占位手牌", &"native_reaction_player_hand", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"反应目标", &"native_reaction_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.OPPONENT_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		reaction_state,
+		0,
+		1,
+		&"native_reaction_target",
+		"Full-board after-summoned listener makes an exact targeted reaction"
+	)
+	var out_of_range_board: Array = Rules.empty_board()
+	out_of_range_board[0] = _slot(reaction_source.duplicate(true), Rules.PLAYER_OWNER)
+	var out_of_range_state := State.new(
+		out_of_range_board,
+		[_make_plain_card(&"玩家占位手牌", &"native_reaction_player_hand_far", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"范围外目标", &"native_reaction_far_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.OPPONENT_OWNER
+	)
+	var out_of_range_expected: Dictionary = Simulator.apply_action(
+		out_of_range_state,
+		Action.make_play(0, 8, &"native_reaction_far_target")
+	)
+	_check(
+		_first_event_index(out_of_range_expected.get("events", []) as Array, &"attack_started") < 0,
+		"Out-of-range after-summoned target does not create a reaction attack"
+	)
+	_check_transition_parity(
+		kernel,
+		out_of_range_state,
+		0,
+		8,
+		&"native_reaction_far_target",
+		"Full-board reaction range condition rejects an out-of-range target"
+	)
+
+	var disappearing_board: Array = Rules.empty_board()
+	disappearing_board[0] = _slot(reaction_source.duplicate(true), Rules.PLAYER_OWNER)
+	disappearing_board[3] = _slot(
+		_make_plain_card(&"不可顺延目标", &"native_reaction_second_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0]),
+		Rules.OPPONENT_OWNER
+	)
+	var disappearing_target: Dictionary = _make_plain_card(
+		&"受击离场目标",
+		&"native_reaction_disappearing_target",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	disappearing_target["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	var disappearing_state := State.new(
+		disappearing_board,
+		[_make_plain_card(&"玩家占位手牌", &"native_reaction_player_hand_2", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[disappearing_target],
+		Rules.OPPONENT_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		disappearing_state,
+		0,
+		1,
+		&"native_reaction_disappearing_target",
+		"Targeted reaction does not retarget when the exact target leaves during CARD_BE_ATTACKED"
+	)
+
+	var flipped_source_board: Array = Rules.empty_board()
+	var directional_reaction_source: Dictionary = reaction_source.duplicate(true)
+	directional_reaction_source["instance_id"] = &"native_reaction_flipped_source"
+	directional_reaction_source["powers"] = [0, 3, 0, 0]
+	flipped_source_board[0] = _slot(directional_reaction_source, Rules.PLAYER_OWNER)
+	var source_flipper: Dictionary = _make_plain_card(
+		&"反应中翻转攻方",
+		&"native_reaction_source_flipper",
+		Rules.OPPONENT_OWNER,
+		[2, 1, 1, 1]
+	)
+	source_flipper["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ALLY}],
+			"actions": [{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}]
+	flipped_source_board[3] = _slot(source_flipper, Rules.OPPONENT_OWNER)
+	var flipped_source_state := State.new(
+		flipped_source_board,
+		[_make_plain_card(&"玩家占位手牌", &"native_reaction_player_hand_3", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"反应目标", &"native_reaction_flip_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.OPPONENT_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		flipped_source_state,
+		0,
+		1,
+		&"native_reaction_flip_target",
+		"Targeted reaction stops when its exact attacker changes owner during CARD_BE_ATTACKED"
+	)
+
+	var movement_board: Array = Rules.empty_board()
+	movement_board[2] = _slot(
+		_make_plain_card(&"隔空敌方", &"native_between_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var movement_listener: Dictionary = _make_plain_card(
+		&"移动监听",
+		&"native_between_listener",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	movement_listener["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_MOVED,
+			"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_ALLY}],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		}],
+	}]
+	movement_board[8] = _slot(movement_listener, Rules.PLAYER_OWNER)
+	var moving_source: Dictionary = _make_plain_card(
+		&"首个中间空位移动",
+		&"native_between_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	moving_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF},
+				{"type": Catalog.CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY},
+			],
+			"actions": [{"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY}],
+		}],
+	}]
+	var movement_state := State.new(
+		movement_board,
+		[moving_source],
+		[_make_plain_card(&"敌方占位手牌", &"native_between_enemy_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"移动后抽牌", &"native_between_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_parity(
+		kernel,
+		movement_state,
+		0,
+		0,
+		&"native_between_source",
+		"First empty cell between source and enemy uses the shared movement transaction"
+	)
+
+	_check_transfer_fixture(kernel, true)
+	_check_transfer_fixture(kernel, false)
+	_check_transfer_skips_special_negative_fixture(kernel)
+	_check_outside_hand_exile_fixture(kernel, false)
+	_check_outside_hand_exile_fixture(kernel, true)
+
+	var counter_board: Array = Rules.empty_board()
+	var counter: Dictionary = _make_plain_card(
+		&"范围内友方翻面反击",
+		&"native_counter_source",
+		Rules.PLAYER_OWNER,
+		[1, 4, 1, 1]
+	)
+	counter["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [
+				{"type": Catalog.CONDITION_ATTACKER_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE},
+			],
+			"actions": [{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}]
+	counter_board[0] = _slot(counter, Rules.PLAYER_OWNER)
+	counter_board[1] = _slot(
+		_make_plain_card(&"被翻友方", &"native_counter_ally", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		Rules.PLAYER_OWNER
+	)
+	var counter_state := State.new(
+		counter_board,
+		[_make_plain_card(&"玩家占位手牌", &"native_counter_player_hand", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"敌方攻方", &"native_counter_attacker", Rules.OPPONENT_OWNER, [2, 2, 2, 2])],
+		Rules.OPPONENT_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		counter_state,
+		0,
+		4,
+		&"native_counter_attacker",
+		"After-attack reaction recognizes this attack's still-in-range flipped ally"
+	)
+
+
+func _check_transfer_fixture(kernel: Object, use_ki: bool) -> void:
+	var donor: Dictionary = _make_plain_card(
+		&"资源供体",
+		StringName("native_transfer_donor_%s" % ("ki" if use_ki else "powers")),
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	donor["ki"] = 1 if use_ki else 0
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(donor, Rules.OPPONENT_OWNER)
+	var source: Dictionary = _make_plain_card(
+		&"资源接收者",
+		StringName("native_transfer_source_%s" % ("ki" if use_ki else "powers")),
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
+						{
+							"type": Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+							"amount": 1,
+							"resource": Catalog.RESOURCE_KI,
+							"fallback_resource": Catalog.RESOURCE_POWERS,
+						},
+					],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_TRANSFER_CARD_RESOURCE,
+					"from": Catalog.CARD_REF_SELECTED_CARD,
+					"to": Catalog.CARD_REF_ABILITY_SOURCE,
+					"amount": 1,
+					"resource": Catalog.RESOURCE_KI,
+					"fallback_resource": Catalog.RESOURCE_POWERS,
+				}],
+			}],
+		}],
+	}]
+	var instance_id := StringName(source.get("instance_id", &""))
+	var state := State.new(
+		board,
+		[source],
+		[_make_plain_card(&"敌方占位手牌", StringName("native_transfer_hand_%s" % ("ki" if use_ki else "powers")), Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		state,
+		0,
+		4,
+		instance_id,
+		"Resource transfer prefers ki" if use_ki else "Resource transfer falls back to powers and preserves zero-exile ordering"
+	)
+
+
+func _check_transfer_skips_special_negative_fixture(kernel: Object) -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(
+		_make_plain_card(&"不可吸取供体", &"native_transfer_negative", Rules.OPPONENT_OWNER, [-1, -1, -1, -1]),
+		Rules.OPPONENT_OWNER
+	)
+	var valid_donor: Dictionary = _make_plain_card(
+		&"顺延供体",
+		&"native_transfer_next_donor",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	valid_donor["ki"] = 1
+	board[1] = _slot(valid_donor, Rules.OPPONENT_OWNER)
+	var source: Dictionary = _make_plain_card(
+		&"跳过不可吸取牌",
+		&"native_transfer_skip_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
+						{
+							"type": Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
+							"amount": 1,
+							"resource": Catalog.RESOURCE_KI,
+							"fallback_resource": Catalog.RESOURCE_POWERS,
+						},
+					],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_TRANSFER_CARD_RESOURCE,
+					"from": Catalog.CARD_REF_SELECTED_CARD,
+					"to": Catalog.CARD_REF_ABILITY_SOURCE,
+					"amount": 1,
+					"resource": Catalog.RESOURCE_KI,
+					"fallback_resource": Catalog.RESOURCE_POWERS,
+				}],
+			}],
+		}],
+	}]
+	var state := State.new(
+		board,
+		[source],
+		[_make_plain_card(&"敌方占位手牌", &"native_transfer_skip_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		state,
+		0,
+		4,
+		&"native_transfer_skip_source",
+		"Resource selector skips a four-sided -1 card and locks the next legal donor"
+	)
+
+
+func _check_outside_hand_exile_fixture(kernel: Object, exile_enemy_hand: bool) -> void:
+	var board: Array = Rules.empty_board()
+	var listener: Dictionary = _make_plain_card(
+		&"手牌外移除监听",
+		StringName("native_outside_listener_%s" % ("enemy" if exile_enemy_hand else "ally")),
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	listener["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_BEFORE_EXILED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND}],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		}],
+	}]
+	board[8] = _slot(listener, Rules.PLAYER_OWNER)
+	var source: Dictionary = _make_plain_card(
+		&"移除手牌来源",
+		StringName("native_outside_source_%s" % ("enemy" if exile_enemy_hand else "ally")),
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND],
+					"conditions": [{
+						"type": (
+							Catalog.CONDITION_SELECTED_CARD_IS_ENEMY
+							if exile_enemy_hand
+							else Catalog.CONDITION_SELECTED_CARD_IS_ALLY
+						),
+					}],
+					"limit": 1,
+				},
+				"actions": [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD}],
+			}],
+		}],
+	}]
+	var source_id := StringName(source.get("instance_id", &""))
+	var ally_hand_card := _make_plain_card(
+		&"己方手牌移除目标",
+		StringName("native_outside_ally_target_%s" % ("enemy" if exile_enemy_hand else "ally")),
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	var enemy_hand_card := _make_plain_card(
+		&"敌方手牌移除目标",
+		StringName("native_outside_enemy_target_%s" % ("enemy" if exile_enemy_hand else "ally")),
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	var state := State.new(
+		board,
+		[source, ally_hand_card],
+		[enemy_hand_card],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"手牌外移除后抽牌", StringName("native_outside_draw_%s" % ("enemy" if exile_enemy_hand else "ally")), Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_transition_parity(
+		kernel,
+		state,
+		0,
+		4,
+		source_id,
+		"Enemy hand exile counts as outside the listener owner's hand" if exile_enemy_hand else "Own hand exile does not count as outside the listener owner's hand"
 	)
 
 
