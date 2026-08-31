@@ -68,6 +68,7 @@ func _run() -> void:
 		push_error("DUEL_NATIVE_COMPACT_PROBE_FAILED clone_result=%s" % clone_result)
 		quit(1)
 		return
+	_test_fresh_prototype_metadata(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
@@ -124,6 +125,58 @@ func _run() -> void:
 		]
 	)
 	quit(0)
+
+
+func _test_fresh_prototype_metadata(kernel: Object) -> void:
+	var catalog_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"native_prototype_card"
+	)
+	var prototype_state := State.new(
+		Rules.empty_board(),
+		[catalog_card],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(prototype_state), "Fresh-prototype fixture captures")
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Native kernel loads fresh-card prototype metadata"
+	)
+	var layout: Dictionary = kernel.call("inspect_layout") as Dictionary
+	_check(
+		int(layout.get("fresh_card_prototype_count", -1)) == 1,
+		"Native kernel compiles one fresh-card prototype"
+	)
+	var actual: Dictionary = kernel.call(
+		"apply_play_transition",
+		0,
+		4,
+		&"native_prototype_card"
+	) as Dictionary
+	_check(bool(actual.get("supported", false)), "Prototype metadata preserves a supported transition")
+	var result_payload: Dictionary = actual.get("payload", {}) as Dictionary
+	_check(
+		(result_payload.get("fresh_card_prototypes", []) as Array).size() == 1,
+		"Native transition payload preserves immutable fresh-card prototypes"
+	)
+	_check(
+		CompactState.from_variant_payload(result_payload) != null,
+		"Native payload with fresh-card prototypes remains loadable"
+	)
+	var legacy_payload: Dictionary = compact.to_variant_payload().duplicate(true)
+	legacy_payload.erase("fresh_card_prototypes")
+	_check(
+		bool(kernel.call("load_compact_payload", legacy_payload)),
+		"Native kernel accepts legacy payload without fresh-card prototypes"
+	)
+	layout = kernel.call("inspect_layout") as Dictionary
+	_check(
+		int(layout.get("fresh_card_prototype_count", -1)) == 0,
+		"Legacy native payload has no inferred prototype metadata"
+	)
 
 
 func _first_opening() -> State:

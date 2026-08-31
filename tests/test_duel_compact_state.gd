@@ -24,6 +24,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_nonempty_runtime_payload_round_trip()
+	_test_fresh_card_prototype_metadata()
 	_test_variant_payload_load_round_trip()
 	_test_compact_copy_isolation()
 	_test_real_quick_state_corpus()
@@ -124,6 +125,77 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 	if restored == null:
 		return
 	_check_exact_state(state, restored, "Nonempty runtime state round-trips exactly")
+
+
+func _test_fresh_card_prototype_metadata() -> void:
+	var mutated: Dictionary = Catalog.create_instance(
+		&"TuNaShu3",
+		Rules.PLAYER_OWNER,
+		&"compact_mutated_prototype_source"
+	)
+	mutated["powers"] = [9, 8, 7, 6]
+	mutated["ki"] = 4
+	mutated["active_abilities"] = []
+	mutated["temporary_suppression_batches"] = [{"fixture": true}]
+	var state := State.new(Rules.empty_board(), [mutated], [], Rules.PLAYER_OWNER)
+	var compact: CompactState = _capture(state)
+	_check(compact != null, "Mutated runtime card can be captured for fresh prototype metadata")
+	if compact == null:
+		return
+	var has_prototype_property: bool = false
+	for property: Dictionary in compact.get_property_list():
+		if StringName(property.get("name", &"")) == &"fresh_card_prototypes":
+			has_prototype_property = true
+			break
+	_check(has_prototype_property, "Compact state exposes immutable fresh-card prototypes")
+	if not has_prototype_property:
+		return
+	var prototypes: Array = compact.get("fresh_card_prototypes") as Array
+	_check(prototypes.size() == 1, "Fresh prototype table deduplicates the captured card ID")
+	if prototypes.size() != 1:
+		return
+	var prototype: Dictionary = prototypes[0] as Dictionary
+	var expected_fresh: Dictionary = Catalog.create_instance(
+		&"TuNaShu3",
+		Rules.PLAYER_OWNER,
+		&"expected"
+	)
+	_check(StringName(prototype.get("card_id", &"")) == &"TuNaShu3", "Fresh prototype keeps card ID")
+	_check(
+		prototype.get("powers", []) == expected_fresh.get("powers", []),
+		"Fresh prototype keeps catalog powers"
+	)
+	_check(
+		int(prototype.get("ki", -1)) == int(expected_fresh.get("ki", -2)),
+		"Fresh prototype keeps catalog starting ki"
+	)
+	var template_index: int = int(prototype.get("template_index", -1))
+	_check(
+		template_index >= 0
+		and template_index < compact.card_template_pool.size()
+		and StringName((compact.card_template_pool[template_index] as Dictionary).get("card_id", &""))
+		== &"TuNaShu3",
+		"Fresh prototype references immutable catalog card metadata"
+	)
+	var ability_set_index: int = int(prototype.get("active_ability_set_index", -1))
+	var expected_abilities: Array = expected_fresh.get("active_abilities", []) as Array
+	_check(
+		ability_set_index >= 0
+		and ability_set_index < compact.active_ability_set_pool.size()
+		and compact.active_ability_set_pool[ability_set_index] == expected_abilities,
+		"Fresh prototype keeps normalized innate abilities instead of runtime losses"
+	)
+	var full_payload: Dictionary = compact.to_variant_payload()
+	_check(full_payload.has("fresh_card_prototypes"), "Full payload carries fresh-card prototypes")
+	var legacy_payload: Dictionary = full_payload.duplicate(true)
+	legacy_payload.erase("fresh_card_prototypes")
+	var legacy_loaded: CompactState = CompactState.from_variant_payload(legacy_payload)
+	_check(legacy_loaded != null, "Legacy format-1 payload without prototypes remains loadable")
+	if legacy_loaded != null:
+		var restored: State = legacy_loaded.restore()
+		_check(restored != null, "Legacy payload without prototypes remains restorable")
+		if restored != null:
+			_check_exact_state(state, restored, "Prototype metadata does not alter restored duel state")
 
 
 func _test_variant_payload_load_round_trip() -> void:

@@ -154,6 +154,12 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	state.card_template_pool = payload.get("card_template_pool", Array());
 	state.active_ability_set_pool = payload.get("active_ability_set_pool", Array());
 	state.suppression_set_pool = payload.get("suppression_set_pool", Array());
+	const Variant fresh_prototypes_value = payload.get("fresh_card_prototypes", Array());
+	if (fresh_prototypes_value.get_type() != Variant::ARRAY) {
+		last_error = "Fresh-card prototype pool is not an Array";
+		return false;
+	}
+	state.fresh_card_prototype_pool = fresh_prototypes_value;
 	state.side_payload = payload.get("side_payload", Dictionary());
 	state.has_rule_metadata = (
 		payload.has("card_template_pool")
@@ -173,6 +179,61 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	state.zones.reserve(static_cast<size_t>(zones.size()));
 	for (int64_t index = 0; index < zones.size(); ++index) {
 		state.zones.push_back(to_int_vector(zones[index]));
+	}
+
+	state.fresh_card_prototypes.clear();
+	state.fresh_card_prototypes.reserve(
+		static_cast<size_t>(state.fresh_card_prototype_pool.size())
+	);
+	for (int64_t index = 0; index < state.fresh_card_prototype_pool.size(); ++index) {
+		const Variant prototype_value = state.fresh_card_prototype_pool[index];
+		if (prototype_value.get_type() != Variant::DICTIONARY) {
+			last_error = "Fresh-card prototype pool contains a non-Dictionary value";
+			return false;
+		}
+		const Dictionary prototype = prototype_value;
+		const Variant powers_value = prototype.get("powers", Variant());
+		if (
+			prototype.size() != 5
+			|| Variant(prototype.get("card_id", Variant())).get_type() != Variant::STRING_NAME
+			|| Variant(prototype.get("template_index", Variant())).get_type() != Variant::INT
+			|| powers_value.get_type() != Variant::ARRAY
+			|| Variant(prototype.get("ki", Variant())).get_type() != Variant::INT
+			|| Variant(prototype.get("active_ability_set_index", Variant())).get_type() != Variant::INT
+		) {
+			last_error = "Fresh-card prototype has an invalid declaration shape";
+			return false;
+		}
+		const Array powers = powers_value;
+		if (powers.size() != 4) {
+			last_error = "Fresh-card prototype must have exactly four powers";
+			return false;
+		}
+		FreshCardPrototype compiled;
+		compiled.card_id = prototype.get("card_id", StringName());
+		compiled.template_index = static_cast<int32_t>(
+			static_cast<int64_t>(prototype.get("template_index", -1))
+		);
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			if (Variant(powers[direction]).get_type() != Variant::INT) {
+				last_error = "Fresh-card prototype power is not an integer";
+				return false;
+			}
+			compiled.powers[direction] = static_cast<int32_t>(
+				static_cast<int64_t>(powers[direction])
+			);
+		}
+		compiled.ki = static_cast<int32_t>(static_cast<int64_t>(prototype.get("ki", 0)));
+		compiled.active_ability_set_index = static_cast<int32_t>(
+			static_cast<int64_t>(prototype.get("active_ability_set_index", -1))
+		);
+		for (const FreshCardPrototype &existing : state.fresh_card_prototypes) {
+			if (existing.card_id == compiled.card_id) {
+				last_error = "Fresh-card prototype IDs must be unique";
+				return false;
+			}
+		}
+		state.fresh_card_prototypes.push_back(compiled);
 	}
 
 	state.card_ids.clear();
@@ -240,6 +301,9 @@ Dictionary DuelNativeCompactKernel::inspect_layout() const {
 	result["power_count"] = static_cast<int64_t>(state.card_powers.size());
 	result["compiled_ability_set_count"] = static_cast<int64_t>(
 		compiled_ability_sets.size()
+	);
+	result["fresh_card_prototype_count"] = static_cast<int64_t>(
+		state.fresh_card_prototypes.size()
 	);
 	result["checksum"] = static_cast<int64_t>(checksum(state) & 0x7fffffffffffffffULL);
 	return result;
@@ -634,6 +698,26 @@ bool DuelNativeCompactKernel::validate_shape() {
 	) {
 		last_error = "Compact card arrays differ in length";
 		return false;
+	}
+	for (const FreshCardPrototype &prototype : state.fresh_card_prototypes) {
+		if (prototype.card_id.is_empty()) {
+			last_error = "Fresh-card prototype card ID cannot be empty";
+			return false;
+		}
+		if (
+			prototype.template_index < 0
+			|| prototype.template_index >= state.card_template_pool.size()
+		) {
+			last_error = "Fresh-card prototype template index is out of range";
+			return false;
+		}
+		if (
+			prototype.active_ability_set_index < 0
+			|| prototype.active_ability_set_index >= state.active_ability_set_pool.size()
+		) {
+			last_error = "Fresh-card prototype ability-set index is out of range";
+			return false;
+		}
 	}
 	return true;
 }
@@ -3407,6 +3491,7 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	payload["card_template_pool"] = value.card_template_pool;
 	payload["active_ability_set_pool"] = materialized_pool;
 	payload["suppression_set_pool"] = value.suppression_set_pool;
+	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
 	payload["side_payload"] = value.side_payload;
 	return payload;
 }

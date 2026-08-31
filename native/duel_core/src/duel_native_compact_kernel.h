@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -18,6 +19,14 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct RuntimeAbilityEntry {
 		int32_t compiled_ability_index = -1;
 		uint64_t handle = 0;
+	};
+
+	struct FreshCardPrototype {
+		StringName card_id;
+		int32_t template_index = -1;
+		std::array<int32_t, 4> powers = {0, 0, 0, 0};
+		int32_t ki = 0;
+		int32_t active_ability_set_index = -1;
 	};
 
 	struct NativeState {
@@ -41,6 +50,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array card_template_pool;
 		Array active_ability_set_pool;
 		Array suppression_set_pool;
+		Array fresh_card_prototype_pool;
+		std::vector<FreshCardPrototype> fresh_card_prototypes;
 		Dictionary side_payload;
 		bool has_rule_metadata = false;
 		uint64_t next_ability_handle = 1;

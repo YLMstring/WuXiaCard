@@ -11,6 +11,7 @@ extends RefCounted
 
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
+const Catalog = preload("res://scripts/card_catalog.gd")
 
 const FORMAT_VERSION: int = 1
 const EMPTY_CARD_INDEX: int = -1
@@ -92,6 +93,7 @@ var card_hand_slots: PackedInt32Array = PackedInt32Array()
 var card_template_pool: Array[Dictionary] = []
 var active_ability_set_pool: Array[Array] = []
 var suppression_set_pool: Array[Array] = []
+var fresh_card_prototypes: Array[Dictionary] = []
 
 ## Lossless bridge for uncommon or not-yet-packed state-level containers.
 var side_payload: Dictionary = {}
@@ -196,6 +198,7 @@ func duplicate_compact() -> RefCounted:
 	copied.card_template_pool = card_template_pool
 	copied.active_ability_set_pool = active_ability_set_pool
 	copied.suppression_set_pool = suppression_set_pool
+	copied.fresh_card_prototypes = fresh_card_prototypes
 	copied.side_payload = side_payload.duplicate(true)
 	return copied
 
@@ -243,6 +246,20 @@ func is_structurally_valid() -> bool:
 		for zone_card_index: int in zone:
 			if zone_card_index < 0 or zone_card_index >= card_count:
 				return false
+	for prototype: Dictionary in fresh_card_prototypes:
+		var template_index: int = int(prototype.get("template_index", -1))
+		var ability_set_index: int = int(prototype.get("active_ability_set_index", -1))
+		var powers_value: Variant = prototype.get("powers", null)
+		if (
+			StringName(prototype.get("card_id", &"")) == &""
+			or template_index < 0
+			or template_index >= card_template_pool.size()
+			or ability_set_index < 0
+			or ability_set_index >= active_ability_set_pool.size()
+			or not powers_value is Array
+			or (powers_value as Array).size() != 4
+		):
+			return false
 	return true
 
 
@@ -251,6 +268,7 @@ func to_variant_payload() -> Dictionary:
 	payload["card_template_pool"] = card_template_pool
 	payload["active_ability_set_pool"] = active_ability_set_pool
 	payload["suppression_set_pool"] = suppression_set_pool
+	payload["fresh_card_prototypes"] = fresh_card_prototypes
 	return payload
 
 
@@ -362,6 +380,11 @@ func load_variant_payload(payload: Dictionary) -> bool:
 		if not suppression_set_value is Array:
 			return _fail("Compact suppression-set pool contains a non-Array value")
 		suppression_set_pool.append((suppression_set_value as Array).duplicate(true))
+	fresh_card_prototypes = []
+	for prototype_value: Variant in payload.get("fresh_card_prototypes", []) as Array:
+		if not prototype_value is Dictionary:
+			return _fail("Compact fresh-card prototype pool contains a non-Dictionary value")
+		fresh_card_prototypes.append((prototype_value as Dictionary).duplicate(true))
 
 	var side_value: Variant = payload.get("side_payload", {})
 	if not side_value is Dictionary:
@@ -466,9 +489,55 @@ func _capture_state(state: StateData) -> bool:
 			packed_zone.append(card_index)
 		zone_card_indices[zone_index] = packed_zone
 
+	if not _capture_fresh_card_prototypes():
+		return false
+
 	for key: StringName in SIDE_PAYLOAD_KEYS:
 		side_payload[key] = state.get(String(key)).duplicate(true)
 	return is_structurally_valid()
+
+
+func _capture_fresh_card_prototypes() -> bool:
+	fresh_card_prototypes = []
+	var observed_card_ids: Dictionary = {}
+	for card_index: int in range(card_instance_ids.size()):
+		var runtime_template_index: int = card_template_indices[card_index]
+		if runtime_template_index < 0 or runtime_template_index >= card_template_pool.size():
+			return _fail("Compact runtime card has no template for fresh prototype capture")
+		var card_id := StringName(
+			(card_template_pool[runtime_template_index] as Dictionary).get("card_id", &"")
+		)
+		if card_id == &"" or observed_card_ids.has(card_id):
+			continue
+		observed_card_ids[card_id] = true
+		if not Catalog.has_card(card_id):
+			continue
+		var fresh: Dictionary = Catalog.create_instance(
+			card_id,
+			Rules.PLAYER_OWNER,
+			&"compact_fresh_prototype"
+		)
+		var template: Dictionary = fresh.duplicate(true)
+		for key: StringName in MUTABLE_CARD_KEYS:
+			template.erase(key)
+		var template_index: int = _intern_dictionary(
+			template,
+			card_template_pool,
+			_template_index_by_bytes
+		)
+		var active_ability_set_index: int = _intern_array(
+			fresh.get("active_abilities", []) as Array,
+			active_ability_set_pool,
+			_ability_set_index_by_bytes
+		)
+		fresh_card_prototypes.append({
+			"card_id": card_id,
+			"template_index": template_index,
+			"powers": (fresh.get("powers", []) as Array).duplicate(),
+			"ki": int(fresh.get("ki", 0)),
+			"active_ability_set_index": active_ability_set_index,
+		})
+	return true
 
 
 func _capture_card(card: Dictionary) -> int:
