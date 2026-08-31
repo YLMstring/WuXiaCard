@@ -406,245 +406,49 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 		next.board_slot_extras[target_cell] = Dictionary();
 	}
 
-	Array events;
+	Resolution resolution;
 	Dictionary placed_event;
 	placed_event["type"] = StringName("card_placed");
 	placed_event["source_cell"] = target_cell;
 	placed_event["target_cell"] = target_cell;
 	placed_event["owner_id"] = moving_owner;
 	placed_event["instance_id"] = played_instance_id;
-	events.append(placed_event);
+	resolution.events.append(placed_event);
 
 	std::vector<int32_t> exile_stack;
-	const std::vector<int32_t> summon_attack_redirect_sources =
-		snapshot_summon_attack_redirect_sources(
-			next,
-			static_cast<int32_t>(target_cell),
-			moving_owner
-		);
-	EventContext summon_context;
-	summon_context.trigger_cell = static_cast<int32_t>(target_cell);
-	summon_context.trigger_card_index = played_card_index;
-	summon_context.trigger_owner = moving_owner;
-	summon_context.trigger_was_on_board = true;
-	Resolution after_summoned = resolve_event(
+	SummonRequest summon_request;
+	summon_request.summon_cell = static_cast<int32_t>(target_cell);
+	summon_request.card_index = played_card_index;
+	summon_request.owner_id = moving_owner;
+	Resolution summon_resolution = resolve_summon_lifecycle(
 		next,
-		StringName("card_after_summoned"),
-		summon_context,
+		summon_request,
 		exile_stack
 	);
-	if (!after_summoned.supported) {
+	if (!summon_resolution.supported) {
 		result["supported"] = false;
-		result["reason"] = after_summoned.reason;
+		result["reason"] = summon_resolution.reason;
 		return result;
 	}
-	events.append_array(after_summoned.events);
+	append_resolution(resolution, summon_resolution);
 
-	Array captures;
-	Array exiles;
-	captures.append_array(after_summoned.captures);
-	exiles.append_array(after_summoned.exiles);
-	const int32_t initial_attack_cell = find_board_card(
+	Resolution finish_resolution = finish_action(
 		next,
-		played_card_index,
-		static_cast<int32_t>(target_cell)
+		moving_owner,
+		played_card_index
 	);
-	if (
-		initial_attack_cell >= 0
-		&& next.board_owners[initial_attack_cell] == moving_owner
-		&& next.scalars[moving_owner == 1 ? 3 : 4] < 20
-		&& !attack_is_prohibited(next, moving_owner)
-	) {
-		const AttackPolicy requested_policy = get_summon_attack_policy(
-			next,
-			initial_attack_cell,
-			moving_owner,
-			summon_attack_redirect_sources
-		);
-		const AttackPolicy attack_policy = get_standard_attack_policy(
-			next,
-			initial_attack_cell,
-			played_card_index,
-			moving_owner,
-			requested_policy
-		);
-		const std::vector<int32_t> target_cells = get_attack_targets(
-			next,
-			initial_attack_cell,
-			attack_policy
-		);
-		if (!target_cells.empty()) {
-			next.scalars[moving_owner == 1 ? 3 : 4] += 1;
-		}
-		bool attack_started = false;
-		bool attack_flipped_enemy = false;
-		std::vector<EventContext::AttackFlipRecord> attack_flips;
-		for (const int32_t locked_cell : target_cells) {
-			const int32_t attacker_cell = find_board_card(next, played_card_index, static_cast<int32_t>(target_cell));
-			if (attacker_cell < 0 || next.board_owners[attacker_cell] != moving_owner) break;
-			const int32_t attacked_card_index = next.board_card_indices[locked_cell];
-			if (attacked_card_index < 0) continue;
-			const int32_t attacked_cell = locked_cell;
-			if (!can_attack_target(next, attacker_cell, attacked_cell, attack_policy, true)) continue;
-			const int32_t attacked_owner = next.board_owners[attacked_cell];
-			const StringName attacked_instance_id = next.card_instance_ids[attacked_card_index];
-
-			Dictionary attack_event;
-			attack_event["type"] = StringName("attack_started");
-			attack_event["source_cell"] = attacker_cell;
-			attack_event["source_instance_id"] = played_instance_id;
-			attack_event["source_owner_id"] = moving_owner;
-			attack_event["target_cell"] = attacked_cell;
-			attack_event["target_instance_id"] = attacked_instance_id;
-			attack_event["target_owner_id"] = attacked_owner;
-			attack_event["attack_reason"] = StringName("summon_standard_attack");
-			events.append(attack_event);
-			attack_started = true;
-
-			EventContext attack_context;
-			attack_context.attacker_cell = attacker_cell;
-			attack_context.attacker_card_index = played_card_index;
-			attack_context.attacker_owner = moving_owner;
-			attack_context.attacked_cell = attacked_cell;
-			attack_context.attacked_card_index = attacked_card_index;
-			attack_context.attacked_owner = attacked_owner;
-			attack_context.trigger_cell = attacked_cell;
-			attack_context.trigger_card_index = attacked_card_index;
-			attack_context.trigger_owner = attacked_owner;
-			attack_context.trigger_was_on_board = true;
-			attack_context.attack_reason = StringName("summon_standard_attack");
-			Resolution be_attacked = resolve_event(next, StringName("card_be_attacked"), attack_context, exile_stack);
-			if (!be_attacked.supported) {
-				result["supported"] = false;
-				result["reason"] = be_attacked.reason;
-				return result;
-			}
-			events.append_array(be_attacked.events);
-			captures.append_array(be_attacked.captures);
-			exiles.append_array(be_attacked.exiles);
-			const int32_t current_attacker_cell = find_board_card(next, played_card_index, attacker_cell);
-			const int32_t current_attacked_cell = find_board_card(next, attacked_card_index, attacked_cell);
-			if (current_attacker_cell < 0 || next.board_owners[current_attacker_cell] != moving_owner) break;
-			if (current_attacked_cell < 0) continue;
-			if (!can_attack_target(next, current_attacker_cell, current_attacked_cell, attack_policy, true)) continue;
-			int32_t resolved_capture_owner = moving_owner;
-			if (next.board_owners[current_attacked_cell] == moving_owner) {
-				resolved_capture_owner = (
-					attack_policy.capture_owner_id != 0
-					? attack_policy.capture_owner_id
-					: other_owner(moving_owner)
-				);
-			}
-			if (resolved_capture_owner == next.board_owners[current_attacked_cell]) continue;
-			EventContext before_context = attack_context;
-			before_context.attacker_cell = current_attacker_cell;
-			before_context.attacked_cell = current_attacked_cell;
-			before_context.attacked_owner = next.board_owners[current_attacked_cell];
-			before_context.trigger_cell = current_attacked_cell;
-			before_context.trigger_owner = next.board_owners[current_attacked_cell];
-			before_context.new_owner = resolved_capture_owner;
-			before_context.flip_reason = StringName("summon_standard_attack");
-			Resolution before_flip = resolve_event(next, StringName("card_before_flipped"), before_context, exile_stack);
-			if (!before_flip.supported) {
-				result["supported"] = false;
-				result["reason"] = before_flip.reason;
-				return result;
-			}
-			events.append_array(before_flip.events);
-			captures.append_array(before_flip.captures);
-			exiles.append_array(before_flip.exiles);
-			if (before_flip.flip_prevented) {
-				Dictionary prevented;
-				prevented["type"] = StringName("card_flip_prevented");
-				prevented["source_cell"] = current_attacker_cell;
-				prevented["target_cell"] = current_attacked_cell;
-				prevented["owner_id"] = attacked_owner;
-				prevented["new_owner_id"] = resolved_capture_owner;
-				prevented["instance_id"] = attacked_instance_id;
-				events.append(prevented);
-				Resolution after_prevented = resolve_event(next, StringName("card_flip_prevented"), before_context, exile_stack);
-				if (!after_prevented.supported) {
-					result["supported"] = false;
-					result["reason"] = after_prevented.reason;
-					return result;
-				}
-				events.append_array(after_prevented.events);
-				captures.append_array(after_prevented.captures);
-				exiles.append_array(after_prevented.exiles);
-				continue;
-			}
-			Resolution flip_resolution;
-			if (!flip_card(next, current_attacker_cell, played_card_index, current_attacked_cell, attacked_card_index, resolved_capture_owner, before_context, exile_stack, flip_resolution)) {
-				result["supported"] = false;
-				result["reason"] = flip_resolution.reason;
-				return result;
-			}
-			events.append_array(flip_resolution.events);
-			captures.append_array(flip_resolution.captures);
-			exiles.append_array(flip_resolution.exiles);
-			attack_flipped_enemy = attack_flipped_enemy || attacked_owner != moving_owner;
-			EventContext::AttackFlipRecord flip_record;
-			flip_record.card_index = attacked_card_index;
-			flip_record.previous_owner = attacked_owner;
-			attack_flips.push_back(flip_record);
-		}
-		if (attack_started) {
-			EventContext after_attack_context;
-			after_attack_context.attacker_cell = find_board_card(next, played_card_index, static_cast<int32_t>(target_cell));
-			after_attack_context.attacker_card_index = played_card_index;
-			after_attack_context.attacker_owner = moving_owner;
-			after_attack_context.attack_flipped_enemy = attack_flipped_enemy;
-			after_attack_context.attack_flips = attack_flips;
-			Resolution after_attack = resolve_event(next, StringName("card_after_attack"), after_attack_context, exile_stack);
-			if (!after_attack.supported) {
-				result["supported"] = false;
-				result["reason"] = after_attack.reason;
-				return result;
-			}
-			events.append_array(after_attack.events);
-			captures.append_array(after_attack.captures);
-			exiles.append_array(after_attack.exiles);
-		}
+	if (!finish_resolution.supported) {
+		result["supported"] = false;
+		result["reason"] = finish_resolution.reason;
+		return result;
 	}
-
-	Dictionary last_hand_plays = next.side_payload.get(
-		"last_hand_play_by_owner",
-		Dictionary()
-	);
-	last_hand_plays = last_hand_plays.duplicate(true);
-	Dictionary last_hand_play;
-	last_hand_play["played_by_owner_id"] = moving_owner;
-	last_hand_play["card_id"] = next.card_ids[played_card_index];
-	last_hand_play["instance_id"] = played_instance_id;
-	last_hand_plays[moving_owner] = last_hand_play;
-	next.side_payload["last_hand_play_by_owner"] = last_hand_plays;
-
-	next.scalars[1] += 1;
-	next.scalars[12] += 1;
-	next.scalars[6] = 1;
-	complete_owner_turn_boundary(next);
-	if (!is_terminal(next)) {
-		int32_t previous_owner = moving_owner;
-		while (true) {
-			const int32_t turn_owner = other_owner(previous_owner);
-			next.scalars[0] = turn_owner;
-			if (owner_has_legal_play(next, turn_owner)) {
-				break;
-			}
-			next.scalars[6] = 1;
-			complete_owner_turn_boundary(next);
-			if (is_terminal(next)) {
-				break;
-			}
-			previous_owner = turn_owner;
-		}
-	}
+	append_resolution(resolution, finish_resolution);
 
 	result["valid"] = true;
 	result["reason"] = String();
-	result["captures"] = captures;
-	result["exiles"] = exiles;
-	result["events"] = events;
+	result["captures"] = resolution.captures;
+	result["exiles"] = resolution.exiles;
+	result["events"] = resolution.events;
 	result["payload"] = to_variant_payload(next);
 	return result;
 }
@@ -2013,6 +1817,275 @@ bool DuelNativeCompactKernel::power_pair_wins(
 		: effective_defending_power(value, target_card_index, target_owner, defending_direction)
 	);
 	return comparison_reversed ? attacking_power < defending_power : attacking_power > defending_power;
+}
+
+void DuelNativeCompactKernel::append_resolution(
+	Resolution &destination,
+	const Resolution &addition
+) const {
+	destination.events.append_array(addition.events);
+	destination.captures.append_array(addition.captures);
+	destination.exiles.append_array(addition.exiles);
+	destination.flip_prevented = destination.flip_prevented || addition.flip_prevented;
+}
+
+bool DuelNativeCompactKernel::resolution_has_output(const Resolution &resolution) const {
+	return (
+		!resolution.events.is_empty()
+		|| !resolution.captures.is_empty()
+		|| !resolution.exiles.is_empty()
+	);
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_request(
+	NativeState &value,
+	const AttackRequest &request,
+	std::vector<int32_t> &exile_stack
+) const {
+	Resolution resolution;
+	const int32_t initial_attack_cell = find_board_card(
+		value,
+		request.attacker_card_index,
+		request.attacker_cell
+	);
+	if (
+		initial_attack_cell < 0
+		|| value.board_owners[initial_attack_cell] != request.attacker_owner
+		|| value.scalars[request.attacker_owner == 1 ? 3 : 4] >= 20
+		|| attack_is_prohibited(value, request.attacker_owner)
+	) {
+		return resolution;
+	}
+	const AttackPolicy attack_policy = get_standard_attack_policy(
+		value,
+		initial_attack_cell,
+		request.attacker_card_index,
+		request.attacker_owner,
+		request.requested_policy
+	);
+	const std::vector<int32_t> target_cells = get_attack_targets(
+		value,
+		initial_attack_cell,
+		attack_policy
+	);
+	if (!target_cells.empty()) {
+		value.scalars[request.attacker_owner == 1 ? 3 : 4] += 1;
+	}
+	bool attack_started = false;
+	bool attack_flipped_enemy = false;
+	std::vector<EventContext::AttackFlipRecord> attack_flips;
+	for (const int32_t locked_cell : target_cells) {
+		const int32_t attacker_cell = find_board_card(
+			value,
+			request.attacker_card_index,
+			request.attacker_cell
+		);
+		if (
+			attacker_cell < 0
+			|| value.board_owners[attacker_cell] != request.attacker_owner
+		) break;
+		const int32_t attacked_card_index = value.board_card_indices[locked_cell];
+		if (attacked_card_index < 0) continue;
+		const int32_t attacked_cell = locked_cell;
+		if (!can_attack_target(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
+		const int32_t attacked_owner = value.board_owners[attacked_cell];
+		const StringName attacked_instance_id = value.card_instance_ids[attacked_card_index];
+
+		Dictionary attack_event;
+		attack_event["type"] = StringName("attack_started");
+		attack_event["source_cell"] = attacker_cell;
+		attack_event["source_instance_id"] = value.card_instance_ids[request.attacker_card_index];
+		attack_event["source_owner_id"] = request.attacker_owner;
+		attack_event["target_cell"] = attacked_cell;
+		attack_event["target_instance_id"] = attacked_instance_id;
+		attack_event["target_owner_id"] = attacked_owner;
+		attack_event["attack_reason"] = request.reason;
+		resolution.events.append(attack_event);
+		attack_started = true;
+
+		EventContext attack_context;
+		attack_context.attacker_cell = attacker_cell;
+		attack_context.attacker_card_index = request.attacker_card_index;
+		attack_context.attacker_owner = request.attacker_owner;
+		attack_context.attacked_cell = attacked_cell;
+		attack_context.attacked_card_index = attacked_card_index;
+		attack_context.attacked_owner = attacked_owner;
+		attack_context.trigger_cell = attacked_cell;
+		attack_context.trigger_card_index = attacked_card_index;
+		attack_context.trigger_owner = attacked_owner;
+		attack_context.trigger_was_on_board = true;
+		attack_context.attack_reason = request.reason;
+		Resolution be_attacked = resolve_event(
+			value,
+			StringName("card_be_attacked"),
+			attack_context,
+			exile_stack
+		);
+		if (!be_attacked.supported) return be_attacked;
+		append_resolution(resolution, be_attacked);
+		const int32_t current_attacker_cell = find_board_card(
+			value,
+			request.attacker_card_index,
+			attacker_cell
+		);
+		const int32_t current_attacked_cell = find_board_card(
+			value,
+			attacked_card_index,
+			attacked_cell
+		);
+		if (
+			current_attacker_cell < 0
+			|| value.board_owners[current_attacker_cell] != request.attacker_owner
+		) break;
+		if (current_attacked_cell < 0) continue;
+		if (!can_attack_target(
+			value,
+			current_attacker_cell,
+			current_attacked_cell,
+			attack_policy,
+			true
+		)) continue;
+		int32_t resolved_capture_owner = request.attacker_owner;
+		if (value.board_owners[current_attacked_cell] == request.attacker_owner) {
+			resolved_capture_owner = (
+				attack_policy.capture_owner_id != 0
+				? attack_policy.capture_owner_id
+				: other_owner(request.attacker_owner)
+			);
+		}
+		if (resolved_capture_owner == value.board_owners[current_attacked_cell]) continue;
+		EventContext before_context = attack_context;
+		before_context.attacker_cell = current_attacker_cell;
+		before_context.attacked_cell = current_attacked_cell;
+		before_context.attacked_owner = value.board_owners[current_attacked_cell];
+		before_context.trigger_cell = current_attacked_cell;
+		before_context.trigger_owner = value.board_owners[current_attacked_cell];
+		before_context.new_owner = resolved_capture_owner;
+		before_context.flip_reason = request.reason;
+		Resolution before_flip = resolve_event(
+			value,
+			StringName("card_before_flipped"),
+			before_context,
+			exile_stack
+		);
+		if (!before_flip.supported) return before_flip;
+		append_resolution(resolution, before_flip);
+		if (before_flip.flip_prevented) {
+			Dictionary prevented;
+			prevented["type"] = StringName("card_flip_prevented");
+			prevented["source_cell"] = current_attacker_cell;
+			prevented["target_cell"] = current_attacked_cell;
+			prevented["owner_id"] = attacked_owner;
+			prevented["new_owner_id"] = resolved_capture_owner;
+			prevented["instance_id"] = attacked_instance_id;
+			resolution.events.append(prevented);
+			Resolution after_prevented = resolve_event(
+				value,
+				StringName("card_flip_prevented"),
+				before_context,
+				exile_stack
+			);
+			if (!after_prevented.supported) return after_prevented;
+			append_resolution(resolution, after_prevented);
+			continue;
+		}
+		Resolution flip_resolution;
+		if (!flip_card(
+			value,
+			current_attacker_cell,
+			request.attacker_card_index,
+			current_attacked_cell,
+			attacked_card_index,
+			resolved_capture_owner,
+			before_context,
+			exile_stack,
+			flip_resolution
+		)) return flip_resolution;
+		append_resolution(resolution, flip_resolution);
+		attack_flipped_enemy = (
+			attack_flipped_enemy
+			|| attacked_owner != request.attacker_owner
+		);
+		EventContext::AttackFlipRecord flip_record;
+		flip_record.card_index = attacked_card_index;
+		flip_record.previous_owner = attacked_owner;
+		attack_flips.push_back(flip_record);
+	}
+	if (attack_started) {
+		EventContext after_attack_context;
+		after_attack_context.attacker_cell = find_board_card(
+			value,
+			request.attacker_card_index,
+			request.attacker_cell
+		);
+		after_attack_context.attacker_card_index = request.attacker_card_index;
+		after_attack_context.attacker_owner = request.attacker_owner;
+		after_attack_context.attack_flipped_enemy = attack_flipped_enemy;
+		after_attack_context.attack_flips = attack_flips;
+		Resolution after_attack = resolve_event(
+			value,
+			StringName("card_after_attack"),
+			after_attack_context,
+			exile_stack
+		);
+		if (!after_attack.supported) return after_attack;
+		append_resolution(resolution, after_attack);
+	}
+	return resolution;
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_lifecycle(
+	NativeState &value,
+	const SummonRequest &request,
+	std::vector<int32_t> &exile_stack
+) const {
+	Resolution resolution;
+	const std::vector<int32_t> summon_attack_redirect_sources =
+		snapshot_summon_attack_redirect_sources(
+			value,
+			request.summon_cell,
+			request.owner_id
+		);
+	EventContext summon_context;
+	summon_context.trigger_cell = request.summon_cell;
+	summon_context.trigger_card_index = request.card_index;
+	summon_context.trigger_owner = request.owner_id;
+	summon_context.trigger_was_on_board = true;
+	Resolution after_summoned = resolve_event(
+		value,
+		StringName("card_after_summoned"),
+		summon_context,
+		exile_stack
+	);
+	if (!after_summoned.supported) return after_summoned;
+	append_resolution(resolution, after_summoned);
+
+	AttackRequest attack_request;
+	attack_request.attacker_cell = request.summon_cell;
+	attack_request.attacker_card_index = request.card_index;
+	attack_request.attacker_owner = request.owner_id;
+	const int32_t initial_attack_cell = find_board_card(
+		value,
+		request.card_index,
+		request.summon_cell
+	);
+	if (initial_attack_cell >= 0) {
+		attack_request.requested_policy = get_summon_attack_policy(
+			value,
+			initial_attack_cell,
+			request.owner_id,
+			summon_attack_redirect_sources
+		);
+	}
+	attack_request.reason = StringName("summon_standard_attack");
+	Resolution attack_resolution = resolve_attack_request(
+		value,
+		attack_request,
+		exile_stack
+	);
+	if (!attack_resolution.supported) return attack_resolution;
+	append_resolution(resolution, attack_resolution);
+	return resolution;
 }
 
 bool DuelNativeCompactKernel::board_has_enabled_event(
@@ -3991,6 +4064,90 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_movement_ev
 	return resolve_event(value, event_id, context, exile_stack);
 }
 
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::move_card_between_cells(
+	NativeState &value,
+	int32_t source_cell,
+	int32_t origin_cell,
+	int32_t target_cell,
+	int32_t moving_card_index,
+	int32_t moving_owner,
+	bool resolve_before_event,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	if (
+		source_cell < 0
+		|| target_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| value.board_card_indices[source_cell] != moving_card_index
+		|| value.board_owners[source_cell] != moving_owner
+		|| value.board_card_indices[target_cell] >= 0
+	) return ActionOutcome::NO_EFFECT;
+
+	Resolution movement_resolution;
+	if (resolve_before_event) {
+		Resolution before = resolve_movement_event(
+			value,
+			StringName("card_before_moved"),
+			source_cell,
+			origin_cell,
+			target_cell,
+			moving_card_index,
+			moving_owner,
+			exile_stack
+		);
+		if (!before.supported) {
+			resolution.reason = before.reason;
+			return ActionOutcome::UNSUPPORTED;
+		}
+		append_resolution(movement_resolution, before);
+		if (
+			find_board_card(value, moving_card_index, source_cell) != source_cell
+			|| value.board_owners[source_cell] != moving_owner
+			|| value.board_card_indices[target_cell] >= 0
+		) {
+			append_resolution(resolution, movement_resolution);
+			return resolution_has_output(movement_resolution)
+				? ActionOutcome::APPLIED
+				: ActionOutcome::NO_EFFECT;
+		}
+	}
+
+	const Variant moving_extra = value.board_slot_extras[source_cell];
+	value.board_card_indices[source_cell] = -1;
+	value.board_owners[source_cell] = 0;
+	value.board_slot_extras[source_cell] = Dictionary();
+	value.board_card_indices[target_cell] = moving_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(moving_owner);
+	value.board_slot_extras[target_cell] = moving_extra;
+
+	Dictionary moved;
+	moved["type"] = StringName("card_moved");
+	moved["source_cell"] = source_cell;
+	moved["target_cell"] = target_cell;
+	moved["owner_id"] = moving_owner;
+	moved["instance_id"] = value.card_instance_ids[moving_card_index];
+	movement_resolution.events.append(moved);
+	Resolution after = resolve_movement_event(
+		value,
+		StringName("card_after_moved"),
+		target_cell,
+		origin_cell,
+		target_cell,
+		moving_card_index,
+		moving_owner,
+		exile_stack
+	);
+	if (!after.supported) {
+		resolution.reason = after.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(movement_resolution, after);
+	append_resolution(resolution, movement_resolution);
+	return ActionOutcome::APPLIED;
+}
+
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subject_with_ability_source(
 	NativeState &value,
 	const EventGroup &group,
@@ -4030,11 +4187,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 	}
 	if (!adjacent) return ActionOutcome::NO_EFFECT;
 
-	auto append_resolution = [](Resolution &destination, const Resolution &addition) {
-		destination.events.append_array(addition.events);
-		destination.captures.append_array(addition.captures);
-		destination.exiles.append_array(addition.exiles);
-	};
 	Resolution source_before = resolve_movement_event(
 		value,
 		StringName("card_before_moved"),
@@ -4056,49 +4208,37 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 		|| value.board_owners[target_cell] != target_owner
 	) {
 		append_resolution(resolution, source_before);
-		return (
-			source_before.events.is_empty()
-			&& source_before.captures.is_empty()
-			&& source_before.exiles.is_empty()
-		) ? ActionOutcome::NO_EFFECT : ActionOutcome::APPLIED;
+		return resolution_has_output(source_before)
+			? ActionOutcome::APPLIED
+			: ActionOutcome::NO_EFFECT;
 	}
 
 	const Variant reserved_target_extra = value.board_slot_extras[target_cell];
 	value.board_card_indices[target_cell] = -1;
 	value.board_owners[target_cell] = 0;
 	value.board_slot_extras[target_cell] = Dictionary();
-	const Variant moving_source_extra = value.board_slot_extras[source_cell];
-	value.board_card_indices[source_cell] = -1;
-	value.board_owners[source_cell] = 0;
-	value.board_slot_extras[source_cell] = Dictionary();
-	value.board_card_indices[target_cell] = source_card_index;
-	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
-	value.board_slot_extras[target_cell] = moving_source_extra;
 
 	Resolution swap_resolution;
 	append_resolution(swap_resolution, source_before);
-	Dictionary source_moved;
-	source_moved["type"] = StringName("card_moved");
-	source_moved["source_cell"] = source_cell;
-	source_moved["target_cell"] = target_cell;
-	source_moved["owner_id"] = source_owner;
-	source_moved["instance_id"] = value.card_instance_ids[source_card_index];
-	swap_resolution.events.append(source_moved);
-	Resolution source_after = resolve_movement_event(
+	const ActionOutcome source_move_outcome = move_card_between_cells(
 		value,
-		StringName("card_after_moved"),
-		target_cell,
+		source_cell,
 		source_cell,
 		target_cell,
 		source_card_index,
 		source_owner,
-		exile_stack
+		false,
+		exile_stack,
+		swap_resolution
 	);
-	if (!source_after.supported) {
-		resolution.reason = source_after.reason;
+	if (source_move_outcome == ActionOutcome::UNSUPPORTED) {
+		resolution.reason = swap_resolution.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
-	append_resolution(swap_resolution, source_after);
+	if (source_move_outcome != ActionOutcome::APPLIED) {
+		append_resolution(resolution, swap_resolution);
+		return source_move_outcome;
+	}
 	if (
 		find_board_card(value, source_card_index, target_cell) != target_cell
 		|| value.board_owners[target_cell] != source_owner
@@ -4139,34 +4279,25 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 	}
 	append_resolution(swap_resolution, target_before);
 
-	value.board_card_indices[target_cell] = -1;
-	value.board_owners[target_cell] = 0;
-	value.board_slot_extras[target_cell] = Dictionary();
-	value.board_card_indices[source_cell] = target_card_index;
-	value.board_owners[source_cell] = static_cast<uint8_t>(target_owner);
-	value.board_slot_extras[source_cell] = reserved_target_extra;
-	Dictionary target_moved;
-	target_moved["type"] = StringName("card_moved");
-	target_moved["source_cell"] = target_cell;
-	target_moved["target_cell"] = source_cell;
-	target_moved["owner_id"] = target_owner;
-	target_moved["instance_id"] = value.card_instance_ids[target_card_index];
-	swap_resolution.events.append(target_moved);
-	Resolution target_after = resolve_movement_event(
+	const ActionOutcome target_move_outcome = move_card_between_cells(
 		value,
-		StringName("card_after_moved"),
-		source_cell,
+		target_cell,
 		target_cell,
 		source_cell,
 		target_card_index,
 		target_owner,
-		exile_stack
+		false,
+		exile_stack,
+		swap_resolution
 	);
-	if (!target_after.supported) {
-		resolution.reason = target_after.reason;
+	if (target_move_outcome == ActionOutcome::UNSUPPORTED) {
+		resolution.reason = swap_resolution.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
-	append_resolution(swap_resolution, target_after);
+	if (target_move_outcome != ActionOutcome::APPLIED) {
+		resolution.reason = "Second swap leg could not move its exact instance";
+		return ActionOutcome::UNSUPPORTED;
+	}
 
 	value.board_card_indices[target_cell] = source_card_index;
 	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
@@ -4457,6 +4588,43 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 		return true;
 	}
 	return !owner_has_legal_play(value, 1) && !owner_has_legal_play(value, 2);
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
+	NativeState &value,
+	int32_t moving_owner,
+	int32_t played_card_index
+) const {
+	Resolution resolution;
+	Dictionary last_hand_plays = value.side_payload.get(
+		"last_hand_play_by_owner",
+		Dictionary()
+	);
+	last_hand_plays = last_hand_plays.duplicate(true);
+	Dictionary last_hand_play;
+	last_hand_play["played_by_owner_id"] = moving_owner;
+	last_hand_play["card_id"] = value.card_ids[played_card_index];
+	last_hand_play["instance_id"] = value.card_instance_ids[played_card_index];
+	last_hand_plays[moving_owner] = last_hand_play;
+	value.side_payload["last_hand_play_by_owner"] = last_hand_plays;
+
+	value.scalars[1] += 1;
+	value.scalars[12] += 1;
+	value.scalars[6] = 1;
+	complete_owner_turn_boundary(value);
+	if (!is_terminal(value)) {
+		int32_t previous_owner = moving_owner;
+		while (true) {
+			const int32_t turn_owner = other_owner(previous_owner);
+			value.scalars[0] = turn_owner;
+			if (owner_has_legal_play(value, turn_owner)) break;
+			value.scalars[6] = 1;
+			complete_owner_turn_boundary(value);
+			if (is_terminal(value)) break;
+			previous_owner = turn_owner;
+		}
+	}
+	return resolution;
 }
 
 void DuelNativeCompactKernel::complete_owner_turn_boundary(NativeState &value) const {

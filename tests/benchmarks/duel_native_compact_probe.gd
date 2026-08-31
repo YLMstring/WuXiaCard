@@ -669,6 +669,46 @@ func _test_draw_trigger_transition_parity(kernel: Object) -> void:
 		"Draw events precede standard attack"
 	)
 
+	var global_board: Array = Rules.empty_board()
+	var global_listener: Dictionary = _make_plain_card(
+		&"全场进场监听",
+		&"native_global_after_summoned_listener",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	global_listener["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	global_board[0] = _slot(global_listener, Rules.PLAYER_OWNER)
+	var global_state := State.new(
+		global_board,
+		[_make_plain_card(
+			&"全场监听进场牌",
+			&"native_global_after_summoned_trigger",
+			Rules.PLAYER_OWNER,
+			[1, 1, 1, 1]
+		)],
+		[_make_plain_card(
+			&"全场监听敌手",
+			&"native_global_after_summoned_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		global_state,
+		0,
+		4,
+		&"native_global_after_summoned_trigger",
+		"After-summoned discovery scans the full board in row-major order"
+	)
+
 
 func _test_draw_trigger_rejections(kernel: Object) -> void:
 	var empty_deck_state := State.new(

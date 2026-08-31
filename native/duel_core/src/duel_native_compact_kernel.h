@@ -255,6 +255,20 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool specified = false;
 	};
 
+	struct AttackRequest {
+		int32_t attacker_cell = -1;
+		int32_t attacker_card_index = -1;
+		int32_t attacker_owner = 0;
+		AttackPolicy requested_policy;
+		StringName reason;
+	};
+
+	struct SummonRequest {
+		int32_t summon_cell = -1;
+		int32_t card_index = -1;
+		int32_t owner_id = 0;
+	};
+
 	struct EventContext {
 		int32_t ability_source_cell = -1;
 		int32_t ability_source_zone = -1;
@@ -484,6 +498,18 @@ private:
 		int32_t defending_direction,
 		bool comparison_reversed
 	) const;
+	void append_resolution(Resolution &destination, const Resolution &addition) const;
+	bool resolution_has_output(const Resolution &resolution) const;
+	Resolution resolve_attack_request(
+		NativeState &value,
+		const AttackRequest &request,
+		std::vector<int32_t> &exile_stack
+	) const;
+	Resolution resolve_summon_lifecycle(
+		NativeState &value,
+		const SummonRequest &request,
+		std::vector<int32_t> &exile_stack
+	) const;
 	bool conditions_match(
 		const NativeState &value,
 		const EventGroup &group,
@@ -639,6 +665,17 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
+	ActionOutcome move_card_between_cells(
+		NativeState &value,
+		int32_t source_cell,
+		int32_t origin_cell,
+		int32_t target_cell,
+		int32_t moving_card_index,
+		int32_t moving_owner,
+		bool resolve_before_event,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
 	Resolution resolve_movement_event(
 		NativeState &value,
 		const StringName &event_id,
@@ -733,6 +770,11 @@ private:
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;
 	bool owner_has_legal_play(const NativeState &value, int32_t owner_id) const;
 	bool is_terminal(const NativeState &value) const;
+	Resolution finish_action(
+		NativeState &value,
+		int32_t moving_owner,
+		int32_t played_card_index
+	) const;
 	void complete_owner_turn_boundary(NativeState &value) const;
 	String board_repetition_signature(const NativeState &value) const;
 	Dictionary to_variant_payload(const NativeState &value) const;
