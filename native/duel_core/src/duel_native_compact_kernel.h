@@ -21,6 +21,17 @@ class DuelNativeCompactKernel : public RefCounted {
 		uint64_t handle = 0;
 	};
 
+	struct RuntimeSuppressionEntry {
+		int32_t original_index = -1;
+		int32_t compiled_ability_index = -1;
+		uint64_t handle = 0;
+	};
+
+	struct RuntimeSuppressionBatch {
+		int32_t expires_after_turn = 0;
+		std::vector<RuntimeSuppressionEntry> entries;
+	};
+
 	struct FreshCardPrototype {
 		StringName card_id;
 		int32_t template_index = -1;
@@ -42,6 +53,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<int32_t> card_ki;
 		std::vector<int32_t> card_active_ability_set_indices;
 		std::vector<std::vector<RuntimeAbilityEntry>> card_runtime_abilities;
+		std::vector<std::vector<RuntimeSuppressionBatch>> card_runtime_suppression_batches;
 		std::vector<uint8_t> card_reveal_codes;
 		std::vector<int32_t> card_suppression_set_indices;
 		std::vector<int32_t> card_hand_slots;
@@ -373,6 +385,7 @@ public:
 private:
 	bool validate_shape();
 	void compile_ability_sets();
+	bool compile_runtime_suppression_batches();
 	CompiledCondition compile_condition(const Variant &value) const;
 	CompiledSelectorCondition compile_selector_condition(const Variant &value) const;
 	CompiledSelector compile_selector(const Variant &value) const;
@@ -602,6 +615,7 @@ private:
 		int32_t &logical_index
 	) const;
 	bool card_declarations_can_spend_ki(const NativeState &value, int32_t card_index) const;
+	bool card_is_heart_method(const NativeState &value, int32_t card_index) const;
 	bool action_declarations_can_spend_ki(const Variant &value) const;
 	ActionOutcome change_powers(
 		NativeState &value,
@@ -755,6 +769,27 @@ private:
 		int32_t owner_id,
 		Array &events
 	) const;
+	void clear_runtime_suppression(NativeState &value, int32_t card_index) const;
+	Resolution consume_pending_hand_play_suppression(
+		NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		int32_t cell
+	) const;
+	ActionOutcome temporarily_remove_non_retained_abilities(
+		NativeState &value,
+		const ActionContext &action_context,
+		int32_t source_cell,
+		Resolution &resolution
+	) const;
+	Resolution restore_temporary_abilities(
+		NativeState &value,
+		int32_t completed_turn
+	) const;
+	Array materialize_suppression_batches(
+		const NativeState &value,
+		int32_t card_index
+	) const;
 	bool flip_card(
 		NativeState &value,
 		int32_t attacker_cell,
@@ -775,7 +810,7 @@ private:
 		int32_t moving_owner,
 		int32_t played_card_index
 	) const;
-	void complete_owner_turn_boundary(NativeState &value) const;
+	Resolution complete_owner_turn_boundary(NativeState &value) const;
 	String board_repetition_signature(const NativeState &value) const;
 	Dictionary to_variant_payload(const NativeState &value) const;
 	uint64_t checksum(const NativeState &value) const;

@@ -84,6 +84,7 @@ func _run() -> void:
 	_test_swap_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
+	_test_suppression_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
 		push_error(
@@ -806,6 +807,260 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		nested_unknown_state,
 		&"native_nested_unknown_source",
 		"Unsupported nested action is rejected atomically"
+	)
+
+
+func _test_suppression_transition_parity(kernel: Object) -> void:
+	var first_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [],
+	}
+	var second_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [],
+		"modifiers": [],
+	}
+	var retained_ability: Dictionary = {
+		"retained_on_flip": true,
+		"triggers": [],
+	}
+	var expiring_batches: Array = [
+		{
+			"expires_after_turn": 0,
+			"entries": [{"index": 0, "ability": first_ability.duplicate(true)}],
+		},
+		{
+			"expires_after_turn": 0,
+			"entries": [{"index": 0, "ability": second_ability.duplicate(true)}],
+		},
+	]
+	var future_batch: Array = [{
+		"expires_after_turn": 1,
+		"entries": [{"index": 0, "ability": first_ability.duplicate(true)}],
+	}]
+	var restoration_board: Array = Rules.empty_board()
+	restoration_board[0] = _slot(
+		_make_suppressed_card(
+			&"native_suppression_board",
+			Rules.PLAYER_OWNER,
+			[retained_ability.duplicate(true)],
+			expiring_batches
+		),
+		Rules.PLAYER_OWNER
+	)
+	var restoration_state := State.new(
+		restoration_board,
+		[
+			_make_plain_card(
+				&"压制恢复出牌",
+				&"native_suppression_play",
+				Rules.PLAYER_OWNER,
+				[1, 1, 1, 1]
+			),
+			_make_suppressed_card(
+				&"native_suppression_hand",
+				Rules.PLAYER_OWNER,
+				[],
+				expiring_batches
+			),
+		],
+		[_make_plain_card(
+			&"压制恢复敌手",
+			&"native_suppression_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_suppressed_card(
+			&"native_suppression_deck",
+			Rules.PLAYER_OWNER,
+			[],
+			future_batch
+		)]
+	)
+	restoration_state.discard_piles[Rules.PLAYER_OWNER] = [
+		_make_suppressed_card(
+			&"native_suppression_discard",
+			Rules.PLAYER_OWNER,
+			[],
+			expiring_batches
+		),
+	]
+	restoration_state.removed_cards[Rules.OPPONENT_OWNER] = [
+		_make_suppressed_card(
+			&"native_suppression_removed",
+			Rules.OPPONENT_OWNER,
+			[],
+			expiring_batches
+		),
+	]
+	_check_transition_parity(
+		kernel,
+		restoration_state,
+		0,
+		4,
+		&"native_suppression_play",
+		"Temporary suppression restores across live zones in oracle order"
+	)
+
+	var flipped_board: Array = Rules.empty_board()
+	flipped_board[1] = _slot(
+		_make_suppressed_card(
+			&"native_suppression_flipped",
+			Rules.OPPONENT_OWNER,
+			[],
+			expiring_batches
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var flipped_state := State.new(
+		flipped_board,
+		[_make_plain_card(
+			&"压制翻面攻击者",
+			&"native_suppression_flip_attacker",
+			Rules.PLAYER_OWNER,
+			[2, 2, 2, 2]
+		)],
+		[_make_plain_card(
+			&"压制翻面敌手",
+			&"native_suppression_flip_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		flipped_state,
+		0,
+		4,
+		&"native_suppression_flip_attacker",
+		"Ownership flips permanently clear temporary suppression batches"
+	)
+
+	var moved_source: Dictionary = _make_selector_source(
+		&"native_suppression_move_source",
+		{
+			"zones": [Catalog.CARD_ZONE_DISCARD],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			"limit": 1,
+		},
+		[{
+			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+			"card": Catalog.CARD_REF_SELECTED_CARD,
+			"recipient": Catalog.OWNER_CARD_CURRENT,
+			"preserve_instance": true,
+		}]
+	)
+	var moved_state := State.new(
+		Rules.empty_board(),
+		[moved_source],
+		[_make_plain_card(
+			&"压制移动敌手",
+			&"native_suppression_move_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	moved_state.discard_piles[Rules.PLAYER_OWNER] = [
+		_make_suppressed_card(
+			&"native_suppression_moved",
+			Rules.PLAYER_OWNER,
+			[],
+			expiring_batches
+		),
+	]
+	_check_transition_parity(
+		kernel,
+		moved_state,
+		0,
+		4,
+		&"native_suppression_move_source",
+		"Suppression follows an exact instance from discard into hand before restoration"
+	)
+
+	var pending_card: Dictionary = _make_plain_card(
+		&"待消费压制牌",
+		&"native_pending_suppression_play",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	var pending_removed_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [],
+		"modifiers": [{"type": &"native_unsupported_modifier"}],
+	}
+	pending_card["active_abilities"] = [
+		pending_removed_ability,
+		retained_ability.duplicate(true),
+	]
+	var pending_state := State.new(
+		Rules.empty_board(),
+		[pending_card],
+		[_make_plain_card(
+			&"待消费压制敌手",
+			&"native_pending_suppression_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	pending_state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
+	_check_transition_parity(
+		kernel,
+		pending_state,
+		0,
+		4,
+		&"native_pending_suppression_play",
+		"Pending suppression consumes one layer before a non-heart summon"
+	)
+
+	var heart_card: Dictionary = pending_card.duplicate(true)
+	heart_card["instance_id"] = &"native_pending_suppression_heart"
+	heart_card["weapon"] = "心法"
+	heart_card["active_abilities"] = [
+		first_ability.duplicate(true),
+		retained_ability.duplicate(true),
+	]
+	var heart_state := State.new(
+		Rules.empty_board(),
+		[heart_card],
+		[_make_plain_card(
+			&"心法压制敌手",
+			&"native_pending_suppression_heart_enemy",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	heart_state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
+	_check_transition_parity(
+		kernel,
+		heart_state,
+		0,
+		4,
+		&"native_pending_suppression_heart",
+		"Heart methods preserve pending suppression"
+	)
+
+	var invalid_compact := CompactState.new()
+	_check(
+		invalid_compact.capture_state(restoration_state),
+		"Malformed suppression fixture can be compacted"
+	)
+	var invalid_payload: Dictionary = invalid_compact.to_variant_payload().duplicate(true)
+	var invalid_pool: Array = invalid_payload.get("suppression_set_pool", []) as Array
+	var invalid_batches: Array = invalid_pool[0] as Array
+	var invalid_batch: Dictionary = (invalid_batches[0] as Dictionary).duplicate(true)
+	invalid_batch["unknown_field"] = true
+	invalid_batches[0] = invalid_batch
+	invalid_pool[0] = invalid_batches
+	invalid_payload["suppression_set_pool"] = invalid_pool
+	_check(
+		not bool(kernel.call("load_compact_payload", invalid_payload)),
+		"Native load atomically rejects an unknown suppression batch field"
 	)
 
 
@@ -3235,6 +3490,23 @@ func _make_plain_card(
 		"active_abilities": [],
 		"revealed_to_owner_ids": [owner_id],
 	}
+
+
+func _make_suppressed_card(
+	instance_id: StringName,
+	owner_id: int,
+	active_abilities: Array,
+	batches: Array
+) -> Dictionary:
+	var card: Dictionary = _make_plain_card(
+		&"原生压制夹具",
+		instance_id,
+		owner_id,
+		[1, 1, 1, 1]
+	)
+	card["active_abilities"] = active_abilities.duplicate(true)
+	card["temporary_suppression_batches"] = batches.duplicate(true)
+	return card
 
 
 func _slot(card: Dictionary, owner_id: int) -> Dictionary:

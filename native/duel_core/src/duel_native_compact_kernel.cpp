@@ -286,6 +286,7 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 			}
 			state.card_runtime_abilities.push_back(runtime_entries);
 		}
+		loaded = compile_runtime_suppression_batches();
 	}
 	return loaded;
 }
@@ -369,8 +370,28 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 		result["reason"] = "Expected instance ID does not match the hand card";
 		return result;
 	}
+	const NativeState *support_state = &state;
+	NativeState pending_adjusted_state;
+	const int32_t pending_scalar_index = moving_owner == 1 ? 8 : 9;
+	if (
+		state.scalars[pending_scalar_index] > 0
+		&& !card_is_heart_method(state, played_card_index)
+	) {
+		pending_adjusted_state = state;
+		std::vector<RuntimeAbilityEntry> retained_entries;
+		for (const RuntimeAbilityEntry &entry : pending_adjusted_state.card_runtime_abilities[played_card_index]) {
+			if (
+				entry.compiled_ability_index >= 0
+				&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
+				&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
+			) retained_entries.push_back(entry);
+		}
+		pending_adjusted_state.card_runtime_abilities[played_card_index] = retained_entries;
+		clear_runtime_suppression(pending_adjusted_state, played_card_index);
+		support_state = &pending_adjusted_state;
+	}
 	if (!validate_action_rule_support(
-			state,
+			*support_state,
 			played_card_index,
 			static_cast<int32_t>(target_cell),
 			support_reason
@@ -413,6 +434,13 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 	placed_event["target_cell"] = target_cell;
 	placed_event["owner_id"] = moving_owner;
 	placed_event["instance_id"] = played_instance_id;
+	Resolution suppression_resolution = consume_pending_hand_play_suppression(
+		next,
+		played_card_index,
+		moving_owner,
+		static_cast<int32_t>(target_cell)
+	);
+	append_resolution(resolution, suppression_resolution);
 	resolution.events.append(placed_event);
 
 	std::vector<int32_t> exile_stack;
@@ -1053,6 +1081,79 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 	}
 }
 
+bool DuelNativeCompactKernel::compile_runtime_suppression_batches() {
+	state.card_runtime_suppression_batches.clear();
+	state.card_runtime_suppression_batches.resize(state.card_instance_ids.size());
+	for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
+		if ((state.card_runtime_flags[card_index] & (1 << 6)) == 0) continue;
+		const int32_t set_index = state.card_suppression_set_indices[card_index];
+		if (
+			set_index < 0
+			|| set_index >= state.suppression_set_pool.size()
+			|| Variant(state.suppression_set_pool[set_index]).get_type() != Variant::ARRAY
+		) {
+			last_error = "Temporary suppression set reference is invalid";
+			return false;
+		}
+		const Array batches = state.suppression_set_pool[set_index];
+		std::vector<RuntimeSuppressionBatch> compiled_batches;
+		compiled_batches.reserve(static_cast<size_t>(batches.size()));
+		for (int64_t batch_index = 0; batch_index < batches.size(); ++batch_index) {
+			const Variant batch_value = batches[batch_index];
+			if (batch_value.get_type() != Variant::DICTIONARY) {
+				last_error = "Temporary suppression batch is not a Dictionary";
+				return false;
+			}
+			const Dictionary batch = batch_value;
+			const Variant expires_value = batch.get("expires_after_turn", Variant());
+			const Variant entries_value = batch.get("entries", Variant());
+			if (
+				batch.size() != 2
+				|| expires_value.get_type() != Variant::INT
+				|| entries_value.get_type() != Variant::ARRAY
+			) {
+				last_error = "Temporary suppression batch has an invalid declaration shape";
+				return false;
+			}
+			RuntimeSuppressionBatch compiled_batch;
+			compiled_batch.expires_after_turn = static_cast<int32_t>(
+				static_cast<int64_t>(expires_value)
+			);
+			const Array entries = entries_value;
+			compiled_batch.entries.reserve(static_cast<size_t>(entries.size()));
+			for (int64_t entry_index = 0; entry_index < entries.size(); ++entry_index) {
+				const Variant entry_value = entries[entry_index];
+				if (entry_value.get_type() != Variant::DICTIONARY) {
+					last_error = "Temporary suppression entry is not a Dictionary";
+					return false;
+				}
+				const Dictionary entry = entry_value;
+				const Variant index_value = entry.get("index", Variant());
+				const Variant ability_value = entry.get("ability", Variant());
+				if (
+					entry.size() != 2
+					|| index_value.get_type() != Variant::INT
+					|| static_cast<int64_t>(index_value) < 0
+					|| ability_value.get_type() != Variant::DICTIONARY
+				) {
+					last_error = "Temporary suppression entry has an invalid declaration shape";
+					return false;
+				}
+				RuntimeSuppressionEntry compiled_entry;
+				compiled_entry.original_index = static_cast<int32_t>(
+					static_cast<int64_t>(index_value)
+				);
+				compiled_entry.compiled_ability_index = intern_compiled_ability(ability_value);
+				compiled_entry.handle = state.next_ability_handle++;
+				compiled_batch.entries.push_back(compiled_entry);
+			}
+			compiled_batches.push_back(compiled_batch);
+		}
+		state.card_runtime_suppression_batches[card_index] = compiled_batches;
+	}
+	return true;
+}
+
 bool DuelNativeCompactKernel::validate_play_support(
 	const NativeState &value,
 	String &reason
@@ -1067,10 +1168,6 @@ bool DuelNativeCompactKernel::validate_play_support(
 	}
 	if (value.scalars[5] != 0 || value.scalars[6] != 0) {
 		reason = "Play transition does not cover extra plays or a partially resolved turn end";
-		return false;
-	}
-	if (value.scalars[8] != 0 || value.scalars[9] != 0) {
-		reason = "Play transition does not cover pending hand-play suppression";
 		return false;
 	}
 	if (value.scalars[10] >= 8) {
@@ -1114,18 +1211,6 @@ bool DuelNativeCompactKernel::validate_play_support(
 		) {
 			reason = "Play transition has an invalid runtime ability-set reference";
 			return false;
-		}
-		if ((value.card_runtime_flags[card_index] & (1 << 6)) != 0) {
-			const int32_t suppression_index = value.card_suppression_set_indices[card_index];
-			if (
-				suppression_index < 0
-				|| suppression_index >= value.suppression_set_pool.size()
-				|| Variant(value.suppression_set_pool[suppression_index]).get_type() != Variant::ARRAY
-				|| !Array(value.suppression_set_pool[suppression_index]).is_empty()
-			) {
-				reason = "Play transition does not cover temporary ability suppression";
-				return false;
-			}
 		}
 	}
 	return true;
@@ -2786,8 +2871,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 		entry.handle = value.next_ability_handle++;
 		value.card_runtime_abilities[target].push_back(entry);
 	}
-	value.card_runtime_flags[target] &= static_cast<uint8_t>(~(1 << 6));
-	value.card_suppression_set_indices[target] = -1;
+	clear_runtime_suppression(value, target);
 	uint8_t &reveal_code = value.card_reveal_codes[target];
 	if (owner_id == 1 && reveal_code == 0) reveal_code = 1;
 	else if (owner_id == 1 && reveal_code == 2) reveal_code = 4;
@@ -2845,6 +2929,271 @@ void DuelNativeCompactKernel::remove_ability_with_event(
 	event["owner_id"] = owner_id;
 	event["instance_id"] = value.card_instance_ids[card_index];
 	events.append(event);
+}
+
+void DuelNativeCompactKernel::clear_runtime_suppression(
+	NativeState &value,
+	int32_t card_index
+) const {
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_suppression_batches.size())
+	) return;
+	value.card_runtime_suppression_batches[card_index].clear();
+	value.card_runtime_flags[card_index] &= static_cast<uint8_t>(~(1 << 6));
+	value.card_suppression_set_indices[card_index] = -1;
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_hand_play_suppression(
+	NativeState &value,
+	int32_t card_index,
+	int32_t owner_id,
+	int32_t cell
+) const {
+	Resolution resolution;
+	if (
+		owner_id < 1
+		|| owner_id > 2
+		|| card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
+		|| card_is_heart_method(value, card_index)
+	) return resolution;
+	const int32_t scalar_index = owner_id == 1 ? 8 : 9;
+	if (value.scalars[scalar_index] <= 0) return resolution;
+	value.scalars[scalar_index] -= 1;
+
+	Dictionary consumed;
+	consumed["type"] = StringName("non_retained_suppression_consumed");
+	consumed["source_cell"] = cell;
+	consumed["target_cell"] = cell;
+	consumed["owner_id"] = owner_id;
+	consumed["instance_id"] = value.card_instance_ids[card_index];
+	consumed["pending_count"] = value.scalars[scalar_index];
+	resolution.events.append(consumed);
+
+	std::vector<RuntimeAbilityEntry> retained_entries;
+	retained_entries.reserve(value.card_runtime_abilities[card_index].size());
+	for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[card_index]) {
+		const bool retained = (
+			entry.compiled_ability_index >= 0
+			&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
+			&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
+		);
+		if (retained) {
+			retained_entries.push_back(entry);
+			continue;
+		}
+		Dictionary lost;
+		lost["type"] = StringName("ability_lost");
+		lost["source_instance_id"] = StringName();
+		lost["source_cell"] = cell;
+		lost["target_cell"] = cell;
+		lost["owner_id"] = owner_id;
+		lost["instance_id"] = value.card_instance_ids[card_index];
+		lost["zone"] = StringName("board");
+		lost["logical_index"] = cell;
+		lost["permanent"] = true;
+		resolution.events.append(lost);
+	}
+	value.card_runtime_abilities[card_index] = retained_entries;
+	clear_runtime_suppression(value, card_index);
+	return resolution;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::temporarily_remove_non_retained_abilities(
+	NativeState &value,
+	const ActionContext &action_context,
+	int32_t source_cell,
+	Resolution &resolution
+) const {
+	const int32_t card_index = action_context.action_subject_card_index;
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
+	) return ActionOutcome::NO_EFFECT;
+	int32_t zone = -1;
+	int32_t owner_id = 0;
+	int32_t logical_index = -1;
+	if (
+		!locate_card(value, card_index, zone, owner_id, logical_index)
+		|| owner_id != action_context.action_subject_owner
+	) return ActionOutcome::NO_EFFECT;
+
+	RuntimeSuppressionBatch batch;
+	batch.expires_after_turn = value.scalars[2];
+	std::vector<RuntimeAbilityEntry> retained_entries;
+	const std::vector<RuntimeAbilityEntry> active_entries = value.card_runtime_abilities[card_index];
+	retained_entries.reserve(active_entries.size());
+	for (size_t ability_index = 0; ability_index < active_entries.size(); ++ability_index) {
+		const RuntimeAbilityEntry &entry = active_entries[ability_index];
+		const bool retained = (
+			entry.compiled_ability_index >= 0
+			&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
+			&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
+		);
+		if (retained) {
+			retained_entries.push_back(entry);
+			continue;
+		}
+		RuntimeSuppressionEntry suppressed_entry;
+		suppressed_entry.original_index = static_cast<int32_t>(ability_index);
+		suppressed_entry.compiled_ability_index = entry.compiled_ability_index;
+		suppressed_entry.handle = entry.handle;
+		batch.entries.push_back(suppressed_entry);
+
+		const int32_t cell = zone == 0 ? logical_index : -1;
+		Dictionary lost;
+		lost["type"] = StringName("ability_lost");
+		lost["source_instance_id"] = (
+			action_context.ability_source_card_index >= 0
+			&& action_context.ability_source_card_index
+				< static_cast<int32_t>(value.card_instance_ids.size())
+			? value.card_instance_ids[action_context.ability_source_card_index]
+			: StringName()
+		);
+		lost["source_cell"] = source_cell;
+		lost["target_cell"] = cell;
+		lost["owner_id"] = owner_id;
+		lost["instance_id"] = value.card_instance_ids[card_index];
+		lost["zone"] = (
+			zone == 0 ? StringName("board")
+			: (zone == 1 ? StringName("hand")
+			: (zone == 2 ? StringName("deck")
+			: (zone == 3 ? StringName("discard") : StringName("removed"))))
+		);
+		lost["logical_index"] = logical_index;
+		lost["temporary"] = true;
+		resolution.events.append(lost);
+	}
+	if (batch.entries.empty()) return ActionOutcome::NO_EFFECT;
+	value.card_runtime_abilities[card_index] = retained_entries;
+	value.card_runtime_suppression_batches[card_index].push_back(batch);
+	value.card_runtime_flags[card_index] |= static_cast<uint8_t>(1 << 6);
+	value.card_suppression_set_indices[card_index] = -1;
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::restore_temporary_abilities(
+	NativeState &value,
+	int32_t completed_turn
+) const {
+	Resolution resolution;
+	auto restore_card = [&](
+		int32_t card_index,
+		int32_t owner_id,
+		const StringName &zone,
+		int32_t logical_index
+	) {
+		if (
+			card_index < 0
+			|| card_index >= static_cast<int32_t>(value.card_runtime_suppression_batches.size())
+		) return;
+		const std::vector<RuntimeSuppressionBatch> batches =
+			value.card_runtime_suppression_batches[card_index];
+		if (batches.empty()) return;
+		std::vector<RuntimeSuppressionBatch> remaining_batches;
+		for (int32_t batch_index = static_cast<int32_t>(batches.size()) - 1; batch_index >= 0; --batch_index) {
+			const RuntimeSuppressionBatch &batch = batches[batch_index];
+			if (batch.expires_after_turn > completed_turn) {
+				remaining_batches.insert(remaining_batches.begin(), batch);
+				continue;
+			}
+			std::vector<RuntimeSuppressionEntry> entries = batch.entries;
+			std::sort(entries.begin(), entries.end(), [](const RuntimeSuppressionEntry &left, const RuntimeSuppressionEntry &right) {
+				return left.original_index < right.original_index;
+			});
+			std::vector<RuntimeAbilityEntry> &active = value.card_runtime_abilities[card_index];
+			for (const RuntimeSuppressionEntry &entry : entries) {
+				const int32_t insert_index = std::clamp(
+					entry.original_index,
+					0,
+					static_cast<int32_t>(active.size())
+				);
+				RuntimeAbilityEntry restored_entry;
+				restored_entry.compiled_ability_index = entry.compiled_ability_index;
+				restored_entry.handle = entry.handle;
+				active.insert(active.begin() + insert_index, restored_entry);
+
+				const int32_t cell = zone == StringName("board") ? logical_index : -1;
+				Dictionary gained;
+				gained["type"] = StringName("ability_gained");
+				gained["source_cell"] = cell;
+				gained["target_cell"] = cell;
+				gained["owner_id"] = owner_id;
+				gained["instance_id"] = value.card_instance_ids[card_index];
+				gained["zone"] = zone;
+				gained["logical_index"] = logical_index;
+				gained["temporary"] = true;
+				resolution.events.append(gained);
+			}
+		}
+		value.card_runtime_suppression_batches[card_index] = remaining_batches;
+		if (remaining_batches.empty()) {
+			clear_runtime_suppression(value, card_index);
+		} else {
+			value.card_runtime_flags[card_index] |= static_cast<uint8_t>(1 << 6);
+		}
+	};
+
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t card_index = value.board_card_indices[cell];
+		if (card_index < 0) continue;
+		restore_card(
+			card_index,
+			value.board_owners[cell],
+			StringName("board"),
+			static_cast<int32_t>(cell)
+		);
+	}
+	for (int32_t owner_id : {1, 2}) {
+		const std::array<std::pair<int32_t, StringName>, 4> zones = {{
+			{owner_id - 1, StringName("hand")},
+			{owner_id + 1, StringName("deck")},
+			{owner_id + 3, StringName("discard")},
+			{owner_id + 5, StringName("removed")},
+		}};
+		for (const auto &zone_entry : zones) {
+			const std::vector<int32_t> &cards = value.zones[zone_entry.first];
+			for (size_t logical_index = 0; logical_index < cards.size(); ++logical_index) {
+				restore_card(
+					cards[logical_index],
+					owner_id,
+					zone_entry.second,
+					static_cast<int32_t>(logical_index)
+				);
+			}
+		}
+	}
+	return resolution;
+}
+
+Array DuelNativeCompactKernel::materialize_suppression_batches(
+	const NativeState &value,
+	int32_t card_index
+) const {
+	Array batches;
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_suppression_batches.size())
+	) return batches;
+	for (const RuntimeSuppressionBatch &batch : value.card_runtime_suppression_batches[card_index]) {
+		Array entries;
+		for (const RuntimeSuppressionEntry &entry : batch.entries) {
+			if (
+				entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(ability_declaration_pool.size())
+			) continue;
+			Dictionary materialized_entry;
+			materialized_entry["index"] = entry.original_index;
+			materialized_entry["ability"] = ability_declaration_pool[entry.compiled_ability_index];
+			entries.append(materialized_entry);
+		}
+		Dictionary materialized_batch;
+		materialized_batch["expires_after_turn"] = batch.expires_after_turn;
+		materialized_batch["entries"] = entries;
+		batches.append(materialized_batch);
+	}
+	return batches;
 }
 
 bool DuelNativeCompactKernel::resolve_selector_source(
@@ -2924,6 +3273,22 @@ bool DuelNativeCompactKernel::card_declarations_can_spend_ki(
 		}
 	}
 	return false;
+}
+
+bool DuelNativeCompactKernel::card_is_heart_method(
+	const NativeState &value,
+	int32_t card_index
+) const {
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_template_indices.size())
+	) return false;
+	const int32_t template_index = value.card_template_indices[card_index];
+	if (template_index < 0 || template_index >= value.card_template_pool.size()) return false;
+	const Variant template_value = value.card_template_pool[template_index];
+	if (template_value.get_type() != Variant::DICTIONARY) return false;
+	const Dictionary card_template = template_value;
+	return String(card_template.get("weapon", String())) == String::utf8("心法");
 }
 
 bool DuelNativeCompactKernel::selector_conditions_match(
@@ -4000,6 +4365,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		runtime_entries.push_back(entry);
 	}
 	value.card_runtime_abilities.push_back(runtime_entries);
+	value.card_runtime_suppression_batches.push_back({});
 	value.card_reveal_codes.push_back(static_cast<uint8_t>(recipient_owner == 1 ? 3 : 4));
 	value.card_suppression_set_indices.push_back(-1);
 	value.card_hand_slots.push_back(hand_slot);
@@ -4437,6 +4803,7 @@ bool DuelNativeCompactKernel::flip_card(
 	flipped["owner_id"] = new_owner;
 	flipped["instance_id"] = value.card_instance_ids[target_card_index];
 	resolution.events.append(flipped);
+	clear_runtime_suppression(value, target_card_index);
 	for (const uint64_t ability_handle : remove_before_after_flip) {
 		remove_ability_with_event(value, target_card_index, ability_handle, attacker_cell, attacker_card_index, current_target_cell, new_owner, resolution.events);
 	}
@@ -4520,10 +4887,10 @@ Dictionary DuelNativeCompactKernel::restore_runtime_card(
 		card["revealed_to_owner_ids"] = audiences;
 	}
 	if ((flags & (1 << 6)) != 0) {
-		const int32_t suppression_index = value.card_suppression_set_indices[card_index];
-		card["temporary_suppression_batches"] = Array(
-			value.suppression_set_pool[suppression_index]
-		).duplicate(true);
+		card["temporary_suppression_batches"] = materialize_suppression_batches(
+			value,
+			card_index
+		);
 	}
 	if ((flags & (1 << 7)) != 0) {
 		card["hand_slot_index"] = value.card_hand_slots[card_index];
@@ -4611,7 +4978,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	value.scalars[1] += 1;
 	value.scalars[12] += 1;
 	value.scalars[6] = 1;
-	complete_owner_turn_boundary(value);
+	append_resolution(resolution, complete_owner_turn_boundary(value));
 	if (!is_terminal(value)) {
 		int32_t previous_owner = moving_owner;
 		while (true) {
@@ -4619,7 +4986,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 			value.scalars[0] = turn_owner;
 			if (owner_has_legal_play(value, turn_owner)) break;
 			value.scalars[6] = 1;
-			complete_owner_turn_boundary(value);
+			append_resolution(resolution, complete_owner_turn_boundary(value));
 			if (is_terminal(value)) break;
 			previous_owner = turn_owner;
 		}
@@ -4627,7 +4994,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	return resolution;
 }
 
-void DuelNativeCompactKernel::complete_owner_turn_boundary(NativeState &value) const {
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn_boundary(
+	NativeState &value
+) const {
+	Resolution resolution = restore_temporary_abilities(value, value.scalars[2]);
 	value.scalars[2] += 1;
 	value.scalars[3] = 0;
 	value.scalars[4] = 0;
@@ -4636,6 +5006,7 @@ void DuelNativeCompactKernel::complete_owner_turn_boundary(NativeState &value) c
 	repetition_hashes = repetition_hashes.duplicate(true);
 	repetition_hashes.append(board_repetition_signature(value));
 	value.side_payload["repetition_hashes"] = repetition_hashes;
+	return resolution;
 }
 
 String DuelNativeCompactKernel::board_repetition_signature(const NativeState &value) const {
@@ -4710,13 +5081,37 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	}
 	payload["card_active_ability_set_indices"] = to_packed_int32_array(materialized_indices);
 	payload["card_reveal_codes"] = to_packed_byte_array(value.card_reveal_codes);
+	Array materialized_suppression_pool = value.suppression_set_pool.duplicate();
+	std::vector<int32_t> materialized_suppression_indices = value.card_suppression_set_indices;
+	for (size_t card_index = 0; card_index < value.card_instance_ids.size(); ++card_index) {
+		if ((value.card_runtime_flags[card_index] & (1 << 6)) == 0) {
+			materialized_suppression_indices[card_index] = -1;
+			continue;
+		}
+		const Array derived = materialize_suppression_batches(
+			value,
+			static_cast<int32_t>(card_index)
+		);
+		int32_t derived_index = -1;
+		for (int64_t pool_index = 0; pool_index < materialized_suppression_pool.size(); ++pool_index) {
+			if (Variant(materialized_suppression_pool[pool_index]) == Variant(derived)) {
+				derived_index = static_cast<int32_t>(pool_index);
+				break;
+			}
+		}
+		if (derived_index < 0) {
+			derived_index = static_cast<int32_t>(materialized_suppression_pool.size());
+			materialized_suppression_pool.append(derived);
+		}
+		materialized_suppression_indices[card_index] = derived_index;
+	}
 	payload["card_suppression_set_indices"] = to_packed_int32_array(
-		value.card_suppression_set_indices
+		materialized_suppression_indices
 	);
 	payload["card_hand_slots"] = to_packed_int32_array(value.card_hand_slots);
 	payload["card_template_pool"] = value.card_template_pool;
 	payload["active_ability_set_pool"] = materialized_pool;
-	payload["suppression_set_pool"] = value.suppression_set_pool;
+	payload["suppression_set_pool"] = materialized_suppression_pool;
 	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
 	payload["empty_deck_draw_prototype_index"] = value.empty_deck_draw_prototype_index;
 	payload["side_payload"] = value.side_payload;
@@ -4740,6 +5135,18 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 		for (const RuntimeAbilityEntry &entry : abilities) {
 			hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
 			hash *= 1099511628211ULL;
+		}
+	}
+	for (const std::vector<RuntimeSuppressionBatch> &batches : value.card_runtime_suppression_batches) {
+		for (const RuntimeSuppressionBatch &batch : batches) {
+			hash ^= static_cast<uint64_t>(batch.expires_after_turn);
+			hash *= 1099511628211ULL;
+			for (const RuntimeSuppressionEntry &entry : batch.entries) {
+				hash ^= static_cast<uint64_t>(entry.original_index);
+				hash *= 1099511628211ULL;
+				hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
+				hash *= 1099511628211ULL;
+			}
 		}
 	}
 	hash_values(hash, value.card_reveal_codes);
