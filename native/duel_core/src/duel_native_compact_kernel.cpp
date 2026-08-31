@@ -160,6 +160,14 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		return false;
 	}
 	state.fresh_card_prototype_pool = fresh_prototypes_value;
+	const Variant fallback_index_value = payload.get("empty_deck_draw_prototype_index", -1);
+	if (fallback_index_value.get_type() != Variant::INT) {
+		last_error = "Empty-deck fallback prototype index is not an integer";
+		return false;
+	}
+	state.empty_deck_draw_prototype_index = static_cast<int32_t>(
+		static_cast<int64_t>(fallback_index_value)
+	);
 	state.side_payload = payload.get("side_payload", Dictionary());
 	state.has_rule_metadata = (
 		payload.has("card_template_pool")
@@ -718,6 +726,14 @@ bool DuelNativeCompactKernel::validate_shape() {
 			last_error = "Fresh-card prototype ability-set index is out of range";
 			return false;
 		}
+	}
+	if (
+		state.empty_deck_draw_prototype_index < -1
+		|| state.empty_deck_draw_prototype_index
+			>= static_cast<int32_t>(state.fresh_card_prototypes.size())
+	) {
+		last_error = "Empty-deck fallback prototype index is out of range";
+		return false;
 	}
 	return true;
 }
@@ -4534,6 +4550,7 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	payload["active_ability_set_pool"] = materialized_pool;
 	payload["suppression_set_pool"] = value.suppression_set_pool;
 	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
+	payload["empty_deck_draw_prototype_index"] = value.empty_deck_draw_prototype_index;
 	payload["side_payload"] = value.side_payload;
 	return payload;
 }

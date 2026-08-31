@@ -41,6 +41,7 @@ func _run() -> void:
 		push_error("DUEL_NATIVE_COMPACT_PROBE_FAILED class cannot be instantiated")
 		quit(1)
 		return
+	_report_catalog_trigger_inventory()
 	if not bool(kernel.call("load_compact_payload", compact.to_mutable_variant_payload())):
 		push_error(
 			"DUEL_NATIVE_COMPACT_PROBE_FAILED load_error=%s"
@@ -169,11 +170,16 @@ func _test_fresh_prototype_metadata(kernel: Object) -> void:
 		"Native transition payload preserves immutable fresh-card prototypes"
 	)
 	_check(
+		int(result_payload.get("empty_deck_draw_prototype_index", -1)) == 0,
+		"Native transition payload preserves the dedicated empty-deck fallback reference"
+	)
+	_check(
 		CompactState.from_variant_payload(result_payload) != null,
 		"Native payload with fresh-card prototypes remains loadable"
 	)
 	var legacy_payload: Dictionary = compact.to_variant_payload().duplicate(true)
 	legacy_payload.erase("fresh_card_prototypes")
+	legacy_payload.erase("empty_deck_draw_prototype_index")
 	_check(
 		bool(kernel.call("load_compact_payload", legacy_payload)),
 		"Native kernel accepts legacy payload without fresh-card prototypes"
@@ -183,6 +189,124 @@ func _test_fresh_prototype_metadata(kernel: Object) -> void:
 		int(layout.get("fresh_card_prototype_count", -1)) == 0,
 		"Legacy native payload has no inferred prototype metadata"
 	)
+	var invalid_fallback_payload: Dictionary = compact.to_variant_payload().duplicate(true)
+	invalid_fallback_payload["empty_deck_draw_prototype_index"] = 3
+	_check(
+		not bool(kernel.call("load_compact_payload", invalid_fallback_payload)),
+		"Native kernel rejects an out-of-range empty-deck fallback reference"
+	)
+
+
+func _report_catalog_trigger_inventory() -> void:
+	var event_counts: Dictionary = {}
+	var condition_counts: Dictionary = {}
+	var action_counts: Dictionary = {}
+	for card_id: StringName in Catalog.get_all_card_ids():
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		for ability_value: Variant in definition.get("abilities", []) as Array:
+			if ability_value is Dictionary:
+				_collect_ability_trigger_inventory(
+					ability_value as Dictionary,
+					event_counts,
+					condition_counts,
+					action_counts
+				)
+	print(
+		"DUEL_NATIVE_TRIGGER_INVENTORY events=%s conditions=%s actions=%s"
+		% [
+			JSON.stringify(_sorted_inventory(event_counts)),
+			JSON.stringify(_sorted_inventory(condition_counts)),
+			JSON.stringify(_sorted_inventory(action_counts)),
+		]
+	)
+
+
+func _collect_ability_trigger_inventory(
+	ability: Dictionary,
+	event_counts: Dictionary,
+	condition_counts: Dictionary,
+	action_counts: Dictionary
+) -> void:
+	for trigger_value: Variant in ability.get("triggers", []) as Array:
+		if not trigger_value is Dictionary:
+			continue
+		var trigger: Dictionary = trigger_value
+		_increment_inventory(event_counts, StringName(trigger.get("event", &"")))
+		_collect_condition_inventory(
+			trigger.get("conditions", []) as Array,
+			condition_counts
+		)
+		_collect_action_inventory(
+			trigger.get("actions", []) as Array,
+			event_counts,
+			condition_counts,
+			action_counts
+		)
+
+
+func _collect_action_inventory(
+	actions: Array,
+	event_counts: Dictionary,
+	condition_counts: Dictionary,
+	action_counts: Dictionary
+) -> void:
+	for action_value: Variant in actions:
+		if not action_value is Dictionary:
+			continue
+		var action: Dictionary = action_value
+		_increment_inventory(action_counts, StringName(action.get("type", &"")))
+		_collect_condition_inventory(
+			action.get("conditions", []) as Array,
+			condition_counts
+		)
+		var selector_value: Variant = action.get("selector", null)
+		if selector_value is Dictionary:
+			_collect_condition_inventory(
+				(selector_value as Dictionary).get("conditions", []) as Array,
+				condition_counts
+			)
+		_collect_action_inventory(
+			action.get("actions", []) as Array,
+			event_counts,
+			condition_counts,
+			action_counts
+		)
+		var granted_ability_value: Variant = action.get("ability", null)
+		if granted_ability_value is Dictionary:
+			_collect_ability_trigger_inventory(
+				granted_ability_value as Dictionary,
+				event_counts,
+				condition_counts,
+				action_counts
+			)
+
+
+func _collect_condition_inventory(conditions: Array, condition_counts: Dictionary) -> void:
+	for condition_value: Variant in conditions:
+		if condition_value is Dictionary:
+			_increment_inventory(
+				condition_counts,
+				StringName((condition_value as Dictionary).get("type", &""))
+			)
+
+
+func _increment_inventory(counts: Dictionary, key: StringName) -> void:
+	if key == &"":
+		return
+	counts[key] = int(counts.get(key, 0)) + 1
+
+
+func _sorted_inventory(counts: Dictionary) -> Array[Dictionary]:
+	var keys: Array[StringName] = []
+	for key_value: Variant in counts:
+		keys.append(StringName(key_value))
+	keys.sort_custom(func(first: StringName, second: StringName) -> bool:
+		return String(first) < String(second)
+	)
+	var entries: Array[Dictionary] = []
+	for key: StringName in keys:
+		entries.append({"type": key, "count": int(counts.get(key, 0))})
+	return entries
 
 
 func _first_opening() -> State:
@@ -1662,6 +1786,10 @@ func _test_return_to_hand_transition_parity(kernel: Object) -> void:
 		if StringName(prototype.get("card_id", &"")) != &"TuNaShu3":
 			retained_prototypes.append(prototype)
 	missing_payload["fresh_card_prototypes"] = retained_prototypes
+	missing_payload["empty_deck_draw_prototype_index"] = _prototype_index_by_card_id(
+		retained_prototypes,
+		&"TaiZuChangQuan"
+	)
 	_check(
 		bool(kernel.call("load_compact_payload", missing_payload)),
 		"Native kernel loads a root missing an optional target prototype"
@@ -1680,6 +1808,17 @@ func _test_return_to_hand_transition_parity(kernel: Object) -> void:
 		and (rejected.get("exiles", []) as Array).is_empty(),
 		"A reached return without a fresh prototype rejects atomically"
 	)
+
+
+func _prototype_index_by_card_id(prototypes: Array, card_id: StringName) -> int:
+	for index: int in range(prototypes.size()):
+		var prototype_value: Variant = prototypes[index]
+		if (
+			prototype_value is Dictionary
+			and StringName((prototype_value as Dictionary).get("card_id", &"")) == card_id
+		):
+			return index
+	return -1
 
 
 func _test_swap_transition_parity(kernel: Object) -> void:

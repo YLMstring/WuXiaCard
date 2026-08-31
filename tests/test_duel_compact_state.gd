@@ -25,6 +25,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_nonempty_runtime_payload_round_trip()
 	_test_fresh_card_prototype_metadata()
+	_test_empty_deck_fallback_metadata()
 	_test_transform_reachable_fresh_prototypes()
 	_test_variant_payload_load_round_trip()
 	_test_compact_copy_isolation()
@@ -58,11 +59,13 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 		Rules.OPPONENT_OWNER,
 		&"compact_board"
 	)
+	var suppressed_abilities: Array = board_card.get("active_abilities", []) as Array
+	board_card["active_abilities"] = []
 	board_card["temporary_suppression_batches"] = [{
-		"expires_after_owner_turn_serial": 7,
-		"abilities": [{
+		"expires_after_turn": 7,
+		"entries": [{
 			"index": 0,
-			"ability": (board_card.get("active_abilities", []) as Array)[0],
+			"ability": suppressed_abilities[0],
 		}],
 	}]
 	var state := State.new(
@@ -152,10 +155,12 @@ func _test_fresh_card_prototype_metadata() -> void:
 	if not has_prototype_property:
 		return
 	var prototypes: Array = compact.get("fresh_card_prototypes") as Array
-	_check(prototypes.size() == 1, "Fresh prototype table deduplicates the captured card ID")
-	if prototypes.size() != 1:
+	_check(prototypes.size() == 2, "Fresh prototype table includes the runtime and fallback IDs")
+	var prototype_index: int = _find_prototype_index(prototypes, &"TuNaShu3")
+	_check(prototype_index >= 0, "Fresh prototype table keeps the captured runtime card ID")
+	if prototype_index < 0:
 		return
-	var prototype: Dictionary = prototypes[0] as Dictionary
+	var prototype: Dictionary = prototypes[prototype_index] as Dictionary
 	var expected_fresh: Dictionary = Catalog.create_instance(
 		&"TuNaShu3",
 		Rules.PLAYER_OWNER,
@@ -188,8 +193,13 @@ func _test_fresh_card_prototype_metadata() -> void:
 	)
 	var full_payload: Dictionary = compact.to_variant_payload()
 	_check(full_payload.has("fresh_card_prototypes"), "Full payload carries fresh-card prototypes")
+	_check(
+		full_payload.has("empty_deck_draw_prototype_index"),
+		"Full payload carries the dedicated empty-deck fallback reference"
+	)
 	var legacy_payload: Dictionary = full_payload.duplicate(true)
 	legacy_payload.erase("fresh_card_prototypes")
+	legacy_payload.erase("empty_deck_draw_prototype_index")
 	var legacy_loaded: CompactState = CompactState.from_variant_payload(legacy_payload)
 	_check(legacy_loaded != null, "Legacy format-1 payload without prototypes remains loadable")
 	if legacy_loaded != null:
@@ -197,6 +207,47 @@ func _test_fresh_card_prototype_metadata() -> void:
 		_check(restored != null, "Legacy payload without prototypes remains restorable")
 		if restored != null:
 			_check_exact_state(state, restored, "Prototype metadata does not alter restored duel state")
+
+
+func _test_empty_deck_fallback_metadata() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(
+			&"TuNaShu1",
+			Rules.PLAYER_OWNER,
+			&"compact_fallback_metadata_source"
+		)],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var compact: CompactState = _capture(state)
+	_check(compact != null, "Empty-deck fallback metadata fixture captures")
+	if compact == null:
+		return
+	var fallback_index: int = compact.empty_deck_draw_prototype_index
+	_check(
+		fallback_index >= 0 and fallback_index < compact.fresh_card_prototypes.size(),
+		"Empty-deck fallback metadata references a fresh prototype"
+	)
+	if fallback_index < 0 or fallback_index >= compact.fresh_card_prototypes.size():
+		return
+	_check(
+		StringName(compact.fresh_card_prototypes[fallback_index].get("card_id", &""))
+		== &"TaiZuChangQuan",
+		"Empty-deck fallback metadata points to the authoritative fallback card"
+	)
+	var loaded: CompactState = CompactState.from_variant_payload(compact.to_variant_payload())
+	_check(
+		loaded != null
+		and loaded.empty_deck_draw_prototype_index == fallback_index,
+		"Empty-deck fallback reference survives variant-payload loading"
+	)
+	var invalid_compact: CompactState = compact.duplicate_compact()
+	invalid_compact.empty_deck_draw_prototype_index = -2
+	_check(
+		not invalid_compact.is_structurally_valid(),
+		"Compact state rejects an invalid negative empty-deck fallback reference"
+	)
 
 
 func _test_transform_reachable_fresh_prototypes() -> void:
@@ -218,8 +269,13 @@ func _test_transform_reachable_fresh_prototypes() -> void:
 	for prototype_value: Variant in compact.fresh_card_prototypes:
 		prototype_ids.append(StringName((prototype_value as Dictionary).get("card_id", &"")))
 	_check(
-		prototype_ids == [&"SanRuDiYu1", &"SanRuDiYu2", &"SanRuDiYu3"],
-		"Fresh prototypes include the deterministic transitive transform closure only"
+		prototype_ids == [
+			&"SanRuDiYu1",
+			&"SanRuDiYu2",
+			&"SanRuDiYu3",
+			&"TaiZuChangQuan",
+		],
+		"Fresh prototypes append fallback metadata after the deterministic transform closure"
 	)
 
 
@@ -363,6 +419,17 @@ func _capture(state: State) -> CompactState:
 	if not compact.capture_state(state):
 		return null
 	return compact
+
+
+func _find_prototype_index(prototypes: Array, card_id: StringName) -> int:
+	for index: int in range(prototypes.size()):
+		var prototype_value: Variant = prototypes[index]
+		if (
+			prototype_value is Dictionary
+			and StringName((prototype_value as Dictionary).get("card_id", &"")) == card_id
+		):
+			return index
+	return -1
 
 
 func _check_exact_state(expected: State, actual: State, message: String) -> void:

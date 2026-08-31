@@ -52,6 +52,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array suppression_set_pool;
 		Array fresh_card_prototype_pool;
 		std::vector<FreshCardPrototype> fresh_card_prototypes;
+		int32_t empty_deck_draw_prototype_index = -1;
 		Dictionary side_payload;
 		bool has_rule_metadata = false;
 		uint64_t next_ability_handle = 1;

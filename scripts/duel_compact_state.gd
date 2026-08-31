@@ -12,6 +12,7 @@ extends RefCounted
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Executor = preload("res://scripts/duel_ability_executor.gd")
 
 const FORMAT_VERSION: int = 1
 const EMPTY_CARD_INDEX: int = -1
@@ -94,6 +95,7 @@ var card_template_pool: Array[Dictionary] = []
 var active_ability_set_pool: Array[Array] = []
 var suppression_set_pool: Array[Array] = []
 var fresh_card_prototypes: Array[Dictionary] = []
+var empty_deck_draw_prototype_index: int = -1
 
 ## Lossless bridge for uncommon or not-yet-packed state-level containers.
 var side_payload: Dictionary = {}
@@ -199,6 +201,7 @@ func duplicate_compact() -> RefCounted:
 	copied.active_ability_set_pool = active_ability_set_pool
 	copied.suppression_set_pool = suppression_set_pool
 	copied.fresh_card_prototypes = fresh_card_prototypes
+	copied.empty_deck_draw_prototype_index = empty_deck_draw_prototype_index
 	copied.side_payload = side_payload.duplicate(true)
 	return copied
 
@@ -260,6 +263,15 @@ func is_structurally_valid() -> bool:
 			or (powers_value as Array).size() != 4
 		):
 			return false
+	if empty_deck_draw_prototype_index < -1:
+		return false
+	if empty_deck_draw_prototype_index >= 0:
+		if empty_deck_draw_prototype_index >= fresh_card_prototypes.size():
+			return false
+		if StringName(
+			fresh_card_prototypes[empty_deck_draw_prototype_index].get("card_id", &"")
+		) != Executor.EMPTY_DECK_DRAW_CARD_ID:
+			return false
 	return true
 
 
@@ -269,6 +281,7 @@ func to_variant_payload() -> Dictionary:
 	payload["active_ability_set_pool"] = active_ability_set_pool
 	payload["suppression_set_pool"] = suppression_set_pool
 	payload["fresh_card_prototypes"] = fresh_card_prototypes
+	payload["empty_deck_draw_prototype_index"] = empty_deck_draw_prototype_index
 	return payload
 
 
@@ -385,6 +398,10 @@ func load_variant_payload(payload: Dictionary) -> bool:
 		if not prototype_value is Dictionary:
 			return _fail("Compact fresh-card prototype pool contains a non-Dictionary value")
 		fresh_card_prototypes.append((prototype_value as Dictionary).duplicate(true))
+	var fallback_index_value: Variant = payload.get("empty_deck_draw_prototype_index", -1)
+	if not fallback_index_value is int:
+		return _fail("Compact empty-deck fallback prototype index is not an integer")
+	empty_deck_draw_prototype_index = int(fallback_index_value)
 
 	var side_value: Variant = payload.get("side_payload", {})
 	if not side_value is Dictionary:
@@ -499,6 +516,7 @@ func _capture_state(state: StateData) -> bool:
 
 func _capture_fresh_card_prototypes() -> bool:
 	fresh_card_prototypes = []
+	empty_deck_draw_prototype_index = -1
 	var pending_card_ids: Array[StringName] = []
 	var queued_card_ids: Dictionary = {}
 	for card_index: int in range(card_instance_ids.size()):
@@ -514,47 +532,61 @@ func _capture_fresh_card_prototypes() -> bool:
 		pending_card_ids.append(card_id)
 
 	var next_card_index: int = 0
-	while next_card_index < pending_card_ids.size():
-		var card_id: StringName = pending_card_ids[next_card_index]
-		next_card_index += 1
-		if not Catalog.has_card(card_id):
-			continue
-		var fresh: Dictionary = Catalog.create_instance(
-			card_id,
-			Rules.PLAYER_OWNER,
-			&"compact_fresh_prototype"
-		)
-		var template: Dictionary = fresh.duplicate(true)
-		for key: StringName in MUTABLE_CARD_KEYS:
-			template.erase(key)
-		var template_index: int = _intern_dictionary(
-			template,
-			card_template_pool,
-			_template_index_by_bytes
-		)
-		var active_ability_set_index: int = _intern_array(
-			fresh.get("active_abilities", []) as Array,
-			active_ability_set_pool,
-			_ability_set_index_by_bytes
-		)
-		fresh_card_prototypes.append({
-			"card_id": card_id,
-			"template_index": template_index,
-			"powers": (fresh.get("powers", []) as Array).duplicate(),
-			"ki": int(fresh.get("ki", 0)),
-			"active_ability_set_index": active_ability_set_index,
-		})
-
-		var transform_targets: Array[StringName] = []
-		_collect_transform_target_card_ids(
-			fresh.get("active_abilities", []) as Array,
-			transform_targets
-		)
-		for target_card_id: StringName in transform_targets:
-			if target_card_id == &"" or queued_card_ids.has(target_card_id):
+	while true:
+		while next_card_index < pending_card_ids.size():
+			var card_id: StringName = pending_card_ids[next_card_index]
+			next_card_index += 1
+			if not Catalog.has_card(card_id):
 				continue
-			queued_card_ids[target_card_id] = true
-			pending_card_ids.append(target_card_id)
+			var fresh: Dictionary = Catalog.create_instance(
+				card_id,
+				Rules.PLAYER_OWNER,
+				&"compact_fresh_prototype"
+			)
+			var template: Dictionary = fresh.duplicate(true)
+			for key: StringName in MUTABLE_CARD_KEYS:
+				template.erase(key)
+			var template_index: int = _intern_dictionary(
+				template,
+				card_template_pool,
+				_template_index_by_bytes
+			)
+			var active_ability_set_index: int = _intern_array(
+				fresh.get("active_abilities", []) as Array,
+				active_ability_set_pool,
+				_ability_set_index_by_bytes
+			)
+			fresh_card_prototypes.append({
+				"card_id": card_id,
+				"template_index": template_index,
+				"powers": (fresh.get("powers", []) as Array).duplicate(),
+				"ki": int(fresh.get("ki", 0)),
+				"active_ability_set_index": active_ability_set_index,
+			})
+
+			var transform_targets: Array[StringName] = []
+			_collect_transform_target_card_ids(
+				fresh.get("active_abilities", []) as Array,
+				transform_targets
+			)
+			for target_card_id: StringName in transform_targets:
+				if target_card_id == &"" or queued_card_ids.has(target_card_id):
+					continue
+				queued_card_ids[target_card_id] = true
+				pending_card_ids.append(target_card_id)
+		if queued_card_ids.has(Executor.EMPTY_DECK_DRAW_CARD_ID):
+			break
+		queued_card_ids[Executor.EMPTY_DECK_DRAW_CARD_ID] = true
+		pending_card_ids.append(Executor.EMPTY_DECK_DRAW_CARD_ID)
+
+	for prototype_index: int in range(fresh_card_prototypes.size()):
+		if StringName(fresh_card_prototypes[prototype_index].get("card_id", &"")) == (
+			Executor.EMPTY_DECK_DRAW_CARD_ID
+		):
+			empty_deck_draw_prototype_index = prototype_index
+			break
+	if empty_deck_draw_prototype_index < 0:
+		return _fail("Compact root cannot capture the empty-deck fallback prototype")
 	return true
 
 

@@ -29,6 +29,8 @@
 - `scripts/duel_compact_state.gd`
 - `tests/test_duel_compact_state.gd`
 - `tests/benchmarks/duel_native_compact_probe.gd`
+- `native/duel_core/src/duel_native_compact_kernel.h`
+- `native/duel_core/src/duel_native_compact_kernel.cpp`
 
 步骤：
 
