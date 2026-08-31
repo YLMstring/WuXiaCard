@@ -42,18 +42,25 @@ Current scope:
 - resolves fixed and dynamic power changes, power-change batches, four-zero
   exile, ki gain/spend and immediate ki-change triggers, non-attack flips, and
   dynamic passive or activation grants;
+- carries immutable catalog-fresh prototypes at the compact root and supports
+  ordinary board returns by appending a fresh public hand instance while
+  retaining the destroyed old index as an unreferenced tombstone; full hands
+  use the normal exile lifecycle;
+- resolves `self_swapped_with_ability_source` as two ordered movements, with
+  global before/after movement events, exact instance/owner revalidation, and
+  mover-removal cancellation;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
 - uses an action-specific conservative gate and explicitly rejects relevant
   unsupported summon/draw/attack/turn declarations, generated empty-deck
-  draws, temporary suppression, extra/nested attacks, movement/discard/return,
-  pending choices/effects, or difficulty 8/9 hand rules instead of
-  approximating them;
+  draws, temporary suppression, extra/nested attacks, discard and
+  preserve-instance return, non-swap movement, pending choices/effects, or
+  difficulty 8/9 hand rules instead of approximating them;
 - measures native core cloning and the covered transition slice.
 
 It deliberately does not implement the remaining action/condition vocabulary,
-generated empty-deck draws, discard/return/movement primitives, start/end-turn
-lifecycle, state keys, evaluation, or search yet.
+generated empty-deck draws, discard/preserve-instance return/general movement
+primitives, start/end-turn lifecycle, state keys, evaluation, or search yet.
 Production does not call it. The probe compares every covered state field and
 event against `DuelSimulator`, which remains the oracle for every native
 primitive.

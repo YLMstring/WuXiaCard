@@ -545,13 +545,31 @@ preserves passive abilities. Newly granted declaration trees are recursively
 interned, so an unsupported future branch is rejected only if execution
 actually reaches it.
 
+The return/movement slice adds immutable catalog-fresh prototypes to each
+compact root. An ordinary board return destroys the located runtime instance,
+appends a new default card index with a collision-free generated instance ID,
+fills the recipient's physical-leftmost hand slot, and emits the public
+`card_returned_to_hand` / `card_revealed` pair. The destroyed index remains an
+unreferenced tombstone inside that native branch so stable indices are never
+reused; restoration naturally omits it because no board or zone references it.
+A full recipient hand instead runs the existing before/after exile lifecycle
+with reason `return_to_full_hand`.
+
+`self_swapped_with_ability_source` is implemented as two ordered movements.
+Each leg dispatches the global `card_before_moved`, emits `card_moved`, then
+dispatches `card_after_moved`; exact instances, cells, owners, and movement
+conditions are revalidated between steps. A before-move power loss can remove
+the mover and cancel relocation. Unknown reached movement actions reject the
+private native branch atomically, while dormant unsupported declarations do
+not reduce coverage.
+
 The support gate is action-specific: abilities in hand/deck remain dormant, an
 unrelated listener whose supported conditions are false remains dormant, and
 only declarations reached by the current event cause mid-branch rejection.
 Empty-deck generated cards, future draw revelation, after-draw listeners,
-movement, discard/return flows, nested or extra attacks, start/end-turn
-lifecycle, and still-uncompiled condition/action variants remain rejected
-rather than approximated.
+discard and preserve-instance return flows, non-swap movement, nested or extra
+attacks, start/end-turn lifecycle, and still-uncompiled condition/action
+variants remain rejected rather than approximated.
 
 The native probe covers the original five oracle transitions,
 `TuNaShu1`–`TuNaShu3` for both owners, both-owner Bagua exile, all three LeiZhen
@@ -568,32 +586,45 @@ fixtures additionally cover all four zones, ordering and owner filters,
 no-refill revalidation, dynamic and batched power changes, four-zero exile,
 immediate ki-change dispatch, non-attack flip, passive-grant deduplication,
 activation replacement, and declarations containing unsupported future
-branches. Across 883 checks, restored canonical state keys, live state versions,
-captures, exiles, and every event matched `DuelSimulator`.
+branches. Return/swap fixtures cover mutated-to-fresh reconstruction, generated
+ID collisions, hand slots and public reveal order, full-hand exile, missing
+prototype rejection, both real swap declarations, before/after movement
+listeners, mover removal, and unsupported-listener rejection. Across 973
+checks, restored canonical state keys, live state versions, captures, exiles,
+and every event matched `DuelSimulator`.
 
 The same probe enumerates every legal root play in the 14 unique real Quick
-openings. On 2026-08-31 it found 490 legal plays: 341 were supported and all 341
-had exact full-state/event parity; 149 were explicitly rejected with zero
-partial results. The first rejection reasons were 46 unsupported actions, 35
-start-turn rules, 28 end-turn rules, 19 unsupported trigger conditions, 14
-before-summoned rules, and 7 empty-deck fallback draws. The probe also prints
+openings. Before the return/swap slice it found 490 legal plays: 341 were
+supported and all 341 had exact full-state/event parity; 149 were explicitly
+rejected with zero partial results. The first rejection reasons were 46
+unsupported actions, 35 start-turn rules, 28 end-turn rules, 19 unsupported
+trigger conditions, 14 before-summoned rules, and 7 empty-deck fallback draws. The probe also prints
 the corresponding reason counts by source card ID, currently covering 22
 cards. This is a coverage report, not an adoption threshold.
 
-The latest retained 5,000-transition plain-card probe returned full compact
-payloads and events in `440,136` microseconds versus `4,114,537` microseconds
-for the authoritative GDScript transition loop, about `9.35x` faster. This is
+After catalog-fresh return and ordered adjacent swap support, the same fixed
+openings now support 349 of 490 plays, all 349 with exact parity and zero
+mismatches. The remaining 141 rejections are 38 unsupported actions, 35
+start-turn rules, 28 end-turn rules, 19 unsupported trigger conditions, 14
+before-summoned rules, and 7 empty-deck fallback draws. The expected three
+additional `KuiHua3` roots now pass the swap itself but then reach its
+still-uncompiled re-summon action, so the conservative gate correctly keeps
+them rejected instead of claiming partial coverage.
+
+The latest 5,000-transition Debug plain-card probe returned full compact
+payloads and events in `347,886` microseconds versus `4,271,365` microseconds
+for the authoritative GDScript transition loop, about `12.28x` faster. This is
 evidence that a coarse native transition can be worthwhile, not a
 production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `670,511` clones per
+same run completed 100,000 native branch clones at about `761,128` clones per
 second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- Native root-action coverage is still 341/490 on the real Quick openings; the
+- Native root-action coverage is still 349/490 on the real Quick openings; the
   categorized rejections identify the next generic declaration slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.

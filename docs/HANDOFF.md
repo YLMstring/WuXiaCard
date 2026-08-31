@@ -478,17 +478,24 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   compact root and tracks ordered branch-local runtime ability entries with
   stable trigger handles. It implements the generic summon/attack/flip/exile
   lifecycle plus recursive nested actions, all-zone selectors, batched power
-  changes/four-zero exile, ki-change dispatch, non-attack flips, and dynamic
-  passive/activation grants. Its generic attack module compiles all catalog
+  changes/four-zero exile, ki-change dispatch, non-attack flips, dynamic
+  passive/activation grants, catalog-fresh board returns, and ordered adjacent
+  swaps. Fresh returns append a new compact card index from an immutable root
+  prototype and leave the destroyed old index as an unreferenced tombstone;
+  full recipient hands reuse the normal exile lifecycle. Swaps resolve two
+  complete global before/moved/after movement legs and revalidate exact
+  instances between them. Its generic attack module compiles all catalog
   attack modifiers, including distance/intervening rules, comparison reversal,
   summon redirection, unlimited/non-orthogonal first-target locking, and both
   indiscriminate target policies. Four-sided `-1` semantics override comparison
   reversal, and locked attacks compare powers only during initial selection in
   both GDScript and native paths. The 14 real Quick openings currently expose
-  490 legal root plays: 341 are supported with exact full-state/event parity
-  and 149 are conservatively rejected with categorized and per-card reasons.
-  The expanded probe passes 883 parity checks. Production adoption remains
-  forbidden.
+  490 legal root plays: 349 are supported with exact full-state/event parity
+  and 141 are conservatively rejected with categorized and per-card reasons.
+  The expanded probe passes 973 parity checks. `KuiHua3` now completes its
+  swap but its three real Quick branches then reach the still-unsupported
+  re-summon action, so they remain atomically rejected. Production adoption
+  remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
