@@ -58,11 +58,11 @@ fresh in-place re-summon. It must preserve the oracle order:
 1. place the card in the board state while buffering the visible placement or
    summon event;
 2. consume any pending non-retained suppression applicable to this hand play;
-3. dispatch `CARD_BEFORE_SUMMONED` and emit its results before the buffered
-   placement/summon event;
-4. dispatch `CARD_SUMMONED` globally;
-5. if the exact instance still exists, dispatch `CARD_AFTER_SUMMONED` using its
-   current cell and owner;
+3. dispatch `TRIGGER_CARD_BEFORE_SUMMONED` and emit its results before the
+   buffered placement/summon event;
+4. dispatch `TRIGGER_CARD_SUMMONED` globally;
+5. if the exact instance still exists, dispatch
+   `TRIGGER_CARD_AFTER_SUMMONED` using its current cell and owner;
 6. if the exact instance still exists and still belongs to its summoning owner,
    resolve its standard summon attack.
 
@@ -129,14 +129,21 @@ interrupt already-granted extra plays.
 typed support for the following current declaration vocabulary:
 
 - trigger card is in the ability source's attack range;
+- trigger card is an ally or enemy of the ability source;
+- trigger card is adjacent to the ability source;
 - the ability source has an empty cell between itself and an enemy;
 - the trigger card was outside the ability source owner's hand;
+- the trigger card was an enemy before the current ownership change;
+- the current attack flipped an ally in the ability source's attack range;
 - the current turn owner is the ability source owner;
+- the ability source owner is not among the current winning owners;
 - attack the exact trigger card;
+- start a standard attack with the current action subject;
 - move self to the first empty cell between self and an enemy;
 - re-summon an exact referenced card in place;
 - reveal hand cards using typed recipient and reveal-filter opcodes;
 - grant extra card plays;
+- transfer ki with powers as a fallback resource;
 - temporarily remove non-retained abilities;
 - add pending non-retained suppression for a relative owner.
 
