@@ -46,6 +46,17 @@ Current scope:
   ordinary board returns by appending a fresh public hand instance while
   retaining the destroyed old index as an unreferenced tombstone; full hands
   use the normal exile lifecycle;
+- expands those prototypes through the deterministic transitive closure of
+  reachable transform targets, then rebuilds transformed runtime cards in
+  place without changing instance identity, ownership, zone, or visibility;
+- executes strict conditional action lists with list-local mutable context,
+  including source-owner empty-hand and actual discard-batch-size checks;
+- resolves single and batch discard as one snapshot/no-refill transaction,
+  emits canonical batch identities and one physical-slot shift, dispatches
+  discarded-card self triggers before the global batch-finished event, and
+  preserves the original ability-source snapshot through those nested events;
+- returns preserved discard instances to the leftmost hand slot, reveals them
+  publicly only when needed, and exiles the same instance when the hand is full;
 - resolves `self_swapped_with_ability_source` as two ordered movements, with
   global before/after movement events, exact instance/owner revalidation, and
   mover-removal cancellation;
@@ -53,13 +64,13 @@ Current scope:
   `DuelSimulator`;
 - uses an action-specific conservative gate and explicitly rejects relevant
   unsupported summon/draw/attack/turn declarations, generated empty-deck
-  draws, temporary suppression, extra/nested attacks, discard and
-  preserve-instance return, non-swap movement, pending choices/effects, or
+  draws, temporary suppression, extra/nested attacks, non-swap movement,
+  pending choices/effects, or
   difficulty 8/9 hand rules instead of approximating them;
 - measures native core cloning and the covered transition slice.
 
 It deliberately does not implement the remaining action/condition vocabulary,
-generated empty-deck draws, discard/preserve-instance return/general movement
+generated empty-deck draws, summon/general movement and extra-attack
 primitives, start/end-turn lifecycle, state keys, evaluation, or search yet.
 Production does not call it. The probe compares every covered state field and
 event against `DuelSimulator`, which remains the oracle for every native

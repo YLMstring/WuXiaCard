@@ -563,12 +563,34 @@ the mover and cancel relocation. Unknown reached movement actions reject the
 private native branch atomically, while dormant unsupported declarations do
 not reduce coverage.
 
+The discard/transform slice adds list-local execution state for the current
+action source cell and most recent successful discard-batch size. `if` child
+actions share that state, while each selected-card child list receives the
+same shallow contextual isolation as the oracle. Single and batch discard
+snapshot exact card indices, revalidate without refill, move every valid card
+before reactions, emit the canonical shared batch ID and one final physical
+hand-slot shift, then resolve each discarded instance's own
+`card_after_discarded` rule before one row-major `discard_batch_finished`.
+Discard-only trigger discovery never scans unrelated cards. Nested discard
+events preserve both the discarded listener and the original ability-source
+snapshot, which may be different instances.
+
+Fresh prototype capture now follows transform declarations transitively, so a
+root containing `SanRuDiYu1` carries only the reachable
+`SanRuDiYu1`–`SanRuDiYu3` chain rather than the whole catalog. Transform
+rebuilds powers, ki, template/card ID, active abilities, runtime handles, and
+suppression from the fresh prototype while preserving the same instance ID,
+original owner, current zone owner, reveal order, and hand slot. A preserved
+discard return moves that exact index to the recipient's leftmost empty hand
+slot and reveals it to the opponent only if newly visible; a full hand exiles
+the same transformed instance with `return_to_full_hand`.
+
 The support gate is action-specific: abilities in hand/deck remain dormant, an
 unrelated listener whose supported conditions are false remains dormant, and
 only declarations reached by the current event cause mid-branch rejection.
 Empty-deck generated cards, future draw revelation, after-draw listeners,
-discard and preserve-instance return flows, non-swap movement, nested or extra
-attacks, start/end-turn lifecycle, and still-uncompiled condition/action
+summon and non-swap movement flows, nested or extra attacks, start/end-turn
+lifecycle, and still-uncompiled condition/action
 variants remain rejected rather than approximated.
 
 The native probe covers the original five oracle transitions,
@@ -589,9 +611,15 @@ activation replacement, and declarations containing unsupported future
 branches. Return/swap fixtures cover mutated-to-fresh reconstruction, generated
 ID collisions, hand slots and public reveal order, full-hand exile, missing
 prototype rejection, both real swap declarations, before/after movement
-listeners, mover removal, and unsupported-listener rejection. Across 973
-checks, restored canonical state keys, live state versions, captures, exiles,
-and every event matched `DuelSimulator`.
+listeners, mover removal, and unsupported-listener rejection. Before the
+discard slice, that probe covered 973 checks with exact parity.
+
+Discard/transform fixtures additionally cover conditional true/false branches,
+single and batch discard, noncontiguous physical-slot compression, actual
+batch-size gating, in-place catalog reconstruction, inherited source context,
+new and already-public preserved returns, and same-instance full-hand exile.
+Across 1,034 checks, restored canonical state keys, live state versions,
+captures, exiles, and every event match `DuelSimulator`.
 
 The same probe enumerates every legal root play in the 14 unique real Quick
 openings. Before the return/swap slice it found 490 legal plays: 341 were
@@ -602,29 +630,29 @@ trigger conditions, 14 before-summoned rules, and 7 empty-deck fallback draws. T
 the corresponding reason counts by source card ID, currently covering 22
 cards. This is a coverage report, not an adoption threshold.
 
-After catalog-fresh return and ordered adjacent swap support, the same fixed
-openings now support 349 of 490 plays, all 349 with exact parity and zero
-mismatches. The remaining 141 rejections are 38 unsupported actions, 35
+After discard transactions, conditional lists, transform, and preserved return
+support, the same fixed openings now support 384 of 490 plays, all 384 with
+exact parity and zero mismatches. The remaining 106 rejections are 35
 start-turn rules, 28 end-turn rules, 19 unsupported trigger conditions, 14
-before-summoned rules, and 7 empty-deck fallback draws. The expected three
-additional `KuiHua3` roots now pass the swap itself but then reach its
-still-uncompiled re-summon action, so the conservative gate correctly keeps
-them rejected instead of claiming partial coverage.
+before-summoned rules, 7 empty-deck fallback draws, and 3 unsupported actions.
+Those last three are `KuiHua3` roots that complete their swap before reaching
+the still-uncompiled re-summon action; the conservative gate correctly rejects
+the whole private branch instead of returning a partial result.
 
 The latest 5,000-transition Debug plain-card probe returned full compact
-payloads and events in `347,886` microseconds versus `4,271,365` microseconds
-for the authoritative GDScript transition loop, about `12.28x` faster. This is
+payloads and events in `343,789` microseconds versus `4,018,571` microseconds
+for the authoritative GDScript transition loop, about `11.69x` faster. This is
 evidence that a coarse native transition can be worthwhile, not a
 production-search forecast: it excludes compact-to-`DuelState` restoration,
 general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `761,128` clones per
+same run completed 100,000 native branch clones at about `714,536` clones per
 second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- Native root-action coverage is still 349/490 on the real Quick openings; the
+- Native root-action coverage is still 384/490 on the real Quick openings; the
   categorized rejections identify the next generic declaration slices.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
