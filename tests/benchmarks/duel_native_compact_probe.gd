@@ -76,6 +76,7 @@ func _run() -> void:
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
 	_test_return_to_hand_transition_parity(kernel)
+	_test_swap_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
@@ -1326,6 +1327,287 @@ func _test_return_to_hand_transition_parity(kernel: Object) -> void:
 		and (rejected.get("captures", []) as Array).is_empty()
 		and (rejected.get("exiles", []) as Array).is_empty(),
 		"A reached return without a fresh prototype rejects atomically"
+	)
+
+
+func _test_swap_transition_parity(kernel: Object) -> void:
+	var taishan_board: Array = Rules.empty_board()
+	taishan_board[5] = _slot(
+		_make_plain_card(
+			&"原生交换敌方",
+			&"native_taishan_swap_target",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var taishan_state := State.new(
+		taishan_board,
+		[Catalog.create_instance(
+			&"TaiShan18Pan2",
+			Rules.PLAYER_OWNER,
+			&"native_taishan_swap_source"
+		)],
+		[_make_plain_card(
+			&"原生交换敌手",
+			&"native_taishan_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		taishan_state,
+		0,
+		4,
+		&"native_taishan_swap_source",
+		"TaiShan performs an ordered adjacent swap before its standard attack"
+	)
+
+	var kuihua_board: Array = Rules.empty_board()
+	kuihua_board[1] = _slot(
+		_make_plain_card(
+			&"原生葵花敌方",
+			&"native_kuihua_swap_target",
+			Rules.OPPONENT_OWNER,
+			[9, 9, 9, 9]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var kuihua_state := State.new(
+		kuihua_board,
+		[Catalog.create_instance(
+			&"KuiHua3",
+			Rules.PLAYER_OWNER,
+			&"native_kuihua_swap_source"
+		)],
+		[_make_plain_card(
+			&"原生葵花敌手",
+			&"native_kuihua_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	kuihua_state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+		Rules.EFFECT_GATE_SELF_CASTRATION,
+	]
+	_check_transition_parity(
+		kernel,
+		kuihua_state,
+		0,
+		4,
+		&"native_kuihua_swap_source",
+		"KuiHua performs the same selected-card swap under its enabled effect gate"
+	)
+
+	var listener: Dictionary = _make_plain_card(
+		&"原生移动监听",
+		&"native_swap_listener",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2]
+	)
+	listener["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_BEFORE_MOVED,
+			"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_ALLY}],
+			"actions": [{
+				"type": Catalog.ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
+		}],
+	}]
+	var listened_board: Array = Rules.empty_board()
+	listened_board[0] = _slot(listener, Rules.PLAYER_OWNER)
+	listened_board[5] = _slot(
+		_make_plain_card(
+			&"原生受监听敌方",
+			&"native_listened_swap_target",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var listened_state := State.new(
+		listened_board,
+		[Catalog.create_instance(
+			&"TaiShan18Pan2",
+			Rules.PLAYER_OWNER,
+			&"native_listened_swap_source"
+		)],
+		[_make_plain_card(
+			&"原生受监听敌手",
+			&"native_listened_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		listened_state,
+		0,
+		4,
+		&"native_listened_swap_source",
+		"A global before-moved ally listener resolves during the first swap leg"
+	)
+
+	var after_move_source: Dictionary = Catalog.create_instance(
+		&"TaiShan18Pan2",
+		Rules.PLAYER_OWNER,
+		&"native_after_move_swap_source"
+	)
+	var after_move_abilities: Array = (
+		after_move_source.get("active_abilities", []) as Array
+	).duplicate(true)
+	after_move_abilities.append({
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_MOVED,
+			"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	})
+	after_move_source["active_abilities"] = after_move_abilities
+	var after_move_board: Array = Rules.empty_board()
+	after_move_board[5] = _slot(
+		_make_plain_card(
+			&"原生移动后敌方",
+			&"native_after_move_swap_target",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var after_move_state := State.new(
+		after_move_board,
+		[after_move_source],
+		[_make_plain_card(
+			&"原生移动后敌手",
+			&"native_after_move_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		after_move_state,
+		0,
+		4,
+		&"native_after_move_swap_source",
+		"A self after-moved listener observes the source at its new cell"
+	)
+
+	var fragile_source: Dictionary = Catalog.create_instance(
+		&"TaiShan18Pan2",
+		Rules.PLAYER_OWNER,
+		&"native_fragile_swap_source"
+	)
+	fragile_source["powers"] = [1, 1, 1, 1]
+	var cancel_board: Array = Rules.empty_board()
+	cancel_board[0] = _slot(listener.duplicate(true), Rules.PLAYER_OWNER)
+	cancel_board[5] = _slot(
+		_make_plain_card(
+			&"原生取消交换敌方",
+			&"native_cancel_swap_target",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var cancel_state := State.new(
+		cancel_board,
+		[fragile_source],
+		[_make_plain_card(
+			&"原生取消交换敌手",
+			&"native_cancel_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		cancel_state,
+		0,
+		4,
+		&"native_fragile_swap_source",
+		"A before-moved listener can exile the moving source and cancel the swap"
+	)
+
+	var unsupported_listener: Dictionary = _make_plain_card(
+		&"原生未知移动监听",
+		&"native_unsupported_swap_listener",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2]
+	)
+	unsupported_listener["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_BEFORE_MOVED,
+			"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_ALLY}],
+			"actions": [{
+				"type": Catalog.ACTION_REVEAL_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+				"observer": Catalog.OWNER_ABILITY_SOURCE,
+			}],
+		}],
+	}]
+	var unsupported_board: Array = Rules.empty_board()
+	unsupported_board[0] = _slot(unsupported_listener, Rules.PLAYER_OWNER)
+	unsupported_board[5] = _slot(
+		_make_plain_card(
+			&"原生未知交换敌方",
+			&"native_unsupported_swap_target",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var unsupported_state := State.new(
+		unsupported_board,
+		[Catalog.create_instance(
+			&"TaiShan18Pan2",
+			Rules.PLAYER_OWNER,
+			&"native_unsupported_swap_source"
+		)],
+		[_make_plain_card(
+			&"原生未知交换敌手",
+			&"native_unsupported_swap_hand",
+			Rules.OPPONENT_OWNER,
+			[1, 1, 1, 1]
+		)],
+		Rules.PLAYER_OWNER
+	)
+	var unsupported_compact := CompactState.new()
+	_check(
+		unsupported_compact.capture_state(unsupported_state),
+		"Unsupported movement-listener fixture captures"
+	)
+	_check(
+		bool(kernel.call(
+			"load_compact_payload",
+			unsupported_compact.to_variant_payload()
+		)),
+		"Unsupported movement-listener fixture loads natively"
+	)
+	var unsupported_result: Dictionary = kernel.call(
+		"apply_play_transition",
+		0,
+		4,
+		&"native_unsupported_swap_source"
+	) as Dictionary
+	_check(
+		not bool(unsupported_result.get("supported", false))
+		and not bool(unsupported_result.get("valid", false))
+		and (unsupported_result.get("events", []) as Array).is_empty()
+		and (unsupported_result.get("captures", []) as Array).is_empty()
+		and (unsupported_result.get("exiles", []) as Array).is_empty(),
+		"A reached unsupported movement listener rejects atomically"
 	)
 
 

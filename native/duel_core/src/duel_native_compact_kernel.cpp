@@ -749,6 +749,8 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
 	else if (type == StringName("ki_changed_card_is_self")) compiled.opcode = ConditionOpcode::KI_CHANGED_CARD_IS_SELF;
 	else if (type == StringName("ki_reached_zero")) compiled.opcode = ConditionOpcode::KI_REACHED_ZERO;
+	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
+	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;
 	return compiled;
 }
 
@@ -1005,6 +1007,11 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		} else if (recipient == StringName("ability_source")) {
 			compiled.recipient_owner = RelativeOwnerOpcode::ABILITY_SOURCE;
 		}
+	} else if (
+		type == StringName("self_swapped_with_ability_source")
+		&& action.size() == 1 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE;
 	}
 	return compiled;
 }
@@ -2112,6 +2119,19 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::KI_REACHED_ZERO:
 				matched = context.previous_ki > 0 && context.ki == 0;
 				break;
+			case ConditionOpcode::MOVING_CARD_IS_SELF:
+				matched = (
+					context.moving_card_index == group.source_card_index
+					&& context.moving_source_cell == group.source_cell
+				);
+				break;
+			case ConditionOpcode::MOVING_CARD_IS_ALLY:
+				matched = (
+					context.moving_card_index >= 0
+					&& (context.moving_owner == 1 || context.moving_owner == 2)
+					&& context.moving_owner == group.source_owner
+				);
+				break;
 			default:
 				supported = false;
 				return false;
@@ -3138,6 +3158,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return grant_ability_to_subject(value, group, action, action_context, action_source_cell, resolution);
 		case ActionOpcode::RETURN_CARD_TO_HAND:
 			return return_card_to_hand(value, group, action, event_context, action_context, exile_stack, resolution);
+		case ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE:
+			return swap_action_subject_with_ability_source(value, group, event_context, action_context, exile_stack, resolution);
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}
@@ -3334,6 +3356,215 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	revealed["instance_id"] = new_instance_id;
 	revealed["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
 	resolution.events.append(revealed);
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_movement_event(
+	NativeState &value,
+	const StringName &event_id,
+	int32_t source_cell,
+	int32_t origin_cell,
+	int32_t target_cell,
+	int32_t moving_card_index,
+	int32_t moving_owner,
+	std::vector<int32_t> &exile_stack
+) const {
+	EventContext context;
+	context.trigger_cell = source_cell;
+	context.trigger_card_index = moving_card_index;
+	context.trigger_owner = moving_owner;
+	context.trigger_zone = 0;
+	context.trigger_logical_index = source_cell;
+	context.trigger_was_on_board = true;
+	context.moving_source_cell = source_cell;
+	context.moving_origin_cell = origin_cell;
+	context.moving_target_cell = target_cell;
+	context.moving_card_index = moving_card_index;
+	context.moving_owner = moving_owner;
+	return resolve_event(value, event_id, context, exile_stack);
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subject_with_ability_source(
+	NativeState &value,
+	const EventGroup &group,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	(void)event_context;
+	const int32_t source_card_index = group.source_card_index;
+	const int32_t target_card_index = action_context.action_subject_card_index;
+	if (
+		source_card_index < 0
+		|| target_card_index < 0
+		|| source_card_index == target_card_index
+	) return ActionOutcome::NO_EFFECT;
+	const int32_t source_owner = action_context.ability_source_owner;
+	const int32_t target_owner = action_context.action_subject_owner;
+	int32_t source_cell = find_board_card(value, source_card_index, group.source_cell);
+	int32_t target_cell = find_board_card(
+		value,
+		target_card_index,
+		action_context.action_subject_logical_index
+	);
+	if (
+		source_cell < 0
+		|| target_cell < 0
+		|| value.board_owners[source_cell] != source_owner
+		|| value.board_owners[target_cell] != target_owner
+	) return ActionOutcome::NO_EFFECT;
+	bool adjacent = false;
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		if (neighbor_index(source_cell, direction) == target_cell) {
+			adjacent = true;
+			break;
+		}
+	}
+	if (!adjacent) return ActionOutcome::NO_EFFECT;
+
+	auto append_resolution = [](Resolution &destination, const Resolution &addition) {
+		destination.events.append_array(addition.events);
+		destination.captures.append_array(addition.captures);
+		destination.exiles.append_array(addition.exiles);
+	};
+	Resolution source_before = resolve_movement_event(
+		value,
+		StringName("card_before_moved"),
+		source_cell,
+		source_cell,
+		target_cell,
+		source_card_index,
+		source_owner,
+		exile_stack
+	);
+	if (!source_before.supported) {
+		resolution.reason = source_before.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		find_board_card(value, source_card_index, source_cell) != source_cell
+		|| value.board_owners[source_cell] != source_owner
+		|| find_board_card(value, target_card_index, target_cell) != target_cell
+		|| value.board_owners[target_cell] != target_owner
+	) {
+		append_resolution(resolution, source_before);
+		return (
+			source_before.events.is_empty()
+			&& source_before.captures.is_empty()
+			&& source_before.exiles.is_empty()
+		) ? ActionOutcome::NO_EFFECT : ActionOutcome::APPLIED;
+	}
+
+	const Variant reserved_target_extra = value.board_slot_extras[target_cell];
+	value.board_card_indices[target_cell] = -1;
+	value.board_owners[target_cell] = 0;
+	value.board_slot_extras[target_cell] = Dictionary();
+	const Variant moving_source_extra = value.board_slot_extras[source_cell];
+	value.board_card_indices[source_cell] = -1;
+	value.board_owners[source_cell] = 0;
+	value.board_slot_extras[source_cell] = Dictionary();
+	value.board_card_indices[target_cell] = source_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
+	value.board_slot_extras[target_cell] = moving_source_extra;
+
+	Resolution swap_resolution;
+	append_resolution(swap_resolution, source_before);
+	Dictionary source_moved;
+	source_moved["type"] = StringName("card_moved");
+	source_moved["source_cell"] = source_cell;
+	source_moved["target_cell"] = target_cell;
+	source_moved["owner_id"] = source_owner;
+	source_moved["instance_id"] = value.card_instance_ids[source_card_index];
+	swap_resolution.events.append(source_moved);
+	Resolution source_after = resolve_movement_event(
+		value,
+		StringName("card_after_moved"),
+		target_cell,
+		source_cell,
+		target_cell,
+		source_card_index,
+		source_owner,
+		exile_stack
+	);
+	if (!source_after.supported) {
+		resolution.reason = source_after.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(swap_resolution, source_after);
+	if (
+		find_board_card(value, source_card_index, target_cell) != target_cell
+		|| value.board_owners[target_cell] != source_owner
+	) {
+		resolution.reason = "First swap leg was invalidated after movement";
+		return ActionOutcome::UNSUPPORTED;
+	}
+
+	const Variant reserved_source_extra = value.board_slot_extras[target_cell];
+	value.board_card_indices[target_cell] = target_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(target_owner);
+	value.board_slot_extras[target_cell] = reserved_target_extra;
+	Resolution target_before = resolve_movement_event(
+		value,
+		StringName("card_before_moved"),
+		target_cell,
+		target_cell,
+		source_cell,
+		target_card_index,
+		target_owner,
+		exile_stack
+	);
+	if (!target_before.supported) {
+		resolution.reason = target_before.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		find_board_card(value, target_card_index, target_cell) != target_cell
+		|| value.board_owners[target_cell] != target_owner
+	) {
+		value.board_card_indices[source_cell] = source_card_index;
+		value.board_owners[source_cell] = static_cast<uint8_t>(source_owner);
+		value.board_slot_extras[source_cell] = reserved_source_extra;
+		value.board_card_indices[target_cell] = target_card_index;
+		value.board_owners[target_cell] = static_cast<uint8_t>(target_owner);
+		value.board_slot_extras[target_cell] = reserved_target_extra;
+		return ActionOutcome::NO_EFFECT;
+	}
+	append_resolution(swap_resolution, target_before);
+
+	value.board_card_indices[target_cell] = -1;
+	value.board_owners[target_cell] = 0;
+	value.board_slot_extras[target_cell] = Dictionary();
+	value.board_card_indices[source_cell] = target_card_index;
+	value.board_owners[source_cell] = static_cast<uint8_t>(target_owner);
+	value.board_slot_extras[source_cell] = reserved_target_extra;
+	Dictionary target_moved;
+	target_moved["type"] = StringName("card_moved");
+	target_moved["source_cell"] = target_cell;
+	target_moved["target_cell"] = source_cell;
+	target_moved["owner_id"] = target_owner;
+	target_moved["instance_id"] = value.card_instance_ids[target_card_index];
+	swap_resolution.events.append(target_moved);
+	Resolution target_after = resolve_movement_event(
+		value,
+		StringName("card_after_moved"),
+		source_cell,
+		target_cell,
+		source_cell,
+		target_card_index,
+		target_owner,
+		exile_stack
+	);
+	if (!target_after.supported) {
+		resolution.reason = target_after.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(swap_resolution, target_after);
+
+	value.board_card_indices[target_cell] = source_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
+	value.board_slot_extras[target_cell] = reserved_source_extra;
+	append_resolution(resolution, swap_resolution);
 	return ActionOutcome::APPLIED;
 }
 

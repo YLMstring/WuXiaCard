@@ -68,6 +68,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		KI_AT_LEAST,
 		KI_CHANGED_CARD_IS_SELF,
 		KI_REACHED_ZERO,
+		MOVING_CARD_IS_SELF,
+		MOVING_CARD_IS_ALLY,
 		UNSUPPORTED,
 	};
 
@@ -84,6 +86,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		FLIP_SELF,
 		GRANT_ABILITY_TO_SELF,
 		RETURN_CARD_TO_HAND,
+		SELF_SWAPPED_WITH_ABILITY_SOURCE,
 		UNSUPPORTED,
 	};
 
@@ -253,6 +256,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool attack_flipped_enemy = false;
 		int32_t previous_ki = 0;
 		int32_t ki = -1;
+		int32_t moving_source_cell = -1;
+		int32_t moving_origin_cell = -1;
+		int32_t moving_target_cell = -1;
+		int32_t moving_card_index = -1;
+		int32_t moving_owner = 0;
 		struct AttackFlipRecord {
 			int32_t card_index = -1;
 			int32_t previous_owner = 0;
@@ -576,6 +584,24 @@ private:
 		const ActionContext &action_context,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
+	) const;
+	ActionOutcome swap_action_subject_with_ability_source(
+		NativeState &value,
+		const EventGroup &group,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	Resolution resolve_movement_event(
+		NativeState &value,
+		const StringName &event_id,
+		int32_t source_cell,
+		int32_t origin_cell,
+		int32_t target_cell,
+		int32_t moving_card_index,
+		int32_t moving_owner,
+		std::vector<int32_t> &exile_stack
 	) const;
 	bool draw_cards(
 		NativeState &value,
