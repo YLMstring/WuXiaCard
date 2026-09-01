@@ -463,7 +463,7 @@ complete transition semantics and Windows/Android packaging are both proven.
 
 ### Native play-transition slices
 
-The opt-in kernel implements a deliberately narrow generic play path. Its first
+The opt-in kernel implements a generic hand-play path. Its first
 slice resolves normalized hand plays through placement, orthogonal power
 comparison, standard adjacent attacks, ownership flips,
 `last_hand_play_by_owner`, action/state version increments, owner-turn
@@ -475,12 +475,11 @@ restore.
 Unsupported semantics are never approximated. The prototype resolves each
 action on a private native branch and rejects the whole branch when a relevant
 declaration or runtime feature lies outside the covered slice; rejected results
-contain no payload, events, captures, or exiles. State abilities, temporary
-suppression, queued effects, pending choices, extra plays, a partially resolved
-turn end, pending hand-play suppression, mixed negative powers, and difficulty
-8/9 hand rules remain unsupported. Exact four-sided `-1` cards are supported as
-the generic special-negative shape: they can be attacked, cannot win an attack,
-and are not legal power-change subjects.
+contain no payload, events, captures, or exiles. Queued effects, pending player
+choices, activation transitions, and mixed negative powers remain outside this
+hand-play slice. Exact four-sided `-1` cards are supported as the generic
+special-negative shape: they can be attacked, cannot win an attack, and are not
+legal power-change subjects.
 
 The second slice compiles every interned immutable ability set once when the
 compact root is loaded. Search nodes consult typed event, condition, action, and
@@ -585,13 +584,39 @@ discard return moves that exact index to the recipient's leftmost empty hand
 slot and reveals it to the opponent only if newly visible; a full hand exiles
 the same transformed instance with `return_to_full_hand`.
 
+The summon/draw slice resolves both ordinary and generated entrance lifecycles.
+`card_before_summoned` is limited to the entering instance, while
+`card_summoned` and `card_after_summoned` discover the full board in row-major
+order. After every `card_summoned` group finishes, the exact entering
+`instance_id` is relocated; if it is still on the board, the after-summoned
+context uses its current cell and current owner. Thus a hand card swapped or
+moved during `card_summoned` is not mistaken for having left play. Its standard
+attack uses the same relocated instance and is cancelled if ownership changed.
+
+Generated summons support exact instances from hand, discard, and removed
+zones; catalog-fresh copies; complete runtime perfect copies; current discard
+top; fresh in-place re-summons; and depart/re-summon identity boundaries. Draws
+execute one card at a time, create a fresh `TaiZuChangQuan` when a deck is empty,
+preserve physical hand slots and reveal order, dispatch full-board
+`card_after_drawn`, and apply the one-use difficulty-eight enemy hand rule after
+every relevant atomic hand-size change.
+
+The owner-turn slice resolves end-turn triggers once, coalesces extra plays
+granted at that boundary, and lets already granted extra plays continue beyond
+`max_turns`. A full board dispatches `before_duel_end` with one immutable winner
+snapshot before terminal adjudication. Completing a turn restores temporary
+abilities, advances the owner-turn serial, resets attack counts, and records the
+repetition signature. Terminal checks then run before the next owner's
+`start_owner_turn`. An owner with no legal action still resolves both start and
+end events; only its action phase is skipped.
+
 The support gate is action-specific: abilities in hand/deck remain dormant, an
 unrelated listener whose supported conditions are false remains dormant, and
 only declarations reached by the current event cause mid-branch rejection.
-Empty-deck generated cards, future draw revelation, after-draw listeners,
-summon and non-swap movement flows, nested or extra attacks, start/end-turn
-lifecycle, and still-uncompiled condition/action
-variants remain rejected rather than approximated.
+Still-uncompiled condition/action variants remain rejected rather than
+approximated. Activation legality is conservatively gated where an empty-turn or
+terminal decision would otherwise require executing the not-yet-native
+activation path.
 
 The native probe covers the original five oracle transitions,
 `TuNaShu1`–`TuNaShu3` for both owners, both-owner Bagua exile, all three LeiZhen
@@ -618,42 +643,43 @@ Discard/transform fixtures additionally cover conditional true/false branches,
 single and batch discard, noncontiguous physical-slot compression, actual
 batch-size gating, in-place catalog reconstruction, inherited source context,
 new and already-public preserved returns, and same-instance full-hand exile.
-Across 1,034 checks, restored canonical state keys, live state versions,
-captures, exiles, and every event match `DuelSimulator`.
+Generated-summon, draw, and owner-turn fixtures additionally cover every source
+zone and copy mode, exact/fresh identity, nested summon lifecycles, future draw
+revelation, after-draw reactions, empty-deck fallback, difficulty eight, direct
+and end-trigger extra plays, the action cap, empty owner turns, full-board
+pre-end reactions, and terminal-before-next-start ordering. A dedicated
+regression swaps an entering hand card during `card_summoned` and verifies that
+full-board `card_after_summoned` discovers the same instance at its new cell.
+The current probe performs 1,487 checks; restored canonical state keys, live
+state versions, captures, exiles, and every event match `DuelSimulator`.
 
-The same probe enumerates every legal root play in the 14 unique real Quick
-openings. Before the return/swap slice it found 490 legal plays: 341 were
-supported and all 341 had exact full-state/event parity; 149 were explicitly
-rejected with zero partial results. The first rejection reasons were 46
-unsupported actions, 35 start-turn rules, 28 end-turn rules, 19 unsupported
-trigger conditions, 14 before-summoned rules, and 7 empty-deck fallback draws. The probe also prints
-the corresponding reason counts by source card ID, currently covering 22
-cards. This is a coverage report, not an adoption threshold.
-
-After discard transactions, conditional lists, transform, and preserved return
-support, the same fixed openings now support 384 of 490 plays, all 384 with
-exact parity and zero mismatches. The remaining 106 rejections are 35
-start-turn rules, 28 end-turn rules, 19 unsupported trigger conditions, 14
-before-summoned rules, 7 empty-deck fallback draws, and 3 unsupported actions.
-Those last three are `KuiHua3` roots that complete their swap before reaching
-the still-uncompiled re-summon action; the conservative gate correctly rejects
-the whole private branch instead of returning a partial result.
+The same probe enumerates every legal root hand play in the 14 unique real Quick
+openings. It currently finds 490 plays: all 490 are supported with exact
+full-state/event parity, with zero mismatches and no rejection reasons. This is
+complete coverage of that fixed hand-play corpus, not proof that activations,
+future declarations, native tree search, or platform packaging are complete.
 
 The latest 5,000-transition Debug plain-card probe returned full compact
-payloads and events in `343,789` microseconds versus `4,018,571` microseconds
-for the authoritative GDScript transition loop, about `11.69x` faster. This is
-evidence that a coarse native transition can be worthwhile, not a
-production-search forecast: it excludes compact-to-`DuelState` restoration,
-general declarations/triggers, state keys, evaluation, and tree traversal. The
-same run completed 100,000 native branch clones at about `714,536` clones per
-second.
+payloads and events in about `0.509s` versus `5.022s` for the authoritative
+GDScript transition loop, about `9.86x` faster. This is evidence that a coarse
+native transition can be worthwhile, not a production-search forecast: it
+excludes compact-to-`DuelState` restoration, state keys, evaluation, tree
+traversal, and native activation handling. The same run completed 100,000 native
+branch clones at about `472,590` clones per second.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
-- Native root-action coverage is still 384/490 on the real Quick openings; the
-  categorized rejections identify the next generic declaration slices.
+- Native hand-play coverage is 490/490 on the fixed real Quick opening corpus,
+  but production still uses `DuelSimulator` for every transition.
+- Implement activation generation, cost/target validation, and activation
+  transitions in the compact kernel before attempting a fully native search.
+- Keep an entire trial search tree native; converting at every node would erase
+  the measured transition advantage. Compare root actions, scores, completed
+  depths, and selected-result restoration against the existing search oracle.
+- Prove Windows release and Android ARM64 builds before enabling the extension
+  outside opt-in tests.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
 - No difficulty profiles beyond budget.

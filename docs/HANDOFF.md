@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-08-31
+Updated: 2026-09-01
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -443,7 +443,10 @@ See `docs/DECISIONS.md` for ability-specific behavior.
 - `TRIGGER_CARD_AFTER_SUMMONED` scans the full board and resolves matching
   sources in row-major order. `CangSongYingKe2` uses this window, so its order
   relative to the summoned card's own entrance ability depends on their board
-  cells; both precede the standard attack. There is still no general queued
+  cells; both precede the standard attack. If `CARD_SUMMONED` moves or swaps the
+  entering card, discovery finishes first, then the exact entering `instance_id`
+  is relocated and `CARD_AFTER_SUMMONED` uses its current cell and owner. There
+  is still no general queued
   player-choice/interrupt engine.
 - `CARD_BEFORE_FLIPPED` is a committed-flip boundary, not a second attack-range
   check. Future rules that need to cancel a committed flip must do so through a
@@ -483,7 +486,11 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   swaps. It also implements list-local `if` context, single/batch discard,
   discard-only self-trigger discovery, row-major batch-finished listeners,
   transitive transform prototypes, in-place transform, and same-instance
-  discard return. Fresh board returns append a new compact card index from an
+  discard return. It now also covers before-summoned/full-board summoned and
+  after-summoned discovery, generated summons from all supported zones and copy
+  modes, fresh in-place re-summons, one-at-a-time draw with empty-deck fallback,
+  future revelation/after-draw/difficulty-eight handling, and complete
+  end/start/empty-turn/full-board terminal boundaries. Fresh board returns append a new compact card index from an
   immutable root prototype and leave the destroyed old index as an unreferenced tombstone;
   preserved discard returns instead move the existing index and reveal it only
   when newly public. Both return modes reuse the normal full-hand exile
@@ -495,12 +502,12 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   indiscriminate target policies. Four-sided `-1` semantics override comparison
   reversal, and locked attacks compare powers only during initial selection in
   both GDScript and native paths. The 14 real Quick openings currently expose
-  490 legal root plays: 384 are supported with exact full-state/event parity
-  and 106 are conservatively rejected with categorized and per-card reasons.
-  The expanded probe passes 1,034 parity checks. `KuiHua3` now completes its
-  swap but its three real Quick branches then reach the still-unsupported
-  re-summon action, so they remain atomically rejected. Production adoption
-  remains forbidden.
+  490 legal root hand plays: all 490 have exact full-state/event parity, with no
+  rejection reasons or mismatches. The expanded probe passes 1,487 checks and
+  its 5,000-transition Debug plain-card loop measured about `9.86x` the oracle's
+  throughput. Activation transitions, an all-native search tree, selected-result
+  restoration, and release/Android packaging remain unfinished, so production
+  adoption remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

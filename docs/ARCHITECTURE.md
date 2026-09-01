@@ -456,8 +456,15 @@ Add reusable vocabulary before adding named-card branches:
 
 Search and evaluation must not check `card_id == ...`. Named content belongs in catalog data assembled from generic primitives.
 
-## Deferred Architecture
+## Native Experiment Boundary
 
 `DuelState.effect_queue` and `pending_choice` reserve space for future multi-step effects, but there is not yet a general decision/interrupt engine. Do not pretend it exists.
 
-The current “compact” key hashes a canonical string. Search still deep-duplicates Dictionary-heavy states. A true compact, indexed simulation state was deliberately deferred until more reusable ability primitives stabilize; otherwise each new primitive would require parallel maintenance in two rule engines.
+Production search still uses `DuelState` and authoritative `DuelSimulator`
+transitions. `DuelStateKey.build_compact()` is a complete-state fingerprint, not
+the simulation representation. The opt-in `DuelCompactState` codec and
+`DuelNativeCompactKernel` under `native/duel_core/` are the experimental indexed
+branch representation. Their fixed real-Quick hand-play corpus has exact oracle
+parity, but activation transitions and a complete native search tree are not yet
+implemented. Do not add a production call site until one root conversion can
+remain native for the entire tree and the selected result can cross back once.
