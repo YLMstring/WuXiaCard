@@ -503,11 +503,15 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   reversal, and locked attacks compare powers only during initial selection in
   both GDScript and native paths. The 14 real Quick openings currently expose
   490 legal root hand plays: all 490 have exact full-state/event parity, with no
-  rejection reasons or mismatches. The expanded probe passes 1,487 checks and
-  its 5,000-transition Debug plain-card loop measured about `9.86x` the oracle's
-  throughput. Activation transitions, an all-native search tree, selected-result
-  restoration, and release/Android packaging remain unfinished, so production
-  adoption remains forbidden.
+  rejection reasons or mismatches. It now also compiles all eight current
+  activation target rules and all 20 current catalog activation declarations.
+  The catalog fixtures are 36/36 exact; 136 deterministic states derived from
+  the same Quick openings expose another 104 activation actions, all 104 exact.
+  The expanded probe passes 1,635 checks. Its latest Debug loops measured about
+  `12.83x` oracle throughput for 5,000 plain transitions and `17.47x` for 500
+  fixed `TiYunZong4` activation transactions. An all-native search tree,
+  selected-result restoration, and release/Android packaging remain unfinished,
+  so production adoption remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

@@ -464,7 +464,11 @@ Production search still uses `DuelState` and authoritative `DuelSimulator`
 transitions. `DuelStateKey.build_compact()` is a complete-state fingerprint, not
 the simulation representation. The opt-in `DuelCompactState` codec and
 `DuelNativeCompactKernel` under `native/duel_core/` are the experimental indexed
-branch representation. Their fixed real-Quick hand-play corpus has exact oracle
-parity, but activation transitions and a complete native search tree are not yet
-implemented. Do not add a production call site until one root conversion can
-remain native for the entire tree and the selected result can cross back once.
+branch representation. Their fixed real-Quick hand-play corpus has 490/490 exact
+oracle parity; all 20 current catalog activation declarations have fixture
+coverage, and 104/104 activation actions from 136 deterministic Quick-derived
+states also have exact parity. The activation path compiles target rules and
+actions once, enumerates exact runtime actions, and executes each transaction on
+a private native branch. A complete native search tree is not yet implemented.
+Do not add a production call site until one root conversion can remain native
+for the entire tree and the selected result can cross back once.

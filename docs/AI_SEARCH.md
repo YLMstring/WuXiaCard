@@ -476,8 +476,8 @@ Unsupported semantics are never approximated. The prototype resolves each
 action on a private native branch and rejects the whole branch when a relevant
 declaration or runtime feature lies outside the covered slice; rejected results
 contain no payload, events, captures, or exiles. Queued effects, pending player
-choices, activation transitions, and mixed negative powers remain outside this
-hand-play slice. Exact four-sided `-1` cards are supported as the generic
+choices and mixed negative powers remain outside this hand-play slice. Exact
+four-sided `-1` cards are supported as the generic
 special-negative shape: they can be attacked, cannot win an attack, and are not
 legal power-change subjects.
 
@@ -610,13 +610,28 @@ repetition signature. Terminal checks then run before the next owner's
 `start_owner_turn`. An owner with no legal action still resolves both start and
 end events; only its action phase is skipped.
 
+The activation slice compiles the eight current catalog target rules, ordered
+cost actions, effect actions, and catalog-ordered runtime activation indices.
+Native legal-action enumeration uses exact source instances, logical hand
+indices, row-major board order, and the same extra-play restriction as the
+oracle. `apply_activate_transition` revalidates source, owner, current runtime
+ability index, cumulative ki cost, and target on a private branch; it then
+executes the complete action chain, resolves full-board
+`card_after_targeted_activation`, and enters the shared owner-turn finish path.
+Movement, swapping, reveal, re-summon, distribution of ki, public hand
+addition, and a referenced card's standard attack all use generic compiled
+actions rather than card-ID branches. Stable selected-card snapshots preserve
+the intended instance when an earlier cost moves or discards it. Deferred
+attack/flip/summon/ki-event results retain their own power-change batch scope,
+while synchronous movement and exile callbacks remain part of their containing
+action, matching the GDScript executor's request boundaries.
+
 The support gate is action-specific: abilities in hand/deck remain dormant, an
 unrelated listener whose supported conditions are false remains dormant, and
 only declarations reached by the current event cause mid-branch rejection.
 Still-uncompiled condition/action variants remain rejected rather than
-approximated. Activation legality is conservatively gated where an empty-turn or
-terminal decision would otherwise require executing the not-yet-native
-activation path.
+approximated. Empty-turn and terminal decisions now use the same exact native
+play-and-activation legality enumeration as explicit action generation.
 
 The native probe covers the original five oracle transitions,
 `TuNaShu1`–`TuNaShu3` for both owners, both-owner Bagua exile, all three LeiZhen
@@ -650,31 +665,45 @@ and end-trigger extra plays, the action cap, empty owner turns, full-board
 pre-end reactions, and terminal-before-next-start ordering. A dedicated
 regression swaps an entering hand card during `card_summoned` and verifies that
 full-board `card_after_summoned` discovers the same instance at its new cell.
-The current probe performs 1,487 checks; restored canonical state keys, live
+Activation fixtures instantiate every current catalog card with an activation:
+17 cards, 20 declarations, and 36 legal fixture actions are all supported with
+exact state/event parity. A second corpus walks 136 deterministic states derived
+from the 14 real Quick openings and compares all 104 legal activation actions;
+all 104 are supported and exact. It covers multiple innate activations, dynamic
+replace-all activation grants, stale runtime indices, board and hand targets,
+source/target relocation, cost-time reactions, generated re-summons, public
+copy creation, and nested attack/exile chains.
+
+The current probe performs 1,635 checks; restored canonical state keys, live
 state versions, captures, exiles, and every event match `DuelSimulator`.
 
 The same probe enumerates every legal root hand play in the 14 unique real Quick
 openings. It currently finds 490 plays: all 490 are supported with exact
 full-state/event parity, with zero mismatches and no rejection reasons. This is
-complete coverage of that fixed hand-play corpus, not proof that activations,
-future declarations, native tree search, or platform packaging are complete.
+complete coverage of that fixed hand-play corpus. Together with the two
+activation corpora it proves the current fixed test material, not future
+declarations, a native tree search, or platform packaging.
 
 The latest 5,000-transition Debug plain-card probe returned full compact
-payloads and events in about `0.509s` versus `5.022s` for the authoritative
-GDScript transition loop, about `9.86x` faster. This is evidence that a coarse
+payloads and events in about `0.514s` versus `6.592s` for the authoritative
+GDScript transition loop, about `12.83x` faster. A separate 500-transition
+Debug `TiYunZong4` activation probe took about `0.062s` natively versus `1.081s`
+through the oracle, about `17.47x` faster. These are evidence that a coarse
 native transition can be worthwhile, not a production-search forecast: it
 excludes compact-to-`DuelState` restoration, state keys, evaluation, tree
-traversal, and native activation handling. The same run completed 100,000 native
-branch clones at about `472,590` clones per second.
+traversal, move ordering, and deadline checks. The same run completed 100,000
+native branch clones at about `477,528` clones per second. Debug timing is
+recorded rather than asserted; parity and generality take precedence over a
+retained speedup multiple.
 
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
   search receives another actionable state; there is no search-only draw rule.
 - Native hand-play coverage is 490/490 on the fixed real Quick opening corpus,
-  but production still uses `DuelSimulator` for every transition.
-- Implement activation generation, cost/target validation, and activation
-  transitions in the compact kernel before attempting a fully native search.
+  and activation coverage is 36/36 across every current catalog declaration
+  plus 104/104 in deterministic Quick-derived states. Production still uses
+  `DuelSimulator` for every transition.
 - Keep an entire trial search tree native; converting at every node would erase
   the measured transition advantage. Compare root actions, scores, completed
   depths, and selected-result restoration against the existing search oracle.

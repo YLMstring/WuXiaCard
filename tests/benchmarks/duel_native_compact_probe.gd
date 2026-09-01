@@ -2,6 +2,7 @@ extends SceneTree
 
 const CLONE_ITERATIONS: int = 100_000
 const TRANSITION_ITERATIONS: int = 5_000
+const ACTIVATION_TRANSITION_ITERATIONS: int = 500
 
 const CompactState = preload("res://scripts/duel_compact_state.gd")
 const Action = preload("res://scripts/duel_action.gd")
@@ -118,6 +119,23 @@ func _run() -> void:
 			int(transition_benchmark.get("native_usec", 0)),
 			int(transition_benchmark.get("oracle_usec", 0)),
 			float(transition_benchmark.get("speedup", 0.0)),
+		]
+	)
+	var activation_benchmark: Dictionary = _benchmark_activation_transition(kernel)
+	if not bool(activation_benchmark.get("valid", false)):
+		push_error("DUEL_NATIVE_COMPACT_PROBE_FAILED activation benchmark")
+		quit(1)
+		return
+	print(
+		(
+			"DUEL_NATIVE_ACTIVATION_TRANSITION_BENCHMARK iterations=%d native_usec=%d "
+			+ "oracle_usec=%d speedup=%.3f"
+		)
+		% [
+			ACTIVATION_TRANSITION_ITERATIONS,
+			int(activation_benchmark.get("native_usec", 0)),
+			int(activation_benchmark.get("oracle_usec", 0)),
+			float(activation_benchmark.get("speedup", 0.0)),
 		]
 	)
 	var elapsed_usec: int = int(clone_result.get("elapsed_usec", 0))
@@ -5901,6 +5919,58 @@ func _benchmark_basic_transition(kernel: Object) -> Dictionary:
 	var action: Action = Action.make_play(0, 4, &"native_bench_play")
 	var oracle_started_usec: int = Time.get_ticks_usec()
 	for _iteration: int in range(TRANSITION_ITERATIONS):
+		var transition: Dictionary = Simulator.apply_action(state, action)
+		if not bool(transition.get("valid", false)):
+			return {"valid": false}
+		oracle_sink += (transition.get("events", []) as Array).size()
+	var oracle_usec: int = Time.get_ticks_usec() - oracle_started_usec
+	return {
+		"valid": native_sink == oracle_sink and native_sink > 0,
+		"native_usec": native_usec,
+		"oracle_usec": oracle_usec,
+		"speedup": float(oracle_usec) / float(native_usec) if native_usec > 0 else 0.0,
+	}
+
+
+func _benchmark_activation_transition(kernel: Object) -> Dictionary:
+	var state: State = _build_catalog_activation_fixture(&"TiYunZong4")
+	if state == null:
+		return {"valid": false}
+	var action: Action = null
+	for candidate: Action in Simulator.get_legal_actions_for_owner(
+		state,
+		Rules.PLAYER_OWNER
+	):
+		if candidate.action_type == Action.TYPE_ACTIVATE:
+			action = candidate
+			break
+	if action == null:
+		return {"valid": false}
+	var compact := CompactState.new()
+	if not compact.capture_state(state):
+		return {"valid": false}
+	if not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+		return {"valid": false}
+
+	var native_sink: int = 0
+	var native_started_usec: int = Time.get_ticks_usec()
+	for _iteration: int in range(ACTIVATION_TRANSITION_ITERATIONS):
+		var transition: Dictionary = kernel.call(
+			"apply_activate_transition",
+			action.source_index,
+			action.target_kind,
+			action.target_index,
+			action.activation_index,
+			action.source_instance_id
+		) as Dictionary
+		if not bool(transition.get("valid", false)):
+			return {"valid": false}
+		native_sink += (transition.get("events", []) as Array).size()
+	var native_usec: int = Time.get_ticks_usec() - native_started_usec
+
+	var oracle_sink: int = 0
+	var oracle_started_usec: int = Time.get_ticks_usec()
+	for _iteration: int in range(ACTIVATION_TRANSITION_ITERATIONS):
 		var transition: Dictionary = Simulator.apply_action(state, action)
 		if not bool(transition.get("valid", false)):
 			return {"valid": false}

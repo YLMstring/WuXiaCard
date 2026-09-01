@@ -60,18 +60,25 @@ Current scope:
 - resolves `self_swapped_with_ability_source` as two ordered movements, with
   global before/after movement events, exact instance/owner revalidation, and
   mover-removal cancellation;
+- compiles all eight current activation target rules, enumerates legal runtime
+  activations, validates cumulative ki costs and exact targets, and executes
+  activation transactions through the shared action/turn lifecycle;
+- supports targeted move/swap/reveal, generated re-summon, ki distribution,
+  public fresh/perfect hand copies, and referenced-card standard attacks as
+  generic actions reached by current catalog activations;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
-- uses an action-specific conservative gate and explicitly rejects relevant
-  unsupported summon/draw/attack/turn declarations, generated empty-deck
-  draws, temporary suppression, extra/nested attacks, non-swap movement,
-  pending choices/effects, or
-  difficulty 8/9 hand rules instead of approximating them;
-- measures native core cloning and the covered transition slice.
+- uses an action-specific conservative gate and atomically rejects any reached
+  future declaration that has not been compiled instead of approximating it;
+- measures native core cloning, plain hand-play transitions, and a fixed
+  activation transaction.
 
-It deliberately does not implement the remaining action/condition vocabulary,
-generated empty-deck draws, summon/general movement and extra-attack
-primitives, start/end-turn lifecycle, state keys, evaluation, or search yet.
-Production does not call it. The probe compares every covered state field and
-event against `DuelSimulator`, which remains the oracle for every native
-primitive.
+The current probe reports 490/490 exact hand-play transitions in the 14 real
+Quick openings, 36/36 legal actions covering all 20 catalog activation
+declarations, and 104/104 activation actions across 136 deterministic
+Quick-derived states. It deliberately does not implement state keys,
+evaluation, a complete native search tree, or production integration yet.
+Future declaration vocabulary remains outside the slice until separately
+proven. Production does not call the extension. The probe compares every
+covered state field and ordered event against `DuelSimulator`, which remains
+the oracle for every native primitive.
