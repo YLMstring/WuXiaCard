@@ -84,6 +84,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ATTACKER_CARD_IS_ENEMY,
 		ATTACKER_CARD_IS_OTHER_ALLY,
 		ATTACK_IS_NOT_REPEAT,
+		ACTIVATION_OWNER_IS_ALLY,
 		TRIGGER_CARD_WAS_ON_BOARD,
 		ATTACK_FLIPPED_ENEMY,
 		ATTACK_FLIPPED_ALLY_IN_RANGE,
@@ -422,6 +423,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t discard_batch_size = 0;
 		int32_t turn_owner = 0;
 		int32_t activation_owner = 0;
+		int32_t activation_source_cell = -1;
+		int32_t activation_source_card_index = -1;
+		StringName activation_target_kind;
+		int32_t activation_target_index = -1;
 		bool repeat_attack = false;
 		std::vector<int32_t> winning_owners;
 		struct AttackFlipRecord {
@@ -457,6 +462,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t action_subject_zone = -1;
 		int32_t action_subject_logical_index = -1;
 		int32_t selected_card_index = -1;
+		int32_t selected_card_owner = 0;
+		StringName activation_target_kind;
+		int32_t activation_target_index = -1;
+		bool record_direct_board_changes = true;
 		int32_t trigger_card_index = -1;
 		int32_t attacker_card_index = -1;
 		StringName event_id;
@@ -500,6 +509,13 @@ public:
 	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,
+		const StringName &expected_instance_id = StringName()
+	) const;
+	Dictionary apply_activate_transition(
+		int64_t source_cell,
+		const StringName &target_kind,
+		int64_t target_index,
+		int64_t activation_index = 0,
 		const StringName &expected_instance_id = StringName()
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
@@ -886,7 +902,8 @@ private:
 		const StringName &exile_reason,
 		const EventContext &parent_context,
 		std::vector<int32_t> &exile_stack,
-		Resolution &resolution
+		Resolution &resolution,
+		bool record_exile_index = true
 	) const;
 	int32_t find_board_card(const NativeState &value, int32_t card_index, int32_t hint = -1) const;
 	bool locate_card(
@@ -1017,7 +1034,8 @@ private:
 		int32_t new_owner,
 		const EventContext &context,
 		std::vector<int32_t> &exile_stack,
-		Resolution &resolution
+		Resolution &resolution,
+		bool record_capture_index = true
 	) const;
 	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;

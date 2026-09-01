@@ -71,6 +71,7 @@ func _run() -> void:
 		return
 	_test_fresh_prototype_metadata(kernel)
 	_test_activation_legal_action_parity(kernel)
+	_test_activation_transition_parity(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_reveal_and_difficulty_parity(kernel)
@@ -337,6 +338,286 @@ func _count_activate_actions(actions: Array) -> int:
 		if action != null and action.action_type == Action.TYPE_ACTIVATE:
 			count += 1
 	return count
+
+
+func _test_activation_transition_parity(kernel: Object) -> void:
+	var source: Dictionary = _make_activation_source(
+		&"native_activation_transaction_source",
+		Catalog.TARGET_ANY_ENEMY_BOARD,
+		[
+			{
+				"type": Catalog.ACTION_CHANGE_POWERS,
+				"card": Catalog.CARD_REF_SELECTED_CARD,
+				"amount": 1,
+			},
+			{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1},
+			{"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+		]
+	)
+	var listener: Dictionary = _make_plain_card(
+		&"原生指定后监听者",
+		&"native_activation_listener",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	listener["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_TARGETED_ACTIVATION,
+			"conditions": [{"type": Catalog.CONDITION_ACTIVATION_OWNER_IS_ALLY}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(listener, Rules.PLAYER_OWNER)
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[5] = _slot(
+		_make_plain_card(&"原生指定目标", &"native_activation_target", Rules.OPPONENT_OWNER, [2, 2, 2, 2]),
+		Rules.OPPONENT_OWNER
+	)
+	var state := State.new(
+		board,
+		[_make_plain_card(&"原生额外出牌", &"native_activation_extra_hand", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"原生敌方后续", &"native_activation_enemy_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"原生主动抽牌", &"native_activation_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	_check_activation_transition_parity(
+		kernel,
+		state,
+		4,
+		&"native_activation_transaction_source",
+		Action.TARGET_BOARD_CELL,
+		5,
+		0,
+		"Activation cost, action, reaction, and extra play"
+	)
+
+	var departing_source: Dictionary = _make_activation_source(
+		&"native_activation_departing_source",
+		Catalog.TARGET_ANY_ENEMY_BOARD,
+		[
+			{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_SELECTED_CARD},
+			{"type": Catalog.ACTION_EXILE_SELF},
+		]
+	)
+	var departure_board: Array = Rules.empty_board()
+	departure_board[0] = _slot(listener.duplicate(true), Rules.PLAYER_OWNER)
+	departure_board[4] = _slot(departing_source, Rules.PLAYER_OWNER)
+	departure_board[5] = _slot(
+		_make_plain_card(&"原生离场目标", &"native_activation_departing_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var departure_state := State.new(
+		departure_board,
+		[],
+		[_make_plain_card(&"原生离场敌手", &"native_activation_departure_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_activation_transition_parity(
+		kernel,
+		departure_state,
+		4,
+		&"native_activation_departing_source",
+		Action.TARGET_BOARD_CELL,
+		5,
+		0,
+		"Activation source and target leave before the global after-event"
+	)
+
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Activation rejection fixture can be compacted")
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Activation rejection fixture loads natively"
+	)
+	for rejected: Dictionary in [
+		{
+			"source_cell": 4,
+			"target_kind": Action.TARGET_BOARD_CELL,
+			"target_index": 5,
+			"activation_index": 0,
+			"instance_id": &"stale_activation_instance",
+			"label": "Stale activation source",
+		},
+		{
+			"source_cell": 4,
+			"target_kind": Action.TARGET_BOARD_CELL,
+			"target_index": 3,
+			"activation_index": 0,
+			"instance_id": &"native_activation_transaction_source",
+			"label": "Stale activation target",
+		},
+	]:
+		var rejected_result: Dictionary = kernel.call(
+			"apply_activate_transition",
+			int(rejected.get("source_cell", -1)),
+			StringName(rejected.get("target_kind", &"")),
+			int(rejected.get("target_index", -1)),
+			int(rejected.get("activation_index", 0)),
+			StringName(rejected.get("instance_id", &""))
+		) as Dictionary
+		_check(
+			bool(rejected_result.get("supported", false))
+			and not bool(rejected_result.get("valid", true)),
+			"%s is rejected as an invalid action" % String(rejected.get("label", ""))
+		)
+		_check(
+			not rejected_result.has("payload")
+			and (rejected_result.get("events", []) as Array).is_empty()
+			and (rejected_result.get("captures", []) as Array).is_empty()
+			and (rejected_result.get("exiles", []) as Array).is_empty(),
+			"%s rejection exposes no partial transition" % String(rejected.get("label", ""))
+		)
+
+	var unsupported_listener: Dictionary = listener.duplicate(true)
+	unsupported_listener["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_TARGETED_ACTIVATION,
+			"conditions": [{"type": Catalog.CONDITION_ACTIVATION_OWNER_IS_ALLY}],
+			"actions": [{"type": &"native_unknown_activation_reaction"}],
+		}],
+	}]
+	var unsupported_state: State = state.duplicate_state()
+	unsupported_state.board[0] = _slot(unsupported_listener, Rules.PLAYER_OWNER)
+	var unsupported_compact := CompactState.new()
+	_check(
+		unsupported_compact.capture_state(unsupported_state),
+		"Unsupported activation reaction fixture can be compacted"
+	)
+	_check(
+		bool(kernel.call("load_compact_payload", unsupported_compact.to_variant_payload())),
+		"Unsupported activation reaction fixture loads natively"
+	)
+	var unsupported_result: Dictionary = kernel.call(
+		"apply_activate_transition",
+		4,
+		Action.TARGET_BOARD_CELL,
+		5,
+		0,
+		&"native_activation_transaction_source"
+	) as Dictionary
+	_check(
+		not bool(unsupported_result.get("supported", true))
+		and not bool(unsupported_result.get("valid", true)),
+		"Unsupported nested activation reaction rejects the native branch"
+	)
+	_check(
+		not unsupported_result.has("payload")
+		and (unsupported_result.get("events", []) as Array).is_empty()
+		and (unsupported_result.get("captures", []) as Array).is_empty()
+		and (unsupported_result.get("exiles", []) as Array).is_empty(),
+		"Unsupported nested activation reaction is atomic"
+	)
+
+
+func _make_activation_source(
+	instance_id: StringName,
+	target_rule: StringName,
+	actions: Array
+) -> Dictionary:
+	var card: Dictionary = _make_plain_card(
+		&"原生主动事务源",
+		instance_id,
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	card["ki"] = 1
+	card["active_abilities"] = [{
+		"retained_on_flip": false,
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": target_rule,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": actions.duplicate(true),
+		},
+	}]
+	return card
+
+
+func _check_activation_transition_parity(
+	kernel: Object,
+	state: State,
+	source_cell: int,
+	instance_id: StringName,
+	target_kind: StringName,
+	target_index: int,
+	activation_index: int,
+	label: String
+) -> void:
+	var action: Action = Action.make_activate(
+		source_cell,
+		instance_id,
+		target_kind,
+		target_index,
+		activation_index
+	)
+	var expected: Dictionary = Simulator.apply_action(state, action)
+	_check(bool(expected.get("valid", false)), "%s oracle transition is valid" % label)
+	if not bool(expected.get("valid", false)):
+		return
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s source can be compacted" % label)
+	if not compact.is_structurally_valid():
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"%s compact source loads natively" % label
+	)
+	var actual: Dictionary = kernel.call(
+		"apply_activate_transition",
+		source_cell,
+		target_kind,
+		target_index,
+		activation_index,
+		instance_id
+	) as Dictionary
+	_check(bool(actual.get("supported", false)), "%s is covered by the native slice" % label)
+	_check(bool(actual.get("valid", false)), "%s native transition is valid" % label)
+	if not bool(actual.get("valid", false)):
+		print("NATIVE_ACTIVATION_REASON label=%s reason=%s" % [label, actual.get("reason", "")])
+		return
+	var result_compact: CompactState = CompactState.from_variant_payload(
+		actual.get("payload", {}) as Dictionary
+	)
+	_check(result_compact != null, "%s native result payload can be loaded" % label)
+	if result_compact == null:
+		return
+	var actual_state: State = result_compact.restore()
+	var expected_state: State = expected.get("state") as State
+	_check(
+		actual_state != null
+		and expected_state != null
+		and StateKey.build(actual_state) == StateKey.build(expected_state)
+		and actual_state.state_version == expected_state.state_version,
+		"%s native state exactly matches DuelSimulator" % label
+	)
+	_check(
+		actual.get("captures", []) == expected.get("captures", []),
+		"%s captures exactly match DuelSimulator" % label
+	)
+	_check(
+		actual.get("exiles", []) == expected.get("exiles", []),
+		"%s exiles exactly match DuelSimulator" % label
+	)
+	if actual.get("exiles", []) != expected.get("exiles", []):
+		print("NATIVE_ACTIVATION_EXILE_DIFFERENCE label=%s expected=%s actual=%s" % [
+			label,
+			expected.get("exiles", []),
+			actual.get("exiles", []),
+		])
+	_check(
+		actual.get("events", []) == expected.get("events", []),
+		"%s events exactly match DuelSimulator" % label
+	)
+	if actual.get("events", []) != expected.get("events", []):
+		print("NATIVE_ACTIVATION_EVENT_DIFFERENCE label=%s expected=%s actual=%s" % [
+			label,
+			expected.get("events", []),
+			actual.get("events", []),
+		])
 
 
 func _report_catalog_trigger_inventory() -> void:
