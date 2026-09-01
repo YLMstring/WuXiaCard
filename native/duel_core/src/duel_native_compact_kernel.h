@@ -125,9 +125,12 @@ class DuelNativeCompactKernel : public RefCounted {
 		SWAP_SELF_WITH_TRIGGER_CARD,
 		ATTACK_TRIGGER_CARD,
 		STANDARD_ATTACK_WITH_SELF,
+		MOVE_SELF_TO_TARGET,
+		SWAP_SELF_WITH_TARGET,
 		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 		TRANSFER_CARD_RESOURCE,
 		REVEAL_HAND_CARDS,
+		REVEAL_CARD,
 		GRANT_EXTRA_CARD_PLAY,
 		ADD_PENDING_NON_RETAINED_SUPPRESSION,
 		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
@@ -135,6 +138,18 @@ class DuelNativeCompactKernel : public RefCounted {
 		SUMMON_CARD,
 		RESUMMON_CARD_IN_PLACE,
 		DEPART_CARD_FOR_RESUMMON,
+		UNSUPPORTED,
+	};
+
+	enum class TargetRuleOpcode : uint8_t {
+		ADJACENT_EMPTY_BOARD,
+		ADJACENT_ALLY_BOARD,
+		ADJACENT_ENEMY_BOARD,
+		OTHER_ALLY_BOARD,
+		ENEMY_HAND_CARD,
+		ALLY_HAND_CARD,
+		ANY_EMPTY_BOARD,
+		ANY_ENEMY_BOARD,
 		UNSUPPORTED,
 	};
 
@@ -304,6 +319,14 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<CompiledAction> child_actions;
 	};
 
+	struct CompiledActivation {
+		bool declaration_valid = true;
+		TargetRuleOpcode target_rule = TargetRuleOpcode::UNSUPPORTED;
+		int32_t required_ki = 0;
+		std::vector<CompiledAction> costs;
+		std::vector<CompiledAction> actions;
+	};
+
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
 		int32_t current_source_cell = -1;
@@ -326,6 +349,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool declaration_valid = true;
 		bool retained_on_flip = false;
 		bool has_activation = false;
+		CompiledActivation activation;
 		bool isolated_self_after_flip = false;
 		std::vector<CompiledTriggerRule> triggers;
 		std::vector<CompiledModifier> modifiers;
@@ -478,6 +502,7 @@ public:
 		int64_t target_cell,
 		const StringName &expected_instance_id = StringName()
 	) const;
+	Array get_legal_actions_for_owner(int64_t owner_id) const;
 
 private:
 	bool validate_shape();
@@ -489,6 +514,7 @@ private:
 	CompiledAction compile_action(const Variant &value);
 	CompiledModifier compile_modifier(const Variant &value) const;
 	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid);
+	CompiledActivation compile_activation(const Variant &value);
 	CompiledAbility compile_ability(const Variant &value);
 	int32_t intern_compiled_ability(const Variant &value);
 	bool validate_play_support(const NativeState &value, String &reason) const;
@@ -540,6 +566,24 @@ private:
 		const NativeState &value,
 		int32_t owner_id
 	) const;
+	const CompiledActivation *get_activation_at(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		int32_t activation_index
+	) const;
+	bool can_pay_activation_cost(
+		const NativeState &value,
+		int32_t source_card_index,
+		const CompiledActivation &activation
+	) const;
+	std::vector<int32_t> get_activation_target_indices(
+		const NativeState &value,
+		int32_t owner_id,
+		int32_t source_cell,
+		const CompiledActivation &activation
+	) const;
+	bool activation_targets_hand(const CompiledActivation &activation) const;
 	bool card_has_unsupported_enabled_modifier(
 		const NativeState &value,
 		int32_t card_index,

@@ -70,6 +70,7 @@ func _run() -> void:
 		quit(1)
 		return
 	_test_fresh_prototype_metadata(kernel)
+	_test_activation_legal_action_parity(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_reveal_and_difficulty_parity(kernel)
@@ -200,6 +201,142 @@ func _test_fresh_prototype_metadata(kernel: Object) -> void:
 		not bool(kernel.call("load_compact_payload", invalid_fallback_payload)),
 		"Native kernel rejects an out-of-range empty-deck fallback reference"
 	)
+
+
+func _test_activation_legal_action_parity(kernel: Object) -> void:
+	var source: Dictionary = _make_plain_card(
+		&"原生主动能力源",
+		&"native_activation_source",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	source["ki"] = 1
+	source["effect_gate"] = &"native_activation_gate"
+	var target_rules: Array[StringName] = [
+		Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+		Catalog.TARGET_ADJACENT_ALLY_BOARD,
+		Catalog.TARGET_ADJACENT_ENEMY_BOARD,
+		Catalog.TARGET_OTHER_ALLY_BOARD,
+		Catalog.TARGET_ENEMY_HAND_CARD,
+		Catalog.TARGET_ALLY_HAND_CARD,
+		Catalog.TARGET_ANY_EMPTY_BOARD,
+		Catalog.TARGET_ANY_ENEMY_BOARD,
+	]
+	var abilities: Array = []
+	for target_rule: StringName in target_rules:
+		abilities.append({
+			"retained_on_flip": false,
+			"activation": {
+				"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": target_rule,
+				"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+		})
+	source["active_abilities"] = abilities
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[1] = _slot(
+		_make_plain_card(&"原生相邻友方", &"native_activation_ally_a", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	board[8] = _slot(
+		_make_plain_card(&"原生其它友方", &"native_activation_ally_b", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	board[5] = _slot(
+		_make_plain_card(&"原生相邻敌方", &"native_activation_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var state := State.new(
+		board,
+		[
+			_make_plain_card(&"原生友方手牌甲", &"native_activation_hand_a", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"原生友方手牌乙", &"native_activation_hand_b", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		],
+		[
+			_make_plain_card(&"原生敌方手牌甲", &"native_activation_enemy_hand_a", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"原生敌方手牌乙", &"native_activation_enemy_hand_b", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		],
+		Rules.PLAYER_OWNER
+	)
+	(state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] as Array).append(
+		&"native_activation_gate"
+	)
+	_check_legal_action_parity(kernel, state, Rules.PLAYER_OWNER, "Eight activation target rules")
+	var activation_count: int = 0
+	for action: Action in Simulator.get_legal_actions_for_owner(state, Rules.PLAYER_OWNER):
+		if action.action_type == Action.TYPE_ACTIVATE:
+			activation_count += 1
+	_check(activation_count == 16, "Eight activation target rules enumerate every ordered target")
+
+	var no_ki_state: State = state.duplicate_state()
+	((no_ki_state.board[4] as Dictionary).get("card", {}) as Dictionary)["ki"] = 0
+	_check_legal_action_parity(kernel, no_ki_state, Rules.PLAYER_OWNER, "Activation ki cost")
+	_check(
+		_count_activate_actions(Simulator.get_legal_actions_for_owner(no_ki_state, Rules.PLAYER_OWNER)) == 0,
+		"Insufficient ki removes every activation action"
+	)
+
+	var gated_state: State = state.duplicate_state()
+	gated_state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = []
+	_check_legal_action_parity(kernel, gated_state, Rules.PLAYER_OWNER, "Activation effect gate")
+	_check(
+		_count_activate_actions(Simulator.get_legal_actions_for_owner(gated_state, Rules.PLAYER_OWNER)) == 0,
+		"Disabled effect gate removes every activation action"
+	)
+
+	var extra_play_state: State = state.duplicate_state()
+	extra_play_state.extra_card_plays_remaining = 1
+	_check_legal_action_parity(kernel, extra_play_state, Rules.PLAYER_OWNER, "Extra-play activation exclusion")
+	_check(
+		_count_activate_actions(Simulator.get_legal_actions_for_owner(extra_play_state, Rules.PLAYER_OWNER)) == 0,
+		"Extra play exposes only hand-play actions"
+	)
+
+
+func _check_legal_action_parity(
+	kernel: Object,
+	state: State,
+	owner_id: int,
+	label: String
+) -> void:
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s fixture can be compacted" % label)
+	if not compact.is_structurally_valid():
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"%s compact source loads natively" % label
+	)
+	var expected_keys: Array[String] = []
+	for action: Action in Simulator.get_legal_actions_for_owner(state, owner_id):
+		expected_keys.append(action.canonical_key())
+	var actual_keys: Array[String] = []
+	for action_value: Variant in kernel.call("get_legal_actions_for_owner", owner_id) as Array:
+		actual_keys.append(_native_action_canonical_key(action_value as Dictionary))
+	_check(actual_keys == expected_keys, "%s legal actions preserve exact order and identity" % label)
+
+
+func _native_action_canonical_key(action: Dictionary) -> String:
+	return "%s|%s|%010d|%s|%s|%010d|%010d" % [
+		StringName(action.get("action_type", &"")),
+		StringName(action.get("source_zone", &"")),
+		int(action.get("source_index", -1)),
+		StringName(action.get("source_instance_id", &"")),
+		StringName(action.get("target_kind", &"")),
+		int(action.get("target_index", -1)),
+		int(action.get("activation_index", 0)),
+	]
+
+
+func _count_activate_actions(actions: Array) -> int:
+	var count: int = 0
+	for action_value: Variant in actions:
+		var action: Action = action_value as Action
+		if action != null and action.action_type == Action.TYPE_ACTIVATE:
+			count += 1
+	return count
 
 
 func _report_catalog_trigger_inventory() -> void:
