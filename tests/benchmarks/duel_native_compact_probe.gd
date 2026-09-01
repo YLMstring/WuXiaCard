@@ -73,6 +73,8 @@ func _run() -> void:
 	_test_activation_legal_action_parity(kernel)
 	_test_activation_transition_parity(kernel)
 	_test_targeted_activation_action_parity(kernel)
+	_report_catalog_activation_coverage(kernel)
+	_test_activation_runtime_index_changes(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_reveal_and_difficulty_parity(kernel)
@@ -92,6 +94,7 @@ func _run() -> void:
 	_test_summon_before_lifecycle_parity(kernel)
 	_test_generated_summon_and_turn_boundary_transition_parity(kernel)
 	_test_suppression_transition_parity(kernel)
+	_report_real_quick_activation_coverage(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
 		push_error(
@@ -863,6 +866,413 @@ func _check_activation_transition_parity(
 		])
 
 
+func _report_catalog_activation_coverage(kernel: Object) -> void:
+	var activation_cards: int = 0
+	var activation_declarations: int = 0
+	var total_legal: int = 0
+	var supported: int = 0
+	var exact_parity: int = 0
+	var rejection_reasons: Dictionary = {}
+	var uncovered_declarations: Array[String] = []
+	for card_id: StringName in Catalog.get_all_card_ids():
+		var state: State = _build_catalog_activation_fixture(card_id)
+		if state == null:
+			continue
+		activation_cards += 1
+		var source_card: Dictionary = (state.board[4] as Dictionary).get("card", {}) as Dictionary
+		var declaration_count: int = 0
+		for ability_value: Variant in source_card.get("active_abilities", []) as Array:
+			if ability_value is Dictionary and (ability_value as Dictionary).has("activation"):
+				declaration_count += 1
+		activation_declarations += declaration_count
+		var covered_indices: Dictionary = {}
+		for action: Action in Simulator.get_legal_actions_for_owner(state, Rules.PLAYER_OWNER):
+			if (
+				action.action_type != Action.TYPE_ACTIVATE
+				or action.source_instance_id != StringName(source_card.get("instance_id", &""))
+			):
+				continue
+			total_legal += 1
+			covered_indices[action.activation_index] = true
+			var comparison: Dictionary = _evaluate_activation_transition(kernel, state, action)
+			if bool(comparison.get("supported", false)):
+				supported += 1
+			else:
+				var reason: String = String(comparison.get("reason", "unspecified"))
+				rejection_reasons[reason] = int(rejection_reasons.get(reason, 0)) + 1
+			if bool(comparison.get("exact", false)):
+				exact_parity += 1
+			else:
+				print(
+					"DUEL_NATIVE_CATALOG_ACTIVATION_MISMATCH card=%s activation=%d target=%s:%d reason=%s details=%s"
+					% [
+						card_id,
+						action.activation_index,
+						action.target_kind,
+						action.target_index,
+						comparison.get("reason", ""),
+						JSON.stringify(comparison.get("details", {})),
+					]
+				)
+		for activation_index: int in range(declaration_count):
+			if not covered_indices.has(activation_index):
+				uncovered_declarations.append("%s:%d" % [card_id, activation_index])
+	_check(
+		uncovered_declarations.is_empty(),
+		"Every current catalog activation declaration has a legal real-card fixture"
+	)
+	_check(
+		total_legal > 0 and supported == total_legal and exact_parity == total_legal,
+		"Every catalog activation fixture has exact native parity"
+	)
+	print(
+		"DUEL_NATIVE_CATALOG_ACTIVATION_COVERAGE cards=%d declarations=%d total_legal=%d supported=%d exact_parity=%d uncovered=%s rejection_reasons=%s"
+		% [
+			activation_cards,
+			activation_declarations,
+			total_legal,
+			supported,
+			exact_parity,
+			JSON.stringify(uncovered_declarations),
+			JSON.stringify(rejection_reasons),
+		]
+	)
+
+
+func _build_catalog_activation_fixture(card_id: StringName) -> State:
+	var source: Dictionary = Catalog.create_instance(
+		card_id,
+		Rules.PLAYER_OWNER,
+		StringName("native_catalog_activation_source_%s" % card_id)
+	)
+	var has_activation: bool = false
+	for ability_value: Variant in source.get("active_abilities", []) as Array:
+		if ability_value is Dictionary and (ability_value as Dictionary).has("activation"):
+			has_activation = true
+			break
+	if not has_activation:
+		return null
+	var prefix: String = "native_catalog_activation_%s" % card_id
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[1] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("%s_ally_up" % prefix)),
+		Rules.PLAYER_OWNER
+	)
+	board[7] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("%s_ally_down" % prefix)),
+		Rules.PLAYER_OWNER
+	)
+	board[0] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, StringName("%s_enemy_corner" % prefix)),
+		Rules.OPPONENT_OWNER
+	)
+	board[5] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, StringName("%s_enemy_right" % prefix)),
+		Rules.OPPONENT_OWNER
+	)
+	var state := State.new(
+		board,
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("%s_ally_hand_a" % prefix)),
+			Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, StringName("%s_ally_hand_b" % prefix)),
+		],
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, StringName("%s_enemy_hand_a" % prefix)),
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, StringName("%s_enemy_hand_b" % prefix)),
+		],
+		Rules.PLAYER_OWNER,
+		0,
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("%s_ally_deck_a" % prefix)),
+			Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, StringName("%s_ally_deck_b" % prefix)),
+		],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			StringName("%s_enemy_deck" % prefix)
+		)]
+	)
+	state.discard_piles[Rules.PLAYER_OWNER] = [Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		StringName("%s_ally_discard" % prefix)
+	)]
+	state.discard_piles[Rules.OPPONENT_OWNER] = [Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.OPPONENT_OWNER,
+		StringName("%s_enemy_discard" % prefix)
+	)]
+	state.removed_cards[Rules.PLAYER_OWNER] = [Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		StringName("%s_ally_removed" % prefix)
+	)]
+	state.removed_cards[Rules.OPPONENT_OWNER] = [Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.OPPONENT_OWNER,
+		StringName("%s_enemy_removed" % prefix)
+	)]
+	return state
+
+
+func _evaluate_activation_transition(
+	kernel: Object,
+	state: State,
+	action: Action
+) -> Dictionary:
+	var expected: Dictionary = Simulator.apply_action(state, action)
+	if not bool(expected.get("valid", false)):
+		return {"supported": false, "exact": false, "reason": "Oracle action was invalid"}
+	var compact := CompactState.new()
+	if not compact.capture_state(state) or not compact.is_structurally_valid():
+		return {"supported": false, "exact": false, "reason": compact.capture_error}
+	if not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+		return {
+			"supported": false,
+			"exact": false,
+			"reason": String(kernel.call("get_last_error")),
+		}
+	var actual: Dictionary = kernel.call(
+		"apply_activate_transition",
+		action.source_index,
+		action.target_kind,
+		action.target_index,
+		action.activation_index,
+		action.source_instance_id
+	) as Dictionary
+	if not bool(actual.get("supported", false)) or not bool(actual.get("valid", false)):
+		return {
+			"supported": bool(actual.get("supported", false)),
+			"exact": false,
+			"reason": String(actual.get("reason", "Native action was invalid")),
+		}
+	var result_compact: CompactState = CompactState.from_variant_payload(
+		actual.get("payload", {}) as Dictionary
+	)
+	var actual_state: State = result_compact.restore() if result_compact != null else null
+	var expected_state: State = expected.get("state") as State
+	var state_equal: bool = (
+		actual_state != null
+		and expected_state != null
+		and StateKey.build(actual_state) == StateKey.build(expected_state)
+	)
+	var exact: bool = (
+		state_equal
+		and actual_state.state_version == expected_state.state_version
+		and actual.get("captures", []) == expected.get("captures", [])
+		and actual.get("exiles", []) == expected.get("exiles", [])
+		and actual.get("events", []) == expected.get("events", [])
+	)
+	var first_event_difference: Dictionary = _first_event_difference(
+		actual.get("events", []) as Array,
+		expected.get("events", []) as Array
+	)
+	return {
+		"supported": true,
+		"exact": exact,
+		"reason": "" if exact else "Native state or ordered outputs differed",
+		"details": {} if exact else {
+			"state_equal": state_equal,
+			"state_version": [
+				actual_state.state_version if actual_state != null else -1,
+				expected_state.state_version if expected_state != null else -1,
+			],
+			"captures_equal": actual.get("captures", []) == expected.get("captures", []),
+			"exiles_equal": actual.get("exiles", []) == expected.get("exiles", []),
+			"actual_captures": actual.get("captures", []),
+			"expected_captures": expected.get("captures", []),
+			"actual_exiles": actual.get("exiles", []),
+			"expected_exiles": expected.get("exiles", []),
+			"actual_events": _summarize_events(actual.get("events", []) as Array),
+			"expected_events": _summarize_events(expected.get("events", []) as Array),
+			"first_event_difference": first_event_difference,
+		},
+	}
+
+
+func _first_event_difference(actual: Array, expected: Array) -> Dictionary:
+	var shared_size: int = mini(actual.size(), expected.size())
+	for event_index: int in range(shared_size):
+		if actual[event_index] != expected[event_index]:
+			return {
+				"index": event_index,
+				"actual": actual[event_index],
+				"expected": expected[event_index],
+			}
+	if actual.size() != expected.size():
+		return {
+			"index": shared_size,
+			"actual": actual[shared_size] if shared_size < actual.size() else null,
+			"expected": expected[shared_size] if shared_size < expected.size() else null,
+		}
+	return {}
+
+
+func _test_activation_runtime_index_changes(kernel: Object) -> void:
+	var replacement_activation: Dictionary = {
+		"retained_on_flip": false,
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_OTHER_ALLY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		},
+	}
+	var source: Dictionary = _make_plain_card(
+		&"原生主动替换源",
+		&"native_activation_replacement_source",
+		Rules.PLAYER_OWNER,
+		[2, 2, 2, 2]
+	)
+	source["ki"] = 3
+	source["active_abilities"] = [
+		{
+			"retained_on_flip": true,
+			"modifiers": [{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE}],
+		},
+		{
+			"retained_on_flip": false,
+			"activation": {
+				"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": Catalog.TARGET_ANY_ENEMY_BOARD,
+				"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+		},
+		{
+			"retained_on_flip": false,
+			"activation": {
+				"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+				"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+		},
+		{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.CARD_KI_CHANGED,
+				"conditions": [{"type": Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF}],
+				"actions": [{
+					"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": replacement_activation,
+				}],
+			}],
+		},
+	]
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[1] = _slot(
+		_make_plain_card(&"原生主动替换友方", &"native_activation_replacement_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		Rules.PLAYER_OWNER
+	)
+	board[5] = _slot(
+		_make_plain_card(&"原生主动替换敌方", &"native_activation_replacement_enemy", Rules.OPPONENT_OWNER, [9, 9, 9, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	var state := State.new(
+		board,
+		[_make_plain_card(&"原生主动替换手牌", &"native_activation_replacement_hand", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[
+			_make_plain_card(&"原生主动替换抽牌甲", &"native_activation_replacement_draw_a", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"原生主动替换抽牌乙", &"native_activation_replacement_draw_b", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		]
+	)
+	var original_action: Action = Action.make_activate(
+		4,
+		&"native_activation_replacement_source",
+		Action.TARGET_BOARD_CELL,
+		5,
+		0
+	)
+	var expected: Dictionary = Simulator.apply_action(state, original_action)
+	_check(bool(expected.get("valid", false)), "Runtime activation replacement oracle action is valid")
+	if not bool(expected.get("valid", false)):
+		return
+	var result_state: State = expected.get("state") as State
+	_check(
+		result_state != null and result_state.active_player == Rules.PLAYER_OWNER,
+		"Empty opponent turn returns control after runtime activation replacement"
+	)
+	if result_state == null or result_state.active_player != Rules.PLAYER_OWNER:
+		return
+	var result_source: Dictionary = (result_state.board[4] as Dictionary).get("card", {}) as Dictionary
+	var runtime_activation_count: int = 0
+	var retained_modifier: bool = false
+	for ability_value: Variant in result_source.get("active_abilities", []) as Array:
+		if not ability_value is Dictionary:
+			continue
+		var ability: Dictionary = ability_value as Dictionary
+		if ability.has("activation"):
+			runtime_activation_count += 1
+		if ability.has("modifiers"):
+			retained_modifier = true
+	_check(
+		runtime_activation_count == 1 and retained_modifier,
+		"Granting an activation replaces old activations while preserving passives"
+	)
+	_check_activation_transition_parity(
+		kernel,
+		state,
+		4,
+		&"native_activation_replacement_source",
+		Action.TARGET_BOARD_CELL,
+		5,
+		0,
+		"Runtime activation replacement during cost resolution"
+	)
+	_check_legal_action_parity(
+		kernel,
+		result_state,
+		Rules.PLAYER_OWNER,
+		"Runtime activation replacement reindexes the new activation"
+	)
+	var replacement_actions: Array[Action] = []
+	for action: Action in Simulator.get_legal_actions_for_owner(result_state, Rules.PLAYER_OWNER):
+		if (
+			action.action_type == Action.TYPE_ACTIVATE
+			and action.source_instance_id == &"native_activation_replacement_source"
+		):
+			replacement_actions.append(action)
+	_check(
+		not replacement_actions.is_empty()
+		and replacement_actions[0].activation_index == 0
+		and replacement_actions[0].target_index == 1,
+		"The dynamically granted activation is exposed at filtered index zero"
+	)
+	var stale_result: Dictionary = kernel.call(
+		"apply_activate_transition",
+		4,
+		Action.TARGET_BOARD_CELL,
+		3,
+		1,
+		&"native_activation_replacement_source"
+	) as Dictionary
+	_check(
+		bool(stale_result.get("supported", false))
+		and not bool(stale_result.get("valid", true))
+		and not stale_result.has("payload")
+		and (stale_result.get("events", []) as Array).is_empty(),
+		"A stale activation index is rejected without partial output after replacement"
+	)
+	if not replacement_actions.is_empty():
+		var replacement_action: Action = replacement_actions[0]
+		_check_activation_transition_parity(
+			kernel,
+			result_state,
+			replacement_action.source_index,
+			replacement_action.source_instance_id,
+			replacement_action.target_kind,
+			replacement_action.target_index,
+			replacement_action.activation_index,
+			"Dynamically granted activation transition"
+		)
+
+
 func _report_catalog_trigger_inventory() -> void:
 	var event_counts: Dictionary = {}
 	var condition_counts: Dictionary = {}
@@ -984,6 +1394,113 @@ func _first_opening() -> State:
 		return null
 	var built: Dictionary = EnemyStateFactory.build(games[0], matchups[0])
 	return built.get("state") as State
+
+
+func _report_real_quick_activation_coverage(kernel: Object) -> void:
+	const MAX_ROLLOUT_ACTIONS: int = 12
+	var unique_openings: Dictionary = {}
+	var evaluated_states: Dictionary = {}
+	var covered_cards: Dictionary = {}
+	var total_legal: int = 0
+	var supported: int = 0
+	var exact_parity: int = 0
+	var mismatches: int = 0
+	var rejection_reasons: Dictionary = {}
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	for matchup: Dictionary in matchups:
+		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
+			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			var state: State = built.get("state") as State
+			if state == null:
+				continue
+			var opening_key: String = StateKey.build(state)
+			if unique_openings.has(opening_key):
+				continue
+			unique_openings[opening_key] = true
+			var rollout_states: Dictionary = {}
+			for _step: int in range(MAX_ROLLOUT_ACTIONS):
+				var state_key: String = StateKey.build(state)
+				if rollout_states.has(state_key):
+					break
+				rollout_states[state_key] = true
+				var legal_actions: Array = Simulator.get_legal_actions(state)
+				if legal_actions.is_empty():
+					break
+				if not evaluated_states.has(state_key):
+					evaluated_states[state_key] = true
+					for action_value: Variant in legal_actions:
+						var activation_action: Action = action_value as Action
+						if activation_action == null or activation_action.action_type != Action.TYPE_ACTIVATE:
+							continue
+						total_legal += 1
+						if (
+							activation_action.source_index >= 0
+							and activation_action.source_index < state.board.size()
+							and state.board[activation_action.source_index] is Dictionary
+						):
+							var source_card: Dictionary = (
+								(state.board[activation_action.source_index] as Dictionary).get("card", {})
+								as Dictionary
+							)
+							covered_cards[String(source_card.get("card_id", &"unknown"))] = true
+						var comparison: Dictionary = _evaluate_activation_transition(
+							kernel,
+							state,
+							activation_action
+						)
+						if bool(comparison.get("supported", false)):
+							supported += 1
+						else:
+							var reason: String = String(comparison.get("reason", "unspecified"))
+							rejection_reasons[reason] = int(rejection_reasons.get(reason, 0)) + 1
+						if bool(comparison.get("exact", false)):
+							exact_parity += 1
+						else:
+							mismatches += 1
+							print(
+								"DUEL_NATIVE_QUICK_ACTIVATION_MISMATCH action=%s reason=%s details=%s"
+								% [
+									activation_action.canonical_key(),
+									comparison.get("reason", ""),
+									JSON.stringify(comparison.get("details", {})),
+								]
+							)
+				var chosen_action: Action = null
+				for action_value: Variant in legal_actions:
+					var candidate: Action = action_value as Action
+					if candidate != null and candidate.action_type == Action.TYPE_PLAY:
+						chosen_action = candidate
+						break
+				if chosen_action == null:
+					chosen_action = legal_actions[0] as Action
+				if chosen_action == null:
+					break
+				var transition: Dictionary = Simulator.apply_action(state, chosen_action)
+				if not bool(transition.get("valid", false)):
+					break
+				state = transition.get("state") as State
+				if state == null:
+					break
+	var sorted_cards: Array = covered_cards.keys()
+	sorted_cards.sort()
+	_check(total_legal > 0, "Real Quick rollouts expose activation actions")
+	_check(
+		mismatches == 0 and supported == total_legal and exact_parity == total_legal,
+		"Every real Quick-derived activation action has exact native parity"
+	)
+	print(
+		"DUEL_NATIVE_QUICK_ACTIVATION_COVERAGE openings=%d states=%d cards=%s total_legal=%d supported=%d exact_parity=%d mismatches=%d rejection_reasons=%s"
+		% [
+			unique_openings.size(),
+			evaluated_states.size(),
+			JSON.stringify(sorted_cards),
+			total_legal,
+			supported,
+			exact_parity,
+			mismatches,
+			JSON.stringify(rejection_reasons),
+		]
+	)
 
 
 func _report_real_quick_native_coverage(kernel: Object) -> void:

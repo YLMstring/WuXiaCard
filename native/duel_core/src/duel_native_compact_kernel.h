@@ -126,10 +126,13 @@ class DuelNativeCompactKernel : public RefCounted {
 		SWAP_SELF_WITH_TRIGGER_CARD,
 		ATTACK_TRIGGER_CARD,
 		STANDARD_ATTACK_WITH_SELF,
+		STANDARD_ATTACK_WITH_CARD,
 		MOVE_SELF_TO_TARGET,
 		SWAP_SELF_WITH_TARGET,
 		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 		TRANSFER_CARD_RESOURCE,
+		DISTRIBUTE_KI,
+		ADD_CARD_TO_HAND,
 		REVEAL_HAND_CARDS,
 		REVEAL_CARD,
 		GRANT_EXTRA_CARD_PLAY,
@@ -287,6 +290,7 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	struct CompiledAction {
 		bool declaration_valid = true;
+		StringName declaration_type;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
 		CardRefOpcode from_card_ref = CardRefOpcode::UNSUPPORTED;
@@ -463,6 +467,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t action_subject_logical_index = -1;
 		int32_t selected_card_index = -1;
 		int32_t selected_card_owner = 0;
+		int32_t selected_card_zone = -1;
+		int32_t selected_card_logical_index = -1;
 		StringName activation_target_kind;
 		int32_t activation_target_index = -1;
 		bool record_direct_board_changes = true;
@@ -486,6 +492,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array events;
 		Array captures;
 		Array exiles;
+		std::vector<std::pair<int64_t, int64_t>> protected_power_batch_ranges;
 		std::vector<ExtraPlayRequest> extra_play_requests;
 		bool flip_prevented = false;
 	};
@@ -785,6 +792,7 @@ private:
 		Resolution &resolution
 	) const;
 	void assign_power_change_batch(
+		const NativeState &value,
 		Resolution &resolution,
 		int64_t first_event_index,
 		const EventGroup &group,
