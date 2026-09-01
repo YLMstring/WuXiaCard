@@ -87,7 +87,7 @@ func _run() -> void:
 	_test_attack_modifier_transition_parity(kernel)
 	_test_event_reaction_primitive_parity(kernel)
 	_test_summon_before_lifecycle_parity(kernel)
-	_test_generated_summon_transition_parity(kernel)
+	_test_generated_summon_and_turn_boundary_transition_parity(kernel)
 	_test_suppression_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
@@ -1018,6 +1018,67 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 
 
 func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
+	var swap_listener: Dictionary = _make_plain_card(
+		&"进场换位监听者",
+		&"native_summoned_swap_listener",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	swap_listener["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"conditions": [
+				{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY},
+				{"type": Catalog.CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+			],
+			"actions": [{"type": Catalog.ACTION_SWAP_SELF_WITH_TRIGGER_CARD}],
+		}],
+	}]
+	var swapped_summon: Dictionary = _make_plain_card(
+		&"换位后进场牌",
+		&"native_summoned_swapped_card",
+		Rules.PLAYER_OWNER,
+		[0, 0, 0, 0]
+	)
+	swapped_summon["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	var swapped_board: Array = Rules.empty_board()
+	swapped_board[0] = _slot(swap_listener, Rules.OPPONENT_OWNER)
+	var swapped_state := State.new(
+		swapped_board,
+		[
+			swapped_summon,
+			_make_plain_card(&"换位后续手牌", &"native_summoned_swap_filler", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		],
+		[_make_plain_card(&"换位敌方手牌", &"native_summoned_swap_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.PLAYER_OWNER
+	)
+	var swapped_expected: Dictionary = Simulator.apply_action(
+		swapped_state,
+		Action.make_play(0, 1, &"native_summoned_swapped_card")
+	)
+	var swapped_result: State = swapped_expected.get("state") as State
+	_check(
+		swapped_result != null
+		and StringName(((swapped_result.board[0] as Dictionary).get("card", {}) as Dictionary).get("instance_id", &""))
+		== &"native_summoned_swapped_card"
+		and int(((swapped_result.board[0] as Dictionary).get("card", {}) as Dictionary).get("ki", 0)) == 1,
+		"A summoned hand instance moved during CARD_SUMMONED resolves CARD_AFTER_SUMMONED from its current cell"
+	)
+	_check_transition_parity(
+		kernel,
+		swapped_state,
+		0,
+		1,
+		&"native_summoned_swapped_card",
+		"CARD_SUMMONED relocation preserves full-board CARD_AFTER_SUMMONED discovery"
+	)
+
 	var no_form_board: Array = Rules.empty_board()
 	no_form_board[3] = _slot(
 		_make_plain_card(&"无招相邻友方", &"native_no_form_ally", Rules.PLAYER_OWNER, [9, 9, 9, 9]),
@@ -1387,7 +1448,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		)
 
 
-func _test_generated_summon_transition_parity(kernel: Object) -> void:
+func _test_generated_summon_and_turn_boundary_transition_parity(kernel: Object) -> void:
 	var depart_source: Dictionary = Catalog.create_instance(
 		&"TiYunZong2", Rules.PLAYER_OWNER, &"native_generated_depart_source"
 	)
@@ -1431,6 +1492,194 @@ func _test_generated_summon_transition_parity(kernel: Object) -> void:
 	_check_transition_parity(
 		kernel, depart_state, 0, 4, &"native_generated_depart_source",
 		"Depart, fresh-copy summon, and last-summoned reference"
+	)
+	var end_source: Dictionary = _make_plain_card(
+		&"回合结束额外出牌",
+		&"native_boundary_end_source",
+		Rules.PLAYER_OWNER,
+		[0, 0, 0, 0]
+	)
+	end_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1}],
+		}],
+	}]
+	var end_board: Array = Rules.empty_board()
+	end_board[0] = _slot(end_source, Rules.PLAYER_OWNER)
+	var end_state := State.new(
+		end_board,
+		[
+			_make_plain_card(&"结束节点出牌", &"native_boundary_end_play", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+			_make_plain_card(&"结束节点后续", &"native_boundary_end_filler", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		],
+		[_make_plain_card(&"结束节点敌手", &"native_boundary_end_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.PLAYER_OWNER
+	)
+	end_state.max_turns = 1
+	var end_expected: Dictionary = Simulator.apply_action(
+		end_state,
+		Action.make_play(0, 4, &"native_boundary_end_play")
+	)
+	var end_result: State = end_expected.get("state") as State
+	_check(
+		end_result != null
+		and end_result.turn_count == 1
+		and end_result.active_player == Rules.PLAYER_OWNER
+		and end_result.extra_card_plays_remaining == 1
+		and end_result.end_turn_triggers_resolved,
+		"End-turn granted extra play survives the action cap and keeps the same owner"
+	)
+	_check_transition_parity(
+		kernel, end_state, 0, 4, &"native_boundary_end_play",
+		"End-turn extra play precedes action-cap terminal detection"
+	)
+
+	var empty_owner_source: Dictionary = _make_plain_card(
+		&"空回合节点",
+		&"native_boundary_empty_source",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	empty_owner_source["active_abilities"] = [
+		{
+			"triggers": [{
+				"event": Catalog.TRIGGER_START_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			}],
+		},
+		{
+			"triggers": [{
+				"event": Catalog.TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{
+					"type": Catalog.ACTION_CHANGE_POWERS,
+					"amount": 1,
+					"card": Catalog.CARD_REF_ABILITY_SOURCE,
+				}],
+			}],
+		},
+	]
+	var empty_owner_board: Array = Rules.empty_board()
+	empty_owner_board[0] = _slot(empty_owner_source, Rules.OPPONENT_OWNER)
+	var empty_owner_state := State.new(
+		empty_owner_board,
+		[
+			_make_plain_card(&"空回合前出牌", &"native_boundary_empty_play", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+			_make_plain_card(&"空回合后续", &"native_boundary_empty_filler", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var empty_owner_expected: Dictionary = Simulator.apply_action(
+		empty_owner_state,
+		Action.make_play(0, 4, &"native_boundary_empty_play")
+	)
+	var empty_owner_result: State = empty_owner_expected.get("state") as State
+	var empty_owner_card: Dictionary = (
+		(empty_owner_result.board[0] as Dictionary).get("card", {}) as Dictionary
+		if empty_owner_result != null
+		else {}
+	)
+	_check(
+		empty_owner_result != null
+		and empty_owner_result.active_player == Rules.PLAYER_OWNER
+		and int(empty_owner_card.get("ki", 0)) == 1
+		and empty_owner_card.get("powers", []) == [2, 2, 2, 2],
+		"An owner with no legal action still resolves start and end turn nodes"
+	)
+	_check_transition_parity(
+		kernel, empty_owner_state, 0, 4, &"native_boundary_empty_play",
+		"Empty owner turns emit both boundary trigger events"
+	)
+
+	var terminal_start_source: Dictionary = _make_plain_card(
+		&"终局后不可开始",
+		&"native_boundary_terminal_start",
+		Rules.OPPONENT_OWNER,
+		[1, 1, 1, 1]
+	)
+	terminal_start_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	var terminal_board: Array = Rules.empty_board()
+	terminal_board[0] = _slot(terminal_start_source, Rules.OPPONENT_OWNER)
+	var terminal_state := State.new(
+		terminal_board,
+		[_make_plain_card(&"终局行动", &"native_boundary_terminal_play", Rules.PLAYER_OWNER, [0, 0, 0, 0])],
+		[_make_plain_card(&"终局敌手", &"native_boundary_terminal_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.PLAYER_OWNER
+	)
+	terminal_state.max_turns = 1
+	var terminal_expected: Dictionary = Simulator.apply_action(
+		terminal_state,
+		Action.make_play(0, 4, &"native_boundary_terminal_play")
+	)
+	var terminal_result: State = terminal_expected.get("state") as State
+	_check(
+		terminal_result != null
+		and int((((terminal_result.board[0] as Dictionary).get("card", {}) as Dictionary).get("ki", 0))) == 0,
+		"Terminal detection occurs before the next owner's start-turn trigger"
+	)
+	_check_transition_parity(
+		kernel, terminal_state, 0, 4, &"native_boundary_terminal_play",
+		"Action-cap terminal detection precedes next-owner start"
+	)
+
+	var ending_source: Dictionary = _make_plain_card(
+		&"满场前终局",
+		&"native_boundary_before_end",
+		Rules.OPPONENT_OWNER,
+		[0, 0, 0, 0]
+	)
+	ending_source["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.TRIGGER_BEFORE_DUEL_END,
+			"conditions": [{"type": Catalog.CONDITION_OWNER_DID_NOT_WIN}],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	var ending_board: Array = Rules.empty_board()
+	ending_board[0] = _slot(ending_source, Rules.OPPONENT_OWNER)
+	for cell_index: int in range(1, 8):
+		var owner_id: int = Rules.PLAYER_OWNER if cell_index % 2 == 1 else Rules.OPPONENT_OWNER
+		ending_board[cell_index] = _slot(
+			_make_plain_card(
+				&"满场占位%d" % cell_index,
+				&"native_boundary_full_%d" % cell_index,
+				owner_id,
+				[0, 0, 0, 0]
+			),
+			owner_id
+		)
+	var ending_state := State.new(
+		ending_board,
+		[
+			_make_plain_card(&"满场行动", &"native_boundary_full_play", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+			_make_plain_card(&"满场后续", &"native_boundary_full_filler", Rules.PLAYER_OWNER, [0, 0, 0, 0]),
+		],
+		[_make_plain_card(&"满场敌手", &"native_boundary_full_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
+		Rules.PLAYER_OWNER
+	)
+	var ending_expected: Dictionary = Simulator.apply_action(
+		ending_state,
+		Action.make_play(0, 8, &"native_boundary_full_play")
+	)
+	var ending_result: State = ending_expected.get("state") as State
+	_check(
+		ending_result != null and ending_result.board[0] == null,
+		"Before-duel-end resolves on the full board before terminal detection"
+	)
+	_check_transition_parity(
+		kernel, ending_state, 0, 8, &"native_boundary_full_play",
+		"Full-board before-duel-end reactions precede terminal detection"
 	)
 
 	var perfect_board: Array = Rules.empty_board()

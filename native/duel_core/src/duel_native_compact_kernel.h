@@ -978,12 +978,25 @@ private:
 	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;
 	bool owner_has_legal_play(const NativeState &value, int32_t owner_id) const;
+	bool owner_has_legal_action(const NativeState &value, int32_t owner_id) const;
 	bool is_terminal(const NativeState &value) const;
+	void apply_extra_card_play_requests(
+		NativeState &value,
+		int32_t moving_owner,
+		const std::vector<Resolution::ExtraPlayRequest> &requests,
+		Resolution &resolution,
+		bool coalesce
+	) const;
+	Resolution resolve_before_full_board_end(
+		NativeState &value,
+		std::vector<int32_t> &exile_stack
+	) const;
 	Resolution finish_action(
 		NativeState &value,
 		int32_t moving_owner,
 		int32_t played_card_index,
-		const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests
+		const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests,
+		std::vector<int32_t> &exile_stack
 	) const;
 	Resolution complete_owner_turn_boundary(NativeState &value) const;
 	String board_repetition_signature(const NativeState &value) const;

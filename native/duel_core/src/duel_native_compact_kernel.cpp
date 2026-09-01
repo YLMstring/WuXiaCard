@@ -491,7 +491,8 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 		next,
 		moving_owner,
 		played_card_index,
-		resolution.extra_play_requests
+		resolution.extra_play_requests,
+		exile_stack
 	);
 	if (!finish_resolution.supported) {
 		result["supported"] = false;
@@ -1499,50 +1500,11 @@ bool DuelNativeCompactKernel::validate_action_rule_support(
 	const int32_t hand_zone_index = moving_owner - 1;
 	const int32_t hand_size_after_play = static_cast<int32_t>(value.zones[hand_zone_index].size()) - 1;
 
-	if (
-		board_has_enabled_event(value, StringName("end_owner_turn"))
-		|| (source_enabled && card_has_enabled_event(
-			value,
-			played_card_index,
-			moving_owner,
-			StringName("end_owner_turn")
-		))
-	) {
-		reason = "Play transition does not cover end-turn trigger rules";
-		return false;
-	}
-	if (
-		board_has_enabled_event(value, StringName("start_owner_turn"))
-		|| (source_enabled && card_has_enabled_event(
-			value,
-			played_card_index,
-			moving_owner,
-			StringName("start_owner_turn")
-		))
-	) {
-		reason = "Play transition does not cover start-turn trigger rules";
-		return false;
-	}
 	const int32_t empty_cells_before = static_cast<int32_t>(std::count(
 		value.board_card_indices.begin(),
 		value.board_card_indices.end(),
 		-1
 	));
-	if (
-		empty_cells_before == 1
-		&& (
-			board_has_enabled_event(value, StringName("before_duel_end"))
-			|| (source_enabled && card_has_enabled_event(
-				value,
-				played_card_index,
-				moving_owner,
-				StringName("before_duel_end")
-			))
-		)
-	) {
-		reason = "Full board would trigger an unsupported before-duel-end rule";
-		return false;
-	}
 
 	if (empty_cells_before > 1) {
 		const int32_t next_owner = other_owner(moving_owner);
@@ -6549,7 +6511,19 @@ bool DuelNativeCompactKernel::owner_has_legal_play(
 	) != value.board_card_indices.end();
 }
 
+bool DuelNativeCompactKernel::owner_has_legal_action(
+	const NativeState &value,
+	int32_t owner_id
+) const {
+	if (owner_has_legal_play(value, owner_id)) return true;
+	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return false;
+	return board_has_enabled_activation_for_owner(value, owner_id);
+}
+
 bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
+	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
+		return false;
+	}
 	if (value.scalars[1] >= value.scalars[7]) {
 		return true;
 	}
@@ -6567,14 +6541,67 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 		== value.board_card_indices.end()) {
 		return true;
 	}
-	return !owner_has_legal_play(value, 1) && !owner_has_legal_play(value, 2);
+	return !owner_has_legal_action(value, 1) && !owner_has_legal_action(value, 2);
+}
+
+void DuelNativeCompactKernel::apply_extra_card_play_requests(
+	NativeState &value,
+	int32_t moving_owner,
+	const std::vector<Resolution::ExtraPlayRequest> &requests,
+	Resolution &resolution,
+	bool coalesce
+) const {
+	Array source_instance_ids;
+	int32_t granted_amount = 0;
+	for (const Resolution::ExtraPlayRequest &request : requests) {
+		if (
+			request.owner_id != moving_owner
+			|| request.amount <= 0
+			|| request.source_card_index < 0
+			|| request.source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+		) continue;
+		granted_amount += request.amount;
+		source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
+	}
+	if (source_instance_ids.is_empty()) return;
+	if (coalesce) granted_amount = 1;
+	value.scalars[5] += granted_amount;
+	Dictionary granted;
+	granted["type"] = StringName("extra_card_play_granted");
+	granted["owner_id"] = moving_owner;
+	granted["amount"] = granted_amount;
+	granted["request_count"] = source_instance_ids.size();
+	granted["source_instance_ids"] = source_instance_ids;
+	resolution.events.append(granted);
+}
+
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_before_full_board_end(
+	NativeState &value,
+	std::vector<int32_t> &exile_stack
+) const {
+	Resolution resolution;
+	if (
+		std::find(value.board_card_indices.begin(), value.board_card_indices.end(), -1)
+		!= value.board_card_indices.end()
+	) return resolution;
+	int32_t owner_one_count = 0;
+	int32_t owner_two_count = 0;
+	for (const uint8_t owner : value.board_owners) {
+		if (owner == 1) owner_one_count += 1;
+		else if (owner == 2) owner_two_count += 1;
+	}
+	EventContext context;
+	if (owner_one_count > owner_two_count) context.winning_owners.push_back(1);
+	else if (owner_two_count > owner_one_count) context.winning_owners.push_back(2);
+	return resolve_event(value, StringName("before_duel_end"), context, exile_stack);
 }
 
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	NativeState &value,
 	int32_t moving_owner,
 	int32_t played_card_index,
-	const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests
+	const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests,
+	std::vector<int32_t> &exile_stack
 ) const {
 	Resolution resolution;
 	Dictionary last_hand_plays = value.side_payload.get(
@@ -6591,46 +6618,96 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 
 	value.scalars[1] += 1;
 	value.scalars[12] += 1;
-	Array source_instance_ids;
-	int32_t granted_amount = 0;
-	for (const Resolution::ExtraPlayRequest &request : extra_play_requests) {
-		if (
-			request.owner_id != moving_owner
-			|| request.amount <= 0
-			|| request.source_card_index < 0
-			|| request.source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
-		) continue;
-		granted_amount += request.amount;
-		source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
-	}
-	if (!source_instance_ids.is_empty()) {
-		value.scalars[5] += granted_amount;
-		Dictionary granted;
-		granted["type"] = StringName("extra_card_play_granted");
-		granted["owner_id"] = moving_owner;
-		granted["amount"] = granted_amount;
-		granted["request_count"] = source_instance_ids.size();
-		granted["source_instance_ids"] = source_instance_ids;
-		resolution.events.append(granted);
-	}
+	apply_extra_card_play_requests(
+		value,
+		moving_owner,
+		extra_play_requests,
+		resolution,
+		false
+	);
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
 		value.scalars[0] = moving_owner;
 		return resolution;
 	}
 	value.scalars[5] = 0;
-	value.scalars[6] = 1;
+
+	if (value.scalars[6] == 0) {
+		EventContext end_context;
+		end_context.turn_owner = moving_owner;
+		Resolution end_resolution = resolve_event(
+			value,
+			StringName("end_owner_turn"),
+			end_context,
+			exile_stack
+		);
+		if (!end_resolution.supported) return end_resolution;
+		append_resolution(resolution, end_resolution);
+		value.scalars[6] = 1;
+		apply_extra_card_play_requests(
+			value,
+			moving_owner,
+			end_resolution.extra_play_requests,
+			resolution,
+			true
+		);
+	}
+
+	Resolution before_end = resolve_before_full_board_end(value, exile_stack);
+	if (!before_end.supported) return before_end;
+	append_resolution(resolution, before_end);
+	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
+		value.scalars[0] = moving_owner;
+		return resolution;
+	}
+	value.scalars[5] = 0;
+
 	append_resolution(resolution, complete_owner_turn_boundary(value));
-	if (!is_terminal(value)) {
-		int32_t previous_owner = moving_owner;
-		while (true) {
-			const int32_t turn_owner = other_owner(previous_owner);
-			value.scalars[0] = turn_owner;
-			if (owner_has_legal_play(value, turn_owner)) break;
-			value.scalars[6] = 1;
-			append_resolution(resolution, complete_owner_turn_boundary(value));
-			if (is_terminal(value)) break;
-			previous_owner = turn_owner;
+	if (is_terminal(value)) return resolution;
+
+	int32_t previous_owner = moving_owner;
+	while (true) {
+		const int32_t turn_owner = other_owner(previous_owner);
+		value.scalars[0] = turn_owner;
+		EventContext start_context;
+		start_context.turn_owner = turn_owner;
+		Resolution start_resolution = resolve_event(
+			value,
+			StringName("start_owner_turn"),
+			start_context,
+			exile_stack
+		);
+		if (!start_resolution.supported) return start_resolution;
+		append_resolution(resolution, start_resolution);
+		if (owner_has_legal_action(value, turn_owner)) return resolution;
+
+		EventContext empty_end_context;
+		empty_end_context.turn_owner = turn_owner;
+		Resolution empty_end_resolution = resolve_event(
+			value,
+			StringName("end_owner_turn"),
+			empty_end_context,
+			exile_stack
+		);
+		if (!empty_end_resolution.supported) return empty_end_resolution;
+		append_resolution(resolution, empty_end_resolution);
+		value.scalars[6] = 1;
+		apply_extra_card_play_requests(
+			value,
+			turn_owner,
+			empty_end_resolution.extra_play_requests,
+			resolution,
+			true
+		);
+		Resolution empty_before_end = resolve_before_full_board_end(value, exile_stack);
+		if (!empty_before_end.supported) return empty_before_end;
+		append_resolution(resolution, empty_before_end);
+		if (value.scalars[5] > 0 && owner_has_legal_play(value, turn_owner)) {
+			return resolution;
 		}
+		value.scalars[5] = 0;
+		append_resolution(resolution, complete_owner_turn_boundary(value));
+		if (is_terminal(value)) return resolution;
+		previous_owner = turn_owner;
 	}
 	return resolution;
 }
