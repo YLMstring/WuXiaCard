@@ -85,6 +85,7 @@ func _run() -> void:
 	_test_attack_lifecycle_transition_parity(kernel)
 	_test_attack_modifier_transition_parity(kernel)
 	_test_event_reaction_primitive_parity(kernel)
+	_test_summon_before_lifecycle_parity(kernel)
 	_test_suppression_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
@@ -400,6 +401,40 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 					exact_parity += 1
 				else:
 					mismatches += 1
+					var mismatch_card_id: String = "unknown"
+					var mismatch_hand: Array = opening.get_hand(opening.active_player)
+					if action.source_index >= 0 and action.source_index < mismatch_hand.size():
+						var mismatch_source: Variant = mismatch_hand[action.source_index]
+						if mismatch_source is Dictionary:
+							mismatch_card_id = String((mismatch_source as Dictionary).get("card_id", &"unknown"))
+					var mismatch_actual_compact: CompactState = CompactState.from_variant_payload(
+						actual.get("payload", {}) as Dictionary
+					)
+					var mismatch_actual_state: State = (
+						mismatch_actual_compact.restore() if mismatch_actual_compact != null else null
+					)
+					var mismatch_expected_state: State = expected.get("state") as State
+					print(
+						"DUEL_NATIVE_QUICK_MISMATCH card=%s source=%d target=%d state_equal=%s version=%d/%d captures=%s/%s exiles=%s/%s events=%s/%s"
+						% [
+							mismatch_card_id,
+							action.source_index,
+							action.target_index,
+							str(
+								mismatch_actual_state != null
+								and mismatch_expected_state != null
+								and StateKey.build(mismatch_actual_state) == StateKey.build(mismatch_expected_state)
+							),
+							mismatch_actual_state.state_version if mismatch_actual_state != null else -1,
+							mismatch_expected_state.state_version if mismatch_expected_state != null else -1,
+							JSON.stringify(actual.get("captures", [])),
+							JSON.stringify(expected.get("captures", [])),
+							JSON.stringify(actual.get("exiles", [])),
+							JSON.stringify(expected.get("exiles", [])),
+							JSON.stringify(_summarize_events(actual.get("events", []) as Array)),
+							JSON.stringify(_summarize_events(expected.get("events", []) as Array)),
+						]
+					)
 	_check(unique_openings.size() == 14, "Quick coverage uses 14 unique real openings")
 	_check(mismatches == 0, "Every supported Quick root action has exact oracle parity")
 	print(
@@ -414,6 +449,28 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 			JSON.stringify(rejection_reasons_by_card),
 		]
 	)
+
+
+func _summarize_events(events: Array) -> Array[Dictionary]:
+	var summaries: Array[Dictionary] = []
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value as Dictionary
+		var summary: Dictionary = {"type": event.get("type", &"")}
+		for key: StringName in [
+			&"source_cell",
+			&"target_cell",
+			&"source_owner_id",
+			&"owner_id",
+			&"observer_owner_id",
+			&"logical_hand_index",
+			&"logical_index",
+		]:
+			if event.has(key):
+				summary[key] = event[key]
+		summaries.append(summary)
+	return summaries
 
 
 func _test_basic_transition_parity(kernel: Object) -> void:
@@ -809,6 +866,376 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		&"native_nested_unknown_source",
 		"Unsupported nested action is rejected atomically"
 	)
+
+
+func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
+	var no_form_board: Array = Rules.empty_board()
+	no_form_board[3] = _slot(
+		_make_plain_card(&"无招相邻友方", &"native_no_form_ally", Rules.PLAYER_OWNER, [9, 9, 9, 9]),
+		Rules.PLAYER_OWNER
+	)
+	no_form_board[5] = _slot(
+		_make_plain_card(&"无招相邻敌方", &"native_no_form_enemy", Rules.OPPONENT_OWNER, [9, 9, 9, 9]),
+		Rules.OPPONENT_OWNER
+	)
+	var no_form_state := State.new(
+		no_form_board,
+		[Catalog.create_instance(&"DuGu9Jian1", Rules.PLAYER_OWNER, &"native_no_form")],
+		[
+			_make_plain_card(&"待揭示甲", &"native_no_form_reveal_a", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"待揭示乙", &"native_no_form_reveal_b", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		],
+		Rules.PLAYER_OWNER,
+		0,
+		[
+			_make_plain_card(&"无招本方抽一", &"native_no_form_draw_ally", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"无招本方抽二", &"native_no_form_draw_self", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		],
+		[_make_plain_card(&"无招敌方抽牌", &"native_no_form_draw_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])]
+	)
+	var no_form_expected: Dictionary = Simulator.apply_action(
+		no_form_state,
+		Action.make_play(0, 4, &"native_no_form")
+	)
+	var no_form_events: Array = no_form_expected.get("events", []) as Array
+	_check(
+		_first_event_index(no_form_events, &"card_revealed")
+		< _first_event_index(no_form_events, &"card_exiled"),
+		"No-form reveals the enemy hand before exiling cards"
+	)
+	_check(
+		_count_event_type(no_form_events, &"card_exiled") == 3
+		and _count_event_type(no_form_events, &"card_drawn") == 3,
+		"No-form exiles self and both adjacent cards and draws for each owner"
+	)
+	_check(
+		_count_event_type(no_form_events, &"attack_started") == 0,
+		"A card that leaves during before-summoned skips its standard attack"
+	)
+	_check_transition_parity(
+		kernel,
+		no_form_state,
+		0,
+		4,
+		&"native_no_form",
+		"Before-summoned reveal, self-exile, owner draws, and adjacent snapshot"
+	)
+
+	var anticipate_board: Array = Rules.empty_board()
+	anticipate_board[0] = _slot(
+		Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			&"native_anticipate_enemy_previous"
+		),
+		Rules.OPPONENT_OWNER
+	)
+	anticipate_board[8] = _slot(
+		Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"native_anticipate_ally_previous"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var anticipate_state := State.new(
+		anticipate_board,
+		[Catalog.create_instance(&"DuGu9Jian2", Rules.PLAYER_OWNER, &"native_anticipate")],
+		[_make_plain_card(&"料敌敌手", &"native_anticipate_enemy_hand", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"料敌抽牌", &"native_anticipate_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	anticipate_state.last_hand_play_by_owner = {
+		Rules.PLAYER_OWNER: {
+			"card_id": &"TaiZuChangQuan",
+			"instance_id": &"native_anticipate_ally_previous",
+			"played_by_owner_id": Rules.PLAYER_OWNER,
+		},
+		Rules.OPPONENT_OWNER: {
+			"card_id": &"TaiZuChangQuan",
+			"instance_id": &"native_anticipate_enemy_previous",
+			"played_by_owner_id": Rules.OPPONENT_OWNER,
+		},
+	}
+	var anticipate_expected: Dictionary = Simulator.apply_action(
+		anticipate_state,
+		Action.make_play(0, 4, &"native_anticipate")
+	)
+	var anticipate_result: State = anticipate_expected.get("state") as State
+	_check(
+		anticipate_result != null
+		and anticipate_result.active_player == Rules.PLAYER_OWNER
+		and anticipate_result.extra_card_plays_remaining == 1,
+		"Anticipate retains the acting owner for its granted extra play"
+	)
+	_check(
+		StringName(
+			(anticipate_result.last_hand_play_by_owner.get(Rules.PLAYER_OWNER, {}) as Dictionary).get(
+				"instance_id",
+				&""
+			)
+		) == &"native_anticipate",
+		"A self-exiled hand play is still recorded as the owner's last hand play"
+	)
+	_check_transition_parity(
+		kernel,
+		anticipate_state,
+		0,
+		4,
+		&"native_anticipate",
+		"Before-summoned source snapshot survives self-exile and grants an extra play"
+	)
+
+	var break_all_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"DuGu9Jian3", Rules.PLAYER_OWNER, &"native_break_all")],
+		[_make_plain_card(&"破尽敌手", &"native_break_all_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"破尽抽牌", &"native_break_all_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	var break_all_expected: Dictionary = Simulator.apply_action(
+		break_all_state,
+		Action.make_play(0, 4, &"native_break_all")
+	)
+	var break_all_result: State = break_all_expected.get("state") as State
+	_check(
+		break_all_result != null
+		and break_all_result.active_player == Rules.PLAYER_OWNER
+		and break_all_result.extra_card_plays_remaining == 1
+		and int(
+			break_all_result.pending_non_retained_suppression_by_owner.get(
+				Rules.OPPONENT_OWNER,
+				0
+			)
+		) == 1,
+		"Break-all aggregates its extra play and pending enemy suppression"
+	)
+	_check_transition_parity(
+		kernel,
+		break_all_state,
+		0,
+		4,
+		&"native_break_all",
+		"Before-summoned extra play and pending suppression requests"
+	)
+
+	var consumed_extra_state := State.new(
+		Rules.empty_board(),
+		[
+			_make_plain_card(&"消费额外出牌", &"native_consume_extra", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			_make_plain_card(&"消费后留手", &"native_consume_extra_remain", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+		],
+		[_make_plain_card(&"消费额外敌手", &"native_consume_extra_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	consumed_extra_state.extra_card_plays_remaining = 1
+	var consumed_extra_expected: Dictionary = Simulator.apply_action(
+		consumed_extra_state,
+		Action.make_play(0, 4, &"native_consume_extra")
+	)
+	var consumed_extra_result: State = consumed_extra_expected.get("state") as State
+	_check(
+		consumed_extra_result != null
+		and consumed_extra_result.extra_card_plays_remaining == 0
+		and consumed_extra_result.active_player == Rules.OPPONENT_OWNER,
+		"An existing extra play is consumed before the played card can grant another"
+	)
+	_check_transition_parity(
+		kernel,
+		consumed_extra_state,
+		0,
+		4,
+		&"native_consume_extra",
+		"Existing extra-play consumption"
+	)
+
+	var pending_before_card: Dictionary = _make_plain_card(
+		&"待压制进场前",
+		&"native_pending_before_order",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	pending_before_card["weapon"] = "剑法"
+	pending_before_card["active_abilities"] = [{
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		}],
+	}]
+	var pending_before_state := State.new(
+		Rules.empty_board(),
+		[pending_before_card],
+		[_make_plain_card(&"待压制敌手", &"native_pending_before_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"不应抽到", &"native_pending_before_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	pending_before_state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
+	var pending_before_expected: Dictionary = Simulator.apply_action(
+		pending_before_state,
+		Action.make_play(0, 4, &"native_pending_before_order")
+	)
+	_check(
+		_count_event_type(pending_before_expected.get("events", []) as Array, &"card_drawn") == 0,
+		"Pending suppression is consumed before before-summoned discovery"
+	)
+	_check_transition_parity(
+		kernel,
+		pending_before_state,
+		0,
+		4,
+		&"native_pending_before_order",
+		"Pending suppression precedes the next non-heart before-summoned trigger"
+	)
+
+	var summoned_listener_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [
+			{
+				"event": Catalog.TRIGGER_CARD_SUMMONED,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+			{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+		],
+	}
+	var global_board: Array = Rules.empty_board()
+	var first_listener: Dictionary = _make_plain_card(
+		&"首格进场监听",
+		&"native_global_summon_first",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	first_listener["active_abilities"] = [summoned_listener_ability.duplicate(true)]
+	global_board[0] = _slot(first_listener, Rules.PLAYER_OWNER)
+	var last_listener: Dictionary = _make_plain_card(
+		&"末格进场监听",
+		&"native_global_summon_last",
+		Rules.PLAYER_OWNER,
+		[1, 1, 1, 1]
+	)
+	last_listener["active_abilities"] = [summoned_listener_ability.duplicate(true)]
+	global_board[8] = _slot(last_listener, Rules.PLAYER_OWNER)
+	var global_state := State.new(
+		global_board,
+		[_make_plain_card(&"全场进场源", &"native_global_summon_source", Rules.PLAYER_OWNER, [1, 1, 1, 1])],
+		[_make_plain_card(&"全场敌手", &"native_global_summon_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	var global_expected: Dictionary = Simulator.apply_action(
+		global_state,
+		Action.make_play(0, 4, &"native_global_summon_source")
+	)
+	var global_trigger_cells: Array[int] = []
+	for event_value: Variant in global_expected.get("events", []) as Array:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == &"ability_triggered"
+		):
+			global_trigger_cells.append(int((event_value as Dictionary).get("source_cell", -1)))
+	_check(
+		global_trigger_cells == [0, 8, 0, 8],
+		"CARD_SUMMONED and CARD_AFTER_SUMMONED each scan the full board row-major"
+	)
+	_check_transition_parity(
+		kernel,
+		global_state,
+		0,
+		4,
+		&"native_global_summon_source",
+		"Full-board summoned and after-summoned discovery order"
+	)
+
+	var moved_during_summoned_board: Array = Rules.empty_board()
+	moved_during_summoned_board[5] = _slot(
+		Catalog.create_instance(
+			&"TianWaiYuLong2",
+			Rules.PLAYER_OWNER,
+			&"native_summoned_swap_listener"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var moved_during_summoned_source: Dictionary = _make_after_summoned_card(
+		&"native_summoned_moved_source",
+		{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}
+	)
+	var moved_during_summoned_state := State.new(
+		moved_during_summoned_board,
+		[moved_during_summoned_source],
+		[_make_plain_card(&"换位敌手", &"native_summoned_swap_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_plain_card(&"不应在换位后抽到", &"native_summoned_swap_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+	)
+	var moved_during_summoned_expected: Dictionary = Simulator.apply_action(
+		moved_during_summoned_state,
+		Action.make_play(0, 4, &"native_summoned_moved_source")
+	)
+	_check(
+		_count_event_type(
+			moved_during_summoned_expected.get("events", []) as Array,
+			&"card_drawn"
+		) == 1,
+		"A hand play moved during CARD_SUMMONED still receives CARD_AFTER_SUMMONED"
+	)
+	_check_transition_parity(
+		kernel,
+		moved_during_summoned_state,
+		0,
+		4,
+		&"native_summoned_moved_source",
+		"Hand-play after-summoned follows the surviving instance's current cell"
+	)
+
+	for yunwu_id: StringName in [&"YunWu13Shi2", &"YunWu13Shi3"]:
+		var yunwu_board: Array = Rules.empty_board()
+		var suppressed_enemy: Dictionary = _make_plain_card(
+			yunwu_id,
+			StringName("native_%s_enemy" % String(yunwu_id)),
+			Rules.OPPONENT_OWNER,
+			[9, 9, 9, 9]
+		)
+		suppressed_enemy["active_abilities"] = [{
+			"retained_on_flip": false,
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_SUMMONED,
+				"conditions": [],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			}],
+		}]
+		var enemy_cell: int = 5 if yunwu_id == &"YunWu13Shi3" else 0
+		yunwu_board[enemy_cell] = _slot(suppressed_enemy, Rules.OPPONENT_OWNER)
+		var yunwu_instance_id := StringName("native_%s_source" % String(yunwu_id))
+		var yunwu_state := State.new(
+			yunwu_board,
+			[Catalog.create_instance(yunwu_id, Rules.PLAYER_OWNER, yunwu_instance_id)],
+			[_make_plain_card(&"云雾敌手", StringName("native_%s_hand" % String(yunwu_id)), Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+			Rules.PLAYER_OWNER
+		)
+		var yunwu_expected: Dictionary = Simulator.apply_action(
+			yunwu_state,
+			Action.make_play(0, 4, yunwu_instance_id)
+		)
+		_check(
+			_count_event_type(yunwu_expected.get("events", []) as Array, &"ki_changed") == 0,
+			"%s suppresses full-board summoned reactions before discovery" % String(yunwu_id)
+		)
+		_check_transition_parity(
+			kernel,
+			yunwu_state,
+			0,
+			4,
+			yunwu_instance_id,
+			"%s temporary suppression restores at the owner-turn boundary" % String(yunwu_id)
+		)
 
 
 func _test_suppression_transition_parity(kernel: Object) -> void:
@@ -3853,6 +4280,17 @@ func _first_event_index(events: Array, event_type: StringName) -> int:
 		):
 			return event_index
 	return -1
+
+
+func _count_event_type(events: Array, event_type: StringName) -> int:
+	var count: int = 0
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			count += 1
+	return count
 
 
 func _make_after_summoned_card(instance_id: StringName, action: Dictionary) -> Dictionary:

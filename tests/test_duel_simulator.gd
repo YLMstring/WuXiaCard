@@ -59,6 +59,7 @@ func _run() -> void:
 	_test_trigger_groups_resolve_atomically()
 	_test_passive_trigger_event_semantics()
 	_test_summon_trigger_discovery_and_stale_identity()
+	_test_after_summoned_follows_card_moved_during_summoned()
 	_test_summon_reaction_interrupts_on_play_and_standard_attack()
 	_test_summon_reaction_conditions_and_ability_loss()
 	_test_summon_reactions_use_board_order_and_stop_after_flip()
@@ -2019,6 +2020,60 @@ func _test_summon_trigger_discovery_and_stale_identity() -> void:
 	}
 	var stale_result: Dictionary = Triggers.resolve_group(stale_state, groups[0])
 	_check((stale_result.get("attack_requests", []) as Array).is_empty(), "Stale trigger identity cannot attack a replacement occupant")
+
+
+func _test_after_summoned_follows_card_moved_during_summoned() -> void:
+	var board: Array = Rules.empty_board()
+	board[5] = {
+		"card": Catalog.create_instance(
+			&"TianWaiYuLong2",
+			Rules.PLAYER_OWNER,
+			&"after_summoned_swap_listener"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var summoned: Dictionary = _make_runtime_card(
+		"Moved Summon",
+		[1, 1, 1, 1],
+		Rules.PLAYER_OWNER,
+		&"after_summoned_moved_source",
+		[_draw_ability(1)]
+	)
+	var state := State.new(
+		board,
+		[summoned],
+		[],
+		Rules.PLAYER_OWNER,
+		0,
+		[_make_runtime_card(
+			"Moved Summon Draw",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			&"after_summoned_moved_draw"
+		)]
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4, &"after_summoned_moved_source")
+	)
+	var next_state: State = transition.get("state") as State
+	var moved_slot: Dictionary = next_state.board[5] if next_state != null else {}
+	var moved_card: Dictionary = moved_slot.get("card", {}) as Dictionary
+	_check(
+		next_state != null
+		and StringName(moved_card.get("instance_id", &""))
+		== &"after_summoned_moved_source",
+		"CARD_SUMMONED may move the entering instance to another cell"
+	)
+	var draw_event: Dictionary = _first_event(
+		transition.get("events", []) as Array,
+		&"card_drawn"
+	)
+	_check(
+		_count_events(transition.get("events", []) as Array, &"card_drawn") == 1
+		and int(draw_event.get("source_cell", -1)) == 5,
+		"CARD_AFTER_SUMMONED follows the surviving instance at its current cell"
+	)
 
 
 func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:

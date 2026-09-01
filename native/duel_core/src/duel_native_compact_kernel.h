@@ -121,10 +121,15 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRANSFORM_CARD,
 		RETURN_CARD_TO_HAND,
 		SELF_SWAPPED_WITH_ABILITY_SOURCE,
+		SWAP_SELF_WITH_TRIGGER_CARD,
 		ATTACK_TRIGGER_CARD,
 		STANDARD_ATTACK_WITH_SELF,
 		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 		TRANSFER_CARD_RESOURCE,
+		REVEAL_HAND_CARDS,
+		GRANT_EXTRA_CARD_PLAY,
+		ADD_PENDING_NON_RETAINED_SUPPRESSION,
+		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
 		UNSUPPORTED,
 	};
 
@@ -140,6 +145,19 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD,
 		ABILITY_SOURCE,
 		ATTACKER_CARD,
+		LAST_SUMMONED_CARD,
+		UNSUPPORTED,
+	};
+
+	enum class RecipientOpcode : uint8_t {
+		SELF,
+		OPPONENT,
+		UNSUPPORTED,
+	};
+
+	enum class RevealFilterOpcode : uint8_t {
+		ALL,
+		REMEMBERED,
 		UNSUPPORTED,
 	};
 
@@ -248,6 +266,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
 		ResourceOpcode resource = ResourceOpcode::NONE;
 		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
+		RecipientOpcode recipient = RecipientOpcode::UNSUPPORTED;
+		RevealFilterOpcode reveal_filter = RevealFilterOpcode::UNSUPPORTED;
 		StringName change_reason;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
@@ -310,6 +330,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t summon_cell = -1;
 		int32_t card_index = -1;
 		int32_t owner_id = 0;
+		StringName summon_reason;
+		StringName attack_reason;
+		std::vector<int32_t> attack_redirect_source_card_indices;
+		bool attack_redirect_snapshot_taken = false;
+		Array buffered_placement_events;
 	};
 
 	struct EventContext {
@@ -388,11 +413,18 @@ class DuelNativeCompactKernel : public RefCounted {
 	};
 
 	struct Resolution {
+		struct ExtraPlayRequest {
+			int32_t owner_id = 0;
+			int32_t source_card_index = -1;
+			int32_t source_cell = -1;
+			int32_t amount = 0;
+		};
 		bool supported = true;
 		String reason;
 		Array events;
 		Array captures;
 		Array exiles;
+		std::vector<ExtraPlayRequest> extra_play_requests;
 		bool flip_prevented = false;
 	};
 
@@ -844,7 +876,8 @@ private:
 	Resolution finish_action(
 		NativeState &value,
 		int32_t moving_owner,
-		int32_t played_card_index
+		int32_t played_card_index,
+		const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests
 	) const;
 	Resolution complete_owner_turn_boundary(NativeState &value) const;
 	String board_repetition_signature(const NativeState &value) const;

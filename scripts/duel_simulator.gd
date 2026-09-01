@@ -388,9 +388,15 @@ static func _apply_play_action(state: StateData, action: ActionData) -> Dictiona
 	_append_extra_card_play_requests(extra_card_play_requests, summon_result)
 	_merge_resolution(captures, exiles, events, summon_result)
 
-	if _card_instance_at(next_state, action.target_index, instance_id):
-		var current_slot: Dictionary = next_state.board[action.target_index]
+	var after_summon_cell: int = _find_board_card_cell(
+		next_state,
+		instance_id,
+		action.target_index
+	)
+	if after_summon_cell >= 0:
+		var current_slot: Dictionary = next_state.board[after_summon_cell]
 		var after_context: Dictionary = summon_context.duplicate(true)
+		after_context["trigger_cell"] = after_summon_cell
 		after_context["trigger_owner_id"] = int(current_slot.get("owner", 0))
 		var after_result: Dictionary = _resolve_trigger_event(
 			next_state,
