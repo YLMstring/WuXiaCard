@@ -5367,6 +5367,92 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				resolution
 			);
 		}
+		case ActionOpcode::MOVE_SELF_TO_TARGET: {
+			if (action_context.activation_target_kind != StringName("board_cell")) {
+				return ActionOutcome::NO_EFFECT;
+			}
+			const int32_t target_cell = action_context.activation_target_index;
+			const int32_t moving_card_index = action_context.action_subject_card_index;
+			const int32_t moving_owner = action_context.action_subject_owner;
+			if (
+				target_cell < 0
+				|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+				|| value.board_card_indices[target_cell] >= 0
+			) return ActionOutcome::NO_EFFECT;
+			const int32_t current_cell = find_board_card(
+				value,
+				moving_card_index,
+				action_source_cell
+			);
+			if (
+				current_cell != action_source_cell
+				|| current_cell < 0
+				|| value.board_owners[current_cell] != moving_owner
+			) return ActionOutcome::NO_EFFECT;
+			bool adjacent = false;
+			for (int32_t direction = 0; direction < 4; ++direction) {
+				if (neighbor_index(current_cell, direction) == target_cell) {
+					adjacent = true;
+					break;
+				}
+			}
+			if (!adjacent) return ActionOutcome::NO_EFFECT;
+			const ActionOutcome outcome = move_card_between_cells(
+				value,
+				current_cell,
+				current_cell,
+				target_cell,
+				moving_card_index,
+				moving_owner,
+				true,
+				exile_stack,
+				resolution
+			);
+			if (outcome == ActionOutcome::APPLIED) {
+				execution_state.current_source_cell = find_board_card(
+					value,
+					group.source_card_index,
+					target_cell
+				);
+			}
+			return outcome;
+		}
+		case ActionOpcode::SWAP_SELF_WITH_TARGET: {
+			if (action_context.activation_target_kind != StringName("board_cell")) {
+				return ActionOutcome::NO_EFFECT;
+			}
+			const int32_t target_cell = action_context.activation_target_index;
+			const int32_t target_card_index = action_context.selected_card_index;
+			const int32_t target_owner = action_context.selected_card_owner;
+			if (
+				target_cell < 0
+				|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+				|| target_card_index < 0
+				|| value.board_card_indices[target_cell] != target_card_index
+				|| value.board_owners[target_cell] != target_owner
+			) return ActionOutcome::NO_EFFECT;
+			ActionContext target_context = action_context;
+			target_context.action_subject_card_index = target_card_index;
+			target_context.action_subject_owner = target_owner;
+			target_context.action_subject_zone = 0;
+			target_context.action_subject_logical_index = target_cell;
+			const ActionOutcome outcome = swap_action_subject_with_ability_source(
+				value,
+				group,
+				event_context,
+				target_context,
+				exile_stack,
+				resolution
+			);
+			if (outcome == ActionOutcome::APPLIED) {
+				execution_state.current_source_cell = find_board_card(
+					value,
+					group.source_card_index,
+					target_cell
+				);
+			}
+			return outcome;
+		}
 		case ActionOpcode::ATTACK_TRIGGER_CARD:
 		case ActionOpcode::STANDARD_ATTACK_WITH_SELF: {
 			int32_t source_zone = -1;
@@ -5602,6 +5688,64 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				applied = true;
 			}
 			return applied ? ActionOutcome::APPLIED : ActionOutcome::NO_EFFECT;
+		}
+		case ActionOpcode::REVEAL_CARD: {
+			const int32_t target = resolve_action_card_reference(
+				action.card_ref,
+				event_context,
+				action_context,
+				execution_state
+			);
+			int32_t zone = -1;
+			int32_t owner = 0;
+			int32_t logical_index = -1;
+			if (target < 0 || !locate_card(value, target, zone, owner, logical_index)) {
+				return ActionOutcome::NO_EFFECT;
+			}
+			int32_t expected_owner = 0;
+			if (action.card_ref == CardRefOpcode::SELECTED_CARD) {
+				expected_owner = action_context.selected_card_owner;
+			} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
+				expected_owner = event_context.trigger_owner;
+			} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
+				expected_owner = action_context.ability_source_owner;
+			} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
+				expected_owner = event_context.attacker_owner;
+			}
+			if (expected_owner != 0 && owner != expected_owner) return ActionOutcome::NO_EFFECT;
+			const int32_t observer_owner = resolve_relative_owner(
+				value,
+				action.recipient_owner,
+				action_context,
+				target
+			);
+			if (observer_owner != 1 && observer_owner != 2) return ActionOutcome::NO_EFFECT;
+			StringName zone_name;
+			if (zone == 0) zone_name = StringName("board");
+			else if (zone == 1) zone_name = StringName("hand");
+			else if (zone == 3) zone_name = StringName("discard");
+			else if (zone == 4) zone_name = StringName("removed");
+			else return ActionOutcome::NO_EFFECT;
+			uint8_t &code = value.card_reveal_codes[target];
+			const bool already_revealed = (
+				(observer_owner == 1 && (code == 1 || code == 3 || code == 4))
+				|| (observer_owner == 2 && (code == 2 || code == 3 || code == 4))
+			);
+			if (already_revealed) return ActionOutcome::NO_EFFECT;
+			if (observer_owner == 1) code = code == 2 ? 4 : 1;
+			else code = code == 1 ? 3 : 2;
+			Dictionary revealed;
+			revealed["type"] = StringName("card_revealed");
+			revealed["source_cell"] = action_source_cell;
+			revealed["owner_id"] = owner;
+			revealed["observer_owner_id"] = observer_owner;
+			revealed["card_id"] = value.card_ids[target];
+			revealed["instance_id"] = value.card_instance_ids[target];
+			revealed["zone"] = zone_name;
+			revealed["logical_hand_index"] = zone == 1 ? logical_index : -1;
+			revealed["target_cell"] = zone == 0 ? logical_index : -1;
+			resolution.events.append(revealed);
+			return ActionOutcome::APPLIED;
 		}
 		case ActionOpcode::GRANT_EXTRA_CARD_PLAY: {
 			int32_t source_card_index = action_context.action_subject_card_index;
@@ -5994,7 +6138,10 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 			execution_state
 		);
 	} else if (action.cell_spec == CellSpecOpcode::ACTIVATION_TARGET) {
-		return ActionOutcome::NO_EFFECT;
+		if (action_context.activation_target_kind != StringName("board_cell")) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		target_cell = action_context.activation_target_index;
 	} else if (
 		action.cell_spec == CellSpecOpcode::FIRST_ADJACENT_EMPTY
 		|| action.cell_spec == CellSpecOpcode::FIRST_ADJACENT_OR_ANY_EMPTY

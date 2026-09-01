@@ -72,6 +72,7 @@ func _run() -> void:
 	_test_fresh_prototype_metadata(kernel)
 	_test_activation_legal_action_parity(kernel)
 	_test_activation_transition_parity(kernel)
+	_test_targeted_activation_action_parity(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
 	_test_draw_reveal_and_difficulty_parity(kernel)
@@ -510,6 +511,248 @@ func _test_activation_transition_parity(kernel: Object) -> void:
 		and (unsupported_result.get("captures", []) as Array).is_empty()
 		and (unsupported_result.get("exiles", []) as Array).is_empty(),
 		"Unsupported nested activation reaction is atomic"
+	)
+
+
+func _test_targeted_activation_action_parity(kernel: Object) -> void:
+	var jianfa_board: Array = Rules.empty_board()
+	jianfa_board[4] = _slot(
+		Catalog.create_instance(
+			&"JianFaQinYin2",
+			Rules.PLAYER_OWNER,
+			&"native_jianfa_activation_source"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var jianfa_state := State.new(
+		jianfa_board,
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"native_jianfa_activation_hand"
+		)],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			&"native_jianfa_activation_enemy_hand"
+		)],
+		Rules.PLAYER_OWNER
+	)
+	_check_activation_transition_parity(
+		kernel,
+		jianfa_state,
+		4,
+		&"native_jianfa_activation_source",
+		Action.TARGET_BOARD_CELL,
+		3,
+		0,
+		"JianFa moves to its locked target before granting an extra play"
+	)
+
+	var hanbin_board: Array = Rules.empty_board()
+	hanbin_board[4] = _slot(
+		Catalog.create_instance(
+			&"HanBinZhenQi3",
+			Rules.PLAYER_OWNER,
+			&"native_hanbin_activation_source"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var hanbin_state := State.new(
+		hanbin_board,
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"native_hanbin_activation_hand"
+		)],
+		[
+			Catalog.create_instance(
+				&"TaiZuChangQuan",
+				Rules.OPPONENT_OWNER,
+				&"native_hanbin_activation_target"
+			),
+			Catalog.create_instance(
+				&"TuNaShu1",
+				Rules.OPPONENT_OWNER,
+				&"native_hanbin_activation_enemy_hand"
+			),
+		],
+		Rules.PLAYER_OWNER
+	)
+	_check_activation_transition_parity(
+		kernel,
+		hanbin_state,
+		4,
+		&"native_hanbin_activation_source",
+		Action.TARGET_HAND_SLOT,
+		0,
+		0,
+		"HanBin changes and reveals the exact enemy hand target"
+	)
+
+	var displaced_target_source: Dictionary = _make_activation_source(
+		&"native_displaced_hand_target_source",
+		Catalog.TARGET_ENEMY_HAND_CARD,
+		[
+			{
+				"type": Catalog.ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": Catalog.CARD_REF_SELECTED_CARD,
+			},
+			{
+				"type": Catalog.ACTION_REVEAL_CARD,
+				"card": Catalog.CARD_REF_SELECTED_CARD,
+				"observer": Catalog.OWNER_ABILITY_SOURCE,
+			},
+		]
+	)
+	(displaced_target_source["active_abilities"] as Array).append({
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.CARD_KI_CHANGED,
+			"conditions": [{"type": Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_DISCARD_CARDS,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY}],
+					"limit": 1,
+				},
+			}],
+		}],
+	})
+	var displaced_board: Array = Rules.empty_board()
+	displaced_board[4] = _slot(displaced_target_source, Rules.PLAYER_OWNER)
+	var displaced_state := State.new(
+		displaced_board,
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"native_displaced_hand_target_ally_hand"
+		)],
+		[
+			Catalog.create_instance(
+				&"TaiZuChangQuan",
+				Rules.OPPONENT_OWNER,
+				&"native_displaced_hand_target"
+			),
+			Catalog.create_instance(
+				&"TuNaShu1",
+				Rules.OPPONENT_OWNER,
+				&"native_displaced_hand_fallback"
+			),
+		],
+		Rules.PLAYER_OWNER
+	)
+	_check_activation_transition_parity(
+		kernel,
+		displaced_state,
+		4,
+		&"native_displaced_hand_target_source",
+		Action.TARGET_HAND_SLOT,
+		0,
+		0,
+		"Activation actions follow the locked hand instance after a cost reaction discards it"
+	)
+
+	for activation_index: int in range(3):
+		var youfen_board: Array = Rules.empty_board()
+		youfen_board[4] = _slot(
+			Catalog.create_instance(
+				&"YouFenLaiYi4",
+				Rules.PLAYER_OWNER,
+				StringName("native_youfen_activation_source_%d" % activation_index)
+			),
+			Rules.PLAYER_OWNER
+		)
+		if activation_index == 1:
+			youfen_board[3] = _slot(
+				_make_plain_card(
+					&"原生有凤友方目标",
+					&"native_youfen_activation_ally",
+					Rules.PLAYER_OWNER,
+					[9, 9, 9, 9]
+				),
+				Rules.PLAYER_OWNER
+			)
+		elif activation_index == 2:
+			youfen_board[3] = _slot(
+				_make_plain_card(
+					&"原生有凤敌方目标",
+					&"native_youfen_activation_enemy",
+					Rules.OPPONENT_OWNER,
+					[9, 9, 9, 9]
+				),
+				Rules.OPPONENT_OWNER
+			)
+		var youfen_state := State.new(
+			youfen_board,
+			[Catalog.create_instance(
+				&"TaiZuChangQuan",
+				Rules.PLAYER_OWNER,
+				StringName("native_youfen_activation_hand_%d" % activation_index)
+			)],
+			[Catalog.create_instance(
+				&"TaiZuChangQuan",
+				Rules.OPPONENT_OWNER,
+				StringName("native_youfen_activation_enemy_hand_%d" % activation_index)
+			)],
+			Rules.PLAYER_OWNER
+		)
+		_check_activation_transition_parity(
+			kernel,
+			youfen_state,
+			4,
+			StringName("native_youfen_activation_source_%d" % activation_index),
+			Action.TARGET_BOARD_CELL,
+			3,
+			activation_index,
+			"YouFen activation %d preserves move-or-swap then attack order" % activation_index
+		)
+
+	var sanhuan_board: Array = Rules.empty_board()
+	sanhuan_board[4] = _slot(
+		Catalog.create_instance(
+			&"TaiJiSanHuan5",
+			Rules.PLAYER_OWNER,
+			&"native_sanhuan_activation_source"
+		),
+		Rules.PLAYER_OWNER
+	)
+	var sanhuan_state := State.new(
+		sanhuan_board,
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"native_sanhuan_activation_hand"
+		)],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			&"native_sanhuan_activation_enemy_hand"
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[Catalog.create_instance(
+			&"TuNaShu1",
+			Rules.PLAYER_OWNER,
+			&"native_sanhuan_activation_draw"
+		)]
+	)
+	sanhuan_state.removed_cards[Rules.PLAYER_OWNER] = [Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"native_sanhuan_activation_removed"
+	)]
+	_check_activation_transition_parity(
+		kernel,
+		sanhuan_state,
+		4,
+		&"native_sanhuan_activation_source",
+		Action.TARGET_BOARD_CELL,
+		0,
+		0,
+		"SanHuan summons the selected removed instance at the activation target"
 	)
 
 
@@ -3866,11 +4109,7 @@ func _test_swap_transition_parity(kernel: Object) -> void:
 		"triggers": [{
 			"event": Catalog.CARD_BEFORE_MOVED,
 			"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_ALLY}],
-			"actions": [{
-				"type": Catalog.ACTION_REVEAL_CARD,
-				"card": Catalog.CARD_REF_TRIGGER_CARD,
-				"observer": Catalog.OWNER_ABILITY_SOURCE,
-			}],
+			"actions": [{"type": &"native_unknown_movement_reaction"}],
 		}],
 	}]
 	var unsupported_board: Array = Rules.empty_board()
