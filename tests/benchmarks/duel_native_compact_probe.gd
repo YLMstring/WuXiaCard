@@ -86,6 +86,7 @@ func _run() -> void:
 	_test_attack_modifier_transition_parity(kernel)
 	_test_event_reaction_primitive_parity(kernel)
 	_test_summon_before_lifecycle_parity(kernel)
+	_test_generated_summon_transition_parity(kernel)
 	_test_suppression_transition_parity(kernel)
 	_report_real_quick_native_coverage(kernel)
 	if _failures > 0:
@@ -1236,6 +1237,292 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 			yunwu_instance_id,
 			"%s temporary suppression restores at the owner-turn boundary" % String(yunwu_id)
 		)
+
+
+func _test_generated_summon_transition_parity(kernel: Object) -> void:
+	var depart_source: Dictionary = Catalog.create_instance(
+		&"TiYunZong2", Rules.PLAYER_OWNER, &"native_generated_depart_source"
+	)
+	depart_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [
+				{
+					"type": Catalog.ACTION_DEPART_CARD_FOR_RESUMMON,
+					"card": Catalog.CARD_REF_ABILITY_SOURCE,
+				},
+				{
+					"type": Catalog.ACTION_SUMMON_CARD,
+					"card": {
+						"type": Catalog.CARD_SPEC_FRESH_COPY,
+						"of": Catalog.CARD_REF_ABILITY_SOURCE,
+					},
+					"cell": {
+						"type": Catalog.CELL_REF_INITIAL_CARD_CELL,
+						"card": Catalog.CARD_REF_ABILITY_SOURCE,
+					},
+				},
+				{
+					"type": Catalog.ACTION_GAIN_KI,
+					"amount": 1,
+					"card": Catalog.CARD_REF_LAST_SUMMONED_CARD,
+				},
+			],
+		}],
+	}]
+	var depart_state := State.new(
+		Rules.empty_board(),
+		[
+			depart_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_generated_depart_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_generated_depart_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, depart_state, 0, 4, &"native_generated_depart_source",
+		"Depart, fresh-copy summon, and last-summoned reference"
+	)
+
+	var perfect_board: Array = Rules.empty_board()
+	perfect_board[0] = _slot(
+		Catalog.create_instance(&"QianShouRuLai5", Rules.PLAYER_OWNER, &"native_perfect_listener"),
+		Rules.PLAYER_OWNER
+	)
+	var perfect_trigger: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_perfect_exile_trigger"
+	)
+	perfect_trigger["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_EXILE_SELF}],
+		}],
+	}]
+	var perfect_state := State.new(
+		perfect_board,
+		[
+			perfect_trigger,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_perfect_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_perfect_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, perfect_state, 0, 4, &"native_perfect_exile_trigger",
+		"Perfect runtime copy summons into an exiled card's initial cell"
+	)
+
+	var hand_source: Dictionary = Catalog.create_instance(
+		&"TuNaShu1", Rules.PLAYER_OWNER, &"native_existing_hand_source"
+	)
+	hand_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [
+				{"type": Catalog.ACTION_EXILE_SELF},
+				{
+					"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [Catalog.CARD_ZONE_HAND],
+						"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+						"limit": 1,
+						"required_count": 1,
+					},
+					"actions": [{
+						"type": Catalog.ACTION_SUMMON_CARD,
+						"card": Catalog.CARD_REF_SELECTED_CARD,
+						"cell": {
+							"type": Catalog.CELL_REF_INITIAL_CARD_CELL,
+							"card": Catalog.CARD_REF_ABILITY_SOURCE,
+						},
+					}],
+				},
+			],
+		}],
+	}]
+	var hand_state := State.new(
+		Rules.empty_board(),
+		[
+			hand_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_existing_hand_replacement"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_existing_hand_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, hand_state, 0, 4, &"native_existing_hand_source",
+		"Existing hand instance summons after its source leaves"
+	)
+
+	var removed_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_removed_summon_source"
+	)
+	removed_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_REMOVED],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+					"required_count": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_SUMMON_CARD,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+					"cell": {
+						"type": Catalog.CELL_REF_FIRST_ADJACENT_EMPTY,
+						"card": Catalog.CARD_REF_ABILITY_SOURCE,
+					},
+				}],
+			}],
+		}],
+	}]
+	var removed_state := State.new(
+		Rules.empty_board(),
+		[
+			removed_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_removed_summon_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_removed_summon_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	var removed_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_removed_summon_card"
+	)
+	removed_card["powers"] = [8, 7, 6, 5]
+	removed_state.removed_cards[Rules.PLAYER_OWNER] = [removed_card]
+	_check_transition_parity(
+		kernel, removed_state, 0, 4, &"native_removed_summon_source",
+		"Removed-zone exact instance summons without resetting runtime state"
+	)
+
+	var resummon_board: Array = Rules.empty_board()
+	resummon_board[0] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_resummon_target"),
+		Rules.PLAYER_OWNER
+	)
+	var resummon_source: Dictionary = Catalog.create_instance(
+		&"TuNaShu1", Rules.PLAYER_OWNER, &"native_resummon_source"
+	)
+	resummon_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+					],
+					"limit": 1,
+					"required_count": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				}],
+			}],
+		}],
+	}]
+	var resummon_state := State.new(
+		resummon_board,
+		[
+			resummon_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_resummon_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_resummon_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, resummon_state, 0, 4, &"native_resummon_source",
+		"In-place resummon replaces the old runtime identity with a fresh instance"
+	)
+
+	var top_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_top_discard_source"
+	)
+	top_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_SUMMON_CARD,
+				"card": {
+					"type": Catalog.CARD_SPEC_TOP_DISCARD,
+					"owner": Catalog.OWNER_ABILITY_SOURCE,
+				},
+				"cell": {
+					"type": Catalog.CELL_REF_FIRST_ADJACENT_OR_ANY_EMPTY,
+					"card": Catalog.CARD_REF_ABILITY_SOURCE,
+				},
+			}],
+		}],
+	}]
+	var top_state := State.new(
+		Rules.empty_board(),
+		[
+			top_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_top_discard_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_top_discard_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	top_state.discard_piles[Rules.PLAYER_OWNER] = [
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_top_discard_card"),
+	]
+	_check_transition_parity(
+		kernel, top_state, 0, 4, &"native_top_discard_source",
+		"Top discard instance summons into the first adjacent empty cell"
+	)
+
+	var discarded_board: Array = Rules.empty_board()
+	discarded_board[0] = _slot(
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_discard_anchor"),
+		Rules.OPPONENT_OWNER
+	)
+	var discarded_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_direct_discard_source"
+	)
+	discarded_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+					"required_count": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_DISCARD_CARD,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				}],
+			}],
+		}],
+	}]
+	var discarded_state := State.new(
+		discarded_board,
+		[
+			discarded_source,
+			Catalog.create_instance(&"NianhuaWeiXiao4", Rules.PLAYER_OWNER, &"native_direct_discard_card"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_direct_discard_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, discarded_state, 0, 8, &"native_direct_discard_source",
+		"Discarded exact instance summons into the first owner-adjacent empty cell"
+	)
 
 
 func _test_suppression_transition_parity(kernel: Object) -> void:

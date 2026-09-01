@@ -804,6 +804,13 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (resource.is_empty()) return ResourceOpcode::NONE;
 		return ResourceOpcode::UNSUPPORTED;
 	};
+	auto compile_relative_owner = [](const StringName &owner) {
+		if (owner == StringName("ability_source")) return RelativeOwnerOpcode::ABILITY_SOURCE;
+		if (owner == StringName("opponent_of_ability_source")) return RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE;
+		if (owner == StringName("card_current_owner")) return RelativeOwnerOpcode::CARD_CURRENT;
+		if (owner == StringName("card_original_owner")) return RelativeOwnerOpcode::CARD_ORIGINAL;
+		return RelativeOwnerOpcode::UNSUPPORTED;
+	};
 	if (
 		type == StringName("draw_cards")
 		&& action.size() == 2 + generic_field_count
@@ -1068,6 +1075,83 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		&& action.size() == 1 + generic_field_count
 	) {
 		compiled.opcode = ActionOpcode::TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES;
+	} else if (
+		type == StringName("summon_card")
+		&& action.size() == 3 + generic_field_count
+		&& Variant(action.get("cell", Variant())).get_type() == Variant::DICTIONARY
+	) {
+		compiled.opcode = ActionOpcode::SUMMON_CARD;
+		const Variant card_value = action.get("card", Variant());
+		if (card_value.get_type() == Variant::STRING_NAME || card_value.get_type() == Variant::STRING) {
+			compiled.card_spec = CardSpecOpcode::EXISTING_REFERENCE;
+			compiled.summon_card_ref = compile_card_ref(StringName(card_value));
+			if (compiled.summon_card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+		} else if (card_value.get_type() == Variant::DICTIONARY) {
+			const Dictionary card_spec = card_value;
+			const StringName card_spec_type = card_spec.get("type", StringName());
+			if (
+				(card_spec_type == StringName("fresh_copy") || card_spec_type == StringName("perfect_copy"))
+				&& card_spec.size() == 2
+			) {
+				compiled.card_spec = card_spec_type == StringName("fresh_copy")
+					? CardSpecOpcode::FRESH_COPY
+					: CardSpecOpcode::PERFECT_COPY;
+				compiled.summon_card_ref = compile_card_ref(card_spec.get("of", StringName()));
+				if (compiled.summon_card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+			} else if (card_spec_type == StringName("top_discard") && card_spec.size() == 2) {
+				compiled.card_spec = CardSpecOpcode::TOP_DISCARD;
+				compiled.summon_owner = compile_relative_owner(card_spec.get("owner", StringName()));
+				if (compiled.summon_owner == RelativeOwnerOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+			} else {
+				compiled.declaration_valid = false;
+			}
+		} else {
+			compiled.declaration_valid = false;
+		}
+
+		const Dictionary cell_spec = action.get("cell", Dictionary());
+		const StringName cell_type = cell_spec.get("type", StringName());
+		if (cell_type == StringName("initial_card_cell") && cell_spec.size() == 2) {
+			compiled.cell_spec = CellSpecOpcode::INITIAL_CARD_CELL;
+			compiled.summon_cell_card_ref = compile_card_ref(cell_spec.get("card", StringName()));
+		} else if (cell_type == StringName("activation_target") && cell_spec.size() == 1) {
+			compiled.cell_spec = CellSpecOpcode::ACTIVATION_TARGET;
+		} else if (cell_type == StringName("first_adjacent_empty") && cell_spec.size() == 2) {
+			compiled.cell_spec = CellSpecOpcode::FIRST_ADJACENT_EMPTY;
+			compiled.summon_cell_card_ref = compile_card_ref(cell_spec.get("card", StringName()));
+		} else if (cell_type == StringName("first_adjacent_or_any_empty") && cell_spec.size() == 2) {
+			compiled.cell_spec = CellSpecOpcode::FIRST_ADJACENT_OR_ANY_EMPTY;
+			compiled.summon_cell_card_ref = compile_card_ref(cell_spec.get("card", StringName()));
+		} else if (cell_type == StringName("first_empty_adjacent_to_enemy") && cell_spec.size() == 2) {
+			compiled.cell_spec = CellSpecOpcode::FIRST_EMPTY_ADJACENT_TO_ENEMY;
+			compiled.summon_owner = compile_relative_owner(cell_spec.get("owner", StringName()));
+		} else {
+			compiled.declaration_valid = false;
+		}
+		if (
+			(compiled.cell_spec == CellSpecOpcode::INITIAL_CARD_CELL
+				|| compiled.cell_spec == CellSpecOpcode::FIRST_ADJACENT_EMPTY
+				|| compiled.cell_spec == CellSpecOpcode::FIRST_ADJACENT_OR_ANY_EMPTY)
+			&& compiled.summon_cell_card_ref == CardRefOpcode::UNSUPPORTED
+		) compiled.declaration_valid = false;
+		if (
+			compiled.cell_spec == CellSpecOpcode::FIRST_EMPTY_ADJACENT_TO_ENEMY
+			&& compiled.summon_owner == RelativeOwnerOpcode::UNSUPPORTED
+		) compiled.declaration_valid = false;
+	} else if (
+		type == StringName("resummon_card_in_place")
+		&& action.size() == 2 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::RESUMMON_CARD_IN_PLACE;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+	} else if (
+		type == StringName("depart_card_for_resummon")
+		&& action.size() == 2 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::DEPART_CARD_FOR_RESUMMON;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
 	}
 	return compiled;
 }
@@ -2233,12 +2317,31 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			append_resolution(resolution, after_prevented);
 			continue;
 		}
+		const int32_t post_before_attacker_cell = find_board_card(
+			value,
+			request.attacker_card_index,
+			current_attacker_cell
+		);
+		const int32_t post_before_attacked_cell = find_board_card(
+			value,
+			attacked_card_index,
+			current_attacked_cell
+		);
+		if (
+			post_before_attacker_cell < 0
+			|| value.board_owners[post_before_attacker_cell] != request.attacker_owner
+		) break;
+		if (
+			post_before_attacked_cell < 0
+			|| value.board_owners[post_before_attacked_cell] == resolved_capture_owner
+		) continue;
+		const int32_t flipped_previous_owner = value.board_owners[post_before_attacked_cell];
 		Resolution flip_resolution;
 		if (!flip_card(
 			value,
-			current_attacker_cell,
+			post_before_attacker_cell,
 			request.attacker_card_index,
-			current_attacked_cell,
+			post_before_attacked_cell,
 			attacked_card_index,
 			resolved_capture_owner,
 			before_context,
@@ -2248,11 +2351,11 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		append_resolution(resolution, flip_resolution);
 		attack_flipped_enemy = (
 			attack_flipped_enemy
-			|| attacked_owner != request.attacker_owner
+			|| flipped_previous_owner != request.attacker_owner
 		);
 		EventContext::AttackFlipRecord flip_record;
 		flip_record.card_index = attacked_card_index;
-		flip_record.previous_owner = attacked_owner;
+		flip_record.previous_owner = flipped_previous_owner;
 		attack_flips.push_back(flip_record);
 	}
 	if (attack_started) {
@@ -4482,8 +4585,33 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		case ActionOpcode::CHANGE_POWERS:
 			return change_powers(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
 		case ActionOpcode::GAIN_KI:
-		case ActionOpcode::SPEND_KI:
+		case ActionOpcode::SPEND_KI: {
+			if (action.card_ref_explicit && action.card_ref == CardRefOpcode::LAST_SUMMONED_CARD) {
+				const int32_t target = execution_state.last_summoned_card_index;
+				int32_t zone = -1;
+				int32_t owner = 0;
+				int32_t logical_index = -1;
+				if (target < 0 || !locate_card(value, target, zone, owner, logical_index)) {
+					return ActionOutcome::NO_EFFECT;
+				}
+				CompiledAction selected_action = action;
+				selected_action.card_ref = CardRefOpcode::SELECTED_CARD;
+				ActionContext selected_context = action_context;
+				selected_context.selected_card_index = target;
+				selected_context.action_subject_owner = owner;
+				return change_ki(
+					value,
+					group,
+					selected_action,
+					event_context,
+					selected_context,
+					action_source_cell,
+					exile_stack,
+					resolution
+				);
+			}
 			return change_ki(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
+		}
 		case ActionOpcode::FLIP_SELF:
 			return flip_action_subject(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::GRANT_ABILITY_TO_SELF:
@@ -4803,9 +4931,579 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				action_source_cell,
 				resolution
 			);
+		case ActionOpcode::SUMMON_CARD:
+			return summon_card(
+				value,
+				group,
+				action,
+				event_context,
+				action_context,
+				execution_state,
+				exile_stack,
+				resolution
+			);
+		case ActionOpcode::RESUMMON_CARD_IN_PLACE:
+			return resummon_card_in_place(
+				value,
+				group,
+				action,
+				event_context,
+				action_context,
+				execution_state,
+				exile_stack,
+				resolution
+			);
+		case ActionOpcode::DEPART_CARD_FOR_RESUMMON:
+			return depart_card_for_resummon(
+				value,
+				action,
+				event_context,
+				action_context,
+				execution_state,
+				resolution
+			);
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}
+}
+
+int32_t DuelNativeCompactKernel::resolve_action_card_reference(
+	CardRefOpcode reference,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	const ActionExecutionState &execution_state
+) const {
+	if (reference == CardRefOpcode::SELECTED_CARD) return action_context.selected_card_index;
+	if (reference == CardRefOpcode::TRIGGER_CARD) return event_context.trigger_card_index;
+	if (reference == CardRefOpcode::ABILITY_SOURCE) return action_context.ability_source_card_index;
+	if (reference == CardRefOpcode::ATTACKER_CARD) return event_context.attacker_card_index;
+	if (reference == CardRefOpcode::LAST_SUMMONED_CARD) return execution_state.last_summoned_card_index;
+	return -1;
+}
+
+int32_t DuelNativeCompactKernel::initial_cell_for_reference(
+	CardRefOpcode reference,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	const ActionExecutionState &execution_state
+) const {
+	if (reference == CardRefOpcode::ABILITY_SOURCE) {
+		return action_context.ability_source_zone == 0
+			? action_context.ability_source_logical_index
+			: action_context.ability_source_cell;
+	}
+	if (reference == CardRefOpcode::SELECTED_CARD) {
+		return action_context.action_subject_card_index == action_context.selected_card_index
+			&& action_context.action_subject_zone == 0
+			? action_context.action_subject_logical_index
+			: -1;
+	}
+	if (reference == CardRefOpcode::TRIGGER_CARD) {
+		return event_context.trigger_zone == 0
+			? event_context.trigger_logical_index
+			: event_context.trigger_cell;
+	}
+	if (reference == CardRefOpcode::ATTACKER_CARD) return event_context.attacker_cell;
+	if (reference == CardRefOpcode::LAST_SUMMONED_CARD) return execution_state.last_summoned_cell;
+	return -1;
+}
+
+int32_t DuelNativeCompactKernel::resolve_relative_owner(
+	const NativeState &value,
+	RelativeOwnerOpcode reference,
+	const ActionContext &action_context,
+	int32_t referenced_card_index
+) const {
+	if (reference == RelativeOwnerOpcode::ABILITY_SOURCE) return action_context.ability_source_owner;
+	if (reference == RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE) {
+		return action_context.ability_source_owner == 1 || action_context.ability_source_owner == 2
+			? other_owner(action_context.ability_source_owner)
+			: 0;
+	}
+	if (referenced_card_index < 0) referenced_card_index = action_context.action_subject_card_index;
+	if (
+		referenced_card_index < 0
+		|| referenced_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) return 0;
+	if (reference == RelativeOwnerOpcode::CARD_ORIGINAL) {
+		return value.card_original_owners[referenced_card_index];
+	}
+	if (reference == RelativeOwnerOpcode::CARD_CURRENT) {
+		int32_t zone = -1;
+		int32_t owner = 0;
+		int32_t logical_index = -1;
+		return locate_card(value, referenced_card_index, zone, owner, logical_index) ? owner : 0;
+	}
+	return 0;
+}
+
+const DuelNativeCompactKernel::FreshCardPrototype *DuelNativeCompactKernel::find_fresh_card_prototype(
+	const NativeState &value,
+	const StringName &card_id
+) const {
+	for (const FreshCardPrototype &prototype : value.fresh_card_prototypes) {
+		if (prototype.card_id == card_id) return &prototype;
+	}
+	return nullptr;
+}
+
+StringName DuelNativeCompactKernel::make_generated_instance_id(
+	const NativeState &value,
+	const StringName &card_id
+) const {
+	auto located = [&](const StringName &candidate) {
+		for (const int32_t card_index : value.board_card_indices) {
+			if (card_index >= 0 && value.card_instance_ids[card_index] == candidate) return true;
+		}
+		for (const std::vector<int32_t> &zone : value.zones) {
+			for (const int32_t card_index : zone) {
+				if (value.card_instance_ids[card_index] == candidate) return true;
+			}
+		}
+		return false;
+	};
+	for (int64_t serial = 1; ; ++serial) {
+		const StringName candidate(
+			String("generated_") + String(card_id) + "_" + String::num_int64(serial)
+		);
+		if (!located(candidate)) return candidate;
+	}
+}
+
+int32_t DuelNativeCompactKernel::append_fresh_board_card(
+	NativeState &value,
+	const StringName &card_id,
+	const StringName &instance_id,
+	int32_t owner_id,
+	String &reason
+) const {
+	const FreshCardPrototype *prototype_pointer = find_fresh_card_prototype(value, card_id);
+	if (prototype_pointer == nullptr) {
+		reason = "Summoned card has no fresh-card prototype";
+		return -1;
+	}
+	const FreshCardPrototype prototype = *prototype_pointer;
+	if (
+		prototype.active_ability_set_index < 0
+		|| prototype.active_ability_set_index >= static_cast<int32_t>(compiled_ability_sets.size())
+	) {
+		reason = "Summoned card prototype has no compiled ability set";
+		return -1;
+	}
+	const int32_t card_index = static_cast<int32_t>(value.card_instance_ids.size());
+	value.card_instance_ids.push_back(instance_id);
+	value.card_template_indices.push_back(prototype.template_index);
+	static constexpr uint8_t fresh_runtime_flags = (
+		(1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5)
+	);
+	value.card_runtime_flags.push_back(fresh_runtime_flags);
+	for (const int32_t power : prototype.powers) value.card_powers.push_back(power);
+	value.card_original_owners.push_back(static_cast<uint8_t>(owner_id));
+	value.card_ki.push_back(prototype.ki);
+	value.card_active_ability_set_indices.push_back(prototype.active_ability_set_index);
+	std::vector<RuntimeAbilityEntry> runtime_entries;
+	const std::vector<int32_t> &ability_indices = compiled_ability_sets[
+		prototype.active_ability_set_index
+	].ability_pool_indices;
+	runtime_entries.reserve(ability_indices.size());
+	for (const int32_t compiled_ability_index : ability_indices) {
+		RuntimeAbilityEntry entry;
+		entry.compiled_ability_index = compiled_ability_index;
+		entry.handle = value.next_ability_handle++;
+		runtime_entries.push_back(entry);
+	}
+	value.card_runtime_abilities.push_back(runtime_entries);
+	value.card_runtime_suppression_batches.push_back({});
+	value.card_reveal_codes.push_back(static_cast<uint8_t>(owner_id));
+	value.card_suppression_set_indices.push_back(-1);
+	value.card_hand_slots.push_back(-1);
+	value.card_ids.push_back(card_id);
+	return card_index;
+}
+
+int32_t DuelNativeCompactKernel::append_perfect_copy_board_card(
+	NativeState &value,
+	int32_t copied_card_index,
+	const StringName &instance_id,
+	String &reason
+) const {
+	if (
+		copied_card_index < 0
+		|| copied_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) {
+		reason = "Perfect-copy summon has no copied runtime card";
+		return -1;
+	}
+	const int32_t card_index = static_cast<int32_t>(value.card_instance_ids.size());
+	value.card_instance_ids.push_back(instance_id);
+	value.card_template_indices.push_back(value.card_template_indices[copied_card_index]);
+	value.card_runtime_flags.push_back(
+		value.card_runtime_flags[copied_card_index] & static_cast<uint8_t>(~(1 << 7))
+	);
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		value.card_powers.push_back(value.card_powers[copied_card_index * 4 + direction]);
+	}
+	value.card_original_owners.push_back(value.card_original_owners[copied_card_index]);
+	value.card_ki.push_back(value.card_ki[copied_card_index]);
+	value.card_active_ability_set_indices.push_back(
+		value.card_active_ability_set_indices[copied_card_index]
+	);
+	std::vector<RuntimeAbilityEntry> runtime_entries;
+	runtime_entries.reserve(value.card_runtime_abilities[copied_card_index].size());
+	for (const RuntimeAbilityEntry &copied_entry : value.card_runtime_abilities[copied_card_index]) {
+		RuntimeAbilityEntry entry;
+		entry.compiled_ability_index = copied_entry.compiled_ability_index;
+		entry.handle = value.next_ability_handle++;
+		runtime_entries.push_back(entry);
+	}
+	value.card_runtime_abilities.push_back(runtime_entries);
+	std::vector<RuntimeSuppressionBatch> suppression_batches;
+	suppression_batches.reserve(value.card_runtime_suppression_batches[copied_card_index].size());
+	for (const RuntimeSuppressionBatch &copied_batch : value.card_runtime_suppression_batches[copied_card_index]) {
+		RuntimeSuppressionBatch batch;
+		batch.expires_after_turn = copied_batch.expires_after_turn;
+		batch.entries.reserve(copied_batch.entries.size());
+		for (const RuntimeSuppressionEntry &copied_entry : copied_batch.entries) {
+			RuntimeSuppressionEntry entry;
+			entry.original_index = copied_entry.original_index;
+			entry.compiled_ability_index = copied_entry.compiled_ability_index;
+			entry.handle = value.next_ability_handle++;
+			batch.entries.push_back(entry);
+		}
+		suppression_batches.push_back(batch);
+	}
+	value.card_runtime_suppression_batches.push_back(suppression_batches);
+	value.card_reveal_codes.push_back(value.card_reveal_codes[copied_card_index]);
+	value.card_suppression_set_indices.push_back(
+		value.card_suppression_set_indices[copied_card_index]
+	);
+	value.card_hand_slots.push_back(-1);
+	value.card_ids.push_back(value.card_ids[copied_card_index]);
+	return card_index;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	const int32_t source_owner = action_context.ability_source_owner;
+	if (source_owner != 1 && source_owner != 2) return ActionOutcome::NO_EFFECT;
+	const int32_t source_card_index = action_context.ability_source_card_index;
+	int32_t source_cell = find_board_card(value, source_card_index, execution_state.current_source_cell);
+	if (source_cell < 0) source_cell = execution_state.current_source_cell;
+
+	int32_t referenced_card_index = -1;
+	int32_t existing_zone = -1;
+	int32_t existing_owner = 0;
+	int32_t existing_logical_index = -1;
+	StringName card_id;
+	if (action.card_spec == CardSpecOpcode::TOP_DISCARD) {
+		existing_owner = resolve_relative_owner(value, action.summon_owner, action_context);
+		if (existing_owner != 1 && existing_owner != 2) return ActionOutcome::NO_EFFECT;
+		std::vector<int32_t> &discard = value.zones[existing_owner + 3];
+		if (discard.empty()) return ActionOutcome::NO_EFFECT;
+		referenced_card_index = discard.back();
+		if (!locate_card(value, referenced_card_index, existing_zone, existing_owner, existing_logical_index)) {
+			return ActionOutcome::NO_EFFECT;
+		}
+	} else {
+		referenced_card_index = resolve_action_card_reference(
+			action.summon_card_ref,
+			event_context,
+			action_context,
+			execution_state
+		);
+		if (
+			referenced_card_index < 0
+			|| referenced_card_index >= static_cast<int32_t>(value.card_ids.size())
+		) return ActionOutcome::NO_EFFECT;
+		if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE) {
+			if (!locate_card(value, referenced_card_index, existing_zone, existing_owner, existing_logical_index)) {
+				return ActionOutcome::NO_EFFECT;
+			}
+		}
+	}
+	card_id = value.card_ids[referenced_card_index];
+	if (card_id.is_empty()) return ActionOutcome::NO_EFFECT;
+
+	int32_t target_cell = -1;
+	if (action.cell_spec == CellSpecOpcode::INITIAL_CARD_CELL) {
+		target_cell = initial_cell_for_reference(
+			action.summon_cell_card_ref,
+			event_context,
+			action_context,
+			execution_state
+		);
+	} else if (action.cell_spec == CellSpecOpcode::ACTIVATION_TARGET) {
+		return ActionOutcome::NO_EFFECT;
+	} else if (
+		action.cell_spec == CellSpecOpcode::FIRST_ADJACENT_EMPTY
+		|| action.cell_spec == CellSpecOpcode::FIRST_ADJACENT_OR_ANY_EMPTY
+	) {
+		const int32_t anchor_card_index = resolve_action_card_reference(
+			action.summon_cell_card_ref,
+			event_context,
+			action_context,
+			execution_state
+		);
+		const int32_t anchor_cell = find_board_card(value, anchor_card_index);
+		if (anchor_cell < 0) return ActionOutcome::NO_EFFECT;
+		std::vector<int32_t> empty_neighbors;
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			const int32_t neighbor = neighbor_index(anchor_cell, direction);
+			if (neighbor >= 0 && value.board_card_indices[neighbor] < 0) empty_neighbors.push_back(neighbor);
+		}
+		if (!empty_neighbors.empty()) {
+			std::sort(empty_neighbors.begin(), empty_neighbors.end());
+			target_cell = empty_neighbors.front();
+		} else if (action.cell_spec == CellSpecOpcode::FIRST_ADJACENT_OR_ANY_EMPTY) {
+			for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+				if (value.board_card_indices[cell] < 0) {
+					target_cell = static_cast<int32_t>(cell);
+					break;
+				}
+			}
+		}
+	} else if (action.cell_spec == CellSpecOpcode::FIRST_EMPTY_ADJACENT_TO_ENEMY) {
+		const int32_t reference_owner = resolve_relative_owner(
+			value,
+			action.summon_owner,
+			action_context
+		);
+		if (reference_owner != 1 && reference_owner != 2) return ActionOutcome::NO_EFFECT;
+		for (size_t cell = 0; cell < value.board_card_indices.size() && target_cell < 0; ++cell) {
+			if (value.board_card_indices[cell] >= 0) continue;
+			for (int32_t direction = 0; direction < 4; ++direction) {
+				const int32_t neighbor = neighbor_index(static_cast<int32_t>(cell), direction);
+				if (
+					neighbor >= 0
+					&& value.board_card_indices[neighbor] >= 0
+					&& value.board_owners[neighbor] != reference_owner
+				) {
+					target_cell = static_cast<int32_t>(cell);
+					break;
+				}
+			}
+		}
+	}
+	if (
+		target_cell < 0
+		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| value.board_card_indices[target_cell] >= 0
+	) return ActionOutcome::NO_EFFECT;
+
+	int32_t summoned_card_index = referenced_card_index;
+	StringName instance_id;
+	StringName from_hand_instance_id;
+	StringName from_removed_instance_id;
+	StringName from_discard_instance_id;
+	if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE || action.card_spec == CardSpecOpcode::TOP_DISCARD) {
+		if (existing_zone != 1 && existing_zone != 3 && existing_zone != 4) return ActionOutcome::NO_EFFECT;
+		if ((existing_zone == 1 || existing_zone == 4) && existing_owner != source_owner) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		const int32_t zone_index = existing_zone == 1
+			? existing_owner - 1
+			: (existing_zone == 3 ? existing_owner + 3 : existing_owner + 5);
+		std::vector<int32_t> &zone = value.zones[zone_index];
+		if (
+			existing_logical_index < 0
+			|| existing_logical_index >= static_cast<int32_t>(zone.size())
+			|| zone[existing_logical_index] != summoned_card_index
+		) return ActionOutcome::NO_EFFECT;
+		zone.erase(zone.begin() + existing_logical_index);
+		instance_id = value.card_instance_ids[summoned_card_index];
+		if (existing_zone == 1) {
+			from_hand_instance_id = instance_id;
+			value.card_runtime_flags[summoned_card_index] &= static_cast<uint8_t>(~(1 << 7));
+			value.card_hand_slots[summoned_card_index] = -1;
+		} else if (existing_zone == 3) {
+			from_discard_instance_id = instance_id;
+		} else {
+			from_removed_instance_id = instance_id;
+		}
+	} else {
+		instance_id = make_generated_instance_id(value, card_id);
+		String append_reason;
+		summoned_card_index = action.card_spec == CardSpecOpcode::PERFECT_COPY
+			? append_perfect_copy_board_card(value, referenced_card_index, instance_id, append_reason)
+			: append_fresh_board_card(value, card_id, instance_id, source_owner, append_reason);
+		if (summoned_card_index < 0) {
+			resolution.reason = append_reason;
+			return ActionOutcome::UNSUPPORTED;
+		}
+	}
+
+	value.board_card_indices[target_cell] = summoned_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
+	if (target_cell < value.board_slot_extras.size()) value.board_slot_extras[target_cell] = Dictionary();
+	Dictionary summoned_event;
+	summoned_event["type"] = StringName("card_summoned");
+	summoned_event["source_cell"] = source_cell;
+	summoned_event["source_instance_id"] = source_card_index >= 0
+		? value.card_instance_ids[source_card_index]
+		: StringName();
+	summoned_event["target_cell"] = target_cell;
+	summoned_event["owner_id"] = source_owner;
+	summoned_event["card_id"] = card_id;
+	summoned_event["instance_id"] = instance_id;
+	summoned_event["card"] = restore_runtime_card(value, summoned_card_index);
+	summoned_event["from_hand_instance_id"] = from_hand_instance_id;
+	summoned_event["from_removed_instance_id"] = from_removed_instance_id;
+	summoned_event["from_discard_instance_id"] = from_discard_instance_id;
+	const StringName summon_reason = from_discard_instance_id.is_empty()
+		? StringName("ability_fresh_copy")
+		: StringName("ability_discard_summon");
+	summoned_event["summon_reason"] = summon_reason;
+
+	SummonRequest request;
+	request.summon_cell = target_cell;
+	request.card_index = summoned_card_index;
+	request.owner_id = source_owner;
+	request.summon_reason = summon_reason;
+	request.attack_reason = StringName("generated_summon_standard_attack");
+	request.buffered_placement_events.append(summoned_event);
+	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
+	if (!nested.supported) {
+		resolution.reason = nested.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(resolution, nested);
+	execution_state.last_summoned_card_index = summoned_card_index;
+	execution_state.last_summoned_cell = target_cell;
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in_place(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	const int32_t source_card_index = action_context.action_subject_card_index;
+	const int32_t source_owner = action_context.action_subject_owner;
+	const int32_t source_cell = find_board_card(value, source_card_index, execution_state.current_source_cell);
+	if (source_cell < 0 || value.board_owners[source_cell] != source_owner) return ActionOutcome::NO_EFFECT;
+	const int32_t target_card_index = resolve_action_card_reference(
+		action.card_ref,
+		event_context,
+		action_context,
+		execution_state
+	);
+	const int32_t target_cell = find_board_card(value, target_card_index);
+	if (target_cell < 0) return ActionOutcome::NO_EFFECT;
+	const StringName card_id = value.card_ids[target_card_index];
+	const StringName old_instance_id = value.card_instance_ids[target_card_index];
+	const StringName new_instance_id = make_generated_instance_id(value, card_id);
+	value.board_card_indices[target_cell] = -1;
+	value.board_owners[target_cell] = 0;
+	if (target_cell < value.board_slot_extras.size()) value.board_slot_extras[target_cell] = Dictionary();
+
+	Dictionary departed;
+	departed["type"] = StringName("card_departed_for_resummon");
+	departed["source_cell"] = source_cell;
+	departed["source_instance_id"] = value.card_instance_ids[source_card_index];
+	departed["target_cell"] = target_cell;
+	departed["owner_id"] = source_owner;
+	departed["old_instance_id"] = old_instance_id;
+	departed["card_id"] = card_id;
+	resolution.events.append(departed);
+
+	String append_reason;
+	const int32_t new_card_index = append_fresh_board_card(
+		value,
+		card_id,
+		new_instance_id,
+		source_owner,
+		append_reason
+	);
+	if (new_card_index < 0) {
+		resolution.reason = append_reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	value.board_card_indices[target_cell] = new_card_index;
+	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
+	const int32_t summon_source_cell = find_board_card(
+		value,
+		source_card_index,
+		source_cell
+	);
+	Dictionary summoned_event;
+	summoned_event["type"] = StringName("card_summoned");
+	summoned_event["source_cell"] = summon_source_cell;
+	summoned_event["source_instance_id"] = value.card_instance_ids[source_card_index];
+	summoned_event["target_cell"] = target_cell;
+	summoned_event["owner_id"] = source_owner;
+	summoned_event["card_id"] = card_id;
+	summoned_event["instance_id"] = new_instance_id;
+	summoned_event["card"] = restore_runtime_card(value, new_card_index);
+	summoned_event["from_hand_instance_id"] = StringName();
+	summoned_event["from_removed_instance_id"] = StringName();
+	summoned_event["from_discard_instance_id"] = StringName();
+	summoned_event["summon_reason"] = StringName("ability_resummon_in_place");
+	SummonRequest request;
+	request.summon_cell = target_cell;
+	request.card_index = new_card_index;
+	request.owner_id = source_owner;
+	request.summon_reason = StringName("ability_resummon_in_place");
+	request.attack_reason = StringName("generated_summon_standard_attack");
+	request.buffered_placement_events.append(summoned_event);
+	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
+	if (!nested.supported) {
+		resolution.reason = nested.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(resolution, nested);
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::depart_card_for_resummon(
+	NativeState &value,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	Resolution &resolution
+) const {
+	const int32_t target_card_index = resolve_action_card_reference(
+		action.card_ref,
+		event_context,
+		action_context,
+		execution_state
+	);
+	const int32_t target_cell = find_board_card(value, target_card_index);
+	if (target_cell < 0) return ActionOutcome::NO_EFFECT;
+	const int32_t target_owner = value.board_owners[target_cell];
+	value.board_card_indices[target_cell] = -1;
+	value.board_owners[target_cell] = 0;
+	if (target_cell < value.board_slot_extras.size()) value.board_slot_extras[target_cell] = Dictionary();
+	Dictionary departed;
+	departed["type"] = StringName("card_departed_for_resummon");
+	departed["source_cell"] = action_context.ability_source_cell;
+	departed["source_instance_id"] = action_context.ability_source_card_index >= 0
+		? value.card_instance_ids[action_context.ability_source_card_index]
+		: StringName();
+	departed["target_cell"] = target_cell;
+	departed["owner_id"] = target_owner;
+	departed["old_instance_id"] = value.card_instance_ids[target_card_index];
+	departed["card_id"] = value.card_ids[target_card_index];
+	resolution.events.append(departed);
+	execution_state.current_source_cell = find_board_card(
+		value,
+		action_context.action_subject_card_index,
+		execution_state.current_source_cell
+	);
+	return ActionOutcome::APPLIED;
 }
 
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_hand(

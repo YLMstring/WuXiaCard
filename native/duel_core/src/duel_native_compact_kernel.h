@@ -130,6 +130,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		GRANT_EXTRA_CARD_PLAY,
 		ADD_PENDING_NON_RETAINED_SUPPRESSION,
 		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+		SUMMON_CARD,
+		RESUMMON_CARD_IN_PLACE,
+		DEPART_CARD_FOR_RESUMMON,
 		UNSUPPORTED,
 	};
 
@@ -158,6 +161,23 @@ class DuelNativeCompactKernel : public RefCounted {
 	enum class RevealFilterOpcode : uint8_t {
 		ALL,
 		REMEMBERED,
+		UNSUPPORTED,
+	};
+
+	enum class CardSpecOpcode : uint8_t {
+		EXISTING_REFERENCE,
+		FRESH_COPY,
+		PERFECT_COPY,
+		TOP_DISCARD,
+		UNSUPPORTED,
+	};
+
+	enum class CellSpecOpcode : uint8_t {
+		INITIAL_CARD_CELL,
+		ACTIVATION_TARGET,
+		FIRST_ADJACENT_EMPTY,
+		FIRST_ADJACENT_OR_ANY_EMPTY,
+		FIRST_EMPTY_ADJACENT_TO_ENEMY,
 		UNSUPPORTED,
 	};
 
@@ -268,6 +288,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
 		RecipientOpcode recipient = RecipientOpcode::UNSUPPORTED;
 		RevealFilterOpcode reveal_filter = RevealFilterOpcode::UNSUPPORTED;
+		CardSpecOpcode card_spec = CardSpecOpcode::UNSUPPORTED;
+		CellSpecOpcode cell_spec = CellSpecOpcode::UNSUPPORTED;
+		CardRefOpcode summon_card_ref = CardRefOpcode::UNSUPPORTED;
+		CardRefOpcode summon_cell_card_ref = CardRefOpcode::UNSUPPORTED;
+		RelativeOwnerOpcode summon_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		StringName change_reason;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
@@ -280,6 +305,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
 		int32_t current_source_cell = -1;
+		int32_t last_summoned_card_index = -1;
+		int32_t last_summoned_cell = -1;
 	};
 
 	struct CompiledModifier {
@@ -848,6 +875,73 @@ private:
 		NativeState &value,
 		const ActionContext &action_context,
 		int32_t source_cell,
+		Resolution &resolution
+	) const;
+	int32_t resolve_action_card_reference(
+		CardRefOpcode reference,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		const ActionExecutionState &execution_state
+	) const;
+	int32_t initial_cell_for_reference(
+		CardRefOpcode reference,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		const ActionExecutionState &execution_state
+	) const;
+	int32_t resolve_relative_owner(
+		const NativeState &value,
+		RelativeOwnerOpcode reference,
+		const ActionContext &action_context,
+		int32_t referenced_card_index = -1
+	) const;
+	const FreshCardPrototype *find_fresh_card_prototype(
+		const NativeState &value,
+		const StringName &card_id
+	) const;
+	StringName make_generated_instance_id(
+		const NativeState &value,
+		const StringName &card_id
+	) const;
+	int32_t append_fresh_board_card(
+		NativeState &value,
+		const StringName &card_id,
+		const StringName &instance_id,
+		int32_t owner_id,
+		String &reason
+	) const;
+	int32_t append_perfect_copy_board_card(
+		NativeState &value,
+		int32_t copied_card_index,
+		const StringName &instance_id,
+		String &reason
+	) const;
+	ActionOutcome summon_card(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome resummon_card_in_place(
+		NativeState &value,
+		const EventGroup &group,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
+	ActionOutcome depart_card_for_resummon(
+		NativeState &value,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		ActionExecutionState &execution_state,
 		Resolution &resolution
 	) const;
 	Resolution restore_temporary_abilities(
