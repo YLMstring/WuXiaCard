@@ -88,6 +88,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ATTACK_FLIPPED_ENEMY,
 		ATTACK_FLIPPED_ALLY_IN_RANGE,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		DRAWN_CARD_IS_ENEMY,
 		TURN_OWNER_IS_SELF,
 		OWNER_DID_NOT_WIN,
 		KI_AT_LEAST,
@@ -130,6 +131,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		GRANT_EXTRA_CARD_PLAY,
 		ADD_PENDING_NON_RETAINED_SUPPRESSION,
 		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+		ENABLE_FUTURE_DRAW_REVEAL,
 		SUMMON_CARD,
 		RESUMMON_CARD_IN_PLACE,
 		DEPART_CARD_FOR_RESUMMON,
@@ -800,7 +802,17 @@ private:
 		int32_t owner_id,
 		int32_t source_cell,
 		int32_t amount,
+		const EventContext &draw_context,
+		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
+	) const;
+	Resolution resolve_difficulty_hand_change(
+		NativeState &value,
+		int32_t owner_id,
+		int32_t previous_size,
+		int32_t current_size,
+		int32_t source_cell,
+		std::vector<int32_t> &exile_stack
 	) const;
 	ActionOutcome discard_locked_cards(
 		NativeState &value,

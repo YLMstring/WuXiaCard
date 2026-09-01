@@ -72,6 +72,7 @@ func _run() -> void:
 	_test_fresh_prototype_metadata(kernel)
 	_test_basic_transition_parity(kernel)
 	_test_draw_trigger_transition_parity(kernel)
+	_test_draw_reveal_and_difficulty_parity(kernel)
 	_test_draw_trigger_rejections(kernel)
 	_test_if_transition_parity(kernel)
 	_test_discard_transition_parity(kernel)
@@ -770,6 +771,147 @@ func _test_draw_trigger_transition_parity(kernel: Object) -> void:
 	)
 
 
+func _test_draw_reveal_and_difficulty_parity(kernel: Object) -> void:
+	var reveal_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_enable_draw_reveal_source"
+	)
+	reveal_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+				"recipient": Catalog.RECIPIENT_OPPONENT,
+			}],
+		}],
+	}]
+	var enable_state := State.new(
+		Rules.empty_board(),
+		[
+			reveal_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_enable_draw_reveal_filler"),
+		],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_enable_draw_reveal_enemy")],
+		Rules.PLAYER_OWNER
+	)
+	_check_transition_parity(
+		kernel, enable_state, 0, 4, &"native_enable_draw_reveal_source",
+		"Future-draw reveal audience is persisted in compact state"
+	)
+
+	var future_draw_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_future_draw_observer")],
+		[
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"native_future_draw_source"),
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_future_draw_filler"),
+		],
+		Rules.OPPONENT_OWNER,
+		0,
+		[],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_future_draw_card")]
+	)
+	future_draw_state.future_draw_reveal_audiences[Rules.OPPONENT_OWNER] = [
+		Rules.PLAYER_OWNER,
+	]
+	_check_transition_parity(
+		kernel, future_draw_state, 0, 4, &"native_future_draw_source",
+		"Future-draw audience sees each newly drawn card"
+	)
+
+	var enemy_draw_board: Array = Rules.empty_board()
+	var enemy_draw_listener: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_enemy_draw_listener"
+	)
+	enemy_draw_listener["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DRAWN,
+			"conditions": [{"type": Catalog.CONDITION_DRAWN_CARD_IS_ENEMY}],
+			"actions": [{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_TRIGGER_CARD,
+			}],
+		}],
+	}]
+	enemy_draw_board[0] = _slot(enemy_draw_listener, Rules.PLAYER_OWNER)
+	var enemy_draw_state := State.new(
+		enemy_draw_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_enemy_draw_player_hand")],
+		[
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"native_enemy_draw_source"),
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_enemy_draw_filler"),
+		],
+		Rules.OPPONENT_OWNER,
+		0,
+		[],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_enemy_draw_card")]
+	)
+	_check_transition_parity(
+		kernel, enemy_draw_state, 0, 4, &"native_enemy_draw_source",
+		"Enemy after-drawn reaction can exile the exact drawn hand instance"
+	)
+
+	var difficulty_play_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_difficulty_player_hand")],
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_play_source"),
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_play_filler"),
+		],
+		Rules.OPPONENT_OWNER,
+		0,
+		[],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_play_draw")]
+	)
+	difficulty_play_state.run_difficulty = 8
+	_check_transition_parity(
+		kernel, difficulty_play_state, 0, 4, &"native_difficulty_play_source",
+		"Difficulty eight draws when opponent hand first becomes one after play"
+	)
+
+	var difficulty_discard_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_discard_source"
+	)
+	difficulty_discard_source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_HAND],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+					"required_count": 1,
+				},
+				"actions": [{
+					"type": Catalog.ACTION_DISCARD_CARD,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				}],
+			}],
+		}],
+	}]
+	var difficulty_discard_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"native_difficulty_discard_player")],
+		[
+			difficulty_discard_source,
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_discard_target"),
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_discard_filler"),
+		],
+		Rules.OPPONENT_OWNER,
+		0,
+		[],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"native_difficulty_discard_draw")]
+	)
+	difficulty_discard_state.run_difficulty = 8
+	_check_transition_parity(
+		kernel, difficulty_discard_state, 0, 4, &"native_difficulty_discard_source",
+		"Difficulty eight also observes nested discard hand changes"
+	)
+
+
 func _test_draw_trigger_rejections(kernel: Object) -> void:
 	var empty_deck_state := State.new(
 		Rules.empty_board(),
@@ -777,7 +919,10 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		[_make_plain_card(&"敌手", &"native_empty_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER
 	)
-	_check_transition_rejected(kernel, empty_deck_state, &"native_empty_draw", "Empty-deck fallback")
+	_check_transition_parity(
+		kernel, empty_deck_state, 0, 4, &"native_empty_draw",
+		"Empty-deck fallback generates TaiZuChangQuan"
+	)
 
 	var listener_board: Array = Rules.empty_board()
 	var draw_listener: Dictionary = _make_plain_card(
@@ -803,7 +948,10 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		0,
 		[_make_plain_card(&"待抽", &"native_listener_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
 	)
-	_check_transition_rejected(kernel, listener_state, &"native_listener_source", "After-drawn listener")
+	_check_transition_parity(
+		kernel, listener_state, 0, 4, &"native_listener_source",
+		"After-drawn listener resolves after the card enters hand"
+	)
 
 	var filtered_source: Dictionary = _make_after_summoned_card(
 		&"native_filtered_source",
