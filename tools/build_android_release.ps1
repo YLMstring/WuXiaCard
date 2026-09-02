@@ -66,22 +66,30 @@ $resolvedEngine = Resolve-EnginePath -RequestedPath $EnginePath
 $templateDirectory = Join-Path $resolvedProject ".summer\local\export-templates\4.7.2"
 $releaseTemplate = Join-Path $templateDirectory "android_release.apk"
 $androidSourceTemplate = Join-Path $templateDirectory "android_source.zip"
-if ([string]::IsNullOrWhiteSpace($TemplateArchive)) {
-    $TemplateArchive = Join-Path $resolvedProject "Godot_v4.7.2-stable_export_templates.tpz"
-}
-$resolvedTemplateArchive = [System.IO.Path]::GetFullPath($TemplateArchive)
-if (-not (Test-Path -LiteralPath $resolvedTemplateArchive -PathType Leaf)) {
-    throw "Godot 4.7.2 export template archive not found: $resolvedTemplateArchive"
-}
+$templateArchiveWasSpecified = -not [string]::IsNullOrWhiteSpace($TemplateArchive)
+$cachedTemplatesExist =
+    (Test-Path -LiteralPath $releaseTemplate -PathType Leaf) -and
+    (Test-Path -LiteralPath $androidSourceTemplate -PathType Leaf)
+if ($templateArchiveWasSpecified -or -not $cachedTemplatesExist) {
+    if (-not $templateArchiveWasSpecified) {
+        $TemplateArchive = Join-Path $resolvedProject "Godot_v4.7.2-stable_export_templates.tpz"
+    }
+    $resolvedTemplateArchive = [System.IO.Path]::GetFullPath($TemplateArchive)
+    if (-not (Test-Path -LiteralPath $resolvedTemplateArchive -PathType Leaf)) {
+        throw "Cached Android templates are missing and the Godot 4.7.2 export template archive was not found: $resolvedTemplateArchive"
+    }
 
-New-Item -ItemType Directory -Force -Path $templateDirectory | Out-Null
-& tar -xf $resolvedTemplateArchive -C $templateDirectory --strip-components=1 `
-    templates/android_release.apk templates/android_source.zip
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $releaseTemplate -PathType Leaf)) {
-    throw "Failed to extract the Android release template."
-}
-if (-not (Test-Path -LiteralPath $androidSourceTemplate -PathType Leaf)) {
-    throw "Failed to extract the Android source template: $androidSourceTemplate"
+    New-Item -ItemType Directory -Force -Path $templateDirectory | Out-Null
+    & tar -xf $resolvedTemplateArchive -C $templateDirectory --strip-components=1 `
+        templates/android_release.apk templates/android_source.zip
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $releaseTemplate -PathType Leaf)) {
+        throw "Failed to extract the Android release template."
+    }
+    if (-not (Test-Path -LiteralPath $androidSourceTemplate -PathType Leaf)) {
+        throw "Failed to extract the Android source template: $androidSourceTemplate"
+    }
+} else {
+    Write-Host "Reusing cached Godot 4.7.2 Android export templates."
 }
 
 $androidRoot = Join-Path $resolvedProject "android"
