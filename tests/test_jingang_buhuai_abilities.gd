@@ -3,7 +3,7 @@ extends SceneTree
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 var _checks: int = 0
@@ -308,7 +308,7 @@ func _test_normal_play_preserves_remaining_physical_slots() -> void:
 	var remaining: Dictionary = _plain(&"normal_remaining", Rules.PLAYER_OWNER)
 	played["hand_slot_index"] = 1
 	remaining["hand_slot_index"] = 4
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(Rules.empty_board(), [played, remaining], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"normal_played")
 	)
@@ -328,7 +328,7 @@ func _test_attack_flip_uses_the_same_discard_prevention() -> void:
 	)
 	var attacker: Dictionary = _plain(&"jingang_attacker", Rules.PLAYER_OWNER, [9, 9, 9, 9])
 	var enemy_left: Dictionary = _plain(&"enemy_left", Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [attacker], [enemy_left], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"jingang_attacker")
 	)
@@ -430,7 +430,7 @@ func _test_removal_does_not_emit_flip_prevented_trigger() -> void:
 		Rules.OPPONENT_OWNER
 	)
 	var attacker: Dictionary = _plain(&"removal_attacker", Rules.PLAYER_OWNER, [9, 9, 9, 9])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [attacker], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"removal_attacker")
 	)

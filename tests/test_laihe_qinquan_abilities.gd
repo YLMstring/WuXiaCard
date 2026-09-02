@@ -4,7 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const CardScene = preload("res://scenes/card_view.tscn")
@@ -67,7 +67,7 @@ func _test_reveal_all_and_future_draws() -> void:
 	]
 	var reveal_one: Dictionary = Catalog.create_instance(&"LaiHeQinQuan1", Rules.PLAYER_OWNER, &"laihe_1")
 	var state := State.new(Rules.empty_board(), [reveal_one], enemy_hand, Rules.PLAYER_OWNER)
-	var result: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
+	var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next: State = result["state"] as State
 	_check(_all_revealed(next.get_hand(Rules.OPPONENT_OWNER), Rules.PLAYER_OWNER), "LaiHe1 reveals every current enemy hand card")
 	_check(_event_count(result.get("events", []), &"card_revealed") == 2, "LaiHe1 emits one event per newly revealed card")
@@ -76,10 +76,10 @@ func _test_reveal_all_and_future_draws() -> void:
 	var drawer: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_drawer")
 	var drawn: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"future_enemy")
 	var state_three := State.new(Rules.empty_board(), [reveal_three], [drawer], Rules.PLAYER_OWNER, 0, [], [drawn])
-	var result_three: Dictionary = Simulator.apply_action_oracle(state_three, Action.make_play(0, 4))
+	var result_three: Dictionary = Simulator.apply_action(state_three, Action.make_play(0, 4))
 	var next_three: State = result_three["state"] as State
 	_check((next_three.future_draw_reveal_audiences.get(Rules.OPPONENT_OWNER, []) as Array).has(Rules.PLAYER_OWNER), "LaiHe3 permanently enables future enemy-draw reveal")
-	var draw_result: Dictionary = Simulator.apply_action_oracle(next_three, Action.make_play(0, 0))
+	var draw_result: Dictionary = Simulator.apply_action(next_three, Action.make_play(0, 0))
 	var after_draw: State = draw_result["state"] as State
 	_check(_is_revealed(after_draw.get_hand(Rules.OPPONENT_OWNER)[0], Rules.PLAYER_OWNER), "LaiHe3 reveals a later enemy draw")
 	var draw_event_index: int = _event_index(draw_result.get("events", []), &"card_drawn")
@@ -93,11 +93,11 @@ func _test_remembered_reveal_and_weakness() -> void:
 	var source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan4", Rules.PLAYER_OWNER, &"laihe_4")
 	var state := State.new(Rules.empty_board(), [source], [remembered, unknown], Rules.PLAYER_OWNER)
 	state.remembered_glyphs_by_owner = {Rules.PLAYER_OWNER: ["吐纳术"]}
-	var reveal_result: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
+	var reveal_result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var revealed_state: State = reveal_result["state"] as State
 	_check(_is_revealed(revealed_state.get_hand(Rules.OPPONENT_OWNER)[0], Rules.PLAYER_OWNER), "LaiHe4 reveals a remembered glyph")
 	_check(not _is_revealed(revealed_state.get_hand(Rules.OPPONENT_OWNER)[1], Rules.PLAYER_OWNER), "LaiHe4 leaves an unknown glyph concealed")
-	var summon_result: Dictionary = Simulator.apply_action_oracle(revealed_state, Action.make_play(0, 0))
+	var summon_result: Dictionary = Simulator.apply_action(revealed_state, Action.make_play(0, 0))
 	var summoned_state: State = summon_result["state"] as State
 	var summoned_card: Dictionary = (summoned_state.board[0] as Dictionary).get("card", {})
 	_check(Abilities.has_modifier(summoned_card, Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE), "LaiHe4 grants weakness to a revealed enemy summon")
@@ -113,7 +113,7 @@ func _test_remembered_reveal_and_weakness() -> void:
 	duplicate_board[3] = {"card": first_source, "owner": Rules.PLAYER_OWNER}
 	duplicate_board[6] = {"card": second_source, "owner": Rules.PLAYER_OWNER}
 	var duplicate_state := State.new(duplicate_board, [], [duplicate_target], Rules.OPPONENT_OWNER)
-	var duplicate_result: Dictionary = Simulator.apply_action_oracle(duplicate_state, Action.make_play(0, 0))
+	var duplicate_result: Dictionary = Simulator.apply_action(duplicate_state, Action.make_play(0, 0))
 	_check(_event_count(duplicate_result.get("events", []), &"ability_gained") == 1, "Structurally identical weakness grants are idempotent")
 
 	var weakness: Dictionary = {
@@ -160,7 +160,7 @@ func _test_enemy_remembered_reveal_and_weakness() -> void:
 	state.remembered_glyphs_by_owner = {
 		Rules.OPPONENT_OWNER: ["吐纳术"],
 	}
-	var reveal_result: Dictionary = Simulator.apply_action_oracle(
+	var reveal_result: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4)
 	)
@@ -178,7 +178,7 @@ func _test_enemy_remembered_reveal_and_weakness() -> void:
 		not _is_revealed(player_hand[2], Rules.OPPONENT_OWNER),
 		"Enemy LaiHe4 leaves a later unrelated glyph concealed"
 	)
-	var summon_result: Dictionary = Simulator.apply_action_oracle(
+	var summon_result: Dictionary = Simulator.apply_action(
 		revealed_state,
 		Action.make_play(0, 0)
 	)
@@ -220,7 +220,7 @@ func _test_flip_protection() -> void:
 	attack_board[5] = {"card": attack_target, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Attacker", "攻", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var attack_state := State.new(attack_board, [attacker], [], Rules.PLAYER_OWNER)
-	var attack_result: Dictionary = Simulator.apply_action_oracle(attack_state, Action.make_play(0, 4))
+	var attack_result: Dictionary = Simulator.apply_action(attack_state, Action.make_play(0, 4))
 	var after_attack: State = attack_result["state"] as State
 	_check(int((after_attack.board[5] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER, "LaiHe protection also prevents an attack flip")
 	_check(_event_count(attack_result.get("events", []), &"card_flip_prevented") == 1, "Attack prevention emits the same generic event")
@@ -242,7 +242,7 @@ func _test_flip_protection() -> void:
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)
-	var turn_result: Dictionary = Simulator.apply_action_oracle(turn_state, Action.make_play(0, 0))
+	var turn_result: Dictionary = Simulator.apply_action(turn_state, Action.make_play(0, 0))
 	var after_turn: State = turn_result["state"] as State
 	var turn_runtime: Dictionary = (after_turn.board[4] as Dictionary).get("card", {})
 	_check((turn_runtime.get("active_abilities", []) as Array).size() == 1, "Protection expires at the start of its owner's turn")

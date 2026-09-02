@@ -8,7 +8,7 @@ const Decks = preload("res://scripts/duel_decks.gd")
 const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const Action = preload("res://scripts/duel_action.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Backdrop = preload("res://scripts/duel_backdrop.gd")
@@ -1263,7 +1263,7 @@ func _check_opponent_turn_plan_consumption() -> void:
 	var initial_state: Variant = plan_duel.get("duel_state")
 	var opponent_state: Variant = null
 	for candidate: Action in Simulator.get_legal_actions(initial_state):
-		var transition: Dictionary = Simulator.apply_action_oracle(
+		var transition: Dictionary = Simulator.apply_action(
 			initial_state.duplicate_state(),
 			candidate
 		)

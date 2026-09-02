@@ -4,7 +4,7 @@ const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 var _checks: int = 0
@@ -63,7 +63,7 @@ func _test_leizhen_draws_before_board_exile() -> void:
 		Catalog.create_instance(&"LeiZHenJian2", Rules.PLAYER_OWNER, &"leizhen_draw"),
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[_plain(&"leizhen_draw_card", [1, 1, 1, 1], Rules.PLAYER_OWNER)],
@@ -105,7 +105,7 @@ func _test_flipped_leizhen_loses_exile_draw() -> void:
 		[_plain(&"forbidden_draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER)]
 	)
 	Simulator.resolve_non_attack_flip(state, &"flipped_leizhen", Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"flip_attacker")
 	)
@@ -125,7 +125,7 @@ func _test_huzhua_three_reacts_only_to_other_real_ally_attack() -> void:
 		Catalog.create_instance(&"HuZhuaJueHuSHou3", Rules.PLAYER_OWNER, &"huzhua_three"),
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[_plain(&"real_ally_attacker", [9, 9, 9, 9], Rules.PLAYER_OWNER)],
@@ -152,7 +152,7 @@ func _test_huzhua_three_reacts_only_to_other_real_ally_attack() -> void:
 		Catalog.create_instance(&"HuZhuaJueHuSHou3", Rules.PLAYER_OWNER, &"idle_huzhua"),
 		Rules.PLAYER_OWNER
 	)
-	var weak_transition: Dictionary = Simulator.apply_action_oracle(
+	var weak_transition: Dictionary = Simulator.apply_action(
 		State.new(
 			weak_board,
 			[_plain(&"weak_ally_attacker", [1, 1, 1, 1], Rules.PLAYER_OWNER)],
@@ -174,7 +174,7 @@ func _test_huzhua_four_intercepts_each_drawn_card() -> void:
 		Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.PLAYER_OWNER, &"draw_hunter"),
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[],
@@ -212,7 +212,7 @@ func _test_hand_leizhen_does_not_trigger_when_intercepted() -> void:
 		Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.PLAYER_OWNER, &"hand_rule_hunter"),
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[],
@@ -238,7 +238,7 @@ func _test_yizidianjian_uses_all_target_policy_until_flipped() -> void:
 	)
 	board[1] = _slot(_plain(&"enemy_old_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[3] = _slot(_plain(&"enemy_normal_target", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[],

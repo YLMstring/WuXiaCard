@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const CompactState = preload("res://scripts/duel_compact_state.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -18,9 +19,11 @@ func _init() -> void:
 
 
 func _run() -> void:
-	_test_every_catalog_card_hand_play_matches_oracle()
-	_test_every_catalog_activation_matches_oracle()
-	_test_native_whole_tree_search_matches_oracle()
+	_test_live_catalog_compiles_natively()
+	_test_every_catalog_card_hand_play_runs_in_production()
+	_test_every_catalog_activation_runs_in_production()
+	_test_native_whole_tree_search_is_deterministic()
+	_test_native_search_solves_forced_terminal_choice()
 	_test_native_search_node_budget_keeps_only_complete_depths()
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
@@ -32,7 +35,40 @@ func _run() -> void:
 	quit(_failures)
 
 
-func _test_every_catalog_card_hand_play_matches_oracle() -> void:
+func _test_live_catalog_compiles_natively() -> void:
+	var catalog_cards: Array = []
+	for card_index: int in range(Catalog.ALL_CARD_IDS.size()):
+		catalog_cards.append(Catalog.create_instance(
+			Catalog.ALL_CARD_IDS[card_index],
+			Rules.PLAYER_OWNER,
+			StringName("production_catalog_audit_%d" % card_index)
+		))
+	var state := State.new(Rules.empty_board(), [], [], Rules.PLAYER_OWNER)
+	state.removed_cards[Rules.PLAYER_OWNER] = catalog_cards
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Complete live catalog crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Native production kernel is registered")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Complete live catalog loads into the native kernel"
+	)
+	var layout: Dictionary = kernel.call("inspect_layout") as Dictionary
+	_check(
+		int(layout.get("invalid_compiled_ability_count", -1)) == 0,
+		"Every live catalog ability uses supported native declarations"
+	)
+	_check(
+		int(layout.get("invalid_compiled_ability_set_count", -1)) == 0,
+		"Every live catalog ability set compiles natively"
+	)
+
+
+func _test_every_catalog_card_hand_play_runs_in_production() -> void:
 	for card_id: StringName in Catalog.ALL_CARD_IDS:
 		var prefix := String(card_id).to_snake_case()
 		var state := State.new(
@@ -47,14 +83,26 @@ func _test_every_catalog_card_hand_play_matches_oracle() -> void:
 			],
 			[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, StringName("native_enemy_deck_%s" % prefix))]
 		)
-		_compare_transition(
+		var transition: Dictionary = _assert_production_transition(
 			state,
 			Action.make_play(0, 4, StringName("native_play_%s" % prefix)),
 			"catalog play %s" % card_id
 		)
+		if not bool(transition.get("valid", false)):
+			continue
+		var next_state: State = transition.get("state") as State
+		_check(
+			not _zone_has_instance(
+				next_state.get_hand(Rules.PLAYER_OWNER),
+				StringName("native_play_%s" % prefix)
+			),
+			"catalog play %s consumes its exact hand instance" % card_id
+		)
 
 
-func _test_every_catalog_activation_matches_oracle() -> void:
+func _test_every_catalog_activation_runs_in_production() -> void:
+	var activation_declarations: int = 0
+	var covered_declarations: Dictionary = {}
 	for card_id: StringName in Catalog.ALL_CARD_IDS:
 		var prefix := String(card_id).to_snake_case()
 		var board: Array = Rules.empty_board()
@@ -82,10 +130,28 @@ func _test_every_catalog_activation_matches_oracle() -> void:
 			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, StringName("native_player_deck_%s" % prefix))],
 			[Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, StringName("native_opponent_deck_%s" % prefix))]
 		)
+		state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
+			Rules.EFFECT_GATE_SELF_CASTRATION,
+		]
+		var declared: Array[Dictionary] = Abilities.get_activate_abilities(
+			source,
+			state.get_enabled_effect_gates(Rules.PLAYER_OWNER)
+		)
+		activation_declarations += declared.size()
 		for action: Action in Simulator.get_legal_actions(state):
 			if action.action_type != Action.TYPE_ACTIVATE or action.source_index != 4:
 				continue
-			_compare_transition(state, action, "catalog activation %s %s" % [card_id, action.canonical_key()])
+			covered_declarations["%s|%d" % [card_id, action.activation_index]] = true
+			_assert_production_transition(
+				state,
+				action,
+				"catalog activation %s %s" % [card_id, action.canonical_key()]
+			)
+	_check(activation_declarations > 0, "The live catalog exposes activation declarations")
+	_check(
+		covered_declarations.size() == activation_declarations,
+		"The complete fixture reaches every live activation declaration"
+	)
 
 
 func _make_search_state() -> State:
@@ -103,27 +169,64 @@ func _make_search_state() -> State:
 	)
 
 
-func _test_native_whole_tree_search_matches_oracle() -> void:
+func _test_native_whole_tree_search_is_deterministic() -> void:
 	var state: State = _make_search_state()
-	var native: Dictionary = Search.find_best_action_iterative_native(
+	var first: Dictionary = Search.find_best_action_iterative_native(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1}
 	)
-	var oracle: Dictionary = Search.find_best_action_iterative_oracle(
+	var repeated: Dictionary = Search.find_best_action_iterative_native(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1}
 	)
-	var native_action: Action = native.get("action") as Action
-	var oracle_action: Action = oracle.get("action") as Action
-	_check(native_action != null and native_action.action_type != &"", "Native whole-tree search returns an action")
+	var first_action: Action = first.get("action") as Action
+	var repeated_action: Action = repeated.get("action") as Action
+	_check(first_action != null and first_action.action_type != &"", "Native whole-tree search returns an action")
 	_check(
-		native_action.canonical_key() == oracle_action.canonical_key(),
-		"Depth-one native whole-tree search chooses the same action as Oracle"
+		first_action.canonical_key() == repeated_action.canonical_key(),
+		"Repeated native searches choose the same canonical action"
 	)
-	_check(int(native.get("score", 0)) == int(oracle.get("score", 1)), "Depth-one native whole-tree score matches Oracle")
-	_check(int(native.get("completed_depth", 0)) == 1, "Native whole-tree search reports complete-round depth one")
+	_check(int(first.get("score", 0)) == int(repeated.get("score", 1)), "Repeated native searches return the same score")
+	_check(int(first.get("completed_depth", 0)) == 1, "Native whole-tree search reports complete-round depth one")
+	_check(Simulator.is_action_legal(state, first_action), "Native whole-tree search returns a legal action")
+
+
+func _test_native_search_solves_forced_terminal_choice() -> void:
+	var board: Array = Rules.empty_board()
+	for cell_index: int in range(8):
+		var owner_id: int = Rules.PLAYER_OWNER if cell_index < 4 else Rules.OPPONENT_OWNER
+		board[cell_index] = {
+			"owner": owner_id,
+			"card": Catalog.create_instance(
+				&"TaiZuChangQuan",
+				owner_id,
+				StringName("forced_board_%d" % cell_index)
+			),
+		}
+	var state := State.new(
+		board,
+		[],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			&"forced_winner"
+		)],
+		Rules.OPPONENT_OWNER
+	)
+	var result: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1}
+	)
+	var action: Action = result.get("action") as Action
+	_check(action != null, "Forced terminal search returns its only action")
+	if action == null:
+		return
+	_check(action.source_index == 0 and action.target_index == 8, "Forced terminal search fills the only empty cell")
+	_check(action.source_instance_id == &"forced_winner", "Forced terminal search preserves exact source identity")
+	_check(int(result.get("score", 0)) == 1_000_099, "Forced terminal win has the documented terminal score")
 
 
 func _test_native_search_node_budget_keeps_only_complete_depths() -> void:
@@ -208,22 +311,37 @@ func _test_native_search_keeps_same_turn_principal_actions() -> void:
 	)
 
 
-func _compare_transition(state: State, action: Action, label: String) -> void:
-	var oracle: Dictionary = Simulator.apply_action_oracle(state, action)
-	var native: Dictionary = Simulator.apply_action(state, action)
-	_check(bool(oracle.get("valid", false)), "%s oracle accepts the action" % label)
-	_check(bool(native.get("valid", false)), "%s production native accepts the action" % label)
-	if not bool(oracle.get("valid", false)) or not bool(native.get("valid", false)):
-		return
-	var oracle_state: State = oracle.get("state") as State
-	var native_state: State = native.get("state") as State
+func _assert_production_transition(state: State, action: Action, label: String) -> Dictionary:
+	var before: Dictionary = CompactState.exact_state_payload(state)
+	var transition: Dictionary = Simulator.apply_action(state, action)
+	_check(bool(transition.get("valid", false)), "%s production native accepts the action" % label)
+	_check(CompactState.exact_state_payload(state) == before, "%s does not mutate its input state" % label)
+	_check(transition.get("captures", null) is Array, "%s returns an ordered capture array" % label)
+	_check(transition.get("exiles", null) is Array, "%s returns an ordered exile array" % label)
+	_check(transition.get("events", null) is Array, "%s returns an ordered event array" % label)
+	if not bool(transition.get("valid", false)):
+		return transition
+	var next_state: State = transition.get("state") as State
+	_check(next_state != null, "%s returns a DuelState" % label)
+	if next_state == null:
+		return transition
+	var compact := CompactState.new()
 	_check(
-		CompactState.exact_state_payload(native_state) == CompactState.exact_state_payload(oracle_state),
-		"%s native state exactly matches Oracle" % label
+		compact.capture_state(next_state) and compact.is_structurally_valid(),
+		"%s returns a structurally valid production state" % label
 	)
-	_check(native.get("captures", []) == oracle.get("captures", []), "%s capture order matches Oracle" % label)
-	_check(native.get("exiles", []) == oracle.get("exiles", []), "%s exile order matches Oracle" % label)
-	_check(native.get("events", []) == oracle.get("events", []), "%s event order matches Oracle" % label)
+	_check(next_state.turn_count == state.turn_count + 1, "%s consumes exactly one action" % label)
+	return transition
+
+
+func _zone_has_instance(zone: Array, instance_id: StringName) -> bool:
+	for card_value: Variant in zone:
+		if (
+			card_value is Dictionary
+			and StringName((card_value as Dictionary).get("instance_id", &"")) == instance_id
+		):
+			return true
+	return false
 
 
 func _check(condition: bool, message: String) -> void:

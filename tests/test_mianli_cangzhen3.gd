@@ -5,7 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const ProfileStore = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 var _failures: int = 0
@@ -90,7 +90,7 @@ func _test_resummon_is_fresh_and_resolves_full_summon() -> void:
 		&"mianli_source"
 	)
 	var draw_card: Dictionary = _plain(&"resummon_draw")
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[source],
@@ -133,7 +133,7 @@ func _test_resummon_requires_self_attack_and_original_ally() -> void:
 	var nonally_board: Array = Rules.empty_board()
 	nonally_board[1] = _slot(nonally_target, Rules.OPPONENT_OWNER)
 	var source: Dictionary = Catalog.create_instance(&"MianLiCangZhen3", Rules.PLAYER_OWNER, &"nonally_source")
-	var nonally_transition: Dictionary = Simulator.apply_action_oracle(
+	var nonally_transition: Dictionary = Simulator.apply_action(
 		State.new(nonally_board, [source], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"nonally_source")
 	)
@@ -149,7 +149,7 @@ func _test_resummon_requires_self_attack_and_original_ally() -> void:
 		Rules.PLAYER_OWNER
 	)
 	var other_attacker: Dictionary = _plain(&"other_attacker", [9, 1, 1, 1])
-	var other_transition: Dictionary = Simulator.apply_action_oracle(
+	var other_transition: Dictionary = Simulator.apply_action(
 		State.new(other_board, [other_attacker], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"other_attacker")
 	)

@@ -4,7 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Selector = preload("res://scripts/duel_card_selector.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
@@ -95,7 +95,7 @@ func _test_tianchang_power_from_adjacent_enemies() -> void:
 		Rules.PLAYER_OWNER,
 		&"tianchang_power"
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [tianchang], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"tianchang_power")
 	)
@@ -160,7 +160,7 @@ func _test_hengshan_two_grants_self_and_adjacent_allies() -> void:
 	board[0] = _slot(_plain(&"distant_ally"), Rules.PLAYER_OWNER)
 	board[5] = _slot(_plain(&"adjacent_enemy"), Rules.OPPONENT_OWNER)
 	var quiet: Dictionary = _plain(&"quiet_two")
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [quiet], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"quiet_two")
 	)
@@ -179,7 +179,7 @@ func _test_hengshan_three_grants_all_allies() -> void:
 	board[0] = _slot(_plain(&"far_ally"), Rules.PLAYER_OWNER)
 	board[5] = _slot(_plain(&"far_enemy"), Rules.OPPONENT_OWNER)
 	var quiet: Dictionary = _plain(&"quiet_three")
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [quiet], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"quiet_three")
 	)
@@ -200,7 +200,7 @@ func _test_hengshan_four_flips_surrounded_enemy() -> void:
 		Rules.PLAYER_OWNER,
 		&"hengshan_four"
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [hengshan], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"hengshan_four")
 	)
@@ -229,7 +229,7 @@ func _test_hengshan_four_respects_flip_prevention() -> void:
 		Rules.PLAYER_OWNER,
 		&"protect_hengshan"
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [hengshan], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"protect_hengshan")
 	)
@@ -298,7 +298,7 @@ func _test_counterattacks_once_after_all_directions() -> void:
 	board[1] = _slot(_plain(&"north_ally", [1, 1, 1, 1]), Rules.PLAYER_OWNER)
 	board[3] = _slot(_plain(&"west_ally", [1, 1, 1, 1]), Rules.PLAYER_OWNER)
 	var attacker: Dictionary = _plain(&"multi_attacker", [9, 9, 9, 9])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [attacker], Rules.OPPONENT_OWNER),
 		Action.make_play(0, 0, &"multi_attacker")
 	)
@@ -328,7 +328,7 @@ func _test_nested_counterattacks_consume_before_attacking() -> void:
 	), Rules.OPPONENT_OWNER)
 	board[5] = _slot(_plain(&"nested_ally", [1, 1, 1, 1]), Rules.PLAYER_OWNER)
 	var attacker: Dictionary = _plain(&"nested_attacker", [9, 9, 9, 9])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [attacker], Rules.OPPONENT_OWNER),
 		Action.make_play(0, 8, &"nested_attacker")
 	)

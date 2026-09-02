@@ -8,7 +8,7 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const Action = preload("res://scripts/duel_action.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -144,7 +144,7 @@ func _test_bagua_exiles_before_flip() -> void:
 		&"bagua_attacker"
 	)
 	var state: State = State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	_check(bool(transition.get("valid", false)), "A normal card can attack special-negative Bagua")
 	var next_state: State = transition.get("state", state)
 	_check(next_state.board[1] == null, "Bagua leaves the board before its pending flip")

@@ -5,7 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
 
@@ -84,7 +84,7 @@ func _test_jinzhen_returns_first_matching_card_as_fresh_copy() -> void:
 	board[0] = _slot(first, Rules.OPPONENT_OWNER, Rules.PLAYER_OWNER)
 	board[2] = _slot(second, Rules.OPPONENT_OWNER, Rules.PLAYER_OWNER)
 	var source: Dictionary = Catalog.create_instance(&"JinZhenDuJie2", Rules.PLAYER_OWNER, &"jin_source")
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [source], [_plain(&"jin_reply")], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"jin_source")
 	)
@@ -198,7 +198,7 @@ func _test_wanhua_copy_uses_lowest_adjacent_cell_and_full_summon() -> void:
 	board[4] = _slot(Catalog.create_instance(&"WanHuaJian2", Rules.PLAYER_OWNER, &"wan_source"), Rules.PLAYER_OWNER)
 	board[0] = _slot(_plain(&"wan_copy_target", [1, 1, 1, 1]), Rules.OPPONENT_OWNER)
 	var attacker: Dictionary = _plain(&"wan_attacker", [1, 1, 9, 1])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [attacker], Rules.OPPONENT_OWNER),
 		Action.make_play(0, 1, &"wan_attacker")
 	)
@@ -232,7 +232,7 @@ func _test_wanhua_loser_reopens_full_board_before_terminal_state() -> void:
 	for cell: int in [4, 5, 6, 7]:
 		board[cell] = _slot(_plain(StringName("losing_ally_%d" % cell), [9, 9, 9, 9]), Rules.PLAYER_OWNER)
 	var ninth: Dictionary = _plain(&"losing_ninth", [1, 1, 1, 1])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [ninth], [_plain(&"losing_reply")], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"losing_ninth")
 	)
@@ -250,7 +250,7 @@ func _test_wanhua_winner_stays_for_stable_terminal_state() -> void:
 		board[cell] = _slot(_plain(StringName("winning_ally_%d" % cell), [9, 9, 9, 9]), Rules.PLAYER_OWNER)
 	for cell: int in [4, 5, 6, 7]:
 		board[cell] = _slot(_plain(StringName("winning_enemy_%d" % cell), [9, 9, 9, 9]), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [_plain(&"winning_ninth")], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"winning_ninth")
 	)

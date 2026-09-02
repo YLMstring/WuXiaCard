@@ -4,7 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const Targeting = preload("res://scripts/duel_targeting.gd")
 const Triggers = preload("res://scripts/duel_triggers.gd")
@@ -141,7 +141,7 @@ func _test_staged_self_after_flip_cleanup() -> void:
 	var attacker: Dictionary = _plain(&"staged_flip_attacker", [1, 9, 1, 1], Rules.PLAYER_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(target, Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[attacker],
@@ -188,7 +188,7 @@ func _test_hanbin_target_activation() -> void:
 	var target: Dictionary = _plain(&"hanbin_target", [3, 3, 3, 3], Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [target], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"hanbin_three", Action.TARGET_HAND_SLOT, 0)
 	)
@@ -213,7 +213,7 @@ func _test_hanbin_target_activation() -> void:
 	)
 	var sentinel_board: Array = Rules.empty_board()
 	sentinel_board[4] = _slot(sentinel_source, Rules.PLAYER_OWNER)
-	var sentinel_transition: Dictionary = Simulator.apply_action_oracle(
+	var sentinel_transition: Dictionary = Simulator.apply_action(
 		State.new(sentinel_board, [], [sentinel], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"hanbin_sentinel_source", Action.TARGET_HAND_SLOT, 0)
 	)
@@ -239,7 +239,7 @@ func _test_tianwai_swap_and_attack() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	board[2] = _slot(enemy, Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[ally],
@@ -272,7 +272,7 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 	var target: Dictionary = _plain(&"hanbin_four_target", [3, 3, 3, 3], Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [target], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"hanbin_four", Action.TARGET_HAND_SLOT, 0)
 	)
@@ -390,7 +390,7 @@ func _test_tianwai_tier_three_and_multiple_sources() -> void:
 	var ally: Dictionary = _plain(&"tianwai_three_ally", [2, 2, 2, 2], Rules.PLAYER_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[ally],
@@ -419,7 +419,7 @@ func _test_tianwai_tier_three_and_multiple_sources() -> void:
 	)
 	var sentinel_board: Array = Rules.empty_board()
 	sentinel_board[4] = _slot(sentinel_source, Rules.PLAYER_OWNER)
-	var sentinel_transition: Dictionary = Simulator.apply_action_oracle(
+	var sentinel_transition: Dictionary = Simulator.apply_action(
 		State.new(
 			sentinel_board,
 			[sentinel],
@@ -442,7 +442,7 @@ func _test_tianwai_tier_three_and_multiple_sources() -> void:
 	var multiple_board: Array = Rules.empty_board()
 	multiple_board[2] = _slot(first, Rules.PLAYER_OWNER)
 	multiple_board[4] = _slot(second, Rules.PLAYER_OWNER)
-	var multiple_transition: Dictionary = Simulator.apply_action_oracle(
+	var multiple_transition: Dictionary = Simulator.apply_action(
 		State.new(
 			multiple_board,
 			[shared_ally],

@@ -4,7 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Action = preload("res://scripts/duel_action.gd")
 
 const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_ally"
@@ -191,7 +191,7 @@ func _test_attack_permission_and_minimum_defense() -> void:
 
 
 func _test_summon_attack_gate() -> void:
-	var alone_result: Dictionary = Simulator.apply_action_oracle(
+	var alone_result: Dictionary = Simulator.apply_action(
 		_make_qixin_summon_state(false),
 		Action.make_play(0, 4, &"qixin_summon")
 	)
@@ -206,7 +206,7 @@ func _test_summon_attack_gate() -> void:
 		"A denied summon attack emits no attack-started event"
 	)
 
-	var allied_result: Dictionary = Simulator.apply_action_oracle(
+	var allied_result: Dictionary = Simulator.apply_action(
 		_make_qixin_summon_state(true),
 		Action.make_play(0, 4, &"qixin_summon")
 	)
@@ -223,7 +223,7 @@ func _test_summon_attack_gate() -> void:
 
 
 func _test_reaction_respects_declaration_gate() -> void:
-	var alone_result: Dictionary = Simulator.apply_action_oracle(
+	var alone_result: Dictionary = Simulator.apply_action(
 		_make_qixin_reaction_state(false),
 		Action.make_play(0, 5, &"reaction_target")
 	)
@@ -239,7 +239,7 @@ func _test_reaction_respects_declaration_gate() -> void:
 		"A triggered reaction cannot declare its attack without another ally"
 	)
 
-	var allied_result: Dictionary = Simulator.apply_action_oracle(
+	var allied_result: Dictionary = Simulator.apply_action(
 		_make_qixin_reaction_state(true),
 		Action.make_play(0, 5, &"reaction_target")
 	)
@@ -390,7 +390,7 @@ func _test_temporary_flip_protection() -> void:
 		[quiet],
 		Rules.OPPONENT_OWNER
 	)
-	var turn_result: Dictionary = Simulator.apply_action_oracle(
+	var turn_result: Dictionary = Simulator.apply_action(
 		turn_state,
 		Action.make_play(0, 0, &"quiet_turn_card")
 	)

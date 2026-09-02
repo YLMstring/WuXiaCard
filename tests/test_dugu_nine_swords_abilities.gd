@@ -4,7 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
@@ -107,7 +107,7 @@ func _test_no_form_exiles_and_draws_in_order() -> void:
 	board[0] = _slot(_catalog_card(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"untouched"), Rules.PLAYER_OWNER)
 	board[1] = _slot(_catalog_card(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"north"), Rules.PLAYER_OWNER)
 	board[3] = _slot(_catalog_card(&"TuNaShu1", Rules.OPPONENT_OWNER, &"west"), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[_catalog_card(&"DuGu9Jian1", Rules.PLAYER_OWNER, &"no_form")],
@@ -164,7 +164,7 @@ func _test_no_form_uses_current_owner_and_snapshot_targets() -> void:
 			_catalog_card(&"CangSongYingKe3", Rules.PLAYER_OWNER, &"owner_draw_two"),
 		]
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"no_form_owner")
 	)
@@ -211,7 +211,7 @@ func _test_anticipate_returns_previous_plays() -> void:
 			"instance_id": &"enemy_previous",
 		},
 	}
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"anticipate")
 	)
@@ -286,7 +286,7 @@ func _test_anticipate_full_hand_and_missing_target_continue() -> void:
 			"instance_id": &"full_hand_target",
 		},
 	}
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"anticipate_full")
 	)
@@ -314,7 +314,7 @@ func _test_break_all_suppresses_next_non_heart() -> void:
 	)
 	var target: Dictionary = _catalog_card(&"CangSongYingKe1", Rules.OPPONENT_OWNER, &"suppressed")
 	target["active_abilities"] = [non_retained, retained]
-	var first: Dictionary = Simulator.apply_action_oracle(
+	var first: Dictionary = Simulator.apply_action(
 		State.new(
 			Rules.empty_board(),
 			[_catalog_card(&"DuGu9Jian3", Rules.PLAYER_OWNER, &"break_all")],
@@ -338,12 +338,12 @@ func _test_break_all_suppresses_next_non_heart() -> void:
 		),
 		"Break All does not reveal the opponent hand"
 	)
-	var extra_play: Dictionary = Simulator.apply_action_oracle(
+	var extra_play: Dictionary = Simulator.apply_action(
 		prepared,
 		Action.make_play(0, 8, &"break_draw")
 	)
 	prepared = extra_play.get("state") as State
-	var second: Dictionary = Simulator.apply_action_oracle(
+	var second: Dictionary = Simulator.apply_action(
 		prepared,
 		Action.make_play(0, 0, &"suppressed")
 	)
@@ -378,7 +378,7 @@ func _test_break_all_skips_heart_methods() -> void:
 	)]
 	var state := State.new(Rules.empty_board(), [], [heart], Rules.OPPONENT_OWNER)
 	state.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER] = 1
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"heart")
 	)
@@ -418,7 +418,7 @@ func _test_break_all_stacks_one_layer_per_card() -> void:
 	)
 	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 2
 	state.extra_card_plays_remaining = 1
-	var first_transition: Dictionary = Simulator.apply_action_oracle(
+	var first_transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 0, &"stack_first")
 	)
@@ -428,7 +428,7 @@ func _test_break_all_stacks_one_layer_per_card() -> void:
 		and int(((after_first.board[0] as Dictionary).get("card", {}) as Dictionary).get("ki", 0)) == 0,
 		"One non-heart play consumes exactly one suppression layer"
 	)
-	var second_transition: Dictionary = Simulator.apply_action_oracle(
+	var second_transition: Dictionary = Simulator.apply_action(
 		after_first,
 		Action.make_play(0, 8, &"stack_second")
 	)
@@ -449,7 +449,7 @@ func _test_break_all_consumes_for_abilityless_card() -> void:
 	card["active_abilities"] = []
 	var state := State.new(Rules.empty_board(), [card], [], Rules.PLAYER_OWNER)
 	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"abilityless_target")
 	)

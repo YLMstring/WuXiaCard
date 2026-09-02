@@ -8,7 +8,7 @@ const CompactState = preload("res://scripts/duel_compact_state.gd")
 const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
@@ -391,7 +391,7 @@ func _test_real_quick_state_corpus() -> void:
 			return first.canonical_key() < second.canonical_key()
 		)
 		for action_index: int in range(mini(actions.size(), CHILDREN_PER_STATE)):
-			var transition: Dictionary = Simulator.apply_action_oracle(state, actions[action_index])
+			var transition: Dictionary = Simulator.apply_action(state, actions[action_index])
 			if not bool(transition.get("valid", false)):
 				continue
 			var child: State = transition.get("state") as State

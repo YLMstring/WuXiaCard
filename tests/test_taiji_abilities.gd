@@ -4,7 +4,7 @@ const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
@@ -124,7 +124,7 @@ func _test_sanhuan_redirects_summon_attack() -> void:
 	)
 	board[3] = _slot(_plain(&"summoner_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[5] = _slot(_plain(&"summoner_enemy", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[_plain(&"sanhuan_reply", [1, 1, 1, 1], Rules.PLAYER_OWNER)],
@@ -223,7 +223,7 @@ func _test_sanhuan_resurrects_same_instance() -> void:
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, [_plain(&"drawn", [1, 1, 1, 1], Rules.PLAYER_OWNER)], [])
 	state.removed_cards[Rules.PLAYER_OWNER] = [skipped, negative_skipped, revived]
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_activate(4, &"sanhuan_five", Action.TARGET_BOARD_CELL, 8, 0)
 	)
@@ -257,7 +257,7 @@ func _test_dakui_strengthens_then_attacks_allies() -> void:
 	board[4] = _slot(_plain(&"dakui_enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[1] = _slot(_plain(&"dakui_enemy_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[3] = _slot(_plain(&"dakui_player_card", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [], Rules.PLAYER_OWNER),
 		Action.make_activate(8, &"dakui", Action.TARGET_BOARD_CELL, 4, 0)
 	)
@@ -275,7 +275,7 @@ func _test_luanhuan_starts_adjacent_attacks() -> void:
 	board[0] = _slot(_plain(&"luan_enemy_for_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[3] = _slot(_plain(&"luan_adjacent_ally", [9, 9, 9, 9], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
 	board[5] = _slot(_plain(&"luan_entry_enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[Catalog.create_instance(&"TaiJiLuanHuan5", Rules.PLAYER_OWNER, &"luan_source")],
@@ -300,7 +300,7 @@ func _test_attack_cap_stops_later_attackers() -> void:
 	board[7] = _slot(_plain(&"second_capped_ally", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
 	state.attacks_started_by_owner[Rules.OPPONENT_OWNER] = Simulator.MAX_ATTACKS_PER_OWNER_TURN - 1
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_activate(4, &"cap_dakui", Action.TARGET_BOARD_CELL, 0, 0)
 	)
@@ -312,7 +312,7 @@ func _test_yinyang_grants_two_separate_abilities() -> void:
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(_plain(&"yinyang_enemy", [9, 9, 9, 9], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[8] = _slot(_plain(&"yinyang_survivor", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[Catalog.create_instance(&"TaiJiYinYang5", Rules.PLAYER_OWNER, &"taiji_yinyang")],

@@ -3,7 +3,7 @@ extends SceneTree
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 var _checks: int = 0
@@ -129,7 +129,7 @@ func _test_single_discard_entry_buff() -> void:
 		left["hand_slot_index"] = 1
 		right["hand_slot_index"] = 4
 		var initial_powers: Array = source.get("powers", []).duplicate()
-		var transition: Dictionary = Simulator.apply_action_oracle(
+		var transition: Dictionary = Simulator.apply_action(
 			State.new(
 				Rules.empty_board(),
 				[source, right, left],
@@ -174,7 +174,7 @@ func _test_lijing_four_partial_payment() -> void:
 			)
 			filler["hand_slot_index"] = index + 1
 			player_hand.append(filler)
-		var transition: Dictionary = Simulator.apply_action_oracle(
+		var transition: Dictionary = Simulator.apply_action(
 			State.new(
 				Rules.empty_board(),
 				player_hand,
@@ -198,7 +198,7 @@ func _test_prevented_self_attack_exiles_target() -> void:
 	var board: Array = Rules.empty_board()
 	board[5] = _slot(protected, Rules.OPPONENT_OWNER)
 	var source: Dictionary = Catalog.create_instance(&"BaoCanShouQue3", Rules.PLAYER_OWNER, &"bao_three_attacker")
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [source], [_plain(&"bao_enemy_hand", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"bao_three_attacker")
 	)
@@ -218,7 +218,7 @@ func _test_other_attack_prevention_does_not_trigger() -> void:
 		Rules.PLAYER_OWNER
 	)
 	var attacker: Dictionary = _plain(&"other_attacker", Rules.PLAYER_OWNER, [1, 9, 1, 1])
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [attacker], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"other_attacker")
 	)
@@ -294,7 +294,7 @@ func _test_baocan_four_checks_empty_hand_once() -> void:
 		Rules.PLAYER_OWNER,
 		[1, 9, 1, 1]
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[attacker],
@@ -371,7 +371,7 @@ func _test_baocan_four_second_copy_respects_occupied_cell() -> void:
 		Rules.PLAYER_OWNER,
 		[1, 9, 1, 1]
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [attacker], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"occupied_cell_attacker")
 	)
@@ -405,7 +405,7 @@ func _attack_baocan_two(attacker_powers: Array, prefix: StringName) -> Dictionar
 		Rules.PLAYER_OWNER,
 		attacker_powers
 	)
-	return Simulator.apply_action_oracle(
+	return Simulator.apply_action(
 		State.new(board, [attacker], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, StringName("%s_attacker" % prefix))
 	)
@@ -434,7 +434,7 @@ func _attack_baocan_four(draw_during_exile: bool) -> Dictionary:
 		if draw_during_exile
 		else []
 	)
-	return Simulator.apply_action_oracle(
+	return Simulator.apply_action(
 		State.new(board, [attacker], [], Rules.PLAYER_OWNER, 0, [], opponent_deck),
 		Action.make_play(0, 4, attacker_id)
 	)

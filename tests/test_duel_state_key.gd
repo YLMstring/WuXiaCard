@@ -5,7 +5,7 @@ const StateKey = preload("res://scripts/duel_state_key.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 
 const COLLISION_STATE_TARGET: int = 512
 const CHILDREN_PER_STATE: int = 2
@@ -189,7 +189,7 @@ func _test_real_state_collision_corpus() -> void:
 		)
 		for action_index: int in range(mini(actions.size(), CHILDREN_PER_STATE)):
 			var action: Action = actions[action_index]
-			var transition: Dictionary = Simulator.apply_action_oracle(state, action)
+			var transition: Dictionary = Simulator.apply_action(state, action)
 			if not bool(transition.get("valid", false)):
 				continue
 			var next_state: State = transition.get("state") as State

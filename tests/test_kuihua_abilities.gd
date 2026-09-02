@@ -5,7 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const ProfileStore = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
@@ -130,7 +130,7 @@ func _test_player_gate_controls_kuihua_one() -> void:
 		[_plain(&"disabled_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
 		Rules.PLAYER_OWNER
 	)
-	var disabled_transition: Dictionary = Simulator.apply_action_oracle(
+	var disabled_transition: Dictionary = Simulator.apply_action(
 		disabled,
 		Action.make_play(0, 4, &"disabled_kuihua")
 	)
@@ -152,7 +152,7 @@ func _test_player_gate_controls_kuihua_one() -> void:
 	enabled.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var enabled_transition: Dictionary = Simulator.apply_action_oracle(
+	var enabled_transition: Dictionary = Simulator.apply_action(
 		enabled,
 		Action.make_play(0, 4, &"enabled_kuihua")
 	)
@@ -181,7 +181,7 @@ func _test_zero_target_attack_has_no_after_attack_trigger() -> void:
 		_plain(&"too_strong", [9, 9, 9, 9], Rules.OPPONENT_OWNER),
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		State.new(
 			board,
 			[observer],
@@ -214,7 +214,7 @@ func _test_kuihua_two_minimum_defense_and_after_attack_gain() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(state)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"kuihua_two_attack")
 	)
@@ -237,7 +237,7 @@ func _test_kuihua_two_minimum_defense_and_after_attack_gain() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(empty_state)
-	var no_attack_transition: Dictionary = Simulator.apply_action_oracle(
+	var no_attack_transition: Dictionary = Simulator.apply_action(
 		empty_state,
 		Action.make_play(0, 4, &"kuihua_two_no_attack")
 	)
@@ -252,7 +252,7 @@ func _test_kuihua_two_minimum_defense_and_after_attack_gain() -> void:
 
 func _test_kuihua_two_returns_only_from_a_successful_attack() -> void:
 	var weak_attack_state: State = _kuihua_two_defense_state([1, 1, 1, 1], &"weak_attacker")
-	var weak_transition: Dictionary = Simulator.apply_action_oracle(
+	var weak_transition: Dictionary = Simulator.apply_action(
 		weak_attack_state,
 		Action.make_play(0, 4, &"weak_attacker")
 	)
@@ -264,7 +264,7 @@ func _test_kuihua_two_returns_only_from_a_successful_attack() -> void:
 	)
 
 	var strong_attack_state: State = _kuihua_two_defense_state([9, 9, 9, 9], &"strong_attacker")
-	var strong_transition: Dictionary = Simulator.apply_action_oracle(
+	var strong_transition: Dictionary = Simulator.apply_action(
 		strong_attack_state,
 		Action.make_play(0, 4, &"strong_attacker")
 	)
@@ -302,7 +302,7 @@ func _test_kuihua_two_indiscriminate_attack_changes_owners() -> void:
 		Rules.OPPONENT_OWNER
 	)
 	_enable_player_kuihua(state)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"policy_attacker")
 	)
@@ -334,7 +334,7 @@ func _test_kuihua_three_swaps_only_one_adjacent_enemy() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(single_state)
-	var single_transition: Dictionary = Simulator.apply_action_oracle(
+	var single_transition: Dictionary = Simulator.apply_action(
 		single_state,
 		Action.make_play(0, 4, &"kuihua_three_swap")
 	)
@@ -361,7 +361,7 @@ func _test_kuihua_three_swaps_only_one_adjacent_enemy() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(double_state)
-	var double_transition: Dictionary = Simulator.apply_action_oracle(
+	var double_transition: Dictionary = Simulator.apply_action(
 		double_state,
 		Action.make_play(0, 4, &"kuihua_three_stay")
 	)
@@ -388,7 +388,7 @@ func _test_kuihua_three_resummons_only_after_flipping_enemy() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(flip_state)
-	var flip_transition: Dictionary = Simulator.apply_action_oracle(
+	var flip_transition: Dictionary = Simulator.apply_action(
 		flip_state,
 		Action.make_play(0, 4, &"kuihua_three_old")
 	)
@@ -423,7 +423,7 @@ func _test_kuihua_three_resummons_only_after_flipping_enemy() -> void:
 		Rules.PLAYER_OWNER
 	)
 	_enable_player_kuihua(return_state)
-	var return_transition: Dictionary = Simulator.apply_action_oracle(
+	var return_transition: Dictionary = Simulator.apply_action(
 		return_state,
 		Action.make_play(0, 4, &"kuihua_three_no_flip")
 	)
@@ -458,7 +458,7 @@ func _test_kuihua_four_exiles_targets_and_recursively_enters_copies() -> void:
 		]
 	)
 	_enable_player_kuihua(state)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"kuihua_four_source")
 	)
@@ -502,7 +502,7 @@ func _test_kuihua_four_is_inert_without_player_gate() -> void:
 		0,
 		[_plain(&"disabled_four_draw", [1, 1, 1, 1], Rules.PLAYER_OWNER)]
 	)
-	var transition: Dictionary = Simulator.apply_action_oracle(
+	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"disabled_kuihua_four")
 	)
