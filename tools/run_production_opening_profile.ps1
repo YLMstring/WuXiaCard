@@ -4,6 +4,8 @@ param(
     [int]$MaxOpenings = 14,
     [ValidateSet("complete_round", "self_turn")]
     [string]$DepthMode = "complete_round",
+    [ValidateSet("quick_unique", "extra_play_cap")]
+    [string]$OpeningSet = "quick_unique",
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
 )
@@ -36,7 +38,8 @@ try {
         "--",
         "--budget-seconds=$BudgetSeconds",
         "--max-openings=$MaxOpenings",
-        "--depth-mode=$DepthMode"
+        "--depth-mode=$DepthMode",
+        "--opening-set=$OpeningSet"
     )
     $process = Start-Process `
         -FilePath $EnginePath `

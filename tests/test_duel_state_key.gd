@@ -141,6 +141,12 @@ func _test_state_semantics() -> void:
 		StateKey.build_compact(state) != StateKey.build_compact(copied),
 		"Run difficulty affects compact identity"
 	)
+	copied = state.duplicate_state() as State
+	copied.extra_card_play_granted_this_turn = true
+	_check(
+		StateKey.build_compact(state) != StateKey.build_compact(copied),
+		"Per-turn extra-play grant usage affects compact identity"
+	)
 
 
 func _test_real_state_collision_corpus() -> void:

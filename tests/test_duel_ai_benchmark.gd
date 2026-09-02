@@ -164,6 +164,17 @@ func _check_enemy_manifest() -> void:
 		EnemyManifest.get_all_matchups() == matchups,
 		"Manifest rebuild is deterministic"
 	)
+	var extra_play_matchups: Array[Dictionary] = EnemyManifest.get_extra_play_cap_matchups()
+	_check(extra_play_matchups.size() == 3, "Extra-play profile declares three requested matchups")
+	var extra_play_state_keys: Dictionary = {}
+	for matchup: Dictionary in extra_play_matchups:
+		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
+			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			var state_key: String = String(
+				(built.get("metadata", {}) as Dictionary).get("initial_state_key", "")
+			)
+			extra_play_state_keys[state_key] = true
+	_check(extra_play_state_keys.size() == 4, "Mirror deduplication leaves four unique extra-play openings")
 	for mode_fixture: Dictionary in [
 		{"mode": &"quick", "matchups": 7, "games": 28},
 		{"mode": &"pilot", "matchups": 3, "games": 12},

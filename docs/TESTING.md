@@ -53,6 +53,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
+- `test_extra_play_turn_cap.gd` — consecutive extra-play requests, action-to-end
+  trigger interactions, simultaneous request coalescing, and owner-turn reset.
 - `test_native_production_rules.gd` — independent complete-runtime fixtures for
   every catalog hand play and legal catalog activation, strict declaration
   audits, direct native event/attack/flip semantics, node-budget behavior,
@@ -194,6 +196,7 @@ Profile production opening depth separately with either retained mode:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4
 ```
 
 This runs the 14 unique real Quick openings with the production ten-second
@@ -203,6 +206,10 @@ mode; the JSON report explicitly records `depth_mode` and `depth_unit` so the
 two horizons cannot be compared as if they were the same or as old action-ply
 results. Its report is written under
 `.summer/local/ai-benchmarks/` and must not be committed.
+
+`OpeningSet extra_play_cap` is the focused four-opening set for Dongfang Bubai
+mirror, Feng Qingyang mirror, and both initiative orders of Dongfang Bubai
+versus Feng Qingyang. Mirror duplicates are removed by exact opening state.
 
 Run the 512-state/1,024-action simulator transition microbenchmark with Dummy
 audio through:

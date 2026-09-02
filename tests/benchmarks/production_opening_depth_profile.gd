@@ -27,7 +27,8 @@ func _run() -> void:
 	var budget_seconds: float = float(options.get("budget_seconds", DEFAULT_BUDGET_SECONDS))
 	var max_openings: int = int(options.get("max_openings", DEFAULT_MAX_OPENINGS))
 	var depth_mode: StringName = StringName(options.get("depth_mode", &"complete_round"))
-	var openings: Array[Dictionary] = _build_unique_openings()
+	var opening_set: StringName = StringName(options.get("opening_set", &"quick_unique"))
+	var openings: Array[Dictionary] = _build_unique_openings(opening_set)
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
 	var samples: Array[Dictionary] = []
@@ -71,12 +72,13 @@ func _run() -> void:
 			"use_evaluation_cache": false,
 			"evaluator_profile": "baseline",
 			"opening_count": openings.size(),
+			"opening_set": String(opening_set),
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
 		"timing_probes": timing_samples,
 	}
-	var output_path: String = _write_report(report)
+	var output_path: String = _write_report(report, opening_set)
 	if output_path.is_empty():
 		push_error("OPENING_DEPTH_PROFILE_FAILED could not write JSON report")
 		quit(1)
@@ -356,10 +358,15 @@ func _summarize(
 	}
 
 
-func _build_unique_openings() -> Array[Dictionary]:
+func _build_unique_openings(opening_set: StringName) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var observed_state_keys: Dictionary = {}
-	for matchup: Dictionary in EnemyManifest.get_matchups_for_mode(&"quick"):
+	var matchups: Array[Dictionary] = (
+		EnemyManifest.get_extra_play_cap_matchups()
+		if opening_set == &"extra_play_cap"
+		else EnemyManifest.get_matchups_for_mode(&"quick")
+	)
+	for matchup: Dictionary in matchups:
 		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
 			var built: Dictionary = EnemyStateFactory.build(game, matchup)
 			var metadata: Dictionary = built.get("metadata", {}) as Dictionary
@@ -378,11 +385,15 @@ func _build_unique_openings() -> Array[Dictionary]:
 	return result
 
 
-func _write_report(report: Dictionary) -> String:
+func _write_report(report: Dictionary, opening_set: StringName) -> String:
 	var absolute_directory: String = ProjectSettings.globalize_path(OUTPUT_DIRECTORY)
 	if DirAccess.make_dir_recursive_absolute(absolute_directory) != OK:
 		return ""
-	var filename: String = "production-opening-depth-%d.json" % int(Time.get_unix_time_from_system())
+	var filename: String = (
+		"production-opening-depth-extra-play-cap-%d.json"
+		if opening_set == &"extra_play_cap"
+		else "production-opening-depth-%d.json"
+	) % int(Time.get_unix_time_from_system())
 	var absolute_path: String = absolute_directory.path_join(filename)
 	var file: FileAccess = FileAccess.open(absolute_path, FileAccess.WRITE)
 	if file == null:
@@ -397,6 +408,7 @@ func _parse_options() -> Dictionary:
 		"budget_seconds": DEFAULT_BUDGET_SECONDS,
 		"max_openings": DEFAULT_MAX_OPENINGS,
 		"depth_mode": &"complete_round",
+		"opening_set": &"quick_unique",
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -415,4 +427,10 @@ func _parse_options() -> Dictionary:
 				push_error("Unsupported depth mode: %s" % requested_mode)
 				continue
 			result["depth_mode"] = requested_mode
+		elif argument.begins_with("--opening-set="):
+			var requested_set := StringName(argument.trim_prefix("--opening-set="))
+			if requested_set not in [&"quick_unique", &"extra_play_cap"]:
+				push_error("Unsupported opening set: %s" % requested_set)
+				continue
+			result["opening_set"] = requested_set
 	return result

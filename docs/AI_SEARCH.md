@@ -48,7 +48,8 @@ action plies. Two selectable modes share the same native search implementation:
   next turn.
 
 Automatic empty turns consume the boundaries they actually cross and do not
-add artificial depth. Same-turn extra plays add work but no boundary.
+add artificial depth. A granted same-turn extra play adds work but no boundary;
+the gameplay rule permits at most one successful grant per owner turn.
 
 Iterative deepening publishes only the deepest fully completed iteration. An
 incomplete deeper attempt is diagnostic data and never replaces the last

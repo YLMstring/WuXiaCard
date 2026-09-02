@@ -1221,8 +1221,7 @@ private:
 		NativeState &value,
 		int32_t moving_owner,
 		const std::vector<Resolution::ExtraPlayRequest> &requests,
-		Resolution &resolution,
-		bool coalesce
+		Resolution &resolution
 	) const;
 	Resolution resolve_before_full_board_end(
 		NativeState &value,

@@ -53,6 +53,7 @@ static func _state_payload(state: StateData) -> Dictionary:
 		"owner_turn_serial": state.owner_turn_serial,
 		"attacks_started_by_owner": state.attacks_started_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,
+		"extra_card_play_granted_this_turn": state.extra_card_play_granted_this_turn,
 		"end_turn_triggers_resolved": state.end_turn_triggers_resolved,
 		"max_turns": state.max_turns,
 		"active_abilities": state.active_abilities,

@@ -746,7 +746,10 @@ bool DuelNativeCompactKernel::transition_play(
 	next = source;
 	next.board_slot_extras = source.board_slot_extras.duplicate(true);
 	next.side_payload = source.side_payload.duplicate(true);
-	if (next.scalars[5] > 0) next.scalars[5] -= 1;
+	if (next.scalars[5] > 0) {
+		next.scalars[13] = 1;
+		next.scalars[5] -= 1;
+	}
 	std::vector<int32_t> &next_hand = next.zones[hand_zone_index];
 	next_hand.erase(next_hand.begin() + hand_index);
 	next.card_runtime_flags[played_card_index] &= static_cast<uint8_t>(~(1 << 7));
@@ -2260,7 +2263,7 @@ Dictionary DuelNativeCompactKernel::benchmark_core_clone(int64_t iterations) con
 
 bool DuelNativeCompactKernel::validate_shape() {
 	const size_t card_count = state.card_instance_ids.size();
-	if (state.scalars.size() != 13) {
+	if (state.scalars.size() != 14) {
 		last_error = "Compact scalar count must be 13";
 		return false;
 	}
@@ -9283,11 +9286,10 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 	NativeState &value,
 	int32_t moving_owner,
 	const std::vector<Resolution::ExtraPlayRequest> &requests,
-	Resolution &resolution,
-	bool coalesce
+	Resolution &resolution
 ) const {
+	if (value.scalars[13] != 0) return;
 	Array source_instance_ids;
-	int32_t granted_amount = 0;
 	for (const Resolution::ExtraPlayRequest &request : requests) {
 		if (
 			request.owner_id != moving_owner
@@ -9295,16 +9297,15 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 			|| request.source_card_index < 0
 			|| request.source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
 		) continue;
-		granted_amount += request.amount;
 		source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
 	}
 	if (source_instance_ids.is_empty()) return;
-	if (coalesce) granted_amount = 1;
-	value.scalars[5] += granted_amount;
+	value.scalars[13] = 1;
+	value.scalars[5] = std::max(value.scalars[5], 1);
 	Dictionary granted;
 	granted["type"] = StringName("extra_card_play_granted");
 	granted["owner_id"] = moving_owner;
-	granted["amount"] = granted_amount;
+	granted["amount"] = 1;
 	granted["request_count"] = source_instance_ids.size();
 	granted["source_instance_ids"] = source_instance_ids;
 	resolution.events.append(granted);
@@ -9362,8 +9363,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		value,
 		moving_owner,
 		extra_play_requests,
-		resolution,
-		false
+		resolution
 	);
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
 		value.scalars[0] = moving_owner;
@@ -9387,8 +9387,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 			value,
 			moving_owner,
 			end_resolution.extra_play_requests,
-			resolution,
-			true
+			resolution
 		);
 	}
 
@@ -9435,8 +9434,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 			value,
 			turn_owner,
 			empty_end_resolution.extra_play_requests,
-			resolution,
-			true
+			resolution
 		);
 		Resolution empty_before_end = resolve_before_full_board_end(value, exile_stack);
 		if (!empty_before_end.supported) return empty_before_end;
@@ -9460,6 +9458,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[3] = 0;
 	value.scalars[4] = 0;
 	value.scalars[6] = 0;
+	value.scalars[13] = 0;
 	Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 	repetition_hashes = repetition_hashes.duplicate(true);
 	repetition_hashes.append(board_repetition_signature(value));

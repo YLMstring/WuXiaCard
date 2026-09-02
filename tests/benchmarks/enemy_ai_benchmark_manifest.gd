@@ -29,6 +29,12 @@ const PRODUCTION_PAIRS: Array[Array] = [
 	[&"wulin_sanren", &"wulin_sanren2"],
 ]
 
+const EXTRA_PLAY_CAP_PAIRS: Array[Array] = [
+	[&"wulin_sanren", &"wulin_sanren"],
+	[&"wulin_sanren", &"tianmen_yishi"],
+	[&"tianmen_yishi", &"tianmen_yishi"],
+]
+
 
 static func get_roster() -> Array[Dictionary]:
 	return Enemies.get_ai_benchmark_definitions()
@@ -73,6 +79,17 @@ static func get_matchups_for_mode(mode: StringName) -> Array[Dictionary]:
 		)
 		if not found.is_empty():
 			result.append(found)
+	return result
+
+
+static func get_extra_play_cap_matchups() -> Array[Dictionary]:
+	var roster: Array[Dictionary] = get_roster()
+	var result: Array[Dictionary] = []
+	for pair: Array in EXTRA_PLAY_CAP_PAIRS:
+		var first: Dictionary = _definition_by_id(roster, StringName(pair[0]))
+		var second: Dictionary = _definition_by_id(roster, StringName(pair[1]))
+		if not first.is_empty() and not second.is_empty():
+			result.append(_make_matchup(first, second, &"extra_play_cap"))
 	return result
 
 

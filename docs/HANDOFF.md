@@ -319,9 +319,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `ACTION_CHANGE_POWERS` accepts explicit exact-card references plus signed
   literals or a current-owner hand count. Subtraction floors each side at zero;
   four zeros move the card to its original owner's removed zone.
-  Extra-card-play grants stack and permit hand plays only. They do not repeat
-  start-owner-turn or end-owner-turn triggers; those boundaries run once per
-  owner turn, and temporary turn-scoped effects restore only when it closes.
+  Each owner can gain at most one extra card play per actual owner turn;
+  later requests in that turn do nothing. The grant permits hand plays only
+  and does not repeat start-owner-turn or end-owner-turn triggers; those
+  boundaries run once per owner turn, and temporary turn-scoped effects restore
+  only when it closes.
+  The per-turn grant latch is part of compact state and search identity, then
+  resets only when the authoritative owner-turn boundary completes.
 - WanYueChaoZong1–4 now gain current-hand-count power after their own summon
   and decay at owner-turn start. Tiers 2–4 also strengthen adjacent allied
   summons by `+1/+1/+2`. DaSongYangZhang1–4 strengthen adjacent allied summons
@@ -462,6 +466,13 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   depth three in 9/14; the two Dongfang Bubai/Zhang Sanfeng seats completed
   depth two in 9.46 seconds and 0.84 seconds. This measures reachability, not
   comparative playing strength.
+- A focused four-opening `self_turn` profile after imposing the per-owner-turn
+  extra-play cap completed depth two for Dongfang Bubai mirror (`8.67s`) and
+  Dongfang-first versus Feng Qingyang (`6.83s`). Feng-first versus Dongfang
+  completed `14/35` depth-two roots with a `24.94s` linear estimate; Feng mirror
+  completed `22/35` with a `15.88s` estimate. The report is
+  `production-opening-depth-extra-play-cap-1788338601.json` under the local,
+  uncommitted benchmark directory.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()`
   now uses the complete explicit state payload, Godot native Variant binary
   encoding, and a SHA-256/128 `v2` fingerprint; it is faster but is not a compact

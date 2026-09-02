@@ -31,7 +31,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks,
   discard/removed zones, active player, turn count, owner-turn serial,
-  remaining extra card plays, end-boundary state, queued-effect scaffolding,
+  remaining extra card plays, the per-owner-turn grant latch, end-boundary
+  state, queued-effect scaffolding,
   last successful hand plays, active-run difficulty, the difficulty-eight
   one-card-draw latch, persistent pending suppression counts, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.

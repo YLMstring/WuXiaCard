@@ -80,6 +80,7 @@ $testScripts = @(
     "test_duel_card_selector.gd",
 	"test_duel_trigger_revalidation.gd",
 	"test_duel_simulator.gd",
+	"test_extra_play_turn_cap.gd",
 	"test_duel_state_key.gd",
 	"test_duel_compact_state.gd",
 	"test_native_production_rules.gd",
@@ -139,6 +140,8 @@ foreach ($testScript in $testScripts) {
     try {
         $arguments = @(
             "--headless",
+			"--audio-driver",
+			"Dummy",
             "--path",
             ('"{0}"' -f $resolvedProject),
             "--script",

@@ -16,6 +16,7 @@ var turn_count: int = 0
 var owner_turn_serial: int = 0
 var attacks_started_by_owner: Dictionary = {}
 var extra_card_plays_remaining: int = 0
+var extra_card_play_granted_this_turn: bool = false
 var end_turn_triggers_resolved: bool = false
 var max_turns: int = 100
 var active_abilities: Array = []
@@ -205,6 +206,7 @@ func duplicate_state() -> DuelState:
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
+	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
 	return copied
@@ -237,6 +239,7 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
+	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
 	return copied

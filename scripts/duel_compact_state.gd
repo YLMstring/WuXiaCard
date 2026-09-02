@@ -49,7 +49,8 @@ const SCALAR_OPPONENT_PENDING_SUPPRESSION: int = 9
 const SCALAR_RUN_DIFFICULTY: int = 10
 const SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED: int = 11
 const SCALAR_STATE_VERSION: int = 12
-const SCALAR_COUNT: int = 13
+const SCALAR_EXTRA_CARD_PLAY_GRANTED_THIS_TURN: int = 13
+const SCALAR_COUNT: int = 14
 
 const MUTABLE_CARD_KEYS: Array[StringName] = [
 	&"instance_id",
@@ -158,6 +159,9 @@ func restore() -> StateData:
 		Rules.OPPONENT_OWNER: scalars[SCALAR_OPPONENT_ATTACKS],
 	}
 	restored.extra_card_plays_remaining = scalars[SCALAR_EXTRA_CARD_PLAYS]
+	restored.extra_card_play_granted_this_turn = bool(
+		scalars[SCALAR_EXTRA_CARD_PLAY_GRANTED_THIS_TURN]
+	)
 	restored.end_turn_triggers_resolved = bool(
 		scalars[SCALAR_END_TURN_TRIGGERS_RESOLVED]
 	)
@@ -424,6 +428,7 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"owner_turn_serial": state.owner_turn_serial,
 		"attacks_started_by_owner": state.attacks_started_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,
+		"extra_card_play_granted_this_turn": state.extra_card_play_granted_this_turn,
 		"end_turn_triggers_resolved": state.end_turn_triggers_resolved,
 		"max_turns": state.max_turns,
 		"active_abilities": state.active_abilities,
@@ -456,6 +461,7 @@ func _capture_state(state: StateData) -> bool:
 		state.run_difficulty,
 		int(state.difficulty_eight_draw_consumed),
 		state.state_version,
+		int(state.extra_card_play_granted_this_turn),
 	])
 
 	board_card_indices.resize(state.board.size())

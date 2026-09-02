@@ -605,7 +605,7 @@ For every new ability, consider:
 - multiple simultaneous triggers;
 - action invalid-context policy;
 - cumulative activation costs;
-- extra card plays, stacked allowances, and active-player changes;
+- the one-extra-play-per-owner-turn cap and active-player changes;
 - terminal state reached mid-resolution;
 - AI clone/search behavior;
 - face-down information leakage;

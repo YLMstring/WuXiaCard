@@ -186,6 +186,7 @@ static func _overwrite_state(target: StateData, source: StateData) -> void:
 		&"owner_turn_serial",
 		&"attacks_started_by_owner",
 		&"extra_card_plays_remaining",
+		&"extra_card_play_granted_this_turn",
 		&"end_turn_triggers_resolved",
 		&"max_turns",
 		&"active_abilities",

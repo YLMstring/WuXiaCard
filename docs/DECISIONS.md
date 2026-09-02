@@ -211,8 +211,10 @@ The action/target model should also support future non-movement activations with
   ki but only one extra card play is granted.
 - The grant permits a hand play only, not an activation. If no legal hand play
   remains, it expires and the owner turn closes.
-- Extra-card-play grants from ordinary actions stack. End-owner-turn requests
-  are resolved once and cannot retrigger from the granted play.
+- Each owner can gain at most one extra card play per actual owner turn.
+  Simultaneous requests coalesce into that one grant; every later request in
+  the same turn does nothing. The allowance resets only after the owner-turn
+  boundary, not when the granted card is played.
 - Ownership flip removes this passive ability, but retained ki remains.
 - The presentation uses only a short gold board-outline pulse and the
   `额外出牌` status. Golden convergence beads are deliberately omitted.
