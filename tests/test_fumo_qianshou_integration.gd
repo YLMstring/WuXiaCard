@@ -4,7 +4,7 @@ const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Simulator = preload("res://scripts/duel_simulator.gd")
+const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 const TEST_PROFILE_PATH: String = "user://fumo_qianshou_integration.json"

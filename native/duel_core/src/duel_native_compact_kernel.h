@@ -573,6 +573,16 @@ public:
 		int64_t activation_index = 0,
 		const StringName &expected_instance_id = StringName()
 	) const;
+	Dictionary resolve_event_transition(
+		const StringName &event_id,
+		const Dictionary &context
+	) const;
+	Dictionary resolve_attack_transition(const Dictionary &request) const;
+	Dictionary resolve_non_attack_flip_transition(
+		const StringName &target_instance_id,
+		int64_t new_owner,
+		const StringName &reason = StringName("non_attack_flip")
+	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_iterative_round_depth(
@@ -585,6 +595,21 @@ public:
 	) const;
 
 private:
+	int32_t find_card_by_instance_id(
+		const NativeState &value,
+		const StringName &instance_id
+	) const;
+	EventContext event_context_from_dictionary(
+		const NativeState &value,
+		const Dictionary &context
+	) const;
+	AttackPolicy attack_policy_from_dictionary(const Dictionary &value) const;
+	Dictionary materialize_direct_transition(
+		const NativeState &value,
+		const Resolution &resolution,
+		bool valid,
+		const String &reason = String()
+	) const;
 	bool validate_shape();
 	std::vector<NativeAction> get_legal_native_actions(
 		const NativeState &value,

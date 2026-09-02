@@ -236,17 +236,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   opponent, including created cards, copies, fresh board returns, and the same
   instance returning from discard. Newly public instances emit
   `card_revealed` immediately after their addition/return event.
-- The AI sees both hands and exact deck order. Production uses the enhanced
-  iterative-deepening LazyOnly profile: deterministic generic ordering and lazy
-  simulator transitions, with PVS available only by explicit override. The
-  bounded two-ply tactical extension (scan 12/search
-  4) remains available by explicit override but is disabled by default because
-  its stand-pat result can violate mandatory-action semantics. `baseline`
-  remains available for paired benchmarks. Search stays card-agnostic; the
-  measured-slower evaluation cache and unproven candidate evaluator terms are
-  off by default. Root canonical tie-breaking verifies apparent alpha-beta
-  ties in a narrow window before replacing the proven best action, so a cutoff
-  bound cannot select an objectively worse move.
+- The AI sees both hands and exact deck order. Production uses the sole native
+  complete-round iterative search with deterministic structural ordering and
+  alpha-beta pruning. Historical GDScript PVS, tactics, evaluation-cache, and
+  alternate-evaluator profiles were removed with the old search backend.
+  Search stays card-agnostic and canonical root ordering resolves equal scores.
 - Internal modifier checks use read-only views rather than deep-copying every
   modifier dictionary. The public copying API is unchanged. The 2026-08-29
   14-opening production profile reached `547.48` nodes/s versus `490.18`
@@ -286,15 +280,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
   those lines live. The final JSON shares the same artifact stem and references
   the checkpoint. A partial checkpoint survives interruption but is not a final
   benchmark result, so a separate Pilot is no longer required before Extended.
-- `LazyPVS` is the historical Oracle PVS benchmark variant: both sides use Lazy transitions,
-  baseline evaluation, no tactics, and no evaluation cache; only Enhanced turns
-  on PVS. Current native production does not use this profile switch. The 14-real-opening fixed-depth oracle
-  must preserve every score and root action before the 112-game Extended
-  `LazyPVS` run is allowed; no Quick/Pilot screening or automatic production
-  enablement is part of that evaluation. The completed 2026-08-29 run scored
-  `55/112` (`49.1%`) for Lazy+PVS, reduced nodes by only `0.7%`, and took `5.0%`
-  more search time than LazyOnly. It produced no fallback, incomplete, or
-  invalid games, but missed the adoption gate; keep production PVS disabled.
+- Historical GDScript PVS/tactics/evaluator ablations were retired with the
+  former search backend. Quick, Extended, and Production now run the same
+  native search for every seat; old `enhanced`/`baseline` report fields are
+  balanced assignment labels, not different algorithms.
 - The first 14-opening ten-second profile after this migration completed
   complete-round depth one in every opening and depth two in none. Mean depth-one
   time was `1.365s`; the closest depth-two attempt completed 34/35 root actions
@@ -477,9 +466,8 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   evidence rather than judging strength from one game. Node-limited reports must
   include minimum-depth guard and overrun diagnostics instead of describing
   1,500 as a hard cap.
-- `DuelNativeCompactKernel` is now the strict production rules and deep-search
-  backend behind `DuelSimulator`/`DuelSearch`. Oracle rules remain explicit
-  test-only entry points. The kernel compiles immutable ability declarations once per
+- `DuelNativeCompactKernel` is the sole production rules and deep-search
+  backend behind `DuelSimulator`/`DuelSearch`. The kernel compiles immutable ability declarations once per
   compact root and tracks ordered branch-local runtime ability entries with
   stable trigger handles. It implements the generic summon/attack/flip/exile
   lifecycle plus recursive nested actions, all-zone selectors, batched power
@@ -502,20 +490,16 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   attack modifiers, including distance/intervening rules, comparison reversal,
   summon redirection, unlimited/non-orthogonal first-target locking, and both
   indiscriminate target policies. Four-sided `-1` semantics override comparison
-  reversal, and locked attacks compare powers only during initial selection in
-  both GDScript and native paths. The 14 real Quick openings currently expose
-  490 legal root hand plays: all 490 have exact full-state/event parity, with no
-  rejection reasons or mismatches. It now also compiles all eight current
-  activation target rules and all 20 current catalog activation declarations.
-  The catalog fixtures are 36/36 exact; 136 deterministic states derived from
-  the same Quick openings expose another 104 activation actions, all 104 exact.
-  The kernel also exposes a fixed-complete-round-depth Oracle probe and a
-  production iterative entry that converts one root and leaves the whole tree
-  native. All 14 real
-  Quick depth-one searches match the oracle's exact score and canonical root
-  action; focused depth-two empty-turn and activation/extra-play fixtures also
-  match. The expanded probe passes 1,774 parity checks; the independent native
-  production suite passes 995 rule/card/search assertions. Production adds
+  reversal, and locked attacks compare powers only during initial selection.
+  It also exposes direct event/attack/non-attack-flip adapters for focused
+  semantic tests; these reuse production primitives. Before retirement, the
+  migration corpus sealed all 490 real-Quick root hand plays, all 20 catalog
+  activation declarations, and 104 activation actions from 136 derived states.
+  The final seal passed 4,812 checks across 56 deterministic walks and 584
+  actions; commit `e68885d` is the recoverable pre-removal endpoint. Current
+  authority comes from native catalog audits, focused rule/card fixtures,
+  complete-runtime actions, search contracts, and controller integration.
+  Production adds
   structural ordering, alpha-beta, iterative deepening, hard deadline/node
   checks, low-frequency cancellation, completed-depth result restoration, and
   same-turn principal plans. On the 14 real Quick openings at ten seconds it
@@ -523,7 +507,8 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   all-GDScript baseline and 0/14 for the temporary per-edge native facade.
   Native transpositions and release/Android packaging remain unfinished;
   Android/release are distribution gates rather than desktop production gates.
-  See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
+  See `docs/AI_SEARCH.md` before extending it. Do not restore a second rules or
+  search engine as a fallback.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.

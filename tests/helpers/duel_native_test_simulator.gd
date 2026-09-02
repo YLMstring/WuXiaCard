@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ProductionSimulator = preload("res://scripts/duel_simulator.gd")
+const NativeRules = preload("res://scripts/duel_native_rules.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const StateData = preload("res://scripts/duel_state.gd")
@@ -50,7 +51,7 @@ static func resolve_non_attack_flip(
 	reason: StringName = &"non_attack_flip"
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator.resolve_non_attack_flip(
+	return NativeRules.resolve_non_attack_flip(
 		state,
 		target_instance_id,
 		new_owner,
@@ -63,7 +64,7 @@ static func _resolve_attack_request(
 	request: Dictionary
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator._resolve_attack_request(state, request)
+	return NativeRules.resolve_attack(state, request)
 
 
 static func _resolve_attack_target(
@@ -76,15 +77,23 @@ static func _resolve_attack_target(
 	attack_policy: Dictionary = {}
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator._resolve_attack_target(
-		state,
-		source_cell,
-		source_instance_id,
-		target_cell,
-		target_instance_id,
-		reason,
-		attack_policy
-	)
+	var source_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0)) \
+		if source_cell >= 0 and source_cell < state.board.size() and state.board[source_cell] is Dictionary \
+		else 0
+	var target_owner: int = int((state.board[target_cell] as Dictionary).get("owner", 0)) \
+		if target_cell >= 0 and target_cell < state.board.size() and state.board[target_cell] is Dictionary \
+		else 0
+	return NativeRules.resolve_attack(state, {
+		"mode": &"targeted",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": source_owner,
+		"target_cell": target_cell,
+		"target_instance_id": target_instance_id,
+		"target_owner_id": target_owner,
+		"reason": reason,
+		"attack_policy": attack_policy,
+	})
 
 
 static func _resolve_before_move_request(
@@ -92,7 +101,11 @@ static func _resolve_before_move_request(
 	request: Dictionary
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator._resolve_before_move_request(state, request)
+	return NativeRules.resolve_event(
+		state,
+		StringName(request.get("movement_event", &"card_before_moved")),
+		request
+	)
 
 
 static func _resolve_standard_attacks(
@@ -104,14 +117,18 @@ static func _resolve_standard_attacks(
 	requested_policy: Dictionary = {}
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator._resolve_standard_attacks(
-		state,
-		source_cell,
-		source_instance_id,
-		reason,
-		repeat_attack,
-		requested_policy
-	)
+	var source_owner: int = int((state.board[source_cell] as Dictionary).get("owner", 0)) \
+		if source_cell >= 0 and source_cell < state.board.size() and state.board[source_cell] is Dictionary \
+		else 0
+	return NativeRules.resolve_attack(state, {
+		"mode": &"standard",
+		"source_cell": source_cell,
+		"source_instance_id": source_instance_id,
+		"source_owner_id": source_owner,
+		"reason": reason,
+		"repeat_attack": repeat_attack,
+		"attack_policy": requested_policy,
+	})
 
 
 static func _resolve_trigger_event(
@@ -120,11 +137,7 @@ static func _resolve_trigger_event(
 	context: Dictionary
 ) -> Dictionary:
 	_ensure_runtime_instance_ids(state)
-	return ProductionSimulator._resolve_trigger_event(
-		state,
-		event_id,
-		context
-	)
+	return NativeRules.resolve_event(state, event_id, context)
 
 
 static func _ensure_runtime_instance_ids(state: StateData) -> void:

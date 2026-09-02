@@ -54,15 +54,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
 - `test_native_production_rules.gd` — independent complete-runtime fixtures for
-  every catalog hand play and legal catalog activation, exact native/Oracle
-  state and ordered-event parity, native fixed-depth score/action parity,
-  node-budget semantics, production routing, cancellation, and same-turn
-  principal-action reuse. Historical fine-grained rule/card suites call the
-  Oracle explicitly and are not counted as native coverage.
-- `test_duel_search.gd` — evaluation/search, deadlines, minimum completed-depth
-  node guards, deterministic ordering,
-  lazy-transition/PVS exactness, bounded tactical extension,
-  opt-in evaluation caching, fallback, and state keys.
+  every catalog hand play and legal catalog activation, strict declaration
+  audits, direct native event/attack/flip semantics, node-budget behavior,
+  production routing, cancellation, and same-turn principal-action reuse.
+- `test_duel_search.gd` — the single native search facade, complete-round depth,
+  deadlines, minimum completed-depth node guards, deterministic canonical
+  selection, fallback, cancellation, and same-turn plans.
 - `test_duel_ai_benchmark.gd` — versioned enemy roster/manifest validation,
   deterministic rebuilds, mutable-state isolation, minimum-depth mode wiring,
   per-game progress/checkpoint serialization, and a tiny four-game runner
@@ -143,21 +140,10 @@ Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of 
 
 ## Expected Baseline
 
-The full baseline after the persistent deck builder contains ten passing
-suites and at least 934 checks:
-
-- catalog: 270
-- deck profile: 24
-- library grid: 29
-- deck-builder integration: 24
-- inspector: 17
-- backdrop: 19
-- rules: 27
-- simulator: 174
-- search: 37
-- integration: at least 313
-
-Treat the fresh runner output as authoritative; counts can change as tests grow and integration paths vary.
+The 2026-09-02 Oracle-retirement baseline contains 72 passing suites. Treat a
+fresh runner result as authoritative rather than freezing individual check
+counts here; card, catalog, and integration coverage intentionally grows over
+time.
 
 ## Change-Level Verification
 
@@ -179,7 +165,7 @@ next snapshot member.
 
 Run simulator and search suites. Check deterministic action selection and deadline fallback. Play with the production 10-second budget and inspect `AI_SEARCH` logs.
 
-Run paired AI strength samples separately with:
+Run real enemy-catalog search samples separately with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
@@ -191,34 +177,19 @@ complete-round depth one with `min_completed_depth = 1`; nodes are not reset
 after depth one, so reports must inspect guard-use and overrun diagnostics.
 `Production` uses 4 matchups/16 games with the real 10-second decision budget,
 no minimum-depth guard, and Dummy audio. Each matchup is a balanced four-game
-crossover of deck, owner/initiative, and enhanced/baseline profile. Pilot is
-optional and is not required before Extended.
+crossover of deck and owner/initiative. All seats run the same native search;
+historical `enhanced`/`baseline` fields are assignment labels, not distinct
+algorithms. Pilot is optional and is not required before Extended.
 
 Extended emits one `AI_BENCHMARK_GAME` line per completed game. It also appends
 one independently parseable record to a sibling `.progress.jsonl` checkpoint;
 an interrupted run retains completed lines, but that partial file is not a
-final strength result. The final JSON references the checkpoint. Extended Final
-requires at least 55% match points, 75% initial-depth non-regression, no worse
-fallback rate, and no incomplete games. All results live under
+final benchmark result. The final JSON references the checkpoint. Extended
+requires a complete nonduplicated schedule, terminal games, and no invalid
+transitions. All results live under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
-For the isolated PVS ablation, first run the search suite and the real-opening
-fixed-depth oracle. The oracle script is
-`res://tests/benchmarks/real_quick_search_equivalence.gd`; run it headless with
-Dummy audio after the ordinary suite. It must report identical fixed-depth
-scores/actions for LazyOnly and Lazy+PVS across all 14 openings.
-
-Then run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant LazyPVS
-```
-
-This variant configures both sides identically except for PVS and goes directly
-to all 112 games; do not insert Quick or Pilot. Production PVS stays disabled
-until the creator reviews the final evidence.
-
-Profile production LazyOnly complete-round opening depth separately with:
+Profile production complete-round opening depth separately with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1

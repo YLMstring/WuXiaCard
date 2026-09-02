@@ -1834,7 +1834,7 @@ func _test_search_can_choose_activate_action() -> void:
 	mover["ki"] = 1
 	board[4] = {"card": mover, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
-	var choice: Action = Search.find_best_action_oracle(state, 2, Rules.OPPONENT_OWNER)
+	var choice: Action = Search.find_best_action(state, 2, Rules.OPPONENT_OWNER)
 	_check(choice.action_type == Action.TYPE_ACTIVATE, "Deep search considers board activate actions")
 	_check(choice.source_index == 4 and choice.target_index == 1, "Search action ordering is deterministic when activate outcomes tie")
 
@@ -2969,7 +2969,7 @@ func _test_deeper_search_avoids_greedy_trap() -> void:
 	]
 	var state := State.new(board, player_hand, opponent_hand, Rules.OPPONENT_OWNER)
 	var greedy_move = Simulator.choose_greedy_action(state)
-	var searched_move = Search.find_best_action_oracle(state, 4, Rules.OPPONENT_OWNER)
+	var searched_move = Search.find_best_action(state, 4, Rules.OPPONENT_OWNER)
 	_check(greedy_move.as_vector2i() == Vector2i(1, 4), "Fixture preserves the tempting two-capture greedy move")
 	_check(searched_move.as_vector2i() == Vector2i(0, 3), "Four-ply search chooses the stronger long-term move")
 

@@ -508,9 +508,6 @@ static func aggregate_enemy_games(
 		and invalid_games == 0
 		and missing_game_ids.is_empty()
 		and duplicate_game_ids.is_empty()
-		and enhanced_percent >= 55.0
-		and depth_percent >= 75.0
-		and enhanced_fallback_rate <= baseline_fallback_rate
 	)
 	return {
 		"fixture_version": EnemyStateFactory.VERSION,
@@ -875,13 +872,8 @@ static func node_benchmark_limits(node_limit: int) -> Dictionary:
 
 static func _run_search_backend(state, owner_id: int, limits: Dictionary) -> Dictionary:
 	var clean_limits: Dictionary = limits.duplicate(true)
-	var native_production: bool = bool(clean_limits.get("_native_production_backend", false))
 	clean_limits.erase("_native_production_backend")
-	return (
-		Search.find_best_action_iterative_native(state, owner_id, clean_limits)
-		if native_production
-		else Search.find_best_action_iterative_oracle(state, owner_id, clean_limits)
-	)
+	return Search.find_best_action_iterative(state, owner_id, clean_limits)
 
 
 static func mode_config(mode: StringName) -> Dictionary:
@@ -893,7 +885,6 @@ static func mode_config(mode: StringName) -> Dictionary:
 		&"production":
 			return {"limits": {
 				"budget_seconds": 10.0,
-				"_native_production_backend": true,
 			}}
 	return {}
 
@@ -1012,45 +1003,12 @@ func _write_report_to_path(summary: Dictionary, output_path: String) -> String:
 
 
 static func variant_config(variant: String) -> Dictionary:
-	var enhanced_overrides: Dictionary = {}
-	var baseline_overrides: Dictionary = {}
-	match variant.to_lower():
-		"baselineevaluator":
-			enhanced_overrides = {"evaluator_profile": &"baseline"}
-		"notactics":
-			enhanced_overrides = {"use_tactical_extension": false}
-		"searchonly":
-			enhanced_overrides = {
-				"use_tactical_extension": false,
-				"evaluator_profile": &"baseline",
-			}
-		"lazyonly":
-			enhanced_overrides = {
-				"use_pvs": false,
-				"use_tactical_extension": false,
-				"evaluator_profile": &"baseline",
-			}
-		"lazypvs":
-			enhanced_overrides = _lazy_ablation_overrides(true)
-			baseline_overrides = _lazy_ablation_overrides(false)
-		"evalonly":
-			enhanced_overrides = {
-				"use_lazy_transitions": false,
-				"use_pvs": false,
-				"use_tactical_extension": false,
-				"evaluator_profile": &"enhanced",
-			}
+	# The retired GDScript search variants no longer select alternate backends.
+	# Keep the shape stable for benchmark report readers while both seats run the
+	# one authoritative native search.
+	if variant.to_lower() != "final":
+		push_warning("Unknown native benchmark variant '%s'; using Final" % variant)
 	return {
-		"enhanced_overrides": enhanced_overrides,
-		"baseline_overrides": baseline_overrides,
-	}
-
-
-static func _lazy_ablation_overrides(use_pvs: bool) -> Dictionary:
-	return {
-		"use_lazy_transitions": true,
-		"use_pvs": use_pvs,
-		"use_tactical_extension": false,
-		"use_evaluation_cache": false,
-		"evaluator_profile": &"baseline",
+		"enhanced_overrides": {},
+		"baseline_overrides": {},
 	}

@@ -459,9 +459,9 @@ respectively, in row-major order. The source itself is eligible.
 - Difficulty changes only the time budget, not the evaluator or intentional move weakening.
 - Use the best result from the deepest fully completed iteration.
 - Ignore an incomplete deeper iteration.
-- Production rules and deep search are strict-native. The GDScript rules/search
-  implementations remain explicit test Oracles and are never runtime fallback
-  paths.
+- Production rules and deep search are strict-native. The former independent
+  GDScript rules/search implementation has been retired; no runtime or test
+  fallback may silently resolve a native rejection.
 - Search compacts once at the root and keeps the descendant tree native. Extra
   plays reuse the completed iteration's same-owner-turn principal actions.
 - If depth one cannot complete, worker search fails, or its action becomes invalid, use deterministic greedy fallback.

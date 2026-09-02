@@ -73,6 +73,183 @@ static func apply_action(state: StateData, action: ActionData) -> Dictionary:
 	}
 
 
+static func resolve_event(
+	state: StateData,
+	event_id: StringName,
+	context: Dictionary
+) -> Dictionary:
+	return _resolve_direct_transition(
+		state,
+		&"resolve_event_transition",
+		[event_id, context]
+	)
+
+
+static func resolve_attack(state: StateData, request: Dictionary) -> Dictionary:
+	return _resolve_direct_transition(
+		state,
+		&"resolve_attack_transition",
+		[request]
+	)
+
+
+static func resolve_non_attack_flip(
+	state: StateData,
+	target_instance_id: StringName,
+	new_owner: int,
+	reason: StringName = &"non_attack_flip"
+) -> Dictionary:
+	return _resolve_direct_transition(
+		state,
+		&"resolve_non_attack_flip_transition",
+		[target_instance_id, new_owner, reason]
+	)
+
+
+static func _resolve_direct_transition(
+	state: StateData,
+	method: StringName,
+	arguments: Array
+) -> Dictionary:
+	if state == null:
+		return _integration_failure(state, "Native direct transition received a null state")
+	if not ClassDB.class_exists(KERNEL_CLASS):
+		return _integration_failure(state, "DuelNativeCompactKernel is unavailable")
+	var compact := CompactState.new()
+	if not compact.capture_state(state) or not compact.is_structurally_valid():
+		return _integration_failure(state, "Duel state could not cross the compact native boundary")
+	var kernel: Object = ClassDB.instantiate(KERNEL_CLASS)
+	if kernel == null:
+		return _integration_failure(state, "DuelNativeCompactKernel could not be instantiated")
+	if not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+		return _integration_failure(
+			state,
+			"Native compact payload load failed: %s" % String(kernel.call("get_last_error"))
+		)
+	var native_result: Dictionary = kernel.callv(method, arguments) as Dictionary
+	var reason := String(native_result.get("reason", ""))
+	if not bool(native_result.get("supported", false)):
+		return _integration_failure(state, "Native direct transition is unsupported: %s" % reason)
+	if not bool(native_result.get("valid", false)):
+		return _integration_failure(state, "Native direct transition is invalid: %s" % reason)
+	var payload_value: Variant = native_result.get("payload", null)
+	if not payload_value is Dictionary:
+		return _integration_failure(state, "Native direct transition returned no compact payload")
+	var restored_compact: CompactState = CompactState.from_variant_payload(payload_value as Dictionary)
+	if restored_compact == null or not restored_compact.is_structurally_valid():
+		return _integration_failure(state, "Native direct transition returned a malformed compact payload")
+	var next_state: StateData = restored_compact.restore()
+	if next_state == null:
+		return _integration_failure(state, "Native direct transition payload could not restore a duel state")
+	for field: String in ["captures", "exiles", "events"]:
+		if not native_result.get(field, null) is Array:
+			return _integration_failure(state, "Native direct transition field '%s' is not an Array" % field)
+	_overwrite_state(state, next_state)
+	return {
+		"valid": true,
+		"state": state,
+		"captures": native_result.get("captures", []),
+		"exiles": native_result.get("exiles", []),
+		"events": native_result.get("events", []),
+	}
+
+
+static func _overwrite_state(target: StateData, source: StateData) -> void:
+	var existing_cards: Dictionary = {}
+	_collect_runtime_cards(target, existing_cards)
+	target.board.resize(source.board.size())
+	for cell_index: int in range(source.board.size()):
+		var source_slot_value: Variant = source.board[cell_index]
+		if not source_slot_value is Dictionary:
+			target.board[cell_index] = null
+			continue
+		var source_slot: Dictionary = source_slot_value as Dictionary
+		var target_slot: Dictionary = (
+			target.board[cell_index] as Dictionary
+			if target.board[cell_index] is Dictionary
+			else {}
+		)
+		target_slot.clear()
+		target_slot.merge(source_slot, true)
+		target_slot["card"] = _reuse_runtime_card(
+			source_slot.get("card", {}) as Dictionary,
+			existing_cards
+		)
+		target.board[cell_index] = target_slot
+	_sync_card_zone_dictionary(target.hands, source.hands, existing_cards)
+	_sync_card_zone_dictionary(target.decks, source.decks, existing_cards)
+	_sync_card_zone_dictionary(target.discard_piles, source.discard_piles, existing_cards)
+	_sync_card_zone_dictionary(target.removed_cards, source.removed_cards, existing_cards)
+	for property_name: StringName in [
+		&"active_player",
+		&"turn_count",
+		&"owner_turn_serial",
+		&"attacks_started_by_owner",
+		&"extra_card_plays_remaining",
+		&"end_turn_triggers_resolved",
+		&"max_turns",
+		&"active_abilities",
+		&"effect_queue",
+		&"pending_choice",
+		&"repetition_hashes",
+		&"remembered_glyphs_by_owner",
+		&"future_draw_reveal_audiences",
+		&"last_hand_play_by_owner",
+		&"pending_non_retained_suppression_by_owner",
+		&"enabled_effect_gates_by_owner",
+		&"run_difficulty",
+		&"difficulty_eight_draw_consumed",
+		&"state_version",
+	]:
+		target.set(property_name, source.get(property_name))
+
+
+static func _collect_runtime_cards(state: StateData, result: Dictionary) -> void:
+	for slot_value: Variant in state.board:
+		if slot_value is Dictionary:
+			_collect_runtime_card((slot_value as Dictionary).get("card", {}) as Dictionary, result)
+	for zone_dictionary: Dictionary in [
+		state.hands,
+		state.decks,
+		state.discard_piles,
+		state.removed_cards,
+	]:
+		for owner_id: int in [1, 2]:
+			for card_value: Variant in zone_dictionary.get(owner_id, []):
+				if card_value is Dictionary:
+					_collect_runtime_card(card_value as Dictionary, result)
+
+
+static func _collect_runtime_card(card: Dictionary, result: Dictionary) -> void:
+	var instance_id := StringName(card.get("instance_id", &""))
+	if instance_id != &"":
+		result[instance_id] = card
+
+
+static func _reuse_runtime_card(source_card: Dictionary, existing_cards: Dictionary) -> Dictionary:
+	var instance_id := StringName(source_card.get("instance_id", &""))
+	var target_card: Dictionary = existing_cards.get(instance_id, {}) as Dictionary
+	if target_card.is_empty():
+		return source_card
+	target_card.clear()
+	target_card.merge(source_card, true)
+	return target_card
+
+
+static func _sync_card_zone_dictionary(
+	target_zones: Dictionary,
+	source_zones: Dictionary,
+	existing_cards: Dictionary
+) -> void:
+	for owner_id: int in [1, 2]:
+		var target_zone: Array = target_zones.get(owner_id, []) as Array
+		target_zone.clear()
+		for card_value: Variant in source_zones.get(owner_id, []):
+			if card_value is Dictionary:
+				target_zone.append(_reuse_runtime_card(card_value as Dictionary, existing_cards))
+		target_zones[owner_id] = target_zone
+
+
 static func search_iterative(
 	state: StateData,
 	root_owner: int,

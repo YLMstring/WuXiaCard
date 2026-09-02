@@ -60,14 +60,12 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
   increase. It emits no gameplay events.
 - `duel_simulator.gd` — the authoritative facade for legal-action enumeration,
   legality checks, action application, terminal checks, scoring, and greedy
-  fallback. Production action application is strict-native; the former
-  GDScript implementation remains available only as the explicit Oracle used
-  by unit and parity tests.
+  fallback. All action application is strict-native; there is no second rules
+  implementation or runtime fallback.
 - `duel_native_rules.gd` — the single coarse boundary between `DuelState` and
   `DuelNativeCompactKernel`. It captures one compact root, rejects unsupported
   declarations atomically, restores production transitions, and converts
-  native search actions/progress back into pure GDScript data. It never falls
-  back to Oracle rules.
+  native search actions/progress back into pure GDScript data.
 - `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
 - `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
 - `duel_ability_executor.gd` — generic costs and actions: draw, exact/fresh
@@ -83,13 +81,11 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
   current-state revalidation.
 - `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
 
-`DuelSimulator.apply_action()` is the production rules path and returns a
-transition dictionary containing pure-data events. Human play, replay, greedy
-fallback, and AI-selected actions all use it. Fine-grained historical tests
-call `apply_action_oracle()` explicitly; the independent native production
-suite executes every catalog hand play and every reachable catalog activation
-against complete runtime fixtures and requires exact state/capture/exile/event
-parity.
+`DuelSimulator.apply_action()` is the only rules path and returns a transition
+dictionary containing pure-data events. Human play, testing, replay, greedy
+fallback, AI-selected actions, and rule/card tests all use it. Focused tests can
+invoke direct native event, attack, and non-attack-flip adapters, but those
+adapters resolve through the same production primitives.
 
 Before constructing `DuelState`, the controller chooses the first owner and
 passes it, the active difficulty, and a dedicated layout RNG to
@@ -152,18 +148,15 @@ search key and copied into replay state.
 ### Search
 
 - `duel_search.gd` — production routing and result-schema normalization for the
-  native complete-round iterative search. The explicit Oracle entry retains
-  the former GDScript minimax/alpha-beta implementation for equivalence and
-  diagnostic tests. One public depth unit is two authoritative
+  native complete-round iterative search. One public depth unit is two authoritative
   `owner_turn_serial` boundaries; action count is not depth.
 - `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation,
   failure conversion, join, and deep-copy transport of pure-data turn plans.
 - `duel_turn_plan.gd` — exact state/owner/owner-turn validation and copying for
   a searched same-turn continuation. Any mismatch invalidates the remainder.
-- `duel_evaluator.gd` — card-agnostic heuristic.
 - `duel_state_key.gd` — exact canonical serialization plus the production
-  full-state binary SHA-256/128 transposition fingerprint. Both paths consume
-  the same explicit top-level state payload.
+  full-state binary SHA-256/128 fingerprint over the explicit top-level state
+  payload.
 
 The worker receives an isolated state copy. Production compacts that root once,
 then legal-action enumeration, branch copies, transitions, evaluation,
@@ -488,14 +481,16 @@ native rules implementation. Deep AI loads one root and crosses back only for
 completed-depth progress, the selected action, and the current-turn principal
 line.
 
-The fixed real-Quick corpus has 490/490 hand-play parity, all 20 current catalog
-activation declarations have fixture coverage, and 104/104 activation actions
-from 136 Quick-derived states have exact parity. Fixed-depth native search
-matches all 14 Quick depth-one Oracle scores/actions. Production adds iterative
-deepening, structural ordering, alpha-beta, hard deadline/node checks,
-low-frequency cancellation, and same-turn plan extraction. A native
-transposition table remains future optimization work, not a prerequisite for
-the current production path.
+Before retirement, the fixed real-Quick corpus sealed 490/490 hand plays, all
+20 catalog activation declarations, and 104/104 activation actions derived
+from 136 deterministic states. The final migration seal passed 4,812 checks
+across 56 walks and 584 actions; its recoverable endpoint is commit `e68885d`.
+Current authority comes from native catalog audits, fine-grained semantic
+fixtures, complete-runtime card/action fixtures, search contracts, and
+controller integration tests. Production uses iterative deepening, structural
+ordering, alpha-beta, hard deadline/node checks, low-frequency cancellation,
+and same-turn plan extraction. A native transposition table remains future
+optimization work.
 
 Windows Debug loading and behavior are verified. Android ARM64 and release
 packaging remain distribution gates; benchmark those targets rather than

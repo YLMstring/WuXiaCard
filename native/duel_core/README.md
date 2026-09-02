@@ -1,99 +1,65 @@
-# Duel Native Compact Prototype
+# Duel Native Core
 
-This directory contains the production GDExtension rules/search kernel.
-`DuelSimulator` remains the authoritative GDScript facade, while production
-transitions and deep search are strict-native. A clean checkout must build the
-ignored platform binary before running the game or tests.
+This directory contains the single production rules and deep-search kernel.
+`DuelSimulator` and `DuelSearch` remain the public GDScript facades, but every
+authoritative transition and descendant search node resolves through
+`DuelNativeCompactKernel`.
 
-The pinned `godot-cpp` submodule targets the Godot 4.6 extension API. Build the
-Windows x86-64 prototype with:
+The pinned `godot-cpp` submodule targets Godot 4.6. Build the ignored Windows
+x86-64 binary with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1
 ```
 
-Run the native layout/clone probe with:
+Build products and the generated `.gdextension` live under `bin/` and are
+ignored by Git. CMake intermediates live under
+`.summer/local/native-build/` so Godot does not import compiler objects.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/run_native_compact_probe.ps1
-```
+## Runtime scope
 
-Build products and the generated `.gdextension` file live under `bin/` and are
-ignored by Git. CMake intermediates live under `.summer/local/native-build/`
-so Godot never mistakes MSVC `.obj` files for importable Wavefront models.
+The kernel:
 
-Current scope:
+- owns a compact representation of board, both hands, decks, discard/removed
+  zones, runtime abilities, turn state, memory, revelation, and difficulty
+  latches;
+- compiles immutable catalog declarations and catalog-fresh prototypes once per
+  loaded root;
+- enumerates and validates hand plays and catalog-ordered activations;
+- resolves the full summon, attack, flip, exile, discard, draw, transform,
+  return, movement, swap, suppression, and turn-boundary lifecycles;
+- discovers full-board trigger groups in deterministic row-major order and
+  preserves stable trigger identity while earlier abilities move or disappear;
+- executes recursive generic conditions, selectors, costs, actions, and
+  generated attacks/summons without named-card branches;
+- returns complete compact state plus ordered pure-data events, captures, and
+  exiles for controller presentation;
+- exposes direct event/attack/non-attack-flip adapters used by focused semantic
+  fixtures, all through the same production primitives;
+- performs complete-round iterative deepening, structural ordering, alpha-beta
+  pruning, hard deadline/node checks, minimum-depth guard diagnostics,
+  cancellation, completed-depth snapshots, and same-owner principal actions.
 
-- accepts one coarse full compact-state payload while retaining the earlier
-  mutable-core clone probe;
-- converts packed Godot arrays into owned C++ vectors;
-- validates the documented array shape;
-- resolves generic normalized hand plays, including ordinary
-  orthogonal power comparison, standard attack, ownership flip, hand-play
-  memory, turn boundaries, empty-turn advancement, and terminal checks;
-- compiles immutable ability declarations once per loaded compact root and
-  stores each runtime card's ordered ability entries with transient trigger
-  handles, so real removal and later-entry index shifts preserve oracle trigger
-  semantics;
-- executes those draws sequentially from the deck front, fills the physical
-  leftmost hand slot, and reconstructs complete `card_drawn` snapshots before
-  standard attacks;
-- recursively compiles nested actions and executes generic selectors over the
-  board, hand, deck, and discard using snapshot-then-revalidate/no-refill
-  targeting;
-- resolves fixed and dynamic power changes, power-change batches, four-zero
-  exile, ki gain/spend and immediate ki-change triggers, non-attack flips, and
-  dynamic passive or activation grants;
-- carries immutable catalog-fresh prototypes at the compact root and supports
-  ordinary board returns by appending a fresh public hand instance while
-  retaining the destroyed old index as an unreferenced tombstone; full hands
-  use the normal exile lifecycle;
-- expands those prototypes through the deterministic transitive closure of
-  reachable transform targets, then rebuilds transformed runtime cards in
-  place without changing instance identity, ownership, zone, or visibility;
-- executes strict conditional action lists with list-local mutable context,
-  including source-owner empty-hand and actual discard-batch-size checks;
-- resolves single and batch discard as one snapshot/no-refill transaction,
-  emits canonical batch identities and one physical-slot shift, dispatches
-  discarded-card self triggers before the global batch-finished event, and
-  preserves the original ability-source snapshot through those nested events;
-- returns preserved discard instances to the leftmost hand slot, reveals them
-  publicly only when needed, and exiles the same instance when the hand is full;
-- resolves `self_swapped_with_ability_source` as two ordered movements, with
-  global before/after movement events, exact instance/owner revalidation, and
-  mover-removal cancellation;
-- compiles all eight current activation target rules, enumerates legal runtime
-  activations, validates cumulative ki costs and exact targets, and executes
-  activation transactions through the shared action/turn lifecycle;
-- supports targeted move/swap/reveal, generated re-summon, ki distribution,
-  public fresh/perfect hand copies, and referenced-card standard attacks as
-  generic actions reached by current catalog activations;
-- returns a full compact payload plus the same capture/exile/event arrays as
-  `DuelSimulator`;
-- exposes a fixed-complete-round-depth Oracle probe that loads one
-  root and keeps legal-action enumeration, branch copies, transitions,
-  evaluation, and the entire descendant tree in native state;
-- uses the oracle's owner-turn-serial depth accounting, including same-turn
-  extra plays and multi-boundary automatic empty-turn advancement, and selects
-  equal-scoring root actions by the canonical action order;
-- uses an action-specific conservative gate and atomically rejects any reached
-  future declaration that has not been compiled instead of approximating it;
-- measures native core cloning, plain hand-play transitions, and a fixed
-  activation transaction.
-- exposes production complete-round iterative deepening with structural action
-  ordering, alpha-beta pruning, deadline/node limits, minimum-depth guard
-  diagnostics, low-frequency cancellation, completed-depth snapshots, and the
-  root owner's same-turn principal actions.
+Unsupported reached declarations reject atomically. They must never be
+approximated or passed to a second rules engine.
 
-The current probe reports 490/490 exact hand-play transitions in the 14 real
-Quick openings, 36/36 legal actions covering all 20 catalog activation
-declarations, and 104/104 activation actions across 136 deterministic
-Quick-derived states. Its fixed-depth whole-tree shadow additionally matches
-all 14 Quick depth-one baseline scores/actions plus focused depth-two empty-turn
-and activation/extra-play fixtures. The production 10-second opening profile
-completes round depth two in 12/14 real Quick openings; the remaining two
-complete depth one and enter depth two. A native transposition table is not yet
-implemented. Future declaration vocabulary remains outside the kernel until
-separately proven. The probe compares every covered state field and ordered
-event against `DuelSimulator.apply_action_oracle()`, which remains the explicit
-test Oracle for every native primitive.
+## Authority and retirement boundary
+
+The independently maintained GDScript rules/search Oracle was removed on
+2026-09-02 after the final deterministic seal passed 4,812 checks across 56
+walks and 584 actions. Its recoverable endpoint is commit `e68885d`. Do not
+restore it as a runtime fallback or require new card work to maintain two
+engines.
+
+Current correctness comes from native catalog audits, fine-grained semantic
+fixtures, complete-runtime card/action fixtures, production search contracts,
+controller integration tests, and the full suite. See `docs/AI_SEARCH.md` and
+`docs/TESTING.md`.
+
+## Known limits
+
+- Native transpositions are not implemented.
+- New declaration vocabulary must add native compilation/execution and focused
+  tests before catalog use.
+- Windows Debug behavior is covered locally. Android ARM64 and release-package
+  performance must be measured independently before distribution.
