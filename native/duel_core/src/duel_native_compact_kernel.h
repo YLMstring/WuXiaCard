@@ -77,6 +77,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_IN_RANGE,
 		TRIGGER_CARD_ADJACENT_TO_SOURCE,
 		TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
+		TRIGGER_CARD_REVEALED_TO_SELF,
 		TRIGGER_CARD_WAS_ENEMY,
 		TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
 		ATTACKED_CARD_IS_SELF,
@@ -119,6 +120,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		GAIN_KI,
 		SPEND_KI,
 		FLIP_SELF,
+		GRANT_TRIGGER_CARD_ABILITY,
 		GRANT_ABILITY_TO_SELF,
 		TRANSFORM_CARD,
 		RETURN_CARD_TO_HAND,
@@ -317,6 +319,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		CardRefOpcode summon_cell_card_ref = CardRefOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode summon_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		StringName change_reason;
+		String weapon;
 		bool stop_rule_on_invalid_context = false;
 		StringName power_change_batch_group;
 		StringName card_id;
@@ -886,6 +889,7 @@ private:
 		const EventGroup &group,
 		const CompiledAction &action,
 		const ActionContext &action_context,
+		int32_t event_source_card_index,
 		int32_t source_cell,
 		Resolution &resolution
 	) const;
@@ -932,6 +936,7 @@ private:
 		int32_t owner_id,
 		int32_t source_cell,
 		int32_t amount,
+		const String &weapon_filter,
 		const EventContext &draw_context,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution

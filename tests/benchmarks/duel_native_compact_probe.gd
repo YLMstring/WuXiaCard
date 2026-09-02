@@ -72,6 +72,7 @@ func _run() -> void:
 		quit(1)
 		return
 	_test_fresh_prototype_metadata(kernel)
+	_test_live_catalog_compiles_natively(kernel)
 	_test_activation_legal_action_parity(kernel)
 	_test_activation_transition_parity(kernel)
 	_test_targeted_activation_action_parity(kernel)
@@ -88,6 +89,7 @@ func _run() -> void:
 	_test_selector_transition_parity(kernel)
 	_test_power_change_transition_parity(kernel)
 	_test_ki_flip_and_grant_transition_parity(kernel)
+	_test_laihe_grant_transition_parity(kernel)
 	_test_return_to_hand_transition_parity(kernel)
 	_test_swap_transition_parity(kernel)
 	_test_attack_lifecycle_transition_parity(kernel)
@@ -226,6 +228,42 @@ func _test_fresh_prototype_metadata(kernel: Object) -> void:
 	_check(
 		not bool(kernel.call("load_compact_payload", invalid_fallback_payload)),
 		"Native kernel rejects an out-of-range empty-deck fallback reference"
+	)
+
+
+func _test_live_catalog_compiles_natively(kernel: Object) -> void:
+	var catalog_cards: Array = []
+	var card_index: int = 0
+	for card_id: StringName in Catalog.get_all_card_ids():
+		catalog_cards.append(Catalog.create_instance(
+			card_id,
+			Rules.PLAYER_OWNER,
+			StringName("native_catalog_audit_%d" % card_index)
+		))
+		card_index += 1
+	var catalog_state := State.new(Rules.empty_board(), [], [], Rules.PLAYER_OWNER)
+	catalog_state.removed_cards[Rules.PLAYER_OWNER] = catalog_cards
+	var compact := CompactState.new()
+	_check(compact.capture_state(catalog_state), "Complete live catalog can be compacted")
+	if not compact.is_structurally_valid():
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Complete live catalog loads natively"
+	)
+	var layout: Dictionary = kernel.call("inspect_layout") as Dictionary
+	if (
+		int(layout.get("invalid_compiled_ability_count", -1)) != 0
+		or int(layout.get("invalid_compiled_ability_set_count", -1)) != 0
+	):
+		print("NATIVE_CATALOG_AUDIT_INVALID layout=%s" % layout)
+	_check(
+		int(layout.get("invalid_compiled_ability_count", -1)) == 0,
+		"Every live catalog ability compiles to supported native primitives"
+	)
+	_check(
+		int(layout.get("invalid_compiled_ability_set_count", -1)) == 0,
+		"Every live catalog ability set compiles without an unsupported declaration"
 	)
 
 
@@ -2366,9 +2404,19 @@ func _test_draw_trigger_rejections(kernel: Object) -> void:
 		[_make_plain_card(&"敌手", &"native_filtered_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER,
 		0,
-		[_make_plain_card(&"待抽", &"native_filtered_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
+		[
+			_make_plain_card(&"非剑法", &"native_filtered_skip", Rules.PLAYER_OWNER, [1, 1, 1, 1]),
+			Catalog.create_instance(&"YouFenLaiYi4", Rules.PLAYER_OWNER, &"native_filtered_draw"),
+		]
 	)
-	_check_transition_rejected(kernel, filtered_state, &"native_filtered_source", "Filtered draw")
+	_check_transition_parity(
+		kernel,
+		filtered_state,
+		0,
+		4,
+		&"native_filtered_source",
+		"Filtered draw selects the first matching weapon"
+	)
 
 	var unsupported_source: Dictionary = _make_after_summoned_card(
 		&"native_unsupported_source",
@@ -4471,16 +4519,25 @@ func _test_ki_flip_and_grant_transition_parity(kernel: Object) -> void:
 	var future_passive: Dictionary = {
 		"retained_on_flip": true,
 		"triggers": [{
-			"event": &"native_future_event",
-			"conditions": [],
-			"actions": [{"type": &"native_future_action"}],
+			"event": Catalog.TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 		}],
 	}
 	var replacement_activation: Dictionary = {
 		"retained_on_flip": false,
 		"activation": {
-			"actions": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ANY_EMPTY_BOARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 		},
+	}
+	var innate_activation: Dictionary = {
+		"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": Catalog.TARGET_ANY_EMPTY_BOARD,
+		"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 	}
 	var grant_source: Dictionary = _make_plain_card(
 		&"动态授予链",
@@ -4503,11 +4560,11 @@ func _test_ki_flip_and_grant_transition_parity(kernel: Object) -> void:
 		},
 		{
 			"retained_on_flip": false,
-			"activation": {"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]},
+			"activation": innate_activation,
 		},
 		{
 			"retained_on_flip": true,
-			"activation": {"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 2}]},
+			"activation": innate_activation,
 		},
 	]
 	var grant_state := State.new(
@@ -6191,6 +6248,73 @@ func _benchmark_activation_transition(kernel: Object) -> Dictionary:
 	}
 
 
+func _test_laihe_grant_transition_parity(kernel: Object) -> void:
+	for tier_id: StringName in [&"LaiHeQinQuan4", &"LaiHeQinQuan5"]:
+		for source_owner: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+			var target_owner: int = (
+				Rules.OPPONENT_OWNER
+				if source_owner == Rules.PLAYER_OWNER
+				else Rules.PLAYER_OWNER
+			)
+			var source: Dictionary = Catalog.create_instance(
+				tier_id,
+				source_owner,
+				StringName("native_laihe_source_%s_%d" % [tier_id, source_owner])
+			)
+			var target: Dictionary = Catalog.create_instance(
+				&"TaiZuChangQuan",
+				target_owner,
+				StringName("native_laihe_target_%s_%d" % [tier_id, source_owner])
+			)
+			(target.get("revealed_to_owner_ids", []) as Array).append(source_owner)
+			var board: Array = Rules.empty_board()
+			board[4] = _slot(source, source_owner)
+			var player_hand: Array = [target] if target_owner == Rules.PLAYER_OWNER else []
+			var opponent_hand: Array = [target] if target_owner == Rules.OPPONENT_OWNER else []
+			var state := State.new(
+				board,
+				player_hand,
+				opponent_hand,
+				target_owner
+			)
+			_check_transition_parity(
+				kernel,
+				state,
+				0,
+				0,
+				StringName(target.get("instance_id", &"")),
+				"%s owner %d grants weakness to a revealed enemy summon"
+				% [tier_id, source_owner]
+			)
+
+	var unrevealed_source: Dictionary = Catalog.create_instance(
+		&"LaiHeQinQuan4",
+		Rules.PLAYER_OWNER,
+		&"native_laihe_unrevealed_source"
+	)
+	var unrevealed_target: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.OPPONENT_OWNER,
+		&"native_laihe_unrevealed_target"
+	)
+	var unrevealed_board: Array = Rules.empty_board()
+	unrevealed_board[4] = _slot(unrevealed_source, Rules.PLAYER_OWNER)
+	var unrevealed_state := State.new(
+		unrevealed_board,
+		[],
+		[unrevealed_target],
+		Rules.OPPONENT_OWNER
+	)
+	_check_transition_parity(
+		kernel,
+		unrevealed_state,
+		0,
+		0,
+		&"native_laihe_unrevealed_target",
+		"LaiHe ignores an unrevealed enemy summon"
+	)
+
+
 func _check_transition_parity(
 	kernel: Object,
 	state: State,
@@ -6228,6 +6352,7 @@ func _check_transition_parity(
 	_check(bool(actual.get("valid", false)), "%s native transition is valid" % label)
 	if not bool(actual.get("valid", false)):
 		print("NATIVE_BASIC_TRANSITION_REASON label=%s reason=%s" % [label, actual.get("reason", "")])
+		print("NATIVE_BASIC_TRANSITION_LAYOUT label=%s layout=%s" % [label, kernel.call("inspect_layout")])
 		return
 	var result_compact: CompactState = CompactState.from_variant_payload(
 		actual.get("payload", {}) as Dictionary

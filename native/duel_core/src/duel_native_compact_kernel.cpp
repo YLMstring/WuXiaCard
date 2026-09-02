@@ -332,6 +332,73 @@ Dictionary DuelNativeCompactKernel::inspect_layout() const {
 	result["compiled_ability_set_count"] = static_cast<int64_t>(
 		compiled_ability_sets.size()
 	);
+	int64_t invalid_ability_count = 0;
+	Array invalid_ability_declarations;
+	Array invalid_ability_diagnostics;
+	for (size_t index = 0; index < compiled_ability_pool.size(); ++index) {
+		if (!compiled_ability_pool[index].declaration_valid) {
+			++invalid_ability_count;
+			if (index < ability_declaration_pool.size()) {
+				invalid_ability_declarations.append(ability_declaration_pool[index]);
+			}
+			const CompiledAbility &ability = compiled_ability_pool[index];
+			Dictionary diagnostic;
+			diagnostic["pool_index"] = static_cast<int64_t>(index);
+			diagnostic["activation_valid"] = ability.activation.declaration_valid;
+			Array modifier_opcodes;
+			for (const CompiledModifier &modifier : ability.modifiers) {
+				modifier_opcodes.append(static_cast<int64_t>(modifier.opcode));
+			}
+			diagnostic["modifier_opcodes"] = modifier_opcodes;
+			Array trigger_diagnostics;
+			for (const CompiledTriggerRule &trigger : ability.triggers) {
+				Dictionary trigger_diagnostic;
+				trigger_diagnostic["event"] = trigger.event_id;
+				Array condition_opcodes;
+				for (const CompiledCondition &condition : trigger.conditions) {
+					condition_opcodes.append(static_cast<int64_t>(condition.opcode));
+				}
+				trigger_diagnostic["condition_opcodes"] = condition_opcodes;
+				Array action_diagnostics;
+				for (const CompiledAction &action : trigger.actions) {
+					Dictionary action_diagnostic;
+					action_diagnostic["type"] = action.declaration_type;
+					action_diagnostic["opcode"] = static_cast<int64_t>(action.opcode);
+					action_diagnostic["valid"] = action.declaration_valid;
+					action_diagnostic["selector_valid"] = action.selector.declaration_valid;
+					Array child_diagnostics;
+					for (const CompiledAction &child : action.child_actions) {
+						Dictionary child_diagnostic;
+						child_diagnostic["type"] = child.declaration_type;
+						child_diagnostic["opcode"] = static_cast<int64_t>(child.opcode);
+						child_diagnostic["valid"] = child.declaration_valid;
+						child_diagnostic["granted_ability_index"] = child.granted_ability_index;
+						child_diagnostics.append(child_diagnostic);
+					}
+					action_diagnostic["children"] = child_diagnostics;
+					action_diagnostics.append(action_diagnostic);
+				}
+				trigger_diagnostic["actions"] = action_diagnostics;
+				trigger_diagnostics.append(trigger_diagnostic);
+			}
+			diagnostic["triggers"] = trigger_diagnostics;
+			invalid_ability_diagnostics.append(diagnostic);
+		}
+	}
+	int64_t invalid_ability_set_count = 0;
+	Array invalid_ability_set_indices;
+	for (size_t index = 0; index < compiled_ability_sets.size(); ++index) {
+		if (!compiled_ability_sets[index].declaration_valid) {
+			++invalid_ability_set_count;
+			invalid_ability_set_indices.append(static_cast<int64_t>(index));
+		}
+	}
+	result["compiled_ability_count"] = static_cast<int64_t>(compiled_ability_pool.size());
+	result["invalid_compiled_ability_count"] = invalid_ability_count;
+	result["invalid_compiled_ability_set_count"] = invalid_ability_set_count;
+	result["invalid_compiled_ability_declarations"] = invalid_ability_declarations;
+	result["invalid_compiled_ability_diagnostics"] = invalid_ability_diagnostics;
+	result["invalid_compiled_ability_set_indices"] = invalid_ability_set_indices;
 	result["fresh_card_prototype_count"] = static_cast<int64_t>(
 		state.fresh_card_prototypes.size()
 	);
@@ -1357,6 +1424,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_in_range")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IN_RANGE;
 	else if (type == StringName("trigger_card_adjacent_to_source")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE;
 	else if (type == StringName("trigger_card_outside_source_owner_hand")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND;
+	else if (type == StringName("trigger_card_revealed_to_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF;
 	else if (type == StringName("trigger_card_was_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ENEMY;
 	else if (type == StringName("trigger_card_original_owner_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF;
 	else if (type == StringName("attacked_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
@@ -1439,6 +1507,9 @@ DuelNativeCompactKernel::CompiledSelectorCondition DuelNativeCompactKernel::comp
 		};
 		compiled.resource = compile_resource(condition.get("resource", StringName()));
 		compiled.fallback_resource = compile_resource(condition.get("fallback_resource", StringName()));
+	}
+	if (compiled.opcode == SelectorConditionOpcode::UNSUPPORTED) {
+		compiled.declaration_valid = false;
 	}
 	return compiled;
 }
@@ -1558,12 +1629,18 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 	};
 	if (
 		type == StringName("draw_cards")
-		&& action.size() == 2 + generic_field_count
+		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count)
 		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
 		&& static_cast<int64_t>(action.get("amount", 0)) > 0
+		&& (
+			!action.has("weapon")
+			|| Variant(action.get("weapon", Variant())).get_type() == Variant::STRING
+			|| Variant(action.get("weapon", Variant())).get_type() == Variant::STRING_NAME
+		)
 	) {
 		compiled.opcode = ActionOpcode::DRAW_CARDS;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
+		compiled.weapon = String(action.get("weapon", String()));
 	} else if (type == StringName("discard_card") && action.size() == 2 + generic_field_count) {
 		compiled.opcode = ActionOpcode::DISCARD_CARD;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
@@ -1656,11 +1733,21 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		const StringName owner = action.get("new_owner", StringName());
 		if (owner == StringName("ability_source")) compiled.new_owner = RelativeOwnerOpcode::ABILITY_SOURCE;
 		else if (owner == StringName("opponent_of_ability_source")) compiled.new_owner = RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE;
-	} else if (type == StringName("grant_ability_to_self") && action.size() == 2 + generic_field_count) {
-		compiled.opcode = ActionOpcode::GRANT_ABILITY_TO_SELF;
+	} else if (
+		(type == StringName("grant_trigger_card_ability") || type == StringName("grant_ability_to_self"))
+		&& action.size() == 2 + generic_field_count
+	) {
+		compiled.opcode = type == StringName("grant_trigger_card_ability")
+			? ActionOpcode::GRANT_TRIGGER_CARD_ABILITY
+			: ActionOpcode::GRANT_ABILITY_TO_SELF;
 		const Variant granted = action.get("ability", Variant());
 		if (granted.get_type() == Variant::DICTIONARY && !Dictionary(granted).is_empty()) {
 			compiled.granted_ability_index = intern_compiled_ability(granted);
+			if (!compiled_ability_pool[compiled.granted_ability_index].declaration_valid) {
+				compiled.declaration_valid = false;
+			}
+		} else {
+			compiled.declaration_valid = false;
 		}
 	} else if (type == StringName("transform_card") && action.size() == 3 + generic_field_count) {
 		compiled.opcode = ActionOpcode::TRANSFORM_CARD;
@@ -2003,6 +2090,7 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
 		if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
 	}
+	if (compiled.opcode == ActionOpcode::UNSUPPORTED) compiled.declaration_valid = false;
 	return compiled;
 }
 
@@ -2069,7 +2157,9 @@ DuelNativeCompactKernel::CompiledTriggerRule DuelNativeCompactKernel::compile_tr
 	}
 	const Array conditions = conditions_value;
 	for (int64_t index = 0; index < conditions.size(); ++index) {
-		compiled.conditions.push_back(compile_condition(conditions[index]));
+		const CompiledCondition condition = compile_condition(conditions[index]);
+		if (condition.opcode == ConditionOpcode::UNSUPPORTED) valid = false;
+		compiled.conditions.push_back(condition);
 	}
 	const Array actions = actions_value;
 	for (int64_t index = 0; index < actions.size(); ++index) {
@@ -2185,7 +2275,11 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 		} else {
 			const Array modifiers = modifiers_value;
 			for (int64_t index = 0; index < modifiers.size(); ++index) {
-				compiled.modifiers.push_back(compile_modifier(modifiers[index]));
+				const CompiledModifier modifier = compile_modifier(modifiers[index]);
+				if (modifier.opcode == ModifierOpcode::UNSUPPORTED) {
+					compiled.declaration_valid = false;
+				}
+				compiled.modifiers.push_back(modifier);
 			}
 		}
 	}
@@ -3689,6 +3783,19 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND:
 				matched = !(context.trigger_zone == 1 && context.trigger_owner == group.source_owner);
 				break;
+			case ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF:
+				if (
+					context.trigger_card_index >= 0
+					&& context.trigger_card_index < static_cast<int32_t>(value.card_reveal_codes.size())
+					&& find_board_card(value, context.trigger_card_index, context.trigger_cell)
+						== context.trigger_cell
+				) {
+					const uint8_t reveal_code = value.card_reveal_codes[context.trigger_card_index];
+					matched = group.source_owner == 1
+						? (reveal_code == 1 || reveal_code == 3 || reveal_code == 4)
+						: (reveal_code == 2 || reveal_code == 3 || reveal_code == 4);
+				}
+				break;
 			case ConditionOpcode::TRIGGER_CARD_WAS_ENEMY: {
 				const int32_t previous_owner = (
 					context.trigger_previous_owner != 0
@@ -4046,6 +4153,7 @@ bool DuelNativeCompactKernel::draw_cards(
 	int32_t owner_id,
 	int32_t source_cell,
 	int32_t amount,
+	const String &weapon_filter,
 	const EventContext &draw_context,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
@@ -4063,7 +4171,22 @@ bool DuelNativeCompactKernel::draw_cards(
 	for (int32_t draw_index = 0; draw_index < amount; ++draw_index) {
 		if (hand.size() >= 5) break;
 		int32_t card_index = -1;
-		if (!deck.empty()) {
+		if (!weapon_filter.is_empty()) {
+			auto matching = std::find_if(deck.begin(), deck.end(), [&](const int32_t candidate) {
+				if (
+					candidate < 0
+					|| candidate >= static_cast<int32_t>(value.card_template_indices.size())
+				) return false;
+				const int32_t template_index = value.card_template_indices[candidate];
+				if (template_index < 0 || template_index >= value.card_template_pool.size()) return false;
+				const Variant template_value = value.card_template_pool[template_index];
+				if (template_value.get_type() != Variant::DICTIONARY) return false;
+				return String(Dictionary(template_value).get("weapon", String())) == weapon_filter;
+			});
+			if (matching == deck.end()) break;
+			card_index = *matching;
+			deck.erase(matching);
+		} else if (!deck.empty()) {
 			card_index = deck.front();
 			deck.erase(deck.begin());
 		} else {
@@ -4198,7 +4321,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_difficulty_
 	context.ability_source_logical_index = 0;
 	context.ability_source_card_index = source_card_index;
 	context.ability_source_owner = owner_id;
-	if (!draw_cards(value, owner_id, source_cell, 1, context, exile_stack, resolution)) {
+	if (!draw_cards(value, owner_id, source_cell, 1, String(), context, exile_stack, resolution)) {
 		resolution.supported = false;
 	}
 	return resolution;
@@ -5413,13 +5536,26 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::grant_ability_to
 	const EventGroup &group,
 	const CompiledAction &action,
 	const ActionContext &action_context,
+	int32_t event_source_card_index,
 	int32_t source_cell,
 	Resolution &resolution
 ) const {
 	if (
 		action.granted_ability_index < 0
 		|| action.granted_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
-	) return ActionOutcome::UNSUPPORTED;
+	) {
+		resolution.reason = String("Granted native ability index is invalid: ")
+			+ String::num_int64(action.granted_ability_index);
+		return ActionOutcome::UNSUPPORTED;
+	}
+	if (
+		event_source_card_index < 0
+		|| event_source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) {
+		resolution.reason = String("Granted ability event source index is invalid: ")
+			+ String::num_int64(event_source_card_index);
+		return ActionOutcome::UNSUPPORTED;
+	}
 	const int32_t target = action_context.action_subject_card_index;
 	int32_t zone = -1;
 	int32_t owner = 0;
@@ -5444,7 +5580,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::grant_ability_to
 	Dictionary event;
 	event["type"] = StringName("ability_gained");
 	event["source_cell"] = source_cell;
-	event["source_instance_id"] = value.card_instance_ids[action_context.action_subject_card_index];
+	event["source_instance_id"] = value.card_instance_ids[event_source_card_index];
 	event["target_cell"] = zone == 0 ? logical_index : -1;
 	event["owner_id"] = owner;
 	event["instance_id"] = value.card_instance_ids[target];
@@ -5709,6 +5845,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				action_context.action_subject_owner,
 				action_source_cell,
 				action.amount,
+				action.weapon,
 				draw_context,
 				exile_stack,
 				resolution
@@ -5850,8 +5987,33 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		}
 		case ActionOpcode::FLIP_SELF:
 			return flip_action_subject(value, group, action, event_context, action_context, exile_stack, resolution);
+		case ActionOpcode::GRANT_TRIGGER_CARD_ABILITY: {
+			if (event_context.trigger_card_index < 0) return ActionOutcome::NO_EFFECT;
+			ActionContext trigger_context = action_context;
+			trigger_context.action_subject_card_index = event_context.trigger_card_index;
+			trigger_context.action_subject_owner = event_context.trigger_owner;
+			trigger_context.action_subject_zone = event_context.trigger_zone;
+			trigger_context.action_subject_logical_index = event_context.trigger_logical_index;
+			return grant_ability_to_subject(
+				value,
+				group,
+				action,
+				trigger_context,
+				action_context.action_subject_card_index,
+				action_source_cell,
+				resolution
+			);
+		}
 		case ActionOpcode::GRANT_ABILITY_TO_SELF:
-			return grant_ability_to_subject(value, group, action, action_context, action_source_cell, resolution);
+			return grant_ability_to_subject(
+				value,
+				group,
+				action,
+				action_context,
+				action_context.action_subject_card_index,
+				action_source_cell,
+				resolution
+			);
 		case ActionOpcode::TRANSFORM_CARD:
 			return transform_card(value, group, action, event_context, action_context, execution_state, resolution);
 		case ActionOpcode::RETURN_CARD_TO_HAND:
