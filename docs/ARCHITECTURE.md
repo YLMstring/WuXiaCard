@@ -469,6 +469,11 @@ oracle parity; all 20 current catalog activation declarations have fixture
 coverage, and 104/104 activation actions from 136 deterministic Quick-derived
 states also have exact parity. The activation path compiles target rules and
 actions once, enumerates exact runtime actions, and executes each transaction on
-a private native branch. A complete native search tree is not yet implemented.
-Do not add a production call site until one root conversion can remain native
-for the entire tree and the selected result can cross back once.
+a private native branch. A test-only fixed-complete-round-depth baseline minimax
+now keeps one converted root and every descendant entirely in native state. Its
+14 real Quick depth-one results match the oracle's score and canonical action in
+all 14 openings, with focused depth-two empty-turn and activation/extra-play
+coverage as well. It has no production iterative deepening, deadline,
+cancellation, LazyOnly pruning, state key/transposition table, same-turn plan,
+or selected-result restoration. Do not add a production call site until those
+boundaries are proven and the selected result crosses back only once.

@@ -68,6 +68,12 @@ Current scope:
   generic actions reached by current catalog activations;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
+- exposes a test-only fixed-complete-round-depth baseline minimax that loads one
+  root and keeps legal-action enumeration, branch copies, transitions,
+  evaluation, and the entire descendant tree in native state;
+- uses the oracle's owner-turn-serial depth accounting, including same-turn
+  extra plays and multi-boundary automatic empty-turn advancement, and selects
+  equal-scoring root actions by the canonical action order;
 - uses an action-specific conservative gate and atomically rejects any reached
   future declaration that has not been compiled instead of approximating it;
 - measures native core cloning, plain hand-play transitions, and a fixed
@@ -76,9 +82,14 @@ Current scope:
 The current probe reports 490/490 exact hand-play transitions in the 14 real
 Quick openings, 36/36 legal actions covering all 20 catalog activation
 declarations, and 104/104 activation actions across 136 deterministic
-Quick-derived states. It deliberately does not implement state keys,
-evaluation, a complete native search tree, or production integration yet.
-Future declaration vocabulary remains outside the slice until separately
-proven. Production does not call the extension. The probe compares every
-covered state field and ordered event against `DuelSimulator`, which remains
-the oracle for every native primitive.
+Quick-derived states. Its fixed-depth whole-tree shadow additionally matches
+all 14 Quick depth-one baseline scores/actions plus focused depth-two empty-turn
+and activation/extra-play fixtures. The 2026-09-02 Debug run traversed 27,117
+unpruned native nodes in about 2.10 seconds versus 3,512 alpha-beta oracle nodes
+in about 30.10 seconds. It deliberately does not implement production state
+keys/transpositions, iterative deepening, deadline/cancellation, LazyOnly
+pruning, same-turn plans, selected-result restoration, or production
+integration yet. Future declaration vocabulary remains outside the slice until
+separately proven. Production does not call the extension. The probe compares
+every covered state field and ordered event against `DuelSimulator`, which
+remains the oracle for every native primitive.

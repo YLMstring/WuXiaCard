@@ -507,11 +507,17 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   activation target rules and all 20 current catalog activation declarations.
   The catalog fixtures are 36/36 exact; 136 deterministic states derived from
   the same Quick openings expose another 104 activation actions, all 104 exact.
-  The expanded probe passes 1,635 checks. Its latest Debug loops measured about
-  `12.83x` oracle throughput for 5,000 plain transitions and `17.47x` for 500
-  fixed `TiYunZong4` activation transactions. An all-native search tree,
-  selected-result restoration, and release/Android packaging remain unfinished,
-  so production adoption remains forbidden.
+  The kernel now also exposes a test-only fixed-complete-round-depth baseline
+  minimax that converts one root and leaves the whole tree native. All 14 real
+  Quick depth-one searches match the oracle's exact score and canonical root
+  action; focused depth-two empty-turn and activation/extra-play fixtures also
+  match. The latest expanded probe passes 1,703 checks. Its unpruned native tree
+  visited 27,117 nodes in about `2.10s`, while the alpha-beta GDScript oracle
+  visited 3,512 in about `30.10s`; this proves the native boundary, not a fair
+  final algorithm comparison. Production-equivalent iterative deepening,
+  deadlines/cancellation, LazyOnly pruning, state keys/transpositions,
+  same-turn plans, selected-result restoration, and release/Android packaging
+  remain unfinished, so production adoption remains forbidden.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

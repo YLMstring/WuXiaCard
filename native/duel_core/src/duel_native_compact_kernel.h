@@ -129,6 +129,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		STANDARD_ATTACK_WITH_CARD,
 		MOVE_SELF_TO_TARGET,
 		SWAP_SELF_WITH_TARGET,
+		MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 		TRANSFER_CARD_RESOURCE,
 		DISTRIBUTE_KI,
@@ -497,6 +498,28 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool flip_prevented = false;
 	};
 
+	enum class NativeActionType : uint8_t {
+		PLAY,
+		ACTIVATE,
+	};
+
+	struct NativeAction {
+		NativeActionType type = NativeActionType::PLAY;
+		int32_t source_index = -1;
+		StringName source_instance_id;
+		bool target_is_hand_slot = false;
+		int32_t target_index = -1;
+		int32_t activation_index = 0;
+	};
+
+	struct NativeSearchStats {
+		int64_t nodes = 0;
+		int64_t leaves = 0;
+		int32_t max_action_ply = 0;
+		bool supported = true;
+		String reason;
+	};
+
 	NativeState state;
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
@@ -526,9 +549,48 @@ public:
 		const StringName &expected_instance_id = StringName()
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
+	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 
 private:
 	bool validate_shape();
+	std::vector<NativeAction> get_legal_native_actions(
+		const NativeState &value,
+		int32_t owner_id
+	) const;
+	Dictionary materialize_action(const NativeAction &action) const;
+	bool action_canonical_less(const NativeAction &left, const NativeAction &right) const;
+	bool transition_action(
+		const NativeState &source,
+		const NativeAction &action,
+		NativeState &next,
+		Resolution &resolution,
+		bool &supported,
+		String &reason
+	) const;
+	bool transition_play(
+		const NativeState &source,
+		const NativeAction &action,
+		NativeState &next,
+		Resolution &resolution,
+		bool &supported,
+		String &reason
+	) const;
+	bool transition_activate(
+		const NativeState &source,
+		const NativeAction &action,
+		NativeState &next,
+		Resolution &resolution,
+		bool &supported,
+		String &reason
+	) const;
+	int32_t evaluate_baseline(const NativeState &value, int32_t root_owner) const;
+	int32_t search_minimax(
+		const NativeState &value,
+		int32_t remaining_owner_turn_boundaries,
+		int32_t root_owner,
+		int32_t action_ply,
+		NativeSearchStats &stats
+	) const;
 	void compile_ability_sets();
 	bool compile_runtime_suppression_batches();
 	CompiledCondition compile_condition(const Variant &value) const;

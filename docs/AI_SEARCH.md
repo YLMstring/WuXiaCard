@@ -696,6 +696,41 @@ native branch clones at about `477,528` clones per second. Debug timing is
 recorded rather than asserted; parity and generality take precedence over a
 retained speedup multiple.
 
+### Native whole-tree shadow search
+
+The opt-in kernel now has a test-only `search_fixed_round_depth()` entry point.
+One compact root is loaded from GDScript, after which legal-action enumeration,
+branch copies, hand-play and activation transitions, complete-round depth
+accounting, baseline evaluation, and minimax traversal remain inside C++ for the
+entire tree. Public single-transition probes and search branches share the same
+state-parameterized transaction functions; the search does not serialize or
+restore a payload at each node.
+
+This first correctness oracle deliberately uses complete minimax without
+alpha-beta, state keys, or a transposition table. It reproduces the baseline
+evaluator's terminal score, board ownership, hand/deck/card resources,
+mobility, danger, and active-player tempo terms. Depth uses the same
+`owner_turn_serial` boundary delta as production: extra plays remain inside an
+owner turn, while automatically completed empty turns consume every boundary
+they cross. Equal root scores use the same canonical action ordering.
+
+The 2026-09-02 Debug shadow run matched all 14 real Quick openings at complete-
+round depth one: `14/14` exact scores and `14/14` exact root actions. It also
+matched focused depth-two automatic-empty-turn and depth-one activation-plus-
+extra-play fixtures. The fixed Quick tree visited 27,117 native nodes in about
+`2.10s`; the alpha-beta GDScript oracle visited 3,512 nodes in about `30.10s`.
+Those timings prove that a coarse all-native tree is viable, but are not a fair
+final engine comparison because the algorithms and visited node counts differ.
+The same run retained 490/490 hand-play transition parity, 36/36 catalog
+activation-fixture parity, 104/104 Quick-derived activation parity, and passed
+1,703 native checks.
+
+The shadow run exposed and closed two deeper-state gaps that root-only coverage
+could not see: row-major `move_self_to_first_adjacent_empty`, and a legal action
+after end-turn triggers had already resolved and granted an extra play. This is
+why fixed root-transition coverage is not described as full reachable-state
+coverage.
+
 ## Missing AI Work
 
 - Fivefold board repetition is adjudicated by the shared simulator before the
@@ -704,9 +739,11 @@ retained speedup multiple.
   and activation coverage is 36/36 across every current catalog declaration
   plus 104/104 in deterministic Quick-derived states. Production still uses
   `DuelSimulator` for every transition.
-- Keep an entire trial search tree native; converting at every node would erase
-  the measured transition advantage. Compare root actions, scores, completed
-  depths, and selected-result restoration against the existing search oracle.
+- Add production-equivalent iterative deepening, hard deadline/cancellation,
+  LazyOnly ordering/pruning, state keys/transposition handling, and same-turn
+  plan extraction to the native tree. Then compare completed depths and
+  selected-result restoration against the existing search oracle over full
+  games, not only fixed-depth openings.
 - Prove Windows release and Android ARM64 builds before enabling the extension
   outside opt-in tests.
 - Tactical extension needs a forced-action-correct redesign before it can be

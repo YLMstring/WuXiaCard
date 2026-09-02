@@ -10,6 +10,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
 const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Search = preload("res://scripts/duel_search.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
@@ -97,6 +98,8 @@ func _run() -> void:
 	_test_suppression_transition_parity(kernel)
 	_report_real_quick_activation_coverage(kernel)
 	_report_real_quick_native_coverage(kernel)
+	_report_native_whole_tree_shadow_search(kernel)
+	_test_native_whole_tree_depth_semantics(kernel)
 	if _failures > 0:
 		push_error(
 			"DUEL_NATIVE_COMPACT_PROBE_FAILED parity_failures=%d checks=%d"
@@ -1647,6 +1650,210 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 			JSON.stringify(rejection_reasons_by_card),
 		]
 	)
+
+
+func _report_native_whole_tree_shadow_search(kernel: Object) -> void:
+	var unique_openings: Dictionary = {}
+	var compared: int = 0
+	var exact_scores: int = 0
+	var exact_actions: int = 0
+	var native_nodes: int = 0
+	var native_usec: int = 0
+	var oracle_nodes: int = 0
+	var oracle_usec: int = 0
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	for matchup: Dictionary in matchups:
+		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
+			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			var opening: State = built.get("state") as State
+			if opening == null:
+				continue
+			var opening_key: String = StateKey.build(opening)
+			if unique_openings.has(opening_key):
+				continue
+			unique_openings[opening_key] = true
+			var compact := CompactState.new()
+			_check(compact.capture_state(opening), "Native whole-tree opening can be compacted")
+			if not compact.is_structurally_valid():
+				continue
+			_check(
+				bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+				"Native whole-tree opening loads"
+			)
+			var oracle_started_usec: int = Time.get_ticks_usec()
+			var oracle: Dictionary = Search.find_best_action_iterative(
+				opening.duplicate_state(),
+				opening.active_player,
+				{
+					"max_depth": 1,
+					"profile": &"baseline",
+					"use_lazy_transitions": false,
+					"use_pvs": false,
+					"use_tactical_extension": false,
+					"use_evaluation_cache": false,
+					"evaluator_profile": &"baseline",
+				}
+			)
+			oracle_usec += Time.get_ticks_usec() - oracle_started_usec
+			var native: Dictionary = kernel.call(
+				"search_fixed_round_depth",
+				opening.active_player,
+				1
+			) as Dictionary
+			compared += 1
+			oracle_nodes += int(oracle.get("nodes", 0))
+			native_nodes += int(native.get("nodes", 0))
+			native_usec += int(native.get("elapsed_usec", 0))
+			var oracle_action: Action = oracle.get("action") as Action
+			var oracle_action_key: String = (
+				oracle_action.canonical_key() if oracle_action != null else "<missing>"
+			)
+			var native_action_key: String = _native_action_canonical_key(
+				native.get("action", {}) as Dictionary
+			)
+			var score_equal: bool = (
+				bool(native.get("supported", false))
+				and bool(native.get("valid", false))
+				and int(native.get("score", 0)) == int(oracle.get("score", 1))
+			)
+			var action_equal: bool = native_action_key == oracle_action_key
+			if score_equal:
+				exact_scores += 1
+			if action_equal:
+				exact_actions += 1
+			_check(
+				score_equal,
+				"Native whole-tree score matches oracle for %s (native=%d oracle=%d reason=%s)"
+				% [
+					built.get("game_id", &"unknown"),
+					int(native.get("score", 0)),
+					int(oracle.get("score", 0)),
+					native.get("reason", ""),
+				]
+			)
+			_check(
+				action_equal,
+				"Native whole-tree action matches oracle for %s (native=%s oracle=%s)"
+				% [built.get("game_id", &"unknown"), native_action_key, oracle_action_key]
+			)
+			print(
+				"DUEL_NATIVE_WHOLE_TREE_PROGRESS opening=%d/14 game=%s score=%d action=%s native_nodes=%d oracle_nodes=%d"
+				% [
+					compared,
+					built.get("game_id", &"unknown"),
+					int(native.get("score", 0)),
+					native_action_key,
+					int(native.get("nodes", 0)),
+					int(oracle.get("nodes", 0)),
+				]
+			)
+	_check(unique_openings.size() == 14, "Native whole-tree shadow uses 14 unique Quick openings")
+	_check(
+		exact_scores == compared and exact_actions == compared,
+		"Every native whole-tree Quick result exactly matches the oracle"
+	)
+	print(
+		"DUEL_NATIVE_WHOLE_TREE_SHADOW openings=%d depth=1 exact_scores=%d exact_actions=%d native_nodes=%d oracle_nodes=%d native_usec=%d oracle_usec=%d"
+		% [
+			compared,
+			exact_scores,
+			exact_actions,
+			native_nodes,
+			oracle_nodes,
+			native_usec,
+			oracle_usec,
+		]
+	)
+
+
+func _test_native_whole_tree_depth_semantics(kernel: Object) -> void:
+	var empty_turn_state := State.new(
+		Rules.empty_board(),
+		[
+			_make_plain_card(&"原生深度甲", &"native_depth_player_1", Rules.PLAYER_OWNER, [2, 1, 2, 1]),
+			_make_plain_card(&"原生深度乙", &"native_depth_player_2", Rules.PLAYER_OWNER, [1, 2, 1, 2]),
+		],
+		[
+			_make_plain_card(&"原生深度敌", &"native_depth_enemy_1", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		],
+		Rules.PLAYER_OWNER
+	)
+	_check_native_shadow_search(
+		kernel,
+		empty_turn_state,
+		2,
+		"Depth two preserves automatic empty-turn boundary accounting"
+	)
+
+	var activation_source: Dictionary = _make_activation_source(
+		&"native_depth_activation_source",
+		Catalog.TARGET_ANY_ENEMY_BOARD,
+		[{"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1}]
+	)
+	var activation_board: Array = Rules.empty_board()
+	activation_board[4] = _slot(activation_source, Rules.PLAYER_OWNER)
+	activation_board[5] = _slot(
+		_make_plain_card(&"原生深度目标", &"native_depth_activation_target", Rules.OPPONENT_OWNER, [1, 1, 1, 1]),
+		Rules.OPPONENT_OWNER
+	)
+	var activation_state := State.new(
+		activation_board,
+		[_make_plain_card(&"原生深度额外牌", &"native_depth_extra_play", Rules.PLAYER_OWNER, [2, 2, 2, 2])],
+		[_make_plain_card(&"原生深度敌手", &"native_depth_enemy_reply", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
+		Rules.PLAYER_OWNER
+	)
+	_check_native_shadow_search(
+		kernel,
+		activation_state,
+		1,
+		"Depth one keeps activation and extra play inside the owner turn"
+	)
+
+
+func _check_native_shadow_search(
+	kernel: Object,
+	state: State,
+	round_depth: int,
+	label: String
+) -> void:
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s fixture compacts" % label)
+	if not compact.is_structurally_valid():
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"%s fixture loads natively" % label
+	)
+	var oracle: Dictionary = Search.find_best_action_iterative(
+		state.duplicate_state(),
+		state.active_player,
+		{
+			"max_depth": round_depth,
+			"profile": &"baseline",
+			"use_lazy_transitions": false,
+			"use_pvs": false,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+			"evaluator_profile": &"baseline",
+		}
+	)
+	var native: Dictionary = kernel.call(
+		"search_fixed_round_depth",
+		state.active_player,
+		round_depth
+	) as Dictionary
+	var oracle_action: Action = oracle.get("action") as Action
+	var oracle_key: String = oracle_action.canonical_key() if oracle_action != null else "<missing>"
+	var native_key: String = _native_action_canonical_key(native.get("action", {}) as Dictionary)
+	_check(
+		bool(native.get("supported", false)) and bool(native.get("valid", false)),
+		"%s is fully supported by native search (reason=%s)" % [label, native.get("reason", "")]
+	)
+	_check(
+		int(native.get("score", 0)) == int(oracle.get("score", 1)),
+		"%s score matches oracle" % label
+	)
+	_check(native_key == oracle_key, "%s action matches oracle" % label)
 
 
 func _summarize_events(events: Array) -> Array[Dictionary]:
