@@ -51,8 +51,28 @@ static func find_best_action_iterative_native(
 		native_limits["deadline_usec"] = started_usec + int(
 			float(native_limits["budget_seconds"]) * 1_000_000.0
 		)
+	var native_progress_callback: Callable = Callable()
+	if on_progress.is_valid():
+		native_progress_callback = func(snapshot: Dictionary) -> void:
+			var progress: Dictionary = {
+				"action": snapshot.get("action", ActionData.new()),
+				"score": int(snapshot.get("score", 0)),
+				"completed_depth": int(snapshot.get("depth", 0)),
+				"owner_turn_boundaries": int(snapshot.get("owner_turn_boundaries", 0)),
+				"nodes": int(snapshot.get("nodes", 0)),
+				"generated_actions": int(snapshot.get("generated_actions", 0)),
+				"applied_transitions": int(snapshot.get("applied_transitions", 0)),
+				"cutoffs": int(snapshot.get("cutoffs", 0)),
+				"elapsed_seconds": float(snapshot.get("elapsed_usec", 0)) / 1_000_000.0,
+				"completion_reason": &"searching",
+			}
+			on_progress.call(progress)
 	var result: Dictionary = NativeRules.search_iterative(
-		state, root_owner, native_limits, should_cancel
+		state,
+		root_owner,
+		native_limits,
+		should_cancel,
+		native_progress_callback
 	)
 	result = _native_result_schema(result, native_limits, profile, started_usec)
 	var action: ActionData = result.get("action", null) as ActionData
@@ -60,24 +80,6 @@ static func find_best_action_iterative_native(
 		result["turn_plan"] = _build_native_turn_plan(
 			state, result.get("principal_actions", []) as Array
 		)
-	if on_progress.is_valid():
-		for snapshot_value: Variant in result.get("depth_snapshots", []):
-			if not snapshot_value is Dictionary:
-				continue
-			var snapshot: Dictionary = snapshot_value as Dictionary
-			var progress: Dictionary = result.duplicate(true)
-			var snapshot_action: ActionData = snapshot.get("action", null) as ActionData
-			progress["action"] = snapshot_action.duplicate_action() if snapshot_action != null else ActionData.new()
-			progress["score"] = int(snapshot.get("score", 0))
-			progress["completed_depth"] = int(snapshot.get("depth", 0))
-			progress["owner_turn_boundaries"] = int(snapshot.get("owner_turn_boundaries", 0))
-			progress["nodes"] = int(snapshot.get("nodes", 0))
-			progress["generated_actions"] = int(snapshot.get("generated_actions", 0))
-			progress["applied_transitions"] = int(snapshot.get("applied_transitions", 0))
-			progress["cutoffs"] = int(snapshot.get("cutoffs", 0))
-			progress["elapsed_seconds"] = float(snapshot.get("elapsed_usec", 0)) / 1_000_000.0
-			progress["completion_reason"] = &"searching"
-			on_progress.call(progress)
 	return result
 
 

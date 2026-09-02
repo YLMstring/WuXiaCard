@@ -601,7 +601,8 @@ public:
 		int64_t budget_usec,
 		int64_t max_nodes,
 		int64_t min_completed_depth,
-		const Callable &should_cancel
+		const Callable &should_cancel,
+		const Callable &on_progress
 	) const;
 	Dictionary search_iterative_depth(
 		int64_t root_owner,
@@ -610,7 +611,8 @@ public:
 		int64_t max_nodes,
 		int64_t min_completed_depth,
 		const StringName &depth_mode,
-		const Callable &should_cancel
+		const Callable &should_cancel,
+		const Callable &on_progress
 	) const;
 
 private:

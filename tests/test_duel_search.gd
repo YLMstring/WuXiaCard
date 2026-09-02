@@ -13,6 +13,7 @@ const TurnPlan = preload("res://scripts/duel_turn_plan.gd")
 var _checks: int = 0
 var _failures: int = 0
 var _cancel_checks: int = 0
+var _cancel_after_progress: bool = false
 var _progress_snapshots: Array[Dictionary] = []
 
 
@@ -24,6 +25,7 @@ func _run() -> void:
 	_test_production_facade_uses_native_search()
 	_test_forced_terminal_score_and_canonical_tie()
 	_test_complete_round_result_schema()
+	_test_native_progress_is_published_during_search()
 	_test_selectable_depth_modes()
 	_test_node_limit_and_minimum_depth_guard()
 	_test_cancellation_and_deadline_are_hard_stops()
@@ -112,6 +114,21 @@ func _test_complete_round_result_schema() -> void:
 	_check((result.get("depth_snapshots", []) as Array).size() == 1, "Depth-one search retains one completed snapshot")
 	_check(_progress_snapshots.size() == 1, "Progress callback receives the completed depth snapshot")
 	_check(StringName(result.get("completion_reason", &"")) == &"max_depth", "Maximum depth is reported explicitly")
+
+
+func _test_native_progress_is_published_during_search() -> void:
+	_cancel_after_progress = false
+	_progress_snapshots.clear()
+	var result: Dictionary = Search.find_best_action_iterative(
+		_make_opening_state(),
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 2},
+		Callable(self, "_cancel_after_completed_progress"),
+		Callable(self, "_record_progress_and_request_cancel")
+	)
+	_check(_progress_snapshots.size() == 1, "Native search publishes exactly one live snapshot before cancellation")
+	_check(int(result.get("completed_depth", 0)) == 1, "Live depth-one progress can cancel before depth two begins")
+	_check(StringName(result.get("completion_reason", &"")) == &"cancelled", "Progress-requested cancellation is reported explicitly")
 
 
 func _test_selectable_depth_modes() -> void:
@@ -317,6 +334,20 @@ func _test_search_session() -> void:
 	_check(not bool(completed_result.get("used_fallback", true)), "Completed native result replaces the fallback")
 	_check(not completed_session.is_running(), "Joined session leaves no worker running")
 
+	var live_progress_session: Session = Session.new()
+	_check(live_progress_session.start(state, Rules.OPPONENT_OWNER, 5.0, fallback, {"max_depth": 99}), "Live-progress fixture starts its worker")
+	var observed_live_depth: int = 0
+	var live_progress_frames: int = 0
+	while not live_progress_session.is_complete() and live_progress_frames < 600:
+		observed_live_depth = int(live_progress_session.get_progress().get("completed_depth", 0))
+		if observed_live_depth > 0:
+			break
+		await process_frame
+		live_progress_frames += 1
+	_check(observed_live_depth > 0, "Worker publishes a completed depth while the search is still running")
+	_check(live_progress_session.is_running(), "Live completed-depth progress precedes the final worker result")
+	live_progress_session.cancel_and_join()
+
 	var cancelled_session: Session = Session.new()
 	_check(cancelled_session.start(state, Rules.OPPONENT_OWNER, 10.0, fallback, {"max_depth": 5}), "Cancellation fixture starts its worker")
 	cancelled_session.cancel()
@@ -329,6 +360,15 @@ func _test_search_session() -> void:
 
 func _record_progress(progress: Dictionary) -> void:
 	_progress_snapshots.append(progress.duplicate(true))
+
+
+func _record_progress_and_request_cancel(progress: Dictionary) -> void:
+	_progress_snapshots.append(progress.duplicate(true))
+	_cancel_after_progress = true
+
+
+func _cancel_after_completed_progress() -> bool:
+	return _cancel_after_progress
 
 
 func _cancel_after_native_entry() -> bool:

@@ -24,8 +24,8 @@ release-ready Android package.
 
 ## Exact Starting Point
 
-- Engine target: Godot `4.6`, GL Compatibility
-- Known working Summer build: Summer Engine `0.5.54`, engine `4.6.1.stable.mono.custom_build.3e132c1e2`
+- Engine target: Godot `4.7`, GL Compatibility
+- Known working Summer engine: `4.7.2.stable.mono.custom_build.a8e5ca520`
 - Main scene: `res://main.tscn`
 - Deck builder scene: `res://scenes/deck_builder.tscn`
 - Ending scene: `res://scenes/ending.tscn`
@@ -40,6 +40,8 @@ release-ready Android package.
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing switch: `scripts/game_settings.gd`, `TESTING_MODE`
 - Android preset: `export_presets.cfg`
+- Windows Release preset: `export_presets.cfg`; one-command build:
+  `tools/build_windows_release.ps1`
 
 Run all automated checks with:
 

@@ -163,9 +163,11 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"budget_usec",
 			"max_nodes",
 			"min_completed_depth",
-			"should_cancel"
+			"should_cancel",
+			"on_progress"
 		),
-		&DuelNativeCompactKernel::search_iterative_round_depth
+		&DuelNativeCompactKernel::search_iterative_round_depth,
+		DEFVAL(Callable())
 	);
 	ClassDB::bind_method(
 		D_METHOD(
@@ -176,9 +178,11 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"max_nodes",
 			"min_completed_depth",
 			"depth_mode",
-			"should_cancel"
+			"should_cancel",
+			"on_progress"
 		),
-		&DuelNativeCompactKernel::search_iterative_depth
+		&DuelNativeCompactKernel::search_iterative_depth,
+		DEFVAL(Callable())
 	);
 }
 
@@ -1924,7 +1928,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	int64_t budget_usec_value,
 	int64_t max_nodes_value,
 	int64_t min_completed_depth_value,
-	const Callable &should_cancel
+	const Callable &should_cancel,
+	const Callable &on_progress
 ) const {
 	return search_iterative_depth(
 		root_owner_value,
@@ -1933,7 +1938,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 		max_nodes_value,
 		min_completed_depth_value,
 		StringName("complete_round"),
-		should_cancel
+		should_cancel,
+		on_progress
 	);
 }
 
@@ -1944,7 +1950,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	int64_t max_nodes_value,
 	int64_t min_completed_depth_value,
 	const StringName &depth_mode_name,
-	const Callable &should_cancel
+	const Callable &should_cancel,
+	const Callable &on_progress
 ) const {
 	Dictionary result;
 	result["supported"] = false;
@@ -2143,6 +2150,9 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 			).count()
 		);
 		depth_snapshots.append(snapshot);
+		if (on_progress.is_valid()) {
+			on_progress.call(snapshot);
+		}
 		if (
 			limits.max_nodes > 0
 			&& stats.nodes >= limits.max_nodes

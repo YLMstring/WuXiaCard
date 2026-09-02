@@ -255,7 +255,8 @@ static func search_iterative(
 	state: StateData,
 	root_owner: int,
 	limits: Dictionary,
-	should_cancel: Callable = Callable()
+	should_cancel: Callable = Callable(),
+	on_progress: Callable = Callable()
 ) -> Dictionary:
 	if state == null:
 		return _search_integration_failure("Native search received a null state")
@@ -279,6 +280,14 @@ static func search_iterative(
 		budget_usec = maxi(deadline_usec - Time.get_ticks_usec(), 1)
 	elif float(limits.get("budget_seconds", 0.0)) > 0.0:
 		budget_usec = maxi(int(float(limits["budget_seconds"]) * 1_000_000.0), 1)
+	var native_progress_callback: Callable = Callable()
+	if on_progress.is_valid():
+		native_progress_callback = func(snapshot: Dictionary) -> void:
+			var converted: Dictionary = snapshot.duplicate(true)
+			converted["action"] = _action_from_native(
+				snapshot.get("action", {}) as Dictionary
+			)
+			on_progress.call(converted)
 	var native_result: Dictionary = kernel.call(
 		"search_iterative_depth",
 		root_owner,
@@ -287,7 +296,8 @@ static func search_iterative(
 		maxi(int(limits.get("max_nodes", 0)), 0),
 		maxi(int(limits.get("min_completed_depth", 0)), 0),
 		StringName(limits.get("depth_mode", &"complete_round")),
-		should_cancel
+		should_cancel,
+		native_progress_callback
 	) as Dictionary
 	if not bool(native_result.get("supported", false)):
 		return _search_integration_failure(

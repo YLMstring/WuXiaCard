@@ -7,8 +7,8 @@ project(
     LANGUAGES CXX
 )
 
-set(GODOTCPP_API_VERSION "4.6" CACHE STRING "Godot extension API version" FORCE)
-set(GODOTCPP_TARGET "template_debug" CACHE STRING "godot-cpp target" FORCE)
+set(GODOTCPP_API_VERSION "4.7" CACHE STRING "Godot extension API version")
+set(GODOTCPP_TARGET "template_debug" CACHE STRING "godot-cpp target")
 set(GODOTCPP_ENABLE_TESTING OFF CACHE BOOL "Disable godot-cpp tests" FORCE)
 set(GODOTCPP_USE_HOT_RELOAD OFF CACHE BOOL "Disable hot reload accounting" FORCE)
 
@@ -28,6 +28,11 @@ target_link_libraries(${TARGET_NAME} PRIVATE godot-cpp)
 
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)
 set(OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+if(ANDROID)
+    set(DUEL_NATIVE_PREFIX "lib")
+else()
+    set(DUEL_NATIVE_PREFIX "")
+endif()
 set_target_properties(
     ${TARGET_NAME}
     PROPERTIES
@@ -38,7 +43,7 @@ set_target_properties(
         LIBRARY_OUTPUT_DIRECTORY "$<1:${OUTPUT_DIR}>"
         RUNTIME_OUTPUT_DIRECTORY "$<1:${OUTPUT_DIR}>"
         PDB_OUTPUT_DIRECTORY "$<1:${OUTPUT_DIR}>"
-        PREFIX ""
+        PREFIX "${DUEL_NATIVE_PREFIX}"
         OUTPUT_NAME "duel_native${GODOTCPP_SUFFIX}"
 )
 

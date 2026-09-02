@@ -294,13 +294,27 @@
 
 ### 环境与运行
 
-- 引擎目标：Godot `4.6`，GL Compatibility。
-- 已知可用组合：Summer Engine `0.5.54` / Godot `4.6.1.stable.mono.custom_build.3e132c1e2`。
+- 引擎目标：Godot `4.7`，GL Compatibility。
+- 已知可用 Summer Engine 内核：`4.7.2.stable.mono.custom_build.a8e5ca520`。
 - 主场景：`res://main.tscn`。
 - 逻辑视口：`540 × 960`，竖屏，`canvas_items` 拉伸。
 - Android 导出环境：JDK 21、Android SDK / Platform 36。当前包名和正式签名等发行配置仍需在发布前完成。
 
 在 Summer Engine 或 Godot 中打开仓库根目录，运行 `main.tscn` 即可启动。
+
+Windows 桌面 Release 版可一键生成：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_windows_release.ps1
+```
+
+脚本会优先使用 Summer Engine 4.7.2 自带的匹配模板；若当前引擎没有，
+才会从仓库根目录的 `Godot_v4.7.2-stable_export_templates.tpz` 中只解出
+Windows x86-64 模板。随后脚本会编译 Debug/Release 两套原生 ABI，
+导出到 `build/windows/`，并生成可分发压缩包
+`build/九宫论剑-windows-x86_64-0.1.0.zip`。由于玩法规则使用原生扩展，
+分发时必须让 EXE 与同目录的 `duel_native.windows.template_release.x86_64.dll`
+保持在一起；直接发送上述 ZIP 即可。
 
 ### 权威规则架构
 

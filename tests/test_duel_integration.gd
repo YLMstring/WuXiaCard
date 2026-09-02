@@ -56,6 +56,7 @@ func _run() -> void:
 	await _check_duplicate_enemy_instances()
 	_check_normal_opponent_concealment(duel)
 	await _check_card_inspector_modal()
+	await _check_live_search_depth_status()
 	await _check_inspector_holds_completed_ai_move()
 	await _check_opponent_turn_plan_consumption()
 	await _check_minimum_opponent_decision_delay()
@@ -1204,6 +1205,33 @@ func _submit_card_tap(card: Control) -> void:
 	release.position = center
 	release.global_position = center
 	card.call("_gui_input", release)
+
+
+func _check_live_search_depth_status() -> void:
+	var ai_duel: Node = _instantiate_duel()
+	root.add_child(ai_duel)
+	await process_frame
+	await process_frame
+	ai_duel.debug_set_fast_mode(true)
+	ai_duel.debug_set_search_limits(5.0, {"max_depth": 99})
+	ai_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, true)
+	var turn_status: Label = ai_duel.get_node("DuelCanvas/TurnStatus") as Label
+	var observed_depth: int = 0
+	var frames_waited: int = 0
+	var marker: String = "轮次深度 "
+	while ai_duel.debug_is_search_running() and frames_waited < 600:
+		var marker_index: int = turn_status.text.find(marker)
+		if marker_index >= 0:
+			observed_depth = int(turn_status.text.substr(marker_index + marker.length()))
+			if observed_depth > 0:
+				break
+		await process_frame
+		frames_waited += 1
+	_check(observed_depth > 0, "Opponent thinking status shows a completed nonzero round depth while search continues")
+	_check(ai_duel.debug_is_search_running(), "Visible nonzero round depth precedes the final opponent result")
+	ai_duel.queue_free()
+	for _free_frame: int in range(3):
+		await process_frame
 
 
 func _check_inspector_holds_completed_ai_move() -> void:

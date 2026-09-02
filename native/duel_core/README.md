@@ -5,11 +5,18 @@ This directory contains the single production rules and deep-search kernel.
 authoritative transition and descendant search node resolves through
 `DuelNativeCompactKernel`.
 
-The pinned `godot-cpp` submodule targets Godot 4.6. Build the ignored Windows
-x86-64 binary with:
+The pinned `godot-cpp` submodule targets Godot 4.7. Build the ignored Windows
+x86-64 editor/test binary with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1
+```
+
+Build the release-package ABI with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1 `
+  -GodotCppTarget template_release
 ```
 
 Build products and the generated `.gdextension` live under `bin/` and are
@@ -61,5 +68,5 @@ controller integration tests, and the full suite. See `docs/AI_SEARCH.md` and
 - Native transpositions are not implemented.
 - New declaration vocabulary must add native compilation/execution and focused
   tests before catalog use.
-- Windows Debug behavior is covered locally. Android ARM64 and release-package
-  performance must be measured independently before distribution.
+- Windows Debug and Release behavior is covered locally. Android ARM64 and
+  release-package performance must be measured independently before distribution.
