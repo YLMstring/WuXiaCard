@@ -49,7 +49,6 @@ const CONDITION_ATTACKER_CARD_IS_OTHER_ALLY: StringName = &"attacker_card_is_oth
 const CONDITION_DRAWN_CARD_IS_ENEMY: StringName = &"drawn_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
-const CONDITION_ATTACK_TARGETED_ATTACKER_ALLY: StringName = &"attack_targeted_attacker_ally"
 const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
@@ -93,7 +92,6 @@ const ACTION_DISCARD_CARDS: StringName = &"discard_cards"
 const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
-const ACTION_SPEND_ALL_KI: StringName = &"spend_all_ki"
 const ACTION_GRANT_EXTRA_CARD_PLAY: StringName = &"grant_extra_card_play"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
@@ -221,7 +219,6 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_DRAWN_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 	CONDITION_ATTACK_FLIPPED_ENEMY,
-	CONDITION_ATTACK_TARGETED_ATTACKER_ALLY,
 	CONDITION_ATTACKED_CARD_IS_SELF,
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
@@ -274,7 +271,6 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_ATTACK_TRIGGER_CARD,
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
-	ACTION_SPEND_ALL_KI,
 	ACTION_GRANT_EXTRA_CARD_PLAY,
 	ACTION_MOVE_SELF_TO_TARGET,
 	ACTION_SWAP_SELF_WITH_TARGET,

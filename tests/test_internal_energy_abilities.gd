@@ -93,25 +93,13 @@ func _test_can_spend_ki_semantics() -> void:
 			}],
 		}],
 	}]
-	var spend_all_card: Dictionary = _plain(
-		&"ki_spend_all",
-		[1, 1, 1, 1],
-		Rules.PLAYER_OWNER
-	)
-	spend_all_card["active_abilities"] = [{
-		"triggers": [{
-			"event": Catalog.TRIGGER_END_OWNER_TURN,
-			"actions": [{"type": Catalog.ACTION_SPEND_ALL_KI}],
-		}],
-	}]
 	var passive: Dictionary = _plain(&"ki_passive", [1, 1, 1, 1], Rules.PLAYER_OWNER)
 	_check(
 		Abilities.card_can_spend_ki(activation_card)
 		and Abilities.card_can_spend_ki(automatic_card)
 		and Abilities.card_can_spend_ki(nested_card)
-		and Abilities.card_can_spend_ki(spend_all_card)
 		and not Abilities.card_can_spend_ki(passive),
-		"Ki eligibility includes active, automatic, nested, and spend-all abilities"
+		"Ki eligibility includes active, automatic, and nested abilities"
 	)
 	activation_card["effect_gate"] = Catalog.EFFECT_GATE_SELF_CASTRATION
 	_check(

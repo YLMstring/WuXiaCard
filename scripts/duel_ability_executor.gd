@@ -738,13 +738,6 @@ static func _execute_action(
 			-int(declaration.get("amount", 0)),
 			action_type
 		)
-	if action_type == Catalog.ACTION_SPEND_ALL_KI:
-		return _spend_all_ki(
-			state,
-			source_cell,
-			source_instance_id,
-			expected_owner
-		)
 	if action_type == Catalog.ACTION_GRANT_EXTRA_CARD_PLAY:
 		var grant_instance_id: StringName = source_instance_id
 		var grant_owner: int = expected_owner
@@ -3102,33 +3095,6 @@ static func _resolve_hand_size_change(
 	if resolution_value is Dictionary:
 		return resolution_value as Dictionary
 	return result
-
-
-static func _spend_all_ki(
-	state: StateData,
-	source_cell: int,
-	source_instance_id: StringName,
-	expected_owner: int
-) -> Dictionary:
-	var source: Dictionary = _get_subject(state, source_instance_id, expected_owner)
-	if source.is_empty():
-		return _no_effect(source_cell)
-	var card: Dictionary = source.get("card", {})
-	var previous_ki: int = int(card.get("ki", 0))
-	if previous_ki <= 0:
-		return _no_effect(source_cell)
-	card["ki"] = 0
-	var current_cell: int = _get_location_cell(source)
-	return _applied(source_cell, [_make_ki_event(
-		current_cell,
-		int(source.get("owner_id", 0)),
-		source_instance_id,
-		previous_ki,
-		0,
-		Catalog.ACTION_SPEND_ALL_KI,
-		StringName(source.get("zone", &"")),
-		int(source.get("index", -1))
-	)])
 
 
 static func _grant_extra_card_play(

@@ -109,7 +109,7 @@ static func _actions_can_spend_ki(actions_value: Variant) -> bool:
 			continue
 		var action: Dictionary = action_value
 		var action_type := StringName(action.get("type", &""))
-		if action_type in [Catalog.ACTION_SPEND_KI, Catalog.ACTION_SPEND_ALL_KI]:
+		if action_type == Catalog.ACTION_SPEND_KI:
 			return true
 		if _actions_can_spend_ki(action.get("actions", null)):
 			return true

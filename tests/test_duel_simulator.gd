@@ -2341,33 +2341,6 @@ func _test_KuiHua1_exile_grants_no_ki() -> void:
 	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_card_play_granted") == 0, "Exile grants no ki or extra card play")
 
 
-func _test_multiple_KuiHua1s_drain_for_one_extra_turn() -> void:
-	var board: Array = Rules.empty_board()
-	var first: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"row_first")
-	var second: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"row_second")
-	first["ki"] = 2
-	second["ki"] = 4
-	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
-	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
-	var hand: Array = [
-		Rules.make_card("Action", "行", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
-		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
-	]
-	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
-	var events: Array = transition.get("events", [])
-	var drain_cells: Array[int] = []
-	for event_value: Variant in events:
-		var event: Dictionary = event_value
-		if StringName(event.get("change_reason", &"")) == Catalog.ACTION_SPEND_ALL_KI:
-			drain_cells.append(int(event.get("source_cell", -1)))
-	_check(drain_cells == [0, 8], "Multiple Meng Huos drain in row-major order")
-	_check(_count_events(events, &"extra_card_play_granted") == 1, "Multiple Meng Huo requests coalesce into one extra card play")
-	var extra_event: Dictionary = _first_event(events, &"extra_card_play_granted")
-	_check(int(extra_event.get("request_count", 0)) == 2, "Coalesced event records both valid requests")
-	_check((transition["state"] as State).extra_card_plays_remaining == 1, "Coalesced requests grant one pending play")
-
-
 func _test_KuiHua1_extra_turn_can_chain() -> void:
 	var board: Array = Rules.empty_board()
 	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)

@@ -419,35 +419,6 @@ Swap-and-attack activation:
 }
 ```
 
-Meng Huo:
-
-```gdscript
-{
-    "triggers": [
-        {
-            "event": CARD_AFTER_FLIPPED,
-            "conditions": [
-                {"type": CONDITION_ATTACKER_CARD_IS_SELF},
-            ],
-            "actions": [
-                {"type": ACTION_GAIN_KI, "amount": 1},
-            ],
-        },
-        {
-            "event": TRIGGER_END_OWNER_TURN,
-            "conditions": [
-                {"type": CONDITION_TURN_OWNER_IS_SELF},
-                {"type": CONDITION_KI_AT_LEAST, "amount": 1},
-            ],
-            "actions": [
-                {"type": ACTION_SPEND_ALL_KI},
-                {"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
-            ],
-        },
-    ],
-}
-```
-
 ## Resolution Timing
 
 `TRIGGER_START_OWNER_TURN` resolves after the simulator chooses the next active

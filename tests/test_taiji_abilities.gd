@@ -34,11 +34,6 @@ func _run() -> void:
 
 func _test_catalog_and_vocabulary() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "The catalog accepts all six Taiji declarations")
-	_check(
-		Catalog.CONDITION_ATTACK_TARGETED_ATTACKER_ALLY
-		in Catalog.KNOWN_TRIGGER_CONDITIONS,
-		"Attacks against attacker allies use a registered trigger condition"
-	)
 	for card_id: StringName in [
 		&"TaiJiSanHuan4", &"TaiJiSanHuan5", &"TaiJiDaKui5",
 		&"TaiJiLuanHuan4", &"TaiJiLuanHuan5", &"TaiJiYinYang5",

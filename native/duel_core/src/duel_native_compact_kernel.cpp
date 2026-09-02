@@ -4843,7 +4843,7 @@ bool DuelNativeCompactKernel::action_declarations_can_spend_ki(const Variant &va
 		if (action_value.get_type() != Variant::DICTIONARY) continue;
 		const Dictionary action = action_value;
 		const StringName type = action.get("type", StringName());
-		if (type == StringName("spend_ki") || type == StringName("spend_all_ki")) return true;
+		if (type == StringName("spend_ki")) return true;
 		if (action_declarations_can_spend_ki(action.get("actions", Variant()))) return true;
 	}
 	return false;
