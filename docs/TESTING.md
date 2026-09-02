@@ -57,8 +57,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   every catalog hand play and legal catalog activation, strict declaration
   audits, direct native event/attack/flip semantics, node-budget behavior,
   production routing, cancellation, and same-turn principal-action reuse.
-- `test_duel_search.gd` — the single native search facade, complete-round depth,
-  deadlines, minimum completed-depth node guards, deterministic canonical
+- `test_duel_search.gd` — the single native search facade, selectable
+  complete-round/self-turn depth, deadlines, minimum completed-depth node guards, deterministic canonical
   selection, fallback, cancellation, and same-turn plans.
 - `test_duel_ai_benchmark.gd` — versioned enemy roster/manifest validation,
   deterministic rebuilds, mutable-state isolation, minimum-depth mode wiring,
@@ -189,17 +189,19 @@ requires a complete nonduplicated schedule, terminal games, and no invalid
 transitions. All results live under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
-Profile production complete-round opening depth separately with:
+Profile production opening depth separately with either retained mode:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
 ```
 
 This runs the 14 unique real Quick openings with the production ten-second
-budget, Dummy audio, per-complete-round-depth and partial-root diagnostics,
-plus three node-limited timing probes. The current target is complete-round
-depth two; the JSON report explicitly records `depth_unit = complete_round` so
-it cannot be compared as if it were an old action-ply result. Its report is written under
+budget, Dummy audio, per-depth and partial-root diagnostics, plus three
+node-limited timing probes. The current target is depth two under the selected
+mode; the JSON report explicitly records `depth_mode` and `depth_unit` so the
+two horizons cannot be compared as if they were the same or as old action-ply
+results. Its report is written under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
 Run the 512-state/1,024-action simulator transition microbenchmark with Dummy

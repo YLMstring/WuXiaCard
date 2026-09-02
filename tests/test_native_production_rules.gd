@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
+	_test_native_depth_modes_match_fixed_and_iterative_search()
 	_test_native_search_solves_forced_terminal_choice()
 	_test_native_search_node_budget_keeps_only_complete_depths()
 	_test_production_search_routes_to_native_whole_tree()
@@ -66,6 +67,37 @@ func _test_live_catalog_compiles_natively() -> void:
 		int(layout.get("invalid_compiled_ability_set_count", -1)) == 0,
 		"Every live catalog ability set compiles natively"
 	)
+
+
+func _test_native_depth_modes_match_fixed_and_iterative_search() -> void:
+	var state: State = _make_search_state()
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Search depth fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Search depth fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "Search depth fixture loads into the native kernel")
+	var fixed: Dictionary = kernel.call(
+		"search_fixed_depth", Rules.OPPONENT_OWNER, 1, &"self_turn"
+	) as Dictionary
+	var iterative: Dictionary = kernel.call(
+		"search_iterative_depth",
+		Rules.OPPONENT_OWNER,
+		1,
+		0,
+		0,
+		0,
+		&"self_turn",
+		Callable()
+	) as Dictionary
+	_check(bool(fixed.get("valid", false)) and bool(iterative.get("valid", false)), "Fixed and iterative self-turn searches both complete")
+	_check(int(fixed.get("owner_turn_boundaries", 0)) == 1, "Fixed self-turn depth one uses one owner-turn boundary")
+	_check(int(iterative.get("owner_turn_boundaries", 0)) == 1, "Iterative self-turn depth one uses one owner-turn boundary")
+	_check(int(fixed.get("score", 0)) == int(iterative.get("score", 1)), "Fixed and iterative self-turn searches agree on score")
+	_check((fixed.get("action", {}) as Dictionary) == (iterative.get("action", {}) as Dictionary), "Fixed and iterative self-turn searches agree on action")
 
 
 func _test_every_catalog_card_hand_play_runs_in_production() -> void:

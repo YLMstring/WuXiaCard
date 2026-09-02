@@ -70,6 +70,7 @@ static func find_best_action_iterative_native(
 			progress["action"] = snapshot_action.duplicate_action() if snapshot_action != null else ActionData.new()
 			progress["score"] = int(snapshot.get("score", 0))
 			progress["completed_depth"] = int(snapshot.get("depth", 0))
+			progress["owner_turn_boundaries"] = int(snapshot.get("owner_turn_boundaries", 0))
 			progress["nodes"] = int(snapshot.get("nodes", 0))
 			progress["generated_actions"] = int(snapshot.get("generated_actions", 0))
 			progress["applied_transitions"] = int(snapshot.get("applied_transitions", 0))
@@ -133,6 +134,11 @@ static func _native_result_schema(
 	var action: ActionData = source.get("action", null) as ActionData
 	result["action"] = action.duplicate_action() if action != null else ActionData.new()
 	result["completed_depth"] = int(source.get("completed_depth", 0))
+	result["depth_mode"] = StringName(source.get(
+		"depth_mode",
+		limits.get("depth_mode", &"complete_round")
+	))
+	result["owner_turn_boundaries"] = int(source.get("owner_turn_boundaries", 0))
 	result["nodes"] = int(source.get("nodes", 0))
 	result["min_completed_depth"] = maxi(int(limits.get("min_completed_depth", 0)), 0)
 	result["minimum_depth_guard_used"] = bool(source.get("minimum_depth_guard_used", false))

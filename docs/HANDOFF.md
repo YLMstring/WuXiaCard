@@ -237,8 +237,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   instance returning from discard. Newly public instances emit
   `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order. Production uses the sole native
-  complete-round iterative search with deterministic structural ordering and
-  alpha-beta pruning. Historical GDScript PVS, tactics, evaluation-cache, and
+  iterative search with deterministic structural ordering and alpha-beta
+  pruning; `complete_round` remains its default depth mode. Historical GDScript
+  PVS, tactics, evaluation-cache, and
   alternate-evaluator profiles were removed with the old search backend.
   Search stays card-agnostic and canonical root ordering resolves equal scores.
 - Internal modifier checks use read-only views rather than deep-copying every
@@ -259,9 +260,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   smaller `+0.92%` throughput change (`592.05` to `597.47` nodes/s), unchanged
   `3/14` depth-two completion, and identical depth-one decisions; treat this as
   a low-complexity cleanup with modest measured benefit.
-- Search depth is measured in complete rounds. Depth one finishes the current
-  owner's remaining owner turn and the opponent's following owner turn by
-  consuming two authoritative `owner_turn_serial` boundaries. Same-turn extra
+- Search depth is measured in authoritative `owner_turn_serial` boundaries.
+  Default `complete_round` consumes `2 × depth` boundaries. Opt-in `self_turn`
+  consumes `2 × depth - 1`: depth one ends after the current owner turn, while
+  depth two also completes the opponent turn and the root owner's next turn.
+  Same-turn extra
   plays cost no boundary and are searched fully; simulator-resolved empty turns
   consume however many boundaries they actually cross. Only a fully completed
   round iteration is published. The completed principal line also carries the
@@ -452,6 +455,13 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   triggers; only their action phase is skipped. Five occurrences of the same
   nine-cell catalog-ID/current-owner signature end the duel by score at the
   end-to-start boundary. The action-count fallback is `max_turns = 100`.
+- The search supports two native depth horizons without duplicating the search
+  engine. `complete_round` remains the default and consumes `2 × depth` owner-turn
+  boundaries; opt-in `self_turn` consumes `2 × depth - 1`. The 2026-09-02
+  14-opening, ten-second `self_turn` profile completed depth two in 14/14 and
+  depth three in 9/14; the two Dongfang Bubai/Zhang Sanfeng seats completed
+  depth two in 9.46 seconds and 0.84 seconds. This measures reachability, not
+  comparative playing strength.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()`
   now uses the complete explicit state payload, Godot native Variant binary
   encoding, and a SHA-256/128 `v2` fingerprint; it is faster but is not a compact
@@ -461,7 +471,7 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   legal-action-existence query for terminal and empty-turn checks raised the
   same profile again to `490.18` nodes/s (`+19.24%`) while matching full action
   generation on 1,024 real-state/owner checks. `completed_depth` and benchmark
-  depth settings mean complete rounds, not action plies. Use
+  depth settings mean the report's declared depth mode, not action plies. Use
   `tools/run_ai_benchmark.ps1` for paired Quick/Extended/Production strength
   evidence rather than judging strength from one game. Node-limited reports must
   include minimum-depth guard and overrun diagnostics instead of describing

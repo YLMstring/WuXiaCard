@@ -279,12 +279,13 @@ static func search_iterative(
 	elif float(limits.get("budget_seconds", 0.0)) > 0.0:
 		budget_usec = maxi(int(float(limits["budget_seconds"]) * 1_000_000.0), 1)
 	var native_result: Dictionary = kernel.call(
-		"search_iterative_round_depth",
+		"search_iterative_depth",
 		root_owner,
 		maxi(int(limits.get("max_depth", 0)), 0),
 		budget_usec,
 		maxi(int(limits.get("max_nodes", 0)), 0),
 		maxi(int(limits.get("min_completed_depth", 0)), 0),
+		StringName(limits.get("depth_mode", &"complete_round")),
 		should_cancel
 	) as Dictionary
 	if not bool(native_result.get("supported", false)):

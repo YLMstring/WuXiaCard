@@ -545,6 +545,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
 	};
 
+	enum class SearchDepthMode : uint8_t {
+		COMPLETE_ROUND,
+		SELF_TURN,
+	};
+
 	NativeState state;
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
@@ -585,12 +590,26 @@ public:
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
+	Dictionary search_fixed_depth(
+		int64_t root_owner,
+		int64_t depth,
+		const StringName &depth_mode
+	) const;
 	Dictionary search_iterative_round_depth(
 		int64_t root_owner,
 		int64_t max_round_depth,
 		int64_t budget_usec,
 		int64_t max_nodes,
 		int64_t min_completed_depth,
+		const Callable &should_cancel
+	) const;
+	Dictionary search_iterative_depth(
+		int64_t root_owner,
+		int64_t max_depth,
+		int64_t budget_usec,
+		int64_t max_nodes,
+		int64_t min_completed_depth,
+		const StringName &depth_mode,
 		const Callable &should_cancel
 	) const;
 
@@ -611,6 +630,12 @@ private:
 		const String &reason = String()
 	) const;
 	bool validate_shape();
+	bool parse_search_depth_mode(
+		const StringName &name,
+		SearchDepthMode &mode,
+		String &reason
+	) const;
+	int32_t search_depth_boundaries(int32_t depth, SearchDepthMode mode) const;
 	std::vector<NativeAction> get_legal_native_actions(
 		const NativeState &value,
 		int32_t owner_id

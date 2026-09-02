@@ -36,12 +36,16 @@ owner's principal continuation cross back to GDScript.
 
 ## Depth and publication
 
-Public depth is measured in complete rounds, not action plies. One depth unit
-consumes two authoritative `owner_turn_serial` boundaries:
+Search depth is measured in authoritative `owner_turn_serial` boundaries, not
+action plies. Two selectable modes share the same native search implementation:
 
-1. finish the current owner's remaining turn, including every granted extra
-   card play;
-2. finish the following opponent turn.
+- `complete_round` is the current production default. Public depth `d` consumes
+  `2 × d` boundaries: depth one finishes the current owner's remaining turn and
+  the following opponent turn.
+- `self_turn` is an opt-in comparison mode. Public depth `d` consumes
+  `2 × d - 1` boundaries: depth one finishes the current owner's remaining
+  turn; depth two additionally finishes the opponent turn and the root owner's
+  next turn.
 
 Automatic empty turns consume the boundaries they actually cross and do not
 add artificial depth. Same-turn extra plays add work but no boundary.
@@ -129,11 +133,18 @@ Profile the 14 unique real Quick openings separately with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
 ```
 
 Reports are written under `.summer/local/ai-benchmarks/` and must not be
 committed. Compare measurements from the same engine build, binary type,
 machine state, fixture version, limits, and opening digest.
+
+The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
+unique real Quick openings and depth three in 9/14. The two previously slow
+Dongfang Bubai/Zhang Sanfeng openings completed depth two in 9.46 seconds and
+0.84 seconds respectively. This is reachability evidence only; it does not by
+itself establish that `self_turn` is stronger than `complete_round`.
 
 ## Current limitations
 

@@ -148,8 +148,9 @@ search key and copied into replay state.
 ### Search
 
 - `duel_search.gd` — production routing and result-schema normalization for the
-  native complete-round iterative search. One public depth unit is two authoritative
-  `owner_turn_serial` boundaries; action count is not depth.
+  native iterative search. Default `complete_round` depth `d` spans `2 × d`
+  authoritative `owner_turn_serial` boundaries; opt-in `self_turn` spans
+  `2 × d - 1`. Action count is not depth.
 - `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation,
   failure conversion, join, and deep-copy transport of pure-data turn plans.
 - `duel_turn_plan.gd` — exact state/owner/owner-turn validation and copying for

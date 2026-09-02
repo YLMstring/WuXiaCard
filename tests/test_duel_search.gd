@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_production_facade_uses_native_search()
 	_test_forced_terminal_score_and_canonical_tie()
 	_test_complete_round_result_schema()
+	_test_selectable_depth_modes()
 	_test_node_limit_and_minimum_depth_guard()
 	_test_cancellation_and_deadline_are_hard_stops()
 	_test_same_turn_continuation_plan()
@@ -111,6 +112,52 @@ func _test_complete_round_result_schema() -> void:
 	_check((result.get("depth_snapshots", []) as Array).size() == 1, "Depth-one search retains one completed snapshot")
 	_check(_progress_snapshots.size() == 1, "Progress callback receives the completed depth snapshot")
 	_check(StringName(result.get("completion_reason", &"")) == &"max_depth", "Maximum depth is reported explicitly")
+
+
+func _test_selectable_depth_modes() -> void:
+	var state: State = _make_opening_state()
+	var default_result: Dictionary = Search.find_best_action_iterative(
+		state, Rules.OPPONENT_OWNER, {"max_depth": 1}
+	)
+	var complete_round: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "depth_mode": &"complete_round"}
+	)
+	var self_turn_one: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "depth_mode": &"self_turn"}
+	)
+	var self_turn_two: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 2, "depth_mode": &"self_turn"}
+	)
+	_check(StringName(default_result.get("depth_mode", &"")) == &"complete_round", "Unspecified search depth keeps complete-round semantics")
+	_check(StringName(complete_round.get("depth_mode", &"")) == &"complete_round", "Complete-round mode is reported explicitly")
+	_check(StringName(self_turn_one.get("depth_mode", &"")) == &"self_turn", "Self-turn mode is reported explicitly")
+	_check(int(complete_round.get("owner_turn_boundaries", 0)) == 2, "Complete-round depth one spans two owner-turn boundaries")
+	_check(int(self_turn_one.get("owner_turn_boundaries", 0)) == 1, "Self-turn depth one stops after the current owner turn")
+	_check(int(self_turn_two.get("owner_turn_boundaries", 0)) == 3, "Self-turn depth two spans current, enemy, and next owner turns")
+	var self_turn_snapshots: Array = self_turn_two.get("depth_snapshots", []) as Array
+	_check(self_turn_snapshots.size() == 2, "Self-turn depth two retains both completed iterations")
+	if self_turn_snapshots.size() == 2:
+		_check(int((self_turn_snapshots[0] as Dictionary).get("owner_turn_boundaries", 0)) == 1, "Self-turn depth-one snapshot records one boundary")
+		_check(int((self_turn_snapshots[1] as Dictionary).get("owner_turn_boundaries", 0)) == 3, "Self-turn depth-two snapshot records three boundaries")
+	var default_action: Action = default_result.get("action") as Action
+	var explicit_action: Action = complete_round.get("action") as Action
+	_check(default_action != null and explicit_action != null and default_action.is_same_as(explicit_action), "Explicit complete-round mode preserves the default action")
+	_check(int(default_result.get("score", 0)) == int(complete_round.get("score", 1)), "Explicit complete-round mode preserves the default score")
+
+	var extra_play_state: State = _make_extra_play_search_state()
+	extra_play_state.extra_card_plays_remaining = 2
+	var extra_play_result: Dictionary = Search.find_best_action_iterative(
+		extra_play_state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "depth_mode": &"self_turn"}
+	)
+	_check((extra_play_result.get("turn_plan", []) as Array).size() == 2, "Self-turn depth one includes every granted play before the owner turn ends")
 
 
 func _test_node_limit_and_minimum_depth_guard() -> void:

@@ -2,6 +2,8 @@
 param(
     [double]$BudgetSeconds = 10.0,
     [int]$MaxOpenings = 14,
+    [ValidateSet("complete_round", "self_turn")]
+    [string]$DepthMode = "complete_round",
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
 )
@@ -33,7 +35,8 @@ try {
         "res://tests/benchmarks/production_opening_depth_profile.gd",
         "--",
         "--budget-seconds=$BudgetSeconds",
-        "--max-openings=$MaxOpenings"
+        "--max-openings=$MaxOpenings",
+        "--depth-mode=$DepthMode"
     )
     $process = Start-Process `
         -FilePath $EnginePath `

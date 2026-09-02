@@ -3,8 +3,8 @@ extends SceneTree
 const DEFAULT_BUDGET_SECONDS: float = 10.0
 const DEFAULT_MAX_OPENINGS: int = 14
 const TIMING_NODE_LIMIT: int = 5_000
-const TARGET_COMPLETE_ROUND_DEPTH: int = 2
-const BASELINE_COMPLETE_ROUND_DEPTH: int = 1
+const TARGET_DEPTH: int = 2
+const BASELINE_DEPTH: int = 1
 const OUTPUT_DIRECTORY: String = "res://.summer/local/ai-benchmarks"
 
 const Action = preload("res://scripts/duel_action.gd")
@@ -26,12 +26,15 @@ func _run() -> void:
 	var options: Dictionary = _parse_options()
 	var budget_seconds: float = float(options.get("budget_seconds", DEFAULT_BUDGET_SECONDS))
 	var max_openings: int = int(options.get("max_openings", DEFAULT_MAX_OPENINGS))
+	var depth_mode: StringName = StringName(options.get("depth_mode", &"complete_round"))
 	var openings: Array[Dictionary] = _build_unique_openings()
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
 	var samples: Array[Dictionary] = []
 	for opening_index: int in range(openings.size()):
-		var sample: Dictionary = _profile_opening(openings[opening_index], budget_seconds)
+		var sample: Dictionary = _profile_opening(
+			openings[opening_index], budget_seconds, depth_mode
+		)
 		samples.append(sample)
 		print(
 			(
@@ -50,7 +53,7 @@ func _run() -> void:
 				int(sample.get("nodes", 0)),
 			]
 		)
-	var timing_samples: Array[Dictionary] = _run_timing_probes(openings)
+	var timing_samples: Array[Dictionary] = _run_timing_probes(openings, depth_mode)
 	var report: Dictionary = {
 		"schema_version": 2,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
@@ -58,8 +61,9 @@ func _run() -> void:
 		"configuration": {
 			"backend": "native",
 			"budget_seconds": budget_seconds,
-			"depth_unit": "complete_round",
-			"target_depth": TARGET_COMPLETE_ROUND_DEPTH,
+			"depth_unit": String(depth_mode),
+			"depth_mode": String(depth_mode),
+			"target_depth": TARGET_DEPTH,
 			"profile": "enhanced",
 			"use_lazy_transitions": true,
 			"use_pvs": false,
@@ -68,7 +72,7 @@ func _run() -> void:
 			"evaluator_profile": "baseline",
 			"opening_count": openings.size(),
 		},
-		"summary": _summarize(samples, timing_samples, budget_seconds),
+		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
 		"timing_probes": timing_samples,
 	}
@@ -85,7 +89,7 @@ func _run() -> void:
 		)
 		% [
 			openings.size(),
-			TARGET_COMPLETE_ROUND_DEPTH,
+			TARGET_DEPTH,
 			int(summary.get("target_depth_completed", 0)),
 			float(summary.get("average_completed_depth", 0.0)),
 			float(summary.get("average_baseline_depth_seconds", 0.0)),
@@ -97,7 +101,8 @@ func _run() -> void:
 
 func _profile_opening(
 	opening: Dictionary,
-	budget_seconds: float
+	budget_seconds: float,
+	depth_mode: StringName
 ) -> Dictionary:
 	_depth_snapshots.clear()
 	var state: State = opening.get("state") as State
@@ -109,6 +114,7 @@ func _profile_opening(
 		"use_tactical_extension": false,
 		"use_evaluation_cache": false,
 		"evaluator_profile": &"baseline",
+		"depth_mode": depth_mode,
 	}
 	var result: Dictionary = Search.find_best_action_iterative(
 		state.duplicate_state(),
@@ -123,7 +129,7 @@ func _profile_opening(
 		else {}
 	)
 	var target_depth_snapshot: Dictionary = _snapshot_for_depth(
-		TARGET_COMPLETE_ROUND_DEPTH
+		TARGET_DEPTH
 	)
 	var estimated_required_seconds: Variant = null
 	if not target_depth_snapshot.is_empty():
@@ -131,7 +137,7 @@ func _profile_opening(
 			target_depth_snapshot.get("elapsed_seconds", 0.0)
 		)
 	elif (
-		int(result.get("iteration_depth", 0)) == TARGET_COMPLETE_ROUND_DEPTH
+		int(result.get("iteration_depth", 0)) == TARGET_DEPTH
 		and int(result.get("root_actions_completed", 0)) > 0
 	):
 		var partial_seconds: float = maxf(
@@ -151,6 +157,7 @@ func _profile_opening(
 	return {
 		"game_id": String(opening.get("game_id", &"missing")),
 		"matchup_id": String(opening.get("matchup_id", &"missing")),
+		"depth_mode": String(result.get("depth_mode", depth_mode)),
 		"state_key": String(opening.get("state_key", "")),
 		"state_key_length": String(opening.get("state_key", "")).length(),
 		"exact_state_key_digest": StateKey.build(state).sha256_text(),
@@ -180,6 +187,7 @@ func _record_depth_progress(progress: Dictionary) -> void:
 	var action: Action = progress.get("action") as Action
 	_depth_snapshots.append({
 		"depth": int(progress.get("completed_depth", 0)),
+		"owner_turn_boundaries": int(progress.get("owner_turn_boundaries", 0)),
 		"score": int(progress.get("score", 0)),
 		"action_key": action.canonical_key() if action != null else "",
 		"elapsed_seconds": float(progress.get("elapsed_seconds", 0.0)),
@@ -199,7 +207,8 @@ func _snapshot_for_depth(depth: int) -> Dictionary:
 
 
 func _run_timing_probes(
-	openings: Array[Dictionary]
+	openings: Array[Dictionary],
+	depth_mode: StringName
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
@@ -213,15 +222,16 @@ func _run_timing_probes(
 		var opening: Dictionary = openings[opening_index]
 		var state: State = opening.get("state") as State
 		var timing_limits: Dictionary = {
-				"max_nodes": TIMING_NODE_LIMIT,
-				"profile": &"enhanced",
-				"use_lazy_transitions": true,
-				"use_pvs": false,
-				"use_tactical_extension": false,
-				"use_evaluation_cache": false,
-				"evaluator_profile": &"baseline",
-				"collect_timings": true,
-			}
+			"max_nodes": TIMING_NODE_LIMIT,
+			"profile": &"enhanced",
+			"use_lazy_transitions": true,
+			"use_pvs": false,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+			"evaluator_profile": &"baseline",
+			"collect_timings": true,
+			"depth_mode": depth_mode,
+		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
 			state.duplicate_state(), state.active_player, timing_limits
 		)
@@ -249,7 +259,8 @@ func _run_timing_probes(
 func _summarize(
 	samples: Array[Dictionary],
 	timing_samples: Array[Dictionary],
-	budget_seconds: float
+	budget_seconds: float,
+	depth_mode: StringName
 ) -> Dictionary:
 	var depth_histogram: Dictionary = {}
 	var depth_total: int = 0
@@ -273,11 +284,11 @@ func _summarize(
 		compact_key_length_total += int(sample.get("state_key_length", 0))
 		if bool(sample.get("used_fallback", false)):
 			fallback_count += 1
-		if completed_depth >= TARGET_COMPLETE_ROUND_DEPTH:
+		if completed_depth >= TARGET_DEPTH:
 			target_depth_completed += 1
 		for snapshot_value: Variant in sample.get("depth_snapshots", []):
 			var snapshot: Dictionary = snapshot_value as Dictionary
-			if int(snapshot.get("depth", 0)) == BASELINE_COMPLETE_ROUND_DEPTH:
+			if int(snapshot.get("depth", 0)) == BASELINE_DEPTH:
 				baseline_depth_seconds_total += float(
 					snapshot.get("elapsed_seconds", 0.0)
 				)
@@ -299,8 +310,9 @@ func _summarize(
 		)
 		timing_probe_key_usec += int(timing_sample.get("time_key_usec", 0))
 	return {
-		"depth_unit": "complete_round",
-		"target_depth": TARGET_COMPLETE_ROUND_DEPTH,
+		"depth_unit": String(depth_mode),
+		"depth_mode": String(depth_mode),
+		"target_depth": TARGET_DEPTH,
 		"depth_histogram": depth_histogram,
 		"target_depth_completed": target_depth_completed,
 		"average_completed_depth": (
@@ -384,6 +396,7 @@ func _parse_options() -> Dictionary:
 	var result: Dictionary = {
 		"budget_seconds": DEFAULT_BUDGET_SECONDS,
 		"max_openings": DEFAULT_MAX_OPENINGS,
+		"depth_mode": &"complete_round",
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -396,4 +409,10 @@ func _parse_options() -> Dictionary:
 				int(argument.trim_prefix("--max-openings=")),
 				1
 			)
+		elif argument.begins_with("--depth-mode="):
+			var requested_mode := StringName(argument.trim_prefix("--depth-mode="))
+			if requested_mode not in [&"complete_round", &"self_turn"]:
+				push_error("Unsupported depth mode: %s" % requested_mode)
+				continue
+			result["depth_mode"] = requested_mode
 	return result

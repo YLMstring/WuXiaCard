@@ -152,6 +152,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::search_fixed_round_depth
 	);
 	ClassDB::bind_method(
+		D_METHOD("search_fixed_depth", "root_owner", "depth", "depth_mode"),
+		&DuelNativeCompactKernel::search_fixed_depth
+	);
+	ClassDB::bind_method(
 		D_METHOD(
 			"search_iterative_round_depth",
 			"root_owner",
@@ -162,6 +166,19 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"should_cancel"
 		),
 		&DuelNativeCompactKernel::search_iterative_round_depth
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"search_iterative_depth",
+			"root_owner",
+			"max_depth",
+			"budget_usec",
+			"max_nodes",
+			"min_completed_depth",
+			"depth_mode",
+			"should_cancel"
+		),
+		&DuelNativeCompactKernel::search_iterative_depth
 	);
 }
 
@@ -1730,9 +1747,48 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	return best_score;
 }
 
+bool DuelNativeCompactKernel::parse_search_depth_mode(
+	const StringName &name,
+	SearchDepthMode &mode,
+	String &reason
+) const {
+	if (name == StringName("complete_round")) {
+		mode = SearchDepthMode::COMPLETE_ROUND;
+		return true;
+	}
+	if (name == StringName("self_turn")) {
+		mode = SearchDepthMode::SELF_TURN;
+		return true;
+	}
+	reason = "Search depth mode must be complete_round or self_turn";
+	return false;
+}
+
+int32_t DuelNativeCompactKernel::search_depth_boundaries(
+	int32_t depth,
+	SearchDepthMode mode
+) const {
+	if (depth <= 0) return 0;
+	return mode == SearchDepthMode::SELF_TURN
+		? depth * 2 - 1
+		: depth * 2;
+}
+
 Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 	int64_t root_owner_value,
 	int64_t round_depth_value
+) const {
+	return search_fixed_depth(
+		root_owner_value,
+		round_depth_value,
+		StringName("complete_round")
+	);
+}
+
+Dictionary DuelNativeCompactKernel::search_fixed_depth(
+	int64_t root_owner_value,
+	int64_t depth_value,
+	const StringName &depth_mode_name
 ) const {
 	Dictionary result;
 	result["supported"] = false;
@@ -1742,20 +1798,29 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 	result["leaves"] = 0;
 	result["max_action_ply"] = 0;
 	result["elapsed_usec"] = 0;
+	result["depth_mode"] = depth_mode_name;
 	if (!loaded) {
 		result["reason"] = "No compact state is loaded";
 		return result;
 	}
 	const int32_t root_owner = static_cast<int32_t>(root_owner_value);
-	const int32_t round_depth = static_cast<int32_t>(round_depth_value);
+	const int32_t depth = static_cast<int32_t>(depth_value);
+	SearchDepthMode depth_mode = SearchDepthMode::COMPLETE_ROUND;
+	String depth_mode_reason;
+	if (!parse_search_depth_mode(depth_mode_name, depth_mode, depth_mode_reason)) {
+		result["reason"] = depth_mode_reason;
+		return result;
+	}
 	if (root_owner != 1 && root_owner != 2) {
 		result["reason"] = "Root owner must be player 1 or player 2";
 		return result;
 	}
-	if (round_depth <= 0) {
-		result["reason"] = "Round depth must be positive";
+	if (depth <= 0) {
+		result["reason"] = "Search depth must be positive";
 		return result;
 	}
+	const int32_t owner_turn_boundaries = search_depth_boundaries(depth, depth_mode);
+	result["owner_turn_boundaries"] = owner_turn_boundaries;
 	if (state.scalars[0] != root_owner) {
 		result["reason"] = "Root owner must be the active player";
 		return result;
@@ -1806,7 +1871,7 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 		const int32_t completed_owner_turns = std::max(next.scalars[2] - state.scalars[2], 0);
 		const int32_t score = search_minimax(
 			next,
-			round_depth * 2 - completed_owner_turns,
+			owner_turn_boundaries - completed_owner_turns,
 			root_owner,
 			1,
 			std::numeric_limits<int32_t>::min(),
@@ -1858,6 +1923,26 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	int64_t min_completed_depth_value,
 	const Callable &should_cancel
 ) const {
+	return search_iterative_depth(
+		root_owner_value,
+		max_round_depth_value,
+		budget_usec_value,
+		max_nodes_value,
+		min_completed_depth_value,
+		StringName("complete_round"),
+		should_cancel
+	);
+}
+
+Dictionary DuelNativeCompactKernel::search_iterative_depth(
+	int64_t root_owner_value,
+	int64_t max_depth_value,
+	int64_t budget_usec_value,
+	int64_t max_nodes_value,
+	int64_t min_completed_depth_value,
+	const StringName &depth_mode_name,
+	const Callable &should_cancel
+) const {
 	Dictionary result;
 	result["supported"] = false;
 	result["valid"] = false;
@@ -1880,22 +1965,29 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	result["iteration_depth"] = 0;
 	result["depth_snapshots"] = Array();
 	result["principal_actions"] = Array();
+	result["depth_mode"] = depth_mode_name;
 	if (!loaded) {
 		result["reason"] = "No compact state is loaded";
 		return result;
 	}
 	const int32_t root_owner = static_cast<int32_t>(root_owner_value);
-	const int32_t max_round_depth = static_cast<int32_t>(max_round_depth_value);
+	const int32_t max_depth = static_cast<int32_t>(max_depth_value);
 	const int32_t min_completed_depth = std::max(
 		static_cast<int32_t>(min_completed_depth_value),
 		0
 	);
+	SearchDepthMode depth_mode = SearchDepthMode::COMPLETE_ROUND;
+	String depth_mode_reason;
+	if (!parse_search_depth_mode(depth_mode_name, depth_mode, depth_mode_reason)) {
+		result["reason"] = depth_mode_reason;
+		return result;
+	}
 	if (root_owner != 1 && root_owner != 2) {
 		result["reason"] = "Root owner must be player 1 or player 2";
 		return result;
 	}
-	if (max_round_depth < 0) {
-		result["reason"] = "Maximum round depth cannot be negative";
+	if (max_depth < 0) {
+		result["reason"] = "Maximum search depth cannot be negative";
 		return result;
 	}
 	if (state.scalars[0] != root_owner) {
@@ -1933,8 +2025,9 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	int32_t iteration_depth = 0;
 	Array depth_snapshots;
 	std::unordered_map<uint64_t, NativeAction> completed_principal_actions;
-	while (max_round_depth <= 0 || depth <= max_round_depth) {
+	while (max_depth <= 0 || depth <= max_depth) {
 		iteration_depth = depth;
+		const int32_t owner_turn_boundaries = search_depth_boundaries(depth, depth_mode);
 		limits.protect_node_limit = completed_depth < min_completed_depth;
 		if (search_should_stop(stats, &limits)) break;
 		std::unordered_map<uint64_t, NativeAction> iteration_principal_actions;
@@ -1986,7 +2079,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 			);
 			int32_t score = search_minimax(
 				next,
-				depth * 2 - completed_owner_turns,
+				owner_turn_boundaries - completed_owner_turns,
 				root_owner,
 				1,
 				alpha,
@@ -2005,7 +2098,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 			if (better_tie) {
 				score = search_minimax(
 					next,
-					depth * 2 - completed_owner_turns,
+					owner_turn_boundaries - completed_owner_turns,
 					root_owner,
 					1,
 					std::numeric_limits<int32_t>::min(),
@@ -2034,6 +2127,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 		completed_principal_actions = std::move(iteration_principal_actions);
 		Dictionary snapshot;
 		snapshot["depth"] = depth;
+		snapshot["owner_turn_boundaries"] = owner_turn_boundaries;
 		snapshot["score"] = completed_best_score;
 		snapshot["action"] = materialize_action(completed_best_action);
 		snapshot["nodes"] = stats.nodes;
@@ -2062,7 +2156,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	if (has_completed_action) {
 		NativeState current = state;
 		NativeAction current_action = completed_best_action;
-		int32_t remaining_boundaries = completed_depth * 2;
+		int32_t remaining_boundaries = search_depth_boundaries(completed_depth, depth_mode);
 		const int32_t root_owner_turn_serial = state.scalars[2];
 		for (int32_t plan_index = 0; plan_index < 20; ++plan_index) {
 			principal_actions.append(materialize_action(current_action));
@@ -2101,6 +2195,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	result["reason"] = stats.reason;
 	result["score"] = completed_best_score;
 	result["completed_depth"] = completed_depth;
+	result["owner_turn_boundaries"] = search_depth_boundaries(
+		completed_depth,
+		depth_mode
+	);
 	result["nodes"] = stats.nodes;
 	result["leaves"] = stats.leaves;
 	result["cutoffs"] = stats.cutoffs;
