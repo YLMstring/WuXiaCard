@@ -132,7 +132,7 @@ func _test_nianhua_returns_snapshot_to_original_owners() -> void:
 	var source: Dictionary = Catalog.create_instance(
 		&"NianhuaWeiXiao3", Rules.PLAYER_OWNER, &"nian_return_source"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [source], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"nian_return_source")
 	)
@@ -279,7 +279,7 @@ func _test_sanru_two_reloads_current_discard_top_after_first_chain() -> void:
 		Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"san_dynamic_bottom"),
 		Catalog.create_instance(&"BaoCanShouQue2", Rules.PLAYER_OWNER, &"san_dynamic_first"),
 	]
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"san_dynamic_source")
 	)
@@ -326,7 +326,7 @@ func _test_sanru_three_uses_adjacent_then_row_major_fallback() -> void:
 		Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"san_fallback_second"),
 		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"san_fallback_first"),
 	]
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"san_fallback_source")
 	)

@@ -191,7 +191,7 @@ func _test_attack_permission_and_minimum_defense() -> void:
 
 
 func _test_summon_attack_gate() -> void:
-	var alone_result: Dictionary = Simulator.apply_action(
+	var alone_result: Dictionary = Simulator.apply_action_oracle(
 		_make_qixin_summon_state(false),
 		Action.make_play(0, 4, &"qixin_summon")
 	)
@@ -206,7 +206,7 @@ func _test_summon_attack_gate() -> void:
 		"A denied summon attack emits no attack-started event"
 	)
 
-	var allied_result: Dictionary = Simulator.apply_action(
+	var allied_result: Dictionary = Simulator.apply_action_oracle(
 		_make_qixin_summon_state(true),
 		Action.make_play(0, 4, &"qixin_summon")
 	)
@@ -223,7 +223,7 @@ func _test_summon_attack_gate() -> void:
 
 
 func _test_reaction_respects_declaration_gate() -> void:
-	var alone_result: Dictionary = Simulator.apply_action(
+	var alone_result: Dictionary = Simulator.apply_action_oracle(
 		_make_qixin_reaction_state(false),
 		Action.make_play(0, 5, &"reaction_target")
 	)
@@ -239,7 +239,7 @@ func _test_reaction_respects_declaration_gate() -> void:
 		"A triggered reaction cannot declare its attack without another ally"
 	)
 
-	var allied_result: Dictionary = Simulator.apply_action(
+	var allied_result: Dictionary = Simulator.apply_action_oracle(
 		_make_qixin_reaction_state(true),
 		Action.make_play(0, 5, &"reaction_target")
 	)
@@ -390,7 +390,7 @@ func _test_temporary_flip_protection() -> void:
 		[quiet],
 		Rules.OPPONENT_OWNER
 	)
-	var turn_result: Dictionary = Simulator.apply_action(
+	var turn_result: Dictionary = Simulator.apply_action_oracle(
 		turn_state,
 		Action.make_play(0, 0, &"quiet_turn_card")
 	)

@@ -94,7 +94,7 @@ func _test_yunwu_suppresses_summon_reactions_then_restores() -> void:
 	var yunwu: Dictionary = Catalog.create_instance(
 		&"YunWu13Shi2", Rules.PLAYER_OWNER, &"yunwu_two"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [yunwu], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"yunwu_two")
 	)
@@ -129,7 +129,7 @@ func _test_yijian_two_swaps_with_its_only_direct_flip() -> void:
 	var card: Dictionary = Catalog.create_instance(
 		&"YiJianLuo9Yan2", Rules.PLAYER_OWNER, &"yijian_two"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [card], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"yijian_two")
 	)
@@ -145,7 +145,7 @@ func _test_yijian_three_attacks_after_the_swap() -> void:
 	var card: Dictionary = Catalog.create_instance(
 		&"YiJianLuo9Yan3", Rules.PLAYER_OWNER, &"yijian_three"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [card], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"yijian_three")
 	)
@@ -204,7 +204,7 @@ func _test_tianzhu_three_moves_then_draws() -> void:
 	var drawn: Dictionary = _plain(&"drawn_card")
 	var state := State.new(board, [], [enemy_play], Rules.OPPONENT_OWNER)
 	state.decks[Rules.PLAYER_OWNER] = [drawn]
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 1, &"enemy_play")
 	)
@@ -232,7 +232,7 @@ func _test_tianzhu_four_suppresses_before_external_movement() -> void:
 	board[1] = _slot(Catalog.create_instance(
 		&"CangSongYingKe2", Rules.OPPONENT_OWNER, &"movement_neighbor"
 	), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [], [], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"tianzhu_four", Action.TARGET_BOARD_CELL, 3)
 	)

@@ -66,7 +66,7 @@ func _test_yikong_exiles_at_summoned_timing_and_refills_hand() -> void:
 	var deck: Array = []
 	for index: int in range(5):
 		deck.append(Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("yikong_draw_%d" % index)))
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[yikong, second, first],
@@ -99,7 +99,7 @@ func _test_yikong_five_discards_physical_rightmost_enemy_card() -> void:
 	var logical_second: Dictionary = _plain(&"enemy_leftmost", Rules.OPPONENT_OWNER)
 	logical_first[State.HAND_SLOT_INDEX_KEY] = 4
 	logical_second[State.HAND_SLOT_INDEX_KEY] = 0
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[yikong],
@@ -125,7 +125,7 @@ func _test_ranmu_activation_targets_own_hand() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(ally, Rules.PLAYER_OWNER)
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [own_target, remaining_hand], [enemy_hand], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"ranmu_source", Action.TARGET_HAND_SLOT, 0)
 	)
@@ -146,7 +146,7 @@ func _test_ranmu_three_buffs_only_after_a_real_attack() -> void:
 	var defender: Dictionary = _plain(&"ranmu_defender", Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[5] = _slot(defender, Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [source], [_plain(&"ranmu_reply", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"ranmu_attack")
 	)
@@ -158,7 +158,7 @@ func _test_ranmu_three_buffs_only_after_a_real_attack() -> void:
 	var idle_source: Dictionary = Catalog.create_instance(&"RanMuDaoFa3", Rules.PLAYER_OWNER, &"ranmu_idle")
 	var idle_board: Array = Rules.empty_board()
 	idle_board[8] = _slot(_plain(&"ranmu_far_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var idle_transition: Dictionary = Simulator.apply_action(
+	var idle_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(idle_board, [idle_source], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"ranmu_idle")
 	)
@@ -174,7 +174,7 @@ func _test_wuxiang_activation_attacks_after_discard_before_draw() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(source, Rules.PLAYER_OWNER)
 	board[8] = _slot(enemy, Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [target], [], Rules.PLAYER_OWNER, 0, [drawn], []),
 		Action.make_activate(0, &"wuxiang_activate", Action.TARGET_HAND_SLOT, 0)
 	)
@@ -196,7 +196,7 @@ func _test_wuxiang_four_attacks_once_after_a_batch() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(wuxiang, Rules.PLAYER_OWNER)
 	board[8] = _slot(enemy, Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [yikong, first, second], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"wuxiang_yikong")
 	)
@@ -218,7 +218,7 @@ func _test_multiple_wuxiang_sources_resolve_row_major() -> void:
 	board[2] = _slot(second, Rules.PLAYER_OWNER)
 	board[6] = _slot(_plain(&"wuxiang_enemy_first", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[8] = _slot(_plain(&"wuxiang_enemy_second", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [yikong, _plain(&"wuxiang_multi_discard", Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"wuxiang_multi_yikong")
 	)
@@ -237,7 +237,7 @@ func _test_lijing_four_locks_and_discards_two_as_one_batch() -> void:
 	second[State.HAND_SLOT_INDEX_KEY] = 2
 	third[State.HAND_SLOT_INDEX_KEY] = 4
 	source[State.HAND_SLOT_INDEX_KEY] = 1
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[third, source, second, first],

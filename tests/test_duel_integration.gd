@@ -1263,7 +1263,7 @@ func _check_opponent_turn_plan_consumption() -> void:
 	var initial_state: Variant = plan_duel.get("duel_state")
 	var opponent_state: Variant = null
 	for candidate: Action in Simulator.get_legal_actions(initial_state):
-		var transition: Dictionary = Simulator.apply_action(
+		var transition: Dictionary = Simulator.apply_action_oracle(
 			initial_state.duplicate_state(),
 			candidate
 		)

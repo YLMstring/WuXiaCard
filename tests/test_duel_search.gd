@@ -217,7 +217,7 @@ func _test_search_profiles_and_stats() -> void:
 	_check(int(normalized.get("tactical_scan_limit", -1)) == 0, "Negative tactical scan limit is clamped")
 	_check(int(normalized.get("tactical_action_limit", -1)) == 0, "Negative tactical action limit is clamped")
 
-	var result: Dictionary = Search.find_best_action_iterative(
+	var result: Dictionary = Search.find_best_action_iterative_oracle(
 		_make_opening_state(),
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1, "profile": &"baseline"}
@@ -320,12 +320,12 @@ func _test_action_ordering() -> void:
 
 func _test_lazy_transition_equivalence() -> void:
 	var state: State = _make_opening_state()
-	var baseline: Dictionary = Search.find_best_action_iterative(
+	var baseline: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 3, "profile": &"baseline"}
 	)
-	var enhanced: Dictionary = Search.find_best_action_iterative(
+	var enhanced: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -353,7 +353,7 @@ func _test_lazy_transition_equivalence() -> void:
 
 func _test_pvs_equivalence() -> void:
 	var state: State = _make_opening_state()
-	var lazy_only: Dictionary = Search.find_best_action_iterative(
+	var lazy_only: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -364,7 +364,7 @@ func _test_pvs_equivalence() -> void:
 			"use_evaluation_cache": false,
 		}
 	)
-	var with_pvs: Dictionary = Search.find_best_action_iterative(
+	var with_pvs: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -448,7 +448,7 @@ func _test_tactical_extension_bounds() -> void:
 		[opponent_card, opponent_reserve],
 		Rules.PLAYER_OWNER
 	)
-	var result: Dictionary = Search.find_best_action_iterative(
+	var result: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.PLAYER_OWNER,
 		{
@@ -469,7 +469,7 @@ func _test_tactical_extension_bounds() -> void:
 	)
 	_check(int(result.get("max_tactical_candidates_per_node", 99)) <= 12, "Tactical candidate scan respects its per-node cap")
 	_check(int(result.get("max_tactical_actions_per_node", 99)) <= 4, "Tactical volatile-action search respects its per-node cap")
-	var disabled: Dictionary = Search.find_best_action_iterative(
+	var disabled: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.PLAYER_OWNER,
 		{
@@ -508,7 +508,7 @@ func _test_forced_loss_does_not_use_production_tactical_extension() -> void:
 	if legal_actions.size() != 1:
 		return
 	var stand_pat_score: int = Evaluator.evaluate(state, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, legal_actions[0])
+	var transition: Dictionary = Simulator.apply_action_oracle(state, legal_actions[0])
 	var forced_state: State = transition.get("state") as State
 	_check(Simulator.is_terminal(forced_state), "The only legal action ends the duel")
 	var forced_score: int = Evaluator.evaluate(forced_state, Rules.PLAYER_OWNER)
@@ -561,7 +561,7 @@ func _test_leaf_evaluation_cache() -> void:
 	)
 	_check(not bool(next_search.get("hit", true)), "A new top-level search starts with an empty evaluation cache")
 
-	var disabled: Dictionary = Search.find_best_action_iterative(
+	var disabled: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -637,7 +637,7 @@ func _test_complete_round_depth_semantics() -> void:
 		state,
 		Rules.OPPONENT_OWNER
 	)
-	var result: Dictionary = Search.find_best_action_iterative(
+	var result: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1, "profile": &"enhanced"}
@@ -663,7 +663,7 @@ func _test_complete_round_depth_semantics() -> void:
 		Rules.OPPONENT_OWNER,
 		4
 	)
-	var complete_round_depth_two: Dictionary = Search.find_best_action_iterative(
+	var complete_round_depth_two: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 2, "profile": &"baseline"}
@@ -684,7 +684,7 @@ func _test_complete_round_depth_semantics() -> void:
 
 	var empty_opponent_state: State = _make_empty_opponent_round_state()
 	var first_action: Action = Simulator.get_legal_actions(empty_opponent_state)[0]
-	var empty_transition: Dictionary = Simulator.apply_action(empty_opponent_state, first_action)
+	var empty_transition: Dictionary = Simulator.apply_action_oracle(empty_opponent_state, first_action)
 	var after_empty: State = empty_transition.get("state") as State
 	_check(
 		after_empty.owner_turn_serial - empty_opponent_state.owner_turn_serial >= 2,
@@ -698,7 +698,7 @@ func _test_complete_round_depth_semantics() -> void:
 
 func _test_same_turn_continuation_plan() -> void:
 	var state: State = _make_extra_play_search_state()
-	var result: Dictionary = Search.find_best_action_iterative(
+	var result: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1, "profile": &"enhanced"}
@@ -725,7 +725,7 @@ func _test_same_turn_continuation_plan() -> void:
 		)
 		if action == null or not Simulator.is_action_legal(current_state, action):
 			return
-		var transition: Dictionary = Simulator.apply_action(current_state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(current_state, action)
 		current_state = transition.get("state") as State
 	_check(
 		current_state.owner_turn_serial > state.owner_turn_serial,
@@ -735,7 +735,7 @@ func _test_same_turn_continuation_plan() -> void:
 
 func _test_turn_plan_validation() -> void:
 	var state: State = _make_extra_play_search_state()
-	var result: Dictionary = Search.find_best_action_iterative(
+	var result: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1, "profile": &"enhanced"}
@@ -751,7 +751,7 @@ func _test_turn_plan_validation() -> void:
 		remaining.size() == 1,
 		"Selecting the searched root action retains one extra-play continuation"
 	)
-	var transition: Dictionary = Simulator.apply_action(state, selected)
+	var transition: Dictionary = Simulator.apply_action_oracle(state, selected)
 	var extra_state: State = transition.get("state") as State
 	var taken: Dictionary = TurnPlan.take_next(
 		remaining,
@@ -798,11 +798,11 @@ func _test_turn_plan_validation() -> void:
 
 func _test_iterative_depth_and_interruption() -> void:
 	var state: State = _make_opening_state()
-	var interrupted: Dictionary = Search.find_best_action_iterative(state, Rules.OPPONENT_OWNER, {"max_nodes": 1})
+	var interrupted: Dictionary = Search.find_best_action_iterative_oracle(state, Rules.OPPONENT_OWNER, {"max_nodes": 1})
 	_check(not bool(interrupted.get("has_completed_depth", true)), "Interrupted depth one publishes no partial result")
 	_check(StringName(interrupted.get("completion_reason", &"")) == &"node_limit", "Node-limited interruption reports its completion reason")
 
-	var completed: Dictionary = Search.find_best_action_iterative(state, Rules.OPPONENT_OWNER, {"max_depth": 2})
+	var completed: Dictionary = Search.find_best_action_iterative_oracle(state, Rules.OPPONENT_OWNER, {"max_depth": 2})
 	_check(bool(completed.get("has_completed_depth", false)), "Iterative search publishes a completed depth")
 	_check(int(completed.get("completed_depth", 0)) == 2, "Iterative search reaches its deterministic maximum depth")
 	_check(int(completed.get("iteration_depth", 0)) == 2, "Search reports the last attempted iteration depth")
@@ -813,13 +813,13 @@ func _test_iterative_depth_and_interruption() -> void:
 		"A completed iteration reports every root action complete"
 	)
 	var first_action: Action = completed.get("action") as Action
-	var repeated: Dictionary = Search.find_best_action_iterative(state, Rules.OPPONENT_OWNER, {"max_depth": 2})
+	var repeated: Dictionary = Search.find_best_action_iterative_oracle(state, Rules.OPPONENT_OWNER, {"max_depth": 2})
 	var repeated_action: Action = repeated.get("action") as Action
 	_check(first_action.is_same_as(repeated_action), "Identical completed searches choose the same action")
 	_check(int(completed.get("score", 0)) == int(repeated.get("score", 1)), "Identical completed searches return the same score")
 
 	_cancel_after_completed_depth = false
-	var partial: Dictionary = Search.find_best_action_iterative(
+	var partial: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{},
@@ -837,7 +837,7 @@ func _test_iterative_depth_and_interruption() -> void:
 
 func _test_minimum_completed_depth_guard() -> void:
 	var state: State = _make_opening_state()
-	var ordinary: Dictionary = Search.find_best_action_iterative(
+	var ordinary: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_nodes": 1}
@@ -855,7 +855,7 @@ func _test_minimum_completed_depth_guard() -> void:
 		"Default node limit does not report minimum-depth guard use"
 	)
 
-	var protected: Dictionary = Search.find_best_action_iterative(
+	var protected: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_nodes": 1, "min_completed_depth": 1}
@@ -881,13 +881,13 @@ func _test_minimum_completed_depth_guard() -> void:
 		"Search stops before exploring depth two when protected depth one exceeded the limit"
 	)
 
-	var depth_one: Dictionary = Search.find_best_action_iterative(
+	var depth_one: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 1}
 	)
 	var depth_one_nodes: int = int(depth_one.get("nodes", 0))
-	var shared_budget: Dictionary = Search.find_best_action_iterative(
+	var shared_budget: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -906,7 +906,7 @@ func _test_minimum_completed_depth_guard() -> void:
 		"Reaching the limit after protected depth does not count as guard use or overrun"
 	)
 
-	var cancelled: Dictionary = Search.find_best_action_iterative(
+	var cancelled: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_nodes": 1, "min_completed_depth": 1},
@@ -917,7 +917,7 @@ func _test_minimum_completed_depth_guard() -> void:
 		and StringName(cancelled.get("completion_reason", &"")) == &"cancelled",
 		"Cancellation remains a hard stop during protected depth one"
 	)
-	var deadline: Dictionary = Search.find_best_action_iterative(
+	var deadline: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{
@@ -931,7 +931,7 @@ func _test_minimum_completed_depth_guard() -> void:
 		and StringName(deadline.get("completion_reason", &"")) == &"deadline",
 		"Deadline remains a hard stop during protected depth one"
 	)
-	var normalized: Dictionary = Search.find_best_action_iterative(
+	var normalized: Dictionary = Search.find_best_action_iterative_oracle(
 		state,
 		Rules.OPPONENT_OWNER,
 		{"max_nodes": 1, "min_completed_depth": -5}
@@ -953,7 +953,7 @@ func _test_search_inherits_summon_reactions() -> void:
 	var player_reply: Dictionary = Rules.make_card("Reply", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)
 	player_reply["instance_id"] = &"search_reply"
 	var state := State.new(board, [player_reply], [opponent_card], Rules.OPPONENT_OWNER)
-	var punished: Dictionary = Simulator.apply_action(
+	var punished: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 5, &"search_target")
 	)
@@ -962,17 +962,17 @@ func _test_search_inherits_summon_reactions() -> void:
 		int((punished_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
 		"Search fixture resolves the summon reaction through the simulator"
 	)
-	var first: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
-	var repeated: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
+	var first: Action = Search.find_best_action_oracle(state, 1, Rules.OPPONENT_OWNER)
+	var repeated: Action = Search.find_best_action_oracle(state, 1, Rules.OPPONENT_OWNER)
 	_check(first.is_same_as(repeated), "Reaction-aware search remains deterministic")
 	_check(first.target_index not in [1, 3, 5, 7], "Search avoids a summon square immediately punished by CangSong")
 
 
 func _test_search_session() -> void:
 	var state: State = _make_opening_state()
-	var fallback: Action = Simulator.choose_greedy_action(state)
+	var fallback: Action = Simulator.choose_greedy_action_oracle(state)
 	var fallback_session: Session = Session.new()
-	_check(fallback_session.start(state, Rules.OPPONENT_OWNER, 0.0, fallback, {"max_nodes": 1}), "Search session starts one worker")
+	_check(fallback_session.start(state, Rules.OPPONENT_OWNER, 0.0, fallback, {"max_nodes": 1, "_oracle_test_backend": true}), "Search session starts one worker")
 	await _wait_for_session(fallback_session)
 	var fallback_result: Dictionary = fallback_session.finish_and_get_result()
 	var fallback_action: Action = fallback_result.get("action") as Action
@@ -980,14 +980,14 @@ func _test_search_session() -> void:
 	_check(fallback_action.is_same_as(fallback), "Fallback action preserves full canonical identity")
 
 	var failure_session: Session = Session.new()
-	_check(failure_session.start(state, Rules.OPPONENT_OWNER, 1.0, fallback, {"force_failure": true}), "Failure fixture starts its worker")
+	_check(failure_session.start(state, Rules.OPPONENT_OWNER, 1.0, fallback, {"force_failure": true, "_oracle_test_backend": true}), "Failure fixture starts its worker")
 	await _wait_for_session(failure_session)
 	var failure_result: Dictionary = failure_session.finish_and_get_result()
 	_check(StringName(failure_result.get("completion_reason", &"")) == &"worker_failed", "Worker failure is reported explicitly")
 	_check(bool(failure_result.get("used_fallback", false)), "Worker failure uses the greedy fallback")
 
 	var completed_session: Session = Session.new()
-	_check(completed_session.start(state, Rules.OPPONENT_OWNER, 1.0, fallback, {"max_depth": 2}), "Completed fixture starts its worker")
+	_check(completed_session.start(state, Rules.OPPONENT_OWNER, 1.0, fallback, {"max_depth": 2, "_oracle_test_backend": true}), "Completed fixture starts its worker")
 	await _wait_for_session(completed_session)
 	var completed_result: Dictionary = completed_session.finish_and_get_result()
 	_check(bool(completed_result.get("has_completed_depth", false)), "Worker publishes a completed search depth")
@@ -996,7 +996,7 @@ func _test_search_session() -> void:
 	_check(not completed_session.is_running(), "Joined session leaves no worker running")
 
 	var cancelled_session: Session = Session.new()
-	_check(cancelled_session.start(state, Rules.OPPONENT_OWNER, 10.0, fallback), "Cancellation fixture starts its worker")
+	_check(cancelled_session.start(state, Rules.OPPONENT_OWNER, 10.0, fallback, {"_oracle_test_backend": true}), "Cancellation fixture starts its worker")
 	cancelled_session.cancel()
 	await _wait_for_session(cancelled_session)
 	var cancelled_result: Dictionary = cancelled_session.finish_and_get_result()
@@ -1103,7 +1103,7 @@ func _bruteforce_complete_round_depth_one(
 	var best_action: Action = null
 	var best_score: int = -Search.INFINITY
 	for action: Action in Simulator.get_legal_actions(state):
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		var next_state: State = transition.get("state") as State
 		var score: int = _bruteforce_to_round_boundary(next_state, root_owner, root_serial)
 		var better_tie: bool = (
@@ -1126,7 +1126,7 @@ func _bruteforce_fixed_action_depth(
 	var maximizing: bool = state.active_player == root_owner
 	var best_score: int = -Search.INFINITY if maximizing else Search.INFINITY
 	for action: Action in Simulator.get_legal_actions(state):
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		var score: int = _bruteforce_fixed_action_depth_score(
 			transition.get("state") as State,
 			root_owner,
@@ -1161,7 +1161,7 @@ func _bruteforce_fixed_action_depth_score(
 	var maximizing: bool = state.active_player == root_owner
 	var best_score: int = -Search.INFINITY if maximizing else Search.INFINITY
 	for action: Action in legal_actions:
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		var score: int = _bruteforce_fixed_action_depth_score(
 			transition.get("state") as State,
 			root_owner,
@@ -1184,7 +1184,7 @@ func _bruteforce_to_round_boundary(
 	var maximizing: bool = state.active_player == root_owner
 	var best_score: int = -Search.INFINITY if maximizing else Search.INFINITY
 	for action: Action in legal_actions:
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		var score: int = _bruteforce_to_round_boundary(
 			transition.get("state") as State,
 			root_owner,

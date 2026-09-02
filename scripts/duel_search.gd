@@ -8,6 +8,7 @@ const MAX_TRANSPOSITION_ENTRIES: int = 50_000
 const ActionData = preload("res://scripts/duel_action.gd")
 const EvaluationCache = preload("res://scripts/duel_evaluation_cache.gd")
 const Evaluator = preload("res://scripts/duel_evaluator.gd")
+const NativeRules = preload("res://scripts/duel_native_rules.gd")
 const Profile = preload("res://scripts/duel_search_profile.gd")
 const Ordering = preload("res://scripts/duel_search_ordering.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
@@ -32,6 +33,101 @@ static func find_best_action(
 	return action.duplicate_action() if action != null else ActionData.new()
 
 
+static func find_best_action_oracle(
+	state: StateData,
+	max_depth: int,
+	root_owner: int = -1
+) -> ActionData:
+	var result: Dictionary = find_best_action_iterative_oracle(
+		state,
+		root_owner,
+		{"max_depth": maxi(max_depth, 1)}
+	)
+	var action: ActionData = result.get("action", null) as ActionData
+	return action.duplicate_action() if action != null else ActionData.new()
+
+
+static func find_best_action_iterative_oracle(
+	state: StateData,
+	root_owner: int = -1,
+	limits: Dictionary = {},
+	should_cancel: Callable = Callable(),
+	on_progress: Callable = Callable()
+) -> Dictionary:
+	var oracle_limits: Dictionary = limits.duplicate(true)
+	oracle_limits["_oracle_test_backend"] = true
+	return find_best_action_iterative(
+		state,
+		root_owner,
+		oracle_limits,
+		should_cancel,
+		on_progress
+	)
+
+
+static func find_best_action_iterative_native(
+	state: StateData,
+	root_owner: int = -1,
+	limits: Dictionary = {},
+	should_cancel: Callable = Callable(),
+	on_progress: Callable = Callable()
+) -> Dictionary:
+	var started_usec: int = Time.get_ticks_usec()
+	var profile: Dictionary = Profile.normalize(limits)
+	if state == null:
+		return _native_result_schema({
+			"action": ActionData.new(),
+			"completion_reason": &"no_legal_action",
+			"has_completed_depth": false,
+		}, limits, profile, started_usec)
+	if root_owner < 0:
+		root_owner = state.active_player
+	if should_cancel.is_valid() and bool(should_cancel.call()):
+		return _native_result_schema({
+			"action": ActionData.new(),
+			"completion_reason": &"cancelled",
+			"has_completed_depth": false,
+		}, limits, profile, started_usec)
+	var native_limits: Dictionary = limits.duplicate(true)
+	if (
+		int(native_limits.get("deadline_usec", 0)) <= 0
+		and float(native_limits.get("budget_seconds", 0.0)) > 0.0
+	):
+		native_limits["deadline_usec"] = (
+			started_usec + int(float(native_limits["budget_seconds"]) * 1_000_000.0)
+		)
+	var result: Dictionary = NativeRules.search_iterative(
+		state,
+		root_owner,
+		native_limits,
+		should_cancel
+	)
+	result = _native_result_schema(result, native_limits, profile, started_usec)
+	var action: ActionData = result.get("action", null) as ActionData
+	if bool(result.get("has_completed_depth", false)) and action != null:
+		result["turn_plan"] = _build_native_turn_plan(
+			state,
+			result.get("principal_actions", []) as Array
+		)
+	if on_progress.is_valid():
+		for snapshot_value: Variant in result.get("depth_snapshots", []):
+			if not snapshot_value is Dictionary:
+				continue
+			var snapshot: Dictionary = snapshot_value as Dictionary
+			var progress: Dictionary = result.duplicate(true)
+			progress["action"] = (snapshot.get("action") as ActionData).duplicate_action()
+			progress["score"] = int(snapshot.get("score", 0))
+			progress["completed_depth"] = int(snapshot.get("depth", 0))
+			progress["nodes"] = int(snapshot.get("nodes", 0))
+			progress["generated_actions"] = int(snapshot.get("generated_actions", 0))
+			progress["applied_transitions"] = int(snapshot.get("applied_transitions", 0))
+			progress["cutoffs"] = int(snapshot.get("cutoffs", 0))
+			progress["elapsed_seconds"] = float(snapshot.get("elapsed_usec", 0)) / 1_000_000.0
+			progress["completion_reason"] = &"searching"
+			on_progress.call(progress)
+	return result
+
+
 static func find_best_action_iterative(
 	state: StateData,
 	root_owner: int = -1,
@@ -39,6 +135,14 @@ static func find_best_action_iterative(
 	should_cancel: Callable = Callable(),
 	on_progress: Callable = Callable()
 ) -> Dictionary:
+	if not bool(limits.get("_oracle_test_backend", false)):
+		return find_best_action_iterative_native(
+			state,
+			root_owner,
+			limits,
+			should_cancel,
+			on_progress
+		)
 	var started_usec: int = Time.get_ticks_usec()
 	var profile: Dictionary = Profile.normalize(limits)
 	var max_nodes: int = int(limits.get("max_nodes", 0))
@@ -59,6 +163,7 @@ static func find_best_action_iterative(
 		root_owner = state.active_player
 
 	var context: Dictionary = {
+		"oracle_backend": bool(limits.get("_oracle_test_backend", false)),
 		"deadline_usec": int(limits.get("deadline_usec", 0)),
 		"max_nodes": max_nodes,
 		"min_completed_depth": min_completed_depth,
@@ -141,7 +246,8 @@ static func find_best_action_iterative(
 		context["turn_plan"] = _build_same_turn_plan(
 			state,
 			best_action,
-			table
+			table,
+			bool(context.get("oracle_backend", false))
 		)
 		solved = not bool(context["horizon_reached"])
 		if on_progress.is_valid():
@@ -497,7 +603,7 @@ static func _search_tactical(
 			break
 		if _should_stop(context):
 			return 0
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = _apply_transition(state, action, context)
 		context["applied_transitions"] = int(context.get("applied_transitions", 0)) + 1
 		scanned_at_node += 1
 		context["tactical_candidates_scanned"] = int(context.get("tactical_candidates_scanned", 0)) + 1
@@ -651,7 +757,7 @@ static func _next_state_for_record(
 		if bool(context.get("collect_timings", false))
 		else 0
 	)
-	var transition: Dictionary = Simulator.apply_action(state, record["action"] as ActionData)
+	var transition: Dictionary = _apply_transition(state, record["action"] as ActionData, context)
 	_record_elapsed_timing(context, "time_apply_usec", timing_started_usec)
 	context["applied_transitions"] = int(context.get("applied_transitions", 0)) + 1
 	return transition["state"] as StateData
@@ -709,6 +815,16 @@ static func _record_elapsed_timing(
 	context[field] = int(context.get(field, 0)) + Time.get_ticks_usec() - started_usec
 
 
+static func _apply_transition(
+	state: StateData,
+	action: ActionData,
+	context: Dictionary
+) -> Dictionary:
+	if bool(context.get("oracle_backend", false)):
+		return Simulator.apply_action_oracle(state, action)
+	return Simulator.apply_action(state, action)
+
+
 static func _ordered_transitions(
 	state: StateData,
 	preferred_key: String,
@@ -718,7 +834,7 @@ static func _ordered_transitions(
 	var legal_actions: Array[ActionData] = Simulator.get_legal_actions(state)
 	context["generated_actions"] = int(context.get("generated_actions", 0)) + legal_actions.size()
 	for action: ActionData in legal_actions:
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = _apply_transition(state, action, context)
 		context["applied_transitions"] = int(context.get("applied_transitions", 0)) + 1
 		var next_state: StateData = transition["state"] as StateData
 		var priority: int = 0
@@ -779,7 +895,8 @@ static func _should_stop(context: Dictionary) -> bool:
 static func _build_same_turn_plan(
 	state: StateData,
 	first_action: ActionData,
-	table: Dictionary
+	table: Dictionary,
+	oracle_backend: bool = false
 ) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
 	if state == null or first_action == null or first_action.action_type == &"":
@@ -806,7 +923,11 @@ static func _build_same_turn_plan(
 			"owner_id": root_owner,
 			"action": current_action.duplicate_action(),
 		})
-		var transition: Dictionary = Simulator.apply_action(current_state, current_action)
+		var transition: Dictionary = (
+			Simulator.apply_action_oracle(current_state, current_action)
+			if oracle_backend
+			else Simulator.apply_action(current_state, current_action)
+		)
 		if not bool(transition.get("valid", false)):
 			break
 		current_state = transition.get("state") as StateData
@@ -824,6 +945,40 @@ static func _build_same_turn_plan(
 			break
 		current_action = _find_legal_action_by_key(current_state, next_action_key)
 		if current_action == null:
+			break
+	return plan
+
+
+static func _build_native_turn_plan(
+	state: StateData,
+	planned_actions: Array
+) -> Array[Dictionary]:
+	var plan: Array[Dictionary] = []
+	if state == null or planned_actions.is_empty():
+		return plan
+	var current_state: StateData = state.duplicate_state()
+	var root_owner: int = current_state.active_player
+	var root_owner_turn_serial: int = current_state.owner_turn_serial
+	for action_value: Variant in planned_actions:
+		var action: ActionData = action_value as ActionData
+		if (
+			action == null
+			or current_state.active_player != root_owner
+			or current_state.owner_turn_serial != root_owner_turn_serial
+			or not Simulator.is_action_legal(current_state, action)
+		):
+			break
+		plan.append({
+			"state_key": StateKey.build_compact(current_state),
+			"owner_turn_serial": root_owner_turn_serial,
+			"owner_id": root_owner,
+			"action": action.duplicate_action(),
+		})
+		var transition: Dictionary = Simulator.apply_action(current_state, action)
+		if not bool(transition.get("valid", false)):
+			break
+		current_state = transition.get("state") as StateData
+		if current_state == null or Simulator.is_terminal(current_state):
 			break
 	return plan
 
@@ -849,6 +1004,57 @@ static func _duplicate_turn_plan(source: Array) -> Array[Dictionary]:
 			entry["action"] = action.duplicate_action()
 		copied_plan.append(entry)
 	return copied_plan
+
+
+static func _native_result_schema(
+	source: Dictionary,
+	limits: Dictionary,
+	profile: Dictionary,
+	started_usec: int
+) -> Dictionary:
+	var result: Dictionary = source.duplicate(true)
+	var action: ActionData = source.get("action", null) as ActionData
+	result["action"] = action.duplicate_action() if action != null else ActionData.new()
+	result["completed_depth"] = int(source.get("completed_depth", 0))
+	result["nodes"] = int(source.get("nodes", 0))
+	result["min_completed_depth"] = maxi(int(limits.get("min_completed_depth", 0)), 0)
+	result["minimum_depth_guard_used"] = bool(source.get("minimum_depth_guard_used", false))
+	var max_nodes: int = maxi(int(limits.get("max_nodes", 0)), 0)
+	result["nodes_over_limit"] = (
+		maxi(int(result["nodes"]) - max_nodes, 0) if max_nodes > 0 else 0
+	)
+	for field: String in [
+		"cutoffs",
+		"generated_actions",
+		"applied_transitions",
+		"root_actions_total",
+		"root_actions_started",
+		"root_actions_completed",
+	]:
+		result[field] = int(source.get(field, 0))
+	result["transposition_hits"] = 0
+	result["pvs_probes"] = 0
+	result["pvs_researches"] = 0
+	result["evaluation_cache_hits"] = 0
+	result["iteration_depth"] = int(source.get("iteration_depth", source.get("completed_depth", 0)))
+	result["iteration_nodes"] = 0
+	result["current_root_action_nodes"] = 0
+	result["time_order_usec"] = 0
+	result["time_apply_usec"] = 0
+	result["time_key_usec"] = 0
+	result["time_evaluate_usec"] = 0
+	result["turn_plan"] = []
+	result["max_tactical_depth"] = 0
+	result["tactical_candidates_scanned"] = 0
+	result["tactical_actions_searched"] = 0
+	result["max_tactical_candidates_per_node"] = 0
+	result["max_tactical_actions_per_node"] = 0
+	result["search_profile"] = StringName(profile.get("name", Profile.ENHANCED))
+	result["elapsed_seconds"] = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
+	result["solved"] = bool(source.get("solved", false))
+	result["completion_reason"] = StringName(source.get("completion_reason", &"max_depth"))
+	result["has_completed_depth"] = bool(source.get("has_completed_depth", false))
+	return result
 
 
 static func _make_result(

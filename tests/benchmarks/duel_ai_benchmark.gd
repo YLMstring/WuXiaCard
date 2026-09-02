@@ -175,11 +175,7 @@ static func run_game(
 		for override_key: Variant in owner_overrides:
 			search_limits[override_key] = owner_overrides[override_key]
 		search_limits["profile"] = StringName(profile_by_owner.get(moving_owner, &"baseline"))
-		var result: Dictionary = Search.find_best_action_iterative(
-			state,
-			moving_owner,
-			search_limits
-		)
+		var result: Dictionary = _run_search_backend(state, moving_owner, search_limits)
 		var action = result.get("action", null)
 		var used_fallback: bool = (
 			not bool(result.get("has_completed_depth", false))
@@ -368,11 +364,7 @@ static func run_enemy_game(
 			search_limits[override_key] = overrides[override_key]
 		search_limits["profile"] = profile
 		var fallback = Simulator.choose_greedy_action(state)
-		var result: Dictionary = Search.find_best_action_iterative(
-			state,
-			moving_owner,
-			search_limits
-		)
+		var result: Dictionary = _run_search_backend(state, moving_owner, search_limits)
 		var action = result.get("action", null)
 		var used_fallback: bool = (
 			not bool(result.get("has_completed_depth", false))
@@ -881,6 +873,17 @@ static func node_benchmark_limits(node_limit: int) -> Dictionary:
 	}
 
 
+static func _run_search_backend(state, owner_id: int, limits: Dictionary) -> Dictionary:
+	var clean_limits: Dictionary = limits.duplicate(true)
+	var native_production: bool = bool(clean_limits.get("_native_production_backend", false))
+	clean_limits.erase("_native_production_backend")
+	return (
+		Search.find_best_action_iterative_native(state, owner_id, clean_limits)
+		if native_production
+		else Search.find_best_action_iterative_oracle(state, owner_id, clean_limits)
+	)
+
+
 static func mode_config(mode: StringName) -> Dictionary:
 	match mode:
 		&"quick":
@@ -888,7 +891,10 @@ static func mode_config(mode: StringName) -> Dictionary:
 		&"extended":
 			return {"limits": node_benchmark_limits(EXTENDED_NODE_LIMIT)}
 		&"production":
-			return {"limits": {"budget_seconds": 10.0}}
+			return {"limits": {
+				"budget_seconds": 10.0,
+				"_native_production_backend": true,
+			}}
 	return {}
 
 

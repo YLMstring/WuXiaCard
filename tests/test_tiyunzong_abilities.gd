@@ -58,7 +58,7 @@ func _test_activation_resummons_fresh_instances_in_order() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_activate(4, &"old_tiyun", Action.TARGET_BOARD_CELL, 0)
 	)
@@ -92,7 +92,7 @@ func _test_activation_resummons_fresh_instances_in_order() -> void:
 func _test_flip_move_replaces_only_when_move_succeeds() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"moving_tiyun"), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [_plain(&"move_attacker", [9, 9, 9, 9], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 1, &"move_attacker")
 	)
@@ -109,7 +109,7 @@ func _test_flip_move_replaces_only_when_move_succeeds() -> void:
 	full_board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"trapped_tiyun"), Rules.OPPONENT_OWNER)
 	for cell_index: int in [3, 5, 7]:
 		full_board[cell_index] = _slot(_plain(StringName("block_%d" % cell_index), [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var trapped_transition: Dictionary = Simulator.apply_action(
+	var trapped_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(full_board, [_plain(&"trap_attacker", [9, 9, 9, 9], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 1, &"trap_attacker")
 	)
@@ -125,7 +125,7 @@ func _test_tier_four_draws_only_outside_current_owner_hand() -> void:
 	var own_hand_board: Array = Rules.empty_board()
 	own_hand_board[8] = _slot(Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"own_hand_tiyun"), Rules.PLAYER_OWNER)
 	own_hand_board[7] = _slot(Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.OPPONENT_OWNER, &"enemy_huzhua"), Rules.OPPONENT_OWNER)
-	var own_hand_transition: Dictionary = Simulator.apply_action(
+	var own_hand_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			own_hand_board,
 			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"own_draw_source")],
@@ -142,7 +142,7 @@ func _test_tier_four_draws_only_outside_current_owner_hand() -> void:
 	var enemy_hand_board: Array = Rules.empty_board()
 	enemy_hand_board[8] = _slot(Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"enemy_hand_tiyun"), Rules.PLAYER_OWNER)
 	enemy_hand_board[7] = _slot(Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.PLAYER_OWNER, &"ally_huzhua"), Rules.PLAYER_OWNER)
-	var enemy_hand_transition: Dictionary = Simulator.apply_action(
+	var enemy_hand_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			enemy_hand_board,
 			[],

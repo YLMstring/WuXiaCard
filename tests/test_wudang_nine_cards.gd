@@ -97,7 +97,7 @@ func _test_committed_attack_does_not_compare_powers_twice() -> void:
 	}
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(_plain(&"growing_defender", [1, 1, 1, 1], Rules.OPPONENT_OWNER, [defender_ability]), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [_plain(&"committed_attacker", [5, 5, 5, 5], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"committed_attacker")
 	)
@@ -135,7 +135,7 @@ func _test_committed_attack_does_not_compare_powers_twice() -> void:
 		_plain(&"later_strengthened_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
 		Rules.OPPONENT_OWNER
 	)
-	var multi_transition: Dictionary = Simulator.apply_action(
+	var multi_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			multi_board,
 			[_plain(&"multi_committed_attacker", [5, 5, 5, 5], Rules.PLAYER_OWNER)],
@@ -162,7 +162,7 @@ func _test_raozhi_commits_without_fallback_and_targeted_attacks_stay_explicit() 
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(_plain(&"committed_exile", [1, 1, 1, 1], Rules.OPPONENT_OWNER, [exile_on_attack]), Rules.OPPONENT_OWNER)
 	board[1] = _slot(_plain(&"no_fallback_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [Catalog.create_instance(&"RaoZhiRouJian2", Rules.PLAYER_OWNER, &"committed_raozhi")], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"committed_raozhi")
 	)
@@ -198,7 +198,7 @@ func _test_attack_recheck_uses_range_but_not_powers() -> void:
 	}
 	var ordinary_board: Array = Rules.empty_board()
 	ordinary_board[1] = _slot(_plain(&"ordinary_mover", [1, 1, 1, 1], Rules.OPPONENT_OWNER, [move_on_attack]), Rules.OPPONENT_OWNER)
-	var ordinary_transition: Dictionary = Simulator.apply_action(
+	var ordinary_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(ordinary_board, [_plain(&"ordinary_source", [9, 9, 9, 9], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"ordinary_source")
 	)
@@ -212,7 +212,7 @@ func _test_attack_recheck_uses_range_but_not_powers() -> void:
 
 	var unlimited_board: Array = Rules.empty_board()
 	unlimited_board[0] = _slot(_plain(&"unlimited_mover", [1, 1, 1, 1], Rules.OPPONENT_OWNER, [move_on_attack]), Rules.OPPONENT_OWNER)
-	var unlimited_transition: Dictionary = Simulator.apply_action(
+	var unlimited_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(unlimited_board, [Catalog.create_instance(&"RaoZhiRouJian2", Rules.PLAYER_OWNER, &"moving_raozhi")], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 8, &"moving_raozhi")
 	)
@@ -228,7 +228,7 @@ func _test_attack_recheck_uses_range_but_not_powers() -> void:
 func _test_flip_guard_exiles_then_is_lost_after_own_flip() -> void:
 	var guarded_board: Array = Rules.empty_board()
 	guarded_board[1] = _slot(Catalog.create_instance(&"WuDangMianZhang2", Rules.OPPONENT_OWNER, &"guarded_mianzhang"), Rules.OPPONENT_OWNER)
-	var guarded_transition: Dictionary = Simulator.apply_action(
+	var guarded_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(guarded_board, [_plain(&"guard_attacker", [9, 9, 9, 9], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"guard_attacker")
 	)
@@ -238,7 +238,7 @@ func _test_flip_guard_exiles_then_is_lost_after_own_flip() -> void:
 
 	var attacking_board: Array = Rules.empty_board()
 	attacking_board[1] = _slot(_plain(&"guard_loss_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var attacking_transition: Dictionary = Simulator.apply_action(
+	var attacking_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(attacking_board, [Catalog.create_instance(&"WuDangMianZhang3", Rules.PLAYER_OWNER, &"mianzhang_guard_loss")], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"mianzhang_guard_loss")
 	)
@@ -253,7 +253,7 @@ func _test_flipped_card_attacks_as_the_same_instance() -> void:
 	var board: Array = Rules.empty_board()
 	board[1] = _slot(_plain(&"forced_attacker", [1, 9, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[2] = _slot(_plain(&"forced_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [Catalog.create_instance(&"ShenMen13Jian2", Rules.PLAYER_OWNER, &"shenmen_force")], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"shenmen_force")
 	)
@@ -296,7 +296,7 @@ func _test_raozhi_reacts_after_friendly_targeted_activation() -> void:
 	hanbin["ki"] = 1
 	board[4] = _slot(hanbin, Rules.PLAYER_OWNER)
 	board[0] = _slot(_plain(&"reaction_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [], [_plain(&"selected_hand_card", [5, 5, 5, 5], Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"friendly_activation", Action.TARGET_HAND_SLOT, 0)
 	)

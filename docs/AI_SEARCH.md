@@ -4,13 +4,14 @@
 
 The opponent is a perfect-information deterministic search player. It sees both hands and exact deck order. The controller starts a `DuelSearchSession` worker with a cloned state and a deadline.
 
-`DuelSearch.find_best_action_iterative()` performs iterative-deepening minimax
-with alpha-beta pruning. The production `enhanced` profile adds deterministic
-generic action ordering and lazy transition application. Principal-variation
-search (PVS) remains available by explicit profile override. The bounded
-tactical extension is also opt-in and remains disabled in production until it
-can preserve mandatory action semantics instead of treating stand-pat
-evaluation as a legal pass.
+`DuelSearch.find_best_action_iterative()` routes production to the native
+iterative-deepening alpha-beta tree. It uses deterministic generic structural
+ordering and the baseline evaluator. `find_best_action_iterative_oracle()`
+retains the former GDScript profile system for parity tests and historical
+Lazy/PVS/tactical ablations; those overrides do not alter production native
+search. The bounded tactical extension remains Oracle-only until it can
+preserve mandatory action semantics instead of treating stand-pat evaluation
+as a legal pass.
 Completed depths publish progress. The final move is taken from the deepest
 fully completed depth; partially searched deeper work is discarded.
 
@@ -22,13 +23,11 @@ reported by `DuelSimulator`: extra plays in the same owner turn cost zero
 boundaries, while automatically resolved empty turns may consume more than one.
 Terminal states are still scored before the horizon check.
 
-The `baseline` profile preserves the pre-strengthening eager alpha-beta path for
-paired comparison. It disables PVS and tactical extension.
-Production Enhanced therefore runs the same configuration as the benchmark
-`LazyOnly` variant: lazy transitions on, PVS/tactics/evaluation cache off, and
-the baseline evaluator.
-Both profiles call the same authoritative `DuelSimulator`; neither contains
-named-card branches.
+The Oracle `baseline` profile preserves the pre-strengthening eager alpha-beta
+path for paired comparison. Oracle `enhanced` corresponds to the historical
+LazyOnly configuration: lazy transitions on, PVS/tactics/evaluation cache off,
+and the baseline evaluator. Both Oracle profiles and the native kernel remain
+card-agnostic and resolve the same catalog declarations.
 
 Default production budget is the exported `opponent_search_budget_seconds = 10.0` on `DuelController`. A future easy opponent can receive 5 seconds without changing evaluation strength.
 
@@ -101,13 +100,11 @@ best action, search verifies that candidate in the integer window immediately
 around the current best score. This preserves stable tie-breaking without
 allowing a bound-equal but objectively worse action to become the played move.
 
-Ordering priority is previous principal variation, transposition-table best
-action, generic history score, generic structural score, then canonical key.
-History keys describe action shape plus generic source-card powers, ki, and
-ability count without catalog or runtime card identity. This prevents a cutoff
-earned by one changing hand-slot occupant from contaminating an unrelated card
-that later occupies the same slot. Lazy search sorts legal actions first and
-asks the simulator for a transition only if the branch is actually visited.
+Production ordering is previous root principal action, generic structural
+score, then canonical key. It applies a transition only when the branch is
+visited. The Oracle additionally retains transposition-table and generic
+history ordering; its history keys describe action shape plus generic source-
+card powers, ki, and ability count without catalog or runtime card identity.
 
 PVS searches the first ordered child with the full window and later children
 with a null window, repeating a child with the full window only when required.
@@ -124,9 +121,9 @@ It is not production-safe yet: a nonterminal owner must execute a legal action,
 so stand-pat cannot remain a competing outcome when every legal continuation is
 worse.
 
-The transposition table is capped at 50,000 entries. `DuelStateKey.build()`
+The Oracle transposition table is capped at 50,000 entries. `DuelStateKey.build()`
 retains the exact canonical serialization used by fixtures and diagnostics.
-Production `DuelStateKey.build_compact()` serializes the same complete explicit
+`DuelStateKey.build_compact()` serializes the same complete explicit
 state payload with Godot's native Variant binary encoder, hashes it with
 SHA-256, and uses the first 128 bits plus the encoded byte length as a `v2`
 fingerprint. No gameplay or presentation fields are intentionally omitted. It
@@ -449,17 +446,19 @@ remain the semantic source of truth.
 
 ### Native boundary probe
 
-The first opt-in Windows GDExtension probe is now present under
+The Windows GDExtension implementation lives under
 `native/duel_core/`. It pins official `godot-cpp` commit
 `101ae38034304346a46ea9ea84ae156d3e860496`, generates bindings for API 4.6,
 and keeps its DLL, generated `.gdextension`, and CMake intermediates out of
-version control. Production scripts do not reference the extension.
+version control. A local build is therefore required before running production
+or its strict-native tests.
 
 `DuelNativeCompactKernel` accepts both the original mutable clone-probe payload
 and a complete compact payload with immutable metadata pools. It converts the
 packed runtime arrays into owned C++ vectors, validates all fixed lengths, and
-keeps branch cloning native. Production integration remains forbidden until
-complete transition semantics and Windows/Android packaging are both proven.
+keeps branch cloning native. Complete current-catalog transition semantics and
+Windows Debug integration are proven; Android/release packaging remains a
+distribution gate.
 
 ### Native play-transition slices
 
@@ -696,34 +695,49 @@ native branch clones at about `477,528` clones per second. Debug timing is
 recorded rather than asserted; parity and generality take precedence over a
 retained speedup multiple.
 
-### Native whole-tree shadow search
+### Native production search
 
-The opt-in kernel now has a test-only `search_fixed_round_depth()` entry point.
-One compact root is loaded from GDScript, after which legal-action enumeration,
-branch copies, hand-play and activation transitions, complete-round depth
-accounting, baseline evaluation, and minimax traversal remain inside C++ for the
-entire tree. Public single-transition probes and search branches share the same
-state-parameterized transaction functions; the search does not serialize or
-restore a payload at each node.
+Production loads one compact root through `DuelNativeRules`, after which legal-
+action enumeration, branch copies, rules transitions, baseline evaluation,
+structural move ordering, alpha-beta traversal, complete-round iterative
+deepening, and deadline/node checks remain inside C++. It does not serialize or
+restore a `DuelState` at each search edge. `search_fixed_round_depth()` remains
+as a correctness probe; `search_iterative_round_depth()` is the production
+entry. Neither entry may fall back to GDScript rules.
 
-This first correctness oracle deliberately uses complete minimax without
-alpha-beta, state keys, or a transposition table. It reproduces the baseline
-evaluator's terminal score, board ownership, hand/deck/card resources,
-mobility, danger, and active-player tempo terms. Depth uses the same
-`owner_turn_serial` boundary delta as production: extra plays remain inside an
-owner turn, while automatically completed empty turns consume every boundary
-they cross. Equal root scores use the same canonical action ordering.
+Depth uses the same `owner_turn_serial` boundary delta as the Oracle: extra
+plays remain inside an owner turn, while automatically completed empty turns
+consume every boundary they cross. Only fully completed iterations replace the
+selected action. Equal root scores use canonical action order, including an
+exact verification search when a bounded alpha-beta result could otherwise
+produce a false canonical tie. The completed iteration also retains native
+principal actions from the root owner's current turn; GDScript materializes
+their state keys once so extra plays can reuse the plan without another ten-
+second search.
 
-The 2026-09-02 Debug shadow run matched all 14 real Quick openings at complete-
-round depth one: `14/14` exact scores and `14/14` exact root actions. It also
-matched focused depth-two automatic-empty-turn and depth-one activation-plus-
-extra-play fixtures. The fixed Quick tree visited 27,117 native nodes in about
-`2.10s`; the alpha-beta GDScript oracle visited 3,512 nodes in about `30.10s`.
-Those timings prove that a coarse all-native tree is viable, but are not a fair
-final engine comparison because the algorithms and visited node counts differ.
-The same run retained 490/490 hand-play transition parity, 36/36 catalog
-activation-fixture parity, 104/104 Quick-derived activation parity, and passed
-1,703 native checks.
+The production call accepts the real deadline, the benchmark-only node limit
+and minimum-depth guard, and a low-frequency cancellation callback. A cancelled
+or interrupted deeper iteration is discarded. Progress snapshots contain only
+completed depths. Unsupported reachable declarations are integration errors,
+not permission to switch to the Oracle.
+
+The 2026-09-02 fixed-depth Debug probe matched all 14 real Quick openings at
+complete-round depth one: `14/14` exact scores and `14/14` exact root actions.
+It also matched focused automatic-empty-turn and activation/extra-play
+fixtures. Transition coverage remained 490/490 Quick hand plays, 36/36 catalog
+activation fixtures, and 104/104 Quick-derived activations with exact ordered
+state/event parity. The independent production suite additionally executes all
+133 catalog hand plays and every legal activation exposed by complete catalog
+fixtures; it currently passes 995 assertions including routing, node-budget,
+cancellation, and same-turn-plan checks.
+
+On the 14 real Quick openings with the production ten-second budget, the former
+per-edge native facade completed complete-round depth two in `0/14` openings
+because every edge crossed the compact boundary. The root-native production
+candidate completed depth two in `12/14`; the two hardest grandmaster openings
+completed depth one and entered depth two. Average completed depth rose from
+`1.000` to `1.857`. An earlier optimized all-GDScript run had completed depth
+two in `3/14`, so the root-native result also exceeds the pre-facade baseline.
 
 The shadow run exposed and closed two deeper-state gaps that root-only coverage
 could not see: row-major `move_self_to_first_adjacent_empty`, and a legal action
@@ -737,15 +751,13 @@ coverage.
   search receives another actionable state; there is no search-only draw rule.
 - Native hand-play coverage is 490/490 on the fixed real Quick opening corpus,
   and activation coverage is 36/36 across every current catalog declaration
-  plus 104/104 in deterministic Quick-derived states. Production still uses
-  `DuelSimulator` for every transition.
-- Add production-equivalent iterative deepening, hard deadline/cancellation,
-  LazyOnly ordering/pruning, state keys/transposition handling, and same-turn
-  plan extraction to the native tree. Then compare completed depths and
-  selected-result restoration against the existing search oracle over full
-  games, not only fixed-depth openings.
-- Prove Windows release and Android ARM64 builds before enabling the extension
-  outside opt-in tests.
+  plus 104/104 in deterministic Quick-derived states. Production rules and
+  production search are now strict-native; Oracle calls are explicit tests.
+- Add a native transposition table and history updates only after a separate
+  score/action equivalence gate. Current production intentionally ships the
+  simpler structural ordering and alpha-beta path first.
+- Prove Windows release and Android ARM64 builds before distribution. Windows
+  Debug is the currently verified production integration platform.
 - Tactical extension needs a forced-action-correct redesign before it can be
   restored as an `enhanced` default.
 - No difficulty profiles beyond budget.
@@ -762,8 +774,9 @@ complete hands and exact deck order.
 
 Run it with `tools/run_ai_benchmark.ps1`. `Quick` uses 7 matchups/28 games;
 `Extended` uses all 28 matchups/112 games. Both use the fixed nominal 1,500-node
-limit plus `min_completed_depth = 1` for both profiles. `Production` uses 4
-matchups/16 games with the real ten-second deadline and no minimum-depth guard.
+limit plus `min_completed_depth = 1` for both Oracle profiles. `Production`
+uses the native backend on 4 matchups/16 games with the real ten-second deadline
+and no minimum-depth guard.
 Pilot remains an optional diagnostic mode, not a prerequisite for Extended.
 
 Extended writes one `AI_BENCHMARK_GAME` console line and appends one compact
@@ -781,7 +794,8 @@ Git.
 `LazyPVS` is an explicit pure-ablation variant. Its Enhanced side uses Lazy
 transitions plus PVS; its control side also uses Lazy transitions but disables
 PVS. Both sides disable tactics/evaluation cache and use the baseline evaluator.
-Production remains `LazyOnly`. Before a `LazyPVS` Extended run, both the focused
+This historical ablation compares Oracle LazyOnly with Oracle Lazy+PVS; current
+native production uses neither profile switch. Before a `LazyPVS` Extended run, both the focused
 search suite and the 14-opening fixed-complete-round-depth equivalence script
 must return identical scores and root actions. Run the formal ablation directly
 with:

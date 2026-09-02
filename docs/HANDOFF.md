@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-01
+Updated: 2026-09-02
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -30,7 +30,8 @@ release-ready Android package.
 - Deck builder scene: `res://scenes/deck_builder.tscn`
 - Ending scene: `res://scenes/ending.tscn`
 - Logical viewport: `540×960`; portrait; `canvas_items` stretch
-- Production rules: `scripts/duel_simulator.gd`
+- Production rules facade: `scripts/duel_simulator.gd`; strict native boundary:
+  `scripts/duel_native_rules.gd`; C++ kernel: `native/duel_core/`
 - Card database: `scripts/card_catalog.gd`
 - Persistent deck profile: `scripts/deck_profile_store.gd`
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`
@@ -285,9 +286,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   those lines live. The final JSON shares the same artifact stem and references
   the checkpoint. A partial checkpoint survives interruption but is not a final
   benchmark result, so a separate Pilot is no longer required before Extended.
-- `LazyPVS` is the pure PVS benchmark variant: both sides use Lazy transitions,
+- `LazyPVS` is the historical Oracle PVS benchmark variant: both sides use Lazy transitions,
   baseline evaluation, no tactics, and no evaluation cache; only Enhanced turns
-  on PVS. Production remains `LazyOnly`. The 14-real-opening fixed-depth oracle
+  on PVS. Current native production does not use this profile switch. The 14-real-opening fixed-depth oracle
   must preserve every score and root action before the 112-game Extended
   `LazyPVS` run is allowed; no Quick/Pilot screening or automatic production
   enablement is part of that evaluation. The completed 2026-08-29 run scored
@@ -476,8 +477,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   evidence rather than judging strength from one game. Node-limited reports must
   include minimum-depth guard and overrun diagnostics instead of describing
   1,500 as a hard cap.
-- The opt-in `DuelNativeCompactKernel` remains test-only and absent from every
-  production path. It now compiles immutable ability declarations once per
+- `DuelNativeCompactKernel` is now the strict production rules and deep-search
+  backend behind `DuelSimulator`/`DuelSearch`. Oracle rules remain explicit
+  test-only entry points. The kernel compiles immutable ability declarations once per
   compact root and tracks ordered branch-local runtime ability entries with
   stable trigger handles. It implements the generic summon/attack/flip/exile
   lifecycle plus recursive nested actions, all-zone selectors, batched power
@@ -507,17 +509,20 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   activation target rules and all 20 current catalog activation declarations.
   The catalog fixtures are 36/36 exact; 136 deterministic states derived from
   the same Quick openings expose another 104 activation actions, all 104 exact.
-  The kernel now also exposes a test-only fixed-complete-round-depth baseline
-  minimax that converts one root and leaves the whole tree native. All 14 real
+  The kernel also exposes a fixed-complete-round-depth Oracle probe and a
+  production iterative entry that converts one root and leaves the whole tree
+  native. All 14 real
   Quick depth-one searches match the oracle's exact score and canonical root
   action; focused depth-two empty-turn and activation/extra-play fixtures also
-  match. The latest expanded probe passes 1,703 checks. Its unpruned native tree
-  visited 27,117 nodes in about `2.10s`, while the alpha-beta GDScript oracle
-  visited 3,512 in about `30.10s`; this proves the native boundary, not a fair
-  final algorithm comparison. Production-equivalent iterative deepening,
-  deadlines/cancellation, LazyOnly pruning, state keys/transpositions,
-  same-turn plans, selected-result restoration, and release/Android packaging
-  remain unfinished, so production adoption remains forbidden.
+  match. The expanded probe passes 1,774 parity checks; the independent native
+  production suite passes 995 rule/card/search assertions. Production adds
+  structural ordering, alpha-beta, iterative deepening, hard deadline/node
+  checks, low-frequency cancellation, completed-depth result restoration, and
+  same-turn principal plans. On the 14 real Quick openings at ten seconds it
+  completes round depth two in 12/14, versus 3/14 for the last optimized
+  all-GDScript baseline and 0/14 for the temporary per-edge native facade.
+  Native transpositions and release/Android packaging remain unfinished;
+  Android/release are distribution gates rather than desktop production gates.
   See `docs/AI_SEARCH.md` and the approved native slice spec before extending it.
 - Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.

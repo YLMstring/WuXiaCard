@@ -36,7 +36,7 @@ func _test_jianfa_entry_uses_lowest_qualifying_cell() -> void:
 	var source: Dictionary = Catalog.create_instance(
 		&"JianFaQinYin1", Rules.PLAYER_OWNER, &"jianfa_entry"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [source], [_plain(&"reply", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
 		Action.make_play(0, 0, &"jianfa_entry")
 	)
@@ -61,7 +61,7 @@ func _test_jianfa_activation_grants_only_an_extra_play() -> void:
 		[_plain(&"reply", Rules.OPPONENT_OWNER)],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_activate(0, &"jianfa_activate", Action.TARGET_BOARD_CELL, 1)
 	)
@@ -73,7 +73,7 @@ func _test_jianfa_activation_grants_only_an_extra_play() -> void:
 	_check(not legal_actions.is_empty(), "The pending extra play has legal actions")
 	for legal_action: Action in legal_actions:
 		_check(legal_action.action_type == Action.TYPE_PLAY, "Only hand plays are legal during the extra-play window")
-	var finish_transition: Dictionary = Simulator.apply_action(
+	var finish_transition: Dictionary = Simulator.apply_action_oracle(
 		next_state,
 		Action.make_play(0, 3, &"extra_play")
 	)
@@ -96,7 +96,7 @@ func _test_yanhui_replaces_itself_with_exact_leftmost_light_sword() -> void:
 	var right_light: Dictionary = Catalog.create_instance(
 		&"TianZhuYunQi2", Rules.OPPONENT_OWNER, &"right_light"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [attacker], [left_light, right_light], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"attacker")
 	)
@@ -117,7 +117,7 @@ func _test_yanhui_four_returns_other_ally_and_summons_copy() -> void:
 	)
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	board[5] = _slot(ally, Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [], [_plain(&"reply", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
 		Action.make_activate(4, &"yanhui_source", Action.TARGET_BOARD_CELL, 5)
 	)

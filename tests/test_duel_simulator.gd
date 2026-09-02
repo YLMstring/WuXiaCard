@@ -115,7 +115,7 @@ func _test_difficulty_eight_one_card_draw() -> void:
 		[deck_card],
 		8
 	)
-	var first_transition: Dictionary = Simulator.apply_action(
+	var first_transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 0, &"difficulty_first")
 	)
@@ -133,7 +133,7 @@ func _test_difficulty_eight_one_card_draw() -> void:
 	var remaining_instance_id := StringName(
 		(next_state.get_hand(Rules.OPPONENT_OWNER)[0] as Dictionary).get("instance_id", &"")
 	)
-	var second_transition: Dictionary = Simulator.apply_action(
+	var second_transition: Dictionary = Simulator.apply_action_oracle(
 		next_state,
 		Action.make_play(0, 1, remaining_instance_id)
 	)
@@ -154,7 +154,7 @@ func _test_difficulty_eight_one_card_draw() -> void:
 		[deck_card],
 		7
 	)
-	var inactive_transition: Dictionary = Simulator.apply_action(
+	var inactive_transition: Dictionary = Simulator.apply_action_oracle(
 		difficulty_seven,
 		Action.make_play(0, 0, &"difficulty_first")
 	)
@@ -202,7 +202,7 @@ func _test_difficulty_eight_batch_boundaries() -> void:
 		[],
 		8
 	)
-	var zero_transition: Dictionary = Simulator.apply_action(
+	var zero_transition: Dictionary = Simulator.apply_action_oracle(
 		three_to_zero,
 		Action.make_play(0, 0, &"discard_all_source")
 	)
@@ -249,7 +249,7 @@ func _test_difficulty_eight_batch_boundaries() -> void:
 		[_make_runtime_card("Batch Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_draw")],
 		8
 	)
-	var one_transition: Dictionary = Simulator.apply_action(
+	var one_transition: Dictionary = Simulator.apply_action_oracle(
 		three_to_one,
 		Action.make_play(0, 0, &"discard_two_source")
 	)
@@ -291,7 +291,7 @@ func _test_difficulty_eight_zero_to_one_addition() -> void:
 		[_make_runtime_card("Zero Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"zero_draw")],
 		8
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 0, &"difficulty_add_one")
 	)
@@ -471,7 +471,7 @@ func _test_zixia_gong_after_summon_ki_and_draw_order() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
 		int((next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1
@@ -501,7 +501,7 @@ func _test_zixia_gong_after_summon_ki_and_draw_order() -> void:
 		0,
 		[drawn]
 	)
-	var draw_transition: Dictionary = Simulator.apply_action(
+	var draw_transition: Dictionary = Simulator.apply_action_oracle(
 		draw_state,
 		Action.make_play(0, 4)
 	)
@@ -549,7 +549,7 @@ func _test_zixia_gong_start_turn_and_stacking() -> void:
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 8))
 	var resulting_hand: Dictionary = (
 		(transition.get("state") as State).get_hand(Rules.PLAYER_OWNER)[0]
 	)
@@ -610,7 +610,7 @@ func _test_zixia_gong_four_end_turn_order() -> void:
 		[opponent_hand],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 8))
 	var next_state: State = transition.get("state") as State
 	_check(
 		((next_state.board[0] as Dictionary).get("card", {}) as Dictionary).get("powers", [])
@@ -664,7 +664,7 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
 		next_state.active_player == Rules.PLAYER_OWNER
@@ -689,7 +689,7 @@ func _test_exile_effect_removes_every_target() -> void:
 	var attacker: Dictionary = Rules.make_card("Exiler", "逐", [5, 5, 5, 5], exile_abilities, Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	var exile_targets: Array[int] = []
@@ -717,7 +717,7 @@ func _test_exile_uses_original_owner_and_is_copy_isolated() -> void:
 	var source: Dictionary = Rules.make_card("Exiler", "逐", [1, 5, 1, 1], source_abilities, Rules.PLAYER_OWNER)
 	var state := State.new(board, [source], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var player_removed: Array = next_state.removed_cards[Rules.PLAYER_OWNER]
 	_check(player_removed.size() == 1, "Exile records a previously flipped target under its original owner")
@@ -739,7 +739,7 @@ func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 5, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped_tiger: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Tiger General changes ownership through a normal flip")
@@ -774,7 +774,7 @@ func _test_nonretained_effect_is_permanently_lost() -> void:
 	var second_attacker: Dictionary = Rules.make_card("Second", "二", [1, 1, 5, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [first_attacker], [second_attacker], Rules.PLAYER_OWNER)
 
-	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var first_transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var first_state: State = first_transition["state"] as State
 	var first_events: Array = first_transition.get("events", [])
 	_check(_count_events(first_events, &"ability_lost") == 1, "A non-retained effect emits one ability-lost event")
@@ -784,7 +784,7 @@ func _test_nonretained_effect_is_permanently_lost() -> void:
 	)
 	_check((((first_state.board[5] as Dictionary)["card"] as Dictionary)["active_abilities"] as Array).is_empty(), "Non-retained ability is removed after the first flip")
 
-	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 2))
+	var second_transition: Dictionary = Simulator.apply_action_oracle(first_state, Action.make_play(0, 2))
 	var second_state: State = second_transition["state"] as State
 	_check(int((second_state.board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Target can flip back to its original owner")
 	_check((((second_state.board[5] as Dictionary)["card"] as Dictionary)["active_abilities"] as Array).is_empty(), "Lost ability does not return after flipping back")
@@ -806,7 +806,7 @@ func _test_draw_on_play_respects_hand_cap_and_event_order() -> void:
 	]
 	var state := State.new(board, player_hand, [], Rules.PLAYER_OWNER, 0, player_deck, [])
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
@@ -852,7 +852,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 	var second_draw: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"side_1_TuNaShu1")
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER, 0, [first_draw, second_draw], [])
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
 	var next_hand: Array = next_state.get_hand(Rules.PLAYER_OWNER)
 	_check(next_hand.size() == 4, "Playing from three cards can draw the full requested two")
@@ -870,7 +870,7 @@ func _test_draw_on_play_uses_top_deck_order_and_available_cards() -> void:
 		[Catalog.create_instance(&"HuZhuaJueHuSHou2", Rules.PLAYER_OWNER, &"partial_tiger")],
 		[]
 	)
-	var partial_transition: Dictionary = Simulator.apply_action(partial_state, Action.make_play(0, 0))
+	var partial_transition: Dictionary = Simulator.apply_action_oracle(partial_state, Action.make_play(0, 0))
 	var partial_hand: Array = (partial_transition["state"] as State).get_hand(Rules.PLAYER_OWNER)
 	_check(_count_events(partial_transition.get("events", []), &"card_drawn") == 2, "A depleted side deck fills every available draw")
 	_check(StringName((partial_hand[0] as Dictionary).get("card_id", &"")) == &"HuZhuaJueHuSHou2", "A depleted draw uses the remaining top card first")
@@ -884,7 +884,7 @@ func _test_draw_on_play_handles_empty_deck() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
 	var next_hand: Array = (transition["state"] as State).get_hand(Rules.PLAYER_OWNER)
 	_check(_count_events(transition.get("events", []), &"card_drawn") == 2, "An empty side deck emits one event for each requested draw")
 	_check(next_hand.size() == 2, "An empty side deck still fills both available draws")
@@ -904,7 +904,7 @@ func _test_draw_on_play_handles_empty_deck() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var capped_transition: Dictionary = Simulator.apply_action(
+	var capped_transition: Dictionary = Simulator.apply_action_oracle(
 		capped_state,
 		Action.make_play(0, 0)
 	)
@@ -918,7 +918,7 @@ func _test_turn_passes_to_owner_with_a_legal_move() -> void:
 		Rules.make_card("Second", "二", [1, 1, 1, 1]),
 	]
 	var state := State.new(Rules.empty_board(), player_hand, [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
 	var next_state = transition["state"]
 	_check(next_state.active_player == Rules.PLAYER_OWNER, "Opponent with no move passes back to the player")
 	_check(not Simulator.is_terminal(next_state), "Match continues when the player can still place a card")
@@ -969,7 +969,7 @@ func _test_empty_owner_turn_resolves_start_and_end_boundaries() -> void:
 		Rules.PLAYER_OWNER
 	)
 
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 8, &"empty_turn_first_action")
 	)
@@ -1050,7 +1050,7 @@ func _test_empty_owner_turn_stops_when_start_creates_an_action() -> void:
 		)]
 	)
 
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 8, &"start_draw_opening_action")
 	)
@@ -1132,7 +1132,7 @@ func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
 		changed_owner_signature,
 		repeated_signature,
 	]
-	var fourfold_transition: Dictionary = Simulator.apply_action(
+	var fourfold_transition: Dictionary = Simulator.apply_action_oracle(
 		fourfold_state,
 		Action.make_play(0, 0, &"repeat_instance_one")
 	)
@@ -1160,7 +1160,7 @@ func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
 		changed_owner_signature,
 		repeated_signature,
 	]
-	var fivefold_transition: Dictionary = Simulator.apply_action(
+	var fivefold_transition: Dictionary = Simulator.apply_action_oracle(
 		fivefold_state,
 		Action.make_play(0, 0, &"repeat_instance_five")
 	)
@@ -1189,7 +1189,7 @@ func _test_reopened_cell_keeps_match_alive() -> void:
 	var opponent_reply: Dictionary = Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [exiler], [opponent_reply], Rules.PLAYER_OWNER)
 
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state = transition["state"]
 	_check(next_state.board[5] == null, "Exile reopens a cell on an otherwise full board")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Opponent receives the turn when it can use the reopened cell")
@@ -1242,7 +1242,7 @@ func _test_full_board_ends_before_next_turn_starts() -> void:
 		&"full_board_start_target"
 	)
 	var state := State.new(board, [played], [opponent_hand], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 8))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 8))
 	var next_state: State = transition.get("state") as State
 	var buffed_end_target: Dictionary = (next_state.board[1] as Dictionary).get("card", {})
 	var untouched_start_target: Dictionary = next_state.get_hand(Rules.OPPONENT_OWNER)[0]
@@ -1358,7 +1358,7 @@ func _test_turn_cap_ends_before_next_turn_starts() -> void:
 	var state := State.new(board, [played], [opponent_hand_card], Rules.PLAYER_OWNER)
 	state.max_turns = 1
 
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"turn_cap_action")
 	)
@@ -1407,7 +1407,7 @@ func _test_turn_cap_waits_for_pending_extra_plays() -> void:
 	state.max_turns = 1
 	state.extra_card_plays_remaining = 2
 
-	var first_transition: Dictionary = Simulator.apply_action(
+	var first_transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 0, &"turn_cap_first_extra")
 	)
@@ -1420,7 +1420,7 @@ func _test_turn_cap_waits_for_pending_extra_plays() -> void:
 		"Reaching the turn cap does not interrupt an already-granted extra play chain"
 	)
 
-	var second_transition: Dictionary = Simulator.apply_action(
+	var second_transition: Dictionary = Simulator.apply_action_oracle(
 		first_state,
 		Action.make_play(0, 1, &"turn_cap_second_extra")
 	)
@@ -1463,7 +1463,7 @@ func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
 
-	var first_transition: Dictionary = Simulator.apply_action(
+	var first_transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 0, &"turn_cap_kuihua")
 	)
@@ -1476,7 +1476,7 @@ func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
 		"An end-turn effect may grant an extra play after the turn cap is reached"
 	)
 
-	var second_transition: Dictionary = Simulator.apply_action(
+	var second_transition: Dictionary = Simulator.apply_action_oracle(
 		first_state,
 		Action.make_play(0, 1, &"turn_cap_granted_followup")
 	)
@@ -1503,7 +1503,7 @@ func _test_greedy_ai_values_flip_over_equal_exile() -> void:
 	var flip_card: Dictionary = Rules.make_card("Flipper", "翻", [1, 5, 1, 1], [], Rules.OPPONENT_OWNER)
 	var state := State.new(board, [], [exile_card, flip_card], Rules.OPPONENT_OWNER)
 
-	var choice = Simulator.choose_greedy_action(state)
+	var choice = Simulator.choose_greedy_action_oracle(state)
 	_check(choice.as_vector2i() == Vector2i(1, 4), "Greedy AI values gaining a flipped card over an otherwise equal exile")
 
 
@@ -1523,7 +1523,7 @@ func _test_activate_action_generation_and_resolution() -> void:
 		target_order.append(action.target_index)
 	_check(target_order == [1, 5, 7, 3], "Activate targets use deterministic top-right-bottom-left order")
 
-	var transition: Dictionary = Simulator.apply_action(state, actions[1])
+	var transition: Dictionary = Simulator.apply_action_oracle(state, actions[1])
 	var next_state: State = transition["state"] as State
 	_check(bool(transition.get("valid", false)), "Legal activate action is accepted")
 	_check(next_state.board[4] == null and next_state.board[5] != null, "Activate moves the existing card to its target")
@@ -1631,7 +1631,7 @@ func _test_ordered_ally_swap_then_attack() -> void:
 		5,
 		1
 	)
-	var transition: Dictionary = Simulator.apply_action(state, action)
+	var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 	var next_state: State = transition["state"] as State
 	_check(bool(transition.get("valid", false)), "Adjacent allied swap is a legal activation")
 	_check(
@@ -1707,7 +1707,7 @@ func _test_ordered_enemy_swap_then_attack() -> void:
 		5,
 		2
 	)
-	var transition: Dictionary = Simulator.apply_action(state, action)
+	var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 	var next_state: State = transition["state"] as State
 	_check(bool(transition.get("valid", false)), "Adjacent enemy swap is a legal activation")
 	_check(
@@ -1756,7 +1756,7 @@ func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> v
 	var deck: Array = [Catalog.create_instance(&"CangSongYingKe1", Rules.PLAYER_OWNER, &"would_draw")]
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 0, deck, [])
 	var action: Action = Action.make_activate(4, &"mover", Action.TARGET_BOARD_CELL, 5)
-	var transition: Dictionary = Simulator.apply_action(state, action)
+	var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 	var next_state: State = transition["state"] as State
 	_check(
 		_event_types(transition.get("events", []))
@@ -1789,7 +1789,7 @@ func _test_flipped_activate_ability_is_lost_but_ki_remains() -> void:
 	board[5] = {"card": mover, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int(flipped_card.get("ki", -1)) == 1, "Ownership flip preserves ki")
@@ -1817,7 +1817,7 @@ func _test_greedy_tie_prefers_play_over_spending_ki() -> void:
 	}
 	var weak_play: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [weak_play], [], Rules.PLAYER_OWNER)
-	var choice: Action = Simulator.choose_greedy_action(state)
+	var choice: Action = Simulator.choose_greedy_action_oracle(state)
 	_check(choice.action_type == Action.TYPE_PLAY, "Greedy AI preserves ki when play and activate have equal immediate score")
 
 
@@ -1834,7 +1834,7 @@ func _test_search_can_choose_activate_action() -> void:
 	mover["ki"] = 1
 	board[4] = {"card": mover, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
-	var choice: Action = Search.find_best_action(state, 2, Rules.OPPONENT_OWNER)
+	var choice: Action = Search.find_best_action_oracle(state, 2, Rules.OPPONENT_OWNER)
 	_check(choice.action_type == Action.TYPE_ACTIVATE, "Deep search considers board activate actions")
 	_check(choice.source_index == 4 and choice.target_index == 1, "Search action ordering is deterministic when activate outcomes tie")
 
@@ -2052,7 +2052,7 @@ func _test_after_summoned_follows_card_moved_during_summoned() -> void:
 			&"after_summoned_moved_draw"
 		)]
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"after_summoned_moved_source")
 	)
@@ -2097,7 +2097,7 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 		_make_runtime_card("Would Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"would_draw"),
 	]
 	var state := State.new(board, [], [summoned], Rules.OPPONENT_OWNER, 0, [], side_deck)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 5, &"draw_attacker"))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 5, &"draw_attacker"))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	_check(
@@ -2140,7 +2140,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 		[],
 		[_make_runtime_card("Drawn", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"equal_draw")]
 	)
-	var equal_transition: Dictionary = Simulator.apply_action(equal_state, Action.make_play(0, 1, &"equal_target"))
+	var equal_transition: Dictionary = Simulator.apply_action_oracle(equal_state, Action.make_play(0, 1, &"equal_target"))
 	_check(_count_events(equal_transition.get("events", []), &"card_flipped") == 0, "Equal power does not trigger a reaction attack")
 	_check(_count_events(equal_transition.get("events", []), &"card_drawn") == 1, "Failed range condition allows after-summoned abilities")
 
@@ -2155,7 +2155,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 		[_make_runtime_card("Diagonal Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"diagonal_target")],
 		Rules.OPPONENT_OWNER
 	)
-	var diagonal_transition: Dictionary = Simulator.apply_action(diagonal_state, Action.make_play(0, 4, &"diagonal_target"))
+	var diagonal_transition: Dictionary = Simulator.apply_action_oracle(diagonal_state, Action.make_play(0, 4, &"diagonal_target"))
 	_check(_count_events(diagonal_transition.get("events", []), &"card_flipped") == 0, "Diagonal summon does not trigger a reaction")
 
 	var friendly_board: Array = Rules.empty_board()
@@ -2169,7 +2169,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 		[_make_runtime_card("Friendly Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"friendly_target")],
 		Rules.OPPONENT_OWNER
 	)
-	var friendly_transition: Dictionary = Simulator.apply_action(friendly_state, Action.make_play(0, 1, &"friendly_target"))
+	var friendly_transition: Dictionary = Simulator.apply_action_oracle(friendly_state, Action.make_play(0, 1, &"friendly_target"))
 	_check(_count_events(friendly_transition.get("events", []), &"card_flipped") == 0, "Friendly summon fails the enemy condition")
 
 	var lost_board: Array = Rules.empty_board()
@@ -2182,7 +2182,7 @@ func _test_summon_reaction_conditions_and_ability_loss() -> void:
 		[_make_runtime_card("Lost Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"lost_target")],
 		Rules.OPPONENT_OWNER
 	)
-	var lost_transition: Dictionary = Simulator.apply_action(lost_state, Action.make_play(0, 1, &"lost_target"))
+	var lost_transition: Dictionary = Simulator.apply_action_oracle(lost_state, Action.make_play(0, 1, &"lost_target"))
 	_check(_count_events(lost_transition.get("events", []), &"card_flipped") == 0, "Previously lost Welcoming Pine ability never returns")
 
 
@@ -2202,7 +2202,7 @@ func _test_summon_reactions_use_board_order_and_stop_after_flip() -> void:
 		[_make_runtime_card("Ordered Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"ordered_target")],
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 1, &"ordered_target"))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 1, &"ordered_target"))
 	var events: Array = transition.get("events", [])
 	_check(_count_events(events, &"card_flipped") == 1, "Reaction chain stops after the triggering card flips")
 	var flip_event: Dictionary = _first_event(events, &"card_flipped")
@@ -2230,7 +2230,7 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 		[],
 		[_make_runtime_card("Would Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"exile_would_draw")]
 	)
-	var exile_transition: Dictionary = Simulator.apply_action(exile_state, Action.make_play(0, 1, &"exiled_draw"))
+	var exile_transition: Dictionary = Simulator.apply_action_oracle(exile_state, Action.make_play(0, 1, &"exiled_draw"))
 	var exile_next: State = exile_transition["state"] as State
 	_check(
 		_event_types(exile_transition.get("events", []))
@@ -2258,7 +2258,7 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 		[_make_runtime_card("Momentum Target", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"momentum_target")],
 		Rules.OPPONENT_OWNER
 	)
-	var momentum_transition: Dictionary = Simulator.apply_action(momentum_state, Action.make_play(0, 5, &"momentum_target"))
+	var momentum_transition: Dictionary = Simulator.apply_action_oracle(momentum_state, Action.make_play(0, 5, &"momentum_target"))
 	var momentum_next: State = momentum_transition["state"] as State
 	_check(_count_events(momentum_transition.get("events", []), &"ki_changed") == 1, "Reaction flip invokes existing successful-flip triggers")
 	_check(int((((momentum_next.board[4] as Dictionary)["card"] as Dictionary).get("ki", 0))) == 1, "Reaction source retains gained ki")
@@ -2273,7 +2273,7 @@ func _test_KuiHua1_end_turn_extra_play() -> void:
 	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
 	var event_types: Array[StringName] = _event_types(events)
@@ -2304,7 +2304,7 @@ func _test_KuiHua1_multiple_flips_gain_in_order() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var events: Array = transition.get("events", [])
 	var flip_targets: Array[int] = []
 	var attack_targets: Array[int] = []
@@ -2335,7 +2335,7 @@ func _test_KuiHua1_exile_grants_no_ki() -> void:
 	var meng: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"exile_meng")
 	(meng.get("active_abilities", []) as Array).append(_exile_ability())
 	var state := State.new(board, [meng], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var events: Array = transition.get("events", [])
 	_check(_count_events(events, &"card_exiled") == 1, "Fixture replaces Meng Huo's flip with exile")
 	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_card_play_granted") == 0, "Exile grants no ki or extra card play")
@@ -2355,10 +2355,10 @@ func _test_KuiHua1_extra_turn_can_chain() -> void:
 	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var first_transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
 	var first_state: State = first_transition["state"] as State
 	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First KuiHua1 grants an extra card play")
-	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 3))
+	var second_transition: Dictionary = Simulator.apply_action_oracle(first_state, Action.make_play(0, 3))
 	var second_state: State = second_transition["state"] as State
 	_check(
 		_count_events(second_transition.get("events", []), &"extra_card_play_granted") == 0
@@ -2375,7 +2375,7 @@ func _test_flipped_KuiHua1_loses_ability_but_keeps_ki() -> void:
 	board[5] = {"card": meng, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(int(flipped.get("ki", -1)) == 3, "Flipped KuiHua1 keeps accumulated ki")
@@ -2399,7 +2399,7 @@ func _test_unusable_extra_turn_expires() -> void:
 	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
 	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "End turn still announces the unusable extra-card-play grant")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
@@ -2437,7 +2437,7 @@ func _test_after_summon_group_stales_after_owner_flip() -> void:
 		player_deck,
 		opponent_deck
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 5, &"retained_draw_target")
 	)
@@ -2545,7 +2545,7 @@ func _test_activation_costs_validate_as_a_batch() -> void:
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
 	var action: Action = Action.make_activate(4, &"double_cost", Action.TARGET_BOARD_CELL, 5)
 	_check(not Simulator.is_action_legal(state, action), "Combined activation costs validate before payment")
-	var transition: Dictionary = Simulator.apply_action(state, action)
+	var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 	_check(
 		not bool(transition.get("valid", true))
 		and int(source.get("ki", 0)) == 1
@@ -2599,7 +2599,7 @@ func _test_card_be_attacked_triggers_use_row_major_order() -> void:
 		&"attack_source"
 	)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"attack_source")
 	)
@@ -2874,7 +2874,7 @@ func _test_move_application_and_capture_parity() -> void:
 	board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Blade", "刀", [1, 5, 1, 1])
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state = transition.get("state")
 	_check(bool(transition.get("valid", false)), "A legal simulator move is accepted")
 	_check((transition.get("captures", []) as Array) == [5], "Simulator reports the same direct capture as DuelRules")
@@ -2895,7 +2895,7 @@ func _test_attack_started_event_semantics() -> void:
 	var attacker: Dictionary = Rules.make_card("Blade", "刀", [1, 5, 1, 1])
 	attacker["instance_id"] = &"attack_event_source"
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 4, &"attack_event_source")
 	)
@@ -2948,7 +2948,7 @@ func _test_greedy_choice_matches_prototype() -> void:
 	]
 	var state := State.new(board, [], opponent_hand, Rules.OPPONENT_OWNER)
 	var prototype_choice: Vector2i = Rules.choose_ai_move(board, opponent_hand, Rules.OPPONENT_OWNER)
-	var simulator_choice = Simulator.choose_greedy_action(state)
+	var simulator_choice = Simulator.choose_greedy_action_oracle(state)
 	_check(simulator_choice.as_vector2i() == prototype_choice, "Simulator greedy adapter preserves the prototype AI choice")
 
 
@@ -2968,8 +2968,8 @@ func _test_deeper_search_avoids_greedy_trap() -> void:
 		Rules.make_card("O1", "丁", [4, 9, 6, 6]),
 	]
 	var state := State.new(board, player_hand, opponent_hand, Rules.OPPONENT_OWNER)
-	var greedy_move = Simulator.choose_greedy_action(state)
-	var searched_move = Search.find_best_action(state, 4, Rules.OPPONENT_OWNER)
+	var greedy_move = Simulator.choose_greedy_action_oracle(state)
+	var searched_move = Search.find_best_action_oracle(state, 4, Rules.OPPONENT_OWNER)
 	_check(greedy_move.as_vector2i() == Vector2i(1, 4), "Fixture preserves the tempting two-capture greedy move")
 	_check(searched_move.as_vector2i() == Vector2i(0, 3), "Four-ply search chooses the stronger long-term move")
 

@@ -224,7 +224,7 @@ func _test_entry_draw_and_grant_order() -> void:
 	var skipped_sword_two: Dictionary = _plain(
 		&"skipped_sword_two", [2, 2, 2, 2], Rules.PLAYER_OWNER, "剑法"
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[yinyang, existing_palm, non_palm],
@@ -285,7 +285,7 @@ func _test_entry_draw_and_grant_order() -> void:
 
 
 func _test_empty_draw_and_no_palm_edges() -> void:
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[
@@ -323,7 +323,7 @@ func _test_filtered_draw_respects_hand_capacity() -> void:
 		_plain(&"capacity_palm_one", [2, 2, 2, 2], Rules.PLAYER_OWNER),
 		_plain(&"capacity_palm_two", [3, 3, 3, 3], Rules.PLAYER_OWNER),
 	]
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			player_hand,
@@ -366,7 +366,7 @@ func _test_repeat_attack_is_nonrecursive() -> void:
 		_plain(&"repeat_defender", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			board,
 			[attacker],

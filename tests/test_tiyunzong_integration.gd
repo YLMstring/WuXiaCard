@@ -64,6 +64,8 @@ func _walk_activation_through_controller(duel: Node) -> void:
 		&"integration_attack_target"
 	)
 	attack_target["instance_id"] = &"integration_attack_target"
+	attack_target["ki"] = 0
+	attack_target["ki"] = 0
 	board[1] = {"card": attack_target, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(
 		board,

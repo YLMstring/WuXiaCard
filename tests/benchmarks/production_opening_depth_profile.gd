@@ -26,12 +26,13 @@ func _run() -> void:
 	var options: Dictionary = _parse_options()
 	var budget_seconds: float = float(options.get("budget_seconds", DEFAULT_BUDGET_SECONDS))
 	var max_openings: int = int(options.get("max_openings", DEFAULT_MAX_OPENINGS))
+	var native_backend: bool = bool(options.get("native_backend", false))
 	var openings: Array[Dictionary] = _build_unique_openings()
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
 	var samples: Array[Dictionary] = []
 	for opening_index: int in range(openings.size()):
-		var sample: Dictionary = _profile_opening(openings[opening_index], budget_seconds)
+		var sample: Dictionary = _profile_opening(openings[opening_index], budget_seconds, native_backend)
 		samples.append(sample)
 		print(
 			(
@@ -50,12 +51,13 @@ func _run() -> void:
 				int(sample.get("nodes", 0)),
 			]
 		)
-	var timing_samples: Array[Dictionary] = _run_timing_probes(openings)
+	var timing_samples: Array[Dictionary] = _run_timing_probes(openings, native_backend)
 	var report: Dictionary = {
 		"schema_version": 2,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
 		"fixture_version": EnemyManifest.VERSION,
 		"configuration": {
+			"backend": "native_whole_tree" if native_backend else "production",
 			"budget_seconds": budget_seconds,
 			"depth_unit": "complete_round",
 			"target_depth": TARGET_COMPLETE_ROUND_DEPTH,
@@ -94,7 +96,11 @@ func _run() -> void:
 	quit(0)
 
 
-func _profile_opening(opening: Dictionary, budget_seconds: float) -> Dictionary:
+func _profile_opening(
+	opening: Dictionary,
+	budget_seconds: float,
+	native_backend: bool
+) -> Dictionary:
 	_depth_snapshots.clear()
 	var state: State = opening.get("state") as State
 	var limits: Dictionary = {
@@ -106,12 +112,22 @@ func _profile_opening(opening: Dictionary, budget_seconds: float) -> Dictionary:
 		"use_evaluation_cache": false,
 		"evaluator_profile": &"baseline",
 	}
-	var result: Dictionary = Search.find_best_action_iterative(
-		state.duplicate_state(),
-		state.active_player,
-		limits,
-		Callable(),
-		Callable(self, "_record_depth_progress")
+	var result: Dictionary = (
+		Search.find_best_action_iterative_native(
+			state.duplicate_state(),
+			state.active_player,
+			limits,
+			Callable(),
+			Callable(self, "_record_depth_progress")
+		)
+		if native_backend
+		else Search.find_best_action_iterative(
+			state.duplicate_state(),
+			state.active_player,
+			limits,
+			Callable(),
+			Callable(self, "_record_depth_progress")
+		)
 	)
 	var last_completed: Dictionary = (
 		_depth_snapshots.back()
@@ -194,7 +210,10 @@ func _snapshot_for_depth(depth: int) -> Dictionary:
 	return {}
 
 
-func _run_timing_probes(openings: Array[Dictionary]) -> Array[Dictionary]:
+func _run_timing_probes(
+	openings: Array[Dictionary],
+	native_backend: bool
+) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
 		return result
@@ -206,10 +225,7 @@ func _run_timing_probes(openings: Array[Dictionary]) -> Array[Dictionary]:
 		observed[opening_index] = true
 		var opening: Dictionary = openings[opening_index]
 		var state: State = opening.get("state") as State
-		var profile_result: Dictionary = Search.find_best_action_iterative(
-			state.duplicate_state(),
-			state.active_player,
-			{
+		var timing_limits: Dictionary = {
 				"max_nodes": TIMING_NODE_LIMIT,
 				"profile": &"enhanced",
 				"use_lazy_transitions": true,
@@ -219,6 +235,14 @@ func _run_timing_probes(openings: Array[Dictionary]) -> Array[Dictionary]:
 				"evaluator_profile": &"baseline",
 				"collect_timings": true,
 			}
+		var profile_result: Dictionary = (
+			Search.find_best_action_iterative_native(
+				state.duplicate_state(), state.active_player, timing_limits
+			)
+			if native_backend
+			else Search.find_best_action_iterative(
+				state.duplicate_state(), state.active_player, timing_limits
+			)
 		)
 		var elapsed_usec: float = float(profile_result.get("elapsed_seconds", 0.0)) * 1_000_000.0
 		var measured_usec: int = (
@@ -379,6 +403,7 @@ func _parse_options() -> Dictionary:
 	var result: Dictionary = {
 		"budget_seconds": DEFAULT_BUDGET_SECONDS,
 		"max_openings": DEFAULT_MAX_OPENINGS,
+		"native_backend": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -391,4 +416,6 @@ func _parse_options() -> Dictionary:
 				int(argument.trim_prefix("--max-openings=")),
 				1
 			)
+		elif argument == "--native-whole-tree":
+			result["native_backend"] = true
 	return result

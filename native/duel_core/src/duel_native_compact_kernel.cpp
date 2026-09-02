@@ -133,6 +133,18 @@ void DuelNativeCompactKernel::_bind_methods() {
 		D_METHOD("search_fixed_round_depth", "root_owner", "round_depth"),
 		&DuelNativeCompactKernel::search_fixed_round_depth
 	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"search_iterative_round_depth",
+			"root_owner",
+			"max_round_depth",
+			"budget_usec",
+			"max_nodes",
+			"min_completed_depth",
+			"should_cancel"
+		),
+		&DuelNativeCompactKernel::search_iterative_round_depth
+	);
 }
 
 bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
@@ -513,6 +525,71 @@ bool DuelNativeCompactKernel::action_canonical_less(
 	if (left.target_is_hand_slot != right.target_is_hand_slot) return !left.target_is_hand_slot;
 	if (left.target_index != right.target_index) return left.target_index < right.target_index;
 	return left.activation_index < right.activation_index;
+}
+
+int32_t DuelNativeCompactKernel::action_structural_score(
+	const NativeState &value,
+	const NativeAction &action
+) const {
+	if (action.type == NativeActionType::ACTIVATE) return 500;
+	const int32_t owner_id = value.scalars[0];
+	const int32_t hand_zone = owner_id - 1;
+	if (
+		hand_zone < 0
+		|| hand_zone >= static_cast<int32_t>(value.zones.size())
+		|| action.source_index < 0
+		|| action.source_index >= static_cast<int32_t>(value.zones[hand_zone].size())
+	) return 0;
+	const int32_t card_index = value.zones[hand_zone][action.source_index];
+	if (card_index < 0) return 0;
+	int32_t score = action.target_index == 4
+		? 20
+		: (action.target_index == 0 || action.target_index == 2
+			|| action.target_index == 6 || action.target_index == 8 ? 10 : 0);
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		const int32_t neighbor = neighbor_index(action.target_index, direction);
+		if (neighbor < 0) continue;
+		const int32_t neighbor_card = value.board_card_indices[neighbor];
+		if (neighbor_card < 0) continue;
+		if (value.board_owners[neighbor] == owner_id) {
+			score += 5;
+			continue;
+		}
+		score += 25;
+		const int32_t opposite = (direction + 2) % 4;
+		if (
+			value.card_powers[static_cast<size_t>(card_index) * 4 + direction]
+			> value.card_powers[static_cast<size_t>(neighbor_card) * 4 + opposite]
+		) score += 100;
+	}
+	return score;
+}
+
+std::vector<DuelNativeCompactKernel::NativeAction>
+DuelNativeCompactKernel::order_search_actions(
+	const NativeState &value,
+	const std::vector<NativeAction> &actions,
+	const NativeAction *preferred
+) const {
+	std::vector<NativeAction> ordered = actions;
+	std::stable_sort(
+		ordered.begin(),
+		ordered.end(),
+		[this, &value, preferred](const NativeAction &left, const NativeAction &right) {
+			if (preferred != nullptr) {
+				const bool left_preferred = !action_canonical_less(left, *preferred)
+					&& !action_canonical_less(*preferred, left);
+				const bool right_preferred = !action_canonical_less(right, *preferred)
+					&& !action_canonical_less(*preferred, right);
+				if (left_preferred != right_preferred) return left_preferred;
+			}
+			const int32_t left_score = action_structural_score(value, left);
+			const int32_t right_score = action_structural_score(value, right);
+			if (left_score != right_score) return left_score > right_score;
+			return action_canonical_less(left, right);
+		}
+	);
+	return ordered;
 }
 
 Dictionary DuelNativeCompactKernel::apply_play_transition(
@@ -1132,23 +1209,76 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	);
 }
 
+bool DuelNativeCompactKernel::search_should_stop(
+	NativeSearchStats &stats,
+	const NativeSearchLimits *limits
+) const {
+	if (stats.aborted) return true;
+	if (limits == nullptr) return false;
+	if (
+		limits->should_cancel.is_valid()
+		&& (stats.nodes & 255) == 0
+		&& static_cast<bool>(limits->should_cancel.call())
+	) {
+		stats.aborted = true;
+		stats.stop_reason = StringName("cancelled");
+		return true;
+	}
+	if (
+		limits->max_nodes > 0
+		&& stats.nodes >= limits->max_nodes
+		&& !limits->protect_node_limit
+	) {
+		stats.aborted = true;
+		stats.stop_reason = StringName("node_limit");
+		return true;
+	}
+	if (
+		limits->has_deadline
+		&& std::chrono::steady_clock::now() >= limits->deadline
+	) {
+		stats.aborted = true;
+		stats.stop_reason = StringName("deadline");
+		return true;
+	}
+	return false;
+}
+
+uint64_t DuelNativeCompactKernel::search_position_key(
+	const NativeState &value,
+	int32_t remaining_owner_turn_boundaries
+) const {
+	uint64_t key = checksum(value);
+	key ^= static_cast<uint64_t>(remaining_owner_turn_boundaries + 1)
+		* 0x9e3779b97f4a7c15ULL;
+	return key;
+}
+
 int32_t DuelNativeCompactKernel::search_minimax(
 	const NativeState &value,
 	int32_t remaining_owner_turn_boundaries,
 	int32_t root_owner,
 	int32_t action_ply,
-	NativeSearchStats &stats
+	int32_t alpha,
+	int32_t beta,
+	NativeSearchStats &stats,
+	const NativeSearchLimits *limits
 ) const {
+	if (search_should_stop(stats, limits)) return 0;
 	stats.nodes += 1;
 	stats.max_action_ply = std::max(stats.max_action_ply, action_ply);
 	if (is_terminal(value) || remaining_owner_turn_boundaries <= 0) {
 		stats.leaves += 1;
+		if (remaining_owner_turn_boundaries <= 0 && !is_terminal(value)) {
+			stats.horizon_reached = true;
+		}
 		return evaluate_baseline(value, root_owner);
 	}
-	const std::vector<NativeAction> actions = get_legal_native_actions(
+	const std::vector<NativeAction> actions = order_search_actions(
 		value,
-		value.scalars[0]
+		get_legal_native_actions(value, value.scalars[0])
 	);
+	stats.generated_actions += static_cast<int64_t>(actions.size());
 	if (actions.empty()) {
 		stats.leaves += 1;
 		return evaluate_baseline(value, root_owner);
@@ -1157,6 +1287,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	int32_t best_score = maximizing
 		? std::numeric_limits<int32_t>::min()
 		: std::numeric_limits<int32_t>::max();
+	NativeAction best_action;
+	bool has_best_action = false;
 	for (const NativeAction &action : actions) {
 		NativeState next;
 		Resolution resolution;
@@ -1176,6 +1308,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 				: transition_reason;
 			return 0;
 		}
+		stats.applied_transitions += 1;
 		const int32_t completed_owner_turns = std::max(
 			next.scalars[2] - value.scalars[2],
 			0
@@ -1185,12 +1318,44 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			remaining_owner_turn_boundaries - completed_owner_turns,
 			root_owner,
 			action_ply + 1,
-			stats
+			alpha,
+			beta,
+			stats,
+			limits
 		);
-		if (!stats.supported) return 0;
-		best_score = maximizing
-			? std::max(best_score, score)
-			: std::min(best_score, score);
+		if (!stats.supported || stats.aborted) return 0;
+		const bool better_score = !has_best_action
+			|| (maximizing && score > best_score)
+			|| (!maximizing && score < best_score);
+		const bool better_tie = has_best_action
+			&& score == best_score
+			&& action_canonical_less(action, best_action);
+		if (better_score || better_tie) {
+			best_score = score;
+			best_action = action;
+			has_best_action = true;
+		}
+		if (maximizing) {
+			alpha = std::max(alpha, best_score);
+		} else {
+			beta = std::min(beta, best_score);
+		}
+		if (beta <= alpha) {
+			stats.cutoffs += 1;
+			break;
+		}
+	}
+	if (
+		has_best_action
+		&& limits != nullptr
+		&& limits->principal_actions != nullptr
+		&& !stats.aborted
+		&& stats.supported
+	) {
+		(*limits->principal_actions)[search_position_key(
+			value,
+			remaining_owner_turn_boundaries
+		)] = best_action;
 	}
 	return best_score;
 }
@@ -1239,6 +1404,8 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 
 	const auto started = std::chrono::steady_clock::now();
 	NativeSearchStats stats;
+	stats.root_actions_total = static_cast<int32_t>(root_actions.size());
+	stats.generated_actions = static_cast<int64_t>(root_actions.size());
 	const bool maximizing = state.scalars[0] == root_owner;
 	int32_t best_score = maximizing
 		? std::numeric_limits<int32_t>::min()
@@ -1246,6 +1413,7 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 	NativeAction best_action;
 	bool has_best_action = false;
 	for (const NativeAction &action : root_actions) {
+		stats.root_actions_started += 1;
 		NativeState next;
 		Resolution resolution;
 		bool transition_supported = false;
@@ -1264,15 +1432,20 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 				: transition_reason;
 			break;
 		}
+		stats.applied_transitions += 1;
 		const int32_t completed_owner_turns = std::max(next.scalars[2] - state.scalars[2], 0);
 		const int32_t score = search_minimax(
 			next,
 			round_depth * 2 - completed_owner_turns,
 			root_owner,
 			1,
-			stats
+			std::numeric_limits<int32_t>::min(),
+			std::numeric_limits<int32_t>::max(),
+			stats,
+			nullptr
 		);
 		if (!stats.supported) break;
+		stats.root_actions_completed += 1;
 		const bool better_score = !has_best_action
 			|| (maximizing && score > best_score)
 			|| (!maximizing && score < best_score);
@@ -1292,12 +1465,298 @@ Dictionary DuelNativeCompactKernel::search_fixed_round_depth(
 	result["reason"] = stats.reason;
 	result["nodes"] = stats.nodes;
 	result["leaves"] = stats.leaves;
+	result["cutoffs"] = stats.cutoffs;
+	result["generated_actions"] = stats.generated_actions;
+	result["applied_transitions"] = stats.applied_transitions;
 	result["max_action_ply"] = stats.max_action_ply;
+	result["root_actions_total"] = stats.root_actions_total;
+	result["root_actions_started"] = stats.root_actions_started;
+	result["root_actions_completed"] = stats.root_actions_completed;
 	result["elapsed_usec"] = static_cast<int64_t>(elapsed.count());
 	if (!stats.supported || !has_best_action) return result;
 	result["valid"] = true;
 	result["score"] = best_score;
 	result["action"] = materialize_action(best_action);
+	return result;
+}
+
+Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
+	int64_t root_owner_value,
+	int64_t max_round_depth_value,
+	int64_t budget_usec_value,
+	int64_t max_nodes_value,
+	int64_t min_completed_depth_value,
+	const Callable &should_cancel
+) const {
+	Dictionary result;
+	result["supported"] = false;
+	result["valid"] = false;
+	result["score"] = 0;
+	result["completed_depth"] = 0;
+	result["nodes"] = 0;
+	result["leaves"] = 0;
+	result["cutoffs"] = 0;
+	result["generated_actions"] = 0;
+	result["applied_transitions"] = 0;
+	result["max_action_ply"] = 0;
+	result["root_actions_total"] = 0;
+	result["root_actions_started"] = 0;
+	result["root_actions_completed"] = 0;
+	result["minimum_depth_guard_used"] = false;
+	result["nodes_over_limit"] = 0;
+	result["elapsed_usec"] = 0;
+	result["solved"] = false;
+	result["completion_reason"] = StringName("invalid");
+	result["iteration_depth"] = 0;
+	result["depth_snapshots"] = Array();
+	result["principal_actions"] = Array();
+	if (!loaded) {
+		result["reason"] = "No compact state is loaded";
+		return result;
+	}
+	const int32_t root_owner = static_cast<int32_t>(root_owner_value);
+	const int32_t max_round_depth = static_cast<int32_t>(max_round_depth_value);
+	const int32_t min_completed_depth = std::max(
+		static_cast<int32_t>(min_completed_depth_value),
+		0
+	);
+	if (root_owner != 1 && root_owner != 2) {
+		result["reason"] = "Root owner must be player 1 or player 2";
+		return result;
+	}
+	if (max_round_depth < 0) {
+		result["reason"] = "Maximum round depth cannot be negative";
+		return result;
+	}
+	if (state.scalars[0] != root_owner) {
+		result["reason"] = "Root owner must be the active player";
+		return result;
+	}
+	String support_reason;
+	if (!validate_play_support(state, support_reason)) {
+		result["reason"] = support_reason;
+		return result;
+	}
+	const std::vector<NativeAction> root_actions = get_legal_native_actions(state, root_owner);
+	result["supported"] = true;
+	if (root_actions.empty()) {
+		result["reason"] = "No legal root action";
+		result["completion_reason"] = StringName("no_legal_action");
+		return result;
+	}
+
+	const auto started = std::chrono::steady_clock::now();
+	NativeSearchLimits limits;
+	limits.max_nodes = std::max(max_nodes_value, static_cast<int64_t>(0));
+	limits.should_cancel = should_cancel;
+	if (budget_usec_value > 0) {
+		limits.has_deadline = true;
+		limits.deadline = started + std::chrono::microseconds(budget_usec_value);
+	}
+	NativeSearchStats stats;
+	NativeAction completed_best_action;
+	bool has_completed_action = false;
+	int32_t completed_best_score = 0;
+	int32_t completed_depth = 0;
+	bool solved = false;
+	int32_t depth = 1;
+	int32_t iteration_depth = 0;
+	Array depth_snapshots;
+	std::unordered_map<uint64_t, NativeAction> completed_principal_actions;
+	while (max_round_depth <= 0 || depth <= max_round_depth) {
+		iteration_depth = depth;
+		limits.protect_node_limit = completed_depth < min_completed_depth;
+		if (search_should_stop(stats, &limits)) break;
+		std::unordered_map<uint64_t, NativeAction> iteration_principal_actions;
+		limits.principal_actions = &iteration_principal_actions;
+		stats.horizon_reached = false;
+		const std::vector<NativeAction> ordered_root_actions = order_search_actions(
+			state,
+			root_actions,
+			has_completed_action ? &completed_best_action : nullptr
+		);
+		stats.root_actions_total = static_cast<int32_t>(ordered_root_actions.size());
+		stats.root_actions_started = 0;
+		stats.root_actions_completed = 0;
+		stats.generated_actions += static_cast<int64_t>(root_actions.size());
+
+		const bool maximizing = state.scalars[0] == root_owner;
+		int32_t iteration_best_score = maximizing
+			? std::numeric_limits<int32_t>::min()
+			: std::numeric_limits<int32_t>::max();
+		NativeAction iteration_best_action;
+		bool has_iteration_action = false;
+		int32_t alpha = std::numeric_limits<int32_t>::min();
+		int32_t beta = std::numeric_limits<int32_t>::max();
+		for (const NativeAction &action : ordered_root_actions) {
+			if (search_should_stop(stats, &limits)) break;
+			stats.root_actions_started += 1;
+			NativeState next;
+			Resolution resolution;
+			bool transition_supported = false;
+			String transition_reason;
+			if (!transition_action(
+				state,
+				action,
+				next,
+				resolution,
+				transition_supported,
+				transition_reason
+			)) {
+				stats.supported = false;
+				stats.reason = transition_reason.is_empty()
+					? String("Native search reached an invalid root transition")
+					: transition_reason;
+				break;
+			}
+			stats.applied_transitions += 1;
+			const int32_t completed_owner_turns = std::max(
+				next.scalars[2] - state.scalars[2],
+				0
+			);
+			int32_t score = search_minimax(
+				next,
+				depth * 2 - completed_owner_turns,
+				root_owner,
+				1,
+				alpha,
+				beta,
+				stats,
+				&limits
+			);
+			if (!stats.supported || stats.aborted) break;
+			stats.root_actions_completed += 1;
+			bool better_score = !has_iteration_action
+				|| (maximizing && score > iteration_best_score)
+				|| (!maximizing && score < iteration_best_score);
+			bool better_tie = has_iteration_action
+				&& score == iteration_best_score
+				&& action_canonical_less(action, iteration_best_action);
+			if (better_tie) {
+				score = search_minimax(
+					next,
+					depth * 2 - completed_owner_turns,
+					root_owner,
+					1,
+					std::numeric_limits<int32_t>::min(),
+					std::numeric_limits<int32_t>::max(),
+					stats,
+					&limits
+				);
+				if (!stats.supported || stats.aborted) break;
+				better_score = (maximizing && score > iteration_best_score)
+					|| (!maximizing && score < iteration_best_score);
+				better_tie = score == iteration_best_score;
+			}
+			if (better_score || better_tie) {
+				iteration_best_score = score;
+				iteration_best_action = action;
+				has_iteration_action = true;
+			}
+			if (maximizing) alpha = std::max(alpha, iteration_best_score);
+			else beta = std::min(beta, iteration_best_score);
+		}
+		if (!stats.supported || stats.aborted || !has_iteration_action) break;
+		completed_best_action = iteration_best_action;
+		completed_best_score = iteration_best_score;
+		has_completed_action = true;
+		completed_depth = depth;
+		completed_principal_actions = std::move(iteration_principal_actions);
+		Dictionary snapshot;
+		snapshot["depth"] = depth;
+		snapshot["score"] = completed_best_score;
+		snapshot["action"] = materialize_action(completed_best_action);
+		snapshot["nodes"] = stats.nodes;
+		snapshot["generated_actions"] = stats.generated_actions;
+		snapshot["applied_transitions"] = stats.applied_transitions;
+		snapshot["cutoffs"] = stats.cutoffs;
+		snapshot["elapsed_usec"] = static_cast<int64_t>(
+			std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - started
+			).count()
+		);
+		depth_snapshots.append(snapshot);
+		if (
+			limits.max_nodes > 0
+			&& stats.nodes >= limits.max_nodes
+			&& depth <= min_completed_depth
+		) {
+			stats.minimum_depth_guard_used = true;
+		}
+		solved = !stats.horizon_reached;
+		if (solved) break;
+		depth += 1;
+	}
+	limits.principal_actions = nullptr;
+	Array principal_actions;
+	if (has_completed_action) {
+		NativeState current = state;
+		NativeAction current_action = completed_best_action;
+		int32_t remaining_boundaries = completed_depth * 2;
+		const int32_t root_owner_turn_serial = state.scalars[2];
+		for (int32_t plan_index = 0; plan_index < 20; ++plan_index) {
+			principal_actions.append(materialize_action(current_action));
+			NativeState next;
+			Resolution resolution;
+			bool transition_supported = false;
+			String transition_reason;
+			if (!transition_action(
+				current,
+				current_action,
+				next,
+				resolution,
+				transition_supported,
+				transition_reason
+			)) break;
+			remaining_boundaries -= std::max(next.scalars[2] - current.scalars[2], 0);
+			current = std::move(next);
+			if (
+				is_terminal(current)
+				|| current.scalars[0] != root_owner
+				|| current.scalars[2] != root_owner_turn_serial
+			) break;
+			const auto found = completed_principal_actions.find(search_position_key(
+				current,
+				remaining_boundaries
+			));
+			if (found == completed_principal_actions.end()) break;
+			current_action = found->second;
+		}
+	}
+
+	const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - started
+	);
+	result["supported"] = stats.supported;
+	result["reason"] = stats.reason;
+	result["score"] = completed_best_score;
+	result["completed_depth"] = completed_depth;
+	result["nodes"] = stats.nodes;
+	result["leaves"] = stats.leaves;
+	result["cutoffs"] = stats.cutoffs;
+	result["generated_actions"] = stats.generated_actions;
+	result["applied_transitions"] = stats.applied_transitions;
+	result["max_action_ply"] = stats.max_action_ply;
+	result["root_actions_total"] = stats.root_actions_total;
+	result["root_actions_started"] = stats.root_actions_started;
+	result["root_actions_completed"] = stats.root_actions_completed;
+	result["minimum_depth_guard_used"] = stats.minimum_depth_guard_used;
+	result["nodes_over_limit"] = limits.max_nodes > 0
+		? std::max(stats.nodes - limits.max_nodes, static_cast<int64_t>(0))
+		: 0;
+	result["elapsed_usec"] = static_cast<int64_t>(elapsed.count());
+	result["solved"] = solved;
+	result["completion_reason"] = solved
+		? StringName("solved")
+		: stats.aborted
+			? stats.stop_reason
+			: StringName("max_depth");
+	result["iteration_depth"] = iteration_depth;
+	result["depth_snapshots"] = depth_snapshots;
+	result["principal_actions"] = principal_actions;
+	if (!stats.supported || !has_completed_action) return result;
+	result["valid"] = true;
+	result["action"] = materialize_action(completed_best_action);
 	return result;
 }
 

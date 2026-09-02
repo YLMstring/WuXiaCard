@@ -2,6 +2,7 @@
 param(
     [double]$BudgetSeconds = 10.0,
     [int]$MaxOpenings = 14,
+    [switch]$NativeWholeTree,
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
 )
@@ -35,6 +36,9 @@ try {
         "--budget-seconds=$BudgetSeconds",
         "--max-openings=$MaxOpenings"
     )
+    if ($NativeWholeTree) {
+        $arguments += "--native-whole-tree"
+    }
     $process = Start-Process `
         -FilePath $EnginePath `
         -ArgumentList $arguments `

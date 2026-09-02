@@ -53,6 +53,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   movement-tolerant snapshots, and condition revalidation.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
+- `test_native_production_rules.gd` — independent complete-runtime fixtures for
+  every catalog hand play and legal catalog activation, exact native/Oracle
+  state and ordered-event parity, native fixed-depth score/action parity,
+  node-budget semantics, production routing, cancellation, and same-turn
+  principal-action reuse. Historical fine-grained rule/card suites call the
+  Oracle explicitly and are not counted as native coverage.
 - `test_duel_search.gd` — evaluation/search, deadlines, minimum completed-depth
   node guards, deterministic ordering,
   lazy-transition/PVS exactness, bounded tactical extension,

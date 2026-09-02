@@ -1,11 +1,14 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -518,9 +521,28 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct NativeSearchStats {
 		int64_t nodes = 0;
 		int64_t leaves = 0;
+		int64_t cutoffs = 0;
+		int64_t generated_actions = 0;
+		int64_t applied_transitions = 0;
 		int32_t max_action_ply = 0;
+		int32_t root_actions_total = 0;
+		int32_t root_actions_started = 0;
+		int32_t root_actions_completed = 0;
+		bool horizon_reached = false;
+		bool aborted = false;
+		bool minimum_depth_guard_used = false;
 		bool supported = true;
+		StringName stop_reason;
 		String reason;
+	};
+
+	struct NativeSearchLimits {
+		int64_t max_nodes = 0;
+		bool has_deadline = false;
+		std::chrono::steady_clock::time_point deadline;
+		bool protect_node_limit = false;
+		Callable should_cancel;
+		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
 	};
 
 	NativeState state;
@@ -553,6 +575,14 @@ public:
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
+	Dictionary search_iterative_round_depth(
+		int64_t root_owner,
+		int64_t max_round_depth,
+		int64_t budget_usec,
+		int64_t max_nodes,
+		int64_t min_completed_depth,
+		const Callable &should_cancel
+	) const;
 
 private:
 	bool validate_shape();
@@ -562,6 +592,15 @@ private:
 	) const;
 	Dictionary materialize_action(const NativeAction &action) const;
 	bool action_canonical_less(const NativeAction &left, const NativeAction &right) const;
+	int32_t action_structural_score(
+		const NativeState &value,
+		const NativeAction &action
+	) const;
+	std::vector<NativeAction> order_search_actions(
+		const NativeState &value,
+		const std::vector<NativeAction> &actions,
+		const NativeAction *preferred = nullptr
+	) const;
 	bool transition_action(
 		const NativeState &source,
 		const NativeAction &action,
@@ -592,7 +631,18 @@ private:
 		int32_t remaining_owner_turn_boundaries,
 		int32_t root_owner,
 		int32_t action_ply,
-		NativeSearchStats &stats
+		int32_t alpha,
+		int32_t beta,
+		NativeSearchStats &stats,
+		const NativeSearchLimits *limits
+	) const;
+	bool search_should_stop(
+		NativeSearchStats &stats,
+		const NativeSearchLimits *limits
+	) const;
+	uint64_t search_position_key(
+		const NativeState &value,
+		int32_t remaining_owner_turn_boundaries
 	) const;
 	void compile_ability_sets();
 	bool compile_runtime_suppression_batches();

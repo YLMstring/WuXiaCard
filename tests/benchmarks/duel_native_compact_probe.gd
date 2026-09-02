@@ -859,7 +859,7 @@ func _check_activation_transition_parity(
 		target_index,
 		activation_index
 	)
-	var expected: Dictionary = Simulator.apply_action(state, action)
+	var expected: Dictionary = Simulator.apply_action_oracle(state, action)
 	_check(bool(expected.get("valid", false)), "%s oracle transition is valid" % label)
 	if not bool(expected.get("valid", false)):
 		return
@@ -1080,7 +1080,7 @@ func _evaluate_activation_transition(
 	state: State,
 	action: Action
 ) -> Dictionary:
-	var expected: Dictionary = Simulator.apply_action(state, action)
+	var expected: Dictionary = Simulator.apply_action_oracle(state, action)
 	if not bool(expected.get("valid", false)):
 		return {"supported": false, "exact": false, "reason": "Oracle action was invalid"}
 	var compact := CompactState.new()
@@ -1248,7 +1248,7 @@ func _test_activation_runtime_index_changes(kernel: Object) -> void:
 		5,
 		0
 	)
-	var expected: Dictionary = Simulator.apply_action(state, original_action)
+	var expected: Dictionary = Simulator.apply_action_oracle(state, original_action)
 	_check(bool(expected.get("valid", false)), "Runtime activation replacement oracle action is valid")
 	if not bool(expected.get("valid", false)):
 		return
@@ -1534,7 +1534,7 @@ func _report_real_quick_activation_coverage(kernel: Object) -> void:
 					chosen_action = legal_actions[0] as Action
 				if chosen_action == null:
 					break
-				var transition: Dictionary = Simulator.apply_action(state, chosen_action)
+				var transition: Dictionary = Simulator.apply_action_oracle(state, chosen_action)
 				if not bool(transition.get("valid", false)):
 					break
 				state = transition.get("state") as State
@@ -1619,7 +1619,7 @@ func _report_real_quick_native_coverage(kernel: Object) -> void:
 					)
 					continue
 				supported += 1
-				var expected: Dictionary = Simulator.apply_action(opening, action)
+				var expected: Dictionary = Simulator.apply_action_oracle(opening, action)
 				var matches: bool = bool(actual.get("valid", false)) == bool(expected.get("valid", false))
 				if matches and bool(actual.get("valid", false)):
 					var result_compact: CompactState = CompactState.from_variant_payload(
@@ -1719,7 +1719,7 @@ func _report_native_whole_tree_shadow_search(kernel: Object) -> void:
 				"Native whole-tree opening loads"
 			)
 			var oracle_started_usec: int = Time.get_ticks_usec()
-			var oracle: Dictionary = Search.find_best_action_iterative(
+			var oracle: Dictionary = Search.find_best_action_iterative_oracle(
 				opening.duplicate_state(),
 				opening.active_player,
 				{
@@ -1862,7 +1862,7 @@ func _check_native_shadow_search(
 		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
 		"%s fixture loads natively" % label
 	)
-	var oracle: Dictionary = Search.find_best_action_iterative(
+	var oracle: Dictionary = Search.find_best_action_iterative_oracle(
 		state.duplicate_state(),
 		state.active_player,
 		{
@@ -2509,7 +2509,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		[_make_plain_card(&"换位敌方手牌", &"native_summoned_swap_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
 		Rules.PLAYER_OWNER
 	)
-	var swapped_expected: Dictionary = Simulator.apply_action(
+	var swapped_expected: Dictionary = Simulator.apply_action_oracle(
 		swapped_state,
 		Action.make_play(0, 1, &"native_summoned_swapped_card")
 	)
@@ -2554,7 +2554,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		],
 		[_make_plain_card(&"无招敌方抽牌", &"native_no_form_draw_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])]
 	)
-	var no_form_expected: Dictionary = Simulator.apply_action(
+	var no_form_expected: Dictionary = Simulator.apply_action_oracle(
 		no_form_state,
 		Action.make_play(0, 4, &"native_no_form")
 	)
@@ -2619,7 +2619,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 			"played_by_owner_id": Rules.OPPONENT_OWNER,
 		},
 	}
-	var anticipate_expected: Dictionary = Simulator.apply_action(
+	var anticipate_expected: Dictionary = Simulator.apply_action_oracle(
 		anticipate_state,
 		Action.make_play(0, 4, &"native_anticipate")
 	)
@@ -2656,7 +2656,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		0,
 		[_make_plain_card(&"破尽抽牌", &"native_break_all_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
 	)
-	var break_all_expected: Dictionary = Simulator.apply_action(
+	var break_all_expected: Dictionary = Simulator.apply_action_oracle(
 		break_all_state,
 		Action.make_play(0, 4, &"native_break_all")
 	)
@@ -2692,7 +2692,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		Rules.PLAYER_OWNER
 	)
 	consumed_extra_state.extra_card_plays_remaining = 1
-	var consumed_extra_expected: Dictionary = Simulator.apply_action(
+	var consumed_extra_expected: Dictionary = Simulator.apply_action_oracle(
 		consumed_extra_state,
 		Action.make_play(0, 4, &"native_consume_extra")
 	)
@@ -2736,7 +2736,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		[_make_plain_card(&"不应抽到", &"native_pending_before_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
 	)
 	pending_before_state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
-	var pending_before_expected: Dictionary = Simulator.apply_action(
+	var pending_before_expected: Dictionary = Simulator.apply_action_oracle(
 		pending_before_state,
 		Action.make_play(0, 4, &"native_pending_before_order")
 	)
@@ -2791,7 +2791,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		[_make_plain_card(&"全场敌手", &"native_global_summon_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 		Rules.PLAYER_OWNER
 	)
-	var global_expected: Dictionary = Simulator.apply_action(
+	var global_expected: Dictionary = Simulator.apply_action_oracle(
 		global_state,
 		Action.make_play(0, 4, &"native_global_summon_source")
 	)
@@ -2836,7 +2836,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 		0,
 		[_make_plain_card(&"不应在换位后抽到", &"native_summoned_swap_draw", Rules.PLAYER_OWNER, [1, 1, 1, 1])]
 	)
-	var moved_during_summoned_expected: Dictionary = Simulator.apply_action(
+	var moved_during_summoned_expected: Dictionary = Simulator.apply_action_oracle(
 		moved_during_summoned_state,
 		Action.make_play(0, 4, &"native_summoned_moved_source")
 	)
@@ -2881,7 +2881,7 @@ func _test_summon_before_lifecycle_parity(kernel: Object) -> void:
 			[_make_plain_card(&"云雾敌手", StringName("native_%s_hand" % String(yunwu_id)), Rules.OPPONENT_OWNER, [1, 1, 1, 1])],
 			Rules.PLAYER_OWNER
 		)
-		var yunwu_expected: Dictionary = Simulator.apply_action(
+		var yunwu_expected: Dictionary = Simulator.apply_action_oracle(
 			yunwu_state,
 			Action.make_play(0, 4, yunwu_instance_id)
 		)
@@ -2969,7 +2969,7 @@ func _test_generated_summon_and_turn_boundary_transition_parity(kernel: Object) 
 		Rules.PLAYER_OWNER
 	)
 	end_state.max_turns = 1
-	var end_expected: Dictionary = Simulator.apply_action(
+	var end_expected: Dictionary = Simulator.apply_action_oracle(
 		end_state,
 		Action.make_play(0, 4, &"native_boundary_end_play")
 	)
@@ -3024,7 +3024,7 @@ func _test_generated_summon_and_turn_boundary_transition_parity(kernel: Object) 
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var empty_owner_expected: Dictionary = Simulator.apply_action(
+	var empty_owner_expected: Dictionary = Simulator.apply_action_oracle(
 		empty_owner_state,
 		Action.make_play(0, 4, &"native_boundary_empty_play")
 	)
@@ -3068,7 +3068,7 @@ func _test_generated_summon_and_turn_boundary_transition_parity(kernel: Object) 
 		Rules.PLAYER_OWNER
 	)
 	terminal_state.max_turns = 1
-	var terminal_expected: Dictionary = Simulator.apply_action(
+	var terminal_expected: Dictionary = Simulator.apply_action_oracle(
 		terminal_state,
 		Action.make_play(0, 4, &"native_boundary_terminal_play")
 	)
@@ -3119,7 +3119,7 @@ func _test_generated_summon_and_turn_boundary_transition_parity(kernel: Object) 
 		[_make_plain_card(&"满场敌手", &"native_boundary_full_enemy", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
 		Rules.PLAYER_OWNER
 	)
-	var ending_expected: Dictionary = Simulator.apply_action(
+	var ending_expected: Dictionary = Simulator.apply_action_oracle(
 		ending_state,
 		Action.make_play(0, 8, &"native_boundary_full_play")
 	)
@@ -5333,7 +5333,7 @@ func _test_event_reaction_primitive_parity(kernel: Object) -> void:
 		[_make_plain_card(&"范围外目标", &"native_reaction_far_target", Rules.OPPONENT_OWNER, [0, 0, 0, 0])],
 		Rules.OPPONENT_OWNER
 	)
-	var out_of_range_expected: Dictionary = Simulator.apply_action(
+	var out_of_range_expected: Dictionary = Simulator.apply_action_oracle(
 		out_of_range_state,
 		Action.make_play(0, 8, &"native_reaction_far_target")
 	)
@@ -6183,7 +6183,7 @@ func _benchmark_basic_transition(kernel: Object) -> Dictionary:
 	var action: Action = Action.make_play(0, 4, &"native_bench_play")
 	var oracle_started_usec: int = Time.get_ticks_usec()
 	for _iteration: int in range(TRANSITION_ITERATIONS):
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		if not bool(transition.get("valid", false)):
 			return {"valid": false}
 		oracle_sink += (transition.get("events", []) as Array).size()
@@ -6235,7 +6235,7 @@ func _benchmark_activation_transition(kernel: Object) -> Dictionary:
 	var oracle_sink: int = 0
 	var oracle_started_usec: int = Time.get_ticks_usec()
 	for _iteration: int in range(ACTIVATION_TRANSITION_ITERATIONS):
-		var transition: Dictionary = Simulator.apply_action(state, action)
+		var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 		if not bool(transition.get("valid", false)):
 			return {"valid": false}
 		oracle_sink += (transition.get("events", []) as Array).size()
@@ -6324,7 +6324,7 @@ func _check_transition_parity(
 	label: String
 ) -> void:
 	var action: Action = Action.make_play(hand_index, target_cell, instance_id)
-	var expected: Dictionary = Simulator.apply_action(state, action)
+	var expected: Dictionary = Simulator.apply_action_oracle(state, action)
 	_check(bool(expected.get("valid", false)), "%s oracle transition is valid" % label)
 	if not bool(expected.get("valid", false)):
 		return
@@ -6420,7 +6420,7 @@ func _check_modifier_transition(
 	expected_captures: Array,
 	label: String
 ) -> void:
-	var expected: Dictionary = Simulator.apply_action(
+	var expected: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, target_cell, instance_id)
 	)
@@ -6441,7 +6441,7 @@ func _check_selector_exile_order(
 	label: String,
 	target_cell: int = 4
 ) -> void:
-	var expected: Dictionary = Simulator.apply_action(
+	var expected: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(hand_index, target_cell, instance_id)
 	)
@@ -6466,7 +6466,7 @@ func _check_power_change_fixture(
 	label: String,
 	target_cell: int = 4
 ) -> void:
-	var expected: Dictionary = Simulator.apply_action(
+	var expected: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, target_cell, instance_id)
 	)

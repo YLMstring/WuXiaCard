@@ -442,7 +442,7 @@ func _test_entry_flip_cancels_standard_attack() -> void:
 		)
 		var board: Array = Rules.empty_board()
 		board[5] = _slot(future_enemy, Rules.PLAYER_OWNER)
-		var transition: Dictionary = Simulator.apply_action(
+		var transition: Dictionary = Simulator.apply_action_oracle(
 			State.new(board, [source], [], Rules.PLAYER_OWNER),
 			Action.make_play(0, 4, source_id)
 		)
@@ -634,7 +634,7 @@ func _test_yijin_strengthens_then_draws_and_repeats_on_return() -> void:
 	var ordinary: Dictionary = _plain(&"yijin_ordinary", [2, 2, 2, 2], Rules.PLAYER_OWNER)
 	var first_draw: Dictionary = _plain(&"yijin_first_draw", [4, 4, 4, 4], Rules.PLAYER_OWNER)
 	var second_draw: Dictionary = _plain(&"yijin_second_draw", [5, 5, 5, 5], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			[yijin, sentinel, ordinary],

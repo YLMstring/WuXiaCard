@@ -173,7 +173,7 @@ func _test_cangsong_copies_before_attack_flip() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {"card": target, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [attacker])
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 3, &"copy_attacker")
 	)
@@ -232,7 +232,7 @@ func _test_cangsong_spends_with_full_hand() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {"card": target, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [attacker], full_hand)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 3, &"full_attacker")
 	)
@@ -265,7 +265,7 @@ func _test_exiled_attack_target_emits_no_flip_triggers() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {"card": target, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [attacker])
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 3, &"exile_attacker")
 	)
@@ -347,7 +347,7 @@ func _test_sanqin_three_attacks_in_row_major_order() -> void:
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 8, &"sanqin_opponent_play")
 	)
@@ -400,7 +400,7 @@ func _test_sanqin_spends_without_attack_targets() -> void:
 		[opponent_play],
 		Rules.OPPONENT_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		state,
 		Action.make_play(0, 8, &"quiet_play")
 	)

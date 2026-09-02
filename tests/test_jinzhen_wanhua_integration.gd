@@ -130,6 +130,7 @@ func _instance_at(duel: Node, cell: int) -> StringName:
 func _plain(instance_id: StringName, powers: Array[int] = [1, 1, 1, 1]) -> Dictionary:
 	var card: Dictionary = Rules.make_card(String(instance_id), "测", powers, [], Rules.PLAYER_OWNER)
 	card["instance_id"] = instance_id
+	card["ki"] = 0
 	return card
 
 

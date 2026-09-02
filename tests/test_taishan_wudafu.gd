@@ -138,7 +138,7 @@ func _test_taishan_swaps_in_every_direction() -> void:
 			[],
 			Rules.PLAYER_OWNER
 		)
-		var transition: Dictionary = Simulator.apply_action(
+		var transition: Dictionary = Simulator.apply_action_oracle(
 			state,
 			Action.make_play(0, 4)
 		)
@@ -165,7 +165,7 @@ func _test_taishan_swaps_then_attacks_from_its_new_cell() -> void:
 	var board: Array = Rules.empty_board()
 	board[5] = {"card": enemy, "owner": Rules.OPPONENT_OWNER}
 	var state := State.new(board, [taishan], [], Rules.PLAYER_OWNER)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(bool(transition.get("valid", false)), "TaiShan18Pan2 play is valid")
 	_check(
@@ -206,7 +206,7 @@ func _test_taishan_does_not_swap_with_zero_or_two_adjacent_enemies() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var zero_result: Dictionary = Simulator.apply_action(no_enemy, Action.make_play(0, 4))
+	var zero_result: Dictionary = Simulator.apply_action_oracle(no_enemy, Action.make_play(0, 4))
 	var zero_state: State = zero_result.get("state") as State
 	_check(
 		_instance_at(zero_state, 4) == &"taishan_zero"
@@ -233,7 +233,7 @@ func _test_taishan_does_not_swap_with_zero_or_two_adjacent_enemies() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var two_result: Dictionary = Simulator.apply_action(two_enemy, Action.make_play(0, 4))
+	var two_result: Dictionary = Simulator.apply_action_oracle(two_enemy, Action.make_play(0, 4))
 	var two_state: State = two_result.get("state") as State
 	_check(
 		_instance_at(two_state, 4) == &"taishan_two"
@@ -296,7 +296,7 @@ func _test_wudafu_one_protects_itself() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	var card: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
 	_check(
@@ -339,7 +339,7 @@ func _test_wudafu_two_grants_only_allied_heavy_swords() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
 		_ability_count(next_state, 0) == 1
@@ -376,7 +376,7 @@ func _test_wudafu_three_draws_before_granting() -> void:
 		],
 		[]
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	var event_types: Array[StringName] = _event_types(transition.get("events", []))
 	_check(
@@ -420,7 +420,7 @@ func _test_wudafu_three_hand_cap_does_not_stop_grants() -> void:
 		],
 		[]
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
 		next_state.get_hand(Rules.PLAYER_OWNER).size() == 5
@@ -453,7 +453,7 @@ func _test_wudafu_three_empty_deck_does_not_stop_grants() -> void:
 		[],
 		[]
 	)
-	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
+	var transition: Dictionary = Simulator.apply_action_oracle(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	var fallback_count: int = 0
 	for card_value: Variant in next_state.get_hand(Rules.PLAYER_OWNER):

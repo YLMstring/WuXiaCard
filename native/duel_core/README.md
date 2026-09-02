@@ -1,7 +1,9 @@
 # Duel Native Compact Prototype
 
-This directory contains an opt-in GDExtension experiment. It does not replace
-`DuelSimulator` and is not loaded by a clean checkout until it is built.
+This directory contains the production GDExtension rules/search kernel.
+`DuelSimulator` remains the authoritative GDScript facade, while production
+transitions and deep search are strict-native. A clean checkout must build the
+ignored platform binary before running the game or tests.
 
 The pinned `godot-cpp` submodule targets the Godot 4.6 extension API. Build the
 Windows x86-64 prototype with:
@@ -26,7 +28,7 @@ Current scope:
   mutable-core clone probe;
 - converts packed Godot arrays into owned C++ vectors;
 - validates the documented array shape;
-- resolves test-only generic normalized hand plays, including ordinary
+- resolves generic normalized hand plays, including ordinary
   orthogonal power comparison, standard attack, ownership flip, hand-play
   memory, turn boundaries, empty-turn advancement, and terminal checks;
 - compiles immutable ability declarations once per loaded compact root and
@@ -68,7 +70,7 @@ Current scope:
   generic actions reached by current catalog activations;
 - returns a full compact payload plus the same capture/exile/event arrays as
   `DuelSimulator`;
-- exposes a test-only fixed-complete-round-depth baseline minimax that loads one
+- exposes a fixed-complete-round-depth Oracle probe that loads one
   root and keeps legal-action enumeration, branch copies, transitions,
   evaluation, and the entire descendant tree in native state;
 - uses the oracle's owner-turn-serial depth accounting, including same-turn
@@ -78,18 +80,20 @@ Current scope:
   future declaration that has not been compiled instead of approximating it;
 - measures native core cloning, plain hand-play transitions, and a fixed
   activation transaction.
+- exposes production complete-round iterative deepening with structural action
+  ordering, alpha-beta pruning, deadline/node limits, minimum-depth guard
+  diagnostics, low-frequency cancellation, completed-depth snapshots, and the
+  root owner's same-turn principal actions.
 
 The current probe reports 490/490 exact hand-play transitions in the 14 real
 Quick openings, 36/36 legal actions covering all 20 catalog activation
 declarations, and 104/104 activation actions across 136 deterministic
 Quick-derived states. Its fixed-depth whole-tree shadow additionally matches
 all 14 Quick depth-one baseline scores/actions plus focused depth-two empty-turn
-and activation/extra-play fixtures. The 2026-09-02 Debug run traversed 27,117
-unpruned native nodes in about 2.10 seconds versus 3,512 alpha-beta oracle nodes
-in about 30.10 seconds. It deliberately does not implement production state
-keys/transpositions, iterative deepening, deadline/cancellation, LazyOnly
-pruning, same-turn plans, selected-result restoration, or production
-integration yet. Future declaration vocabulary remains outside the slice until
-separately proven. Production does not call the extension. The probe compares
-every covered state field and ordered event against `DuelSimulator`, which
-remains the oracle for every native primitive.
+and activation/extra-play fixtures. The production 10-second opening profile
+completes round depth two in 12/14 real Quick openings; the remaining two
+complete depth one and enter depth two. A native transposition table is not yet
+implemented. Future declaration vocabulary remains outside the kernel until
+separately proven. The probe compares every covered state field and ordered
+event against `DuelSimulator.apply_action_oracle()`, which remains the explicit
+test Oracle for every native primitive.

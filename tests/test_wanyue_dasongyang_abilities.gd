@@ -198,7 +198,7 @@ func _test_wanyue_entry_decay_and_adjacent_growth() -> void:
 	var hand: Array = [wanyue]
 	for index: int in range(4):
 		hand.append(_plain(StringName("entry_hand_%d" % index), [1, 1, 1, 1], Rules.PLAYER_OWNER))
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(
 			Rules.empty_board(),
 			hand,
@@ -233,7 +233,7 @@ func _test_wanyue_entry_decay_and_adjacent_growth() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(Catalog.create_instance(&"WanYueChaoZong4", Rules.PLAYER_OWNER, &"wanyue_four"), Rules.PLAYER_OWNER)
 	var ally: Dictionary = _plain(&"wanyue_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER)
-	var ally_transition: Dictionary = Simulator.apply_action(
+	var ally_transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [ally], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 5, &"wanyue_ally")
 	)
@@ -249,7 +249,7 @@ func _test_dasongyang_ally_and_enemy_reactions() -> void:
 		var ally_board: Array = Rules.empty_board()
 		ally_board[4] = _slot(Catalog.create_instance(card_id, Rules.PLAYER_OWNER, StringName("dasong_ally_%d" % tier)), Rules.PLAYER_OWNER)
 		var ally_id := StringName("ally_%d" % tier)
-		var ally_transition: Dictionary = Simulator.apply_action(
+		var ally_transition: Dictionary = Simulator.apply_action_oracle(
 			State.new(ally_board, [_plain(ally_id, [5, 5, 5, 5], Rules.PLAYER_OWNER)], [], Rules.PLAYER_OWNER),
 			Action.make_play(0, 5, ally_id)
 		)
@@ -260,7 +260,7 @@ func _test_dasongyang_ally_and_enemy_reactions() -> void:
 		var enemy_board: Array = Rules.empty_board()
 		enemy_board[4] = _slot(Catalog.create_instance(card_id, Rules.PLAYER_OWNER, StringName("dasong_enemy_%d" % tier)), Rules.PLAYER_OWNER)
 		var enemy_id := StringName("enemy_%d" % tier)
-		var enemy_transition: Dictionary = Simulator.apply_action(
+		var enemy_transition: Dictionary = Simulator.apply_action_oracle(
 			State.new(enemy_board, [], [_plain(enemy_id, [5, 5, 5, 5], Rules.OPPONENT_OWNER)], Rules.OPPONENT_OWNER),
 			Action.make_play(0, 5, enemy_id)
 		)
@@ -273,7 +273,7 @@ func _test_summoned_card_removed_before_attack() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(Catalog.create_instance(&"DaSongYangZhang3", Rules.PLAYER_OWNER, &"lethal_dasong"), Rules.PLAYER_OWNER)
 	var victim: Dictionary = _plain(&"lethal_victim", [1, 1, 1, 1], Rules.OPPONENT_OWNER)
-	var transition: Dictionary = Simulator.apply_action(
+	var transition: Dictionary = Simulator.apply_action_oracle(
 		State.new(board, [], [victim], Rules.OPPONENT_OWNER),
 		Action.make_play(0, 5, &"lethal_victim")
 	)

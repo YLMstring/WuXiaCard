@@ -82,6 +82,7 @@ $testScripts = @(
 	"test_duel_simulator.gd",
 	"test_duel_state_key.gd",
 	"test_duel_compact_state.gd",
+	"test_native_production_rules.gd",
     "test_duel_search.gd",
 	"test_duel_ai_benchmark.gd",
 	"test_activation_targeting_swap_presentation.gd",

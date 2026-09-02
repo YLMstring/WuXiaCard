@@ -189,7 +189,7 @@ func _test_real_state_collision_corpus() -> void:
 		)
 		for action_index: int in range(mini(actions.size(), CHILDREN_PER_STATE)):
 			var action: Action = actions[action_index]
-			var transition: Dictionary = Simulator.apply_action(state, action)
+			var transition: Dictionary = Simulator.apply_action_oracle(state, action)
 			if not bool(transition.get("valid", false)):
 				continue
 			var next_state: State = transition.get("state") as State

@@ -6,6 +6,7 @@ const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Executor = preload("res://scripts/duel_ability_executor.gd")
+const NativeRules = preload("res://scripts/duel_native_rules.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Targeting = preload("res://scripts/duel_targeting.gd")
@@ -132,12 +133,26 @@ static func is_action_legal(state: StateData, action: ActionData) -> bool:
 static func apply_action(state: StateData, action: ActionData) -> Dictionary:
 	if not is_action_legal(state, action):
 		return _invalid_transition(state)
+	return NativeRules.apply_action(state, action)
+
+
+static func apply_action_oracle(state: StateData, action: ActionData) -> Dictionary:
+	if not is_action_legal(state, action):
+		return _invalid_transition(state)
 	if action.action_type == ActionData.TYPE_PLAY:
 		return _apply_play_action(state, action)
 	return _apply_activate_action(state, action)
 
 
 static func choose_greedy_action(state: StateData) -> ActionData:
+	return _choose_greedy_action(state, false)
+
+
+static func choose_greedy_action_oracle(state: StateData) -> ActionData:
+	return _choose_greedy_action(state, true)
+
+
+static func _choose_greedy_action(state: StateData, oracle_backend: bool) -> ActionData:
 	if state == null:
 		return ActionData.new()
 	var legal_actions: Array[ActionData] = get_legal_actions(state)
@@ -147,7 +162,11 @@ static func choose_greedy_action(state: StateData) -> ActionData:
 	var best_action: ActionData = legal_actions[0]
 	var best_score: int = -1_000_000_000
 	for action: ActionData in legal_actions:
-		var transition: Dictionary = apply_action(state, action)
+		var transition: Dictionary = (
+			apply_action_oracle(state, action)
+			if oracle_backend
+			else apply_action(state, action)
+		)
 		var next_state: StateData = transition["state"] as StateData
 		var action_score: int = score_difference(next_state, moving_owner)
 		if (

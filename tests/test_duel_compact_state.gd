@@ -391,7 +391,7 @@ func _test_real_quick_state_corpus() -> void:
 			return first.canonical_key() < second.canonical_key()
 		)
 		for action_index: int in range(mini(actions.size(), CHILDREN_PER_STATE)):
-			var transition: Dictionary = Simulator.apply_action(state, actions[action_index])
+			var transition: Dictionary = Simulator.apply_action_oracle(state, actions[action_index])
 			if not bool(transition.get("valid", false)):
 				continue
 			var child: State = transition.get("state") as State
