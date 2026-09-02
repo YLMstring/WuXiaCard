@@ -465,7 +465,12 @@ respectively, in row-major order. The source itself is eligible.
   GDScript rules/search implementation has been retired; no runtime or test
   fallback may silently resolve a native rejection.
 - Search compacts once at the root and keeps the descendant tree native. Extra
-  plays reuse the completed iteration's same-owner-turn principal actions.
+  plays reuse same-owner-turn principal actions only from a completed depth-two
+  or deeper result; a shallower result makes the extra play search again from
+  its exact resulting state.
+- Every AI hand play and activation occupies at least two seconds of decision
+  time. Search time counts toward the minimum; only the missing remainder is
+  presentation delay.
 - If depth one cannot complete, worker search fails, or its action becomes invalid, use deterministic greedy fallback.
 - Search can finish early if it proves/solves the position.
 

@@ -231,6 +231,33 @@ func _test_turn_plan_validation() -> void:
 	_check(remaining.size() == 1, "Selected root action retains one same-turn continuation")
 	if selected == null:
 		return
+	var shallow_result: Dictionary = result.duplicate(true)
+	shallow_result["has_completed_depth"] = true
+	shallow_result["completed_depth"] = 1
+	shallow_result["used_fallback"] = false
+	_check(
+		TurnPlan.remaining_after_search_result(
+			shallow_result, state, selected, 2
+		).is_empty(),
+		"Depth-one search result does not retain a same-turn continuation"
+	)
+	var deep_result: Dictionary = result.duplicate(true)
+	deep_result["has_completed_depth"] = true
+	deep_result["completed_depth"] = 2
+	deep_result["used_fallback"] = false
+	_check(
+		TurnPlan.remaining_after_search_result(
+			deep_result, state, selected, 2
+		).size() == 1,
+		"Depth-two search result retains its valid same-turn continuation"
+	)
+	deep_result["used_fallback"] = true
+	_check(
+		TurnPlan.remaining_after_search_result(
+			deep_result, state, selected, 2
+		).is_empty(),
+		"Fallback result never retains a same-turn continuation at depth two"
+	)
 	var extra_state: State = Simulator.apply_action(state, selected).get("state") as State
 	var taken: Dictionary = TurnPlan.take_next(remaining, extra_state, Rules.OPPONENT_OWNER)
 	_check(bool(taken.get("matched", false)), "Exact same-turn state consumes the planned action")

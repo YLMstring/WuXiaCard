@@ -14,6 +14,7 @@ const Search = preload("res://scripts/duel_search.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
+const TurnPlan = preload("res://scripts/duel_turn_plan.gd")
 
 var _depth_snapshots: Array[Dictionary] = []
 
@@ -34,7 +35,10 @@ func _run() -> void:
 	var samples: Array[Dictionary] = []
 	for opening_index: int in range(openings.size()):
 		var sample: Dictionary = _profile_opening(
-			openings[opening_index], budget_seconds, depth_mode
+			openings[opening_index],
+			budget_seconds,
+			depth_mode,
+			opening_set == &"extra_play_cap"
 		)
 		samples.append(sample)
 		print(
@@ -54,6 +58,25 @@ func _run() -> void:
 				int(sample.get("nodes", 0)),
 			]
 		)
+		var extra_play: Dictionary = sample.get("extra_play", {}) as Dictionary
+		if bool(extra_play.get("entered_extra_play", false)):
+			print(
+				(
+					"OPENING_DEPTH_PROFILE_EXTRA game=%s reused=%s searched=%s "
+					+ "depth=%d attempted=%d roots=%d/%d elapsed=%.3f nodes=%d"
+				)
+				% [
+					String(sample.get("game_id", "missing")),
+					str(bool(extra_play.get("plan_reused", false))),
+					str(bool(extra_play.get("fresh_search", false))),
+					int(extra_play.get("completed_depth", 0)),
+					int(extra_play.get("attempted_depth", 0)),
+					int(extra_play.get("root_actions_completed", 0)),
+					int(extra_play.get("root_actions_total", 0)),
+					float(extra_play.get("elapsed_seconds", 0.0)),
+					int(extra_play.get("nodes", 0)),
+				]
+			)
 	var timing_samples: Array[Dictionary] = _run_timing_probes(openings, depth_mode)
 	var report: Dictionary = {
 		"schema_version": 2,
@@ -104,7 +127,8 @@ func _run() -> void:
 func _profile_opening(
 	opening: Dictionary,
 	budget_seconds: float,
-	depth_mode: StringName
+	depth_mode: StringName,
+	profile_extra_play: bool = false
 ) -> Dictionary:
 	_depth_snapshots.clear()
 	var state: State = opening.get("state") as State
@@ -156,7 +180,7 @@ func _profile_opening(
 	var estimated_speedup: Variant = null
 	if estimated_required_seconds != null:
 		estimated_speedup = float(estimated_required_seconds) / budget_seconds
-	return {
+	var sample: Dictionary = {
 		"game_id": String(opening.get("game_id", &"missing")),
 		"matchup_id": String(opening.get("matchup_id", &"missing")),
 		"depth_mode": String(result.get("depth_mode", depth_mode)),
@@ -183,6 +207,105 @@ func _profile_opening(
 		"estimated_target_depth_seconds": estimated_required_seconds,
 		"estimated_speedup_for_target_depth": estimated_speedup,
 	}
+	if profile_extra_play:
+		sample["extra_play"] = _profile_extra_play_decision(
+			state,
+			result,
+			budget_seconds,
+			depth_mode
+		)
+	return sample
+
+
+func _profile_extra_play_decision(
+	state: State,
+	first_result: Dictionary,
+	budget_seconds: float,
+	depth_mode: StringName
+) -> Dictionary:
+	var first_action: Action = first_result.get("action") as Action
+	var sample: Dictionary = {
+		"entered_extra_play": false,
+		"plan_reused": false,
+		"fresh_search": false,
+		"completed_depth": 0,
+		"attempted_depth": 0,
+		"elapsed_seconds": 0.0,
+		"nodes": 0,
+		"root_actions_total": 0,
+		"root_actions_completed": 0,
+		"depth_snapshots": [],
+	}
+	if first_action == null:
+		sample["reason"] = "no_first_action"
+		return sample
+	var transition: Dictionary = Simulator.apply_action(
+		state.duplicate_state(), first_action
+	)
+	if not bool(transition.get("valid", false)):
+		sample["reason"] = "invalid_first_action"
+		return sample
+	sample["first_action_key"] = first_action.canonical_key()
+	var extra_state: State = transition.get("state") as State
+	if (
+		extra_state == null
+		or extra_state.active_player != state.active_player
+		or extra_state.owner_turn_serial != state.owner_turn_serial
+	):
+		sample["reason"] = "first_action_did_not_grant_extra_play"
+		return sample
+	sample["entered_extra_play"] = true
+	sample["state_key"] = StateKey.build_compact(extra_state)
+	var reusable_plan: Array[Dictionary] = TurnPlan.remaining_after_search_result(
+		first_result,
+		state,
+		first_action,
+		TARGET_DEPTH
+	)
+	if not reusable_plan.is_empty():
+		sample["plan_reused"] = true
+		sample["reason"] = "completed_depth_two_plan"
+		sample["completed_depth"] = int(first_result.get("completed_depth", 0))
+		return sample
+
+	_depth_snapshots.clear()
+	var second_result: Dictionary = Search.find_best_action_iterative(
+		extra_state.duplicate_state(),
+		extra_state.active_player,
+		{
+			"budget_seconds": budget_seconds,
+			"profile": &"enhanced",
+			"use_lazy_transitions": true,
+			"use_pvs": false,
+			"use_tactical_extension": false,
+			"use_evaluation_cache": false,
+			"evaluator_profile": &"baseline",
+			"depth_mode": depth_mode,
+		},
+		Callable(),
+		Callable(self, "_record_depth_progress")
+	)
+	sample["fresh_search"] = true
+	sample["reason"] = "shallow_first_search_rethought"
+	sample["completed_depth"] = int(second_result.get("completed_depth", 0))
+	sample["attempted_depth"] = int(second_result.get("iteration_depth", 0))
+	sample["elapsed_seconds"] = float(second_result.get("elapsed_seconds", 0.0))
+	sample["nodes"] = int(second_result.get("nodes", 0))
+	sample["generated_actions"] = int(second_result.get("generated_actions", 0))
+	sample["applied_transitions"] = int(second_result.get("applied_transitions", 0))
+	sample["cutoffs"] = int(second_result.get("cutoffs", 0))
+	sample["root_actions_total"] = int(second_result.get("root_actions_total", 0))
+	sample["root_actions_started"] = int(second_result.get("root_actions_started", 0))
+	sample["root_actions_completed"] = int(second_result.get("root_actions_completed", 0))
+	sample["completion_reason"] = String(
+		second_result.get("completion_reason", &"")
+	)
+	var second_action: Action = second_result.get("action") as Action
+	sample["action_key"] = (
+		second_action.canonical_key() if second_action != null else ""
+	)
+	sample["depth_snapshots"] = _depth_snapshots.duplicate(true)
+	return sample
 
 
 func _record_depth_progress(progress: Dictionary) -> void:
@@ -276,6 +399,10 @@ func _summarize(
 	var total_search_seconds: float = 0.0
 	var compact_key_length_total: int = 0
 	var fallback_count: int = 0
+	var extra_play_states: int = 0
+	var extra_play_plans_reused: int = 0
+	var extra_play_fresh_searches: int = 0
+	var extra_play_fresh_target_depth_completed: int = 0
 	for sample: Dictionary in samples:
 		var completed_depth: int = int(sample.get("completed_depth", 0))
 		var depth_key: String = str(completed_depth)
@@ -286,6 +413,15 @@ func _summarize(
 		compact_key_length_total += int(sample.get("state_key_length", 0))
 		if bool(sample.get("used_fallback", false)):
 			fallback_count += 1
+		var extra_play: Dictionary = sample.get("extra_play", {}) as Dictionary
+		if bool(extra_play.get("entered_extra_play", false)):
+			extra_play_states += 1
+		if bool(extra_play.get("plan_reused", false)):
+			extra_play_plans_reused += 1
+		if bool(extra_play.get("fresh_search", false)):
+			extra_play_fresh_searches += 1
+			if int(extra_play.get("completed_depth", 0)) >= TARGET_DEPTH:
+				extra_play_fresh_target_depth_completed += 1
 		if completed_depth >= TARGET_DEPTH:
 			target_depth_completed += 1
 		for snapshot_value: Variant in sample.get("depth_snapshots", []):
@@ -341,6 +477,12 @@ func _summarize(
 		),
 		"baseline_snapshot_count": baseline_snapshot_count,
 		"fallback_count": fallback_count,
+		"extra_play_states": extra_play_states,
+		"extra_play_plans_reused": extra_play_plans_reused,
+		"extra_play_fresh_searches": extra_play_fresh_searches,
+		"extra_play_fresh_target_depth_completed": (
+			extra_play_fresh_target_depth_completed
+		),
 		"average_initial_compact_key_length": (
 			float(compact_key_length_total) / float(samples.size())
 			if not samples.is_empty()

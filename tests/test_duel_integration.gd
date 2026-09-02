@@ -36,9 +36,11 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	_check(is_equal_approx(float(duel.debug_get_search_budget_seconds()), 10.0), "Shen Lian defaults to the hard 10-second search profile")
+	_check(is_equal_approx(float(duel.get("opponent_min_decision_seconds")), 2.0), "AI decisions default to a two-second minimum")
 	_check(is_equal_approx(float(duel.get("summon_post_entry_delay")), 0.5), "Board entry pauses half a second before later effects")
 	duel.debug_set_fast_mode(true)
 	_check(is_zero_approx(float(duel.get("summon_post_entry_delay"))), "Fast test mode removes the board-entry pause")
+	_check(is_zero_approx(float(duel.get("opponent_min_decision_seconds"))), "Fast test mode removes the AI decision minimum")
 
 	_check_layout(duel)
 	_check_duel_canvas_structure(duel)
@@ -56,6 +58,7 @@ func _run() -> void:
 	await _check_card_inspector_modal()
 	await _check_inspector_holds_completed_ai_move()
 	await _check_opponent_turn_plan_consumption()
+	await _check_minimum_opponent_decision_delay()
 	await _check_focus_loss_return()
 	await _check_dragged_card_commits_through_simulator()
 	await _check_aspect_ratio_input_paths()
@@ -1308,6 +1311,29 @@ func _check_opponent_turn_plan_consumption() -> void:
 		"Consumed continuation action is removed from the controller plan"
 	)
 	plan_duel.queue_free()
+	await process_frame
+
+
+func _check_minimum_opponent_decision_delay() -> void:
+	var timing_duel: Node = _instantiate_duel()
+	root.add_child(timing_duel)
+	await process_frame
+	await process_frame
+	timing_duel.set("opponent_min_decision_seconds", 0.05)
+	var started_usec: int = Time.get_ticks_usec()
+	await timing_duel.call("_wait_for_minimum_opponent_decision", started_usec)
+	var elapsed_seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
+	_check(elapsed_seconds >= 0.04, "AI decision timing fills a short search to its configured minimum")
+	var completed_started_usec: int = Time.get_ticks_usec() - 100_000
+	var completed_wait_started_usec: int = Time.get_ticks_usec()
+	await timing_duel.call(
+		"_wait_for_minimum_opponent_decision", completed_started_usec
+	)
+	var completed_wait_seconds: float = (
+		float(Time.get_ticks_usec() - completed_wait_started_usec) / 1_000_000.0
+	)
+	_check(completed_wait_seconds < 0.04, "A search already beyond the minimum receives no added delay")
+	timing_duel.queue_free()
 	await process_frame
 
 

@@ -65,8 +65,9 @@ early when the position is solved.
 ## Same-turn continuation
 
 The completed principal line may include additional actions by the same owner
-within the current `owner_turn_serial`. `DuelTurnPlan` reuses them without a new
-thinking pause only while all of these still match:
+within the current `owner_turn_serial`. `DuelTurnPlan` makes that continuation
+eligible only when the producing result completed at least depth two without
+fallback, and then reuses it only while all of these still match:
 
 - exact compact state key;
 - owner ID;
@@ -74,6 +75,12 @@ thinking pause only while all of these still match:
 - current legality of the next action.
 
 Any mismatch clears the remainder and starts a normal fresh search.
+
+A depth-zero or depth-one action remains valid for the current decision, but
+its continuation is discarded. If that action grants an extra play, the
+controller searches again from the resulting exact state. New searches and
+reused actions share a presentation-only two-second minimum decision time;
+actual search time counts toward the minimum, and testing fast mode removes it.
 
 ## Search result contract
 
@@ -146,6 +153,13 @@ unique real Quick openings and depth three in 9/14. The two previously slow
 Dongfang Bubai/Zhang Sanfeng openings completed depth two in 9.46 seconds and
 0.84 seconds respectively. This is reachability evidence only; it does not by
 itself establish that `self_turn` is stronger than `complete_round`.
+
+The later four-opening extra-play profile with the depth-two reuse gate
+completed depth two in 2/4 initial decisions. The two depth-one selected moves
+did not actually grant an extra play. Clearly labelled legal-branch probes from
+those exact openings then applied the first legal extra-play-granting move and
+both fresh ten-second searches completed depth two. Those probes demonstrate
+extra-state reachability only; they are not principal-action results.
 
 ## Current limitations
 

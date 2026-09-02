@@ -27,6 +27,7 @@ const Simulator = preload("res://scripts/duel_simulator.gd")
 const SearchSession = preload("res://scripts/duel_search_session.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const TurnPlan = preload("res://scripts/duel_turn_plan.gd")
+const MINIMUM_REUSABLE_TURN_PLAN_DEPTH: int = 2
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 const AttackVfxData = preload("res://scripts/attack_vfx.gd")
@@ -71,7 +72,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var opponent_hand_shuffle_seed: int = 0
 @export var opening_layout_seed: int = 0
 @export var difficulty_effect_seed: int = 0
-@export var opponent_think_delay: float = 0.55
+@export_range(0.0, 10.0, 0.05) var opponent_min_decision_seconds: float = 2.0
 @export var opponent_search_budget_seconds: float = 10.0
 @export_range(0.0, 10.0, 0.05) var replay_turn_delay: float = 2.0
 @export var invalid_shake_duration: float = 0.18
@@ -235,8 +236,6 @@ func _get_valid_starting_owner() -> int:
 
 
 func _begin_opening_opponent_turn() -> void:
-	if opponent_think_delay > 0.0:
-		await get_tree().create_timer(opponent_think_delay).timeout
 	if (
 		is_inside_tree()
 		and not testing_mode
@@ -270,7 +269,7 @@ func debug_set_fast_mode(enabled: bool) -> void:
 		power_change_pre_delay = 0.0
 		power_change_duration = 0.0
 		extra_card_play_status_duration = 0.0
-		opponent_think_delay = 0.0
+		opponent_min_decision_seconds = 0.0
 		opponent_search_budget_seconds = 0.0
 		_opponent_search_test_limits = {"max_depth": 1}
 		invalid_shake_duration = 0.0
@@ -834,13 +833,19 @@ func _commit_action(
 	_update_turn_status()
 	if testing_mode or not continue_automatically:
 		return
+	var decision_started_usec: int = Time.get_ticks_usec()
 	var planned_choice: ActionData = _take_planned_opponent_action()
 	if planned_choice != null:
-		if await _commit_opponent_choice(planned_choice):
-			return
+		await _wait_for_minimum_opponent_decision(decision_started_usec)
+		if (
+			is_inside_tree()
+			and duel_state != null
+			and turn_state == TurnState.OPPONENT
+			and Simulator.is_action_legal(duel_state, planned_choice)
+		):
+			if await _commit_opponent_choice(planned_choice):
+				return
 		_opponent_turn_plan.clear()
-	if opponent_think_delay > 0.0:
-		await get_tree().create_timer(opponent_think_delay).timeout
 	await _perform_opponent_turn()
 
 
@@ -1742,6 +1747,7 @@ func _wait_after_draw_before_board_effect() -> void:
 func _perform_opponent_turn() -> void:
 	if duel_state == null or testing_mode or turn_state != TurnState.OPPONENT:
 		return
+	var decision_started_usec: int = Time.get_ticks_usec()
 	var starting_version: int = duel_state.state_version
 	var greedy_fallback: ActionData = Simulator.choose_greedy_action(duel_state)
 	if greedy_fallback.action_type == &"":
@@ -1750,7 +1756,7 @@ func _perform_opponent_turn() -> void:
 	var session: SearchSession = SearchSession.new()
 	_opponent_turn_plan.clear()
 	_opponent_search_session = session
-	_opponent_search_started_usec = Time.get_ticks_usec()
+	_opponent_search_started_usec = decision_started_usec
 	_opponent_search_start_count += 1
 	var started: bool = session.start(
 		duel_state,
@@ -1798,16 +1804,41 @@ func _perform_opponent_turn() -> void:
 		_finish_match()
 		return
 	search_result["action"] = choice.duplicate_action()
-	_opponent_turn_plan = TurnPlan.remaining_after_selected_action(
-		search_result.get("turn_plan", []) as Array,
+	_opponent_turn_plan = TurnPlan.remaining_after_search_result(
+		search_result,
 		duel_state,
 		choice,
-		bool(search_result.get("used_fallback", false))
+		MINIMUM_REUSABLE_TURN_PLAN_DEPTH
 	)
 	_last_search_report = search_result.duplicate(true)
 	_print_search_report(search_result)
+	await _wait_for_minimum_opponent_decision(decision_started_usec)
+	if (
+		not is_inside_tree()
+		or duel_state == null
+		or turn_state != TurnState.OPPONENT
+		or duel_state.state_version != starting_version
+		or not Simulator.is_action_legal(duel_state, choice)
+	):
+		_opponent_turn_plan.clear()
+		return
 	if not await _commit_opponent_choice(choice):
 		_finish_match()
+
+
+func _wait_for_minimum_opponent_decision(decision_started_usec: int) -> void:
+	if opponent_min_decision_seconds > 0.0:
+		var elapsed_seconds: float = (
+			float(Time.get_ticks_usec() - decision_started_usec) / 1_000_000.0
+		)
+		var remaining_seconds: float = maxf(
+			opponent_min_decision_seconds - elapsed_seconds,
+			0.0
+		)
+		if remaining_seconds > 0.0:
+			await get_tree().create_timer(remaining_seconds).timeout
+	while is_inside_tree() and _inspection_open:
+		await get_tree().process_frame
 
 
 func _take_planned_opponent_action() -> ActionData:

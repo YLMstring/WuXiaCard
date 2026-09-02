@@ -7,6 +7,26 @@ const StateData = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 
 
+static func remaining_after_search_result(
+	search_result: Dictionary,
+	state: StateData,
+	selected_action: ActionData,
+	minimum_completed_depth: int = 2
+) -> Array[Dictionary]:
+	if (
+		bool(search_result.get("used_fallback", false))
+		or not bool(search_result.get("has_completed_depth", false))
+		or int(search_result.get("completed_depth", 0)) < minimum_completed_depth
+	):
+		return []
+	return remaining_after_selected_action(
+		search_result.get("turn_plan", []) as Array,
+		state,
+		selected_action,
+		false
+	)
+
+
 static func remaining_after_selected_action(
 	source_plan: Array,
 	state: StateData,

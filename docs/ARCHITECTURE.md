@@ -154,8 +154,10 @@ search key and copied into replay state.
   `2 × d - 1`. Action count is not depth.
 - `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation,
   failure conversion, join, and deep-copy transport of pure-data turn plans.
-- `duel_turn_plan.gd` — exact state/owner/owner-turn validation and copying for
-  a searched same-turn continuation. Any mismatch invalidates the remainder.
+- `duel_turn_plan.gd` — completed-depth gating plus exact
+  state/owner/owner-turn validation and copying for a searched same-turn
+  continuation. Results below depth two and any mismatch invalidate the
+  remainder.
 - `duel_state_key.gd` — exact canonical serialization plus the production
   full-state binary SHA-256/128 fingerprint over the explicit top-level state
   payload.
@@ -177,8 +179,10 @@ thread-safe callback. Scene objects never cross the thread boundary.
   actions, calls the simulator, and presents transition events. Logical event
   order stays sequential; visible power changes sharing one transition batch
   animate in parallel behind one barrier. An AI extra play consumes a validated
-  same-turn search plan without another thinking delay; stale or absent plans
-  fall back to a normal fresh search.
+  same-turn search plan only when the producing search completed depth two;
+  shallower, stale, or absent plans trigger a normal fresh search. Every AI
+  hand play or activation waits until its decision has occupied at least two
+  seconds, counting search time rather than adding a fixed post-search pause.
 - `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand slots, library-to-hand exchange, inspection, and the navigation-neutral `back_requested` signal.
 - `deck_library_grid.gd` / `deck_library_grid.tscn` — four-column, 1,000-slot virtualized and scrollable library surface.
 - `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.

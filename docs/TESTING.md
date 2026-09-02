@@ -210,6 +210,10 @@ results. Its report is written under
 `OpeningSet extra_play_cap` is the focused four-opening set for Dongfang Bubai
 mirror, Feng Qingyang mirror, and both initiative orders of Dongfang Bubai
 versus Feng Qingyang. Mirror duplicates are removed by exact opening state.
+For this set only, each opening report also applies the selected first action.
+If it actually leaves the same owner in the same owner turn with an extra hand
+play, a depth-two plan is reported as reused; a shallower result runs and
+records a second fresh ten-second search from that exact state.
 
 Run the 512-state/1,024-action simulator transition microbenchmark with Dummy
 audio through:

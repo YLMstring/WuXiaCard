@@ -268,9 +268,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   plays cost no boundary and are searched fully; simulator-resolved empty turns
   consume however many boundaries they actually cross. Only a fully completed
   round iteration is published. The completed principal line also carries the
-  AI's remaining same-owner-turn actions; the controller reuses them without a
-  second thinking pause only while exact state key, owner, serial, and legality
-  match, otherwise it clears the plan and searches normally.
+  AI's remaining same-owner-turn actions. The controller retains them only
+  from depth-two-or-deeper non-fallback results and still requires exact state
+  key, owner, serial, and legality; shallower or invalid plans make an extra
+  play search normally. Every AI hand play or activation has a two-second
+  minimum decision window with search time included.
 - Node-limited Quick, Pilot, and Extended benchmarks set
   `min_completed_depth = 1`. Their nominal node limit is ignored only until a
   complete depth one exists; total nodes never reset, while cancellation and
@@ -473,6 +475,17 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   completed `22/35` with a `15.88s` estimate. The report is
   `production-opening-depth-extra-play-cap-1788338601.json` under the local,
   uncommitted benchmark directory.
+- After adding the depth-two continuation-reuse gate, the paired four-opening
+  profile again completed depth two in 2/4. Only Dongfang-first versus Feng
+  immediately entered an extra play, and its depth-two plan was reused. The
+  two depth-one selected actions did not grant an extra play, so they remained
+  correctly inapplicable to a real second-search measurement. A separately
+  labelled legal-branch probe played each position's first action that really
+  grants an extra play; both fresh ten-second searches completed depth two and
+  began depth three, at 91,941 and 120,635 nodes. The formal report is
+  `production-opening-depth-extra-play-cap-1788350396.json` under the local,
+  uncommitted benchmark directory; the legal-branch probe is reachability
+  evidence, not an assertion that the AI selected those first actions.
 - The search still duplicates Dictionary-based states. `DuelStateKey.build_compact()`
   now uses the complete explicit state payload, Godot native Variant binary
   encoding, and a SHA-256/128 `v2` fingerprint; it is faster but is not a compact
