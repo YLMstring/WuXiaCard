@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <limits>
+#include <utility>
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -115,6 +116,19 @@ void DuelNativeCompactKernel::_bind_methods() {
 	ClassDB::bind_method(
 		D_METHOD("get_legal_actions_for_owner", "owner_id"),
 		&DuelNativeCompactKernel::get_legal_actions_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD("count_legal_actions_for_owner", "owner_id"),
+		&DuelNativeCompactKernel::count_legal_actions_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"inspect_ordered_search_actions_for_owner",
+			"owner_id",
+			"preferred_action"
+		),
+		&DuelNativeCompactKernel::inspect_ordered_search_actions_for_owner,
+		DEFVAL(Dictionary())
 	);
 	ClassDB::bind_method(
 		D_METHOD(
@@ -479,6 +493,51 @@ Array DuelNativeCompactKernel::get_legal_actions_for_owner(int64_t owner_id_valu
 	return actions;
 }
 
+int64_t DuelNativeCompactKernel::count_legal_actions_for_owner(int64_t owner_id_value) const {
+	if (!loaded) return 0;
+	return count_legal_native_actions(state, static_cast<int32_t>(owner_id_value));
+}
+
+Array DuelNativeCompactKernel::inspect_ordered_search_actions_for_owner(
+	int64_t owner_id_value,
+	const Dictionary &preferred_action
+) const {
+	Array result;
+	if (!loaded) return result;
+	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
+	NativeAction preferred;
+	const NativeAction *preferred_pointer = nullptr;
+	if (!preferred_action.is_empty()) {
+		preferred.type = StringName(preferred_action.get("action_type", StringName("play")))
+			== StringName("activate")
+			? NativeActionType::ACTIVATE
+			: NativeActionType::PLAY;
+		preferred.source_index = static_cast<int32_t>(
+			static_cast<int64_t>(preferred_action.get("source_index", -1))
+		);
+		preferred.source_instance_id = StringName(
+			preferred_action.get("source_instance_id", StringName())
+		);
+		preferred.target_is_hand_slot = StringName(
+			preferred_action.get("target_kind", StringName("board_cell"))
+		) == StringName("hand_slot");
+		preferred.target_index = static_cast<int32_t>(
+			static_cast<int64_t>(preferred_action.get("target_index", -1))
+		);
+		preferred.activation_index = static_cast<int32_t>(
+			static_cast<int64_t>(preferred_action.get("activation_index", 0))
+		);
+		preferred_pointer = &preferred;
+	}
+	auto actions = order_search_actions(
+		state,
+		get_legal_native_actions(state, owner_id),
+		preferred_pointer
+	);
+	for (const NativeAction &action : actions) result.append(materialize_action(action));
+	return result;
+}
+
 std::vector<DuelNativeCompactKernel::NativeAction>
 DuelNativeCompactKernel::get_legal_native_actions(
 	const NativeState &value,
@@ -549,6 +608,57 @@ DuelNativeCompactKernel::get_legal_native_actions(
 	return actions;
 }
 
+int64_t DuelNativeCompactKernel::count_legal_native_actions(
+	const NativeState &value,
+	int32_t owner_id
+) const {
+	if (
+		(owner_id != 1 && owner_id != 2)
+		|| value.board_card_indices.size() != 9
+		|| value.zones.size() < 2
+	) return 0;
+	int64_t empty_cells = 0;
+	for (const int32_t card_index : value.board_card_indices) {
+		if (card_index < 0) empty_cells += 1;
+	}
+	const int32_t hand_zone_index = owner_id - 1;
+	int64_t valid_hand_cards = 0;
+	for (const int32_t card_index : value.zones[hand_zone_index]) {
+		if (
+			card_index >= 0
+			&& card_index < static_cast<int32_t>(value.card_instance_ids.size())
+		) valid_hand_cards += 1;
+	}
+	int64_t action_count = valid_hand_cards * empty_cells;
+	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return action_count;
+	for (size_t source_cell = 0; source_cell < value.board_card_indices.size(); ++source_cell) {
+		const int32_t card_index = value.board_card_indices[source_cell];
+		if (card_index < 0 || value.board_owners[source_cell] != owner_id) continue;
+		if (!card_effects_enabled(value, card_index, owner_id)) continue;
+		for (
+			size_t ability_index = 0;
+			ability_index < value.card_runtime_abilities[card_index].size();
+			++ability_index
+		) {
+			const CompiledAbility *ability = runtime_ability(
+				value,
+				card_index,
+				static_cast<int32_t>(ability_index)
+			);
+			if (ability == nullptr || !ability->has_activation) continue;
+			const CompiledActivation &activation = ability->activation;
+			if (!can_pay_activation_cost(value, card_index, activation)) continue;
+			action_count += count_activation_target_indices(
+				value,
+				owner_id,
+				static_cast<int32_t>(source_cell),
+				activation
+			);
+		}
+	}
+	return action_count;
+}
+
 Dictionary DuelNativeCompactKernel::materialize_action(const NativeAction &action) const {
 	Dictionary result;
 	const bool activation = action.type == NativeActionType::ACTIVATE;
@@ -570,12 +680,24 @@ bool DuelNativeCompactKernel::action_canonical_less(
 ) const {
 	if (left.type != right.type) return left.type == NativeActionType::ACTIVATE;
 	if (left.source_index != right.source_index) return left.source_index < right.source_index;
-	const String left_instance = String(left.source_instance_id);
-	const String right_instance = String(right.source_instance_id);
-	if (left_instance != right_instance) return left_instance < right_instance;
+	if (left.source_instance_id != right.source_instance_id) {
+		return left.source_instance_id < right.source_instance_id;
+	}
 	if (left.target_is_hand_slot != right.target_is_hand_slot) return !left.target_is_hand_slot;
 	if (left.target_index != right.target_index) return left.target_index < right.target_index;
 	return left.activation_index < right.activation_index;
+}
+
+bool DuelNativeCompactKernel::actions_equal(
+	const NativeAction &left,
+	const NativeAction &right
+) const {
+	return left.type == right.type
+		&& left.source_index == right.source_index
+		&& left.source_instance_id == right.source_instance_id
+		&& left.target_is_hand_slot == right.target_is_hand_slot
+		&& left.target_index == right.target_index
+		&& left.activation_index == right.activation_index;
 }
 
 int32_t DuelNativeCompactKernel::action_structural_score(
@@ -619,28 +741,32 @@ int32_t DuelNativeCompactKernel::action_structural_score(
 std::vector<DuelNativeCompactKernel::NativeAction>
 DuelNativeCompactKernel::order_search_actions(
 	const NativeState &value,
-	const std::vector<NativeAction> &actions,
+	std::vector<NativeAction> actions,
 	const NativeAction *preferred
 ) const {
-	std::vector<NativeAction> ordered = actions;
-	std::stable_sort(
-		ordered.begin(),
-		ordered.end(),
-		[this, &value, preferred](const NativeAction &left, const NativeAction &right) {
-			if (preferred != nullptr) {
-				const bool left_preferred = !action_canonical_less(left, *preferred)
-					&& !action_canonical_less(*preferred, left);
-				const bool right_preferred = !action_canonical_less(right, *preferred)
-					&& !action_canonical_less(*preferred, right);
-				if (left_preferred != right_preferred) return left_preferred;
+	for (NativeAction &action : actions) {
+		action.ordering_preferred = preferred != nullptr
+			&& actions_equal(action, *preferred);
+		action.ordering_history_score = 0;
+		action.ordering_structural_score = action_structural_score(value, action);
+	}
+	std::sort(
+		actions.begin(),
+		actions.end(),
+		[this](const NativeAction &left, const NativeAction &right) {
+			if (left.ordering_preferred != right.ordering_preferred) {
+				return left.ordering_preferred;
 			}
-			const int32_t left_score = action_structural_score(value, left);
-			const int32_t right_score = action_structural_score(value, right);
-			if (left_score != right_score) return left_score > right_score;
+			if (left.ordering_history_score != right.ordering_history_score) {
+				return left.ordering_history_score > right.ordering_history_score;
+			}
+			if (left.ordering_structural_score != right.ordering_structural_score) {
+				return left.ordering_structural_score > right.ordering_structural_score;
+			}
 			return action_canonical_less(left, right);
 		}
 	);
-	return ordered;
+	return actions;
 }
 
 Dictionary DuelNativeCompactKernel::apply_play_transition(
@@ -1608,8 +1734,9 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	positional_score += zone_value(root_deck_zone, deck_card_weight)
 		- zone_value(opponent_deck_zone, deck_card_weight);
 	positional_score += static_cast<int32_t>(
-		get_legal_native_actions(value, root_owner).size()
-	) - static_cast<int32_t>(get_legal_native_actions(value, opponent_owner).size());
+		count_legal_native_actions(value, root_owner)
+		- count_legal_native_actions(value, opponent_owner)
+	);
 	positional_score += board_resource_value(root_owner)
 		- board_resource_value(opponent_owner);
 	positional_score += danger_value(opponent_owner) - danger_value(root_owner);
@@ -1701,7 +1828,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	const auto legal_started = collect_diagnostics
 		? std::chrono::steady_clock::now()
 		: std::chrono::steady_clock::time_point();
-	const std::vector<NativeAction> legal_actions = get_legal_native_actions(
+	std::vector<NativeAction> legal_actions = get_legal_native_actions(
 		value,
 		value.scalars[0]
 	);
@@ -1713,7 +1840,10 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	const auto order_started = collect_diagnostics
 		? std::chrono::steady_clock::now()
 		: std::chrono::steady_clock::time_point();
-	const std::vector<NativeAction> actions = order_search_actions(value, legal_actions);
+	const std::vector<NativeAction> actions = order_search_actions(
+		value,
+		std::move(legal_actions)
+	);
 	if (collect_diagnostics) {
 		stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - order_started
@@ -3792,6 +3922,89 @@ bool DuelNativeCompactKernel::activation_targets_hand(
 	);
 }
 
+bool DuelNativeCompactKernel::activation_target_matches(
+	const NativeState &value,
+	int32_t owner_id,
+	int32_t target_cell,
+	TargetRuleOpcode target_rule
+) const {
+	if (
+		target_cell < 0
+		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+	) return false;
+	const int32_t target_card_index = value.board_card_indices[target_cell];
+	switch (target_rule) {
+		case TargetRuleOpcode::ADJACENT_EMPTY_BOARD:
+		case TargetRuleOpcode::ANY_EMPTY_BOARD:
+			return target_card_index < 0;
+		case TargetRuleOpcode::ADJACENT_ALLY_BOARD:
+		case TargetRuleOpcode::OTHER_ALLY_BOARD:
+			return target_card_index >= 0 && value.board_owners[target_cell] == owner_id;
+		case TargetRuleOpcode::ADJACENT_ENEMY_BOARD:
+		case TargetRuleOpcode::ANY_ENEMY_BOARD:
+			return target_card_index >= 0 && value.board_owners[target_cell] != owner_id;
+		default:
+			return false;
+	}
+}
+
+int32_t DuelNativeCompactKernel::count_activation_target_indices(
+	const NativeState &value,
+	int32_t owner_id,
+	int32_t source_cell,
+	const CompiledActivation &activation
+) const {
+	if (
+		owner_id < 1 || owner_id > 2
+		|| source_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| value.board_card_indices[source_cell] < 0
+		|| value.board_owners[source_cell] != owner_id
+		|| !activation.declaration_valid
+	) return 0;
+	if (activation_targets_hand(activation)) {
+		const int32_t target_owner = (
+			activation.target_rule == TargetRuleOpcode::ENEMY_HAND_CARD
+			? other_owner(owner_id)
+			: owner_id
+		);
+		const int32_t zone_index = target_owner - 1;
+		return (
+			zone_index >= 0 && zone_index < static_cast<int32_t>(value.zones.size())
+			? static_cast<int32_t>(value.zones[zone_index].size())
+			: 0
+		);
+	}
+	int32_t count = 0;
+	if (
+		activation.target_rule == TargetRuleOpcode::OTHER_ALLY_BOARD
+		|| activation.target_rule == TargetRuleOpcode::ANY_EMPTY_BOARD
+		|| activation.target_rule == TargetRuleOpcode::ANY_ENEMY_BOARD
+	) {
+		for (size_t target_cell = 0; target_cell < value.board_card_indices.size(); ++target_cell) {
+			if (
+				static_cast<int32_t>(target_cell) != source_cell
+				&& activation_target_matches(
+					value,
+					owner_id,
+					static_cast<int32_t>(target_cell),
+					activation.target_rule
+				)
+			) count += 1;
+		}
+		return count;
+	}
+	for (int32_t direction = 0; direction < 4; ++direction) {
+		if (activation_target_matches(
+			value,
+			owner_id,
+			neighbor_index(source_cell, direction),
+			activation.target_rule
+		)) count += 1;
+	}
+	return count;
+}
+
 std::vector<int32_t> DuelNativeCompactKernel::get_activation_target_indices(
 	const NativeState &value,
 	int32_t owner_id,
@@ -3826,27 +4039,6 @@ std::vector<int32_t> DuelNativeCompactKernel::get_activation_target_indices(
 		return targets;
 	}
 
-	auto matches = [&](int32_t target_cell) {
-		if (
-			target_cell < 0
-			|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
-		) return false;
-		const int32_t target_card_index = value.board_card_indices[target_cell];
-		switch (activation.target_rule) {
-			case TargetRuleOpcode::ADJACENT_EMPTY_BOARD:
-			case TargetRuleOpcode::ANY_EMPTY_BOARD:
-				return target_card_index < 0;
-			case TargetRuleOpcode::ADJACENT_ALLY_BOARD:
-			case TargetRuleOpcode::OTHER_ALLY_BOARD:
-				return target_card_index >= 0 && value.board_owners[target_cell] == owner_id;
-			case TargetRuleOpcode::ADJACENT_ENEMY_BOARD:
-			case TargetRuleOpcode::ANY_ENEMY_BOARD:
-				return target_card_index >= 0 && value.board_owners[target_cell] != owner_id;
-			default:
-				return false;
-		}
-	};
-
 	if (
 		activation.target_rule == TargetRuleOpcode::OTHER_ALLY_BOARD
 		|| activation.target_rule == TargetRuleOpcode::ANY_EMPTY_BOARD
@@ -3855,14 +4047,24 @@ std::vector<int32_t> DuelNativeCompactKernel::get_activation_target_indices(
 		for (size_t target_cell = 0; target_cell < value.board_card_indices.size(); ++target_cell) {
 			if (
 				static_cast<int32_t>(target_cell) != source_cell
-				&& matches(static_cast<int32_t>(target_cell))
+				&& activation_target_matches(
+					value,
+					owner_id,
+					static_cast<int32_t>(target_cell),
+					activation.target_rule
+				)
 			) targets.push_back(static_cast<int32_t>(target_cell));
 		}
 		return targets;
 	}
 	for (int32_t direction = 0; direction < 4; ++direction) {
 		const int32_t target_cell = neighbor_index(source_cell, direction);
-		if (matches(target_cell)) targets.push_back(target_cell);
+		if (activation_target_matches(
+			value,
+			owner_id,
+			target_cell,
+			activation.target_rule
+		)) targets.push_back(target_cell);
 	}
 	return targets;
 }
@@ -4771,12 +4973,12 @@ bool DuelNativeCompactKernel::board_has_enabled_activation_for_owner(
 			const CompiledActivation &activation = ability->activation;
 			if (
 				can_pay_activation_cost(value, card_index, activation)
-				&& !get_activation_target_indices(
+				&& count_activation_target_indices(
 					value,
 					owner_id,
 					static_cast<int32_t>(cell),
 					activation
-				).empty()
+				) > 0
 			) return true;
 		}
 	}

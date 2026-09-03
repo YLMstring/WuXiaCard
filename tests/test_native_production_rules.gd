@@ -4,6 +4,8 @@ const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const CompactState = preload("res://scripts/duel_compact_state.gd")
+const EnemyManifest = preload("res://tests/benchmarks/enemy_ai_benchmark_manifest.gd")
+const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_state_factory.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Simulator = preload("res://scripts/duel_simulator.gd")
@@ -29,6 +31,8 @@ func _run() -> void:
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
 	_test_native_search_keeps_same_turn_principal_actions()
+	_test_native_search_action_order_is_stable()
+	_test_native_fast_legal_action_count_matches_generated_actions()
 	_test_native_search_diagnostics_contract()
 	_test_native_search_releases_temporary_dictionaries()
 	if _failures == 0:
@@ -343,6 +347,199 @@ func _test_native_search_keeps_same_turn_principal_actions() -> void:
 		== int((plan[1] as Dictionary).get("owner_turn_serial", -2)),
 		"Native continuation actions share the searched owner-turn serial"
 	)
+
+
+func _test_native_search_action_order_is_stable() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi4", Rules.OPPONENT_OWNER, &"ordering_active"
+	)
+	source["ki"] = 2
+	board[4] = {"owner": Rules.OPPONENT_OWNER, "card": source}
+	board[1] = {
+		"owner": Rules.OPPONENT_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"ordering_ally"),
+	}
+	board[3] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"ordering_enemy"),
+	}
+	var state := State.new(
+		board,
+		[],
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"ordering_hand_a"),
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"ordering_hand_b"),
+		],
+		Rules.OPPONENT_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Native action-order fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Native action-order fixture creates the kernel")
+	if kernel == null:
+		return
+	_check(bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "Native action-order fixture loads")
+	var ordered: Array = kernel.call(
+		"inspect_ordered_search_actions_for_owner", Rules.OPPONENT_OWNER
+	) as Array
+	var repeated: Array = kernel.call(
+		"inspect_ordered_search_actions_for_owner", Rules.OPPONENT_OWNER
+	) as Array
+	var ordered_keys: Array[String] = []
+	var repeated_keys: Array[String] = []
+	for action_value: Variant in ordered:
+		ordered_keys.append(_native_action_key(action_value as Dictionary))
+	for action_value: Variant in repeated:
+		repeated_keys.append(_native_action_key(action_value as Dictionary))
+	var expected: Array[String] = [
+		"activate|4|ordering_active|board_cell|1|1",
+		"activate|4|ordering_active|board_cell|3|2",
+		"activate|4|ordering_active|board_cell|5|0",
+		"activate|4|ordering_active|board_cell|7|0",
+		"play|0|ordering_hand_a|board_cell|0|0",
+		"play|1|ordering_hand_b|board_cell|0|0",
+		"play|0|ordering_hand_a|board_cell|6|0",
+		"play|1|ordering_hand_b|board_cell|6|0",
+		"play|0|ordering_hand_a|board_cell|2|0",
+		"play|1|ordering_hand_b|board_cell|2|0",
+		"play|0|ordering_hand_a|board_cell|8|0",
+		"play|1|ordering_hand_b|board_cell|8|0",
+		"play|0|ordering_hand_a|board_cell|5|0",
+		"play|0|ordering_hand_a|board_cell|7|0",
+		"play|1|ordering_hand_b|board_cell|5|0",
+		"play|1|ordering_hand_b|board_cell|7|0",
+	]
+	_check(ordered_keys == expected, "Native structural action order stays frozen (actual=%s)" % [ordered_keys])
+	_check(repeated_keys == expected, "Repeated native action ordering is deterministic")
+	if ordered.size() > 8:
+		var preferred: Dictionary = ordered[8] as Dictionary
+		var preferred_order: Array = kernel.call(
+			"inspect_ordered_search_actions_for_owner",
+			Rules.OPPONENT_OWNER,
+			preferred
+		) as Array
+		_check(
+			not preferred_order.is_empty()
+			and _native_action_key(preferred_order[0] as Dictionary) == _native_action_key(preferred),
+			"Exact preferred-action matching outranks structural order"
+		)
+
+
+func _native_action_key(action: Dictionary) -> String:
+	return "%s|%d|%s|%s|%d|%d" % [
+		StringName(action.get("action_type", &"")),
+		int(action.get("source_index", -1)),
+		StringName(action.get("source_instance_id", &"")),
+		StringName(action.get("target_kind", &"")),
+		int(action.get("target_index", -1)),
+		int(action.get("activation_index", 0)),
+	]
+
+
+func _test_native_fast_legal_action_count_matches_generated_actions() -> void:
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	for matchup_index: int in range(mini(matchups.size(), 3)):
+		var matchup: Dictionary = matchups[matchup_index]
+		var games: Array[Dictionary] = EnemyManifest.expand_matchup(matchup)
+		if games.is_empty():
+			continue
+		var built: Dictionary = EnemyStateFactory.build(games[0], matchup)
+		var opening: State = built.get("state") as State
+		_assert_native_legal_count_equivalence(opening, "Quick opening %d" % matchup_index)
+		var opening_actions: Array[Action] = Simulator.get_legal_actions(opening)
+		if not opening_actions.is_empty():
+			var transition: Dictionary = Simulator.apply_action(opening, opening_actions[0])
+			if bool(transition.get("valid", false)):
+				_assert_native_legal_count_equivalence(
+					transition.get("state") as State,
+					"Quick derived state %d" % matchup_index
+				)
+		var extra_play: State = opening.duplicate_state()
+		extra_play.extra_card_plays_remaining = 1
+		_assert_native_legal_count_equivalence(
+			extra_play,
+			"Quick extra-play state %d" % matchup_index
+		)
+
+	var activation_board: Array = Rules.empty_board()
+	var multi_activation: Dictionary = Catalog.create_instance(
+		&"YouFenLaiYi4", Rules.OPPONENT_OWNER, &"count_multi_activation"
+	)
+	multi_activation["ki"] = 2
+	activation_board[4] = {"owner": Rules.OPPONENT_OWNER, "card": multi_activation}
+	activation_board[1] = {
+		"owner": Rules.OPPONENT_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"count_ally"),
+	}
+	activation_board[3] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"count_enemy"),
+	}
+	var hand_target: Dictionary = Catalog.create_instance(
+		&"HanBinZhenQi3", Rules.OPPONENT_OWNER, &"count_hand_activation"
+	)
+	hand_target["ki"] = 1
+	activation_board[0] = {"owner": Rules.OPPONENT_OWNER, "card": hand_target}
+	var activation_state := State.new(
+		activation_board,
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"count_player_hand_a"),
+			Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"count_player_hand_b"),
+		],
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"count_opponent_hand_a"),
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"count_opponent_hand_b"),
+		],
+		Rules.OPPONENT_OWNER
+	)
+	_assert_native_legal_count_equivalence(activation_state, "Multiple board and hand activations")
+
+	var no_ki_state: State = activation_state.duplicate_state()
+	var no_ki_hand_source: Dictionary = (no_ki_state.board[0] as Dictionary).get("card", {}) as Dictionary
+	var no_ki_multi_source: Dictionary = (no_ki_state.board[4] as Dictionary).get("card", {}) as Dictionary
+	no_ki_hand_source["ki"] = 0
+	no_ki_multi_source["ki"] = 0
+	_assert_native_legal_count_equivalence(no_ki_state, "Unaffordable activations")
+
+	var full_board: Array = Rules.empty_board()
+	for cell: int in range(full_board.size()):
+		var owner_id: int = Rules.PLAYER_OWNER if cell % 2 == 0 else Rules.OPPONENT_OWNER
+		full_board[cell] = {
+			"owner": owner_id,
+			"card": Catalog.create_instance(
+				&"TaiZuChangQuan", owner_id, StringName("count_full_%d" % cell)
+			),
+		}
+	var full_state := State.new(
+		full_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"count_full_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"count_full_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+	_assert_native_legal_count_equivalence(full_state, "Full board with no play cells")
+
+
+func _assert_native_legal_count_equivalence(state: State, label: String) -> void:
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s crosses the compact boundary" % label)
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "%s creates the count kernel" % label)
+	if kernel == null:
+		return
+	_check(bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "%s loads natively" % label)
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var generated: Array = kernel.call("get_legal_actions_for_owner", owner_id) as Array
+		var counted: int = int(kernel.call("count_legal_actions_for_owner", owner_id))
+		_check(
+			counted == generated.size(),
+			"%s owner %d fast count matches %d generated actions (counted=%d)"
+			% [label, owner_id, generated.size(), counted]
+		)
 
 
 func _test_native_search_diagnostics_contract() -> void:

@@ -516,6 +516,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool target_is_hand_slot = false;
 		int32_t target_index = -1;
 		int32_t activation_index = 0;
+		bool ordering_preferred = false;
+		int32_t ordering_history_score = 0;
+		int32_t ordering_structural_score = 0;
 	};
 
 	struct NativeSearchStats {
@@ -613,6 +616,11 @@ public:
 		const StringName &reason = StringName("non_attack_flip")
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
+	int64_t count_legal_actions_for_owner(int64_t owner_id) const;
+	Array inspect_ordered_search_actions_for_owner(
+		int64_t owner_id,
+		const Dictionary &preferred_action = Dictionary()
+	) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_fixed_depth(
 		int64_t root_owner,
@@ -672,7 +680,12 @@ private:
 		const NativeState &value,
 		int32_t owner_id
 	) const;
+	int64_t count_legal_native_actions(
+		const NativeState &value,
+		int32_t owner_id
+	) const;
 	Dictionary materialize_action(const NativeAction &action) const;
+	bool actions_equal(const NativeAction &left, const NativeAction &right) const;
 	bool action_canonical_less(const NativeAction &left, const NativeAction &right) const;
 	int32_t action_structural_score(
 		const NativeState &value,
@@ -680,7 +693,7 @@ private:
 	) const;
 	std::vector<NativeAction> order_search_actions(
 		const NativeState &value,
-		const std::vector<NativeAction> &actions,
+		std::vector<NativeAction> actions,
 		const NativeAction *preferred = nullptr
 	) const;
 	bool transition_action(
@@ -803,6 +816,18 @@ private:
 		int32_t owner_id,
 		int32_t source_cell,
 		const CompiledActivation &activation
+	) const;
+	int32_t count_activation_target_indices(
+		const NativeState &value,
+		int32_t owner_id,
+		int32_t source_cell,
+		const CompiledActivation &activation
+	) const;
+	bool activation_target_matches(
+		const NativeState &value,
+		int32_t owner_id,
+		int32_t target_cell,
+		TargetRuleOpcode target_rule
 	) const;
 	bool activation_targets_hand(const CompiledActivation &activation) const;
 	bool card_has_unsupported_enabled_modifier(
