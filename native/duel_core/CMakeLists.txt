@@ -11,6 +11,13 @@ set(GODOTCPP_API_VERSION "4.7" CACHE STRING "Godot extension API version")
 set(GODOTCPP_TARGET "template_debug" CACHE STRING "godot-cpp target")
 set(GODOTCPP_ENABLE_TESTING OFF CACHE BOOL "Disable godot-cpp tests" FORCE)
 set(GODOTCPP_USE_HOT_RELOAD OFF CACHE BOOL "Disable hot reload accounting" FORCE)
+set(
+    GODOTCPP_BINDING_HOOK_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/godot_cpp_binding_hooks.py"
+    CACHE FILEPATH
+    "Project-local godot-cpp binding fixes"
+    FORCE
+)
 
 add_subdirectory(godot-cpp)
 

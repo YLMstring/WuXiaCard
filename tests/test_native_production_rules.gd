@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
 	_test_native_search_keeps_same_turn_principal_actions()
+	_test_native_search_releases_temporary_dictionaries()
 	if _failures == 0:
 		print("NATIVE_PRODUCTION_RULES_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -340,6 +341,55 @@ func _test_native_search_keeps_same_turn_principal_actions() -> void:
 		int((plan[0] as Dictionary).get("owner_turn_serial", -1))
 		== int((plan[1] as Dictionary).get("owner_turn_serial", -2)),
 		"Native continuation actions share the searched owner-turn serial"
+	)
+
+
+func _test_native_search_releases_temporary_dictionaries() -> void:
+	var compact := CompactState.new()
+	_check(compact.capture_state(_make_search_state()), "Native memory fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Native memory fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Native memory fixture loads into the native kernel"
+	)
+	var warmup: Dictionary = kernel.call(
+		"search_iterative_depth",
+		Rules.OPPONENT_OWNER,
+		0,
+		0,
+		2_000,
+		0,
+		&"complete_round",
+		Callable()
+	) as Dictionary
+	warmup.clear()
+	var minimum_usage: float = float(Performance.get_monitor(Performance.MEMORY_STATIC))
+	var maximum_usage: float = minimum_usage
+	for _repeat_index: int in range(3):
+		var result: Dictionary = kernel.call(
+			"search_iterative_depth",
+			Rules.OPPONENT_OWNER,
+			0,
+			0,
+			2_000,
+			0,
+			&"complete_round",
+			Callable()
+		) as Dictionary
+		_check(int(result.get("nodes", 0)) >= 2_000, "Native memory fixture reaches its node budget")
+		result.clear()
+		var usage: float = float(Performance.get_monitor(Performance.MEMORY_STATIC))
+		minimum_usage = minf(minimum_usage, usage)
+		maximum_usage = maxf(maximum_usage, usage)
+	_check(
+		maximum_usage - minimum_usage < 1_048_576.0,
+		"Repeated native searches release temporary Dictionary references (growth=%.2f MiB)"
+		% ((maximum_usage - minimum_usage) / 1_048_576.0)
 	)
 
 

@@ -23,6 +23,22 @@ Build products and the generated `.gdextension` live under `bin/` and are
 ignored by Git. CMake intermediates live under
 `.summer/local/native-build/` so Godot does not import compiler objects.
 
+## Godot 4.7 binding compatibility
+
+The pinned Godot 4.7 `godot-cpp` generator implements `Dictionary` move
+assignment as a copy into the destination's already initialized storage. Its
+generated implementation omits destruction of the previous destination and
+therefore leaks one Dictionary reference whenever code assigns a temporary
+Dictionary, including every native search transition's deep-copied side
+payload.
+
+`godot_cpp_binding_hooks.py` is passed to the supported
+`GODOTCPP_BINDING_HOOK_FILE` generator hook and inserts the missing destructor
+before that copy. This applies to Windows and Android generated bindings. Keep
+the hook until the pinned generator itself emits an equivalent release; verify
+any upgrade with the repeated native-search memory regression in
+`test_native_production_rules.gd`.
+
 ## Runtime scope
 
 The kernel:

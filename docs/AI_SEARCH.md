@@ -34,6 +34,15 @@ resolution, evaluation, ordering, alpha-beta traversal, and iterative deepening
 inside C++. Only completed-depth progress, the chosen action, and the current
 owner's principal continuation cross back to GDScript.
 
+Search transitions keep the event skeletons that rules resolution reads, but
+do not materialize complete runtime-card dictionaries inside presentation-only
+draw/discard/transform/summon/return events. They also skip the final
+presentation-only capture/exile index summaries. Public gameplay transitions
+still return the complete event payloads. On the same 14 real openings with a
+two-second `self_turn` budget, this raised aggregate throughput from `9987.37`
+to `10465.11` nodes/s (`+4.78%`), while all 14 opening digests and deepest
+completed depth/score/action tuples matched; depth two remained `13/14`.
+
 ## Depth and publication
 
 Search depth is measured in authoritative `owner_turn_serial` boundaries, not

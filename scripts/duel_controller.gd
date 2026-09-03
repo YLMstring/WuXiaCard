@@ -94,6 +94,7 @@ var board_cells: Array[PanelContainer] = []
 var board_cards: Array = []
 var _hovered_cell: int = -1
 var _hovered_hand_target: int = -1
+var _hovered_hand_target_owner: int = 0
 var _drag_source_zone: StringName = &""
 var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
@@ -670,23 +671,37 @@ func _on_card_drag_started(card: CardView, pointer_position: Vector2) -> void:
 func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
 	_update_targeting_trace(pointer_position)
 	var target_cell: int = _get_cell_at_position(pointer_position)
-	var target_hand_index: int = _get_enemy_hand_target_at_position(pointer_position)
-	if target_cell == _hovered_cell and target_hand_index == _hovered_hand_target:
+	var hand_target: Dictionary = _get_hand_target_at_position(pointer_position)
+	var target_hand_index: int = int(hand_target.get("index", -1))
+	var target_hand_owner: int = int(hand_target.get("owner_id", 0))
+	if (
+		target_cell == _hovered_cell
+		and target_hand_index == _hovered_hand_target
+		and target_hand_owner == _hovered_hand_target_owner
+	):
 		return
 	_hovered_cell = target_cell
 	_hovered_hand_target = target_hand_index
+	_hovered_hand_target_owner = target_hand_owner
 	_highlight_legal_cells()
 	if target_cell in _drag_valid_targets:
 		_set_cell_style(target_cell, "hover")
-	elif _has_drag_hand_candidate(target_hand_index):
-		_set_hand_target_style(target_hand_index, "hover")
+	elif _has_drag_hand_candidate(target_hand_owner, target_hand_index):
+		_set_hand_target_style(target_hand_owner, target_hand_index, "hover")
 
 
 func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 	var target_cell: int = _get_cell_at_position(pointer_position)
-	var target_hand_index: int = _get_enemy_hand_target_at_position(pointer_position)
+	var hand_target: Dictionary = _get_hand_target_at_position(pointer_position)
+	var target_hand_index: int = int(hand_target.get("index", -1))
+	var target_hand_owner: int = int(hand_target.get("owner_id", 0))
 	_clear_cell_highlights()
-	var action: ActionData = _make_drag_action(card, target_cell, target_hand_index)
+	var action: ActionData = _make_drag_action(
+		card,
+		target_cell,
+		target_hand_index,
+		target_hand_owner
+	)
 	if _can_manually_drag(card) and action != null and Simulator.is_action_legal(duel_state, action):
 		card.finish_drag_state()
 		_remove_targeting_trace()
@@ -2259,28 +2274,70 @@ func _get_cell_at_position(pointer_position: Vector2) -> int:
 	return -1
 
 
+func _get_hand_target_at_position(pointer_position: Vector2) -> Dictionary:
+	for action: ActionData in _drag_action_candidates:
+		if action.target_kind != ActionData.TARGET_HAND_SLOT:
+			continue
+		var target_owner: int = _get_hand_target_owner(action)
+		if target_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+			continue
+		var card: CardView = _get_card_view_for_logical_index(
+			target_owner,
+			action.target_index
+		)
+		if card != null and card.get_global_rect().has_point(pointer_position):
+			return {
+				"owner_id": target_owner,
+				"index": action.target_index,
+			}
+	return {}
+
+
 func _get_enemy_hand_target_at_position(pointer_position: Vector2) -> int:
+	var target: Dictionary = _get_hand_target_at_position(pointer_position)
 	var source_owner: int = _get_drag_source_owner()
 	if source_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
 		return -1
-	var target_owner: int = (
+	var enemy_owner: int = (
 		DuelRules.OPPONENT_OWNER
 		if source_owner == DuelRules.PLAYER_OWNER
 		else DuelRules.PLAYER_OWNER
 	)
-	var container: HBoxContainer = _get_hand_for_owner(target_owner)
-	for slot_value: Node in container.get_children():
-		var slot := slot_value as PanelContainer
-		if slot == null or not slot.get_global_rect().has_point(pointer_position):
-			continue
-		var cards: Array[CardView] = _get_cards_in_slot(slot)
-		if cards.is_empty():
-			return -1
-		return _get_logical_hand_index(
-			target_owner,
-			_get_card_instance_id(cards[0])
+	if int(target.get("owner_id", 0)) != enemy_owner:
+		return -1
+	return int(target.get("index", -1))
+
+
+func _get_hand_target_owner(action: ActionData) -> int:
+	if (
+		duel_state == null
+		or action == null
+		or action.target_kind != ActionData.TARGET_HAND_SLOT
+		or action.source_index < 0
+		or action.source_index >= duel_state.board.size()
+		or not duel_state.board[action.source_index] is Dictionary
+	):
+		return 0
+	var source_slot: Dictionary = duel_state.board[action.source_index]
+	var source_owner: int = int(source_slot.get("owner", 0))
+	if source_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+		return 0
+	var source_card: Dictionary = source_slot.get("card", {}) as Dictionary
+	var activation: Dictionary = Abilities.get_activation(
+		source_card,
+		action.activation_index,
+		duel_state.get_enabled_effect_gates(source_owner)
+	)
+	var target_rule := StringName(activation.get("target_rule", &""))
+	if target_rule == Catalog.TARGET_ALLY_HAND_CARD:
+		return source_owner
+	if target_rule == Catalog.TARGET_ENEMY_HAND_CARD:
+		return (
+			DuelRules.OPPONENT_OWNER
+			if source_owner == DuelRules.PLAYER_OWNER
+			else DuelRules.PLAYER_OWNER
 		)
-	return -1
+	return 0
 
 
 func _get_drag_source_owner() -> int:
@@ -2294,13 +2351,14 @@ func _get_drag_source_owner() -> int:
 	return int((board[_drag_source_index] as Dictionary).get("owner", 0))
 
 
-func _has_drag_hand_candidate(target_hand_index: int) -> bool:
-	if target_hand_index < 0:
+func _has_drag_hand_candidate(target_owner: int, target_hand_index: int) -> bool:
+	if target_owner == 0 or target_hand_index < 0:
 		return false
 	for action: ActionData in _drag_action_candidates:
 		if (
 			action.target_kind == ActionData.TARGET_HAND_SLOT
 			and action.target_index == target_hand_index
+			and _get_hand_target_owner(action) == target_owner
 		):
 			return true
 	return false
@@ -2342,7 +2400,8 @@ func _get_drag_targets(card: CardView) -> Array[int]:
 func _make_drag_action(
 	card: CardView,
 	target_cell: int,
-	target_hand_index: int = -1
+	target_hand_index: int = -1,
+	target_hand_owner: int = 0
 ) -> ActionData:
 	var instance_id: StringName = _get_card_instance_id(card)
 	if _drag_source_zone == ActionData.SOURCE_HAND:
@@ -2356,10 +2415,18 @@ func _make_drag_action(
 	if _drag_source_zone == ActionData.SOURCE_BOARD:
 		for action: ActionData in _drag_action_candidates:
 			if (
-				action.target_kind == ActionData.TARGET_BOARD_CELL
-				and action.target_index == target_cell
-				or action.target_kind == ActionData.TARGET_HAND_SLOT
-				and action.target_index == target_hand_index
+				(
+					action.target_kind == ActionData.TARGET_BOARD_CELL
+					and action.target_index == target_cell
+				)
+				or (
+					action.target_kind == ActionData.TARGET_HAND_SLOT
+					and action.target_index == target_hand_index
+					and (
+						target_hand_owner == 0
+						or _get_hand_target_owner(action) == target_hand_owner
+					)
+				)
 			):
 				return action.duplicate_action()
 	return null
@@ -2370,6 +2437,7 @@ func _clear_drag_context() -> void:
 	_drag_source_zone = &""
 	_drag_source_index = -1
 	_hovered_hand_target = -1
+	_hovered_hand_target_owner = 0
 	_drag_valid_targets.clear()
 	_drag_action_candidates.clear()
 
@@ -2455,7 +2523,11 @@ func _highlight_legal_hand_targets() -> void:
 	_clear_hand_target_highlights()
 	for action: ActionData in _drag_action_candidates:
 		if action.target_kind == ActionData.TARGET_HAND_SLOT:
-			_set_hand_target_style(action.target_index, "legal")
+			_set_hand_target_style(
+				_get_hand_target_owner(action),
+				action.target_index,
+				"legal"
+			)
 
 
 func _clear_hand_target_highlights() -> void:
@@ -2466,15 +2538,9 @@ func _clear_hand_target_highlights() -> void:
 				_set_hand_slot_style(slot, "normal")
 
 
-func _set_hand_target_style(logical_index: int, mode: String) -> void:
-	var source_owner: int = _get_drag_source_owner()
-	if source_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
+func _set_hand_target_style(target_owner: int, logical_index: int, mode: String) -> void:
+	if target_owner not in [DuelRules.PLAYER_OWNER, DuelRules.OPPONENT_OWNER]:
 		return
-	var target_owner: int = (
-		DuelRules.OPPONENT_OWNER
-		if source_owner == DuelRules.PLAYER_OWNER
-		else DuelRules.PLAYER_OWNER
-	)
 	var card: CardView = _get_card_view_for_logical_index(target_owner, logical_index)
 	if card == null:
 		return
@@ -2503,6 +2569,7 @@ func _set_hand_slot_style(slot: PanelContainer, mode: String) -> void:
 func _clear_cell_highlights() -> void:
 	_hovered_cell = -1
 	_hovered_hand_target = -1
+	_hovered_hand_target_owner = 0
 	for cell_index: int in range(board_cells.size()):
 		_set_cell_style(cell_index, "normal")
 	_clear_hand_target_highlights()

@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-02
+Updated: 2026-09-03
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -28,6 +28,11 @@ release-ready Android package.
 - Known working Summer engine: `4.7.2.stable.mono.custom_build.a8e5ca520`
 - Main scene: `res://main.tscn`
 - Deck builder scene: `res://scenes/deck_builder.tscn`
+- The Godot 4.7 `godot-cpp` generator copies `Dictionary` values during move
+  assignment but does not first release the destination. The native build uses
+  `native/duel_core/godot_cpp_binding_hooks.py` to add the missing destructor;
+  do not remove this hook when changing engine or `godot-cpp` versions without
+  first running the repeated-search memory regression.
 - Ending scene: `res://scenes/ending.tscn`
 - Logical viewport: `540×960`; portrait; `canvas_items` stretch
 - Production rules facade: `scripts/duel_simulator.gd`; strict native boundary:
@@ -244,6 +249,16 @@ The creator has made several direct UI and localization edits. Preserve those ed
   PVS, tactics, evaluation-cache, and
   alternate-evaluator profiles were removed with the old search backend.
   Search stays card-agnostic and canonical root ordering resolves equal scores.
+- Native search transitions retain rule-semantic event skeletons but omit
+  complete runtime-card snapshots and capture/exile summaries that are used
+  only by presentation. Live gameplay transitions still materialize the full
+  payload. The same 14 two-second `self_turn` openings improved from `9987.37`
+  to `10465.11` nodes/s (`+4.78%`) with identical deepest completed
+  depth/score/actions and unchanged `13/14` depth-two completion.
+- Hand-target drag hit testing is owner-aware. Enemy-hand activations such as
+  HanBin target only the opponent's physical hand, while allied-hand
+  activations such as RanMu and WuXiang target only their current owner's hand;
+  the logical slot index is never interpreted against the opposite container.
 - Internal modifier checks use read-only views rather than deep-copying every
   modifier dictionary. The public copying API is unchanged. The 2026-08-29
   14-opening production profile reached `547.48` nodes/s versus `490.18`

@@ -102,8 +102,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   return order/full-hand fallback, reveal events, heart-method skipping,
   retained-ability survival, permanent suppression, and queued layers.
 - `test_activation_targeting_swap_presentation.gd` — anchored board activation
-  traces, fixed enemy-hand-slot hit testing, logical hand target commits,
-  exact-card reveal presentation, and ordinary move/swap view identity.
+  traces, owner-aware allied/enemy fixed-hand-slot hit testing, logical hand
+  target commits, exact-card reveal presentation, and ordinary move/swap view
+  identity.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.

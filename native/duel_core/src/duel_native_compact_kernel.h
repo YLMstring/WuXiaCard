@@ -556,6 +556,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	std::vector<Variant> ability_declaration_pool;
 	bool loaded = false;
 	String last_error;
+	// Search keeps semantic event skeletons but omits UI-only nested payloads.
+	mutable bool include_presentation_payloads = true;
 
 protected:
 	static void _bind_methods();
@@ -659,7 +661,8 @@ private:
 		NativeState &next,
 		Resolution &resolution,
 		bool &supported,
-		String &reason
+		String &reason,
+		bool materialize_presentation_payloads = true
 	) const;
 	bool transition_play(
 		const NativeState &source,

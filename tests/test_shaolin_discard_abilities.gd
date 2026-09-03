@@ -136,6 +136,17 @@ func _test_ranmu_activation_targets_own_hand() -> void:
 		and _hand_has(next_state.get_hand(Rules.OPPONENT_OWNER), &"ranmu_enemy_hand"),
 		"RanMu discards the selected allied hand instance, not the opponent's matching index"
 	)
+	var discarded_events: Array[Dictionary] = _events_of_type(
+		transition.get("events", []),
+		&"card_discarded"
+	)
+	_check(
+		discarded_events.size() == 1
+		and StringName((discarded_events[0].get("card", {}) as Dictionary).get(
+			"instance_id", &""
+		)) == &"ranmu_own_target",
+		"Live transitions retain the complete discarded-card payload used by presentation"
+	)
 	_check(_board_card(next_state, &"ranmu_source").get("powers", []) == [6, 8, 8, 6], "RanMu buffs itself")
 	_check(_board_card(next_state, &"ranmu_ally").get("powers", []) == [2, 2, 2, 2], "RanMu buffs every allied board card")
 	_check(next_state.extra_card_plays_remaining == 1, "RanMu grants exactly one extra card play")

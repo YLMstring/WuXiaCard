@@ -1487,12 +1487,19 @@ bool DuelNativeCompactKernel::transition_action(
 	NativeState &next,
 	Resolution &resolution,
 	bool &supported,
-	String &reason
+	String &reason,
+	bool materialize_presentation_payloads
 ) const {
+	const bool previous_include_presentation_payloads = include_presentation_payloads;
+	include_presentation_payloads = materialize_presentation_payloads;
+	bool valid = false;
 	if (action.type == NativeActionType::PLAY) {
-		return transition_play(source, action, next, resolution, supported, reason);
+		valid = transition_play(source, action, next, resolution, supported, reason);
+	} else {
+		valid = transition_activate(source, action, next, resolution, supported, reason);
 	}
-	return transition_activate(source, action, next, resolution, supported, reason);
+	include_presentation_payloads = previous_include_presentation_payloads;
+	return valid;
 }
 
 int32_t DuelNativeCompactKernel::evaluate_baseline(
@@ -1694,7 +1701,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			next,
 			resolution,
 			transition_supported,
-			transition_reason
+			transition_reason,
+			false
 		)) {
 			stats.supported = false;
 			stats.reason = transition_reason.is_empty()
@@ -1866,7 +1874,8 @@ Dictionary DuelNativeCompactKernel::search_fixed_depth(
 			next,
 			resolution,
 			transition_supported,
-			transition_reason
+			transition_reason,
+			false
 		)) {
 			stats.supported = false;
 			stats.reason = transition_reason.is_empty()
@@ -2074,7 +2083,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 				next,
 				resolution,
 				transition_supported,
-				transition_reason
+				transition_reason,
+				false
 			)) {
 				stats.supported = false;
 				stats.reason = transition_reason.is_empty()
@@ -2183,7 +2193,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 				next,
 				resolution,
 				transition_supported,
-				transition_reason
+				transition_reason,
+				false
 			)) break;
 			remaining_boundaries -= std::max(next.scalars[2] - current.scalars[2], 0);
 			current = std::move(next);
@@ -4151,13 +4162,15 @@ void DuelNativeCompactKernel::append_resolution(
 			range.second + event_offset,
 		});
 	}
-	for (int64_t index = 0; index < addition.captures.size(); ++index) {
-		const Variant value = addition.captures[index];
-		if (destination.captures.find(value) < 0) destination.captures.append(value);
-	}
-	for (int64_t index = 0; index < addition.exiles.size(); ++index) {
-		const Variant value = addition.exiles[index];
-		if (destination.exiles.find(value) < 0) destination.exiles.append(value);
+	if (include_presentation_payloads) {
+		for (int64_t index = 0; index < addition.captures.size(); ++index) {
+			const Variant value = addition.captures[index];
+			if (destination.captures.find(value) < 0) destination.captures.append(value);
+		}
+		for (int64_t index = 0; index < addition.exiles.size(); ++index) {
+			const Variant value = addition.exiles[index];
+			if (destination.exiles.find(value) < 0) destination.exiles.append(value);
+		}
 	}
 	destination.extra_play_requests.insert(
 		destination.extra_play_requests.end(),
@@ -5210,7 +5223,9 @@ bool DuelNativeCompactKernel::draw_cards(
 		event["instance_id"] = value.card_instance_ids[card_index];
 		event["logical_hand_index"] = logical_hand_index;
 		event["hand_slot_index"] = slot;
-		event["card"] = restore_runtime_card(value, card_index);
+		if (include_presentation_payloads) {
+			event["card"] = restore_runtime_card(value, card_index);
+		}
 		resolution.events.append(event);
 		for (int64_t audience_index = 0; audience_index < reveal_audiences.size(); ++audience_index) {
 			const Variant observer_value = reveal_audiences[audience_index];
@@ -5402,7 +5417,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 		discarded["hand_slot_index"] = record.hand_slot_index;
 		discarded["discard_batch_id"] = batch_id;
 		discarded["discard_batch_size"] = static_cast<int32_t>(records.size());
-		discarded["card"] = restore_runtime_card(value, record.card_index);
+		if (include_presentation_payloads) {
+			discarded["card"] = restore_runtime_card(value, record.card_index);
+		}
 		resolution.events.append(discarded);
 	}
 
@@ -5608,7 +5625,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 	transformed["instance_id"] = value.card_instance_ids[target];
 	transformed["old_card_id"] = old_card_id;
 	transformed["card_id"] = prototype->card_id;
-	transformed["card"] = restore_runtime_card(value, target);
+	if (include_presentation_payloads) {
+		transformed["card"] = restore_runtime_card(value, target);
+	}
 	resolution.events.append(transformed);
 	return ActionOutcome::APPLIED;
 }
@@ -7597,7 +7616,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			added["instance_id"] = instance_id;
 			added["logical_hand_index"] = static_cast<int32_t>(hand.size()) - 1;
 			added["hand_slot_index"] = hand_slot;
-			added["card"] = restore_runtime_card(value, added_card_index);
+			if (include_presentation_payloads) {
+				added["card"] = restore_runtime_card(value, added_card_index);
+			}
 			resolution.events.append(added);
 			if (!already_revealed) {
 				Dictionary revealed;
@@ -8252,7 +8273,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	summoned_event["owner_id"] = source_owner;
 	summoned_event["card_id"] = card_id;
 	summoned_event["instance_id"] = instance_id;
-	summoned_event["card"] = restore_runtime_card(value, summoned_card_index);
+	if (include_presentation_payloads) {
+		summoned_event["card"] = restore_runtime_card(value, summoned_card_index);
+	}
 	summoned_event["from_hand_instance_id"] = from_hand_instance_id;
 	summoned_event["from_removed_instance_id"] = from_removed_instance_id;
 	summoned_event["from_discard_instance_id"] = from_discard_instance_id;
@@ -8362,7 +8385,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	summoned_event["owner_id"] = source_owner;
 	summoned_event["card_id"] = card_id;
 	summoned_event["instance_id"] = new_instance_id;
-	summoned_event["card"] = restore_runtime_card(value, new_card_index);
+	if (include_presentation_payloads) {
+		summoned_event["card"] = restore_runtime_card(value, new_card_index);
+	}
 	summoned_event["from_hand_instance_id"] = StringName();
 	summoned_event["from_removed_instance_id"] = StringName();
 	summoned_event["from_discard_instance_id"] = StringName();
@@ -8548,7 +8573,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		returned["instance_id"] = value.card_instance_ids[target_card_index];
 		returned["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
 		returned["hand_slot_index"] = hand_slot;
-		returned["card"] = restore_runtime_card(value, target_card_index);
+		if (include_presentation_payloads) {
+			returned["card"] = restore_runtime_card(value, target_card_index);
+		}
 		resolution.events.append(returned);
 		if (!already_revealed) {
 			Dictionary revealed;
@@ -8674,7 +8701,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	returned["instance_id"] = new_instance_id;
 	returned["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
 	returned["hand_slot_index"] = hand_slot;
-	returned["card"] = restore_runtime_card(value, new_card_index);
+	if (include_presentation_payloads) {
+		returned["card"] = restore_runtime_card(value, new_card_index);
+	}
 	resolution.events.append(returned);
 
 	Dictionary revealed;
@@ -9083,7 +9112,11 @@ bool DuelNativeCompactKernel::exile_card(
 	resolution.events.append_array(after.events);
 	resolution.captures.append_array(after.captures);
 	resolution.exiles.append_array(after.exiles);
-	if (record_exile_index && resolution.exiles.find(exiled_cell) < 0) {
+	if (
+		include_presentation_payloads
+		&& record_exile_index
+		&& resolution.exiles.find(exiled_cell) < 0
+	) {
 		resolution.exiles.append(exiled_cell);
 	}
 	return true;
@@ -9127,7 +9160,9 @@ bool DuelNativeCompactKernel::flip_card(
 	for (const uint64_t ability_handle : remove_before_after_flip) {
 		remove_ability_with_event(value, target_card_index, ability_handle, attacker_cell, attacker_card_index, current_target_cell, new_owner, resolution.events);
 	}
-	if (record_capture_index) resolution.captures.append(current_target_cell);
+	if (include_presentation_payloads && record_capture_index) {
+		resolution.captures.append(current_target_cell);
+	}
 	EventContext after_context = context;
 	after_context.trigger_cell = current_target_cell;
 	after_context.trigger_card_index = target_card_index;

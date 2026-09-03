@@ -44,6 +44,7 @@ func _run() -> void:
 	duel.queue_free()
 	await process_frame
 	await _check_enemy_hand_activation_target()
+	await _check_ally_hand_activation_target()
 	_cleanup_test_profile()
 	if _failures == 0:
 		print("ACTIVATION_TARGETING_SWAP_PRESENTATION_PASSED checks=%d" % _checks)
@@ -300,6 +301,94 @@ func _check_enemy_hand_activation_target() -> void:
 		and &"card_revealed" in duel.debug_get_presentation_trace(),
 		"Enemy-hand activation commits through the controller and presents the reveal"
 	)
+	duel.queue_free()
+	await process_frame
+
+
+func _check_ally_hand_activation_target() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	duel.set("deck_profile_path", TEST_PROFILE_PATH)
+	duel.set("testing_mode", true)
+	duel.set("opponent_hand_shuffle_seed", -1)
+	duel.set("opening_layout_seed", -1)
+	var opponent_ids: Array[StringName] = [
+		&"LeiZHenJian1",
+		&"KuiHua1",
+		&"YouFenLaiYi2",
+		&"TuNaShu2",
+		&"CangSongYingKe2",
+	]
+	duel.opponent_card_ids = opponent_ids
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var player_instance_id: StringName = duel.debug_get_hand_instance_ids(
+		Rules.PLAYER_OWNER
+	)[0]
+	var ranmu: Dictionary = Catalog.create_instance(
+		&"RanMuDaoFa2",
+		Rules.PLAYER_OWNER,
+		player_instance_id
+	)
+	duel.duel_state.get_hand(Rules.PLAYER_OWNER)[0] = ranmu
+	var ranmu_hand_view: Node = duel._get_card_view_for_logical_index(
+		Rules.PLAYER_OWNER,
+		0
+	)
+	ranmu_hand_view.sync_runtime_data(ranmu, Rules.PLAYER_OWNER)
+	_check(
+		await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false),
+		"RanMu enters the board for allied-hand targeting presentation"
+	)
+	_check(
+		await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 0, false),
+		"The opponent returns control while RanMu retains allied hand targets"
+	)
+	_check(
+		duel.has_method("_get_hand_target_at_position"),
+		"Hand activation hit testing supports owner-aware targets"
+	)
+	if not duel.has_method("_get_hand_target_at_position"):
+		duel.queue_free()
+		await process_frame
+		return
+
+	var source_view: Control = duel.board_cards[4]
+	var own_target_view: Control = duel._get_card_view_for_logical_index(
+		Rules.PLAYER_OWNER,
+		0
+	)
+	var enemy_target_view: Control = duel._get_card_view_for_logical_index(
+		Rules.OPPONENT_OWNER,
+		0
+	)
+	var pointer_start: Vector2 = source_view.get_global_rect().get_center()
+	var own_pointer: Vector2 = own_target_view.get_global_rect().get_center()
+	source_view._try_begin_drag(pointer_start, -1)
+	source_view._move_drag(own_pointer)
+	var own_target: Dictionary = duel._get_hand_target_at_position(own_pointer)
+	var preview: Action = duel._make_drag_action(
+		source_view,
+		-1,
+		int(own_target.get("index", -1)),
+		int(own_target.get("owner_id", 0))
+	)
+	_check(
+		int(own_target.get("owner_id", 0)) == Rules.PLAYER_OWNER
+		and int(own_target.get("index", -1)) == 0
+		and preview != null
+		and preview.target_kind == Action.TARGET_HAND_SLOT,
+		"RanMu drag maps the physical allied hand card to its own logical slot"
+	)
+	_check(
+		(duel._get_hand_target_at_position(
+			enemy_target_view.get_global_rect().get_center()
+		) as Dictionary).is_empty(),
+		"RanMu drag rejects every opponent hand card"
+	)
+	source_view._try_end_drag(Vector2(-100.0, -100.0), -1)
+	await process_frame
 	duel.queue_free()
 	await process_frame
 
