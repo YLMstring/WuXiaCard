@@ -91,6 +91,30 @@ controller searches again from the resulting exact state. New searches and
 reused actions share a presentation-only two-second minimum decision time;
 actual search time counts toward the minimum, and testing fast mode removes it.
 
+## Native action ordering
+
+Production enables two card-agnostic ordering aids before alpha-beta traversal:
+
+- internal PV ordering reuses the matching action from the previous fully
+  completed iterative-deepening result; hints from interrupted iterations are
+  discarded;
+- conservative history ordering rewards generic action shapes that actually
+  caused cutoffs. Its key contains owner, source location, target shape,
+  powers, ki, ability count, and activation index, but never card IDs, names,
+  instance IDs, or physical hand-slot identity.
+
+The final priority is `PV > structural ordering > history > canonical key`.
+Putting history ahead of structural ordering was measured and rejected because
+it made several real openings substantially shallower. History is scoped to a
+single root search, uses a saturating quadratic cutoff reward, and decays after
+each completed public depth. Explicit `false` switches remain available to
+controlled benchmarks through `use_internal_pv_ordering` and
+`use_history_ordering`; normal production calls default both to `true`.
+
+High-frequency timing and ordering counters are gated by
+`collect_search_diagnostics`, which defaults to `false`. Enabling diagnostics
+is for node-limited probes only and must not be used for production timing.
+
 ## Search result contract
 
 `DuelSearch.find_best_action_iterative()` is the public entry point.
@@ -156,6 +180,25 @@ powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps
 Reports are written under `.summer/local/ai-benchmarks/` and must not be
 committed. Compare measurements from the same engine build, binary type,
 machine state, fixture version, limits, and opening digest.
+
+Native performance comparisons on Windows must load a C++ `Release` build
+compiled for Godot's `template_debug` ABI:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1 -Configuration Release -GodotCppTarget template_debug
+```
+
+A `Debug + template_debug` library is valid for correctness debugging but is
+roughly half-speed here and must not be compared with Release benchmark data.
+
+The 2026-09-03 four-opening `self_turn` ordering evaluation used the same real
+Quick fixtures and ten-second budget. The optimized final candidate (cached
+ordering fields and mobility counts, internal PV, and conservative history)
+reached `11666.0` nodes/s versus the phase baseline's `10130.05` (`+15.2%`).
+It still completed depth two in 2/4 openings; the two incomplete estimates
+improved to `15.20s` and `10.60s`. Strict history priority was rejected after
+it reduced depth-two completion to 1/4. These figures are performance evidence,
+not a claim that a different equal-score move is strategically stronger.
 
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow

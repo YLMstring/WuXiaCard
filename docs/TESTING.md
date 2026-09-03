@@ -200,6 +200,16 @@ powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4
 ```
 
+Before comparing native performance on Windows, rebuild the library as
+`Release` for the engine's `template_debug` ABI:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1 -Configuration Release -GodotCppTarget template_debug
+```
+
+`Debug + template_debug` remains useful for correctness debugging but is not a
+performance baseline; on the current workload it is roughly half-speed.
+
 This runs the 14 unique real Quick openings with the production ten-second
 budget, Dummy audio, per-depth and partial-root diagnostics, plus three
 node-limited timing probes. The current target is depth two under the selected

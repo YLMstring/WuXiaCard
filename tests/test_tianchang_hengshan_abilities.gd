@@ -95,13 +95,20 @@ func _test_tianchang_power_from_adjacent_enemies() -> void:
 		Rules.PLAYER_OWNER,
 		&"tianchang_power"
 	)
+	var initial_powers: Array = (tianchang.get("powers", []) as Array).duplicate()
 	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [tianchang], [], Rules.PLAYER_OWNER),
 		Action.make_play(0, 4, &"tianchang_power")
 	)
 	var next_state: State = transition.get("state") as State
 	var runtime: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
-	_check(runtime.get("powers", []) == [9, 8, 9, 8], "Two adjacent enemies add two to every side")
+	var expected_powers: Array = []
+	for power: Variant in initial_powers:
+		expected_powers.append(int(power) + 2)
+	_check(
+		runtime.get("powers", []) == expected_powers,
+		"Two adjacent enemies add two to every side"
+	)
 	_check(
 		_event_count(transition.get("events", []), &"powers_changed") == 2,
 		"The selector applies one power increase per adjacent enemy"

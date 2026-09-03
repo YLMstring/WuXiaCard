@@ -302,6 +302,19 @@ func _test_production_search_routes_to_native_whole_tree() -> void:
 	_check(bool(production.get("has_completed_depth", false)), "Production search completes a native whole-tree depth")
 	_check(production.has("depth_snapshots"), "Production search exposes native depth snapshots")
 	_check(
+		bool(production.get("internal_pv_ordering_enabled", false)),
+		"Production search enables internal PV ordering by default"
+	)
+	_check(
+		bool(production.get("history_ordering_enabled", false)),
+		"Production search enables conservative history ordering by default"
+	)
+	_check(
+		not bool(explicit_native.get("internal_pv_ordering_enabled", true))
+		and not bool(explicit_native.get("history_ordering_enabled", true)),
+		"Direct native search keeps ordering switches opt-in for controlled comparisons"
+	)
+	_check(
 		production_action.canonical_key() == native_action.canonical_key(),
 		"Production search chooses the explicit native whole-tree action"
 	)

@@ -306,11 +306,16 @@ The creator has made several direct UI and localization edits. Preserve those ed
   former search backend. Quick, Extended, and Production now run the same
   native search for every seat; old `enhanced`/`baseline` report fields are
   balanced assignment labels, not different algorithms.
-- The first 14-opening ten-second profile after this migration completed
-  complete-round depth one in every opening and depth two in none. Mean depth-one
-  time was `1.365s`; the closest depth-two attempt completed 34/35 root actions
-  with a `10.28s` linear estimate. Current timing probes still point first to
-  canonical state keys and simulator transition/state-copy cost.
+- Production native ordering now defaults to internal previous-completed-depth
+  PV hints plus conservative per-root history, with final priority
+  `PV > structural > history > canonical`. Strict history priority was rejected
+  because it reduced real-opening depth-two completion. Timing/cutoff counters
+  remain behind the default-off `collect_search_diagnostics` switch. The
+  2026-09-03 four-opening `self_turn` evaluation reached `11666.0` nodes/s
+  versus the phase baseline's `10130.05` (`+15.2%`), retained 2/4 completed
+  depth-two openings, and reduced the two incomplete linear estimates to
+  `15.20s` and `10.60s`. Use `Release + template_debug` native builds for
+  performance comparisons; `Debug + template_debug` is about half-speed.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live

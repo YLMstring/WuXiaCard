@@ -109,8 +109,13 @@ static func find_best_action_iterative(
 	should_cancel: Callable = Callable(),
 	on_progress: Callable = Callable()
 ) -> Dictionary:
+	var production_limits: Dictionary = limits.duplicate(true)
+	if not production_limits.has("use_internal_pv_ordering"):
+		production_limits["use_internal_pv_ordering"] = true
+	if not production_limits.has("use_history_ordering"):
+		production_limits["use_history_ordering"] = true
 	return find_best_action_iterative_native(
-		state, root_owner, limits, should_cancel, on_progress
+		state, root_owner, production_limits, should_cancel, on_progress
 	)
 
 
