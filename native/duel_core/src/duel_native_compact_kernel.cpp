@@ -164,10 +164,16 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"max_nodes",
 			"min_completed_depth",
 			"should_cancel",
-			"on_progress"
+			"on_progress",
+			"use_internal_pv_ordering",
+			"use_history_ordering",
+			"collect_search_diagnostics"
 		),
 		&DuelNativeCompactKernel::search_iterative_round_depth,
-		DEFVAL(Callable())
+		DEFVAL(Callable()),
+		DEFVAL(false),
+		DEFVAL(false),
+		DEFVAL(false)
 	);
 	ClassDB::bind_method(
 		D_METHOD(
@@ -179,10 +185,16 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"min_completed_depth",
 			"depth_mode",
 			"should_cancel",
-			"on_progress"
+			"on_progress",
+			"use_internal_pv_ordering",
+			"use_history_ordering",
+			"collect_search_diagnostics"
 		),
 		&DuelNativeCompactKernel::search_iterative_depth,
-		DEFVAL(Callable())
+		DEFVAL(Callable()),
+		DEFVAL(false),
+		DEFVAL(false),
+		DEFVAL(false)
 	);
 }
 
@@ -1666,6 +1678,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	const NativeSearchLimits *limits
 ) const {
 	if (search_should_stop(stats, limits)) return 0;
+	const bool collect_diagnostics = limits != nullptr
+		&& limits->collect_search_diagnostics;
 	stats.nodes += 1;
 	stats.max_action_ply = std::max(stats.max_action_ply, action_ply);
 	if (is_terminal(value) || remaining_owner_turn_boundaries <= 0) {
@@ -1673,16 +1687,52 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		if (remaining_owner_turn_boundaries <= 0 && !is_terminal(value)) {
 			stats.horizon_reached = true;
 		}
-		return evaluate_baseline(value, root_owner);
+		const auto evaluate_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
+		const int32_t score = evaluate_baseline(value, root_owner);
+		if (collect_diagnostics) {
+			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - evaluate_started
+			).count();
+		}
+		return score;
 	}
-	const std::vector<NativeAction> actions = order_search_actions(
+	const auto legal_started = collect_diagnostics
+		? std::chrono::steady_clock::now()
+		: std::chrono::steady_clock::time_point();
+	const std::vector<NativeAction> legal_actions = get_legal_native_actions(
 		value,
-		get_legal_native_actions(value, value.scalars[0])
+		value.scalars[0]
 	);
+	if (collect_diagnostics) {
+		stats.time_legal_actions_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - legal_started
+		).count();
+	}
+	const auto order_started = collect_diagnostics
+		? std::chrono::steady_clock::now()
+		: std::chrono::steady_clock::time_point();
+	const std::vector<NativeAction> actions = order_search_actions(value, legal_actions);
+	if (collect_diagnostics) {
+		stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - order_started
+		).count();
+		stats.ordered_nodes += 1;
+	}
 	stats.generated_actions += static_cast<int64_t>(actions.size());
 	if (actions.empty()) {
 		stats.leaves += 1;
-		return evaluate_baseline(value, root_owner);
+		const auto evaluate_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
+		const int32_t score = evaluate_baseline(value, root_owner);
+		if (collect_diagnostics) {
+			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - evaluate_started
+			).count();
+		}
+		return score;
 	}
 	const bool maximizing = value.scalars[0] == root_owner;
 	int32_t best_score = maximizing
@@ -1690,11 +1740,17 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		: std::numeric_limits<int32_t>::max();
 	NativeAction best_action;
 	bool has_best_action = false;
+	int32_t child_ordinal = 0;
 	for (const NativeAction &action : actions) {
+		child_ordinal += 1;
+		if (collect_diagnostics) stats.visited_children += 1;
 		NativeState next;
 		Resolution resolution;
 		bool transition_supported = false;
 		String transition_reason;
+		const auto apply_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
 		if (!transition_action(
 			value,
 			action,
@@ -1709,6 +1765,11 @@ int32_t DuelNativeCompactKernel::search_minimax(
 				? String("Native search reached an invalid transition")
 				: transition_reason;
 			return 0;
+		}
+		if (collect_diagnostics) {
+			stats.time_apply_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - apply_started
+			).count();
 		}
 		stats.applied_transitions += 1;
 		const int32_t completed_owner_turns = std::max(
@@ -1744,6 +1805,13 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		}
 		if (beta <= alpha) {
 			stats.cutoffs += 1;
+			if (collect_diagnostics) {
+				if (child_ordinal == 1) stats.cutoff_first_child += 1;
+				else if (child_ordinal == 2) stats.cutoff_second_child += 1;
+				else if (child_ordinal <= 4) stats.cutoff_third_fourth_child += 1;
+				else if (child_ordinal <= 8) stats.cutoff_fifth_eighth_child += 1;
+				else stats.cutoff_ninth_or_later_child += 1;
+			}
 			break;
 		}
 	}
@@ -1754,10 +1822,19 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		&& !stats.aborted
 		&& stats.supported
 	) {
-		(*limits->principal_actions)[search_position_key(
+		const auto key_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
+		const uint64_t position_key = search_position_key(
 			value,
 			remaining_owner_turn_boundaries
-		)] = best_action;
+		);
+		if (collect_diagnostics) {
+			stats.time_key_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - key_started
+			).count();
+		}
+		(*limits->principal_actions)[position_key] = best_action;
 	}
 	return best_score;
 }
@@ -1938,7 +2015,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	int64_t max_nodes_value,
 	int64_t min_completed_depth_value,
 	const Callable &should_cancel,
-	const Callable &on_progress
+	const Callable &on_progress,
+	bool use_internal_pv_ordering,
+	bool use_history_ordering,
+	bool collect_search_diagnostics
 ) const {
 	return search_iterative_depth(
 		root_owner_value,
@@ -1948,7 +2028,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 		min_completed_depth_value,
 		StringName("complete_round"),
 		should_cancel,
-		on_progress
+		on_progress,
+		use_internal_pv_ordering,
+		use_history_ordering,
+		collect_search_diagnostics
 	);
 }
 
@@ -1960,7 +2043,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	int64_t min_completed_depth_value,
 	const StringName &depth_mode_name,
 	const Callable &should_cancel,
-	const Callable &on_progress
+	const Callable &on_progress,
+	bool use_internal_pv_ordering,
+	bool use_history_ordering,
+	bool collect_search_diagnostics
 ) const {
 	Dictionary result;
 	result["supported"] = false;
@@ -1972,6 +2058,28 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["cutoffs"] = 0;
 	result["generated_actions"] = 0;
 	result["applied_transitions"] = 0;
+	result["time_legal_actions_usec"] = 0;
+	result["time_order_usec"] = 0;
+	result["time_apply_usec"] = 0;
+	result["time_evaluate_usec"] = 0;
+	result["time_key_usec"] = 0;
+	result["ordered_nodes"] = 0;
+	result["visited_children"] = 0;
+	result["cutoff_first_child"] = 0;
+	result["cutoff_second_child"] = 0;
+	result["cutoff_third_fourth_child"] = 0;
+	result["cutoff_fifth_eighth_child"] = 0;
+	result["cutoff_ninth_or_later_child"] = 0;
+	result["pv_queries"] = 0;
+	result["pv_hits"] = 0;
+	result["pv_legal_hits"] = 0;
+	result["pv_illegal_hits"] = 0;
+	result["history_queries"] = 0;
+	result["history_hits"] = 0;
+	result["history_cutoffs"] = 0;
+	result["internal_pv_ordering_enabled"] = use_internal_pv_ordering;
+	result["history_ordering_enabled"] = use_history_ordering;
+	result["search_diagnostics_enabled"] = collect_search_diagnostics;
 	result["max_action_ply"] = 0;
 	result["root_actions_total"] = 0;
 	result["root_actions_started"] = 0;
@@ -2018,7 +2126,16 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		result["reason"] = support_reason;
 		return result;
 	}
+	NativeSearchStats stats;
+	const auto root_legal_started = collect_search_diagnostics
+		? std::chrono::steady_clock::now()
+		: std::chrono::steady_clock::time_point();
 	const std::vector<NativeAction> root_actions = get_legal_native_actions(state, root_owner);
+	if (collect_search_diagnostics) {
+		stats.time_legal_actions_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - root_legal_started
+		).count();
+	}
 	result["supported"] = true;
 	if (root_actions.empty()) {
 		result["reason"] = "No legal root action";
@@ -2030,11 +2147,13 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	NativeSearchLimits limits;
 	limits.max_nodes = std::max(max_nodes_value, static_cast<int64_t>(0));
 	limits.should_cancel = should_cancel;
+	limits.use_internal_pv_ordering = use_internal_pv_ordering;
+	limits.use_history_ordering = use_history_ordering;
+	limits.collect_search_diagnostics = collect_search_diagnostics;
 	if (budget_usec_value > 0) {
 		limits.has_deadline = true;
 		limits.deadline = started + std::chrono::microseconds(budget_usec_value);
 	}
-	NativeSearchStats stats;
 	NativeAction completed_best_action;
 	bool has_completed_action = false;
 	int32_t completed_best_score = 0;
@@ -2052,11 +2171,20 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		std::unordered_map<uint64_t, NativeAction> iteration_principal_actions;
 		limits.principal_actions = &iteration_principal_actions;
 		stats.horizon_reached = false;
+		const auto root_order_started = collect_search_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
 		const std::vector<NativeAction> ordered_root_actions = order_search_actions(
 			state,
 			root_actions,
 			has_completed_action ? &completed_best_action : nullptr
 		);
+		if (collect_search_diagnostics) {
+			stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - root_order_started
+			).count();
+			stats.ordered_nodes += 1;
+		}
 		stats.root_actions_total = static_cast<int32_t>(ordered_root_actions.size());
 		stats.root_actions_started = 0;
 		stats.root_actions_completed = 0;
@@ -2073,10 +2201,14 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		for (const NativeAction &action : ordered_root_actions) {
 			if (search_should_stop(stats, &limits)) break;
 			stats.root_actions_started += 1;
+			if (collect_search_diagnostics) stats.visited_children += 1;
 			NativeState next;
 			Resolution resolution;
 			bool transition_supported = false;
 			String transition_reason;
+			const auto root_apply_started = collect_search_diagnostics
+				? std::chrono::steady_clock::now()
+				: std::chrono::steady_clock::time_point();
 			if (!transition_action(
 				state,
 				action,
@@ -2091,6 +2223,11 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 					? String("Native search reached an invalid root transition")
 					: transition_reason;
 				break;
+			}
+			if (collect_search_diagnostics) {
+				stats.time_apply_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+					std::chrono::steady_clock::now() - root_apply_started
+				).count();
 			}
 			stats.applied_transitions += 1;
 			const int32_t completed_owner_turns = std::max(
@@ -2154,6 +2291,25 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		snapshot["generated_actions"] = stats.generated_actions;
 		snapshot["applied_transitions"] = stats.applied_transitions;
 		snapshot["cutoffs"] = stats.cutoffs;
+		snapshot["time_legal_actions_usec"] = stats.time_legal_actions_usec;
+		snapshot["time_order_usec"] = stats.time_order_usec;
+		snapshot["time_apply_usec"] = stats.time_apply_usec;
+		snapshot["time_evaluate_usec"] = stats.time_evaluate_usec;
+		snapshot["time_key_usec"] = stats.time_key_usec;
+		snapshot["ordered_nodes"] = stats.ordered_nodes;
+		snapshot["visited_children"] = stats.visited_children;
+		snapshot["cutoff_first_child"] = stats.cutoff_first_child;
+		snapshot["cutoff_second_child"] = stats.cutoff_second_child;
+		snapshot["cutoff_third_fourth_child"] = stats.cutoff_third_fourth_child;
+		snapshot["cutoff_fifth_eighth_child"] = stats.cutoff_fifth_eighth_child;
+		snapshot["cutoff_ninth_or_later_child"] = stats.cutoff_ninth_or_later_child;
+		snapshot["pv_queries"] = stats.pv_queries;
+		snapshot["pv_hits"] = stats.pv_hits;
+		snapshot["pv_legal_hits"] = stats.pv_legal_hits;
+		snapshot["pv_illegal_hits"] = stats.pv_illegal_hits;
+		snapshot["history_queries"] = stats.history_queries;
+		snapshot["history_hits"] = stats.history_hits;
+		snapshot["history_cutoffs"] = stats.history_cutoffs;
 		snapshot["elapsed_usec"] = static_cast<int64_t>(
 			std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::steady_clock::now() - started
@@ -2228,6 +2384,25 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["cutoffs"] = stats.cutoffs;
 	result["generated_actions"] = stats.generated_actions;
 	result["applied_transitions"] = stats.applied_transitions;
+	result["time_legal_actions_usec"] = stats.time_legal_actions_usec;
+	result["time_order_usec"] = stats.time_order_usec;
+	result["time_apply_usec"] = stats.time_apply_usec;
+	result["time_evaluate_usec"] = stats.time_evaluate_usec;
+	result["time_key_usec"] = stats.time_key_usec;
+	result["ordered_nodes"] = stats.ordered_nodes;
+	result["visited_children"] = stats.visited_children;
+	result["cutoff_first_child"] = stats.cutoff_first_child;
+	result["cutoff_second_child"] = stats.cutoff_second_child;
+	result["cutoff_third_fourth_child"] = stats.cutoff_third_fourth_child;
+	result["cutoff_fifth_eighth_child"] = stats.cutoff_fifth_eighth_child;
+	result["cutoff_ninth_or_later_child"] = stats.cutoff_ninth_or_later_child;
+	result["pv_queries"] = stats.pv_queries;
+	result["pv_hits"] = stats.pv_hits;
+	result["pv_legal_hits"] = stats.pv_legal_hits;
+	result["pv_illegal_hits"] = stats.pv_illegal_hits;
+	result["history_queries"] = stats.history_queries;
+	result["history_hits"] = stats.history_hits;
+	result["history_cutoffs"] = stats.history_cutoffs;
 	result["max_action_ply"] = stats.max_action_ply;
 	result["root_actions_total"] = stats.root_actions_total;
 	result["root_actions_started"] = stats.root_actions_started;

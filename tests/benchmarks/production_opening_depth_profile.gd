@@ -354,7 +354,7 @@ func _run_timing_probes(
 			"use_tactical_extension": false,
 			"use_evaluation_cache": false,
 			"evaluator_profile": &"baseline",
-			"collect_timings": true,
+			"collect_search_diagnostics": true,
 			"depth_mode": depth_mode,
 		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
@@ -362,7 +362,8 @@ func _run_timing_probes(
 		)
 		var elapsed_usec: float = float(profile_result.get("elapsed_seconds", 0.0)) * 1_000_000.0
 		var measured_usec: int = (
-			int(profile_result.get("time_order_usec", 0))
+			int(profile_result.get("time_legal_actions_usec", 0))
+			+ int(profile_result.get("time_order_usec", 0))
 			+ int(profile_result.get("time_apply_usec", 0))
 			+ int(profile_result.get("time_key_usec", 0))
 			+ int(profile_result.get("time_evaluate_usec", 0))
@@ -372,10 +373,25 @@ func _run_timing_probes(
 			"node_limit": TIMING_NODE_LIMIT,
 			"nodes": int(profile_result.get("nodes", 0)),
 			"elapsed_seconds": float(profile_result.get("elapsed_seconds", 0.0)),
+			"time_legal_actions_usec": int(profile_result.get("time_legal_actions_usec", 0)),
 			"time_order_usec": int(profile_result.get("time_order_usec", 0)),
 			"time_apply_usec": int(profile_result.get("time_apply_usec", 0)),
 			"time_key_usec": int(profile_result.get("time_key_usec", 0)),
 			"time_evaluate_usec": int(profile_result.get("time_evaluate_usec", 0)),
+			"ordered_nodes": int(profile_result.get("ordered_nodes", 0)),
+			"visited_children": int(profile_result.get("visited_children", 0)),
+			"cutoff_first_child": int(profile_result.get("cutoff_first_child", 0)),
+			"cutoff_second_child": int(profile_result.get("cutoff_second_child", 0)),
+			"cutoff_third_fourth_child": int(profile_result.get("cutoff_third_fourth_child", 0)),
+			"cutoff_fifth_eighth_child": int(profile_result.get("cutoff_fifth_eighth_child", 0)),
+			"cutoff_ninth_or_later_child": int(profile_result.get("cutoff_ninth_or_later_child", 0)),
+			"pv_queries": int(profile_result.get("pv_queries", 0)),
+			"pv_hits": int(profile_result.get("pv_hits", 0)),
+			"pv_legal_hits": int(profile_result.get("pv_legal_hits", 0)),
+			"pv_illegal_hits": int(profile_result.get("pv_illegal_hits", 0)),
+			"history_queries": int(profile_result.get("history_queries", 0)),
+			"history_hits": int(profile_result.get("history_hits", 0)),
+			"history_cutoffs": int(profile_result.get("history_cutoffs", 0)),
 			"time_other_usec": maxi(int(elapsed_usec) - measured_usec, 0),
 		})
 	return result

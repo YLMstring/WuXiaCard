@@ -297,7 +297,13 @@ static func search_iterative(
 		maxi(int(limits.get("min_completed_depth", 0)), 0),
 		StringName(limits.get("depth_mode", &"complete_round")),
 		should_cancel,
-		native_progress_callback
+		native_progress_callback,
+		bool(limits.get("use_internal_pv_ordering", false)),
+		bool(limits.get("use_history_ordering", false)),
+		bool(limits.get(
+			"collect_search_diagnostics",
+			limits.get("collect_timings", false)
+		))
 	) as Dictionary
 	if not bool(native_result.get("supported", false)):
 		return _search_integration_failure(

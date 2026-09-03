@@ -63,6 +63,25 @@ static func find_best_action_iterative_native(
 				"generated_actions": int(snapshot.get("generated_actions", 0)),
 				"applied_transitions": int(snapshot.get("applied_transitions", 0)),
 				"cutoffs": int(snapshot.get("cutoffs", 0)),
+				"time_legal_actions_usec": int(snapshot.get("time_legal_actions_usec", 0)),
+				"time_order_usec": int(snapshot.get("time_order_usec", 0)),
+				"time_apply_usec": int(snapshot.get("time_apply_usec", 0)),
+				"time_evaluate_usec": int(snapshot.get("time_evaluate_usec", 0)),
+				"time_key_usec": int(snapshot.get("time_key_usec", 0)),
+				"ordered_nodes": int(snapshot.get("ordered_nodes", 0)),
+				"visited_children": int(snapshot.get("visited_children", 0)),
+				"cutoff_first_child": int(snapshot.get("cutoff_first_child", 0)),
+				"cutoff_second_child": int(snapshot.get("cutoff_second_child", 0)),
+				"cutoff_third_fourth_child": int(snapshot.get("cutoff_third_fourth_child", 0)),
+				"cutoff_fifth_eighth_child": int(snapshot.get("cutoff_fifth_eighth_child", 0)),
+				"cutoff_ninth_or_later_child": int(snapshot.get("cutoff_ninth_or_later_child", 0)),
+				"pv_queries": int(snapshot.get("pv_queries", 0)),
+				"pv_hits": int(snapshot.get("pv_hits", 0)),
+				"pv_legal_hits": int(snapshot.get("pv_legal_hits", 0)),
+				"pv_illegal_hits": int(snapshot.get("pv_illegal_hits", 0)),
+				"history_queries": int(snapshot.get("history_queries", 0)),
+				"history_hits": int(snapshot.get("history_hits", 0)),
+				"history_cutoffs": int(snapshot.get("history_cutoffs", 0)),
 				"elapsed_seconds": float(snapshot.get("elapsed_usec", 0)) / 1_000_000.0,
 				"completion_reason": &"searching",
 			}
@@ -149,16 +168,33 @@ static func _native_result_schema(
 	for field: String in [
 		"cutoffs", "generated_actions", "applied_transitions",
 		"root_actions_total", "root_actions_started", "root_actions_completed",
+		"time_legal_actions_usec", "time_order_usec", "time_apply_usec",
+		"time_key_usec", "time_evaluate_usec", "ordered_nodes", "visited_children",
+		"cutoff_first_child", "cutoff_second_child", "cutoff_third_fourth_child",
+		"cutoff_fifth_eighth_child", "cutoff_ninth_or_later_child",
+		"pv_queries", "pv_hits", "pv_legal_hits", "pv_illegal_hits",
+		"history_queries", "history_hits", "history_cutoffs",
 	]:
 		result[field] = int(source.get(field, 0))
 	for field: String in [
 		"transposition_hits", "pvs_probes", "pvs_researches", "evaluation_cache_hits",
-		"iteration_nodes", "current_root_action_nodes", "time_order_usec", "time_apply_usec",
-		"time_key_usec", "time_evaluate_usec", "max_tactical_depth",
+		"iteration_nodes", "current_root_action_nodes", "max_tactical_depth",
 		"tactical_candidates_scanned", "tactical_actions_searched",
 		"max_tactical_candidates_per_node", "max_tactical_actions_per_node",
 	]:
 		result[field] = 0
+	result["internal_pv_ordering_enabled"] = bool(source.get(
+		"internal_pv_ordering_enabled",
+		limits.get("use_internal_pv_ordering", false)
+	))
+	result["history_ordering_enabled"] = bool(source.get(
+		"history_ordering_enabled",
+		limits.get("use_history_ordering", false)
+	))
+	result["search_diagnostics_enabled"] = bool(source.get(
+		"search_diagnostics_enabled",
+		limits.get("collect_search_diagnostics", limits.get("collect_timings", false))
+	))
 	result["iteration_depth"] = int(source.get("iteration_depth", source.get("completed_depth", 0)))
 	result["turn_plan"] = []
 	result["search_profile"] = StringName(profile.get("name", Profile.ENHANCED))

@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
 	_test_native_search_keeps_same_turn_principal_actions()
+	_test_native_search_diagnostics_contract()
 	_test_native_search_releases_temporary_dictionaries()
 	if _failures == 0:
 		print("NATIVE_PRODUCTION_RULES_TESTS_PASSED checks=%d" % _checks)
@@ -341,6 +342,98 @@ func _test_native_search_keeps_same_turn_principal_actions() -> void:
 		int((plan[0] as Dictionary).get("owner_turn_serial", -1))
 		== int((plan[1] as Dictionary).get("owner_turn_serial", -2)),
 		"Native continuation actions share the searched owner-turn serial"
+	)
+
+
+func _test_native_search_diagnostics_contract() -> void:
+	var state: State = _make_search_state()
+	var reference: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 1,
+			"depth_mode": &"complete_round",
+			"use_internal_pv_ordering": false,
+			"use_history_ordering": false,
+			"collect_search_diagnostics": false,
+		}
+	)
+	var diagnostic: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 1,
+			"depth_mode": &"complete_round",
+			"use_internal_pv_ordering": true,
+			"use_history_ordering": true,
+			"collect_search_diagnostics": true,
+		}
+	)
+	_check(
+		not bool(reference.get("search_diagnostics_enabled", true)),
+		"Native search diagnostics default to disabled"
+	)
+	_check(
+		bool(diagnostic.get("search_diagnostics_enabled", false)),
+		"Native search accepts the benchmark-only diagnostics switch"
+	)
+	_check(
+		bool(diagnostic.get("internal_pv_ordering_enabled", false)),
+		"Native search receives the internal PV ordering switch"
+	)
+	_check(
+		bool(diagnostic.get("history_ordering_enabled", false)),
+		"Native search receives the history ordering switch"
+	)
+	for field: String in [
+		"time_legal_actions_usec",
+		"time_order_usec",
+		"time_apply_usec",
+		"time_evaluate_usec",
+		"time_key_usec",
+		"ordered_nodes",
+		"visited_children",
+		"cutoff_first_child",
+		"cutoff_second_child",
+		"cutoff_third_fourth_child",
+		"cutoff_fifth_eighth_child",
+		"cutoff_ninth_or_later_child",
+		"pv_queries",
+		"pv_hits",
+		"pv_legal_hits",
+		"pv_illegal_hits",
+		"history_queries",
+		"history_hits",
+		"history_cutoffs",
+	]:
+		_check(int(reference.get(field, -1)) == 0, "Disabled diagnostics keep %s at zero" % field)
+		_check(int(diagnostic.get(field, -1)) >= 0, "Enabled diagnostics expose nonnegative %s" % field)
+	_check(int(diagnostic.get("ordered_nodes", 0)) > 0, "Enabled diagnostics count ordered nodes")
+	_check(int(diagnostic.get("visited_children", 0)) > 0, "Enabled diagnostics count visited children")
+	var cutoff_bucket_total: int = 0
+	for field: String in [
+		"cutoff_first_child",
+		"cutoff_second_child",
+		"cutoff_third_fourth_child",
+		"cutoff_fifth_eighth_child",
+		"cutoff_ninth_or_later_child",
+	]:
+		cutoff_bucket_total += int(diagnostic.get(field, 0))
+	_check(
+		cutoff_bucket_total == int(diagnostic.get("cutoffs", -1)),
+		"Cutoff position buckets account for every native cutoff"
+	)
+	var reference_action: Action = reference.get("action") as Action
+	var diagnostic_action: Action = diagnostic.get("action") as Action
+	_check(
+		reference_action != null
+		and diagnostic_action != null
+		and reference_action.is_same_as(diagnostic_action),
+		"Diagnostic and dormant ordering switches preserve the root action"
+	)
+	_check(
+		int(reference.get("score", 0)) == int(diagnostic.get("score", 1)),
+		"Diagnostic and dormant ordering switches preserve the score"
 	)
 
 

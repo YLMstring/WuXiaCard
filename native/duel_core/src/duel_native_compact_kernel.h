@@ -524,6 +524,25 @@ class DuelNativeCompactKernel : public RefCounted {
 		int64_t cutoffs = 0;
 		int64_t generated_actions = 0;
 		int64_t applied_transitions = 0;
+		int64_t time_legal_actions_usec = 0;
+		int64_t time_order_usec = 0;
+		int64_t time_apply_usec = 0;
+		int64_t time_evaluate_usec = 0;
+		int64_t time_key_usec = 0;
+		int64_t ordered_nodes = 0;
+		int64_t visited_children = 0;
+		int64_t cutoff_first_child = 0;
+		int64_t cutoff_second_child = 0;
+		int64_t cutoff_third_fourth_child = 0;
+		int64_t cutoff_fifth_eighth_child = 0;
+		int64_t cutoff_ninth_or_later_child = 0;
+		int64_t pv_queries = 0;
+		int64_t pv_hits = 0;
+		int64_t pv_legal_hits = 0;
+		int64_t pv_illegal_hits = 0;
+		int64_t history_queries = 0;
+		int64_t history_hits = 0;
+		int64_t history_cutoffs = 0;
 		int32_t max_action_ply = 0;
 		int32_t root_actions_total = 0;
 		int32_t root_actions_started = 0;
@@ -541,6 +560,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool has_deadline = false;
 		std::chrono::steady_clock::time_point deadline;
 		bool protect_node_limit = false;
+		bool use_internal_pv_ordering = false;
+		bool use_history_ordering = false;
+		bool collect_search_diagnostics = false;
 		Callable should_cancel;
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
 	};
@@ -604,7 +626,10 @@ public:
 		int64_t max_nodes,
 		int64_t min_completed_depth,
 		const Callable &should_cancel,
-		const Callable &on_progress
+		const Callable &on_progress,
+		bool use_internal_pv_ordering = false,
+		bool use_history_ordering = false,
+		bool collect_search_diagnostics = false
 	) const;
 	Dictionary search_iterative_depth(
 		int64_t root_owner,
@@ -614,7 +639,10 @@ public:
 		int64_t min_completed_depth,
 		const StringName &depth_mode,
 		const Callable &should_cancel,
-		const Callable &on_progress
+		const Callable &on_progress,
+		bool use_internal_pv_ordering = false,
+		bool use_history_ordering = false,
+		bool collect_search_diagnostics = false
 	) const;
 
 private:
