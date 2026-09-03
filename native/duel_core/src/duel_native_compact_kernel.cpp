@@ -1788,7 +1788,17 @@ uint64_t DuelNativeCompactKernel::search_position_key(
 	const NativeState &value,
 	int32_t remaining_owner_turn_boundaries
 ) const {
-	uint64_t key = checksum(value);
+	return search_position_key_from_checksum(
+		checksum(value),
+		remaining_owner_turn_boundaries
+	);
+}
+
+uint64_t DuelNativeCompactKernel::search_position_key_from_checksum(
+	uint64_t state_checksum,
+	int32_t remaining_owner_turn_boundaries
+) const {
+	uint64_t key = state_checksum;
 	key ^= static_cast<uint64_t>(remaining_owner_turn_boundaries + 1)
 		* 0x9e3779b97f4a7c15ULL;
 	return key;
@@ -1837,12 +1847,53 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			std::chrono::steady_clock::now() - legal_started
 		).count();
 	}
+	uint64_t state_checksum = 0;
+	bool has_state_checksum = false;
+	auto ensure_state_checksum = [&]() -> uint64_t {
+		if (has_state_checksum) return state_checksum;
+		const auto key_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
+		state_checksum = checksum(value);
+		has_state_checksum = true;
+		if (collect_diagnostics) {
+			stats.time_key_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - key_started
+			).count();
+		}
+		return state_checksum;
+	};
+	const NativeAction *preferred_action = nullptr;
+	if (
+		limits != nullptr
+		&& limits->use_internal_pv_ordering
+		&& limits->previous_ordering_hints != nullptr
+	) {
+		if (collect_diagnostics) stats.pv_queries += 1;
+		const auto found = limits->previous_ordering_hints->find(ensure_state_checksum());
+		if (found != limits->previous_ordering_hints->end()) {
+			if (collect_diagnostics) stats.pv_hits += 1;
+			bool legal_hint = false;
+			for (const NativeAction &legal_action : legal_actions) {
+				if (!actions_equal(legal_action, found->second)) continue;
+				legal_hint = true;
+				break;
+			}
+			if (legal_hint) {
+				preferred_action = &found->second;
+				if (collect_diagnostics) stats.pv_legal_hits += 1;
+			} else if (collect_diagnostics) {
+				stats.pv_illegal_hits += 1;
+			}
+		}
+	}
 	const auto order_started = collect_diagnostics
 		? std::chrono::steady_clock::now()
 		: std::chrono::steady_clock::time_point();
 	const std::vector<NativeAction> actions = order_search_actions(
 		value,
-		std::move(legal_actions)
+		std::move(legal_actions),
+		preferred_action
 	);
 	if (collect_diagnostics) {
 		stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1945,26 +1996,17 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			break;
 		}
 	}
-	if (
-		has_best_action
-		&& limits != nullptr
-		&& limits->principal_actions != nullptr
-		&& !stats.aborted
-		&& stats.supported
-	) {
-		const auto key_started = collect_diagnostics
-			? std::chrono::steady_clock::now()
-			: std::chrono::steady_clock::time_point();
-		const uint64_t position_key = search_position_key(
-			value,
-			remaining_owner_turn_boundaries
-		);
-		if (collect_diagnostics) {
-			stats.time_key_usec += std::chrono::duration_cast<std::chrono::microseconds>(
-				std::chrono::steady_clock::now() - key_started
-			).count();
+	if (has_best_action && limits != nullptr && !stats.aborted && stats.supported) {
+		const uint64_t ordering_key = ensure_state_checksum();
+		if (limits->current_ordering_hints != nullptr) {
+			(*limits->current_ordering_hints)[ordering_key] = best_action;
 		}
-		(*limits->principal_actions)[position_key] = best_action;
+		if (limits->principal_actions != nullptr) {
+			(*limits->principal_actions)[search_position_key_from_checksum(
+				ordering_key,
+				remaining_owner_turn_boundaries
+			)] = best_action;
+		}
 	}
 	return best_score;
 }
@@ -2293,13 +2335,21 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	int32_t iteration_depth = 0;
 	Array depth_snapshots;
 	std::unordered_map<uint64_t, NativeAction> completed_principal_actions;
+	std::unordered_map<uint64_t, NativeAction> completed_ordering_hints;
 	while (max_depth <= 0 || depth <= max_depth) {
 		iteration_depth = depth;
 		const int32_t owner_turn_boundaries = search_depth_boundaries(depth, depth_mode);
 		limits.protect_node_limit = completed_depth < min_completed_depth;
 		if (search_should_stop(stats, &limits)) break;
 		std::unordered_map<uint64_t, NativeAction> iteration_principal_actions;
+		std::unordered_map<uint64_t, NativeAction> iteration_ordering_hints;
 		limits.principal_actions = &iteration_principal_actions;
+		limits.previous_ordering_hints = use_internal_pv_ordering
+			? &completed_ordering_hints
+			: nullptr;
+		limits.current_ordering_hints = use_internal_pv_ordering
+			? &iteration_ordering_hints
+			: nullptr;
 		stats.horizon_reached = false;
 		const auto root_order_started = collect_search_diagnostics
 			? std::chrono::steady_clock::now()
@@ -2412,6 +2462,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		has_completed_action = true;
 		completed_depth = depth;
 		completed_principal_actions = std::move(iteration_principal_actions);
+		if (use_internal_pv_ordering) {
+			iteration_ordering_hints[checksum(state)] = iteration_best_action;
+			completed_ordering_hints = std::move(iteration_ordering_hints);
+		}
 		Dictionary snapshot;
 		snapshot["depth"] = depth;
 		snapshot["owner_turn_boundaries"] = owner_turn_boundaries;
@@ -2461,6 +2515,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		depth += 1;
 	}
 	limits.principal_actions = nullptr;
+	limits.previous_ordering_hints = nullptr;
+	limits.current_ordering_hints = nullptr;
 	Array principal_actions;
 	if (has_completed_action) {
 		NativeState current = state;

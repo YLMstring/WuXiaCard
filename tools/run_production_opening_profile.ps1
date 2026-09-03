@@ -6,6 +6,8 @@ param(
     [string]$DepthMode = "complete_round",
     [ValidateSet("quick_unique", "extra_play_cap")]
     [string]$OpeningSet = "quick_unique",
+    [switch]$UseInternalPvOrdering,
+    [switch]$UseHistoryOrdering,
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
 )
@@ -41,6 +43,12 @@ try {
         "--depth-mode=$DepthMode",
         "--opening-set=$OpeningSet"
     )
+    if ($UseInternalPvOrdering) {
+        $arguments += "--use-internal-pv-ordering"
+    }
+    if ($UseHistoryOrdering) {
+        $arguments += "--use-history-ordering"
+    }
     $process = Start-Process `
         -FilePath $EnginePath `
         -ArgumentList $arguments `

@@ -568,6 +568,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool collect_search_diagnostics = false;
 		Callable should_cancel;
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
+		const std::unordered_map<uint64_t, NativeAction> *previous_ordering_hints = nullptr;
+		std::unordered_map<uint64_t, NativeAction> *current_ordering_hints = nullptr;
 	};
 
 	enum class SearchDepthMode : uint8_t {
@@ -738,6 +740,10 @@ private:
 	) const;
 	uint64_t search_position_key(
 		const NativeState &value,
+		int32_t remaining_owner_turn_boundaries
+	) const;
+	uint64_t search_position_key_from_checksum(
+		uint64_t state_checksum,
 		int32_t remaining_owner_turn_boundaries
 	) const;
 	void compile_ability_sets();

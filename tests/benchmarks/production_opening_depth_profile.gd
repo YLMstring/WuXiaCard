@@ -29,6 +29,8 @@ func _run() -> void:
 	var max_openings: int = int(options.get("max_openings", DEFAULT_MAX_OPENINGS))
 	var depth_mode: StringName = StringName(options.get("depth_mode", &"complete_round"))
 	var opening_set: StringName = StringName(options.get("opening_set", &"quick_unique"))
+	var use_internal_pv_ordering: bool = bool(options.get("use_internal_pv_ordering", false))
+	var use_history_ordering: bool = bool(options.get("use_history_ordering", false))
 	var openings: Array[Dictionary] = _build_unique_openings(opening_set)
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
@@ -38,7 +40,9 @@ func _run() -> void:
 			openings[opening_index],
 			budget_seconds,
 			depth_mode,
-			opening_set == &"extra_play_cap"
+			opening_set == &"extra_play_cap",
+			use_internal_pv_ordering,
+			use_history_ordering
 		)
 		samples.append(sample)
 		print(
@@ -77,7 +81,12 @@ func _run() -> void:
 					int(extra_play.get("nodes", 0)),
 				]
 			)
-	var timing_samples: Array[Dictionary] = _run_timing_probes(openings, depth_mode)
+	var timing_samples: Array[Dictionary] = _run_timing_probes(
+		openings,
+		depth_mode,
+		use_internal_pv_ordering,
+		use_history_ordering
+	)
 	var report: Dictionary = {
 		"schema_version": 2,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
@@ -96,6 +105,8 @@ func _run() -> void:
 			"evaluator_profile": "baseline",
 			"opening_count": openings.size(),
 			"opening_set": String(opening_set),
+			"use_internal_pv_ordering": use_internal_pv_ordering,
+			"use_history_ordering": use_history_ordering,
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
@@ -128,7 +139,9 @@ func _profile_opening(
 	opening: Dictionary,
 	budget_seconds: float,
 	depth_mode: StringName,
-	profile_extra_play: bool = false
+	profile_extra_play: bool = false,
+	use_internal_pv_ordering: bool = false,
+	use_history_ordering: bool = false
 ) -> Dictionary:
 	_depth_snapshots.clear()
 	var state: State = opening.get("state") as State
@@ -141,6 +154,8 @@ func _profile_opening(
 		"use_evaluation_cache": false,
 		"evaluator_profile": &"baseline",
 		"depth_mode": depth_mode,
+		"use_internal_pv_ordering": use_internal_pv_ordering,
+		"use_history_ordering": use_history_ordering,
 	}
 	var result: Dictionary = Search.find_best_action_iterative(
 		state.duplicate_state(),
@@ -195,6 +210,13 @@ func _profile_opening(
 		"generated_actions": int(result.get("generated_actions", 0)),
 		"applied_transitions": int(result.get("applied_transitions", 0)),
 		"cutoffs": int(result.get("cutoffs", 0)),
+		"pv_queries": int(result.get("pv_queries", 0)),
+		"pv_hits": int(result.get("pv_hits", 0)),
+		"pv_legal_hits": int(result.get("pv_legal_hits", 0)),
+		"pv_illegal_hits": int(result.get("pv_illegal_hits", 0)),
+		"history_queries": int(result.get("history_queries", 0)),
+		"history_hits": int(result.get("history_hits", 0)),
+		"history_cutoffs": int(result.get("history_cutoffs", 0)),
 		"transposition_hits": int(result.get("transposition_hits", 0)),
 		"iteration_nodes": int(result.get("iteration_nodes", 0)),
 		"root_actions_total": int(result.get("root_actions_total", 0)),
@@ -212,7 +234,9 @@ func _profile_opening(
 			state,
 			result,
 			budget_seconds,
-			depth_mode
+			depth_mode,
+			use_internal_pv_ordering,
+			use_history_ordering
 		)
 	return sample
 
@@ -221,7 +245,9 @@ func _profile_extra_play_decision(
 	state: State,
 	first_result: Dictionary,
 	budget_seconds: float,
-	depth_mode: StringName
+	depth_mode: StringName,
+	use_internal_pv_ordering: bool,
+	use_history_ordering: bool
 ) -> Dictionary:
 	var first_action: Action = first_result.get("action") as Action
 	var sample: Dictionary = {
@@ -281,6 +307,8 @@ func _profile_extra_play_decision(
 			"use_evaluation_cache": false,
 			"evaluator_profile": &"baseline",
 			"depth_mode": depth_mode,
+			"use_internal_pv_ordering": use_internal_pv_ordering,
+			"use_history_ordering": use_history_ordering,
 		},
 		Callable(),
 		Callable(self, "_record_depth_progress")
@@ -294,6 +322,13 @@ func _profile_extra_play_decision(
 	sample["generated_actions"] = int(second_result.get("generated_actions", 0))
 	sample["applied_transitions"] = int(second_result.get("applied_transitions", 0))
 	sample["cutoffs"] = int(second_result.get("cutoffs", 0))
+	sample["pv_queries"] = int(second_result.get("pv_queries", 0))
+	sample["pv_hits"] = int(second_result.get("pv_hits", 0))
+	sample["pv_legal_hits"] = int(second_result.get("pv_legal_hits", 0))
+	sample["pv_illegal_hits"] = int(second_result.get("pv_illegal_hits", 0))
+	sample["history_queries"] = int(second_result.get("history_queries", 0))
+	sample["history_hits"] = int(second_result.get("history_hits", 0))
+	sample["history_cutoffs"] = int(second_result.get("history_cutoffs", 0))
 	sample["root_actions_total"] = int(second_result.get("root_actions_total", 0))
 	sample["root_actions_started"] = int(second_result.get("root_actions_started", 0))
 	sample["root_actions_completed"] = int(second_result.get("root_actions_completed", 0))
@@ -320,6 +355,13 @@ func _record_depth_progress(progress: Dictionary) -> void:
 		"generated_actions": int(progress.get("generated_actions", 0)),
 		"applied_transitions": int(progress.get("applied_transitions", 0)),
 		"cutoffs": int(progress.get("cutoffs", 0)),
+		"pv_queries": int(progress.get("pv_queries", 0)),
+		"pv_hits": int(progress.get("pv_hits", 0)),
+		"pv_legal_hits": int(progress.get("pv_legal_hits", 0)),
+		"pv_illegal_hits": int(progress.get("pv_illegal_hits", 0)),
+		"history_queries": int(progress.get("history_queries", 0)),
+		"history_hits": int(progress.get("history_hits", 0)),
+		"history_cutoffs": int(progress.get("history_cutoffs", 0)),
 		"transposition_hits": int(progress.get("transposition_hits", 0)),
 	})
 
@@ -333,7 +375,9 @@ func _snapshot_for_depth(depth: int) -> Dictionary:
 
 func _run_timing_probes(
 	openings: Array[Dictionary],
-	depth_mode: StringName
+	depth_mode: StringName,
+	use_internal_pv_ordering: bool,
+	use_history_ordering: bool
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
@@ -356,6 +400,8 @@ func _run_timing_probes(
 			"evaluator_profile": &"baseline",
 			"collect_search_diagnostics": true,
 			"depth_mode": depth_mode,
+			"use_internal_pv_ordering": use_internal_pv_ordering,
+			"use_history_ordering": use_history_ordering,
 		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
 			state.duplicate_state(), state.active_player, timing_limits
@@ -567,6 +613,8 @@ func _parse_options() -> Dictionary:
 		"max_openings": DEFAULT_MAX_OPENINGS,
 		"depth_mode": &"complete_round",
 		"opening_set": &"quick_unique",
+		"use_internal_pv_ordering": false,
+		"use_history_ordering": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -591,4 +639,8 @@ func _parse_options() -> Dictionary:
 				push_error("Unsupported opening set: %s" % requested_set)
 				continue
 			result["opening_set"] = requested_set
+		elif argument == "--use-internal-pv-ordering":
+			result["use_internal_pv_ordering"] = true
+		elif argument == "--use-history-ordering":
+			result["use_history_ordering"] = true
 	return result

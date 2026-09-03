@@ -32,6 +32,7 @@ func _run() -> void:
 	_test_native_search_honors_cancellation()
 	_test_native_search_keeps_same_turn_principal_actions()
 	_test_native_search_action_order_is_stable()
+	_test_native_internal_pv_ordering_lifecycle()
 	_test_native_fast_legal_action_count_matches_generated_actions()
 	_test_native_search_diagnostics_contract()
 	_test_native_search_releases_temporary_dictionaries()
@@ -426,6 +427,20 @@ func _test_native_search_action_order_is_stable() -> void:
 			and _native_action_key(preferred_order[0] as Dictionary) == _native_action_key(preferred),
 			"Exact preferred-action matching outranks structural order"
 		)
+		var invalid_preferred: Dictionary = preferred.duplicate(true)
+		invalid_preferred["source_instance_id"] = &"missing_ordering_instance"
+		var invalid_order: Array = kernel.call(
+			"inspect_ordered_search_actions_for_owner",
+			Rules.OPPONENT_OWNER,
+			invalid_preferred
+		) as Array
+		var invalid_keys: Array[String] = []
+		for action_value: Variant in invalid_order:
+			invalid_keys.append(_native_action_key(action_value as Dictionary))
+		_check(
+			invalid_keys == expected,
+			"An illegal preferred hint falls back to structural and canonical order"
+		)
 
 
 func _native_action_key(action: Dictionary) -> String:
@@ -437,6 +452,107 @@ func _native_action_key(action: Dictionary) -> String:
 		int(action.get("target_index", -1)),
 		int(action.get("activation_index", 0)),
 	]
+
+
+func _test_native_internal_pv_ordering_lifecycle() -> void:
+	var state: State = _make_pv_ordering_state()
+	var without_pv: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 2,
+			"depth_mode": &"self_turn",
+			"use_internal_pv_ordering": false,
+			"collect_search_diagnostics": true,
+		}
+	)
+	var with_pv: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 2,
+			"depth_mode": &"self_turn",
+			"use_internal_pv_ordering": true,
+			"collect_search_diagnostics": true,
+		}
+	)
+	_check(int(without_pv.get("completed_depth", 0)) == 2, "PV A/B reference completes self-turn depth two")
+	_check(int(with_pv.get("completed_depth", 0)) == 2, "Internal PV candidate completes self-turn depth two")
+	var without_action: Action = without_pv.get("action") as Action
+	var with_action: Action = with_pv.get("action") as Action
+	_check(
+		without_action != null and with_action != null and without_action.is_same_as(with_action),
+		"Internal PV ordering preserves the canonical root action"
+	)
+	_check(
+		int(without_pv.get("score", 0)) == int(with_pv.get("score", 1)),
+		"Internal PV ordering preserves the fixed-depth score"
+	)
+	_check(int(without_pv.get("pv_queries", -1)) == 0, "Disabled internal PV performs no hint queries")
+	_check(int(without_pv.get("pv_hits", -1)) == 0, "Disabled internal PV reports no hint hits")
+	_check(int(with_pv.get("pv_queries", 0)) > 0, "Deeper iteration queries prior complete PV hints")
+	_check(int(with_pv.get("pv_hits", 0)) > 0, "Deeper iteration reuses at least one internal PV hint")
+	_check(
+		int(with_pv.get("pv_legal_hits", -1)) == int(with_pv.get("pv_hits", -2)),
+		"Every matched PV hint in the stable fixture is legal"
+	)
+	_check(int(with_pv.get("pv_illegal_hits", -1)) == 0, "Stable internal PV fixture has no illegal hint")
+
+	var shallow: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 1,
+			"depth_mode": &"self_turn",
+			"use_internal_pv_ordering": true,
+		}
+	)
+	var interrupted: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 3,
+			"depth_mode": &"self_turn",
+			"max_nodes": int(shallow.get("nodes", 0)) + 1,
+			"min_completed_depth": 1,
+			"use_internal_pv_ordering": true,
+		}
+	)
+	_check(
+		int(interrupted.get("completed_depth", 0)) == 1,
+		"Interrupted deeper iteration publishes only its last complete depth"
+	)
+	var shallow_action: Action = shallow.get("action") as Action
+	var interrupted_action: Action = interrupted.get("action") as Action
+	_check(
+		shallow_action != null
+		and interrupted_action != null
+		and shallow_action.is_same_as(interrupted_action),
+		"Interrupted iteration cannot replace the published complete-depth action"
+	)
+
+
+func _make_pv_ordering_state() -> State:
+	var board: Array = Rules.empty_board()
+	for cell: int in range(6):
+		var owner_id: int = Rules.PLAYER_OWNER if cell % 2 == 0 else Rules.OPPONENT_OWNER
+		board[cell] = {
+			"owner": owner_id,
+			"card": Catalog.create_instance(
+				&"TaiZuChangQuan", owner_id, StringName("pv_board_%d" % cell)
+			),
+		}
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"pv_player_hand")],
+		[
+			Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"pv_opponent_hand_a"),
+			Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"pv_opponent_hand_b"),
+		],
+		Rules.OPPONENT_OWNER
+	)
+	state.extra_card_plays_remaining = 2
+	return state
 
 
 func _test_native_fast_legal_action_count_matches_generated_actions() -> void:
