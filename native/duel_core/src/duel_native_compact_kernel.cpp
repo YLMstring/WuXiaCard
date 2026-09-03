@@ -17,6 +17,8 @@
 namespace godot {
 namespace {
 
+constexpr int32_t HISTORY_SCORE_LIMIT = 1'000'000;
+
 std::vector<int32_t> to_int_vector(const PackedInt32Array &source) {
 	std::vector<int32_t> result;
 	result.resize(source.size());
@@ -129,6 +131,20 @@ void DuelNativeCompactKernel::_bind_methods() {
 		),
 		&DuelNativeCompactKernel::inspect_ordered_search_actions_for_owner,
 		DEFVAL(Dictionary())
+	);
+	ClassDB::bind_method(
+		D_METHOD("inspect_history_keys_for_owner", "owner_id"),
+		&DuelNativeCompactKernel::inspect_history_keys_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"inspect_history_score_policy",
+			"initial_score",
+			"remaining_owner_turn_boundaries",
+			"cutoff_updates",
+			"public_depth_decays"
+		),
+		&DuelNativeCompactKernel::inspect_history_score_policy
 	);
 	ClassDB::bind_method(
 		D_METHOD(
@@ -538,6 +554,73 @@ Array DuelNativeCompactKernel::inspect_ordered_search_actions_for_owner(
 	return result;
 }
 
+Array DuelNativeCompactKernel::inspect_history_keys_for_owner(int64_t owner_id_value) const {
+	Array result;
+	if (!loaded) return result;
+	for (const NativeAction &action : get_legal_native_actions(
+		state,
+		static_cast<int32_t>(owner_id_value)
+	)) {
+		Dictionary item = materialize_action(action);
+		item["history_key"] = materialize_history_key(history_key_for_action(state, action));
+		result.append(item);
+	}
+	return result;
+}
+
+Dictionary DuelNativeCompactKernel::inspect_history_score_policy(
+	int64_t initial_score_value,
+	int64_t remaining_owner_turn_boundaries_value,
+	int64_t cutoff_updates_value,
+	int64_t public_depth_decays_value
+) const {
+	Dictionary result;
+	const int32_t remaining_owner_turn_boundaries = static_cast<int32_t>(std::clamp(
+		remaining_owner_turn_boundaries_value,
+		static_cast<int64_t>(0),
+		static_cast<int64_t>(std::numeric_limits<int32_t>::max())
+	));
+	int32_t score = static_cast<int32_t>(std::clamp(
+		initial_score_value,
+		static_cast<int64_t>(0),
+		static_cast<int64_t>(HISTORY_SCORE_LIMIT)
+	));
+	const int64_t cutoff_updates = std::max(cutoff_updates_value, static_cast<int64_t>(0));
+	const int64_t public_depth_decays = std::max(
+		public_depth_decays_value,
+		static_cast<int64_t>(0)
+	);
+	for (int64_t update = 0; update < cutoff_updates; ++update) {
+		score = reward_history_score(score, remaining_owner_turn_boundaries);
+	}
+	for (int64_t decay = 0; decay < public_depth_decays; ++decay) {
+		score = decay_history_score(score);
+	}
+	result["reward"] = history_reward(remaining_owner_turn_boundaries);
+	result["score"] = score;
+	result["limit"] = HISTORY_SCORE_LIMIT;
+	return result;
+}
+
+size_t DuelNativeCompactKernel::HistoryKeyHash::operator()(const HistoryKey &key) const {
+	size_t result = 1469598103934665603ULL;
+	auto mix = [&result](int64_t value) {
+		result ^= static_cast<size_t>(static_cast<uint64_t>(value));
+		result *= 1099511628211ULL;
+	};
+	mix(key.valid ? 1 : 0);
+	mix(static_cast<int32_t>(key.type));
+	mix(key.actor_owner);
+	mix(key.source_board_cell);
+	for (const int32_t power : key.source_powers) mix(power);
+	mix(key.source_ki);
+	mix(key.source_ability_count);
+	mix(key.target_is_hand_slot ? 1 : 0);
+	mix(key.target_index);
+	mix(key.activation_index);
+	return result;
+}
+
 std::vector<DuelNativeCompactKernel::NativeAction>
 DuelNativeCompactKernel::get_legal_native_actions(
 	const NativeState &value,
@@ -738,16 +821,113 @@ int32_t DuelNativeCompactKernel::action_structural_score(
 	return score;
 }
 
+DuelNativeCompactKernel::HistoryKey DuelNativeCompactKernel::history_key_for_action(
+	const NativeState &value,
+	const NativeAction &action
+) const {
+	HistoryKey key;
+	key.type = action.type;
+	key.actor_owner = value.scalars[0];
+	key.target_is_hand_slot = action.target_is_hand_slot;
+	key.target_index = action.target_index;
+	key.activation_index = action.activation_index;
+	int32_t source_card_index = -1;
+	if (action.type == NativeActionType::PLAY) {
+		const int32_t hand_zone = value.scalars[0] - 1;
+		if (
+			hand_zone >= 0
+			&& hand_zone < static_cast<int32_t>(value.zones.size())
+			&& action.source_index >= 0
+			&& action.source_index < static_cast<int32_t>(value.zones[hand_zone].size())
+		) source_card_index = value.zones[hand_zone][action.source_index];
+	} else if (
+		action.source_index >= 0
+		&& action.source_index < static_cast<int32_t>(value.board_card_indices.size())
+	) {
+		key.source_board_cell = action.source_index;
+		source_card_index = value.board_card_indices[action.source_index];
+	}
+	if (
+		source_card_index < 0
+		|| source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) return key;
+	key.valid = true;
+	const size_t power_offset = static_cast<size_t>(source_card_index) * 4;
+	for (size_t direction = 0; direction < key.source_powers.size(); ++direction) {
+		key.source_powers[direction] = value.card_powers[power_offset + direction];
+	}
+	key.source_ki = value.card_ki[source_card_index];
+	key.source_ability_count = static_cast<int32_t>(
+		value.card_runtime_abilities[source_card_index].size()
+	);
+	return key;
+}
+
+Array DuelNativeCompactKernel::materialize_history_key(const HistoryKey &key) const {
+	Array result;
+	result.append(key.valid ? 1 : 0);
+	result.append(static_cast<int32_t>(key.type));
+	result.append(key.actor_owner);
+	result.append(key.source_board_cell);
+	for (const int32_t power : key.source_powers) result.append(power);
+	result.append(key.source_ki);
+	result.append(key.source_ability_count);
+	result.append(key.target_is_hand_slot ? 1 : 0);
+	result.append(key.target_index);
+	result.append(key.activation_index);
+	return result;
+}
+
+int32_t DuelNativeCompactKernel::history_reward(
+	int32_t remaining_owner_turn_boundaries
+) const {
+	const int64_t depth_term = static_cast<int64_t>(
+		std::max(remaining_owner_turn_boundaries, 0)
+	) + 1;
+	return static_cast<int32_t>(std::min(
+		depth_term * depth_term,
+		static_cast<int64_t>(HISTORY_SCORE_LIMIT)
+	));
+}
+
+int32_t DuelNativeCompactKernel::reward_history_score(
+	int32_t current_score,
+	int32_t remaining_owner_turn_boundaries
+) const {
+	return static_cast<int32_t>(std::min(
+		static_cast<int64_t>(std::max(current_score, 0))
+			+ history_reward(remaining_owner_turn_boundaries),
+		static_cast<int64_t>(HISTORY_SCORE_LIMIT)
+	));
+}
+
+int32_t DuelNativeCompactKernel::decay_history_score(int32_t score) const {
+	return static_cast<int32_t>(
+		static_cast<int64_t>(std::max(score, 0)) * 3 / 4
+	);
+}
+
 std::vector<DuelNativeCompactKernel::NativeAction>
 DuelNativeCompactKernel::order_search_actions(
 	const NativeState &value,
 	std::vector<NativeAction> actions,
-	const NativeAction *preferred
+	const NativeAction *preferred,
+	const HistoryTable *history_scores,
+	NativeSearchStats *stats,
+	bool collect_diagnostics
 ) const {
 	for (NativeAction &action : actions) {
 		action.ordering_preferred = preferred != nullptr
 			&& actions_equal(action, *preferred);
 		action.ordering_history_score = 0;
+		if (history_scores != nullptr) {
+			if (collect_diagnostics && stats != nullptr) stats->history_queries += 1;
+			const auto found = history_scores->find(history_key_for_action(value, action));
+			if (found != history_scores->end()) {
+				action.ordering_history_score = found->second;
+				if (collect_diagnostics && stats != nullptr) stats->history_hits += 1;
+			}
+		}
 		action.ordering_structural_score = action_structural_score(value, action);
 	}
 	std::sort(
@@ -757,11 +937,11 @@ DuelNativeCompactKernel::order_search_actions(
 			if (left.ordering_preferred != right.ordering_preferred) {
 				return left.ordering_preferred;
 			}
-			if (left.ordering_history_score != right.ordering_history_score) {
-				return left.ordering_history_score > right.ordering_history_score;
-			}
 			if (left.ordering_structural_score != right.ordering_structural_score) {
 				return left.ordering_structural_score > right.ordering_structural_score;
+			}
+			if (left.ordering_history_score != right.ordering_history_score) {
+				return left.ordering_history_score > right.ordering_history_score;
 			}
 			return action_canonical_less(left, right);
 		}
@@ -1893,7 +2073,16 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	const std::vector<NativeAction> actions = order_search_actions(
 		value,
 		std::move(legal_actions),
-		preferred_action
+		preferred_action,
+		(
+			limits != nullptr
+			&& limits->use_history_ordering
+			&& limits->history_scores != nullptr
+			? limits->history_scores
+			: nullptr
+		),
+		&stats,
+		collect_diagnostics
 	);
 	if (collect_diagnostics) {
 		stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1986,6 +2175,21 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		}
 		if (beta <= alpha) {
 			stats.cutoffs += 1;
+			if (
+				limits != nullptr
+				&& limits->use_history_ordering
+				&& limits->history_scores != nullptr
+			) {
+				const HistoryKey history_key = history_key_for_action(value, action);
+				if (history_key.valid) {
+					int32_t &history_score = (*limits->history_scores)[history_key];
+					history_score = reward_history_score(
+						history_score,
+						remaining_owner_turn_boundaries
+					);
+					if (collect_diagnostics) stats.history_cutoffs += 1;
+				}
+			}
 			if (collect_diagnostics) {
 				if (child_ordinal == 1) stats.cutoff_first_child += 1;
 				else if (child_ordinal == 2) stats.cutoff_second_child += 1;
@@ -2336,6 +2540,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	Array depth_snapshots;
 	std::unordered_map<uint64_t, NativeAction> completed_principal_actions;
 	std::unordered_map<uint64_t, NativeAction> completed_ordering_hints;
+	HistoryTable history_scores;
+	limits.history_scores = use_history_ordering ? &history_scores : nullptr;
 	while (max_depth <= 0 || depth <= max_depth) {
 		iteration_depth = depth;
 		const int32_t owner_turn_boundaries = search_depth_boundaries(depth, depth_mode);
@@ -2350,6 +2556,13 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		limits.current_ordering_hints = use_internal_pv_ordering
 			? &iteration_ordering_hints
 			: nullptr;
+		if (use_history_ordering) {
+			for (auto history = history_scores.begin(); history != history_scores.end();) {
+				history->second = decay_history_score(history->second);
+				if (history->second <= 0) history = history_scores.erase(history);
+				else ++history;
+			}
+		}
 		stats.horizon_reached = false;
 		const auto root_order_started = collect_search_diagnostics
 			? std::chrono::steady_clock::now()
@@ -2357,7 +2570,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		const std::vector<NativeAction> ordered_root_actions = order_search_actions(
 			state,
 			root_actions,
-			has_completed_action ? &completed_best_action : nullptr
+			has_completed_action ? &completed_best_action : nullptr,
+			use_history_ordering ? &history_scores : nullptr,
+			&stats,
+			collect_search_diagnostics
 		);
 		if (collect_search_diagnostics) {
 			stats.time_order_usec += std::chrono::duration_cast<std::chrono::microseconds>(
@@ -2517,6 +2733,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.principal_actions = nullptr;
 	limits.previous_ordering_hints = nullptr;
 	limits.current_ordering_hints = nullptr;
+	limits.history_scores = nullptr;
 	Array principal_actions;
 	if (has_completed_action) {
 		NativeState current = state;

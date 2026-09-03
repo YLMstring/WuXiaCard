@@ -521,6 +521,38 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t ordering_structural_score = 0;
 	};
 
+	struct HistoryKey {
+		bool valid = false;
+		NativeActionType type = NativeActionType::PLAY;
+		int32_t actor_owner = 0;
+		int32_t source_board_cell = -1;
+		std::array<int32_t, 4> source_powers = {0, 0, 0, 0};
+		int32_t source_ki = 0;
+		int32_t source_ability_count = 0;
+		bool target_is_hand_slot = false;
+		int32_t target_index = -1;
+		int32_t activation_index = 0;
+
+		bool operator==(const HistoryKey &other) const {
+			return valid == other.valid
+				&& type == other.type
+				&& actor_owner == other.actor_owner
+				&& source_board_cell == other.source_board_cell
+				&& source_powers == other.source_powers
+				&& source_ki == other.source_ki
+				&& source_ability_count == other.source_ability_count
+				&& target_is_hand_slot == other.target_is_hand_slot
+				&& target_index == other.target_index
+				&& activation_index == other.activation_index;
+		}
+	};
+
+	struct HistoryKeyHash {
+		size_t operator()(const HistoryKey &key) const;
+	};
+
+	using HistoryTable = std::unordered_map<HistoryKey, int32_t, HistoryKeyHash>;
+
 	struct NativeSearchStats {
 		int64_t nodes = 0;
 		int64_t leaves = 0;
@@ -570,6 +602,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
 		const std::unordered_map<uint64_t, NativeAction> *previous_ordering_hints = nullptr;
 		std::unordered_map<uint64_t, NativeAction> *current_ordering_hints = nullptr;
+		HistoryTable *history_scores = nullptr;
 	};
 
 	enum class SearchDepthMode : uint8_t {
@@ -622,6 +655,13 @@ public:
 	Array inspect_ordered_search_actions_for_owner(
 		int64_t owner_id,
 		const Dictionary &preferred_action = Dictionary()
+	) const;
+	Array inspect_history_keys_for_owner(int64_t owner_id) const;
+	Dictionary inspect_history_score_policy(
+		int64_t initial_score,
+		int64_t remaining_owner_turn_boundaries,
+		int64_t cutoff_updates,
+		int64_t public_depth_decays
 	) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_fixed_depth(
@@ -693,10 +733,24 @@ private:
 		const NativeState &value,
 		const NativeAction &action
 	) const;
+	HistoryKey history_key_for_action(
+		const NativeState &value,
+		const NativeAction &action
+	) const;
+	Array materialize_history_key(const HistoryKey &key) const;
+	int32_t history_reward(int32_t remaining_owner_turn_boundaries) const;
+	int32_t reward_history_score(
+		int32_t current_score,
+		int32_t remaining_owner_turn_boundaries
+	) const;
+	int32_t decay_history_score(int32_t score) const;
 	std::vector<NativeAction> order_search_actions(
 		const NativeState &value,
 		std::vector<NativeAction> actions,
-		const NativeAction *preferred = nullptr
+		const NativeAction *preferred = nullptr,
+		const HistoryTable *history_scores = nullptr,
+		NativeSearchStats *stats = nullptr,
+		bool collect_diagnostics = false
 	) const;
 	bool transition_action(
 		const NativeState &source,

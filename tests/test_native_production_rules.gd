@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_native_search_keeps_same_turn_principal_actions()
 	_test_native_search_action_order_is_stable()
 	_test_native_internal_pv_ordering_lifecycle()
+	_test_native_history_key_policy_and_search_equivalence()
 	_test_native_fast_legal_action_count_matches_generated_actions()
 	_test_native_search_diagnostics_contract()
 	_test_native_search_releases_temporary_dictionaries()
@@ -553,6 +554,136 @@ func _make_pv_ordering_state() -> State:
 	)
 	state.extra_card_plays_remaining = 2
 	return state
+
+
+func _test_native_history_key_policy_and_search_equivalence() -> void:
+	var shared_a: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"history_shared_a"
+	)
+	var shared_b: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"history_shared_b"
+	)
+	var changed_power: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"history_power"
+	)
+	(changed_power["powers"] as Array)[0] = 6
+	var changed_ki: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"history_ki"
+	)
+	changed_ki["ki"] = 1
+	var changed_abilities: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"history_abilities"
+	)
+	var ability_source: Dictionary = Catalog.create_instance(
+		&"TuNaShu1", Rules.OPPONENT_OWNER, &"history_ability_source"
+	)
+	(changed_abilities["active_abilities"] as Array).append(
+		(ability_source["active_abilities"] as Array)[0]
+	)
+	var state := State.new(
+		Rules.empty_board(),
+		[],
+		[shared_a, shared_b, changed_power, changed_ki, changed_abilities],
+		Rules.OPPONENT_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "History-key fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "History-key fixture creates the kernel")
+	if kernel == null:
+		return
+	_check(bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "History-key fixture loads natively")
+	var inspected: Array = kernel.call(
+		"inspect_history_keys_for_owner", Rules.OPPONENT_OWNER
+	) as Array
+	var target_zero_keys: Dictionary = {}
+	var shared_a_target_one: Array = []
+	for action_value: Variant in inspected:
+		var action: Dictionary = action_value as Dictionary
+		var instance_id := StringName(action.get("source_instance_id", &""))
+		var target_index: int = int(action.get("target_index", -1))
+		if target_index == 0:
+			target_zero_keys[instance_id] = (action.get("history_key", []) as Array).duplicate()
+		elif instance_id == &"history_shared_a" and target_index == 1:
+			shared_a_target_one = (action.get("history_key", []) as Array).duplicate()
+	var shared_key: Array = target_zero_keys.get(&"history_shared_a", []) as Array
+	_check(
+		shared_key == (target_zero_keys.get(&"history_shared_b", []) as Array),
+		"Identical generic hand cards share history despite different instance IDs and slots"
+	)
+	_check(
+		shared_key != (target_zero_keys.get(&"history_power", []) as Array),
+		"Different four-side powers produce a different history key"
+	)
+	_check(
+		shared_key != (target_zero_keys.get(&"history_ki", []) as Array),
+		"Different ki produces a different history key"
+	)
+	_check(
+		shared_key != (target_zero_keys.get(&"history_abilities", []) as Array),
+		"Different runtime ability count produces a different history key"
+	)
+	_check(shared_key != shared_a_target_one, "Different targets produce a different history key")
+	_check(
+		shared_key.size() == 13 and shared_key.all(func(value: Variant) -> bool: return value is int),
+		"History key contains compact generic integers only"
+	)
+
+	var reward_policy: Dictionary = kernel.call(
+		"inspect_history_score_policy", 0, 2, 1, 0
+	) as Dictionary
+	_check(int(reward_policy.get("reward", 0)) == 9, "History reward is (remaining boundaries + 1)^2")
+	_check(int(reward_policy.get("score", 0)) == 9, "A cutoff applies exactly one history reward")
+	var saturated: Dictionary = kernel.call(
+		"inspect_history_score_policy", 999_999, 9, 10, 0
+	) as Dictionary
+	_check(
+		int(saturated.get("score", 0)) == int(saturated.get("limit", -1)),
+		"History score saturates at its documented limit"
+	)
+	var decayed: Dictionary = kernel.call(
+		"inspect_history_score_policy", 100, 0, 0, 1
+	) as Dictionary
+	_check(int(decayed.get("score", 0)) == 75, "Each public depth iteration decays history to 75 percent")
+
+	var search_state: State = _make_pv_ordering_state()
+	var without_history: Dictionary = Search.find_best_action_iterative_native(
+		search_state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 2,
+			"depth_mode": &"self_turn",
+			"use_history_ordering": false,
+			"collect_search_diagnostics": true,
+		}
+	)
+	var with_history: Dictionary = Search.find_best_action_iterative_native(
+		search_state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 2,
+			"depth_mode": &"self_turn",
+			"use_history_ordering": true,
+			"collect_search_diagnostics": true,
+		}
+	)
+	var without_action: Action = without_history.get("action") as Action
+	var with_action: Action = with_history.get("action") as Action
+	_check(
+		without_action != null and with_action != null and without_action.is_same_as(with_action),
+		"History ordering preserves the canonical root action"
+	)
+	_check(
+		int(without_history.get("score", 0)) == int(with_history.get("score", 1)),
+		"History ordering preserves the fixed-depth score"
+	)
+	_check(int(without_history.get("history_queries", -1)) == 0, "Disabled history performs no queries")
+	_check(int(without_history.get("history_cutoffs", -1)) == 0, "Disabled history records no cutoff rewards")
+	_check(int(with_history.get("history_queries", 0)) > 0, "Enabled history queries generic action keys")
+	_check(int(with_history.get("history_hits", 0)) > 0, "Enabled history reuses learned cutoff actions")
+	_check(int(with_history.get("history_cutoffs", 0)) > 0, "Enabled history rewards real cutoff actions")
 
 
 func _test_native_fast_legal_action_count_matches_generated_actions() -> void:
