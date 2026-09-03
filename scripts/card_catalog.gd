@@ -4008,7 +4008,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "掌法",
 		"description": "进场时，每有一个相邻敌方，我的点数加一。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
-		"powers": [7, 6, 7, 6],
+		"powers": [6, 6, 6, 6],
 		"abilities": [TIANCHANG_SUMMON_POWER],
 	},
 	&"TianChangZhang4": {
@@ -4020,7 +4020,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "掌法",
 		"description": "进场时，每有一个相邻敌方，我的点数加一。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
-		"powers": [7, 6, 7, 6],
+		"powers": [6, 6, 6, 6],
 		"abilities": [
 			TIANCHANG_SUMMON_POWER,
 			HENGSHAN_COUNTERATTACK,
