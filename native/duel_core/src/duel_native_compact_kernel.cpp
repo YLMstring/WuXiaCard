@@ -157,9 +157,11 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"root_owner",
 			"include_deck_evaluation",
 			"include_danger_evaluation",
-			"include_tempo_evaluation"
+			"include_tempo_evaluation",
+			"use_legacy_flat_board_strategic_score"
 		),
 		&DuelNativeCompactKernel::inspect_evaluation,
+		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false)
@@ -220,7 +222,8 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"transposition_table_mib",
 			"include_deck_evaluation",
 			"include_danger_evaluation",
-			"include_tempo_evaluation"
+			"include_tempo_evaluation",
+			"use_legacy_flat_board_strategic_score"
 		),
 		&DuelNativeCompactKernel::search_iterative_round_depth,
 		DEFVAL(Callable()),
@@ -229,6 +232,7 @@ void DuelNativeCompactKernel::_bind_methods() {
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(0),
+		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false)
@@ -251,7 +255,8 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"transposition_table_mib",
 			"include_deck_evaluation",
 			"include_danger_evaluation",
-			"include_tempo_evaluation"
+			"include_tempo_evaluation",
+			"use_legacy_flat_board_strategic_score"
 		),
 		&DuelNativeCompactKernel::search_iterative_depth,
 		DEFVAL(Callable()),
@@ -260,6 +265,7 @@ void DuelNativeCompactKernel::_bind_methods() {
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(0),
+		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false)
@@ -660,7 +666,8 @@ Dictionary DuelNativeCompactKernel::inspect_evaluation(
 	int64_t root_owner_value,
 	bool include_deck_evaluation,
 	bool include_danger_evaluation,
-	bool include_tempo_evaluation
+	bool include_tempo_evaluation,
+	bool use_legacy_flat_board_strategic_score
 ) const {
 	Dictionary result;
 	const int32_t root_owner = static_cast<int32_t>(root_owner_value);
@@ -668,12 +675,16 @@ Dictionary DuelNativeCompactKernel::inspect_evaluation(
 	result["include_deck_evaluation"] = include_deck_evaluation;
 	result["include_danger_evaluation"] = include_danger_evaluation;
 	result["include_tempo_evaluation"] = include_tempo_evaluation;
+	result["use_legacy_flat_board_strategic_score"] =
+		use_legacy_flat_board_strategic_score;
 	result["score"] = 0;
 	if (!static_cast<bool>(result["valid"])) return result;
 	NativeSearchLimits limits;
 	limits.include_deck_evaluation = include_deck_evaluation;
 	limits.include_danger_evaluation = include_danger_evaluation;
 	limits.include_tempo_evaluation = include_tempo_evaluation;
+	limits.use_legacy_flat_board_strategic_score =
+		use_legacy_flat_board_strategic_score;
 	result["score"] = evaluate_baseline(state, root_owner, &limits);
 	return result;
 }
@@ -2095,6 +2106,8 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 		&& limits->include_danger_evaluation;
 	const bool include_tempo_evaluation = limits != nullptr
 		&& limits->include_tempo_evaluation;
+	const bool use_legacy_flat_board_strategic_score = limits != nullptr
+		&& limits->use_legacy_flat_board_strategic_score;
 	const int32_t opponent_owner = other_owner(root_owner);
 	const int32_t score_difference = count_owned(value, root_owner)
 		- count_owned(value, opponent_owner);
@@ -2188,8 +2201,9 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	const int32_t opponent_hand_zone = opponent_owner - 1;
 	const int32_t root_deck_zone = root_owner + 1;
 	const int32_t opponent_deck_zone = opponent_owner + 1;
-	int32_t strategic_score = board_strategic_value(root_owner)
-		- board_strategic_value(opponent_owner);
+	int32_t strategic_score = use_legacy_flat_board_strategic_score
+		? score_difference * 100
+		: board_strategic_value(root_owner) - board_strategic_value(opponent_owner);
 	strategic_score += (
 		static_cast<int32_t>(value.zones[root_hand_zone].size())
 		- static_cast<int32_t>(value.zones[opponent_hand_zone].size())
@@ -2917,7 +2931,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	int64_t transposition_table_mib,
 	bool include_deck_evaluation,
 	bool include_danger_evaluation,
-	bool include_tempo_evaluation
+	bool include_tempo_evaluation,
+	bool use_legacy_flat_board_strategic_score
 ) const {
 	return search_iterative_depth(
 		root_owner_value,
@@ -2935,7 +2950,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 		transposition_table_mib,
 		include_deck_evaluation,
 		include_danger_evaluation,
-		include_tempo_evaluation
+		include_tempo_evaluation,
+		use_legacy_flat_board_strategic_score
 	);
 }
 
@@ -2955,7 +2971,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	int64_t transposition_table_mib,
 	bool include_deck_evaluation,
 	bool include_danger_evaluation,
-	bool include_tempo_evaluation
+	bool include_tempo_evaluation,
+	bool use_legacy_flat_board_strategic_score
 ) const {
 	Dictionary result;
 	result["supported"] = false;
@@ -3027,6 +3044,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["deck_evaluation_enabled"] = include_deck_evaluation;
 	result["danger_evaluation_enabled"] = include_danger_evaluation;
 	result["tempo_evaluation_enabled"] = include_tempo_evaluation;
+	result["legacy_flat_board_strategic_score_enabled"] =
+		use_legacy_flat_board_strategic_score;
 	result["max_action_ply"] = 0;
 	result["root_actions_total"] = 0;
 	result["root_actions_started"] = 0;
@@ -3117,6 +3136,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.include_deck_evaluation = include_deck_evaluation;
 	limits.include_danger_evaluation = include_danger_evaluation;
 	limits.include_tempo_evaluation = include_tempo_evaluation;
+	limits.use_legacy_flat_board_strategic_score =
+		use_legacy_flat_board_strategic_score;
 	limits.transposition_table = transposition_table.enabled()
 		? &transposition_table
 		: nullptr;

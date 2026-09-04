@@ -203,6 +203,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Production
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant StableStrategicScore
 ```
 
 - Quick: 7 matchups / 28 games, nominal 1,500 nodes per decision.
@@ -218,7 +219,9 @@ gate checks schedule completeness, terminal completion, and valid execution.
 `self_turn` depth two without a time or node limit, keeps PV/history/8 MiB TT,
 and compares the reduced production evaluator (`enhanced`) with all three
 deleted terms restored (`baseline`). It is an experiment variant, not a daily
-suite.
+suite. `StableStrategicScore` uses the same fixed-depth setup; `enhanced` uses
+the production stable-card discount while `baseline` restores a flat `100`
+strategic points for every non-terminal board card.
 
 Profile the 14 unique real Quick openings separately with:
 

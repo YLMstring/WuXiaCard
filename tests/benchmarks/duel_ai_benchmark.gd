@@ -1030,6 +1030,23 @@ static func variant_config(variant: String) -> Dictionary:
 				"include_tempo_evaluation": true,
 			},
 		}
+	if variant.to_lower() == "stablestrategicscore":
+		return {
+			"limits": {
+				"max_depth": 2,
+				"depth_mode": &"self_turn",
+				"use_internal_pv_ordering": true,
+				"use_history_ordering": true,
+				"use_transposition_table": true,
+				"transposition_table_mib": 8,
+			},
+			"enhanced_overrides": {
+				"use_legacy_flat_board_strategic_score": false,
+			},
+			"baseline_overrides": {
+				"use_legacy_flat_board_strategic_score": true,
+			},
+		}
 	if variant.to_lower() != "final":
 		push_warning("Unknown native benchmark variant '%s'; using Final" % variant)
 	return {

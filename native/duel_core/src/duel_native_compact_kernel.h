@@ -668,6 +668,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool include_deck_evaluation = false;
 		bool include_danger_evaluation = false;
 		bool include_tempo_evaluation = false;
+		bool use_legacy_flat_board_strategic_score = false;
 		uint32_t transposition_generation = 0;
 		Callable should_cancel;
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
@@ -743,7 +744,8 @@ public:
 		int64_t root_owner,
 		bool include_deck_evaluation = false,
 		bool include_danger_evaluation = false,
-		bool include_tempo_evaluation = false
+		bool include_tempo_evaluation = false,
+		bool use_legacy_flat_board_strategic_score = false
 	) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_fixed_depth(
@@ -766,7 +768,8 @@ public:
 		int64_t transposition_table_mib = 0,
 		bool include_deck_evaluation = false,
 		bool include_danger_evaluation = false,
-		bool include_tempo_evaluation = false
+		bool include_tempo_evaluation = false,
+		bool use_legacy_flat_board_strategic_score = false
 	) const;
 	Dictionary search_iterative_depth(
 		int64_t root_owner,
@@ -784,7 +787,8 @@ public:
 		int64_t transposition_table_mib = 0,
 		bool include_deck_evaluation = false,
 		bool include_danger_evaluation = false,
-		bool include_tempo_evaluation = false
+		bool include_tempo_evaluation = false,
+		bool use_legacy_flat_board_strategic_score = false
 	) const;
 
 private:

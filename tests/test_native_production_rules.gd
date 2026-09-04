@@ -341,6 +341,10 @@ func _test_native_evaluation_feature_subtraction() -> void:
 	_check(not bool(production.get("deck_evaluation_enabled", true)), "Production search excludes deck evaluation")
 	_check(not bool(production.get("danger_evaluation_enabled", true)), "Production search excludes danger evaluation")
 	_check(not bool(production.get("tempo_evaluation_enabled", true)), "Production search excludes tempo evaluation")
+	_check(
+		not bool(production.get("legacy_flat_board_strategic_score_enabled", true)),
+		"Production search uses stable board strategic scoring"
+	)
 
 
 func _test_native_stable_board_strategic_score() -> void:
@@ -380,6 +384,17 @@ func _test_native_stable_board_strategic_score() -> void:
 		stable_score == unstable_score + 50_000,
 		"A corner card with every open-facing power at least eight gains the stable fifty strategic points"
 	)
+	var legacy_kernel: Object = _evaluation_kernel(
+		unstable_state, "Legacy flat strategic score fixture"
+	)
+	if legacy_kernel != null:
+		var legacy_unstable: Dictionary = legacy_kernel.call(
+			"inspect_evaluation", Rules.OPPONENT_OWNER, false, false, false, true
+		) as Dictionary
+		_check(
+			int(legacy_unstable.get("score", 0)) == unstable_score + 50_000,
+			"The benchmark-only legacy switch restores one hundred strategic points for an unstable card"
+		)
 
 	var mirrored_board: Array = Rules.empty_board()
 	var mirrored_card: Dictionary = Catalog.create_instance(
