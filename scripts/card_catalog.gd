@@ -1605,7 +1605,7 @@ const YINYANG_RANGE_FOUR: Dictionary = {
 
 const YINYANG_ZHANGLI_THREE: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"event": TRIGGER_CARD_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
@@ -1633,7 +1633,7 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 
 const YINYANG_ZHANGLI_FOUR: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"event": TRIGGER_CARD_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
