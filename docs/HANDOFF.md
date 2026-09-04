@@ -278,15 +278,18 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Production static evaluation no longer values the remaining deck, adjacent
   immediately vulnerable power edges, or a flat current-action bonus. Three
   default-off native switches retain the old terms for controlled ablation
-  only. Non-terminal strategic ownership values a stable board card at `100`
-  and an unstable one at `50`. Stability requires every real orthogonal
-  neighbor to be occupied or the card's current power toward that empty cell
-  to be at least `8`; terminal scoring still counts every board card equally.
+  only. Non-terminal strategic ownership uses a flat `100` points for every
+  board card; terminal scoring still counts every board card equally.
   The 2026-09-04 fixed-depth-two 112-game Extended comparison finished
   57-55 for the reduced evaluator (`50.9%`, total score margin `+26`) with no
   fallback, invalid, or incomplete game; it also used `3.13%` fewer nodes and
   `2.12%` less search time. Treat this as no observed regression and only weak
   positive strength evidence, not a proven gain.
+- A later 2026-09-04 fixed-depth-two 112-game experiment discounted unstable
+  board cards to `50` strategic points. It scored `46.5/112` (`41.5%`,
+  `46-1-65`) against flat `100` values and increased nodes per decision by
+  `7.05%` and time per decision by `7.32%`; production rejected the change and
+  removed its temporary runtime and benchmark switches.
 - Structural action ordering now scores activations at `100`; plays start at
   center/edge/corner values `0/10/20`, add `5` per occupied orthogonal neighbor,
   and add another `100` for an adjacent enemy that raw powers appear able to

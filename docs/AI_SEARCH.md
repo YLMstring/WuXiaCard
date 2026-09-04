@@ -47,13 +47,10 @@ completed depth/score/action tuples matched; depth two remained `13/14`.
 
 Production evaluation deliberately excludes three weak terms: remaining-deck
 value, immediately vulnerable adjacent power edges, and a flat bonus for the
-side whose action is current. For non-terminal board ownership, a stable card
-is worth `100` strategic points and an unstable card is worth `50`. A card is
-stable only when every real orthogonal neighbor is occupied or its current
-power toward that empty neighbor is at least `8`; board edges outside the grid
-are ignored. Terminal ownership still uses the exact card-count difference.
-Hand count, hand and board powers/ki/abilities, and legal-action count remain.
-Search stays card-agnostic.
+side whose action is current. Non-terminal board ownership uses the flat card-
+count difference at `100` strategic points per card. Terminal ownership still
+uses the exact card-count difference. Hand count, hand and board
+powers/ki/abilities, and legal-action count remain. Search stays card-agnostic.
 
 The native entry retains three default-off switches only so the removed terms
 can be reconstructed in controlled ablations. They are not production profile
@@ -203,7 +200,6 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Production
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
-powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant StableStrategicScore
 ```
 
 - Quick: 7 matchups / 28 games, nominal 1,500 nodes per decision.
@@ -219,9 +215,15 @@ gate checks schedule completeness, terminal completion, and valid execution.
 `self_turn` depth two without a time or node limit, keeps PV/history/8 MiB TT,
 and compares the reduced production evaluator (`enhanced`) with all three
 deleted terms restored (`baseline`). It is an experiment variant, not a daily
-suite. `StableStrategicScore` uses the same fixed-depth setup; `enhanced` uses
-the production stable-card discount while `baseline` restores a flat `100`
-strategic points for every non-terminal board card.
+suite.
+
+The rejected 2026-09-04 stable-card experiment discounted an unstable board
+card from `100` to `50` strategic points. In its fixed-depth-two 112-game
+comparison it scored `46.5/112` (`41.5%`, `46-1-65`) against the flat-value
+evaluator, while nodes per decision rose `7.05%` and time per decision rose
+`7.32%`. Per-node throughput was effectively unchanged (`-0.25%`). Production
+therefore retains flat non-terminal board ownership value, and the temporary
+runtime/benchmark switch was removed.
 
 Profile the 14 unique real Quick openings separately with:
 

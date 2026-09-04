@@ -2,7 +2,7 @@
 param(
     [ValidateSet("Quick", "Pilot", "Extended", "Production")]
     [string]$Mode = "Quick",
-    [ValidateSet("Final", "EvaluationSubtraction", "StableStrategicScore")]
+    [ValidateSet("Final", "EvaluationSubtraction")]
     [string]$Variant = "Final",
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""

@@ -308,8 +308,7 @@ static func search_iterative(
 		maxi(int(limits.get("transposition_table_mib", 0)), 0),
 		bool(limits.get("include_deck_evaluation", false)),
 		bool(limits.get("include_danger_evaluation", false)),
-		bool(limits.get("include_tempo_evaluation", false)),
-		bool(limits.get("use_legacy_flat_board_strategic_score", false))
+		bool(limits.get("include_tempo_evaluation", false))
 	) as Dictionary
 	if not bool(native_result.get("supported", false)):
 		return _search_integration_failure(

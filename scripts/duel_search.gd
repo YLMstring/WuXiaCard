@@ -281,10 +281,6 @@ static func _native_result_schema(
 	result["tempo_evaluation_enabled"] = bool(source.get(
 		"tempo_evaluation_enabled", limits.get("include_tempo_evaluation", false)
 	))
-	result["legacy_flat_board_strategic_score_enabled"] = bool(source.get(
-		"legacy_flat_board_strategic_score_enabled",
-		limits.get("use_legacy_flat_board_strategic_score", false)
-	))
 	result["iteration_depth"] = int(source.get("iteration_depth", source.get("completed_depth", 0)))
 	result["turn_plan"] = []
 	result["search_profile"] = StringName(profile.get("name", Profile.ENHANCED))

@@ -227,25 +227,6 @@ func _check_mode_configs() -> void:
 	]:
 		_check(not bool(subtraction_enhanced.get(feature, true)), "Reduced evaluation disables %s" % feature)
 		_check(bool(subtraction_baseline.get(feature, false)), "Legacy evaluation restores %s" % feature)
-	var stability: Dictionary = Runner.variant_config("StableStrategicScore")
-	var stability_limits: Dictionary = stability.get("limits", {}) as Dictionary
-	_check(int(stability_limits.get("max_depth", 0)) == 2, "Stable strategic score comparison fixes every search at depth two")
-	_check(StringName(stability_limits.get("depth_mode", &"")) == &"self_turn", "Stable strategic score comparison uses production self-turn depth")
-	_check(not stability_limits.has("max_nodes") and not stability_limits.has("budget_seconds"), "Stable strategic score comparison has no node or time limit")
-	_check(bool(stability_limits.get("use_internal_pv_ordering", false)), "Stable strategic score comparison keeps production PV ordering")
-	_check(bool(stability_limits.get("use_history_ordering", false)), "Stable strategic score comparison keeps production history ordering")
-	_check(bool(stability_limits.get("use_transposition_table", false)), "Stable strategic score comparison keeps the production transposition table")
-	_check(int(stability_limits.get("transposition_table_mib", 0)) == 8, "Stable strategic score comparison keeps the 8 MiB table")
-	var stability_enhanced: Dictionary = stability.get("enhanced_overrides", {}) as Dictionary
-	var stability_baseline: Dictionary = stability.get("baseline_overrides", {}) as Dictionary
-	_check(
-		not bool(stability_enhanced.get("use_legacy_flat_board_strategic_score", true)),
-		"Enhanced stability profile uses stable-card discounts"
-	)
-	_check(
-		bool(stability_baseline.get("use_legacy_flat_board_strategic_score", false)),
-		"Baseline stability profile restores flat board-card strategic value"
-	)
 
 
 func _capture_progress_record(record: Dictionary) -> void:
