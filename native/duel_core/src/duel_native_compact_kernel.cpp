@@ -1999,36 +1999,11 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		&& limits->collect_search_diagnostics;
 	stats.nodes += 1;
 	stats.max_action_ply = std::max(stats.max_action_ply, action_ply);
-	if (is_terminal(value) || remaining_owner_turn_boundaries <= 0) {
-		stats.leaves += 1;
-		if (remaining_owner_turn_boundaries <= 0 && !is_terminal(value)) {
-			stats.horizon_reached = true;
-		}
-		const auto evaluate_started = collect_diagnostics
-			? std::chrono::steady_clock::now()
-			: std::chrono::steady_clock::time_point();
-		const int32_t score = evaluate_baseline(value, root_owner);
-		if (collect_diagnostics) {
-			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
-				std::chrono::steady_clock::now() - evaluate_started
-			).count();
-		}
-		return score;
-	}
-	const auto legal_started = collect_diagnostics
-		? std::chrono::steady_clock::now()
-		: std::chrono::steady_clock::time_point();
-	std::vector<NativeAction> legal_actions = get_legal_native_actions(
-		value,
-		value.scalars[0]
-	);
-	if (collect_diagnostics) {
-		stats.time_legal_actions_usec += std::chrono::duration_cast<std::chrono::microseconds>(
-			std::chrono::steady_clock::now() - legal_started
-		).count();
-	}
 	uint64_t state_checksum = 0;
 	bool has_state_checksum = false;
+	uint64_t transposition_exact_key = 0;
+	bool has_transposition_exact_key = false;
+	bool has_completed_transposition_hit = false;
 	auto ensure_state_checksum = [&]() -> uint64_t {
 		if (has_state_checksum) return state_checksum;
 		const auto key_started = collect_diagnostics
@@ -2043,6 +2018,94 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		}
 		return state_checksum;
 	};
+	if (
+		collect_diagnostics
+		&& limits->transposition_seen_keys != nullptr
+		&& limits->transposition_completed_keys != nullptr
+		&& limits->transposition_seen_states != nullptr
+	) {
+		const uint64_t checksum_value = ensure_state_checksum();
+		transposition_exact_key = search_position_key_from_checksum(
+			checksum_value,
+			remaining_owner_turn_boundaries
+		);
+		has_transposition_exact_key = true;
+		stats.transposition_probes += 1;
+		if (!limits->transposition_seen_keys->insert(transposition_exact_key).second) {
+			stats.transposition_hits += 1;
+		}
+		if (
+			limits->transposition_completed_keys->find(transposition_exact_key)
+			!= limits->transposition_completed_keys->end()
+		) {
+			has_completed_transposition_hit = true;
+			stats.transposition_completed_hits += 1;
+		}
+		if (!limits->transposition_seen_states->insert(checksum_value).second) {
+			stats.transposition_state_hits += 1;
+		}
+		stats.transposition_unique_keys = static_cast<int64_t>(
+			limits->transposition_seen_keys->size()
+		);
+		stats.transposition_unique_states = static_cast<int64_t>(
+			limits->transposition_seen_states->size()
+		);
+	}
+	auto mark_transposition_completed = [&]() -> void {
+		if (
+			!has_transposition_exact_key
+			|| limits == nullptr
+			|| limits->transposition_completed_keys == nullptr
+		) return;
+		limits->transposition_completed_keys->insert(transposition_exact_key);
+		stats.transposition_completed_keys = static_cast<int64_t>(
+			limits->transposition_completed_keys->size()
+		);
+	};
+	auto classify_transposition_probe = [&](bool leaf) -> void {
+		if (!has_transposition_exact_key) return;
+		if (leaf) {
+			stats.transposition_leaf_probes += 1;
+			if (has_completed_transposition_hit) {
+				stats.transposition_leaf_completed_hits += 1;
+			}
+		} else {
+			stats.transposition_internal_probes += 1;
+			if (has_completed_transposition_hit) {
+				stats.transposition_internal_completed_hits += 1;
+			}
+		}
+	};
+	if (is_terminal(value) || remaining_owner_turn_boundaries <= 0) {
+		classify_transposition_probe(true);
+		stats.leaves += 1;
+		if (remaining_owner_turn_boundaries <= 0 && !is_terminal(value)) {
+			stats.horizon_reached = true;
+		}
+		const auto evaluate_started = collect_diagnostics
+			? std::chrono::steady_clock::now()
+			: std::chrono::steady_clock::time_point();
+		const int32_t score = evaluate_baseline(value, root_owner);
+		if (collect_diagnostics) {
+			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::steady_clock::now() - evaluate_started
+			).count();
+		}
+		mark_transposition_completed();
+		return score;
+	}
+	const auto legal_started = collect_diagnostics
+		? std::chrono::steady_clock::now()
+		: std::chrono::steady_clock::time_point();
+	std::vector<NativeAction> legal_actions = get_legal_native_actions(
+		value,
+		value.scalars[0]
+	);
+	if (collect_diagnostics) {
+		stats.time_legal_actions_usec += std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - legal_started
+		).count();
+	}
 	const NativeAction *preferred_action = nullptr;
 	if (
 		limits != nullptr
@@ -2092,6 +2155,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	}
 	stats.generated_actions += static_cast<int64_t>(actions.size());
 	if (actions.empty()) {
+		classify_transposition_probe(true);
 		stats.leaves += 1;
 		const auto evaluate_started = collect_diagnostics
 			? std::chrono::steady_clock::now()
@@ -2102,8 +2166,10 @@ int32_t DuelNativeCompactKernel::search_minimax(
 				std::chrono::steady_clock::now() - evaluate_started
 			).count();
 		}
+		mark_transposition_completed();
 		return score;
 	}
+	classify_transposition_probe(false);
 	const bool maximizing = value.scalars[0] == root_owner;
 	int32_t best_score = maximizing
 		? std::numeric_limits<int32_t>::min()
@@ -2212,6 +2278,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			)] = best_action;
 		}
 	}
+	mark_transposition_completed();
 	return best_score;
 }
 
@@ -2453,6 +2520,17 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["history_queries"] = 0;
 	result["history_hits"] = 0;
 	result["history_cutoffs"] = 0;
+	result["transposition_probes"] = 0;
+	result["transposition_hits"] = 0;
+	result["transposition_completed_hits"] = 0;
+	result["transposition_leaf_probes"] = 0;
+	result["transposition_leaf_completed_hits"] = 0;
+	result["transposition_internal_probes"] = 0;
+	result["transposition_internal_completed_hits"] = 0;
+	result["transposition_state_hits"] = 0;
+	result["transposition_unique_keys"] = 0;
+	result["transposition_completed_keys"] = 0;
+	result["transposition_unique_states"] = 0;
 	result["internal_pv_ordering_enabled"] = use_internal_pv_ordering;
 	result["history_ordering_enabled"] = use_history_ordering;
 	result["search_diagnostics_enabled"] = collect_search_diagnostics;
@@ -2541,7 +2619,19 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	std::unordered_map<uint64_t, NativeAction> completed_principal_actions;
 	std::unordered_map<uint64_t, NativeAction> completed_ordering_hints;
 	HistoryTable history_scores;
+	std::unordered_set<uint64_t> transposition_seen_keys;
+	std::unordered_set<uint64_t> transposition_completed_keys;
+	std::unordered_set<uint64_t> transposition_seen_states;
 	limits.history_scores = use_history_ordering ? &history_scores : nullptr;
+	limits.transposition_seen_keys = collect_search_diagnostics
+		? &transposition_seen_keys
+		: nullptr;
+	limits.transposition_completed_keys = collect_search_diagnostics
+		? &transposition_completed_keys
+		: nullptr;
+	limits.transposition_seen_states = collect_search_diagnostics
+		? &transposition_seen_states
+		: nullptr;
 	while (max_depth <= 0 || depth <= max_depth) {
 		iteration_depth = depth;
 		const int32_t owner_turn_boundaries = search_depth_boundaries(depth, depth_mode);
@@ -2710,6 +2800,17 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		snapshot["history_queries"] = stats.history_queries;
 		snapshot["history_hits"] = stats.history_hits;
 		snapshot["history_cutoffs"] = stats.history_cutoffs;
+		snapshot["transposition_probes"] = stats.transposition_probes;
+		snapshot["transposition_hits"] = stats.transposition_hits;
+		snapshot["transposition_completed_hits"] = stats.transposition_completed_hits;
+		snapshot["transposition_leaf_probes"] = stats.transposition_leaf_probes;
+		snapshot["transposition_leaf_completed_hits"] = stats.transposition_leaf_completed_hits;
+		snapshot["transposition_internal_probes"] = stats.transposition_internal_probes;
+		snapshot["transposition_internal_completed_hits"] = stats.transposition_internal_completed_hits;
+		snapshot["transposition_state_hits"] = stats.transposition_state_hits;
+		snapshot["transposition_unique_keys"] = stats.transposition_unique_keys;
+		snapshot["transposition_completed_keys"] = stats.transposition_completed_keys;
+		snapshot["transposition_unique_states"] = stats.transposition_unique_states;
 		snapshot["elapsed_usec"] = static_cast<int64_t>(
 			std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::steady_clock::now() - started
@@ -2734,6 +2835,9 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.previous_ordering_hints = nullptr;
 	limits.current_ordering_hints = nullptr;
 	limits.history_scores = nullptr;
+	limits.transposition_seen_keys = nullptr;
+	limits.transposition_completed_keys = nullptr;
+	limits.transposition_seen_states = nullptr;
 	Array principal_actions;
 	if (has_completed_action) {
 		NativeState current = state;
@@ -2806,6 +2910,17 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["history_queries"] = stats.history_queries;
 	result["history_hits"] = stats.history_hits;
 	result["history_cutoffs"] = stats.history_cutoffs;
+	result["transposition_probes"] = stats.transposition_probes;
+	result["transposition_hits"] = stats.transposition_hits;
+	result["transposition_completed_hits"] = stats.transposition_completed_hits;
+	result["transposition_leaf_probes"] = stats.transposition_leaf_probes;
+	result["transposition_leaf_completed_hits"] = stats.transposition_leaf_completed_hits;
+	result["transposition_internal_probes"] = stats.transposition_internal_probes;
+	result["transposition_internal_completed_hits"] = stats.transposition_internal_completed_hits;
+	result["transposition_state_hits"] = stats.transposition_state_hits;
+	result["transposition_unique_keys"] = stats.transposition_unique_keys;
+	result["transposition_completed_keys"] = stats.transposition_completed_keys;
+	result["transposition_unique_states"] = stats.transposition_unique_states;
 	result["max_action_ply"] = stats.max_action_ply;
 	result["root_actions_total"] = stats.root_actions_total;
 	result["root_actions_started"] = stats.root_actions_started;

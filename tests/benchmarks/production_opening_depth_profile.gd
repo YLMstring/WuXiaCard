@@ -31,6 +31,9 @@ func _run() -> void:
 	var opening_set: StringName = StringName(options.get("opening_set", &"quick_unique"))
 	var use_internal_pv_ordering: bool = bool(options.get("use_internal_pv_ordering", false))
 	var use_history_ordering: bool = bool(options.get("use_history_ordering", false))
+	var collect_transposition_diagnostics: bool = bool(
+		options.get("collect_transposition_diagnostics", false)
+	)
 	var openings: Array[Dictionary] = _build_unique_openings(opening_set)
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
@@ -42,7 +45,8 @@ func _run() -> void:
 			depth_mode,
 			opening_set == &"extra_play_cap",
 			use_internal_pv_ordering,
-			use_history_ordering
+			use_history_ordering,
+			collect_transposition_diagnostics
 		)
 		samples.append(sample)
 		print(
@@ -88,7 +92,7 @@ func _run() -> void:
 		use_history_ordering
 	)
 	var report: Dictionary = {
-		"schema_version": 2,
+		"schema_version": 3,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
 		"fixture_version": EnemyManifest.VERSION,
 		"configuration": {
@@ -107,6 +111,7 @@ func _run() -> void:
 			"opening_set": String(opening_set),
 			"use_internal_pv_ordering": use_internal_pv_ordering,
 			"use_history_ordering": use_history_ordering,
+			"collect_transposition_diagnostics": collect_transposition_diagnostics,
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
@@ -121,7 +126,9 @@ func _run() -> void:
 	print(
 		(
 			"OPENING_DEPTH_PROFILE_COMPLETE openings=%d target_depth=%d completed=%d "
-			+ "avg_depth=%.3f avg_depth1_seconds=%.3f report=%s"
+			+ "avg_depth=%.3f avg_depth1_seconds=%.3f tt_hit_rate=%.4f "
+			+ "tt_completed_hit_rate=%.4f tt_leaf_hit_rate=%.4f "
+			+ "tt_internal_hit_rate=%.4f tt_state_hit_rate=%.4f report=%s"
 		)
 		% [
 			openings.size(),
@@ -129,6 +136,11 @@ func _run() -> void:
 			int(summary.get("target_depth_completed", 0)),
 			float(summary.get("average_completed_depth", 0.0)),
 			float(summary.get("average_baseline_depth_seconds", 0.0)),
+			float(summary.get("transposition_hit_rate", 0.0)),
+			float(summary.get("transposition_completed_hit_rate", 0.0)),
+			float(summary.get("transposition_leaf_completed_hit_rate", 0.0)),
+			float(summary.get("transposition_internal_completed_hit_rate", 0.0)),
+			float(summary.get("transposition_state_hit_rate", 0.0)),
 			output_path,
 		]
 	)
@@ -141,7 +153,8 @@ func _profile_opening(
 	depth_mode: StringName,
 	profile_extra_play: bool = false,
 	use_internal_pv_ordering: bool = false,
-	use_history_ordering: bool = false
+	use_history_ordering: bool = false,
+	collect_transposition_diagnostics: bool = false
 ) -> Dictionary:
 	_depth_snapshots.clear()
 	var state: State = opening.get("state") as State
@@ -156,6 +169,7 @@ func _profile_opening(
 		"depth_mode": depth_mode,
 		"use_internal_pv_ordering": use_internal_pv_ordering,
 		"use_history_ordering": use_history_ordering,
+		"collect_search_diagnostics": collect_transposition_diagnostics,
 	}
 	var result: Dictionary = Search.find_best_action_iterative(
 		state.duplicate_state(),
@@ -217,7 +231,17 @@ func _profile_opening(
 		"history_queries": int(result.get("history_queries", 0)),
 		"history_hits": int(result.get("history_hits", 0)),
 		"history_cutoffs": int(result.get("history_cutoffs", 0)),
+		"transposition_probes": int(result.get("transposition_probes", 0)),
 		"transposition_hits": int(result.get("transposition_hits", 0)),
+		"transposition_completed_hits": int(result.get("transposition_completed_hits", 0)),
+		"transposition_leaf_probes": int(result.get("transposition_leaf_probes", 0)),
+		"transposition_leaf_completed_hits": int(result.get("transposition_leaf_completed_hits", 0)),
+		"transposition_internal_probes": int(result.get("transposition_internal_probes", 0)),
+		"transposition_internal_completed_hits": int(result.get("transposition_internal_completed_hits", 0)),
+		"transposition_state_hits": int(result.get("transposition_state_hits", 0)),
+		"transposition_unique_keys": int(result.get("transposition_unique_keys", 0)),
+		"transposition_completed_keys": int(result.get("transposition_completed_keys", 0)),
+		"transposition_unique_states": int(result.get("transposition_unique_states", 0)),
 		"iteration_nodes": int(result.get("iteration_nodes", 0)),
 		"root_actions_total": int(result.get("root_actions_total", 0)),
 		"root_actions_started": int(result.get("root_actions_started", 0)),
@@ -236,7 +260,8 @@ func _profile_opening(
 			budget_seconds,
 			depth_mode,
 			use_internal_pv_ordering,
-			use_history_ordering
+			use_history_ordering,
+			collect_transposition_diagnostics
 		)
 	return sample
 
@@ -247,7 +272,8 @@ func _profile_extra_play_decision(
 	budget_seconds: float,
 	depth_mode: StringName,
 	use_internal_pv_ordering: bool,
-	use_history_ordering: bool
+	use_history_ordering: bool,
+	collect_transposition_diagnostics: bool
 ) -> Dictionary:
 	var first_action: Action = first_result.get("action") as Action
 	var sample: Dictionary = {
@@ -309,6 +335,7 @@ func _profile_extra_play_decision(
 			"depth_mode": depth_mode,
 			"use_internal_pv_ordering": use_internal_pv_ordering,
 			"use_history_ordering": use_history_ordering,
+			"collect_search_diagnostics": collect_transposition_diagnostics,
 		},
 		Callable(),
 		Callable(self, "_record_depth_progress")
@@ -329,6 +356,17 @@ func _profile_extra_play_decision(
 	sample["history_queries"] = int(second_result.get("history_queries", 0))
 	sample["history_hits"] = int(second_result.get("history_hits", 0))
 	sample["history_cutoffs"] = int(second_result.get("history_cutoffs", 0))
+	sample["transposition_probes"] = int(second_result.get("transposition_probes", 0))
+	sample["transposition_hits"] = int(second_result.get("transposition_hits", 0))
+	sample["transposition_completed_hits"] = int(second_result.get("transposition_completed_hits", 0))
+	sample["transposition_leaf_probes"] = int(second_result.get("transposition_leaf_probes", 0))
+	sample["transposition_leaf_completed_hits"] = int(second_result.get("transposition_leaf_completed_hits", 0))
+	sample["transposition_internal_probes"] = int(second_result.get("transposition_internal_probes", 0))
+	sample["transposition_internal_completed_hits"] = int(second_result.get("transposition_internal_completed_hits", 0))
+	sample["transposition_state_hits"] = int(second_result.get("transposition_state_hits", 0))
+	sample["transposition_unique_keys"] = int(second_result.get("transposition_unique_keys", 0))
+	sample["transposition_completed_keys"] = int(second_result.get("transposition_completed_keys", 0))
+	sample["transposition_unique_states"] = int(second_result.get("transposition_unique_states", 0))
 	sample["root_actions_total"] = int(second_result.get("root_actions_total", 0))
 	sample["root_actions_started"] = int(second_result.get("root_actions_started", 0))
 	sample["root_actions_completed"] = int(second_result.get("root_actions_completed", 0))
@@ -362,7 +400,17 @@ func _record_depth_progress(progress: Dictionary) -> void:
 		"history_queries": int(progress.get("history_queries", 0)),
 		"history_hits": int(progress.get("history_hits", 0)),
 		"history_cutoffs": int(progress.get("history_cutoffs", 0)),
+		"transposition_probes": int(progress.get("transposition_probes", 0)),
 		"transposition_hits": int(progress.get("transposition_hits", 0)),
+		"transposition_completed_hits": int(progress.get("transposition_completed_hits", 0)),
+		"transposition_leaf_probes": int(progress.get("transposition_leaf_probes", 0)),
+		"transposition_leaf_completed_hits": int(progress.get("transposition_leaf_completed_hits", 0)),
+		"transposition_internal_probes": int(progress.get("transposition_internal_probes", 0)),
+		"transposition_internal_completed_hits": int(progress.get("transposition_internal_completed_hits", 0)),
+		"transposition_state_hits": int(progress.get("transposition_state_hits", 0)),
+		"transposition_unique_keys": int(progress.get("transposition_unique_keys", 0)),
+		"transposition_completed_keys": int(progress.get("transposition_completed_keys", 0)),
+		"transposition_unique_states": int(progress.get("transposition_unique_states", 0)),
 	})
 
 
@@ -459,6 +507,17 @@ func _summarize(
 	var estimated_speedup_count: int = 0
 	var total_nodes: int = 0
 	var total_search_seconds: float = 0.0
+	var transposition_probes: int = 0
+	var transposition_hits: int = 0
+	var transposition_completed_hits: int = 0
+	var transposition_leaf_probes: int = 0
+	var transposition_leaf_completed_hits: int = 0
+	var transposition_internal_probes: int = 0
+	var transposition_internal_completed_hits: int = 0
+	var transposition_state_hits: int = 0
+	var transposition_unique_keys: int = 0
+	var transposition_completed_keys: int = 0
+	var transposition_unique_states: int = 0
 	var compact_key_length_total: int = 0
 	var fallback_count: int = 0
 	var extra_play_states: int = 0
@@ -472,6 +531,17 @@ func _summarize(
 		depth_total += completed_depth
 		total_nodes += int(sample.get("nodes", 0))
 		total_search_seconds += float(sample.get("elapsed_seconds", 0.0))
+		transposition_probes += int(sample.get("transposition_probes", 0))
+		transposition_hits += int(sample.get("transposition_hits", 0))
+		transposition_completed_hits += int(sample.get("transposition_completed_hits", 0))
+		transposition_leaf_probes += int(sample.get("transposition_leaf_probes", 0))
+		transposition_leaf_completed_hits += int(sample.get("transposition_leaf_completed_hits", 0))
+		transposition_internal_probes += int(sample.get("transposition_internal_probes", 0))
+		transposition_internal_completed_hits += int(sample.get("transposition_internal_completed_hits", 0))
+		transposition_state_hits += int(sample.get("transposition_state_hits", 0))
+		transposition_unique_keys += int(sample.get("transposition_unique_keys", 0))
+		transposition_completed_keys += int(sample.get("transposition_completed_keys", 0))
+		transposition_unique_states += int(sample.get("transposition_unique_states", 0))
 		compact_key_length_total += int(sample.get("state_key_length", 0))
 		if bool(sample.get("used_fallback", false)):
 			fallback_count += 1
@@ -537,6 +607,42 @@ func _summarize(
 			if total_search_seconds > 0.0
 			else 0.0
 		),
+		"transposition_probes": transposition_probes,
+		"transposition_hits": transposition_hits,
+		"transposition_hit_rate": (
+			float(transposition_hits) / float(transposition_probes)
+			if transposition_probes > 0
+			else 0.0
+		),
+		"transposition_completed_hits": transposition_completed_hits,
+		"transposition_completed_hit_rate": (
+			float(transposition_completed_hits) / float(transposition_probes)
+			if transposition_probes > 0
+			else 0.0
+		),
+		"transposition_leaf_probes": transposition_leaf_probes,
+		"transposition_leaf_completed_hits": transposition_leaf_completed_hits,
+		"transposition_leaf_completed_hit_rate": (
+			float(transposition_leaf_completed_hits) / float(transposition_leaf_probes)
+			if transposition_leaf_probes > 0
+			else 0.0
+		),
+		"transposition_internal_probes": transposition_internal_probes,
+		"transposition_internal_completed_hits": transposition_internal_completed_hits,
+		"transposition_internal_completed_hit_rate": (
+			float(transposition_internal_completed_hits) / float(transposition_internal_probes)
+			if transposition_internal_probes > 0
+			else 0.0
+		),
+		"transposition_state_hits": transposition_state_hits,
+		"transposition_state_hit_rate": (
+			float(transposition_state_hits) / float(transposition_probes)
+			if transposition_probes > 0
+			else 0.0
+		),
+		"transposition_unique_keys": transposition_unique_keys,
+		"transposition_completed_keys": transposition_completed_keys,
+		"transposition_unique_states": transposition_unique_states,
 		"baseline_snapshot_count": baseline_snapshot_count,
 		"fallback_count": fallback_count,
 		"extra_play_states": extra_play_states,
@@ -615,6 +721,7 @@ func _parse_options() -> Dictionary:
 		"opening_set": &"quick_unique",
 		"use_internal_pv_ordering": false,
 		"use_history_ordering": false,
+		"collect_transposition_diagnostics": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -643,4 +750,6 @@ func _parse_options() -> Dictionary:
 			result["use_internal_pv_ordering"] = true
 		elif argument == "--use-history-ordering":
 			result["use_history_ordering"] = true
+		elif argument == "--collect-transposition-diagnostics":
+			result["collect_transposition_diagnostics"] = true
 	return result

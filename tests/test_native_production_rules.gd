@@ -862,11 +862,68 @@ func _test_native_search_diagnostics_contract() -> void:
 		"history_queries",
 		"history_hits",
 		"history_cutoffs",
+		"transposition_probes",
+		"transposition_hits",
+		"transposition_completed_hits",
+		"transposition_leaf_probes",
+		"transposition_leaf_completed_hits",
+		"transposition_internal_probes",
+		"transposition_internal_completed_hits",
+		"transposition_state_hits",
+		"transposition_unique_keys",
+		"transposition_completed_keys",
+		"transposition_unique_states",
 	]:
 		_check(int(reference.get(field, -1)) == 0, "Disabled diagnostics keep %s at zero" % field)
 		_check(int(diagnostic.get(field, -1)) >= 0, "Enabled diagnostics expose nonnegative %s" % field)
 	_check(int(diagnostic.get("ordered_nodes", 0)) > 0, "Enabled diagnostics count ordered nodes")
 	_check(int(diagnostic.get("visited_children", 0)) > 0, "Enabled diagnostics count visited children")
+	var transposition_probes: int = int(diagnostic.get("transposition_probes", -1))
+	var transposition_hits: int = int(diagnostic.get("transposition_hits", -1))
+	var transposition_completed_hits: int = int(
+		diagnostic.get("transposition_completed_hits", -1)
+	)
+	var transposition_state_hits: int = int(diagnostic.get("transposition_state_hits", -1))
+	_check(
+		transposition_probes == int(diagnostic.get("nodes", -2)),
+		"Transposition diagnostics probe every visited native node"
+	)
+	_check(
+		transposition_hits <= transposition_state_hits
+		and transposition_state_hits <= transposition_probes,
+		"Exact-depth transposition hits are a conservative subset of state-only hits"
+	)
+	_check(
+		transposition_completed_hits <= transposition_hits,
+		"Previously completed transposition hits are a conservative subset of repeats"
+	)
+	_check(
+		int(diagnostic.get("transposition_leaf_probes", -1))
+		+ int(diagnostic.get("transposition_internal_probes", -1))
+		== transposition_probes,
+		"Leaf and internal transposition probes account for every visited node"
+	)
+	_check(
+		int(diagnostic.get("transposition_leaf_completed_hits", -1))
+		+ int(diagnostic.get("transposition_internal_completed_hits", -1))
+		== transposition_completed_hits,
+		"Leaf and internal completed hits account for every reusable repeat"
+	)
+	_check(
+		int(diagnostic.get("transposition_completed_keys", -1))
+		<= int(diagnostic.get("transposition_unique_keys", -2)),
+		"Completed transposition keys are a subset of visited exact-depth keys"
+	)
+	_check(
+		int(diagnostic.get("transposition_unique_keys", -1)) + transposition_hits
+		== transposition_probes,
+		"Exact-depth transposition diagnostics account for unique keys and repeats"
+	)
+	_check(
+		int(diagnostic.get("transposition_unique_states", -1)) + transposition_state_hits
+		== transposition_probes,
+		"State-only transposition diagnostics account for unique states and repeats"
+	)
 	var cutoff_bucket_total: int = 0
 	for field: String in [
 		"cutoff_first_child",

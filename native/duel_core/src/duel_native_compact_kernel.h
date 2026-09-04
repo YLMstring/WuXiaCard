@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <godot_cpp/classes/ref_counted.hpp>
@@ -578,6 +579,17 @@ class DuelNativeCompactKernel : public RefCounted {
 		int64_t history_queries = 0;
 		int64_t history_hits = 0;
 		int64_t history_cutoffs = 0;
+		int64_t transposition_probes = 0;
+		int64_t transposition_hits = 0;
+		int64_t transposition_completed_hits = 0;
+		int64_t transposition_leaf_probes = 0;
+		int64_t transposition_leaf_completed_hits = 0;
+		int64_t transposition_internal_probes = 0;
+		int64_t transposition_internal_completed_hits = 0;
+		int64_t transposition_state_hits = 0;
+		int64_t transposition_unique_keys = 0;
+		int64_t transposition_completed_keys = 0;
+		int64_t transposition_unique_states = 0;
 		int32_t max_action_ply = 0;
 		int32_t root_actions_total = 0;
 		int32_t root_actions_started = 0;
@@ -603,6 +615,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		const std::unordered_map<uint64_t, NativeAction> *previous_ordering_hints = nullptr;
 		std::unordered_map<uint64_t, NativeAction> *current_ordering_hints = nullptr;
 		HistoryTable *history_scores = nullptr;
+		std::unordered_set<uint64_t> *transposition_seen_keys = nullptr;
+		std::unordered_set<uint64_t> *transposition_completed_keys = nullptr;
+		std::unordered_set<uint64_t> *transposition_seen_states = nullptr;
 	};
 
 	enum class SearchDepthMode : uint8_t {

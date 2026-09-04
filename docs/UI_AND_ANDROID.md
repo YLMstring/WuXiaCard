@@ -78,12 +78,16 @@ Never commit keystore passwords or private signing material. The existing debug 
 
 `export_presets.cfg` currently:
 
-- exports to `android/build/templates/wuxiacard.apk`;
-- uses non-Gradle export;
+- is built through `tools/build_android_release.ps1`, whose default artifact is
+  `build/android/WuxiaCard-android-arm64-0.1.0.apk`;
+- uses the Gradle source-template export so the Android-to-Godot splash handoff
+  can retain the original splash until engine setup completes;
 - selects ARM64 only;
 - leaves min/target SDK on automatic values;
 - uses placeholder package ID `com.example.$genname`;
-- declares no Android permissions.
+- declares no Android permissions;
+- falls back to the Godot debug keystore for local release builds when no
+  explicit release keystore is supplied.
 
 Before distribution:
 

@@ -114,6 +114,10 @@ controlled benchmarks through `use_internal_pv_ordering` and
 High-frequency timing and ordering counters are gated by
 `collect_search_diagnostics`, which defaults to `false`. Enabling diagnostics
 is for node-limited probes only and must not be used for production timing.
+The same switch can count transposition opportunities without changing search
+results: an exact key combines the complete native-state checksum with remaining
+owner-turn boundaries; a stricter reusable hit requires that an earlier visit
+has already returned. Leaf and internal-node hits are reported separately.
 
 ## Search result contract
 
@@ -175,6 +179,7 @@ Profile the 14 unique real Quick openings separately with:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -CollectTranspositionDiagnostics
 ```
 
 Reports are written under `.summer/local/ai-benchmarks/` and must not be
@@ -200,6 +205,18 @@ improved to `15.20s` and `10.60s`. Strict history priority was rejected after
 it reduced depth-two completion to 1/4. These figures are performance evidence,
 not a claim that a different equal-score move is strategically stronger.
 
+The 2026-09-04 transposition-opportunity probe used the four extra-play-cap
+openings, production PV/history ordering, `self_turn`, and ten seconds per
+opening. Across 460,706 visited nodes, 333,262 exact keys had already completed:
+a `72.34%` reusable-hit rate. Leaves were `73.74%` (302,657/410,431), while
+internal nodes were still `60.88%` (30,605/50,275). State-only matching was
+`72.47%`, only 0.13 percentage points above exact remaining-depth matching.
+This strongly motivates a bounded native transposition table, but it is an
+opportunity rate rather than a predicted speedup: real entries must preserve
+exact/lower/upper bound types, requested depth, deadline safety, and memory
+limits. Diagnostic hashing and sets are default-off and their measured
+throughput must not be compared directly with the ordinary benchmark baseline.
+
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow
 Dongfang Bubai/Zhang Sanfeng openings completed depth two in 9.46 seconds and
@@ -215,7 +232,8 @@ extra-state reachability only; they are not principal-action results.
 
 ## Current limitations
 
-- Native transpositions are not implemented.
+- Native transpositions are not implemented; only default-off opportunity
+  diagnostics exist.
 - Android ARM64 and release-package performance are distribution gates; do not
   infer them from Windows Debug measurements.
 - A future declaration outside the compiled vocabulary must fail atomically

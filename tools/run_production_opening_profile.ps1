@@ -8,6 +8,7 @@ param(
     [string]$OpeningSet = "quick_unique",
     [switch]$UseInternalPvOrdering,
     [switch]$UseHistoryOrdering,
+    [switch]$CollectTranspositionDiagnostics,
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
 )
@@ -48,6 +49,9 @@ try {
     }
     if ($UseHistoryOrdering) {
         $arguments += "--use-history-ordering"
+    }
+    if ($CollectTranspositionDiagnostics) {
+        $arguments += "--collect-transposition-diagnostics"
     }
     $process = Start-Process `
         -FilePath $EnginePath `

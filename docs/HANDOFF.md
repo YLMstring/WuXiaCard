@@ -316,6 +316,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   depth-two openings, and reduced the two incomplete linear estimates to
   `15.20s` and `10.60s`. Use `Release + template_debug` native builds for
   performance comparisons; `Debug + template_debug` is about half-speed.
+- Default-off native transposition opportunity diagnostics are available through
+  `CollectTranspositionDiagnostics` on the opening profile. The 2026-09-04 four
+  extra-play-cap openings produced 333,262 previously completed exact-key hits
+  from 460,706 probes (`72.34%`): leaf reuse was `73.74%`, and internal-node
+  reuse was `60.88%`. State-only matching was `72.47%`, so almost all observed
+  reuse already matched remaining depth. This is strong evidence for a bounded
+  native table next, but no score/bound cache is active in production yet.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live
