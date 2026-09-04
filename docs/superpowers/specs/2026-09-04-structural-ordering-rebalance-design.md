@@ -15,7 +15,8 @@ static evaluation, rules, and legal-action generation remain unchanged.
 - A play into edge cells `1`, `3`, `5`, or `7` starts at `10`.
 - A play into corner cells `0`, `2`, `6`, or `8` starts at `20`.
 - Every occupied orthogonally adjacent cell adds `5`, regardless of owner.
-- Enemy adjacency and apparent raw-power capture add no other score.
+- If an adjacent card is an enemy and the played card's facing raw power is
+  greater than that enemy's opposing raw power, add another `100`.
 
 Structural score remains an ordering hint only. A fully completed search still
 chooses actions by minimax score and canonical tie-breaking.
