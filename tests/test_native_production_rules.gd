@@ -297,7 +297,7 @@ func _test_production_search_routes_to_native_whole_tree() -> void:
 	var explicit_native: Dictionary = Search.find_best_action_iterative_native(
 		_make_search_state(),
 		Rules.OPPONENT_OWNER,
-		{"max_depth": 1}
+		{"max_depth": 1, "depth_mode": &"self_turn"}
 	)
 	var production_action: Action = production.get("action") as Action
 	var native_action: Action = explicit_native.get("action") as Action
@@ -306,6 +306,10 @@ func _test_production_search_routes_to_native_whole_tree() -> void:
 	_check(
 		bool(production.get("internal_pv_ordering_enabled", false)),
 		"Production search enables internal PV ordering by default"
+	)
+	_check(
+		StringName(production.get("depth_mode", &"")) == &"self_turn",
+		"Production search defaults to self-turn depth"
 	)
 	_check(
 		bool(production.get("history_ordering_enabled", false)),

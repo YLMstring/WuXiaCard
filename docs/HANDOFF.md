@@ -245,7 +245,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order. Production uses the sole native
   iterative search with deterministic structural ordering and alpha-beta
-  pruning; `complete_round` remains its default depth mode. A fixed two-way
+  pruning; `self_turn` is its default depth mode while explicit
+  `complete_round` remains available for legacy comparison. A fixed two-way
   native transposition table is scoped to each root decision and defaults to a
   strict 8 MiB on both desktop and Android. Its exact key includes the complete
   native-state checksum and remaining owner-turn boundaries; cached moves are
@@ -266,6 +267,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   improved by `1.25x`, `1.33x`, `20.16x`, and `25.09x`. The diagnostic run
   recorded 74,877 real hits from 424,028 probes, with no allocation fallback
   or illegal cached moves.
+- The final production-selection ablation kept `self_turn` and the 8 MiB table
+  fixed. Removing PV added `2.1%` complete-depth-two work across the four
+  extra-play-cap openings and reduced one unfinished depth-three root from
+  eight completed actions to four. Across 14 unique Quick openings, removing
+  conservative history preserved all same-depth scores/actions and the same
+  `12/14` depth-three completion count, but added `11.81%` completed-depth work
+  and `7.99%` elapsed time. Production therefore enables self-turn depth, PV,
+  conservative history, and the 8 MiB table together.
 - Hand-target drag hit testing is owner-aware. Enemy-hand activations such as
   HanBin target only the opponent's physical hand, while allied-hand
   activations such as RanMu and WuXiang target only their current owner's hand;
@@ -289,9 +298,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `3/14` depth-two completion, and identical depth-one decisions; treat this as
   a low-complexity cleanup with modest measured benefit.
 - Search depth is measured in authoritative `owner_turn_serial` boundaries.
-  Default `complete_round` consumes `2 × depth` boundaries. Opt-in `self_turn`
-  consumes `2 × depth - 1`: depth one ends after the current owner turn, while
-  depth two also completes the opponent turn and the root owner's next turn.
+  Production-default `self_turn` consumes `2 × depth - 1`: depth one ends after
+  the current owner turn, while depth two also completes the opponent turn and
+  the root owner's next turn. Explicit legacy `complete_round` consumes
+  `2 × depth` boundaries.
   Same-turn extra
   plays cost no boundary and are searched fully; simulator-resolved empty turns
   consume however many boundaries they actually cross. Only a fully completed
@@ -504,8 +514,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   nine-cell catalog-ID/current-owner signature end the duel by score at the
   end-to-start boundary. The action-count fallback is `max_turns = 100`.
 - The search supports two native depth horizons without duplicating the search
-  engine. `complete_round` remains the default and consumes `2 × depth` owner-turn
-  boundaries; opt-in `self_turn` consumes `2 × depth - 1`. The 2026-09-02
+  engine. Production defaults to `self_turn` and consumes `2 × depth - 1`
+  owner-turn boundaries; explicit legacy `complete_round` consumes `2 × depth`.
+  The 2026-09-02
   14-opening, ten-second `self_turn` profile completed depth two in 14/14 and
   depth three in 9/14; the two Dongfang Bubai/Zhang Sanfeng seats completed
   depth two in 9.46 seconds and 0.84 seconds. This measures reachability, not

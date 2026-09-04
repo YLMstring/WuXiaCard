@@ -43,7 +43,18 @@ func _run() -> void:
 func _test_production_facade_uses_native_search() -> void:
 	var state: State = _make_opening_state()
 	var production: Dictionary = Search.find_best_action_iterative(state, Rules.OPPONENT_OWNER, {"max_depth": 1})
-	var explicit_native: Dictionary = Search.find_best_action_iterative_native(state, Rules.OPPONENT_OWNER, {"max_depth": 1})
+	var explicit_native: Dictionary = Search.find_best_action_iterative_native(
+		state,
+		Rules.OPPONENT_OWNER,
+		{
+			"max_depth": 1,
+			"depth_mode": &"self_turn",
+			"use_internal_pv_ordering": true,
+			"use_history_ordering": true,
+			"use_transposition_table": true,
+			"transposition_table_mib": 8,
+		}
+	)
 	var production_action: Action = production.get("action") as Action
 	var native_action: Action = explicit_native.get("action") as Action
 	_check(production_action != null and native_action != null, "Both native search entries return an action")
@@ -52,6 +63,11 @@ func _test_production_facade_uses_native_search() -> void:
 	_check(production_action.is_same_as(native_action), "Production facade selects the explicit native action")
 	_check(int(production.get("score", 0)) == int(explicit_native.get("score", 1)), "Production facade returns the native score")
 	_check(Simulator.is_action_legal(state, production_action), "Production search returns a legal action")
+	_check(StringName(production.get("depth_mode", &"")) == &"self_turn", "Production search defaults to self-turn depth")
+	_check(bool(production.get("internal_pv_ordering_enabled", false)), "Production search enables internal PV ordering")
+	_check(bool(production.get("history_ordering_enabled", false)), "Production search enables history ordering")
+	_check(bool(production.get("transposition_table_enabled", false)), "Production search enables the transposition table")
+	_check(int(production.get("transposition_table_requested_mib", 0)) == 8, "Production search requests an 8 MiB transposition table")
 	var simple: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
 	_check(simple.is_same_as(production_action), "Simple search facade preserves canonical native identity")
 
@@ -101,7 +117,7 @@ func _test_complete_round_result_schema() -> void:
 	var result: Dictionary = Search.find_best_action_iterative(
 		_make_opening_state(),
 		Rules.OPPONENT_OWNER,
-		{"max_depth": 1},
+		{"max_depth": 1, "depth_mode": &"complete_round"},
 		Callable(),
 		Callable(self, "_record_progress")
 	)
@@ -151,7 +167,7 @@ func _test_selectable_depth_modes() -> void:
 		Rules.OPPONENT_OWNER,
 		{"max_depth": 2, "depth_mode": &"self_turn"}
 	)
-	_check(StringName(default_result.get("depth_mode", &"")) == &"complete_round", "Unspecified search depth keeps complete-round semantics")
+	_check(StringName(default_result.get("depth_mode", &"")) == &"self_turn", "Production search defaults to self-turn semantics")
 	_check(StringName(complete_round.get("depth_mode", &"")) == &"complete_round", "Complete-round mode is reported explicitly")
 	_check(StringName(self_turn_one.get("depth_mode", &"")) == &"self_turn", "Self-turn mode is reported explicitly")
 	_check(int(complete_round.get("owner_turn_boundaries", 0)) == 2, "Complete-round depth one spans two owner-turn boundaries")
@@ -163,9 +179,9 @@ func _test_selectable_depth_modes() -> void:
 		_check(int((self_turn_snapshots[0] as Dictionary).get("owner_turn_boundaries", 0)) == 1, "Self-turn depth-one snapshot records one boundary")
 		_check(int((self_turn_snapshots[1] as Dictionary).get("owner_turn_boundaries", 0)) == 3, "Self-turn depth-two snapshot records three boundaries")
 	var default_action: Action = default_result.get("action") as Action
-	var explicit_action: Action = complete_round.get("action") as Action
-	_check(default_action != null and explicit_action != null and default_action.is_same_as(explicit_action), "Explicit complete-round mode preserves the default action")
-	_check(int(default_result.get("score", 0)) == int(complete_round.get("score", 1)), "Explicit complete-round mode preserves the default score")
+	var explicit_action: Action = self_turn_one.get("action") as Action
+	_check(default_action != null and explicit_action != null and default_action.is_same_as(explicit_action), "Explicit self-turn mode preserves the production-default action")
+	_check(int(default_result.get("score", 0)) == int(self_turn_one.get("score", 1)), "Explicit self-turn mode preserves the production-default score")
 
 	var extra_play_state: State = _make_extra_play_search_state()
 	extra_play_state.extra_card_plays_remaining = 2
@@ -302,8 +318,18 @@ func _test_search_inherits_summon_reactions() -> void:
 	)
 	var punished: State = Simulator.apply_action(state, Action.make_play(0, 5, &"search_target")).get("state") as State
 	_check(int((punished.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Summon reaction flips an adjacent entering enemy")
-	var first: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
-	var repeated: Action = Search.find_best_action(state, 1, Rules.OPPONENT_OWNER)
+	var first_result: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "depth_mode": &"complete_round"}
+	)
+	var repeated_result: Dictionary = Search.find_best_action_iterative(
+		state,
+		Rules.OPPONENT_OWNER,
+		{"max_depth": 1, "depth_mode": &"complete_round"}
+	)
+	var first: Action = first_result.get("action") as Action
+	var repeated: Action = repeated_result.get("action") as Action
 	_check(first.is_same_as(repeated), "Reaction-aware native search remains deterministic")
 	_check(first.target_index not in [1, 3, 5, 7], "Native search avoids a square immediately punished by CangSong")
 

@@ -3,7 +3,7 @@ param(
     [double]$BudgetSeconds = 10.0,
     [int]$MaxOpenings = 14,
     [ValidateSet("complete_round", "self_turn")]
-    [string]$DepthMode = "complete_round",
+    [string]$DepthMode = "self_turn",
     [ValidateSet("quick_unique", "extra_play_cap")]
     [string]$OpeningSet = "quick_unique",
     [switch]$UseInternalPvOrdering,

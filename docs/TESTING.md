@@ -196,7 +196,7 @@ Profile production opening depth separately with either retained mode:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
-powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode complete_round
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -CollectTranspositionDiagnostics
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -UseTranspositionTable -TranspositionTableMiB 8

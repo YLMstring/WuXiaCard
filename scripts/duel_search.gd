@@ -141,6 +141,8 @@ static func find_best_action_iterative(
 	on_progress: Callable = Callable()
 ) -> Dictionary:
 	var production_limits: Dictionary = limits.duplicate(true)
+	if not production_limits.has("depth_mode"):
+		production_limits["depth_mode"] = &"self_turn"
 	if not production_limits.has("use_internal_pv_ordering"):
 		production_limits["use_internal_pv_ordering"] = true
 	if not production_limits.has("use_history_ordering"):

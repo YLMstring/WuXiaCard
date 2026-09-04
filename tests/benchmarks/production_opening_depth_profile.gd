@@ -27,7 +27,7 @@ func _run() -> void:
 	var options: Dictionary = _parse_options()
 	var budget_seconds: float = float(options.get("budget_seconds", DEFAULT_BUDGET_SECONDS))
 	var max_openings: int = int(options.get("max_openings", DEFAULT_MAX_OPENINGS))
-	var depth_mode: StringName = StringName(options.get("depth_mode", &"complete_round"))
+	var depth_mode: StringName = StringName(options.get("depth_mode", &"self_turn"))
 	var opening_set: StringName = StringName(options.get("opening_set", &"quick_unique"))
 	var use_internal_pv_ordering: bool = bool(options.get("use_internal_pv_ordering", false))
 	var use_history_ordering: bool = bool(options.get("use_history_ordering", false))
@@ -822,7 +822,7 @@ func _parse_options() -> Dictionary:
 	var result: Dictionary = {
 		"budget_seconds": DEFAULT_BUDGET_SECONDS,
 		"max_openings": DEFAULT_MAX_OPENINGS,
-		"depth_mode": &"complete_round",
+		"depth_mode": &"self_turn",
 		"opening_set": &"quick_unique",
 		"use_internal_pv_ordering": false,
 		"use_history_ordering": false,

@@ -48,13 +48,13 @@ completed depth/score/action tuples matched; depth two remained `13/14`.
 Search depth is measured in authoritative `owner_turn_serial` boundaries, not
 action plies. Two selectable modes share the same native search implementation:
 
-- `complete_round` is the current production default. Public depth `d` consumes
-  `2 × d` boundaries: depth one finishes the current owner's remaining turn and
-  the following opponent turn.
-- `self_turn` is an opt-in comparison mode. Public depth `d` consumes
+- `self_turn` is the production default. Public depth `d` consumes
   `2 × d - 1` boundaries: depth one finishes the current owner's remaining
   turn; depth two additionally finishes the opponent turn and the root owner's
   next turn.
+- `complete_round` remains available as an explicit legacy comparison mode.
+  Public depth `d` consumes `2 × d` boundaries: depth one finishes the current
+  owner's remaining turn and the following opponent turn.
 
 Automatic empty turns consume the boundaries they actually cross and do not
 add artificial depth. A granted same-turn extra play adds work but no boundary;
@@ -195,7 +195,7 @@ Profile the 14 unique real Quick openings separately with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
-powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode complete_round
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -CollectTranspositionDiagnostics
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -UseTranspositionTable -TranspositionTableMiB 8
 ```
@@ -251,6 +251,17 @@ The separate 8 MiB diagnostic run recorded 424,028 probes and 74,877 real hits
 Its 19,111 replacements/collisions explain why the earlier unbounded
 opportunity percentage is not the real-table hit rate. Diagnostic counters are
 still unsuitable for throughput comparison.
+
+The final production-selection ablation kept `self_turn` and the 8 MiB table
+fixed. Removing internal PV raised complete-depth-two work by `2.1%` across the
+four extra-play-cap openings and cut one opening's unfinished depth-three root
+progress from eight completed root actions to four. A broader 14-opening Quick
+comparison then measured conservative history: removing it preserved all
+same-depth scores/actions and the same `12/14` depth-three completion count, but
+raised work at the deepest common completed depths from 674,534 to 754,193
+nodes (`+11.81%`) and elapsed time from 65.706 to 70.953 seconds (`+7.99%`).
+Production therefore uses `self_turn`, internal PV, conservative history, and
+an 8 MiB transposition table together.
 
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow
