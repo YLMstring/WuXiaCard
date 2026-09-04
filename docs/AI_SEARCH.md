@@ -47,9 +47,13 @@ completed depth/score/action tuples matched; depth two remained `13/14`.
 
 Production evaluation deliberately excludes three weak terms: remaining-deck
 value, immediately vulnerable adjacent power edges, and a flat bonus for the
-side whose action is current. Terminal score, board-card ownership, hand count,
-hand and board powers/ki/abilities, and legal-action count remain. Search stays
-card-agnostic.
+side whose action is current. For non-terminal board ownership, a stable card
+is worth `100` strategic points and an unstable card is worth `50`. A card is
+stable only when every real orthogonal neighbor is occupied or its current
+power toward that empty neighbor is at least `8`; board edges outside the grid
+are ignored. Terminal ownership still uses the exact card-count difference.
+Hand count, hand and board powers/ki/abilities, and legal-action count remain.
+Search stays card-agnostic.
 
 The native entry retains three default-off switches only so the removed terms
 can be reconstructed in controlled ablations. They are not production profile

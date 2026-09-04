@@ -2143,6 +2143,27 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 		}
 		return result;
 	};
+	auto board_strategic_value = [&value](int32_t owner_id) -> int32_t {
+		int32_t result = 0;
+		for (int32_t cell = 0; cell < static_cast<int32_t>(value.board_card_indices.size()); ++cell) {
+			const int32_t card_index = value.board_card_indices[cell];
+			if (card_index < 0 || value.board_owners[cell] != owner_id) continue;
+			bool stable = true;
+			for (int32_t direction = 0; direction < 4; ++direction) {
+				const int32_t adjacent = neighbor_index(cell, direction);
+				if (adjacent < 0 || value.board_card_indices[adjacent] >= 0) continue;
+				if (
+					value.card_powers[static_cast<size_t>(card_index) * 4 + direction]
+					< 8
+				) {
+					stable = false;
+					break;
+				}
+			}
+			result += stable ? 100 : 50;
+		}
+		return result;
+	};
 	auto danger_value = [&value](int32_t owner_id) -> int32_t {
 		int32_t danger = 0;
 		for (int32_t cell = 0; cell < static_cast<int32_t>(value.board_card_indices.size()); ++cell) {
@@ -2167,7 +2188,8 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	const int32_t opponent_hand_zone = opponent_owner - 1;
 	const int32_t root_deck_zone = root_owner + 1;
 	const int32_t opponent_deck_zone = opponent_owner + 1;
-	int32_t strategic_score = score_difference * 100;
+	int32_t strategic_score = board_strategic_value(root_owner)
+		- board_strategic_value(opponent_owner);
 	strategic_score += (
 		static_cast<int32_t>(value.zones[root_hand_zone].size())
 		- static_cast<int32_t>(value.zones[opponent_hand_zone].size())

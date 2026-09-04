@@ -278,7 +278,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Production static evaluation no longer values the remaining deck, adjacent
   immediately vulnerable power edges, or a flat current-action bonus. Three
   default-off native switches retain the old terms for controlled ablation
-  only. The 2026-09-04 fixed-depth-two 112-game Extended comparison finished
+  only. Non-terminal strategic ownership values a stable board card at `100`
+  and an unstable one at `50`. Stability requires every real orthogonal
+  neighbor to be occupied or the card's current power toward that empty cell
+  to be at least `8`; terminal scoring still counts every board card equally.
+  The 2026-09-04 fixed-depth-two 112-game Extended comparison finished
   57-55 for the reduced evaluator (`50.9%`, total score margin `+26`) with no
   fallback, invalid, or incomplete game; it also used `3.13%` fewer nodes and
   `2.12%` less search time. Treat this as no observed regression and only weak

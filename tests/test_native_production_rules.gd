@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_native_depth_modes_match_fixed_and_iterative_search()
 	_test_native_search_solves_forced_terminal_choice()
 	_test_native_evaluation_feature_subtraction()
+	_test_native_stable_board_strategic_score()
 	_test_native_search_node_budget_keeps_only_complete_depths()
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
@@ -340,6 +341,112 @@ func _test_native_evaluation_feature_subtraction() -> void:
 	_check(not bool(production.get("deck_evaluation_enabled", true)), "Production search excludes deck evaluation")
 	_check(not bool(production.get("danger_evaluation_enabled", true)), "Production search excludes danger evaluation")
 	_check(not bool(production.get("tempo_evaluation_enabled", true)), "Production search excludes tempo evaluation")
+
+
+func _test_native_stable_board_strategic_score() -> void:
+	var unstable_board: Array = Rules.empty_board()
+	var unstable_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_unstable_board"
+	)
+	unstable_card["powers"] = [1, 7, 8, 0]
+	unstable_board[0] = {"owner": Rules.OPPONENT_OWNER, "card": unstable_card}
+	var unstable_state := State.new(
+		unstable_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_unstable_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_unstable_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+
+	var stable_board: Array = Rules.empty_board()
+	var stable_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_stable_board"
+	)
+	stable_card["powers"] = [0, 8, 8, 0]
+	stable_board[0] = {"owner": Rules.OPPONENT_OWNER, "card": stable_card}
+	var stable_state := State.new(
+		stable_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_stable_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_stable_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+
+	var unstable_score: int = _evaluation_score(
+		unstable_state, Rules.OPPONENT_OWNER, "Unstable strategic score fixture"
+	)
+	var stable_score: int = _evaluation_score(
+		stable_state, Rules.OPPONENT_OWNER, "Stable strategic score fixture"
+	)
+	_check(
+		stable_score == unstable_score + 50_000,
+		"A corner card with every open-facing power at least eight gains the stable fifty strategic points"
+	)
+
+	var mirrored_board: Array = Rules.empty_board()
+	var mirrored_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_mirrored_stable_board"
+	)
+	mirrored_card["powers"] = [0, 8, 8, 0]
+	mirrored_board[0] = {"owner": Rules.PLAYER_OWNER, "card": mirrored_card}
+	var mirrored_state := State.new(
+		mirrored_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_mirrored_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_mirrored_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+	var mirrored_score: int = _evaluation_score(
+		mirrored_state, Rules.OPPONENT_OWNER, "Mirrored stable strategic score fixture"
+	)
+	_check(
+		stable_score == -mirrored_score,
+		"Stable strategic board value is symmetric between owners"
+	)
+
+	var surrounded_board: Array = Rules.empty_board()
+	var center_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_surrounded_center"
+	)
+	center_card["powers"] = [0, 0, 0, 0]
+	surrounded_board[4] = {"owner": Rules.OPPONENT_OWNER, "card": center_card}
+	for cell: int in [1, 3, 5, 7]:
+		var surrounding_card: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			StringName("evaluation_surrounding_%d" % cell)
+		)
+		surrounding_card["powers"] = [8, 8, 8, 8]
+		surrounded_board[cell] = {"owner": Rules.OPPONENT_OWNER, "card": surrounding_card}
+	var surrounded_state := State.new(
+		surrounded_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_surrounded_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_surrounded_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+	var surrounded_score: int = _evaluation_score(
+		surrounded_state, Rules.OPPONENT_OWNER, "Surrounded stable strategic score fixture"
+	)
+	_check(
+		surrounded_score >= 500_000 and surrounded_score < 501_000,
+		"A card with every adjacent cell occupied is stable regardless of its powers"
+	)
+
+	stable_state.turn_count = stable_state.max_turns
+	unstable_state.turn_count = unstable_state.max_turns
+	_check(
+		_evaluation_score(stable_state, Rules.OPPONENT_OWNER, "Terminal stable fixture")
+		== _evaluation_score(unstable_state, Rules.OPPONENT_OWNER, "Terminal unstable fixture"),
+		"Terminal scoring ignores strategic stability"
+	)
+
+
+func _evaluation_score(state: State, root_owner: int, label: String) -> int:
+	var kernel: Object = _evaluation_kernel(state, label)
+	if kernel == null:
+		return 0
+	var result: Dictionary = kernel.call(
+		"inspect_evaluation", root_owner, false, false, false
+	) as Dictionary
+	_check(bool(result.get("valid", false)), "%s exposes a valid evaluation" % label)
+	return int(result.get("score", 0))
 
 
 func _evaluation_kernel(state: State, label: String) -> Object:
