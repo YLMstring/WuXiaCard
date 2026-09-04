@@ -10,7 +10,7 @@ measure the resulting search-speed change on real openings.
 Only `action_structural_score()` changes. Other ordering layers, minimax,
 static evaluation, rules, and legal-action generation remain unchanged.
 
-- Every legal activation keeps structural score `500`.
+- Every legal activation has structural score `100`.
 - A play into center cell `4` starts at `0`.
 - A play into edge cells `1`, `3`, `5`, or `7` starts at `10`.
 - A play into corner cells `0`, `2`, `6`, or `8` starts at `20`.
