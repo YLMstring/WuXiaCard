@@ -283,6 +283,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
   fallback, invalid, or incomplete game; it also used `3.13%` fewer nodes and
   `2.12%` less search time. Treat this as no observed regression and only weak
   positive strength evidence, not a proven gain.
+- Structural action ordering now scores activations at `100`; plays start at
+  center/edge/corner values `0/10/20`, add `5` per occupied orthogonal neighbor,
+  and add another `100` for an adjacent enemy that raw powers appear able to
+  flip. A paired 14-opening ten-second production profile retained identical
+  deepest common scores/actions and the same 14/14 depth-two, 12/14 depth-three
+  reach. It reduced depth-two nodes by `5.82%`, but depth-two time rose `9.24%`
+  and depth-three time rose `2.79%`; one slow Dongfang Bubai/Zhang Sanfeng
+  opening nevertheless improved unfinished depth-three progress from 0/35 to
+  11/35. This is mixed behavior, not a measured general speedup.
 - Hand-target drag hit testing is owner-aware. Enemy-hand activations such as
   HanBin target only the opponent's physical hand, while allied-hand
   activations such as RanMu and WuXiang target only their current owner's hand;

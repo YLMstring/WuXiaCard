@@ -863,7 +863,7 @@ int32_t DuelNativeCompactKernel::action_structural_score(
 	const NativeState &value,
 	const NativeAction &action
 ) const {
-	if (action.type == NativeActionType::ACTIVATE) return 500;
+	if (action.type == NativeActionType::ACTIVATE) return 100;
 	const int32_t owner_id = value.scalars[0];
 	const int32_t hand_zone = owner_id - 1;
 	if (
@@ -875,19 +875,16 @@ int32_t DuelNativeCompactKernel::action_structural_score(
 	const int32_t card_index = value.zones[hand_zone][action.source_index];
 	if (card_index < 0) return 0;
 	int32_t score = action.target_index == 4
-		? 20
+		? 0
 		: (action.target_index == 0 || action.target_index == 2
-			|| action.target_index == 6 || action.target_index == 8 ? 10 : 0);
+			|| action.target_index == 6 || action.target_index == 8 ? 20 : 10);
 	for (int32_t direction = 0; direction < 4; ++direction) {
 		const int32_t neighbor = neighbor_index(action.target_index, direction);
 		if (neighbor < 0) continue;
 		const int32_t neighbor_card = value.board_card_indices[neighbor];
 		if (neighbor_card < 0) continue;
-		if (value.board_owners[neighbor] == owner_id) {
-			score += 5;
-			continue;
-		}
-		score += 25;
+		score += 5;
+		if (value.board_owners[neighbor] == owner_id) continue;
 		const int32_t opposite = (direction + 2) % 4;
 		if (
 			value.card_powers[static_cast<size_t>(card_index) * 4 + direction]

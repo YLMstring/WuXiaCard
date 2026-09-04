@@ -129,6 +129,12 @@ each completed public depth. Explicit `false` switches remain available to
 controlled benchmarks through `use_internal_pv_ordering` and
 `use_history_ordering`; normal production calls default both to `true`.
 
+Structural ordering gives activations `100`. Plays start at `0` for center,
+`10` for non-corner edges, and `20` for corners; each occupied orthogonal
+neighbor adds `5`, and an adjacent enemy whose opposing raw power is lower adds
+another `100`. This is only a cheap ordering hint and does not replace rules
+resolution or leaf evaluation.
+
 The table is also independently controlled by `use_transposition_table` and
 `transposition_table_mib`. `DuelSearch.find_best_action_iterative()` defaults
 it to 8 MiB on both desktop and Android. The direct native entry keeps it off
@@ -289,6 +295,18 @@ total score margin of `+26`. It visited 1,097,565 nodes versus 1,133,076
 (`-3.13%`) and spent 114.885 versus 117.374 search seconds (`-2.12%`). This is
 slightly favorable evidence and no observed regression, but the two-game edge
 is too small to establish a meaningful strength gain by itself.
+
+The subsequent 2026-09-04 structural-ordering comparison used the same 14 real
+Quick openings twice with production `self_turn`, PV, history, 8 MiB TT, and a
+ten-second deadline. Both versions completed depth two in 14/14 and depth three
+in 12/14, with identical scores and canonical actions at every deepest common
+completed depth. The revised order used 5.82% fewer cumulative depth-two nodes,
+but cumulative depth-two time rose 9.24% (median per-opening ratio `1.045`) and
+cumulative depth-three time rose 2.79%. Aggregate ten-second throughput fell
+13.89%, although different branch costs make that figure secondary. One slow
+Dongfang Bubai/Zhang Sanfeng opening improved its unfinished depth-three root
+progress from 0/35 to 11/35. Treat the change as mixed ordering behavior, not a
+general speedup.
 
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow

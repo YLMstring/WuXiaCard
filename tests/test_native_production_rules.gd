@@ -474,10 +474,11 @@ func _test_native_search_action_order_is_stable() -> void:
 		"owner": Rules.OPPONENT_OWNER,
 		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"ordering_ally"),
 	}
-	board[3] = {
-		"owner": Rules.PLAYER_OWNER,
-		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"ordering_enemy"),
-	}
+	var ordering_enemy: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"ordering_enemy"
+	)
+	ordering_enemy["powers"] = [0, 0, 0, 0]
+	board[3] = {"owner": Rules.PLAYER_OWNER, "card": ordering_enemy}
 	var state := State.new(
 		board,
 		[],
@@ -509,14 +510,14 @@ func _test_native_search_action_order_is_stable() -> void:
 	for action_value: Variant in repeated:
 		repeated_keys.append(_native_action_key(action_value as Dictionary))
 	var expected: Array[String] = [
-		"activate|4|ordering_active|board_cell|1|1",
-		"activate|4|ordering_active|board_cell|3|2",
-		"activate|4|ordering_active|board_cell|5|0",
-		"activate|4|ordering_active|board_cell|7|0",
 		"play|0|ordering_hand_a|board_cell|0|0",
 		"play|1|ordering_hand_b|board_cell|0|0",
 		"play|0|ordering_hand_a|board_cell|6|0",
 		"play|1|ordering_hand_b|board_cell|6|0",
+		"activate|4|ordering_active|board_cell|1|1",
+		"activate|4|ordering_active|board_cell|3|2",
+		"activate|4|ordering_active|board_cell|5|0",
+		"activate|4|ordering_active|board_cell|7|0",
 		"play|0|ordering_hand_a|board_cell|2|0",
 		"play|1|ordering_hand_b|board_cell|2|0",
 		"play|0|ordering_hand_a|board_cell|8|0",
@@ -554,6 +555,35 @@ func _test_native_search_action_order_is_stable() -> void:
 			invalid_keys == expected,
 			"An illegal preferred hint falls back to structural and canonical order"
 		)
+
+	var position_state := State.new(
+		Rules.empty_board(),
+		[],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"ordering_position")],
+		Rules.OPPONENT_OWNER
+	)
+	var position_compact := CompactState.new()
+	_check(position_compact.capture_state(position_state), "Position-order fixture crosses the compact boundary")
+	if not position_compact.is_structurally_valid():
+		return
+	var position_kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(position_kernel != null, "Position-order fixture creates the kernel")
+	if position_kernel == null:
+		return
+	_check(
+		bool(position_kernel.call("load_compact_payload", position_compact.to_variant_payload())),
+		"Position-order fixture loads"
+	)
+	var position_actions: Array = position_kernel.call(
+		"inspect_ordered_search_actions_for_owner", Rules.OPPONENT_OWNER
+	) as Array
+	var position_targets: Array[int] = []
+	for action_value: Variant in position_actions:
+		position_targets.append(int((action_value as Dictionary).get("target_index", -1)))
+	_check(
+		position_targets == [0, 2, 6, 8, 1, 3, 5, 7, 4],
+		"Empty-board structural order is corner, edge, then center"
+	)
 
 
 func _native_action_key(action: Dictionary) -> String:
