@@ -8,6 +8,9 @@ param(
     [string]$OpeningSet = "quick_unique",
     [switch]$UseInternalPvOrdering,
     [switch]$UseHistoryOrdering,
+    [switch]$UseTranspositionTable,
+    [ValidateRange(0, 4096)]
+    [int]$TranspositionTableMiB = 8,
     [switch]$CollectTranspositionDiagnostics,
     [string]$EnginePath = "",
     [string]$ProjectRoot = ""
@@ -50,6 +53,10 @@ try {
     if ($UseHistoryOrdering) {
         $arguments += "--use-history-ordering"
     }
+    if ($UseTranspositionTable) {
+        $arguments += "--use-transposition-table"
+    }
+    $arguments += "--transposition-table-mib=$TranspositionTableMiB"
     if ($CollectTranspositionDiagnostics) {
         $arguments += "--collect-transposition-diagnostics"
     }

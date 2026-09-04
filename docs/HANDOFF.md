@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-03
+Updated: 2026-09-04
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -245,7 +245,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `card_revealed` immediately after their addition/return event.
 - The AI sees both hands and exact deck order. Production uses the sole native
   iterative search with deterministic structural ordering and alpha-beta
-  pruning; `complete_round` remains its default depth mode. Historical GDScript
+  pruning; `complete_round` remains its default depth mode. A fixed two-way
+  native transposition table is scoped to each root decision and defaults to a
+  strict 8 MiB on both desktop and Android. Its exact key includes the complete
+  native-state checksum and remaining owner-turn boundaries; cached moves are
+  revalidated before ordering or same-turn plan restoration. Historical GDScript
   PVS, tactics, evaluation-cache, and
   alternate-evaluator profiles were removed with the old search backend.
   Search stays card-agnostic and canonical root ordering resolves equal scores.
@@ -255,6 +259,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   payload. The same 14 two-second `self_turn` openings improved from `9987.37`
   to `10465.11` nodes/s (`+4.78%`) with identical deepest completed
   depth/score/actions and unchanged `13/14` depth-two completion.
+- The 2026-09-04 four-opening Release transposition-table ablation improved
+  ten-second `self_turn` depth-two completion from `2/4` to `4/4` at every
+  tested 4/8/16/32 MiB capacity. The selected 8 MiB default preserved all
+  complete depth-two scores and canonical actions; per-opening depth-two time
+  improved by `1.25x`, `1.33x`, `20.16x`, and `25.09x`. The diagnostic run
+  recorded 74,877 real hits from 424,028 probes, with no allocation fallback
+  or illegal cached moves.
 - Hand-target drag hit testing is owner-aware. Enemy-hand activations such as
   HanBin target only the opponent's physical hand, while allied-hand
   activations such as RanMu and WuXiang target only their current owner's hand;
@@ -307,8 +318,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   native search for every seat; old `enhanced`/`baseline` report fields are
   balanced assignment labels, not different algorithms.
 - Production native ordering now defaults to internal previous-completed-depth
-  PV hints plus conservative per-root history, with final priority
-  `PV > structural > history > canonical`. Strict history priority was rejected
+  PV hints, a per-root 8 MiB transposition table, and conservative history,
+  with final priority `PV > transposition move > structural > history >
+  canonical`. Strict history priority was rejected
   because it reduced real-opening depth-two completion. Timing/cutoff counters
   remain behind the default-off `collect_search_diagnostics` switch. The
   2026-09-03 four-opening `self_turn` evaluation reached `11666.0` nodes/s
@@ -316,13 +328,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   depth-two openings, and reduced the two incomplete linear estimates to
   `15.20s` and `10.60s`. Use `Release + template_debug` native builds for
   performance comparisons; `Debug + template_debug` is about half-speed.
-- Default-off native transposition opportunity diagnostics are available through
+- Native transposition opportunity diagnostics are available through
   `CollectTranspositionDiagnostics` on the opening profile. The 2026-09-04 four
   extra-play-cap openings produced 333,262 previously completed exact-key hits
   from 460,706 probes (`72.34%`): leaf reuse was `73.74%`, and internal-node
   reuse was `60.88%`. State-only matching was `72.47%`, so almost all observed
-  reuse already matched remaining depth. This is strong evidence for a bounded
-  native table next, but no score/bound cache is active in production yet.
+  reuse already matched remaining depth. The implemented fixed table's
+  diagnostic run recorded a lower real hit rate of `17.66%`, but those hits
+  produced 50,425 exact returns and 24,188 bound cutoffs.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live

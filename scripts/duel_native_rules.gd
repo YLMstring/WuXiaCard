@@ -303,7 +303,9 @@ static func search_iterative(
 		bool(limits.get(
 			"collect_search_diagnostics",
 			limits.get("collect_timings", false)
-		))
+		)),
+		bool(limits.get("use_transposition_table", false)),
+		maxi(int(limits.get("transposition_table_mib", 0)), 0)
 	) as Dictionary
 	if not bool(native_result.get("supported", false)):
 		return _search_integration_failure(

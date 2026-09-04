@@ -31,6 +31,10 @@ func _run() -> void:
 	var opening_set: StringName = StringName(options.get("opening_set", &"quick_unique"))
 	var use_internal_pv_ordering: bool = bool(options.get("use_internal_pv_ordering", false))
 	var use_history_ordering: bool = bool(options.get("use_history_ordering", false))
+	var use_transposition_table: bool = bool(options.get("use_transposition_table", false))
+	var transposition_table_mib: int = maxi(
+		int(options.get("transposition_table_mib", 8)), 0
+	)
 	var collect_transposition_diagnostics: bool = bool(
 		options.get("collect_transposition_diagnostics", false)
 	)
@@ -46,6 +50,8 @@ func _run() -> void:
 			opening_set == &"extra_play_cap",
 			use_internal_pv_ordering,
 			use_history_ordering,
+			use_transposition_table,
+			transposition_table_mib,
 			collect_transposition_diagnostics
 		)
 		samples.append(sample)
@@ -89,10 +95,12 @@ func _run() -> void:
 		openings,
 		depth_mode,
 		use_internal_pv_ordering,
-		use_history_ordering
+		use_history_ordering,
+		use_transposition_table,
+		transposition_table_mib
 	)
 	var report: Dictionary = {
-		"schema_version": 3,
+		"schema_version": 4,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
 		"fixture_version": EnemyManifest.VERSION,
 		"configuration": {
@@ -111,6 +119,8 @@ func _run() -> void:
 			"opening_set": String(opening_set),
 			"use_internal_pv_ordering": use_internal_pv_ordering,
 			"use_history_ordering": use_history_ordering,
+			"use_transposition_table": use_transposition_table,
+			"transposition_table_mib": transposition_table_mib,
 			"collect_transposition_diagnostics": collect_transposition_diagnostics,
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
@@ -128,7 +138,8 @@ func _run() -> void:
 			"OPENING_DEPTH_PROFILE_COMPLETE openings=%d target_depth=%d completed=%d "
 			+ "avg_depth=%.3f avg_depth1_seconds=%.3f tt_hit_rate=%.4f "
 			+ "tt_completed_hit_rate=%.4f tt_leaf_hit_rate=%.4f "
-			+ "tt_internal_hit_rate=%.4f tt_state_hit_rate=%.4f report=%s"
+			+ "tt_internal_hit_rate=%.4f tt_state_hit_rate=%.4f "
+			+ "table_hit_rate=%.4f report=%s"
 		)
 		% [
 			openings.size(),
@@ -141,6 +152,7 @@ func _run() -> void:
 			float(summary.get("transposition_leaf_completed_hit_rate", 0.0)),
 			float(summary.get("transposition_internal_completed_hit_rate", 0.0)),
 			float(summary.get("transposition_state_hit_rate", 0.0)),
+			float(summary.get("transposition_table_hit_rate", 0.0)),
 			output_path,
 		]
 	)
@@ -154,6 +166,8 @@ func _profile_opening(
 	profile_extra_play: bool = false,
 	use_internal_pv_ordering: bool = false,
 	use_history_ordering: bool = false,
+	use_transposition_table: bool = false,
+	transposition_table_mib: int = 8,
 	collect_transposition_diagnostics: bool = false
 ) -> Dictionary:
 	_depth_snapshots.clear()
@@ -169,6 +183,8 @@ func _profile_opening(
 		"depth_mode": depth_mode,
 		"use_internal_pv_ordering": use_internal_pv_ordering,
 		"use_history_ordering": use_history_ordering,
+		"use_transposition_table": use_transposition_table,
+		"transposition_table_mib": transposition_table_mib,
 		"collect_search_diagnostics": collect_transposition_diagnostics,
 	}
 	var result: Dictionary = Search.find_best_action_iterative(
@@ -186,6 +202,7 @@ func _profile_opening(
 	var target_depth_snapshot: Dictionary = _snapshot_for_depth(
 		TARGET_DEPTH
 	)
+	var selected_action: Action = result.get("action") as Action
 	var estimated_required_seconds: Variant = null
 	if not target_depth_snapshot.is_empty():
 		estimated_required_seconds = float(
@@ -216,6 +233,7 @@ func _profile_opening(
 		"state_key": String(opening.get("state_key", "")),
 		"state_key_length": String(opening.get("state_key", "")).length(),
 		"exact_state_key_digest": StateKey.build(state).sha256_text(),
+		"action_key": selected_action.canonical_key() if selected_action != null else "",
 		"root_legal_actions": int(opening.get("root_legal_actions", 0)),
 		"completed_depth": int(result.get("completed_depth", 0)),
 		"attempted_depth": int(result.get("iteration_depth", 0)),
@@ -242,6 +260,23 @@ func _profile_opening(
 		"transposition_unique_keys": int(result.get("transposition_unique_keys", 0)),
 		"transposition_completed_keys": int(result.get("transposition_completed_keys", 0)),
 		"transposition_unique_states": int(result.get("transposition_unique_states", 0)),
+		"transposition_table_probes": int(result.get("transposition_table_probes", 0)),
+		"transposition_table_hits": int(result.get("transposition_table_hits", 0)),
+		"transposition_exact_hits": int(result.get("transposition_exact_hits", 0)),
+		"transposition_bound_hits": int(result.get("transposition_bound_hits", 0)),
+		"transposition_exact_returns": int(result.get("transposition_exact_returns", 0)),
+		"transposition_bound_cutoffs": int(result.get("transposition_bound_cutoffs", 0)),
+		"transposition_stores": int(result.get("transposition_stores", 0)),
+		"transposition_updates": int(result.get("transposition_updates", 0)),
+		"transposition_replacements": int(result.get("transposition_replacements", 0)),
+		"transposition_collisions": int(result.get("transposition_collisions", 0)),
+		"transposition_move_queries": int(result.get("transposition_move_queries", 0)),
+		"transposition_move_legal_hits": int(result.get("transposition_move_legal_hits", 0)),
+		"transposition_move_illegal_hits": int(result.get("transposition_move_illegal_hits", 0)),
+		"transposition_table_enabled": bool(result.get("transposition_table_enabled", false)),
+		"transposition_table_requested_mib": int(result.get("transposition_table_requested_mib", 0)),
+		"transposition_table_capacity_bytes": int(result.get("transposition_table_capacity_bytes", 0)),
+		"transposition_table_allocation_fallback": bool(result.get("transposition_table_allocation_fallback", false)),
 		"iteration_nodes": int(result.get("iteration_nodes", 0)),
 		"root_actions_total": int(result.get("root_actions_total", 0)),
 		"root_actions_started": int(result.get("root_actions_started", 0)),
@@ -261,6 +296,8 @@ func _profile_opening(
 			depth_mode,
 			use_internal_pv_ordering,
 			use_history_ordering,
+			use_transposition_table,
+			transposition_table_mib,
 			collect_transposition_diagnostics
 		)
 	return sample
@@ -273,6 +310,8 @@ func _profile_extra_play_decision(
 	depth_mode: StringName,
 	use_internal_pv_ordering: bool,
 	use_history_ordering: bool,
+	use_transposition_table: bool,
+	transposition_table_mib: int,
 	collect_transposition_diagnostics: bool
 ) -> Dictionary:
 	var first_action: Action = first_result.get("action") as Action
@@ -335,6 +374,8 @@ func _profile_extra_play_decision(
 			"depth_mode": depth_mode,
 			"use_internal_pv_ordering": use_internal_pv_ordering,
 			"use_history_ordering": use_history_ordering,
+			"use_transposition_table": use_transposition_table,
+			"transposition_table_mib": transposition_table_mib,
 			"collect_search_diagnostics": collect_transposition_diagnostics,
 		},
 		Callable(),
@@ -367,6 +408,13 @@ func _profile_extra_play_decision(
 	sample["transposition_unique_keys"] = int(second_result.get("transposition_unique_keys", 0))
 	sample["transposition_completed_keys"] = int(second_result.get("transposition_completed_keys", 0))
 	sample["transposition_unique_states"] = int(second_result.get("transposition_unique_states", 0))
+	sample["transposition_table_probes"] = int(second_result.get("transposition_table_probes", 0))
+	sample["transposition_table_hits"] = int(second_result.get("transposition_table_hits", 0))
+	sample["transposition_exact_returns"] = int(second_result.get("transposition_exact_returns", 0))
+	sample["transposition_bound_cutoffs"] = int(second_result.get("transposition_bound_cutoffs", 0))
+	sample["transposition_stores"] = int(second_result.get("transposition_stores", 0))
+	sample["transposition_replacements"] = int(second_result.get("transposition_replacements", 0))
+	sample["transposition_collisions"] = int(second_result.get("transposition_collisions", 0))
 	sample["root_actions_total"] = int(second_result.get("root_actions_total", 0))
 	sample["root_actions_started"] = int(second_result.get("root_actions_started", 0))
 	sample["root_actions_completed"] = int(second_result.get("root_actions_completed", 0))
@@ -411,6 +459,13 @@ func _record_depth_progress(progress: Dictionary) -> void:
 		"transposition_unique_keys": int(progress.get("transposition_unique_keys", 0)),
 		"transposition_completed_keys": int(progress.get("transposition_completed_keys", 0)),
 		"transposition_unique_states": int(progress.get("transposition_unique_states", 0)),
+		"transposition_table_probes": int(progress.get("transposition_table_probes", 0)),
+		"transposition_table_hits": int(progress.get("transposition_table_hits", 0)),
+		"transposition_exact_returns": int(progress.get("transposition_exact_returns", 0)),
+		"transposition_bound_cutoffs": int(progress.get("transposition_bound_cutoffs", 0)),
+		"transposition_stores": int(progress.get("transposition_stores", 0)),
+		"transposition_replacements": int(progress.get("transposition_replacements", 0)),
+		"transposition_collisions": int(progress.get("transposition_collisions", 0)),
 	})
 
 
@@ -425,7 +480,9 @@ func _run_timing_probes(
 	openings: Array[Dictionary],
 	depth_mode: StringName,
 	use_internal_pv_ordering: bool,
-	use_history_ordering: bool
+	use_history_ordering: bool,
+	use_transposition_table: bool,
+	transposition_table_mib: int
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
@@ -450,6 +507,8 @@ func _run_timing_probes(
 			"depth_mode": depth_mode,
 			"use_internal_pv_ordering": use_internal_pv_ordering,
 			"use_history_ordering": use_history_ordering,
+			"use_transposition_table": use_transposition_table,
+			"transposition_table_mib": transposition_table_mib,
 		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
 			state.duplicate_state(), state.active_player, timing_limits
@@ -486,6 +545,10 @@ func _run_timing_probes(
 			"history_queries": int(profile_result.get("history_queries", 0)),
 			"history_hits": int(profile_result.get("history_hits", 0)),
 			"history_cutoffs": int(profile_result.get("history_cutoffs", 0)),
+			"transposition_table_probes": int(profile_result.get("transposition_table_probes", 0)),
+			"transposition_table_hits": int(profile_result.get("transposition_table_hits", 0)),
+			"transposition_exact_returns": int(profile_result.get("transposition_exact_returns", 0)),
+			"transposition_bound_cutoffs": int(profile_result.get("transposition_bound_cutoffs", 0)),
 			"time_other_usec": maxi(int(elapsed_usec) - measured_usec, 0),
 		})
 	return result
@@ -518,6 +581,18 @@ func _summarize(
 	var transposition_unique_keys: int = 0
 	var transposition_completed_keys: int = 0
 	var transposition_unique_states: int = 0
+	var transposition_table_probes: int = 0
+	var transposition_table_hits: int = 0
+	var transposition_exact_returns: int = 0
+	var transposition_bound_cutoffs: int = 0
+	var transposition_stores: int = 0
+	var transposition_updates: int = 0
+	var transposition_replacements: int = 0
+	var transposition_collisions: int = 0
+	var transposition_move_queries: int = 0
+	var transposition_move_legal_hits: int = 0
+	var transposition_move_illegal_hits: int = 0
+	var transposition_allocation_fallbacks: int = 0
 	var compact_key_length_total: int = 0
 	var fallback_count: int = 0
 	var extra_play_states: int = 0
@@ -542,6 +617,19 @@ func _summarize(
 		transposition_unique_keys += int(sample.get("transposition_unique_keys", 0))
 		transposition_completed_keys += int(sample.get("transposition_completed_keys", 0))
 		transposition_unique_states += int(sample.get("transposition_unique_states", 0))
+		transposition_table_probes += int(sample.get("transposition_table_probes", 0))
+		transposition_table_hits += int(sample.get("transposition_table_hits", 0))
+		transposition_exact_returns += int(sample.get("transposition_exact_returns", 0))
+		transposition_bound_cutoffs += int(sample.get("transposition_bound_cutoffs", 0))
+		transposition_stores += int(sample.get("transposition_stores", 0))
+		transposition_updates += int(sample.get("transposition_updates", 0))
+		transposition_replacements += int(sample.get("transposition_replacements", 0))
+		transposition_collisions += int(sample.get("transposition_collisions", 0))
+		transposition_move_queries += int(sample.get("transposition_move_queries", 0))
+		transposition_move_legal_hits += int(sample.get("transposition_move_legal_hits", 0))
+		transposition_move_illegal_hits += int(sample.get("transposition_move_illegal_hits", 0))
+		if bool(sample.get("transposition_table_allocation_fallback", false)):
+			transposition_allocation_fallbacks += 1
 		compact_key_length_total += int(sample.get("state_key_length", 0))
 		if bool(sample.get("used_fallback", false)):
 			fallback_count += 1
@@ -643,6 +731,23 @@ func _summarize(
 		"transposition_unique_keys": transposition_unique_keys,
 		"transposition_completed_keys": transposition_completed_keys,
 		"transposition_unique_states": transposition_unique_states,
+		"transposition_table_probes": transposition_table_probes,
+		"transposition_table_hits": transposition_table_hits,
+		"transposition_table_hit_rate": (
+			float(transposition_table_hits) / float(transposition_table_probes)
+			if transposition_table_probes > 0
+			else 0.0
+		),
+		"transposition_exact_returns": transposition_exact_returns,
+		"transposition_bound_cutoffs": transposition_bound_cutoffs,
+		"transposition_stores": transposition_stores,
+		"transposition_updates": transposition_updates,
+		"transposition_replacements": transposition_replacements,
+		"transposition_collisions": transposition_collisions,
+		"transposition_move_queries": transposition_move_queries,
+		"transposition_move_legal_hits": transposition_move_legal_hits,
+		"transposition_move_illegal_hits": transposition_move_illegal_hits,
+		"transposition_allocation_fallbacks": transposition_allocation_fallbacks,
 		"baseline_snapshot_count": baseline_snapshot_count,
 		"fallback_count": fallback_count,
 		"extra_play_states": extra_play_states,
@@ -721,6 +826,8 @@ func _parse_options() -> Dictionary:
 		"opening_set": &"quick_unique",
 		"use_internal_pv_ordering": false,
 		"use_history_ordering": false,
+		"use_transposition_table": false,
+		"transposition_table_mib": 8,
 		"collect_transposition_diagnostics": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
@@ -750,6 +857,13 @@ func _parse_options() -> Dictionary:
 			result["use_internal_pv_ordering"] = true
 		elif argument == "--use-history-ordering":
 			result["use_history_ordering"] = true
+		elif argument == "--use-transposition-table":
+			result["use_transposition_table"] = true
+		elif argument.begins_with("--transposition-table-mib="):
+			result["transposition_table_mib"] = maxi(
+				int(argument.trim_prefix("--transposition-table-mib=")),
+				0
+			)
 		elif argument == "--collect-transposition-diagnostics":
 			result["collect_transposition_diagnostics"] = true
 	return result

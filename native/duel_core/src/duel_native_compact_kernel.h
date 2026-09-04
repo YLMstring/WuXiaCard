@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -518,8 +519,47 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t target_index = -1;
 		int32_t activation_index = 0;
 		bool ordering_preferred = false;
+		bool ordering_transposition_preferred = false;
 		int32_t ordering_history_score = 0;
 		int32_t ordering_structural_score = 0;
+	};
+
+	enum class TranspositionBound : uint8_t {
+		EXACT,
+		LOWER,
+		UPPER,
+	};
+
+	struct CompactNativeAction {
+		int16_t source_index = -1;
+		int16_t target_index = -1;
+		int16_t activation_index = 0;
+		uint8_t type = 0;
+		uint8_t flags = 0;
+	};
+
+	struct TranspositionEntry {
+		uint64_t state_checksum = 0;
+		int32_t score = 0;
+		int32_t remaining_owner_turn_boundaries = -1;
+		uint32_t generation = 0;
+		CompactNativeAction best_action;
+		TranspositionBound bound = TranspositionBound::EXACT;
+		bool occupied = false;
+		bool horizon_reached = false;
+		bool has_best_action = false;
+	};
+
+	struct TranspositionTable {
+		std::unique_ptr<TranspositionEntry[]> entries;
+		size_t set_count = 0;
+		size_t slot_count = 0;
+		size_t allocated_bytes = 0;
+		bool allocation_failed = false;
+
+		bool enabled() const {
+			return entries != nullptr && set_count > 0;
+		}
 	};
 
 	struct HistoryKey {
@@ -590,6 +630,20 @@ class DuelNativeCompactKernel : public RefCounted {
 		int64_t transposition_unique_keys = 0;
 		int64_t transposition_completed_keys = 0;
 		int64_t transposition_unique_states = 0;
+		int64_t transposition_table_probes = 0;
+		int64_t transposition_table_hits = 0;
+		int64_t transposition_exact_hits = 0;
+		int64_t transposition_bound_hits = 0;
+		int64_t transposition_exact_returns = 0;
+		int64_t transposition_bound_cutoffs = 0;
+		int64_t transposition_stores = 0;
+		int64_t transposition_updates = 0;
+		int64_t transposition_replacements = 0;
+		int64_t transposition_collisions = 0;
+		int64_t transposition_move_queries = 0;
+		int64_t transposition_move_legal_hits = 0;
+		int64_t transposition_move_illegal_hits = 0;
+		int64_t horizon_visits = 0;
 		int32_t max_action_ply = 0;
 		int32_t root_actions_total = 0;
 		int32_t root_actions_started = 0;
@@ -609,12 +663,15 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool protect_node_limit = false;
 		bool use_internal_pv_ordering = false;
 		bool use_history_ordering = false;
+		bool use_transposition_table = false;
 		bool collect_search_diagnostics = false;
+		uint32_t transposition_generation = 0;
 		Callable should_cancel;
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
 		const std::unordered_map<uint64_t, NativeAction> *previous_ordering_hints = nullptr;
 		std::unordered_map<uint64_t, NativeAction> *current_ordering_hints = nullptr;
 		HistoryTable *history_scores = nullptr;
+		TranspositionTable *transposition_table = nullptr;
 		std::unordered_set<uint64_t> *transposition_seen_keys = nullptr;
 		std::unordered_set<uint64_t> *transposition_completed_keys = nullptr;
 		std::unordered_set<uint64_t> *transposition_seen_states = nullptr;
@@ -678,6 +735,7 @@ public:
 		int64_t cutoff_updates,
 		int64_t public_depth_decays
 	) const;
+	Dictionary inspect_transposition_table_layout(int64_t capacity_mib) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_fixed_depth(
 		int64_t root_owner,
@@ -694,7 +752,9 @@ public:
 		const Callable &on_progress,
 		bool use_internal_pv_ordering = false,
 		bool use_history_ordering = false,
-		bool collect_search_diagnostics = false
+		bool collect_search_diagnostics = false,
+		bool use_transposition_table = false,
+		int64_t transposition_table_mib = 0
 	) const;
 	Dictionary search_iterative_depth(
 		int64_t root_owner,
@@ -707,7 +767,9 @@ public:
 		const Callable &on_progress,
 		bool use_internal_pv_ordering = false,
 		bool use_history_ordering = false,
-		bool collect_search_diagnostics = false
+		bool collect_search_diagnostics = false,
+		bool use_transposition_table = false,
+		int64_t transposition_table_mib = 0
 	) const;
 
 private:
@@ -763,9 +825,40 @@ private:
 		const NativeState &value,
 		std::vector<NativeAction> actions,
 		const NativeAction *preferred = nullptr,
+		const NativeAction *transposition_preferred = nullptr,
 		const HistoryTable *history_scores = nullptr,
 		NativeSearchStats *stats = nullptr,
 		bool collect_diagnostics = false
+	) const;
+	bool initialize_transposition_table(
+		TranspositionTable &table,
+		int64_t capacity_mib
+	) const;
+	const TranspositionEntry *probe_transposition_table(
+		const TranspositionTable &table,
+		uint64_t state_checksum,
+		int32_t remaining_owner_turn_boundaries
+	) const;
+	void store_transposition_entry(
+		TranspositionTable &table,
+		uint64_t state_checksum,
+		int32_t remaining_owner_turn_boundaries,
+		int32_t score,
+		TranspositionBound bound,
+		bool horizon_reached,
+		const NativeAction *best_action,
+		uint32_t generation,
+		NativeSearchStats *stats,
+		bool collect_diagnostics
+	) const;
+	bool compact_native_action(
+		const NativeAction &action,
+		CompactNativeAction &compact
+	) const;
+	bool restore_compact_action(
+		const CompactNativeAction &compact,
+		const std::vector<NativeAction> &legal_actions,
+		NativeAction &action
 	) const;
 	bool transition_action(
 		const NativeState &source,

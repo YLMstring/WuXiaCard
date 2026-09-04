@@ -91,9 +91,9 @@ controller searches again from the resulting exact state. New searches and
 reused actions share a presentation-only two-second minimum decision time;
 actual search time counts toward the minimum, and testing fast mode removes it.
 
-## Native action ordering
+## Native reuse and action ordering
 
-Production enables two card-agnostic ordering aids before alpha-beta traversal:
+Production enables three card-agnostic search aids:
 
 - internal PV ordering reuses the matching action from the previous fully
   completed iterative-deepening result; hints from interrupted iterations are
@@ -102,14 +102,28 @@ Production enables two card-agnostic ordering aids before alpha-beta traversal:
   caused cutoffs. Its key contains owner, source location, target shape,
   powers, ki, ability count, and activation index, but never card IDs, names,
   instance IDs, or physical hand-slot identity.
+- a fixed two-way native transposition table reuses completed `EXACT`, `LOWER`,
+  and `UPPER` entries whose complete state checksum and remaining owner-turn
+  boundaries both match. It is scoped to one root search and shared across
+  iterative-deepening passes.
 
-The final priority is `PV > structural ordering > history > canonical key`.
+The final priority is `PV > transposition move > structural ordering > history
+> canonical key`.
 Putting history ahead of structural ordering was measured and rejected because
 it made several real openings substantially shallower. History is scoped to a
 single root search, uses a saturating quadratic cutoff reward, and decays after
 each completed public depth. Explicit `false` switches remain available to
 controlled benchmarks through `use_internal_pv_ordering` and
 `use_history_ordering`; normal production calls default both to `true`.
+
+The table is also independently controlled by `use_transposition_table` and
+`transposition_table_mib`. `DuelSearch.find_best_action_iterative()` defaults
+it to 8 MiB on both desktop and Android. The direct native entry keeps it off
+unless a test or benchmark opts in. Capacity is a strict fixed-array ceiling,
+never grows with play time, and is released after each root decision. An
+allocation failure degrades to table-off rather than failing the AI action.
+Cached compact actions are matched against the current legal-action list before
+ordering or same-turn principal-line restoration.
 
 High-frequency timing and ordering counters are gated by
 `collect_search_diagnostics`, which defaults to `false`. Enabling diagnostics
@@ -118,6 +132,9 @@ The same switch can count transposition opportunities without changing search
 results: an exact key combines the complete native-state checksum with remaining
 owner-turn boundaries; a stricter reusable hit requires that an earlier visit
 has already returned. Leaf and internal-node hits are reported separately.
+When the real table is enabled, the same diagnostics also report table probes,
+exact/bound hits, direct returns, bound cutoffs, stores, updates, replacements,
+collisions, compact-move validation, capacity, and allocation fallback.
 
 ## Search result contract
 
@@ -180,6 +197,7 @@ Profile the 14 unique real Quick openings separately with:
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -CollectTranspositionDiagnostics
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -UseTranspositionTable -TranspositionTableMiB 8
 ```
 
 Reports are written under `.summer/local/ai-benchmarks/` and must not be
@@ -217,6 +235,23 @@ exact/lower/upper bound types, requested depth, deadline safety, and memory
 limits. Diagnostic hashing and sets are default-off and their measured
 throughput must not be compared directly with the ordinary benchmark baseline.
 
+The subsequent real-table Release ablation used those same four openings,
+`self_turn`, PV/history ordering, and ten seconds per opening. With the table
+off, only 2/4 initial searches completed depth two. Every tested fixed capacity
+(4, 8, 16, and 32 MiB) completed depth two in 4/4; larger tables showed no
+stable advantage over 8 MiB, so production keeps the shared 8 MiB default. A
+longer table-off run confirmed all four depth-two scores and canonical actions
+match the 8 MiB result. Per-opening complete-depth-two times changed from
+`7.79s`, `6.50s`, `15.48s`, and `11.94s` to `6.25s`, `4.89s`, `0.77s`, and
+`0.48s`; visited nodes fell by `21.6%`, `27.8%`, `95.1%`, and `95.8%`.
+
+The separate 8 MiB diagnostic run recorded 424,028 probes and 74,877 real hits
+(`17.66%`): 50,425 exact returns and 24,188 bound cutoffs. It used exactly
+8,388,608 entry bytes, had no allocation fallback and no illegal cached moves.
+Its 19,111 replacements/collisions explain why the earlier unbounded
+opportunity percentage is not the real-table hit rate. Diagnostic counters are
+still unsuitable for throughput comparison.
+
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow
 Dongfang Bubai/Zhang Sanfeng openings completed depth two in 9.46 seconds and
@@ -232,9 +267,10 @@ extra-state reachability only; they are not principal-action results.
 
 ## Current limitations
 
-- Native transpositions are not implemented; only default-off opportunity
-  diagnostics exist.
-- Android ARM64 and release-package performance are distribution gates; do not
-  infer them from Windows Debug measurements.
+- Native transpositions intentionally do not cross independent AI decisions or
+  substitute a different remaining-depth request; there is no persistent
+  opening book or deeper-entry reuse.
+- Android ARM64 correctness is build-covered, but device performance must still
+  be measured independently rather than inferred from Windows Release.
 - A future declaration outside the compiled vocabulary must fail atomically
   until the native kernel and independent tests support it.

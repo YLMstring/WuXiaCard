@@ -93,6 +93,26 @@ static func find_best_action_iterative_native(
 				"transposition_unique_keys": int(snapshot.get("transposition_unique_keys", 0)),
 				"transposition_completed_keys": int(snapshot.get("transposition_completed_keys", 0)),
 				"transposition_unique_states": int(snapshot.get("transposition_unique_states", 0)),
+				"transposition_table_probes": int(snapshot.get("transposition_table_probes", 0)),
+				"transposition_table_hits": int(snapshot.get("transposition_table_hits", 0)),
+				"transposition_exact_hits": int(snapshot.get("transposition_exact_hits", 0)),
+				"transposition_bound_hits": int(snapshot.get("transposition_bound_hits", 0)),
+				"transposition_exact_returns": int(snapshot.get("transposition_exact_returns", 0)),
+				"transposition_bound_cutoffs": int(snapshot.get("transposition_bound_cutoffs", 0)),
+				"transposition_stores": int(snapshot.get("transposition_stores", 0)),
+				"transposition_updates": int(snapshot.get("transposition_updates", 0)),
+				"transposition_replacements": int(snapshot.get("transposition_replacements", 0)),
+				"transposition_collisions": int(snapshot.get("transposition_collisions", 0)),
+				"transposition_move_queries": int(snapshot.get("transposition_move_queries", 0)),
+				"transposition_move_legal_hits": int(snapshot.get("transposition_move_legal_hits", 0)),
+				"transposition_move_illegal_hits": int(snapshot.get("transposition_move_illegal_hits", 0)),
+				"transposition_table_enabled": bool(snapshot.get("transposition_table_enabled", false)),
+				"transposition_table_requested_mib": int(snapshot.get("transposition_table_requested_mib", 0)),
+				"transposition_table_entry_size_bytes": int(snapshot.get("transposition_table_entry_size_bytes", 0)),
+				"transposition_table_set_count": int(snapshot.get("transposition_table_set_count", 0)),
+				"transposition_table_slot_count": int(snapshot.get("transposition_table_slot_count", 0)),
+				"transposition_table_capacity_bytes": int(snapshot.get("transposition_table_capacity_bytes", 0)),
+				"transposition_table_allocation_fallback": bool(snapshot.get("transposition_table_allocation_fallback", false)),
 				"elapsed_seconds": float(snapshot.get("elapsed_usec", 0)) / 1_000_000.0,
 				"completion_reason": &"searching",
 			}
@@ -125,6 +145,10 @@ static func find_best_action_iterative(
 		production_limits["use_internal_pv_ordering"] = true
 	if not production_limits.has("use_history_ordering"):
 		production_limits["use_history_ordering"] = true
+	if not production_limits.has("use_transposition_table"):
+		production_limits["use_transposition_table"] = true
+	if not production_limits.has("transposition_table_mib"):
+		production_limits["transposition_table_mib"] = 8
 	return find_best_action_iterative_native(
 		state, root_owner, production_limits, should_cancel, on_progress
 	)
@@ -195,6 +219,13 @@ static func _native_result_schema(
 		"transposition_internal_probes", "transposition_internal_completed_hits",
 		"transposition_state_hits", "transposition_unique_keys",
 		"transposition_completed_keys", "transposition_unique_states",
+		"transposition_table_probes", "transposition_table_hits",
+		"transposition_exact_hits", "transposition_bound_hits",
+		"transposition_exact_returns", "transposition_bound_cutoffs",
+		"transposition_stores", "transposition_updates",
+		"transposition_replacements", "transposition_collisions",
+		"transposition_move_queries", "transposition_move_legal_hits",
+		"transposition_move_illegal_hits",
 	]:
 		result[field] = int(source.get(field, 0))
 	for field: String in [
@@ -211,6 +242,29 @@ static func _native_result_schema(
 	result["history_ordering_enabled"] = bool(source.get(
 		"history_ordering_enabled",
 		limits.get("use_history_ordering", false)
+	))
+	result["transposition_table_enabled"] = bool(source.get(
+		"transposition_table_enabled",
+		false
+	))
+	result["transposition_table_requested_mib"] = int(source.get(
+		"transposition_table_requested_mib",
+		limits.get("transposition_table_mib", 0)
+	))
+	result["transposition_table_entry_size_bytes"] = int(source.get(
+		"transposition_table_entry_size_bytes", 0
+	))
+	result["transposition_table_set_count"] = int(source.get(
+		"transposition_table_set_count", 0
+	))
+	result["transposition_table_slot_count"] = int(source.get(
+		"transposition_table_slot_count", 0
+	))
+	result["transposition_table_capacity_bytes"] = int(source.get(
+		"transposition_table_capacity_bytes", 0
+	))
+	result["transposition_table_allocation_fallback"] = bool(source.get(
+		"transposition_table_allocation_fallback", false
 	))
 	result["search_diagnostics_enabled"] = bool(source.get(
 		"search_diagnostics_enabled",

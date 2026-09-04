@@ -199,6 +199,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4
 powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -CollectTranspositionDiagnostics
+powershell -ExecutionPolicy Bypass -File tools/run_production_opening_profile.ps1 -DepthMode self_turn -OpeningSet extra_play_cap -MaxOpenings 4 -UseInternalPvOrdering -UseHistoryOrdering -UseTranspositionTable -TranspositionTableMiB 8
 ```
 
 Before comparing native performance on Windows, rebuild the library as
@@ -219,12 +220,13 @@ two horizons cannot be compared as if they were the same or as old action-ply
 results. Its report is written under
 `.summer/local/ai-benchmarks/` and must not be committed.
 
-`CollectTranspositionDiagnostics` measures possible reuse only. Exact keys pair
-the complete native state checksum with remaining owner-turn boundaries, and
-the report separates all repeated visits from visits whose earlier node had
-already returned. It also splits reusable leaf and internal-node hits. The
-extra hashing and sets intentionally distort throughput, so do not compare a
-diagnostic run's nodes/s with a normal speed baseline.
+`CollectTranspositionDiagnostics` measures both possible reuse and, when
+`UseTranspositionTable` is present, real table probes, hits, exact returns,
+bound cutoffs, writes, replacements, collisions, move validation, capacity,
+and allocation fallback. Exact keys pair the complete native state checksum
+with remaining owner-turn boundaries. The extra counters and opportunity sets
+intentionally distort throughput, so do not compare a diagnostic run's nodes/s
+with a normal speed baseline.
 
 `OpeningSet extra_play_cap` is the focused four-opening set for Dongfang Bubai
 mirror, Feng Qingyang mirror, and both initiative orders of Dongfang Bubai

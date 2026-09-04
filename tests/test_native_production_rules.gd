@@ -35,6 +35,8 @@ func _run() -> void:
 	_test_native_internal_pv_ordering_lifecycle()
 	_test_native_history_key_policy_and_search_equivalence()
 	_test_native_fast_legal_action_count_matches_generated_actions()
+	_test_native_transposition_table_policy_and_equivalence()
+	_test_native_transposition_real_opening_equivalence()
 	_test_native_search_diagnostics_contract()
 	_test_native_search_releases_temporary_dictionaries()
 	if _failures == 0:
@@ -310,9 +312,15 @@ func _test_production_search_routes_to_native_whole_tree() -> void:
 		"Production search enables conservative history ordering by default"
 	)
 	_check(
+		bool(production.get("transposition_table_enabled", false))
+		and int(production.get("transposition_table_requested_mib", 0)) == 8,
+		"Production search enables the shared 8 MiB transposition-table default"
+	)
+	_check(
 		not bool(explicit_native.get("internal_pv_ordering_enabled", true))
-		and not bool(explicit_native.get("history_ordering_enabled", true)),
-		"Direct native search keeps ordering switches opt-in for controlled comparisons"
+		and not bool(explicit_native.get("history_ordering_enabled", true))
+		and not bool(explicit_native.get("transposition_table_enabled", true)),
+		"Direct native search keeps ordering and transposition switches opt-in"
 	)
 	_check(
 		production_action.canonical_key() == native_action.canonical_key(),
@@ -949,6 +957,189 @@ func _test_native_search_diagnostics_contract() -> void:
 		int(reference.get("score", 0)) == int(diagnostic.get("score", 1)),
 		"Diagnostic and dormant ordering switches preserve the score"
 	)
+
+
+func _test_native_transposition_table_policy_and_equivalence() -> void:
+	var compact := CompactState.new()
+	_check(
+		compact.capture_state(_make_pv_ordering_state()),
+		"Transposition-table fixture crosses the compact boundary"
+	)
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Transposition-table fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Transposition-table fixture loads into the native kernel"
+	)
+	var disabled_layout: Dictionary = kernel.call(
+		"inspect_transposition_table_layout", 0
+	) as Dictionary
+	_check(
+		not bool(disabled_layout.get("enabled", true))
+		and int(disabled_layout.get("allocated_bytes", -1)) == 0,
+		"Zero-capacity transposition table performs no allocation"
+	)
+	var layout: Dictionary = kernel.call(
+		"inspect_transposition_table_layout", 8
+	) as Dictionary
+	var entry_size: int = int(layout.get("entry_size_bytes", 0))
+	var set_count: int = int(layout.get("set_count", 0))
+	var slot_count: int = int(layout.get("slot_count", 0))
+	var allocated_bytes: int = int(layout.get("allocated_bytes", 0))
+	_check(bool(layout.get("enabled", false)), "Eight MiB transposition table allocates")
+	_check(entry_size > 0, "Transposition entries report their native byte size")
+	_check(
+		set_count > 0 and (set_count & (set_count - 1)) == 0,
+		"Transposition table uses a power-of-two set count"
+	)
+	_check(slot_count == set_count * 2, "Transposition table is two-way set associative")
+	_check(
+		allocated_bytes == slot_count * entry_size and allocated_bytes <= 8 * 1_048_576,
+		"Eight MiB transposition-table allocation stays within its strict cap"
+	)
+
+	var search_state: State = _make_pv_ordering_state()
+	var common_limits: Dictionary = {
+		"max_depth": 2,
+		"depth_mode": &"self_turn",
+		"use_internal_pv_ordering": true,
+		"use_history_ordering": true,
+		"collect_search_diagnostics": true,
+	}
+	var without_limits: Dictionary = common_limits.duplicate(true)
+	without_limits["use_transposition_table"] = false
+	without_limits["transposition_table_mib"] = 8
+	var with_limits: Dictionary = common_limits.duplicate(true)
+	with_limits["use_transposition_table"] = true
+	with_limits["transposition_table_mib"] = 8
+	var without_table: Dictionary = Search.find_best_action_iterative_native(
+		search_state, Rules.OPPONENT_OWNER, without_limits
+	)
+	var with_table: Dictionary = Search.find_best_action_iterative_native(
+		search_state, Rules.OPPONENT_OWNER, with_limits
+	)
+	var without_action: Action = without_table.get("action") as Action
+	var with_action: Action = with_table.get("action") as Action
+	_check(
+		without_action != null and with_action != null and without_action.is_same_as(with_action),
+		"Transposition reuse preserves the canonical root action"
+	)
+	_check(
+		int(without_table.get("score", 0)) == int(with_table.get("score", 1)),
+		"Transposition reuse preserves the fixed-depth score"
+	)
+	_check(
+		int(without_table.get("completed_depth", 0))
+		== int(with_table.get("completed_depth", -1)),
+		"Transposition reuse preserves the completed public depth"
+	)
+	var without_plan: Array = without_table.get("turn_plan", []) as Array
+	var with_plan: Array = with_table.get("turn_plan", []) as Array
+	var plans_match: bool = without_plan.size() == with_plan.size()
+	if plans_match:
+		for plan_index: int in range(without_plan.size()):
+			var without_step: Dictionary = without_plan[plan_index] as Dictionary
+			var with_step: Dictionary = with_plan[plan_index] as Dictionary
+			var without_step_action: Action = without_step.get("action") as Action
+			var with_step_action: Action = with_step.get("action") as Action
+			if (
+				without_step_action == null
+				or with_step_action == null
+				or not without_step_action.is_same_as(with_step_action)
+			):
+				plans_match = false
+				break
+	_check(plans_match, "Transposition reuse preserves the complete same-turn plan")
+	_check(
+		not bool(without_table.get("transposition_table_enabled", true))
+		and int(without_table.get("transposition_table_probes", -1)) == 0,
+		"Disabled transposition search neither allocates nor probes"
+	)
+	_check(
+		bool(with_table.get("transposition_table_enabled", false))
+		and int(with_table.get("transposition_table_requested_mib", 0)) == 8
+		and int(with_table.get("transposition_table_capacity_bytes", 0)) <= 8 * 1_048_576,
+		"Enabled search reports the bounded eight MiB table"
+	)
+	var probes: int = int(with_table.get("transposition_table_probes", 0))
+	var hits: int = int(with_table.get("transposition_table_hits", 0))
+	_check(probes > 0, "Enabled transposition search probes real tree nodes")
+	_check(hits > 0, "Enabled transposition search finds reusable tree nodes")
+	_check(
+		int(with_table.get("transposition_exact_hits", 0))
+		+ int(with_table.get("transposition_bound_hits", 0)) == hits,
+		"Exact and bound transposition hits account for every table hit"
+	)
+	_check(
+		int(with_table.get("transposition_stores", 0))
+		+ int(with_table.get("transposition_updates", 0)) > 0,
+		"Completed nodes populate or update the transposition table"
+	)
+	_check(
+		int(with_table.get("transposition_move_illegal_hits", 0)) == 0,
+		"Exact-state transposition moves revalidate as legal"
+	)
+
+
+func _test_native_transposition_real_opening_equivalence() -> void:
+	var checked_openings: int = 0
+	var observed: Dictionary = {}
+	for matchup: Dictionary in EnemyManifest.get_extra_play_cap_matchups():
+		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
+			if checked_openings >= 4:
+				break
+			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			var metadata: Dictionary = built.get("metadata", {}) as Dictionary
+			var opening_key: String = String(metadata.get("initial_state_key", ""))
+			if opening_key.is_empty() or observed.has(opening_key):
+				continue
+			observed[opening_key] = true
+			var opening: State = built.get("state") as State
+			if opening == null:
+				continue
+			var common_limits: Dictionary = {
+				"max_depth": 1,
+				"depth_mode": &"self_turn",
+				"use_internal_pv_ordering": true,
+				"use_history_ordering": true,
+				"collect_search_diagnostics": false,
+				"transposition_table_mib": 8,
+			}
+			var without_limits: Dictionary = common_limits.duplicate(true)
+			without_limits["use_transposition_table"] = false
+			var with_limits: Dictionary = common_limits.duplicate(true)
+			with_limits["use_transposition_table"] = true
+			var without_table: Dictionary = Search.find_best_action_iterative_native(
+				opening, opening.active_player, without_limits
+			)
+			var with_table: Dictionary = Search.find_best_action_iterative_native(
+				opening, opening.active_player, with_limits
+			)
+			var without_action: Action = without_table.get("action") as Action
+			var with_action: Action = with_table.get("action") as Action
+			var label := "Real transposition opening %d" % checked_openings
+			_check(
+				without_action != null
+				and with_action != null
+				and without_action.is_same_as(with_action),
+				"%s preserves the canonical root action" % label
+			)
+			_check(
+				int(without_table.get("score", 0)) == int(with_table.get("score", 1)),
+				"%s preserves the fixed-depth score" % label
+			)
+			_check(
+				bool(with_table.get("has_completed_depth", false)),
+				"%s completes with the bounded table" % label
+			)
+			checked_openings += 1
+		if checked_openings >= 4:
+			break
+	_check(checked_openings == 4, "Four unique real extra-play openings verify TT equivalence")
 
 
 func _test_native_search_releases_temporary_dictionaries() -> void:

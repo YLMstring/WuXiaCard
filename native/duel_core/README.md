@@ -61,7 +61,10 @@ The kernel:
   fixtures, all through the same production primitives;
 - performs complete-round iterative deepening, structural ordering, alpha-beta
   pruning, hard deadline/node checks, minimum-depth guard diagnostics,
-  cancellation, completed-depth snapshots, and same-owner principal actions.
+  cancellation, completed-depth snapshots, and same-owner principal actions;
+- reuses exact-depth `EXACT`/`LOWER`/`UPPER` results through a fixed two-way
+  transposition table. Production allocates at most 8 MiB per root decision on
+  desktop and Android and releases it when that decision ends.
 
 Unsupported reached declarations reject atomically. They must never be
 approximated or passed to a second rules engine.
@@ -81,7 +84,8 @@ controller integration tests, and the full suite. See `docs/AI_SEARCH.md` and
 
 ## Known limits
 
-- Native transpositions are not implemented.
+- The transposition table is deliberately local to one root decision and does
+  not reuse deeper entries for a different remaining owner-turn depth.
 - New declaration vocabulary must add native compilation/execution and focused
   tests before catalog use.
 - Windows Debug and Release behavior is covered locally. Android ARM64 and
