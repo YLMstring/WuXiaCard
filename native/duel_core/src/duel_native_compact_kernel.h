@@ -665,6 +665,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool use_history_ordering = false;
 		bool use_transposition_table = false;
 		bool collect_search_diagnostics = false;
+		bool include_deck_evaluation = false;
+		bool include_danger_evaluation = false;
+		bool include_tempo_evaluation = false;
 		uint32_t transposition_generation = 0;
 		Callable should_cancel;
 		std::unordered_map<uint64_t, NativeAction> *principal_actions = nullptr;
@@ -736,6 +739,12 @@ public:
 		int64_t public_depth_decays
 	) const;
 	Dictionary inspect_transposition_table_layout(int64_t capacity_mib) const;
+	Dictionary inspect_evaluation(
+		int64_t root_owner,
+		bool include_deck_evaluation = false,
+		bool include_danger_evaluation = false,
+		bool include_tempo_evaluation = false
+	) const;
 	Dictionary search_fixed_round_depth(int64_t root_owner, int64_t round_depth) const;
 	Dictionary search_fixed_depth(
 		int64_t root_owner,
@@ -754,7 +763,10 @@ public:
 		bool use_history_ordering = false,
 		bool collect_search_diagnostics = false,
 		bool use_transposition_table = false,
-		int64_t transposition_table_mib = 0
+		int64_t transposition_table_mib = 0,
+		bool include_deck_evaluation = false,
+		bool include_danger_evaluation = false,
+		bool include_tempo_evaluation = false
 	) const;
 	Dictionary search_iterative_depth(
 		int64_t root_owner,
@@ -769,7 +781,10 @@ public:
 		bool use_history_ordering = false,
 		bool collect_search_diagnostics = false,
 		bool use_transposition_table = false,
-		int64_t transposition_table_mib = 0
+		int64_t transposition_table_mib = 0,
+		bool include_deck_evaluation = false,
+		bool include_danger_evaluation = false,
+		bool include_tempo_evaluation = false
 	) const;
 
 private:
@@ -885,7 +900,11 @@ private:
 		bool &supported,
 		String &reason
 	) const;
-	int32_t evaluate_baseline(const NativeState &value, int32_t root_owner) const;
+	int32_t evaluate_baseline(
+		const NativeState &value,
+		int32_t root_owner,
+		const NativeSearchLimits *limits
+	) const;
 	int32_t search_minimax(
 		const NativeState &value,
 		int32_t remaining_owner_turn_boundaries,

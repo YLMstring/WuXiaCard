@@ -275,6 +275,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   `12/14` depth-three completion count, but added `11.81%` completed-depth work
   and `7.99%` elapsed time. Production therefore enables self-turn depth, PV,
   conservative history, and the 8 MiB table together.
+- Production static evaluation no longer values the remaining deck, adjacent
+  immediately vulnerable power edges, or a flat current-action bonus. Three
+  default-off native switches retain the old terms for controlled ablation
+  only. The 2026-09-04 fixed-depth-two 112-game Extended comparison finished
+  57-55 for the reduced evaluator (`50.9%`, total score margin `+26`) with no
+  fallback, invalid, or incomplete game; it also used `3.13%` fewer nodes and
+  `2.12%` less search time. Treat this as no observed regression and only weak
+  positive strength evidence, not a proven gain.
 - Hand-target drag hit testing is owner-aware. Enemy-hand activations such as
   HanBin target only the opponent's physical hand, while allied-hand
   activations such as RanMu and WuXiang target only their current owner's hand;

@@ -765,11 +765,14 @@ func _run_command_line() -> void:
 		summary = _run_pilot(enhanced_overrides, baseline_overrides)
 	else:
 		var config: Dictionary = mode_config(mode_key)
+		var benchmark_limits: Dictionary = (
+			selected_variant.get("limits", config.get("limits", {})) as Dictionary
+		).duplicate(true)
 		var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(mode_key)
 		var started_usec: int = Time.get_ticks_usec()
 		summary = run_enemy_matchups(
 			matchups,
-			config.get("limits", {}) as Dictionary,
+			benchmark_limits,
 			SUCCESSFUL_ACTION_WATCHDOG,
 			enhanced_overrides,
 			baseline_overrides,
@@ -778,7 +781,7 @@ func _run_command_line() -> void:
 			progress_metadata
 		)
 		summary["elapsed_seconds"] = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
-		summary["limits"] = (config.get("limits", {}) as Dictionary).duplicate(true)
+		summary["limits"] = benchmark_limits
 		summary["roster"] = EnemyManifest.get_roster()
 		summary["matchups"] = matchups
 	summary["mode"] = mode
@@ -1006,6 +1009,27 @@ static func variant_config(variant: String) -> Dictionary:
 	# The retired GDScript search variants no longer select alternate backends.
 	# Keep the shape stable for benchmark report readers while both seats run the
 	# one authoritative native search.
+	if variant.to_lower() == "evaluationsubtraction":
+		return {
+			"limits": {
+				"max_depth": 2,
+				"depth_mode": &"self_turn",
+				"use_internal_pv_ordering": true,
+				"use_history_ordering": true,
+				"use_transposition_table": true,
+				"transposition_table_mib": 8,
+			},
+			"enhanced_overrides": {
+				"include_deck_evaluation": false,
+				"include_danger_evaluation": false,
+				"include_tempo_evaluation": false,
+			},
+			"baseline_overrides": {
+				"include_deck_evaluation": true,
+				"include_danger_evaluation": true,
+				"include_tempo_evaluation": true,
+			},
+		}
 	if variant.to_lower() != "final":
 		push_warning("Unknown native benchmark variant '%s'; using Final" % variant)
 	return {

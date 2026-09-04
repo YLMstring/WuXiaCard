@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_native_whole_tree_search_is_deterministic()
 	_test_native_depth_modes_match_fixed_and_iterative_search()
 	_test_native_search_solves_forced_terminal_choice()
+	_test_native_evaluation_feature_subtraction()
 	_test_native_search_node_budget_keeps_only_complete_depths()
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
@@ -269,6 +270,92 @@ func _test_native_search_solves_forced_terminal_choice() -> void:
 	_check(action.source_index == 0 and action.target_index == 8, "Forced terminal search fills the only empty cell")
 	_check(action.source_instance_id == &"forced_winner", "Forced terminal search preserves exact source identity")
 	_check(int(result.get("score", 0)) == 1_000_099, "Forced terminal win has the documented terminal score")
+
+
+func _test_native_evaluation_feature_subtraction() -> void:
+	var deck_state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+	deck_state.decks[Rules.OPPONENT_OWNER] = [
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_opponent_deck")
+	]
+	var deck_kernel: Object = _evaluation_kernel(deck_state, "Deck evaluation fixture")
+	if deck_kernel == null:
+		return
+	var reduced_deck: Dictionary = deck_kernel.call(
+		"inspect_evaluation", Rules.OPPONENT_OWNER, false, false, false
+	) as Dictionary
+	var restored_deck: Dictionary = deck_kernel.call(
+		"inspect_evaluation", Rules.OPPONENT_OWNER, true, false, false
+	) as Dictionary
+	_check(
+		int(restored_deck.get("score", 0)) > int(reduced_deck.get("score", 0)),
+		"The deck evaluation switch alone restores positive deck value"
+	)
+
+	var board: Array = Rules.empty_board()
+	var root_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_root_board"
+	)
+	var enemy_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_enemy_board"
+	)
+	root_card["powers"] = [0, 0, 0, 0]
+	enemy_card["powers"] = [0, 0, 0, 1]
+	board[0] = {"owner": Rules.OPPONENT_OWNER, "card": root_card}
+	board[1] = {"owner": Rules.PLAYER_OWNER, "card": enemy_card}
+	var edge_state := State.new(
+		board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"evaluation_edge_player_hand")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"evaluation_edge_opponent_hand")],
+		Rules.OPPONENT_OWNER
+	)
+	var edge_kernel: Object = _evaluation_kernel(edge_state, "Danger and tempo evaluation fixture")
+	if edge_kernel == null:
+		return
+	var reduced_edge: Dictionary = edge_kernel.call(
+		"inspect_evaluation", Rules.OPPONENT_OWNER, false, false, false
+	) as Dictionary
+	var restored_danger: Dictionary = edge_kernel.call(
+		"inspect_evaluation", Rules.OPPONENT_OWNER, false, true, false
+	) as Dictionary
+	var restored_tempo: Dictionary = edge_kernel.call(
+		"inspect_evaluation", Rules.OPPONENT_OWNER, false, false, true
+	) as Dictionary
+	_check(
+		int(restored_danger.get("score", 0)) == int(reduced_edge.get("score", 0)) - 2,
+		"The danger evaluation switch alone restores the vulnerable-edge penalty"
+	)
+	_check(
+		int(restored_tempo.get("score", 0)) == int(reduced_edge.get("score", 0)) + 2,
+		"The tempo evaluation switch alone restores the active-owner bonus"
+	)
+
+	var production: Dictionary = Search.find_best_action_iterative(
+		_make_search_state(), Rules.OPPONENT_OWNER, {"max_depth": 1}
+	)
+	_check(not bool(production.get("deck_evaluation_enabled", true)), "Production search excludes deck evaluation")
+	_check(not bool(production.get("danger_evaluation_enabled", true)), "Production search excludes danger evaluation")
+	_check(not bool(production.get("tempo_evaluation_enabled", true)), "Production search excludes tempo evaluation")
+
+
+func _evaluation_kernel(state: State, label: String) -> Object:
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "%s crosses the compact boundary" % label)
+	if not compact.is_structurally_valid():
+		return null
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "%s creates the native kernel" % label)
+	if kernel == null:
+		return null
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"%s loads into the native kernel" % label
+	)
+	return kernel
 
 
 func _test_native_search_node_budget_keeps_only_complete_depths() -> void:

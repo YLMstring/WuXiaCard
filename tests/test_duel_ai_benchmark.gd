@@ -209,6 +209,24 @@ func _check_mode_configs() -> void:
 		(final_config.get("baseline_overrides", {"unexpected": true}) as Dictionary).is_empty(),
 		"Final native benchmark needs no baseline-seat overrides"
 	)
+	var subtraction: Dictionary = Runner.variant_config("EvaluationSubtraction")
+	var subtraction_limits: Dictionary = subtraction.get("limits", {}) as Dictionary
+	_check(int(subtraction_limits.get("max_depth", 0)) == 2, "Evaluation subtraction fixes every search at depth two")
+	_check(StringName(subtraction_limits.get("depth_mode", &"")) == &"self_turn", "Evaluation subtraction uses production self-turn depth")
+	_check(not subtraction_limits.has("max_nodes") and not subtraction_limits.has("budget_seconds"), "Evaluation subtraction has no node or time limit")
+	_check(bool(subtraction_limits.get("use_internal_pv_ordering", false)), "Evaluation subtraction keeps production PV ordering")
+	_check(bool(subtraction_limits.get("use_history_ordering", false)), "Evaluation subtraction keeps production history ordering")
+	_check(bool(subtraction_limits.get("use_transposition_table", false)), "Evaluation subtraction keeps the production transposition table")
+	_check(int(subtraction_limits.get("transposition_table_mib", 0)) == 8, "Evaluation subtraction keeps the 8 MiB table")
+	var subtraction_enhanced: Dictionary = subtraction.get("enhanced_overrides", {}) as Dictionary
+	var subtraction_baseline: Dictionary = subtraction.get("baseline_overrides", {}) as Dictionary
+	for feature: String in [
+		"include_deck_evaluation",
+		"include_danger_evaluation",
+		"include_tempo_evaluation",
+	]:
+		_check(not bool(subtraction_enhanced.get(feature, true)), "Reduced evaluation disables %s" % feature)
+		_check(bool(subtraction_baseline.get(feature, false)), "Legacy evaluation restores %s" % feature)
 
 
 func _capture_progress_record(record: Dictionary) -> void:

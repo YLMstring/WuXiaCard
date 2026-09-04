@@ -153,6 +153,19 @@ void DuelNativeCompactKernel::_bind_methods() {
 	);
 	ClassDB::bind_method(
 		D_METHOD(
+			"inspect_evaluation",
+			"root_owner",
+			"include_deck_evaluation",
+			"include_danger_evaluation",
+			"include_tempo_evaluation"
+		),
+		&DuelNativeCompactKernel::inspect_evaluation,
+		DEFVAL(false),
+		DEFVAL(false),
+		DEFVAL(false)
+	);
+	ClassDB::bind_method(
+		D_METHOD(
 			"apply_activate_transition",
 			"source_cell",
 			"target_kind",
@@ -204,7 +217,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"use_history_ordering",
 			"collect_search_diagnostics",
 			"use_transposition_table",
-			"transposition_table_mib"
+			"transposition_table_mib",
+			"include_deck_evaluation",
+			"include_danger_evaluation",
+			"include_tempo_evaluation"
 		),
 		&DuelNativeCompactKernel::search_iterative_round_depth,
 		DEFVAL(Callable()),
@@ -212,7 +228,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false),
-		DEFVAL(0)
+		DEFVAL(0),
+		DEFVAL(false),
+		DEFVAL(false),
+		DEFVAL(false)
 	);
 	ClassDB::bind_method(
 		D_METHOD(
@@ -229,7 +248,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 			"use_history_ordering",
 			"collect_search_diagnostics",
 			"use_transposition_table",
-			"transposition_table_mib"
+			"transposition_table_mib",
+			"include_deck_evaluation",
+			"include_danger_evaluation",
+			"include_tempo_evaluation"
 		),
 		&DuelNativeCompactKernel::search_iterative_depth,
 		DEFVAL(Callable()),
@@ -237,7 +259,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		DEFVAL(false),
 		DEFVAL(false),
 		DEFVAL(false),
-		DEFVAL(0)
+		DEFVAL(0),
+		DEFVAL(false),
+		DEFVAL(false),
+		DEFVAL(false)
 	);
 }
 
@@ -628,6 +653,28 @@ Dictionary DuelNativeCompactKernel::inspect_transposition_table_layout(
 	result["allocated_bytes"] = static_cast<int64_t>(table.allocated_bytes);
 	result["enabled"] = table.enabled();
 	result["allocation_failed"] = table.allocation_failed;
+	return result;
+}
+
+Dictionary DuelNativeCompactKernel::inspect_evaluation(
+	int64_t root_owner_value,
+	bool include_deck_evaluation,
+	bool include_danger_evaluation,
+	bool include_tempo_evaluation
+) const {
+	Dictionary result;
+	const int32_t root_owner = static_cast<int32_t>(root_owner_value);
+	result["valid"] = loaded && (root_owner == 1 || root_owner == 2);
+	result["include_deck_evaluation"] = include_deck_evaluation;
+	result["include_danger_evaluation"] = include_danger_evaluation;
+	result["include_tempo_evaluation"] = include_tempo_evaluation;
+	result["score"] = 0;
+	if (!static_cast<bool>(result["valid"])) return result;
+	NativeSearchLimits limits;
+	limits.include_deck_evaluation = include_deck_evaluation;
+	limits.include_danger_evaluation = include_danger_evaluation;
+	limits.include_tempo_evaluation = include_tempo_evaluation;
+	result["score"] = evaluate_baseline(state, root_owner, &limits);
 	return result;
 }
 
@@ -2034,7 +2081,8 @@ bool DuelNativeCompactKernel::transition_action(
 
 int32_t DuelNativeCompactKernel::evaluate_baseline(
 	const NativeState &value,
-	int32_t root_owner
+	int32_t root_owner,
+	const NativeSearchLimits *limits
 ) const {
 	static constexpr int32_t win_score = 1'000'000;
 	static constexpr int32_t deck_card_weight = 25;
@@ -2044,6 +2092,12 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	static constexpr int32_t tempo_weight = 2;
 	static constexpr int32_t positional_limit = 499;
 	static constexpr int32_t strategic_scale = 1'000;
+	const bool include_deck_evaluation = limits != nullptr
+		&& limits->include_deck_evaluation;
+	const bool include_danger_evaluation = limits != nullptr
+		&& limits->include_danger_evaluation;
+	const bool include_tempo_evaluation = limits != nullptr
+		&& limits->include_tempo_evaluation;
 	const int32_t opponent_owner = other_owner(root_owner);
 	const int32_t score_difference = count_owned(value, root_owner)
 		- count_owned(value, opponent_owner);
@@ -2061,14 +2115,14 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 		if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_ki.size())) {
 			return 0;
 		}
-		int32_t result = value.card_ki[card_index] * 4;
+		int32_t result = value.card_ki[card_index] * ki_weight;
 		const size_t power_offset = static_cast<size_t>(card_index) * 4;
 		for (size_t direction = 0; direction < 4; ++direction) {
 			result += value.card_powers[power_offset + direction];
 		}
 		result += static_cast<int32_t>(
 			value.card_runtime_abilities[card_index].size()
-		) * 4;
+		) * ability_weight;
 		return result;
 	};
 	auto zone_value = [&value, &card_resource_value](
@@ -2123,16 +2177,22 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	) * 5;
 	int32_t positional_score = zone_value(root_hand_zone, 0)
 		- zone_value(opponent_hand_zone, 0);
-	positional_score += zone_value(root_deck_zone, deck_card_weight)
-		- zone_value(opponent_deck_zone, deck_card_weight);
+	if (include_deck_evaluation) {
+		positional_score += zone_value(root_deck_zone, deck_card_weight)
+			- zone_value(opponent_deck_zone, deck_card_weight);
+	}
 	positional_score += static_cast<int32_t>(
 		count_legal_native_actions(value, root_owner)
 		- count_legal_native_actions(value, opponent_owner)
 	);
 	positional_score += board_resource_value(root_owner)
 		- board_resource_value(opponent_owner);
-	positional_score += danger_value(opponent_owner) - danger_value(root_owner);
-	positional_score += value.scalars[0] == root_owner ? tempo_weight : -tempo_weight;
+	if (include_danger_evaluation) {
+		positional_score += danger_value(opponent_owner) - danger_value(root_owner);
+	}
+	if (include_tempo_evaluation) {
+		positional_score += value.scalars[0] == root_owner ? tempo_weight : -tempo_weight;
+	}
 	positional_score = std::clamp(positional_score, -positional_limit, positional_limit);
 	return std::clamp(
 		strategic_score * strategic_scale + positional_score,
@@ -2428,7 +2488,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		const auto evaluate_started = collect_diagnostics
 			? std::chrono::steady_clock::now()
 			: std::chrono::steady_clock::time_point();
-		const int32_t score = evaluate_baseline(value, root_owner);
+		const int32_t score = evaluate_baseline(value, root_owner, limits);
 		if (collect_diagnostics) {
 			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::steady_clock::now() - evaluate_started
@@ -2520,7 +2580,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		const auto evaluate_started = collect_diagnostics
 			? std::chrono::steady_clock::now()
 			: std::chrono::steady_clock::time_point();
-		const int32_t score = evaluate_baseline(value, root_owner);
+		const int32_t score = evaluate_baseline(value, root_owner, limits);
 		if (collect_diagnostics) {
 			stats.time_evaluate_usec += std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::steady_clock::now() - evaluate_started
@@ -2835,7 +2895,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 	bool use_history_ordering,
 	bool collect_search_diagnostics,
 	bool use_transposition_table,
-	int64_t transposition_table_mib
+	int64_t transposition_table_mib,
+	bool include_deck_evaluation,
+	bool include_danger_evaluation,
+	bool include_tempo_evaluation
 ) const {
 	return search_iterative_depth(
 		root_owner_value,
@@ -2850,7 +2913,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_round_depth(
 		use_history_ordering,
 		collect_search_diagnostics,
 		use_transposition_table,
-		transposition_table_mib
+		transposition_table_mib,
+		include_deck_evaluation,
+		include_danger_evaluation,
+		include_tempo_evaluation
 	);
 }
 
@@ -2867,7 +2933,10 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	bool use_history_ordering,
 	bool collect_search_diagnostics,
 	bool use_transposition_table,
-	int64_t transposition_table_mib
+	int64_t transposition_table_mib,
+	bool include_deck_evaluation,
+	bool include_danger_evaluation,
+	bool include_tempo_evaluation
 ) const {
 	Dictionary result;
 	result["supported"] = false;
@@ -2936,6 +3005,9 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["transposition_table_capacity_bytes"] = 0;
 	result["transposition_table_allocation_fallback"] = false;
 	result["search_diagnostics_enabled"] = collect_search_diagnostics;
+	result["deck_evaluation_enabled"] = include_deck_evaluation;
+	result["danger_evaluation_enabled"] = include_danger_evaluation;
+	result["tempo_evaluation_enabled"] = include_tempo_evaluation;
 	result["max_action_ply"] = 0;
 	result["root_actions_total"] = 0;
 	result["root_actions_started"] = 0;
@@ -3023,6 +3095,9 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.use_history_ordering = use_history_ordering;
 	limits.use_transposition_table = transposition_table.enabled();
 	limits.collect_search_diagnostics = collect_search_diagnostics;
+	limits.include_deck_evaluation = include_deck_evaluation;
+	limits.include_danger_evaluation = include_danger_evaluation;
+	limits.include_tempo_evaluation = include_tempo_evaluation;
 	limits.transposition_table = transposition_table.enabled()
 		? &transposition_table
 		: nullptr;

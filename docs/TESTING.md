@@ -172,6 +172,7 @@ Run real enemy-catalog search samples separately with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
 ```
 
 `Quick` uses 7 enemy matchups/28 games and `Extended` uses all 28
@@ -183,6 +184,12 @@ no minimum-depth guard, and Dummy audio. Each matchup is a balanced four-game
 crossover of deck and owner/initiative. All seats run the same native search;
 historical `enhanced`/`baseline` fields are assignment labels, not distinct
 algorithms. Pilot is optional and is not required before Extended.
+
+`EvaluationSubtraction` is a focused exception to that label rule. It runs the
+112-game Extended schedule at fixed `self_turn` depth two with no node/time
+limit, keeps production PV/history/8 MiB TT, assigns the reduced production
+evaluator to `enhanced`, and restores deck/danger/tempo terms for `baseline`.
+Do not add it to the daily full suite.
 
 Extended emits one `AI_BENCHMARK_GAME` line per completed game. It also appends
 one independently parseable record to a sibling `.progress.jsonl` checkpoint;

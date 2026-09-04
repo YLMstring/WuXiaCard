@@ -272,6 +272,15 @@ static func _native_result_schema(
 		"search_diagnostics_enabled",
 		limits.get("collect_search_diagnostics", limits.get("collect_timings", false))
 	))
+	result["deck_evaluation_enabled"] = bool(source.get(
+		"deck_evaluation_enabled", limits.get("include_deck_evaluation", false)
+	))
+	result["danger_evaluation_enabled"] = bool(source.get(
+		"danger_evaluation_enabled", limits.get("include_danger_evaluation", false)
+	))
+	result["tempo_evaluation_enabled"] = bool(source.get(
+		"tempo_evaluation_enabled", limits.get("include_tempo_evaluation", false)
+	))
 	result["iteration_depth"] = int(source.get("iteration_depth", source.get("completed_depth", 0)))
 	result["turn_plan"] = []
 	result["search_profile"] = StringName(profile.get("name", Profile.ENHANCED))

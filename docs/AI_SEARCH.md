@@ -43,6 +43,19 @@ two-second `self_turn` budget, this raised aggregate throughput from `9987.37`
 to `10465.11` nodes/s (`+4.78%`), while all 14 opening digests and deepest
 completed depth/score/action tuples matched; depth two remained `13/14`.
 
+## Static evaluation
+
+Production evaluation deliberately excludes three weak terms: remaining-deck
+value, immediately vulnerable adjacent power edges, and a flat bonus for the
+side whose action is current. Terminal score, board-card ownership, hand count,
+hand and board powers/ki/abilities, and legal-action count remain. Search stays
+card-agnostic.
+
+The native entry retains three default-off switches only so the removed terms
+can be reconstructed in controlled ablations. They are not production profile
+options. The result schema records whether each switch was enabled so benchmark
+artifacts cannot silently mix evaluators.
+
 ## Depth and publication
 
 Search depth is measured in authoritative `owner_turn_serial` boundaries, not
@@ -179,6 +192,7 @@ Run the real enemy-catalog benchmark with Dummy audio:
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Production
+powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
 ```
 
 - Quick: 7 matchups / 28 games, nominal 1,500 nodes per decision.
@@ -190,6 +204,11 @@ All seats now run the same native backend. Historical `enhanced` and `baseline`
 labels remain in serialized benchmark records only as balanced assignment
 labels; match-point percentages are not an A/B strength claim. The Extended
 gate checks schedule completeness, terminal completion, and valid execution.
+`EvaluationSubtraction` is the exception: it fixes every decision at production
+`self_turn` depth two without a time or node limit, keeps PV/history/8 MiB TT,
+and compares the reduced production evaluator (`enhanced`) with all three
+deleted terms restored (`baseline`). It is an experiment variant, not a daily
+suite.
 
 Profile the 14 unique real Quick openings separately with:
 
@@ -262,6 +281,14 @@ raised work at the deepest common completed depths from 674,534 to 754,193
 nodes (`+11.81%`) and elapsed time from 65.706 to 70.953 seconds (`+7.99%`).
 Production therefore uses `self_turn`, internal PV, conservative history, and
 an 8 MiB transposition table together.
+
+The 2026-09-04 `EvaluationSubtraction` Extended run completed all 112 games at
+fixed `self_turn` depth two with no fallback, invalid game, or incomplete game.
+The reduced evaluator scored 57 wins to 55 losses (`50.9%` match points) and a
+total score margin of `+26`. It visited 1,097,565 nodes versus 1,133,076
+(`-3.13%`) and spent 114.885 versus 117.374 search seconds (`-2.12%`). This is
+slightly favorable evidence and no observed regression, but the two-game edge
+is too small to establish a meaningful strength gain by itself.
 
 The 2026-09-02 ten-second `self_turn` profile completed depth two in all 14
 unique real Quick openings and depth three in 9/14. The two previously slow
