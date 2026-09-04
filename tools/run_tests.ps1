@@ -101,6 +101,7 @@ $testScripts = @(
 	"test_baocan_lijing_abilities.gd",
 	"test_shaolin_discard_abilities.gd",
 	"test_nianhua_sanru_abilities.gd",
+	"test_nianhua_sanru_integration.gd",
 	"test_fumo_qianshou_abilities.gd",
 	"test_fumo_qianshou_integration.gd",
 	"test_dugu_nine_swords_abilities.gd",

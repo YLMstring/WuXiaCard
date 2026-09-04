@@ -1153,6 +1153,7 @@ func _present_transition_events(
 	var waited_after_draw: bool = false
 	var event_index: int = 0
 	var consumed_power_event_indices: Dictionary = {}
+	var deferred_exile_events: Dictionary = {}
 	while event_index < events.size():
 		if consumed_power_event_indices.has(event_index):
 			event_index += 1
@@ -1253,6 +1254,15 @@ func _present_transition_events(
 			drew_card = true
 		elif event_type == &"card_summoned":
 			await _present_generated_summon_event(event)
+			var summoned_instance_id := StringName(event.get("instance_id", &""))
+			if deferred_exile_events.has(summoned_instance_id):
+				var deferred_exile: Dictionary = deferred_exile_events[summoned_instance_id]
+				var summoned_card: CardView = _get_card_view_by_instance(
+					summoned_instance_id
+				)
+				if summoned_card != null:
+					await _present_exiled_card_view(deferred_exile, summoned_card)
+				deferred_exile_events.erase(summoned_instance_id)
 		elif event_type == &"card_departed_for_resummon":
 			await _present_card_departed_for_resummon_event(event)
 		elif event_type == &"card_discarded":
@@ -1316,24 +1326,32 @@ func _present_transition_events(
 				await get_tree().create_timer(exile_step_delay).timeout
 			var exiled_instance_id := StringName(event.get("instance_id", &""))
 			var exiled_card: CardView = _get_card_view_by_instance(exiled_instance_id)
-			if target_cell >= 0 and target_cell < board_cards.size():
-				var board_card := board_cards[target_cell] as CardView
-				if (
-					board_card != null
-					and _get_card_instance_id(board_card) == exiled_instance_id
-				):
-					board_cards[target_cell] = null
-			if exiled_card != null:
-				if self_removal:
-					_presentation_trace.append(&"card_self_faded")
-					await exiled_card.play_fade_out(card_fade_duration)
-				else:
-					_play_removal_feedback()
-					await exiled_card.play_exile(exile_duration, exile_ink_color)
-				exiled_card.queue_free()
+			if exiled_card == null and exiled_instance_id != &"":
+				deferred_exile_events[exiled_instance_id] = event.duplicate(true)
+			elif exiled_card != null:
+				await _present_exiled_card_view(event, exiled_card)
 			resolved_targets += 1
 		event_index += consumed_events
 	return resolved_targets
+
+
+func _present_exiled_card_view(event: Dictionary, exiled_card: CardView) -> void:
+	var target_cell: int = int(event.get("target_cell", -1))
+	var exiled_instance_id := StringName(event.get("instance_id", &""))
+	if target_cell >= 0 and target_cell < board_cards.size():
+		var board_card := board_cards[target_cell] as CardView
+		if (
+			board_card != null
+			and _get_card_instance_id(board_card) == exiled_instance_id
+		):
+			board_cards[target_cell] = null
+	if bool(event.get("self_removal", false)):
+		_presentation_trace.append(&"card_self_faded")
+		await exiled_card.play_fade_out(card_fade_duration)
+	else:
+		_play_removal_feedback()
+		await exiled_card.play_exile(exile_duration, exile_ink_color)
+	exiled_card.queue_free()
 
 
 func _set_mastery_eligible_card_ids(card_ids: Array[StringName]) -> void:

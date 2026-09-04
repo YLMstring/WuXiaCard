@@ -101,6 +101,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   coverage, source/adjacent exile-draw order and ownership, previous-play
   return order/full-hand fallback, reveal events, heart-method skipping,
   retained-ability survival, permanent suppression, and queued layers.
+- `test_nianhua_sanru_integration.gd` — generated discard summons whose
+  before-summon ability exiles the same instance, including deferred self-fade
+  and orphan-free board-view cleanup through the production controller.
 - `test_activation_targeting_swap_presentation.gd` — anchored board activation
   traces, owner-aware allied/enemy fixed-hand-slot hit testing, logical hand
   target commits, exact-card reveal presentation, and ordinary move/swap view
