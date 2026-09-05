@@ -26,8 +26,16 @@ add_library(${TARGET_NAME} SHARED)
 target_sources(
     ${TARGET_NAME}
     PRIVATE
+        src/duel_native_actions.cpp
+        src/duel_native_compile.cpp
         src/duel_native_compact_kernel.cpp
         src/duel_native_compact_kernel.h
+        src/duel_native_compact_kernel_internal.h
+        src/duel_native_events.cpp
+        src/duel_native_lifecycle.cpp
+        src/duel_native_policy.cpp
+        src/duel_native_resolution.cpp
+        src/duel_native_search.cpp
         src/register_types.cpp
         src/register_types.h
 )

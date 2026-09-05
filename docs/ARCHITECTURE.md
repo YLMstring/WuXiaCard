@@ -487,6 +487,26 @@ native rules implementation. Deep AI loads one root and crosses back only for
 completed-depth progress, the selected action, and the current-turn principal
 line.
 
+The Godot-facing type remains one `DuelNativeCompactKernel`, while its member
+definitions are split by responsibility under `native/duel_core/src/`:
+
+- `duel_native_compact_kernel.cpp`: binding, payload loading, and public entry
+  points;
+- `duel_native_search.cpp`: evaluation, ordering, history, PV, transposition
+  table, and search;
+- `duel_native_compile.cpp`: declaration compilation and support validation;
+- `duel_native_policy.cpp`: runtime ability queries, targeting, and attack
+  policies;
+- `duel_native_resolution.cpp`: attack, summon, flip, and exile lifecycles;
+- `duel_native_events.cpp`: event matching, discovery, and dispatch;
+- `duel_native_actions.cpp`: compiled-action execution and state mutations;
+- `duel_native_lifecycle.cpp`: movement, turn completion, terminal state,
+  export, and checksums.
+
+Shared implementation-only helpers live in
+`duel_native_compact_kernel_internal.h`; they are not part of the public
+GDExtension boundary.
+
 Before retirement, the fixed real-Quick corpus sealed 490/490 hand plays, all
 20 catalog activation declarations, and 104/104 activation actions derived
 from 136 deterministic states. The final migration seal passed 4,812 checks
