@@ -338,9 +338,11 @@ respectively, in row-major order. The source itself is eligible.
 - A directly unlocked card is inserted at the library top. If it has
   still-locked lower-tier cards with the same `glyph` and sect, those cards
   unlock in catalog order at the occupied library bottom.
-- Reaching character tiers 2–5 unlocks all exact-tier cards of the selected
-  sect before reward generation. Tier boundaries are levels 2, 5, 8, and 11;
-  tier 5 remains the cap through level 15.
+- Reaching character tier 2 first unlocks `TuNaShu2`, then all selected-sect
+  tier-2 cards; tier 3 likewise unlocks `TuNaShu3` before its selected-sect
+  cards. Tiers 4–5 unlock only their selected-sect exact-tier cards. All occur
+  before reward generation. Tier boundaries are levels 2, 5, 8, and 11; tier 5
+  remains the cap through level 15.
 - Unlock expansion and victory progression save atomically. Loading or
   repairing an existing valid profile never retroactively applies the namesake
   cascade.

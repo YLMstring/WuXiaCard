@@ -17,9 +17,10 @@ func _init() -> void:
 func _run() -> void:
 	_test_declarations()
 	_test_empty_hand_does_not_prevent_flip()
+	_test_tier_two_empty_hand_still_prevents_flip()
 	_test_tier_one_discards_leftmost_and_never_recalls()
 	_test_discard_shifts_only_cards_to_its_right()
-	_test_tier_two_without_ki_leaves_discarded_card()
+	_test_tier_two_discards_without_ki_or_copy()
 	_test_tier_three_spends_ki_and_gains_fresh_copy()
 	_test_full_hand_after_discard_trigger_still_spends_ki()
 	_test_normal_play_preserves_remaining_physical_slots()
@@ -49,7 +50,13 @@ func _test_declarations() -> void:
 		_check(not abilities.is_empty(), "%s declares its complete abilities" % card_id)
 	var tier_one: Array = Catalog.get_definition(&"JinGangBuHuai1").get("abilities", [])
 	var tier_two: Array = Catalog.get_definition(&"JinGangBuHuai2").get("abilities", [])
+	var tier_three: Array = Catalog.get_definition(&"JinGangBuHuai3").get("abilities", [])
 	var tier_four: Array = Catalog.get_definition(&"JinGangBuHuai4").get("abilities", [])
+	_check(
+		Catalog.get_definition(&"JinGangBuHuai1").get("powers", []) == [8, 4, 8, 4]
+		and Catalog.get_definition(&"JinGangBuHuai2").get("powers", []) == [8, 4, 8, 4],
+		"Jingang tiers one and two use their revised powers"
+	)
 	if not tier_one.is_empty():
 		_check(
 			_contains_all(_action_types(tier_one[0] as Dictionary), [
@@ -58,17 +65,25 @@ func _test_declarations() -> void:
 			"Tier one declares discard followed by flip prevention"
 		)
 	if not tier_two.is_empty():
+		var trigger: Dictionary = ((tier_two[0] as Dictionary).get("triggers", []) as Array)[0]
+		var actions: Array = trigger.get("actions", []) as Array
 		_check(
-			_contains_all(_action_types(tier_two[0] as Dictionary), [
-				&"discard_card",
-				Catalog.ACTION_PREVENT_TRIGGER_FLIP,
-				Catalog.ACTION_SPEND_KI,
-				Catalog.ACTION_ADD_CARD_TO_HAND,
-			]),
-			"Tier two through four declare discard, prevention, ki spend, and a fresh copy"
+			actions.size() == 2
+			and StringName((actions[0] as Dictionary).get("type", &""))
+			== Catalog.ACTION_PREVENT_TRIGGER_FLIP
+			and StringName((actions[1] as Dictionary).get("type", &""))
+			== Catalog.ACTION_FOR_EACH_SELECTED_CARD
+			and not ((actions[1] as Dictionary).get("selector", {}) as Dictionary).has(
+				"required_count"
+			)
+			and _contains_all(_action_types(tier_two[0] as Dictionary), [&"discard_card"])
+			and Catalog.ACTION_SPEND_KI not in _action_types(tier_two[0] as Dictionary)
+			and Catalog.ACTION_ADD_CARD_TO_HAND not in _action_types(tier_two[0] as Dictionary),
+			"Tier two prevents first, then optionally discards, without ki or copying"
 		)
+	if not tier_three.is_empty():
 		var copy_action: Dictionary = _first_action_of_type(
-			tier_two[0] as Dictionary,
+			tier_three[0] as Dictionary,
 			Catalog.ACTION_ADD_CARD_TO_HAND
 		)
 		_check(
@@ -77,7 +92,7 @@ func _test_declarations() -> void:
 				"of": Catalog.CARD_REF_SELECTED_CARD,
 			}
 			and StringName(copy_action.get("recipient", &"")) == Catalog.RECIPIENT_SELF,
-			"Jingang's generic add-to-hand action copies the discarded selection"
+			"Jingang tiers three and four still gain a fresh copy of the discard"
 		)
 	_check(tier_four.size() == 2, "Tier four keeps protection and rally as separate abilities")
 	if tier_four.size() == 2:
@@ -106,6 +121,22 @@ func _test_empty_hand_does_not_prevent_flip() -> void:
 	_check(
 		_event_count(result.get("events", []), &"card_flip_prevented") == 0,
 		"A failed discard emits no flip-prevented event"
+	)
+
+
+func _test_tier_two_empty_hand_still_prevents_flip() -> void:
+	var state: State = _state_with_source(&"JinGangBuHuai2", &"empty_tier_two", [], 4)
+	var result: Dictionary = Simulator.resolve_non_attack_flip(
+		state, &"empty_tier_two", Rules.OPPONENT_OWNER
+	)
+	_check(
+		_board_owner(state, &"empty_tier_two") == Rules.PLAYER_OWNER,
+		"Tier two prevents its flip even when its owner has no hand cards"
+	)
+	_check(
+		_event_count(result.get("events", []), &"card_flip_prevented") == 1
+		and _event_count(result.get("events", []), &"card_discarded") == 0,
+		"Tier two emits prevention without inventing an empty-hand discard"
 	)
 
 
@@ -174,18 +205,25 @@ func _test_discard_shifts_only_cards_to_its_right() -> void:
 	)
 
 
-func _test_tier_two_without_ki_leaves_discarded_card() -> void:
+func _test_tier_two_discards_without_ki_or_copy() -> void:
 	var discarded: Dictionary = _plain(&"tier_two_discard", Rules.PLAYER_OWNER)
 	var state: State = _state_with_source(
 		&"JinGangBuHuai2", &"tier_two_guard", [discarded], 4
 	)
-	Simulator.resolve_non_attack_flip(state, &"tier_two_guard", Rules.OPPONENT_OWNER)
+	var result: Dictionary = Simulator.resolve_non_attack_flip(
+		state, &"tier_two_guard", Rules.OPPONENT_OWNER
+	)
 	_check(
 		_board_owner(state, &"tier_two_guard") == Rules.PLAYER_OWNER
 		and state.get_hand(Rules.PLAYER_OWNER).is_empty()
 		and _instance_at(state.discard_piles[Rules.PLAYER_OWNER] as Array, 0)
 		== &"tier_two_discard",
-		"Tier two prevents but leaves its discard when it has no ki"
+		"Tier two prevents then leaves its discarded card in the discard pile"
+	)
+	_check(
+		int(_board_card(state, &"tier_two_guard").get("ki", 0)) == 0
+		and _event_count(result.get("events", []), &"card_added_to_hand") == 0,
+		"Tier two neither spends ki nor gains a copy"
 	)
 
 

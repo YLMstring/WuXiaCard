@@ -834,6 +834,28 @@ const JINGANG_DISCARD_PROTECTION_WITH_COPY: Dictionary = {
 	}],
 }
 
+const JINGANG_PREVENT_THEN_DISCARD: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_HAND],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+					"limit": 1,
+				},
+				"actions": [{
+					"type": ACTION_DISCARD_CARD,
+					"card": CARD_REF_SELECTED_CARD,
+				}],
+			},
+		],
+	}],
+}
+
 const JINGANG_PREVENTED_ALLY_RALLY: Dictionary = {
 	"triggers": [{
 		"event": CARD_FLIP_PREVENTED,
@@ -1052,7 +1074,7 @@ const RANMU_LOCKED_DISCARD_ACTIVATION: Dictionary = {
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
-					"zones": [CARD_ZONE_BOARD],
+					"zones": [CARD_ZONE_HAND],
 					"conditions": [
 						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
@@ -2897,7 +2919,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，阻止翻面，然后丢弃最左侧的手牌。",
 		"flavor": "韦陀掌是少林派的扎根基武功，这一招双掌推出，招式平平，所含力道却甚雄浑。",
 		"powers": [8, 4, 8, 4],
-		"abilities": [JINGANG_DISCARD_PROTECTION_WITH_COPY],
+		"abilities": [JINGANG_PREVENT_THEN_DISCARD],
 	},
 	&"JinGangBuHuai3": {
 		"id": &"JinGangBuHuai3",

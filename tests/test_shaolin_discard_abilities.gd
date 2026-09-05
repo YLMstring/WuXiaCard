@@ -121,12 +121,19 @@ func _test_ranmu_activation_targets_own_hand() -> void:
 	var ally: Dictionary = _plain(&"ranmu_ally", Rules.PLAYER_OWNER)
 	var own_target: Dictionary = _plain(&"ranmu_own_target", Rules.PLAYER_OWNER)
 	var remaining_hand: Dictionary = _plain(&"ranmu_remaining", Rules.PLAYER_OWNER)
+	var sentinel_hand: Dictionary = _plain(&"ranmu_sentinel", Rules.PLAYER_OWNER)
+	sentinel_hand["powers"] = [-1, -1, -1, -1]
 	var enemy_hand: Dictionary = _plain(&"ranmu_enemy_hand", Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(ally, Rules.PLAYER_OWNER)
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(
-		State.new(board, [own_target, remaining_hand], [enemy_hand], Rules.PLAYER_OWNER),
+		State.new(
+			board,
+			[own_target, remaining_hand, sentinel_hand],
+			[enemy_hand],
+			Rules.PLAYER_OWNER
+		),
 		Action.make_activate(4, &"ranmu_source", Action.TARGET_HAND_SLOT, 0)
 	)
 	var next_state: State = transition.get("state") as State
@@ -147,24 +154,51 @@ func _test_ranmu_activation_targets_own_hand() -> void:
 		)) == &"ranmu_own_target",
 		"Live transitions retain the complete discarded-card payload used by presentation"
 	)
-	_check(_board_card(next_state, &"ranmu_source").get("powers", []) == [6, 8, 8, 6], "RanMu buffs itself")
-	_check(_board_card(next_state, &"ranmu_ally").get("powers", []) == [2, 2, 2, 2], "RanMu buffs every allied board card")
+	_check(
+		_hand_card(next_state.get_hand(Rules.PLAYER_OWNER), &"ranmu_remaining").get(
+			"powers", []
+		) == [2, 2, 2, 2],
+		"RanMu buffs every remaining allied hand card"
+	)
+	_check(
+		_hand_card(next_state.get_hand(Rules.PLAYER_OWNER), &"ranmu_sentinel").get(
+			"powers", []
+		) == [-1, -1, -1, -1],
+		"RanMu skips four-minus-one hand cards"
+	)
+	_check(
+		_board_card(next_state, &"ranmu_source").get("powers", []) == [5, 7, 7, 5]
+		and _board_card(next_state, &"ranmu_ally").get("powers", []) == [1, 1, 1, 1],
+		"RanMu's activation does not buff allied board cards"
+	)
 	_check(next_state.extra_card_plays_remaining == 1, "RanMu grants exactly one extra card play")
 
 
 func _test_ranmu_three_buffs_only_after_a_real_attack() -> void:
 	var source: Dictionary = Catalog.create_instance(&"RanMuDaoFa3", Rules.PLAYER_OWNER, &"ranmu_attack")
 	var defender: Dictionary = _plain(&"ranmu_defender", Rules.OPPONENT_OWNER)
+	var hand_ally: Dictionary = _plain(&"ranmu_attack_hand", Rules.PLAYER_OWNER)
 	var board: Array = Rules.empty_board()
 	board[5] = _slot(defender, Rules.OPPONENT_OWNER)
 	var transition: Dictionary = Simulator.apply_action(
-		State.new(board, [source], [_plain(&"ranmu_reply", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
+		State.new(
+			board,
+			[source, hand_ally],
+			[_plain(&"ranmu_reply", Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER
+		),
 		Action.make_play(0, 4, &"ranmu_attack")
 	)
 	var next_state: State = transition.get("state") as State
 	_check(_event_count(transition.get("events", []), &"attack_started") == 1, "RanMu fixture completes a real attack")
 	_check(_board_card(next_state, &"ranmu_attack").get("powers", []) == [6, 8, 8, 6], "RanMu buffs after its real attack")
 	_check(_board_card(next_state, &"ranmu_defender").get("powers", []) == [2, 2, 2, 2], "The newly flipped ally joins RanMu's post-attack buff")
+	_check(
+		_hand_card(next_state.get_hand(Rules.PLAYER_OWNER), &"ranmu_attack_hand").get(
+			"powers", []
+		) == [1, 1, 1, 1],
+		"RanMu's independent post-attack buff does not affect allied hand cards"
+	)
 
 	var idle_source: Dictionary = Catalog.create_instance(&"RanMuDaoFa3", Rules.PLAYER_OWNER, &"ranmu_idle")
 	var idle_board: Array = Rules.empty_board()
@@ -305,6 +339,16 @@ func _hand_has(cards: Array, instance_id: StringName) -> bool:
 		if value is Dictionary and StringName((value as Dictionary).get("instance_id", &"")) == instance_id:
 			return true
 	return false
+
+
+func _hand_card(cards: Array, instance_id: StringName) -> Dictionary:
+	for value: Variant in cards:
+		if (
+			value is Dictionary
+			and StringName((value as Dictionary).get("instance_id", &"")) == instance_id
+		):
+			return value as Dictionary
+	return {}
 
 
 func _events_of_type(events: Array, event_type: StringName) -> Array[Dictionary]:

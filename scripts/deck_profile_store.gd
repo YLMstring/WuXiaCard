@@ -57,6 +57,10 @@ const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"HanBinZhenQi3",
 	&"TianWaiYuLong2",
 ]
+const TIER_LEAD_UNLOCK_IDS: Dictionary = {
+	2: [&"TuNaShu2"],
+	3: [&"TuNaShu3"],
+}
 
 var save_path: String
 
@@ -1502,7 +1506,11 @@ func _build_victory_advancement(
 	var current_tier: int = tier_for_level(current_level)
 	var next_tier: int = tier_for_level(next_level)
 	if next_tier > current_tier:
-		requested_unlocks = _get_selected_sect_card_ids_for_tier(profile, next_tier)
+		for card_id: StringName in TIER_LEAD_UNLOCK_IDS.get(next_tier, []):
+			requested_unlocks.append(card_id)
+		requested_unlocks.append_array(
+			_get_selected_sect_card_ids_for_tier(profile, next_tier)
+		)
 	var expansion: Dictionary = _build_unlock_expansion(profile, requested_unlocks)
 	if not bool(expansion.get("ok", false)):
 		return {

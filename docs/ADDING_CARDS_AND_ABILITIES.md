@@ -86,9 +86,11 @@ Because catalog order controls inherited ordering, list related cards in their
 intended stable order in `ALL_CARD_IDS`.
 
 The selected sect is matched through the sect catalog's `glyph`. Crossing into
-character tiers 2, 3, 4, or 5 unlocks all cards of that exact tier whose `sect`
-matches the selected sect. Current tier boundaries are levels 2, 5, 8, and 11,
-with tier 5 remaining the cap through level 15.
+character tier 2 first unlocks `TuNaShu2`, then all selected-sect tier-2 cards;
+crossing into tier 3 first unlocks `TuNaShu3`, then all selected-sect tier-3
+cards. Tiers 4 and 5 unlock their selected-sect exact-tier cards as before.
+Current tier boundaries are levels 2, 5, 8, and 11, with tier 5 remaining the
+cap through level 15.
 
 Unlocks occur only through explicit profile-store operations. Do not add family
 expansion to profile validation or repair: loading an older valid save must not

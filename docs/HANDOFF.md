@@ -95,13 +95,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the
   exact pending target before ownership can change.
 - `JinGangBuHuai1`–`4` use generic physical-leftmost discard and flip
-  prevention. Tiers 2–4 then spend one ki and use `ACTION_ADD_CARD_TO_HAND`
-  with `CARD_SPEC_FRESH_COPY` to gain a catalog-fresh copy; the discarded
-  instance remains in discard unless its own trigger moves it. If that trigger
-  refills the hand first, the ki remains spent and adding the copy has no
-  effect. Their explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4
-  makes every protected friendly gain one point and attack once per tier-4
-  source.
+  prevention. Tier 1 requires the discard before prevention. Tier 2 prevents
+  first and then attempts the discard, so an empty hand still prevents; it
+  neither spends ki nor copies the discarded card. Tiers 3–4 require the
+  discard, then spend one ki and use `ACTION_ADD_CARD_TO_HAND` with
+  `CARD_SPEC_FRESH_COPY` to gain a catalog-fresh copy. The discarded instance
+  remains in discard unless its own trigger moves it. If that trigger refills
+  the hand first, the ki remains spent and adding the copy has no effect. Their
+  explicit protection emits global `CARD_FLIP_PREVENTED`; tier 4 makes every
+  protected friendly gain one point and attack once per tier-4 source.
 - `FuMoQuan3`–`4` reduce every allied moving card before each movement/swap
   leg; multiple sources stack and a four-zero result removes the mover before
   it can relocate. Empty-hand owner-turn endings grant all current allies one
@@ -136,8 +138,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   emit normal placement but skip after-summoned rules and standard attack.
   Tier 5 then discards the opponent's physical rightmost occupied hand slot.
   `RanMuDaoFa2`–`3` use a locked allied-hand activation to discard the exact
-  target, batch-buff every legal allied board card, and grant one extra play;
-  tier 3 repeats the board buff only after a real attack. `WuXiangJieZhi3`–`4`
+  target, batch-buff every remaining legal allied hand card, and grant one
+  extra play; tier 3 separately buffs legal allied board cards only after a
+  real attack. `WuXiangJieZhi3`–`4`
   reuse the locked first-legal unlimited attack modifiers and have a locked
   discard/draw activation. Tier 4 attacks once after each successful discard
   batch owned by its current side; multiple sources resolve row-major.

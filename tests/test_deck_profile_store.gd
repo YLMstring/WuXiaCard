@@ -810,9 +810,16 @@ func _run() -> void:
 		"profile",
 		active_profile
 	)
+	var tier_reward_added: Array = tier_reward_advance.get("added_ids", []) as Array
 	_check(
 		&"CangSongYingKe2" in store.get_unlocked_ids(tier_reward_profile),
 		"Level-two progression preserves an owned selected-sect tier-two card"
+	)
+	_check(
+		not tier_reward_added.is_empty()
+		and StringName(String(tier_reward_added[0])) == &"TuNaShu2"
+		and String(tier_reward_profile["library_slots"][0]) == "TuNaShu2",
+		"Level two unlocks tier-two Tuna before selected-sect cards"
 	)
 	var reward_rng := RandomNumberGenerator.new()
 	reward_rng.seed = 2902
@@ -825,8 +832,9 @@ func _run() -> void:
 	_check(
 		&"CangSongYingKe2" not in (
 			post_tier_reward.get("reward_ids", []) as Array
-		),
-		"Automatic tier unlock is excluded from the following reward offer"
+		)
+		and &"TuNaShu2" not in (post_tier_reward.get("reward_ids", []) as Array),
+		"Automatic Tuna and sect unlocks are excluded from the following reward offer"
 	)
 
 	var progression_profile: Dictionary = active_profile
@@ -835,11 +843,16 @@ func _run() -> void:
 		var expected_added_ids: Array = []
 		if Store.tier_for_level(expected_level) > Store.tier_for_level(expected_level - 1):
 			var before_ids: Array[StringName] = store.get_unlocked_ids(progression_profile)
+			var entered_tier: int = Store.tier_for_level(expected_level)
+			if entered_tier == 2 and &"TuNaShu2" not in before_ids:
+				expected_added_ids.append(&"TuNaShu2")
+			elif entered_tier == 3 and &"TuNaShu3" not in before_ids:
+				expected_added_ids.append(&"TuNaShu3")
 			for card_id: StringName in Cards.get_all_card_ids():
 				var definition: Dictionary = Cards.get_definition(card_id)
 				if (
 					String(definition.get("sect", "")) == "华山派"
-					and int(definition.get("tier", 0)) == Store.tier_for_level(expected_level)
+					and int(definition.get("tier", 0)) == entered_tier
 					and card_id not in before_ids
 				):
 					expected_added_ids.append(card_id)
@@ -867,7 +880,7 @@ func _run() -> void:
 		)
 		_check(
 			(advance_result.get("added_ids", []) as Array) == expected_added_ids,
-			"Level %d reports only its exact-tier sect unlocks: actual=%s expected=%s"
+			"Level %d reports ordered Tuna and exact-tier sect unlocks: actual=%s expected=%s"
 			% [expected_level, str(advance_result.get("added_ids", [])), str(expected_added_ids)]
 		)
 		for unlocked_id: StringName in expected_added_ids:
@@ -877,9 +890,10 @@ func _run() -> void:
 			)
 		if not expected_added_ids.is_empty():
 			_check(
-				String(progression_profile["library_slots"][0])
-				== String(expected_added_ids[0]),
-				"Level %d inserts automatic sect cards at the library top"
+				(progression_profile["library_slots"] as Array).slice(
+					0, expected_added_ids.size()
+				) == _strings(expected_added_ids),
+				"Level %d inserts automatic unlocks at the library top in request order"
 				% expected_level
 			)
 	var capped_result: Dictionary = store.advance_after_victory_and_save(progression_profile)
