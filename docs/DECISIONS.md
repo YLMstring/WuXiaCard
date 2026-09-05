@@ -362,6 +362,11 @@ respectively, in row-major order. The source itself is eligible.
 - Sect selection saves every arrow change immediately and restores it across
   scene and process restarts. The two arrow buttons wrap within the unlocked
   range and remain hidden while only difficulty 0 is available.
+- On one main-menu instance, the exact ten-press sequence `闭关重修, 封剑归隐`
+  repeated five times emits a hidden progression-unlock request. It atomically
+  unlocks every catalog sect and difficulty 9 while preserving all other
+  profile fields. Wrong order or navigation clears the sequence; it never
+  unlocks cards, and a later confirmed `封剑归隐` still clears the result.
 - Completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and `闭关重修`
   clear only the active run difficulty while preserving the global maximum and
   last selection. `封剑归隐` clears every difficulty field.

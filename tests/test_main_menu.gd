@@ -81,6 +81,7 @@ func _run() -> void:
 		"journey": 0,
 		"run_reset": 0,
 		"progress_reset": 0,
+		"progression_unlock": 0,
 	}
 	menu.journey_requested.connect(
 		func() -> void: signal_counts["journey"] = int(signal_counts["journey"]) + 1
@@ -92,6 +93,33 @@ func _run() -> void:
 		func() -> void:
 			signal_counts["progress_reset"] = int(signal_counts["progress_reset"]) + 1
 	)
+	menu.progression_unlock_requested.connect(
+		func() -> void:
+			signal_counts["progression_unlock"] = int(signal_counts["progression_unlock"]) + 1
+	)
+
+	progress_reset_button.pressed.emit()
+	_check(menu.debug_get_progression_unlock_step() == 0, "Unlock gesture cannot start from full reset")
+	journey_button.pressed.emit()
+	run_reset_button.pressed.emit()
+	progress_reset_button.pressed.emit()
+	progress_reset_button.pressed.emit()
+	_check(menu.debug_get_progression_unlock_step() == 0, "Wrong alternation clears the unlock gesture")
+	journey_button.pressed.emit()
+	run_reset_button.pressed.emit()
+	progress_reset_button.pressed.emit()
+	journey_button.pressed.emit()
+	_check(menu.debug_get_progression_unlock_step() == 0, "Journey clears the unlock gesture")
+	var journey_count_before_unlock: int = int(signal_counts["journey"])
+	for pair_index: int in range(5):
+		run_reset_button.pressed.emit()
+		progress_reset_button.pressed.emit()
+	_check(int(signal_counts["progression_unlock"]) == 1, "Five alternating pairs request full progression unlock")
+	_check(int(signal_counts["run_reset"]) == 0, "Unlock gesture does not confirm run reset")
+	_check(int(signal_counts["progress_reset"]) == 0, "Unlock gesture does not confirm full reset")
+	_check(menu.debug_get_progression_unlock_step() == 0, "Completed unlock gesture clears its step")
+	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Completed unlock gesture clears destructive countdowns")
+	_check(int(signal_counts["journey"]) == journey_count_before_unlock, "Unlock gesture does not request navigation")
 
 	run_reset_button.pressed.emit()
 	_check(notice.text == "再按四次\n放弃本局", "Run-reset countdown starts at four in two lines")
@@ -120,7 +148,7 @@ func _run() -> void:
 		"A different destructive action cancels the first countdown"
 	)
 	journey_button.pressed.emit()
-	_check(int(signal_counts["journey"]) == 1, "Journey action emits once")
+	_check(int(signal_counts["journey"]) == journey_count_before_unlock + 1, "Journey action emits once")
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Journey cancels both countdowns")
 	_check(notice.text.is_empty(), "Journey clears countdown notice")
 

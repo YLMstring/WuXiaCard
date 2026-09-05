@@ -5,6 +5,7 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
@@ -36,6 +37,32 @@ func _run() -> void:
 
 	var menu := flow.debug_get_current_screen() as MenuController
 	_check(menu != null, "Main scene starts at the main menu")
+	var initial_run_reset_button := menu.get_node(
+		"MenuLayer/Actions/RunResetButton"
+	) as Button
+	var initial_progress_reset_button := menu.get_node(
+		"MenuLayer/Actions/ProgressResetButton"
+	) as Button
+	for pair_index: int in range(5):
+		initial_run_reset_button.pressed.emit()
+		initial_progress_reset_button.pressed.emit()
+	await process_frame
+	var unlocked_profile: Dictionary = Store.new(runtime_save_path).load_profile()
+	_check(
+		Store.new(runtime_save_path).get_unlocked_sect_ids(unlocked_profile)
+		== Sects.get_all_sect_ids(),
+		"Hidden menu gesture persists every sect unlock"
+	)
+	_check(
+		Store.new(runtime_save_path).get_max_unlocked_difficulty(unlocked_profile)
+		== Store.MAX_DIFFICULTY,
+		"Hidden menu gesture persists every difficulty unlock"
+	)
+	_check(
+		(menu.get_node("MenuLayer/Notice") as Label).text
+		== "已解锁全部门派与进阶",
+		"Successful hidden menu gesture reports its unlock"
+	)
 	(menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
 	await process_frame
 	var selector := flow.debug_get_current_screen() as SelectorController
@@ -266,8 +293,19 @@ func _run() -> void:
 	root.add_child(failing_flow)
 	await process_frame
 	var failing_menu := failing_flow.debug_get_current_screen() as MenuController
+	var failing_progress_reset_button := (
+		failing_menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
+	)
 	var failing_reset_button := (
 		failing_menu.get_node("MenuLayer/Actions/RunResetButton") as Button
+	)
+	for pair_index: int in range(5):
+		failing_reset_button.pressed.emit()
+		failing_progress_reset_button.pressed.emit()
+	await process_frame
+	_check(
+		(failing_menu.get_node("MenuLayer/Notice") as Label).text == "保存失败，请重试",
+		"A failed progression unlock remains on the menu and reports the save failure"
 	)
 	for press_index: int in range(5):
 		failing_reset_button.pressed.emit()

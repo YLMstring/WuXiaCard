@@ -216,6 +216,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
   left copy is flipped, both wrap through the unlocked range, and each change
   saves immediately. They remain hidden when only difficulty 0 is unlocked.
+- The main menu recognizes one hidden, in-memory sequence: start with
+  `闭关重修`, alternate with `封剑归隐`, and press each five times. Completion
+  atomically unlocks every sect and difficulty 9 without changing cards or the
+  active run. Wrong order/navigation clears the sequence; a real full reset
+  still removes these unlocks.
 - Revealed library and reward cards are blue when mastered and red otherwise.
   Revealed enemy cards stay red; unoccupied reward backs keep random colors.
 - The ending instances the production main menu so it shares the exact

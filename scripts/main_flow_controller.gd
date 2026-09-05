@@ -59,6 +59,7 @@ func _show_main_menu(notice: String = "") -> void:
 	menu.journey_requested.connect(_on_journey_requested)
 	menu.run_reset_confirmed.connect(_on_run_reset_confirmed)
 	menu.progress_reset_confirmed.connect(_on_progress_reset_confirmed)
+	menu.progression_unlock_requested.connect(_on_progression_unlock_requested)
 	_replace_screen(menu)
 	_music_director.request_context(Music.CONTEXT_MENU)
 	if not notice.is_empty():
@@ -195,6 +196,17 @@ func _on_progress_reset_confirmed() -> void:
 	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
+		if bool(result.get("ok", false))
+		else "保存失败，请重试"
+	)
+
+
+func _on_progression_unlock_requested() -> void:
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	var result: Dictionary = store.unlock_all_progression_and_save(profile)
+	_finish_reset_on_current_menu(
+		"已解锁全部门派与进阶"
 		if bool(result.get("ok", false))
 		else "保存失败，请重试"
 	)

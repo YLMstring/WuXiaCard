@@ -3,6 +3,7 @@ extends SceneTree
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TaiShan18Pan1",
@@ -738,6 +739,34 @@ func _run() -> void:
 	var exchange_for_reset: Dictionary = store.exchange_and_save(active_profile, 0, 0)
 	_check(bool(exchange_for_reset.get("ok", false)), "Run fixture can change its main deck")
 	var changed_profile: Dictionary = exchange_for_reset.get("profile", {})
+	var progression_unlock_result: Dictionary = store.unlock_all_progression_and_save(
+		changed_profile
+	)
+	_check(bool(progression_unlock_result.get("ok", false)), "Full progression unlock saves")
+	var progression_unlock_profile: Dictionary = progression_unlock_result.get("profile", {})
+	var expected_progression_profile: Dictionary = changed_profile.duplicate(true)
+	expected_progression_profile["unlocked_sect_ids"] = []
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		expected_progression_profile["unlocked_sect_ids"].append(String(sect_id))
+	expected_progression_profile["max_unlocked_difficulty"] = Store.MAX_DIFFICULTY
+	_check(
+		store.get_unlocked_sect_ids(progression_unlock_profile) == Sects.get_all_sect_ids(),
+		"Full progression unlock stores every sect in catalog order"
+	)
+	_check(
+		store.get_max_unlocked_difficulty(progression_unlock_profile) == Store.MAX_DIFFICULTY,
+		"Full progression unlock stores difficulty nine"
+	)
+	_check(
+		progression_unlock_profile == expected_progression_profile,
+		"Full progression unlock preserves every unrelated profile field"
+	)
+	_check(
+		store.load_profile() == progression_unlock_profile,
+		"Full progression unlock persists its exact candidate"
+	)
+	changed_profile = progression_unlock_profile
+	retained_sects = (progression_unlock_profile["unlocked_sect_ids"] as Array).duplicate()
 	var reset_result: Dictionary = store.reset_run_and_save(changed_profile)
 	_check(bool(reset_result.get("ok", false)), "Resetting the current run saves")
 	var reset_profile: Dictionary = reset_result.get("profile", {})
@@ -952,6 +981,14 @@ func _run() -> void:
 	var failed_full_reset: Dictionary = failing_store.reset_all_progress_and_save(saved_before_failure)
 	_check(not bool(failed_full_reset.get("ok", true)), "Full-reset save failure is reported")
 	_check(failed_full_reset.get("profile", {}) == saved_before_failure, "Full-reset save failure rolls back")
+	var failed_progression_unlock: Dictionary = failing_store.unlock_all_progression_and_save(
+		saved_before_failure
+	)
+	_check(not bool(failed_progression_unlock.get("ok", true)), "Progression-unlock save failure is reported")
+	_check(
+		failed_progression_unlock.get("profile", {}) == saved_before_failure,
+		"Progression-unlock save failure rolls back"
+	)
 
 	_cleanup()
 	_finish()

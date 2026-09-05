@@ -4,9 +4,22 @@ extends Control
 signal journey_requested
 signal run_reset_confirmed
 signal progress_reset_confirmed
+signal progression_unlock_requested
 
 const RUN_RESET_PRESSES: int = 5
 const PROGRESS_RESET_PRESSES: int = 10
+const PROGRESSION_UNLOCK_SEQUENCE: Array[StringName] = [
+	&"run_reset",
+	&"progress_reset",
+	&"run_reset",
+	&"progress_reset",
+	&"run_reset",
+	&"progress_reset",
+	&"run_reset",
+	&"progress_reset",
+	&"run_reset",
+	&"progress_reset",
+]
 const DEFAULT_CONFIRMATION_TIMEOUT: float = 3.0
 const COUNTDOWN_NUMERALS: Dictionary = {
 	1: "一",
@@ -45,6 +58,7 @@ const PROGRESS_RESET_INK: Texture2D = preload("res://inkpics/封剑归隐.png")
 
 var _run_reset_count: int = 0
 var _progress_reset_count: int = 0
+var _progression_unlock_step: int = 0
 var _artwork_rect: Rect2 = Rect2()
 var _safe_rect: Rect2 = Rect2()
 
@@ -150,6 +164,7 @@ func show_notice(message: String) -> void:
 func reset_confirmation_state() -> void:
 	_run_reset_count = 0
 	_progress_reset_count = 0
+	_progression_unlock_step = 0
 	run_reset_timer.stop()
 	progress_reset_timer.stop()
 	if is_node_ready():
@@ -158,6 +173,10 @@ func reset_confirmation_state() -> void:
 
 func debug_get_confirmation_counts() -> Vector2i:
 	return Vector2i(_run_reset_count, _progress_reset_count)
+
+
+func debug_get_progression_unlock_step() -> int:
+	return _progression_unlock_step
 
 
 func debug_set_confirmation_timeout(seconds: float) -> void:
@@ -185,11 +204,16 @@ func _on_journey_pressed() -> void:
 
 
 func _on_run_reset_pressed() -> void:
+	if _advance_progression_unlock_sequence(&"run_reset"):
+		reset_confirmation_state()
+		progression_unlock_requested.emit()
+		return
 	_cancel_progress_reset()
 	_run_reset_count += 1
 	run_reset_timer.start()
 	if _run_reset_count >= RUN_RESET_PRESSES:
 		_run_reset_count = 0
+		_progression_unlock_step = 0
 		run_reset_timer.stop()
 		notice_label.text = ""
 		run_reset_confirmed.emit()
@@ -201,11 +225,16 @@ func _on_run_reset_pressed() -> void:
 
 
 func _on_progress_reset_pressed() -> void:
+	if _advance_progression_unlock_sequence(&"progress_reset"):
+		reset_confirmation_state()
+		progression_unlock_requested.emit()
+		return
 	_cancel_run_reset()
 	_progress_reset_count += 1
 	progress_reset_timer.start()
 	if _progress_reset_count >= PROGRESS_RESET_PRESSES:
 		_progress_reset_count = 0
+		_progression_unlock_step = 0
 		progress_reset_timer.stop()
 		notice_label.text = ""
 		progress_reset_confirmed.emit()
@@ -214,6 +243,20 @@ func _on_progress_reset_pressed() -> void:
 		PROGRESS_RESET_PRESSES - _progress_reset_count,
 		"删档重来"
 	)
+
+
+func _advance_progression_unlock_sequence(action: StringName) -> bool:
+	var expected_action: StringName = PROGRESSION_UNLOCK_SEQUENCE[_progression_unlock_step]
+	if action == expected_action:
+		_progression_unlock_step += 1
+	elif action == PROGRESSION_UNLOCK_SEQUENCE[0]:
+		_progression_unlock_step = 1
+	else:
+		_progression_unlock_step = 0
+	if _progression_unlock_step < PROGRESSION_UNLOCK_SEQUENCE.size():
+		return false
+	_progression_unlock_step = 0
+	return true
 
 
 func _on_run_reset_timeout() -> void:

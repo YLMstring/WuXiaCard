@@ -751,6 +751,18 @@ func reset_all_progress_and_save(profile: Dictionary) -> Dictionary:
 	return {"ok": true, "profile": candidate}
 
 
+func unlock_all_progression_and_save(profile: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": unchanged}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["unlocked_sect_ids"] = _string_array(Sects.get_all_sect_ids())
+	candidate["max_unlocked_difficulty"] = MAX_DIFFICULTY
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
+
+
 func get_unlocked_ids(profile: Dictionary) -> Array[StringName]:
 	var result: Array[StringName] = []
 	var raw: Variant = profile.get("unlocked_card_ids", [])
