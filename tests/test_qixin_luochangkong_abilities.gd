@@ -1,5 +1,7 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
@@ -21,7 +23,6 @@ func _init() -> void:
 func _run() -> void:
 	_test_catalog_declarations()
 	_test_modifier_validation()
-	_test_minimum_effective_defense()
 	_test_attack_permission_and_minimum_defense()
 	_test_summon_attack_gate()
 	_test_reaction_respects_declaration_gate()
@@ -109,36 +110,6 @@ func _test_modifier_validation() -> void:
 	)
 
 
-func _test_minimum_effective_defense() -> void:
-	var minimum_modifier: Dictionary = {
-		"retained_on_flip": true,
-		"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
-	}
-	var defender: Dictionary = {
-		"powers": [7, 3, 9, 5],
-		"active_abilities": [minimum_modifier],
-	}
-	var original_powers: Array = (defender["powers"] as Array).duplicate()
-	_check(
-		Abilities.get_minimum_effective_defending_power(defender, 0, 7) == 3,
-		"Minimum effective defense uses the weakest current side"
-	)
-	_check(
-		defender["powers"] == original_powers,
-		"Minimum effective defense does not mutate stored powers"
-	)
-	defender["active_abilities"].append({
-		"modifiers": [{
-			"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE,
-			"value": 1,
-		}],
-	})
-	_check(
-		Abilities.get_minimum_effective_defending_power(defender, 0, 7) == 1,
-		"Existing defending-power overrides apply before taking the minimum"
-	)
-
-
 func _test_attack_permission_and_minimum_defense() -> void:
 	var attacker: Dictionary = Catalog.create_instance(
 		&"QiXinLuoChangKong2",
@@ -158,11 +129,11 @@ func _test_attack_permission_and_minimum_defense() -> void:
 	board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
 	var original_powers: Array = (defender["powers"] as Array).duplicate()
 	_check(
-		Rules.is_target_in_attack_range(board, 4, 5),
+		BoardQueries.is_target_in_attack_range(board, 4, 5),
 		"QiXin compares against the defender's minimum effective side"
 	)
 	_check(
-		not Rules.can_attack_target(board, 4, 5),
+		not BoardQueries.can_attack_target(board, 4, 5),
 		"QiXin cannot declare an attack while it has no other ally"
 	)
 	var ally: Dictionary = Rules.make_card(
@@ -175,13 +146,13 @@ func _test_attack_permission_and_minimum_defense() -> void:
 	ally["instance_id"] = &"qixin_ally"
 	board[0] = {"card": ally, "owner": Rules.PLAYER_OWNER}
 	_check(
-		Rules.can_attack_target(board, 4, 5),
+		BoardQueries.can_attack_target(board, 4, 5),
 		"One other allied board card permits QiXin to declare the attack"
 	)
 	board[0] = null
 	_check(
-		Rules.is_target_in_attack_range(board, 4, 5)
-		and not Rules.can_attack_target(board, 4, 5),
+		BoardQueries.is_target_in_attack_range(board, 4, 5)
+		and not BoardQueries.can_attack_target(board, 4, 5),
 		"Post-declaration range remains valid even if the other ally disappears"
 	)
 	_check(
@@ -291,7 +262,7 @@ func _test_retained_modifiers_follow_owner() -> void:
 		"Both attack modifiers remain after QiXin changes owner"
 	)
 	_check(
-		not Rules.can_attack_target(state.board, 4, 5),
+		not BoardQueries.can_attack_target(state.board, 4, 5),
 		"Retained ally requirement evaluates from QiXin's new owner"
 	)
 	var new_ally: Dictionary = Rules.make_card(
@@ -304,7 +275,7 @@ func _test_retained_modifiers_follow_owner() -> void:
 	new_ally["instance_id"] = &"retained_ally"
 	state.board[0] = {"card": new_ally, "owner": Rules.OPPONENT_OWNER}
 	_check(
-		Rules.can_attack_target(state.board, 4, 5),
+		BoardQueries.can_attack_target(state.board, 4, 5),
 		"A new-owner ally permits the retained minimum-side attack"
 	)
 

@@ -1,10 +1,12 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -171,7 +173,7 @@ func _test_distance_two_attack_rules() -> void:
 	sentinel_board[4] = _slot(_plain(&"ordinary_attacker", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
 	sentinel_board[1] = _slot(_plain(&"negative_defender", [-1, -1, -1, -1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	_check(
-		Rules.can_attack_target(sentinel_board, 4, 1),
+		BoardQueries.can_attack_target(sentinel_board, 4, 1),
 		"Any nonnegative ordinary edge can attack a negative-one defender"
 	)
 
@@ -180,15 +182,15 @@ func _test_distance_two_attack_rules() -> void:
 	var board: Array = Rules.empty_board()
 	board[6] = _slot(tier_three, Rules.PLAYER_OWNER)
 	board[0] = _slot(_plain(&"far_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	_check(Rules.can_attack_target(board, 6, 0), "Tier-three range attacks through one empty cell")
+	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-three range attacks through one empty cell")
 	board[3] = _slot(_plain(&"middle_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
-	_check(not Rules.can_attack_target(board, 6, 0), "Tier-three range cannot attack through an ally")
+	_check(not BoardQueries.can_attack_target(board, 6, 0), "Tier-three range cannot attack through an ally")
 	var tier_four: Dictionary = (board[6] as Dictionary).get("card", {})
 	tier_four["active_abilities"] = [_range_ability(true)]
-	_check(Rules.can_attack_target(board, 6, 0), "Tier-four range attacks through one ally")
+	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-four range attacks through one ally")
 	(board[3] as Dictionary)["owner"] = Rules.OPPONENT_OWNER
-	_check(not Rules.can_attack_target(board, 6, 0), "Distance-two attacks never pass through an enemy")
-	_check(not Rules.can_attack_target(board, 6, 2), "Distance-two attacks remain orthogonal and do not wrap")
+	_check(not BoardQueries.can_attack_target(board, 6, 0), "Distance-two attacks never pass through an enemy")
+	_check(not BoardQueries.can_attack_target(board, 6, 2), "Distance-two attacks remain orthogonal and do not wrap")
 
 
 func _test_entry_draw_and_grant_order() -> void:
@@ -253,11 +255,6 @@ func _test_entry_draw_and_grant_order() -> void:
 		and (runtime_drawn_two.get("active_abilities", []) as Array).size() == 2
 		and (runtime_non_palm.get("active_abilities", []) as Array).is_empty(),
 		"Existing and both newly drawn palm cards receive both effects, while non-palm cards do not"
-	)
-	_check(
-		Abilities.can_attack_at_orthogonal_distance_two(runtime_drawn)
-		and not Abilities.allows_intervening_ally_at_orthogonal_distance_two(runtime_drawn),
-		"Tier-three grants the empty-cell distance-two modifier"
 	)
 	var events: Array = transition.get("events", [])
 	var exile_index: int = _event_index(events, &"card_exiled", &"entry_yinyang")
@@ -412,11 +409,6 @@ func _test_grant_deduplication_and_flip_loss() -> void:
 		(runtime.get("active_abilities", []) as Array).size() == 3
 		and _count_events(grant_result.get("events", []), &"ability_gained") == 3,
 		"Repeated grants deduplicate the shared repeat ability"
-	)
-	_check(
-		Abilities.can_attack_at_orthogonal_distance_two(runtime)
-		and Abilities.allows_intervening_ally_at_orthogonal_distance_two(runtime),
-		"Tier-four range remains the effective superset after tier-three and tier-four grants"
 	)
 	state.board[0] = _slot(
 		_plain(&"flip_source", [9, 9, 9, 9], Rules.OPPONENT_OWNER),

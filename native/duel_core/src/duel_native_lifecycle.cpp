@@ -388,6 +388,10 @@ bool DuelNativeCompactKernel::owner_has_legal_action(
 }
 
 bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
+	const Array effect_queue = value.side_payload.get("effect_queue", Array());
+	if (!effect_queue.is_empty()) {
+		return false;
+	}
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
 		return false;
 	}

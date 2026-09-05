@@ -1,9 +1,8 @@
 extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
-const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -25,8 +24,6 @@ func _run() -> void:
 	_test_yijian_three_stops_when_the_flip_is_no_longer_adjacent()
 	_test_tianzhu_three_moves_then_draws()
 	_test_tianzhu_four_suppresses_before_external_movement()
-	_test_temporary_suppression_retains_permanent_abilities_and_new_grants()
-	_test_flipping_while_suppressed_permanently_erases_the_stored_ability()
 	if _failures == 0:
 		print("HENGSHAN_THREE_FAMILIES_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -244,68 +241,6 @@ func _test_tianzhu_four_suppresses_before_external_movement() -> void:
 	_check(
 		_ability_count(transition.get("state") as State, &"movement_neighbor") == 1,
 		"Movement suppression restores at the end of the turn"
-	)
-
-
-func _test_temporary_suppression_retains_permanent_abilities_and_new_grants() -> void:
-	var old_ability: Dictionary = {"triggers": [{
-		"event": Catalog.TRIGGER_END_OWNER_TURN,
-		"conditions": [],
-		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-	}], "retained_on_flip": false}
-	var retained_ability: Dictionary = {"modifiers": [{
-		"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE,
-		"value": 3,
-	}], "retained_on_flip": true}
-	var new_ability: Dictionary = {"modifiers": [{
-		"type": Catalog.MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE,
-	}], "retained_on_flip": false}
-	var card: Dictionary = _plain(&"suppression_fixture")
-	card["active_abilities"] = [old_ability, retained_ability]
-	var removed: Array[Dictionary] = Abilities.temporarily_remove_non_retained_abilities(card, 7)
-	(card["active_abilities"] as Array).append(new_ability.duplicate(true))
-	var restored: Array[Dictionary] = Abilities.restore_temporarily_removed_abilities(card, 7)
-	var active: Array = card.get("active_abilities", [])
-	_check(removed.size() == 1 and restored.size() == 1, "One temporary batch removes and restores one ability")
-	_check(
-		active.size() == 3
-		and active[0] == old_ability
-		and active[1] == retained_ability
-		and active[2] == new_ability,
-		"Retained abilities and abilities granted later remain active in their stable order"
-	)
-
-
-func _test_flipping_while_suppressed_permanently_erases_the_stored_ability() -> void:
-	var old_ability: Dictionary = {"triggers": [{
-		"event": Catalog.TRIGGER_END_OWNER_TURN,
-		"conditions": [],
-		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-	}], "retained_on_flip": false}
-	var retained_ability: Dictionary = {"modifiers": [{
-		"type": Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE,
-		"value": 3,
-	}], "retained_on_flip": true}
-	var card: Dictionary = _plain(&"flip_suppression_fixture")
-	card["active_abilities"] = [old_ability, retained_ability]
-	Abilities.temporarily_remove_non_retained_abilities(card, 4)
-	var board: Array = Rules.empty_board()
-	board[4] = _slot(card, Rules.OPPONENT_OWNER)
-	var state := State.new(board)
-	Executor.resolve_normal_flip(
-		state,
-		-1,
-		&"",
-		4,
-		&"flip_suppression_fixture",
-		Rules.PLAYER_OWNER
-	)
-	var flipped_card: Dictionary = (state.board[4] as Dictionary).get("card", {})
-	_check(
-		(flipped_card.get("active_abilities", []) as Array).size() == 1
-		and (flipped_card.get("active_abilities", []) as Array)[0] == retained_ability
-		and not flipped_card.has("temporary_suppression_batches"),
-		"Flipping clears stored non-retained abilities permanently but keeps retained abilities"
 	)
 
 

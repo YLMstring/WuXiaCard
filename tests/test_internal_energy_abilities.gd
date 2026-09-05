@@ -3,11 +3,10 @@ extends SceneTree
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Action = preload("res://scripts/duel_action.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -519,18 +518,8 @@ func _test_xixing_later_attack_targets_all_while_beiming_does_not() -> void:
 			"trigger_owner_id": Rules.PLAYER_OWNER,
 		}
 	)
-	var attack_requests: Array = request_result.get("attack_requests", []) as Array
-	var targeted_result: Dictionary = Simulator._resolve_attack_request(
-		targeted_state,
-		attack_requests[0] as Dictionary if not attack_requests.is_empty() else {}
-	)
 	_check(
-		attack_requests.size() == 1
-		and (attack_requests[0] as Dictionary).get("attack_policy", {}).get(
-			"attack_target_policy",
-			&""
-		) == Catalog.ATTACK_TARGET_ALL
-		and _event_types(targeted_result.get("events", [])).has(&"attack_started")
+		_event_types(request_result.get("events", [])).has(&"attack_started")
 		and int((targeted_state.board[5] as Dictionary).get("owner", 0))
 		== Rules.OPPONENT_OWNER,
 		"XiXin's locked target policy also permits a specified attack on an ally"

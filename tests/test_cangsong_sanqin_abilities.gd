@@ -3,7 +3,6 @@ extends SceneTree
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
@@ -20,7 +19,6 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_catalog_declarations()
-	_test_generic_add_card_to_hand()
 	_test_cangsong_copies_before_attack_flip()
 	_test_cangsong_spends_with_full_hand()
 	_test_exiled_attack_target_emits_no_flip_triggers()
@@ -84,77 +82,6 @@ func _test_catalog_declarations() -> void:
 			not Catalog.validate_ability(fixture).is_empty(),
 			"Malformed add-card declaration is rejected"
 		)
-
-
-func _test_generic_add_card_to_hand() -> void:
-	var source: Dictionary = Catalog.create_instance(
-		&"ZiXiaGong1",
-		Rules.PLAYER_OWNER,
-		&"add_source"
-	)
-	var board: Array = Rules.empty_board()
-	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
-	var state := State.new(board)
-	var result: Dictionary = Executor.execute_actions(
-		state,
-		4,
-		&"add_source",
-		Rules.PLAYER_OWNER,
-		[{
-			"type": Catalog.ACTION_ADD_CARD_TO_HAND,
-			"card_id": &"CangSongYingKe3",
-			"recipient": Catalog.RECIPIENT_OPPONENT,
-		}],
-		{}
-	)
-	var opponent_hand: Array = state.get_hand(Rules.OPPONENT_OWNER)
-	_check(
-		StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED
-		and opponent_hand.size() == 1,
-		"Generic add-card action can add to the source owner's opponent"
-	)
-	var added: Dictionary = opponent_hand[0]
-	var add_events: Array = result.get("events", [])
-	_check(
-		StringName(added.get("card_id", &"")) == &"CangSongYingKe3"
-		and int(added.get("original_owner", 0)) == Rules.OPPONENT_OWNER
-		and StringName(added.get("instance_id", &""))
-		== &"generated_CangSongYingKe3_1",
-		"Added card is a deterministic fresh catalog instance"
-	)
-	_check(
-		Revelation.is_revealed_to(added, Rules.PLAYER_OWNER)
-		and _event_types(add_events) == [&"card_added_to_hand", &"card_revealed"]
-		and Revelation.is_revealed_to(
-			(_first_event(add_events, &"card_added_to_hand").get("card", {}) as Dictionary),
-			Rules.PLAYER_OWNER
-		),
-		"A non-draw hand addition is public to the recipient's opponent before its event snapshot"
-	)
-	var copied_state: State = state.duplicate_state()
-	var second_result: Dictionary = Executor.execute_actions(
-		copied_state,
-		4,
-		&"add_source",
-		Rules.PLAYER_OWNER,
-		[{
-			"type": Catalog.ACTION_ADD_CARD_TO_HAND,
-			"card_id": &"CangSongYingKe3",
-			"recipient": Catalog.RECIPIENT_OPPONENT,
-		}],
-		{}
-	)
-	_check(
-		StringName(
-			(copied_state.get_hand(Rules.OPPONENT_OWNER)[1] as Dictionary).get(
-				"instance_id",
-				&""
-			)
-		) == &"generated_CangSongYingKe3_2"
-		and StringName(second_result.get("result", &""))
-		== Catalog.ACTION_RESULT_APPLIED,
-		"Generated card IDs avoid collisions deterministically"
-	)
 
 
 func _test_cangsong_copies_before_attack_flip() -> void:

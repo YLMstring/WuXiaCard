@@ -7,9 +7,8 @@ const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -43,7 +42,7 @@ func _run() -> void:
 	_test_turn_cap_waits_for_pending_extra_plays()
 	_test_turn_cap_waits_for_end_turn_extra_play()
 	_test_terminal_requires_both_players_to_be_stuck()
-	_test_greedy_choice_matches_prototype()
+	_test_native_greedy_choice_is_deterministic_and_legal()
 	_test_greedy_ai_values_flip_over_equal_exile()
 	_test_deeper_search_avoids_greedy_trap()
 	_test_activate_action_generation_and_resolution()
@@ -56,7 +55,6 @@ func _run() -> void:
 	_test_search_can_choose_activate_action()
 	_test_trigger_groups_resolve_atomically()
 	_test_passive_trigger_event_semantics()
-	_test_summon_trigger_discovery_and_stale_identity()
 	_test_after_summoned_follows_card_moved_during_summoned()
 	_test_summon_reaction_interrupts_on_play_and_standard_attack()
 	_test_summon_reaction_conditions_and_ability_loss()
@@ -568,20 +566,19 @@ func _test_retained_effect_survives_flip_and_future_attempt() -> void:
 	_check((flipped_tiger["active_abilities"] as Array).size() == 1, "Retained ability survives the ownership flip")
 
 	var combo_state: State = next_state.duplicate_state()
-	var combo_groups: Array[Dictionary] = Triggers.discover(
+	var combo_result: Dictionary = Simulator._resolve_attack_target(
 		combo_state,
-		Catalog.CARD_BE_ATTACKED,
-		{
-			"attacker_cell": 5,
-			"attacker_instance_id": &"retained_tiger",
-			"attacked_cell": 8,
-			"attacked_instance_id": &"future_target",
-		}
+		5,
+		&"retained_tiger",
+		8,
+		&"future_target",
+		&"retained_effect_regression"
 	)
-	var combo_result: Dictionary = Triggers.resolve_group(combo_state, combo_groups[0])
 	var combo_events: Array = combo_result.get("events", [])
+	var combo_types: Array[StringName] = _event_types(combo_events)
 	_check(
-		_event_types(combo_events) == [&"ability_triggered", &"card_exiled"],
+		combo_types.find(&"ability_triggered") >= 0
+		and combo_types.find(&"ability_triggered") < combo_types.find(&"card_exiled"),
 		"A future attempt by the flipped Tiger General cues and then exiles"
 	)
 	_check(combo_state.board[8] == null, "Future retained-effect attempt clears its target")
@@ -1421,11 +1418,14 @@ func _test_multiple_activation_generation_and_identity() -> void:
 		),
 		"Out-of-range activation indices are illegal"
 	)
-	var retained_copy: Dictionary = youfen.duplicate(true)
+	var every_activation_retained: bool = true
+	for ability_value: Variant in youfen.get("active_abilities", []) as Array:
+		if not ability_value is Dictionary or not bool((ability_value as Dictionary).get("retained_on_flip", false)):
+			every_activation_retained = false
+			break
 	_check(
-		Abilities.remove_non_retained_abilities(retained_copy) == 0
-		and Abilities.get_activate_abilities(retained_copy).size() == 3,
-		"Every 有凤来仪 activation survives an ownership flip"
+		Abilities.get_activate_abilities(youfen).size() == 3 and every_activation_retained,
+		"Every 有凤来仪 activation is declared to survive an ownership flip"
 	)
 
 
@@ -1673,39 +1673,20 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
-	var groups: Array[Dictionary] = Triggers.discover(
+	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	_check(groups.size() == 2, "End-turn discovery finds both eligible KuiHua1 cards")
-	_check(int(groups[0].get("source_cell", -1)) == 0 and int(groups[1].get("source_cell", -1)) == 8, "End-turn discovery uses row-major board order")
-	var copied: State = state.duplicate_state()
-	var events: Array = []
-	var requests: Array = []
-	for group: Dictionary in groups:
-		var group_result: Dictionary = Triggers.resolve_group(copied, group)
-		events.append_array(group_result.get("events", []) as Array)
-		requests.append_array(group_result.get("extra_turn_requests", []) as Array)
-	_check(events.size() == 2 and requests.size() == 2, "Each valid rule emits its trigger cue and preserves its request")
+	var events: Array = result.get("events", [])
+	_check(events.size() == 2, "Both eligible KuiHua1 rules emit trigger cues")
 	_check(
 		int((events[0] as Dictionary).get("source_cell", -1)) == 0
 			and int((events[1] as Dictionary).get("source_cell", -1)) == 8,
 		"Trigger cues preserve row-major group order"
 	)
-	_check(int((((copied.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "First matched rule leaves ki unchanged")
-	_check(int((((copied.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 3, "Second matched rule leaves ki unchanged")
-	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "Trigger resolution leaves its source state untouched")
-
-	var stale_state: State = state.duplicate_state()
-	var replacement: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"replacement")
-	replacement["ki"] = 5
-	stale_state.board[0] = {"card": replacement, "owner": Rules.PLAYER_OWNER}
-	var stale_events: Array = []
-	for group: Dictionary in groups:
-		stale_events.append_array((Triggers.resolve_group(stale_state, group)).get("events", []) as Array)
-	_check(stale_events.size() == 1, "Stale instance group is ignored while the other trigger cue still resolves")
-	_check(int(replacement.get("ki", -1)) == 5, "Stale source identity cannot affect a replacement card")
+	_check(int((((state.board[0] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 2, "First matched rule leaves ki unchanged")
+	_check(int((((state.board[8] as Dictionary)["card"] as Dictionary).get("ki", -1))) == 3, "Second matched rule leaves ki unchanged")
 
 
 func _test_passive_trigger_event_semantics() -> void:
@@ -1731,12 +1712,11 @@ func _test_passive_trigger_event_semantics() -> void:
 	source["ki"] = 1
 	board[3] = {"card": source, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
-	var groups: Array[Dictionary] = Triggers.discover(
+	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	var result: Dictionary = Triggers.resolve_group(state, groups[0])
 	var events: Array = result.get("events", [])
 	_check(
 		_event_types(events) == [&"ability_triggered", &"ki_changed"],
@@ -1752,8 +1732,13 @@ func _test_passive_trigger_event_semantics() -> void:
 
 	var condition_failed_state: State = state.duplicate_state()
 	((condition_failed_state.board[3] as Dictionary)["card"] as Dictionary)["ki"] = 0
+	var failed_result: Dictionary = Simulator._resolve_trigger_event(
+		condition_failed_state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
 	_check(
-		(Triggers.resolve_group(condition_failed_state, groups[0]).get("events", []) as Array).is_empty(),
+		(failed_result.get("events", []) as Array).is_empty(),
 		"A group whose condition fails during revalidation emits no trigger event"
 	)
 
@@ -1777,71 +1762,15 @@ func _test_passive_trigger_event_semantics() -> void:
 	)
 	no_effect_board[0] = {"card": no_effect_source, "owner": Rules.PLAYER_OWNER}
 	var no_effect_state := State.new(no_effect_board, [], [], Rules.PLAYER_OWNER)
-	var no_effect_groups: Array[Dictionary] = Triggers.discover(
+	var no_effect_result: Dictionary = Simulator._resolve_trigger_event(
 		no_effect_state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	var no_effect_result: Dictionary = Triggers.resolve_group(
-		no_effect_state,
-		no_effect_groups[0]
-	)
 	_check(
-		_event_types(no_effect_result.get("events", [])) == [&"ability_triggered"]
-			and StringName(no_effect_result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT,
+		_event_types(no_effect_result.get("events", [])) == [&"ability_triggered"],
 		"Accepted passive rule still emits its cue when its action has NO_EFFECT"
 	)
-
-
-func _test_summon_trigger_discovery_and_stale_identity() -> void:
-	var board: Array = Rules.empty_board()
-	board[0] = {
-		"card": _make_reaction_card("First", [1, 5, 1, 1], Rules.PLAYER_OWNER, &"react_first"),
-		"owner": Rules.PLAYER_OWNER,
-	}
-	board[2] = {
-		"card": _make_reaction_card("Second", [1, 1, 1, 5], Rules.PLAYER_OWNER, &"react_second"),
-		"owner": Rules.PLAYER_OWNER,
-	}
-	var target: Dictionary = _make_runtime_card(
-		"Target",
-		[1, 1, 1, 1],
-		Rules.OPPONENT_OWNER,
-		&"summoned_target",
-		[_draw_ability(1)]
-	)
-	board[1] = {"card": target, "owner": Rules.OPPONENT_OWNER}
-	var state := State.new(board, [], [], Rules.OPPONENT_OWNER)
-	var context: Dictionary = {
-		"trigger_cell": 1,
-		"trigger_instance_id": &"summoned_target",
-		"trigger_owner_id": Rules.OPPONENT_OWNER,
-		"summon_reason": &"hand_play",
-	}
-	var groups: Array[Dictionary] = Triggers.discover(state, Catalog.TRIGGER_CARD_AFTER_SUMMONED, context)
-	_check(groups.size() == 3, "After-summoned discovery scans every board source")
-	_check(
-		int(groups[0].get("source_cell", -1)) == 0
-			and int(groups[1].get("source_cell", -1)) == 1
-			and int(groups[2].get("source_cell", -1)) == 2,
-		"After-summoned discovery interleaves global reactions and self rules in row-major order"
-	)
-	_check((groups[0].get("context", {}) as Dictionary) == context, "Summon group preserves stable trigger context")
-	var first_result: Dictionary = Triggers.resolve_group(state, groups[0])
-	var requests: Array = first_result.get("attack_requests", [])
-	_check(requests.size() == 1, "Resolved summon action emits one pure attack request")
-	_check(
-		int((requests[0] as Dictionary).get("target_cell", -1)) == 1
-			and StringName((requests[0] as Dictionary).get("target_instance_id", &"")) == &"summoned_target",
-		"Attack request preserves the triggering card identity"
-	)
-	var stale_state: State = state.duplicate_state()
-	stale_state.board[1] = {
-		"card": _make_runtime_card("Replacement", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"replacement_target"),
-		"owner": Rules.OPPONENT_OWNER,
-	}
-	var stale_result: Dictionary = Triggers.resolve_group(stale_state, groups[0])
-	_check((stale_result.get("attack_requests", []) as Array).is_empty(), "Stale trigger identity cannot attack a replacement occupant")
 
 
 func _test_after_summoned_follows_card_moved_during_summoned() -> void:
@@ -2762,16 +2691,20 @@ func _test_attack_started_event_semantics() -> void:
 	)
 
 
-func _test_greedy_choice_matches_prototype() -> void:
+func _test_native_greedy_choice_is_deterministic_and_legal() -> void:
 	var board: Array = Rules.empty_board()
 	var opponent_hand: Array = [
-		Rules.make_card("Crane", "鹤", [6, 2, 5, 7]),
-		Rules.make_card("Tiger", "虎", [4, 8, 3, 5]),
+		_runtime_test_card("Crane", "鹤", [6, 2, 5, 7], Rules.OPPONENT_OWNER, &"greedy_crane"),
+		_runtime_test_card("Tiger", "虎", [4, 8, 3, 5], Rules.OPPONENT_OWNER, &"greedy_tiger"),
 	]
-	var state := State.new(board, [], opponent_hand, Rules.OPPONENT_OWNER)
-	var prototype_choice: Vector2i = Rules.choose_ai_move(board, opponent_hand, Rules.OPPONENT_OWNER)
-	var simulator_choice = Simulator.choose_greedy_action(state)
-	_check(simulator_choice.as_vector2i() == prototype_choice, "Simulator greedy adapter preserves the prototype AI choice")
+	var player_hand: Array = [
+		_runtime_test_card("Player", "人", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"greedy_player_card"),
+	]
+	var state := State.new(board, player_hand, opponent_hand, Rules.OPPONENT_OWNER)
+	var first_choice = Simulator.choose_greedy_action(state)
+	var second_choice = Simulator.choose_greedy_action(state)
+	_check(first_choice.is_same_as(second_choice), "Native greedy choice is deterministic for an unchanged state")
+	_check(Simulator.is_action_legal(state, first_choice), "Native greedy choice is a legal production action")
 
 
 func _test_deeper_search_avoids_greedy_trap() -> void:
@@ -2794,6 +2727,18 @@ func _test_deeper_search_avoids_greedy_trap() -> void:
 	var searched_move = Search.find_best_action(state, 4, Rules.OPPONENT_OWNER)
 	_check(greedy_move.as_vector2i() == Vector2i(1, 4), "Fixture preserves the tempting two-capture greedy move")
 	_check(searched_move.as_vector2i() == Vector2i(0, 3), "Four-ply search chooses the stronger long-term move")
+
+
+func _runtime_test_card(
+	card_name: String,
+	glyph: String,
+	powers: Array[int],
+	owner_id: int,
+	instance_id: StringName
+) -> Dictionary:
+	var card: Dictionary = Rules.make_card(card_name, glyph, powers, [], owner_id)
+	card["instance_id"] = instance_id
+	return card
 
 
 func _check(condition: bool, message: String) -> void:

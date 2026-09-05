@@ -1,5 +1,7 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -64,23 +66,23 @@ func _test_raozhi_range_comparison_and_first_target() -> void:
 	board[4] = _slot(Catalog.create_instance(&"RaoZhiRouJian2", Rules.PLAYER_OWNER, &"raozhi_rules"), Rules.PLAYER_OWNER)
 	board[0] = _slot(_plain(&"first_enemy", [9, 1, 9, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[1] = _slot(_plain(&"second_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	_check(Rules.can_attack_target(board, 4, 0), "RaoZhi attacks a non-collinear card when either facing axis wins")
-	_check(Rules.can_attack_target(board, 4, 1), "RaoZhi attacks an ordinary distant card through intervening cards")
-	_check(Rules.get_would_flip_indices(board, 4) == [0], "RaoZhi commits to the first legal enemy in board order")
+	_check(BoardQueries.can_attack_target(board, 4, 0), "RaoZhi attacks a non-collinear card when either facing axis wins")
+	_check(BoardQueries.can_attack_target(board, 4, 1), "RaoZhi attacks an ordinary distant card through intervening cards")
+	_check(BoardQueries.get_would_flip_indices(board, 4) == [0], "RaoZhi commits to the first legal enemy in board order")
 	(board[0] as Dictionary)["card"] = _plain(&"too_strong", [9, 9, 9, 9], Rules.OPPONENT_OWNER)
-	_check(not Rules.can_attack_target(board, 4, 0), "A non-collinear target resists when both facing axes fail")
-	_check(Rules.get_would_flip_indices(board, 4) == [1], "RaoZhi skips initially illegal targets")
+	_check(not BoardQueries.can_attack_target(board, 4, 0), "A non-collinear target resists when both facing axes fail")
+	_check(BoardQueries.get_would_flip_indices(board, 4) == [1], "RaoZhi skips initially illegal targets")
 	(board[0] as Dictionary)["card"] = _plain(&"first_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER)
 	(board[0] as Dictionary)["owner"] = Rules.PLAYER_OWNER
 	_check(
-		Rules.get_would_flip_indices(board, 4, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL}) == [0],
+		BoardQueries.get_would_flip_indices(board, 4, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL}) == [0],
 		"All-target policy changes first target to the first other card"
 	)
 	_check(
-		Rules.get_would_flip_indices(board, 4, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY}) == [0],
+		BoardQueries.get_would_flip_indices(board, 4, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY}) == [0],
 		"Allies-only policy changes first target to the first ally"
 	)
-	_check(Rules.can_attack_target(board, 4, 1), "An explicitly chosen later target remains legal")
+	_check(BoardQueries.can_attack_target(board, 4, 1), "An explicitly chosen later target remains legal")
 
 
 func _test_committed_attack_does_not_compare_powers_twice() -> void:

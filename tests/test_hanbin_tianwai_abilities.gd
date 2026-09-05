@@ -6,8 +6,6 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Targeting = preload("res://scripts/duel_targeting.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -65,7 +63,10 @@ func _test_catalog_vocabulary_and_declarations() -> void:
 
 
 func _test_enemy_hand_targeting() -> void:
-	var source: Dictionary = _plain(&"hand_target_source", [2, 2, 2, 2], Rules.PLAYER_OWNER)
+	var source: Dictionary = Catalog.create_instance(
+		&"HanBinZhenQi3", Rules.PLAYER_OWNER, &"hand_target_source"
+	)
+	source["ki"] = 1
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var state := State.new(
@@ -76,15 +77,10 @@ func _test_enemy_hand_targeting() -> void:
 			_plain(&"enemy_right", [-1, -1, -1, -1], Rules.OPPONENT_OWNER),
 		]
 	)
-	var activation: Dictionary = {
-		"target_rule": Catalog.TARGET_ENEMY_HAND_CARD,
-	}
-	var targets: Array[Dictionary] = Targeting.get_valid_targets(
-		state,
-		Rules.PLAYER_OWNER,
-		4,
-		activation
-	)
+	var targets: Array[Dictionary] = []
+	for action: Action in Simulator.get_legal_actions_for_owner(state, Rules.PLAYER_OWNER):
+		if action.action_type == Action.TYPE_ACTIVATE:
+			targets.append({"kind": action.target_kind, "index": action.target_index})
 	_check(
 		targets == [
 			{"kind": Action.TARGET_HAND_SLOT, "index": 0},
@@ -93,21 +89,13 @@ func _test_enemy_hand_targeting() -> void:
 		"Enemy-hand targeting enumerates every logical opponent card, including YinYang"
 	)
 	_check(
-		not Targeting.is_target_valid(
+		not Simulator.is_action_legal(
 			state,
-			Rules.PLAYER_OWNER,
-			4,
-			activation,
-			Action.TARGET_BOARD_CELL,
-			0
+			Action.make_activate(4, &"hand_target_source", Action.TARGET_BOARD_CELL, 0)
 		)
-		and not Targeting.is_target_valid(
+		and not Simulator.is_action_legal(
 			state,
-			Rules.PLAYER_OWNER,
-			4,
-			activation,
-			Action.TARGET_HAND_SLOT,
-			2
+			Action.make_activate(4, &"hand_target_source", Action.TARGET_HAND_SLOT, 2)
 		),
 		"Enemy-hand targeting rejects board cells and empty logical slots"
 	)
@@ -327,12 +315,11 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	var groups: Array[Dictionary] = Triggers.discover(
+	var frozen_result: Dictionary = Simulator._resolve_trigger_event(
 		frozen_state,
 		Catalog.TRIGGER_START_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	var frozen_result: Dictionary = Triggers.resolve_group(frozen_state, groups[0])
 	var runtime_frozen: Dictionary = (frozen_state.board[4] as Dictionary).get("card", {})
 	var runtime_hand: Array = frozen_state.get_hand(Rules.PLAYER_OWNER)
 	var power_events: Array[Dictionary] = []

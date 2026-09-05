@@ -596,15 +596,21 @@ Do not add a `card_id` branch to simulator, search, or controller.
 
 1. Add vocabulary and schema validation in `card_catalog.gd`.
 2. Add catalog rejection/acceptance tests.
-3. Add targeting or conditions in `duel_targeting.gd` /
-   `duel_triggers.gd`.
-4. Add the generic action to `duel_ability_executor.gd`.
-5. Let `duel_simulator.gd` service typed phase requests.
-6. Emit ordered pure-data transition events.
-7. Add simulator tests for identity, timing, ownership, retention, invalid
+3. Compile the new declaration in
+   `native/duel_core/src/duel_native_compile.cpp`.
+4. Add generic targeting/policy in `duel_native_policy.cpp`, event discovery in
+   `duel_native_events.cpp`, action execution in `duel_native_actions.cpp`, or
+   lifecycle handling in `duel_native_resolution.cpp` /
+   `duel_native_lifecycle.cpp`, according to responsibility.
+5. Expose a coarse adapter through `duel_native_rules.gd` only when a focused
+   fixture or presentation consumer needs one; production actions already flow
+   through `duel_simulator.gd`.
+6. Emit ordered pure-data transition events from the native kernel.
+7. Add native/simulator tests for identity, timing, ownership, retention, invalid
    context, and ordering.
 8. Add controller presentation only after the simulator passes.
-9. Verify greedy and deep AI use the same simulator behavior.
+9. Verify human play, greedy fallback, and deep AI all use the same native
+   behavior.
 
 If an ability needs a player choice after an action begins, first design the
 currently missing queued-choice mechanism. Do not resolve it only in UI code.

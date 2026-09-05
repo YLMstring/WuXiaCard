@@ -3,10 +3,8 @@ extends SceneTree
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
-const Selector = preload("res://scripts/duel_card_selector.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -20,7 +18,6 @@ func _run() -> void:
 	_test_catalog_vocabulary()
 	_test_card_declarations()
 	_test_tianchang_power_from_adjacent_enemies()
-	_test_enclosure_selector_uses_existing_neighbors()
 	_test_hengshan_two_grants_self_and_adjacent_allies()
 	_test_hengshan_three_grants_all_allies()
 	_test_hengshan_four_flips_surrounded_enemy()
@@ -113,50 +110,6 @@ func _test_tianchang_power_from_adjacent_enemies() -> void:
 		_event_count(transition.get("events", []), &"powers_changed") == 2,
 		"The selector applies one power increase per adjacent enemy"
 	)
-
-
-func _test_enclosure_selector_uses_existing_neighbors() -> void:
-	var corner_board: Array = Rules.empty_board()
-	corner_board[8] = _slot(_plain(&"selector_source"), Rules.PLAYER_OWNER)
-	corner_board[0] = _slot(_plain(&"corner_enemy"), Rules.OPPONENT_OWNER)
-	corner_board[1] = _slot(_plain(&"corner_right"), Rules.PLAYER_OWNER)
-	corner_board[3] = _slot(_plain(&"corner_down"), Rules.PLAYER_OWNER)
-	var selector: Dictionary = {
-		"zones": [Catalog.CARD_ZONE_BOARD],
-		"conditions": [
-			{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
-			{"type": Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES},
-		],
-	}
-	var corner_state := State.new(corner_board)
-	_check(
-		Selector.snapshot(corner_state, selector, &"selector_source") == [&"corner_enemy"],
-		"A corner enemy is surrounded by its two existing allied neighbors"
-	)
-	corner_state.board[3] = null
-	_check(
-		Selector.snapshot(corner_state, selector, &"selector_source").is_empty(),
-		"An empty existing neighbor breaks corner enclosure"
-	)
-	var edge_board: Array = Rules.empty_board()
-	edge_board[8] = _slot(_plain(&"edge_source"), Rules.PLAYER_OWNER)
-	edge_board[1] = _slot(_plain(&"edge_enemy"), Rules.OPPONENT_OWNER)
-	for cell: int in [0, 2, 4]:
-		edge_board[cell] = _slot(_plain(StringName("edge_ally_%d" % cell)), Rules.PLAYER_OWNER)
-	_check(
-		Selector.snapshot(State.new(edge_board), selector, &"edge_source") == [&"edge_enemy"],
-		"A non-corner edge enemy requires all three existing allied neighbors"
-	)
-	var center_board: Array = Rules.empty_board()
-	center_board[0] = _slot(_plain(&"center_source"), Rules.PLAYER_OWNER)
-	center_board[4] = _slot(_plain(&"center_enemy"), Rules.OPPONENT_OWNER)
-	for cell: int in [1, 3, 5, 7]:
-		center_board[cell] = _slot(_plain(StringName("center_ally_%d" % cell)), Rules.PLAYER_OWNER)
-	_check(
-		Selector.snapshot(State.new(center_board), selector, &"center_source") == [&"center_enemy"],
-		"A center enemy requires all four allied neighbors"
-	)
-
 
 func _test_hengshan_two_grants_self_and_adjacent_allies() -> void:
 	var board: Array = Rules.empty_board()
@@ -259,13 +212,11 @@ func _test_repeated_hengshan_grants_do_not_stack() -> void:
 	board[1] = _slot(_plain(&"repeat_ally"), Rules.PLAYER_OWNER)
 	var state := State.new(board)
 	for _repeat: int in range(2):
-		var groups: Array[Dictionary] = Triggers.discover(
+		Simulator._resolve_trigger_event(
 			state,
 			Catalog.TRIGGER_END_OWNER_TURN,
 			{"turn_owner_id": Rules.PLAYER_OWNER}
 		)
-		for group: Dictionary in groups:
-			Triggers.resolve_group(state, group)
 	_check(_ability_count(state, 4) == 2, "Repeated turn ends do not stack the same self counter")
 	_check(_ability_count(state, 1) == 1, "Repeated turn ends do not stack the same allied counter")
 
@@ -285,14 +236,20 @@ func _test_after_attack_uses_final_board_positions() -> void:
 			"previous_owner_id": Rules.PLAYER_OWNER,
 		}],
 	}
+	var outside: Dictionary = Simulator._resolve_trigger_event(
+		state.duplicate_state(), Catalog.TRIGGER_CARD_AFTER_ATTACK, context
+	)
 	_check(
-		Triggers.discover(state, Catalog.TRIGGER_CARD_AFTER_ATTACK, context).is_empty(),
+		_event_count(outside.get("events", []), &"ability_triggered") == 0,
 		"A flipped ally outside final attack range does not trigger the counter"
 	)
 	state.board[5] = state.board[8]
 	state.board[8] = null
+	var inside: Dictionary = Simulator._resolve_trigger_event(
+		state, Catalog.TRIGGER_CARD_AFTER_ATTACK, context
+	)
 	_check(
-		Triggers.discover(state, Catalog.TRIGGER_CARD_AFTER_ATTACK, context).size() == 1,
+		_event_count(inside.get("events", []), &"ability_triggered") == 1,
 		"The exact flipped ally triggers after moving into final attack range"
 	)
 

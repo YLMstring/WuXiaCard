@@ -11,22 +11,27 @@ const MAX_ATTACKS_PER_OWNER_TURN: int = ProductionSimulator.MAX_ATTACKS_PER_OWNE
 
 
 static func get_legal_actions(state: StateData) -> Array[ActionData]:
+	_ensure_runtime_instance_ids(state)
 	return ProductionSimulator.get_legal_actions(state)
 
 
 static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Array[ActionData]:
+	_ensure_runtime_instance_ids(state)
 	return ProductionSimulator.get_legal_actions_for_owner(state, owner_id)
 
 
 static func has_legal_action_for_owner(state: StateData, owner_id: int) -> bool:
+	_ensure_runtime_instance_ids(state)
 	return ProductionSimulator.has_legal_action_for_owner(state, owner_id)
 
 
 static func is_action_legal(state: StateData, action: ActionData) -> bool:
+	_ensure_runtime_instance_ids(state)
 	return ProductionSimulator.is_action_legal(state, action)
 
 
 static func is_terminal(state: StateData) -> bool:
+	_ensure_runtime_instance_ids(state)
 	return ProductionSimulator.is_terminal(state)
 
 

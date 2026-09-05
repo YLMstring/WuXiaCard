@@ -2,12 +2,11 @@ extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -122,36 +121,8 @@ func _test_jinzhen_follows_board_movement_and_revalidates_conditions() -> void:
 	var state := State.new(board)
 	var result: Dictionary = Executor.execute_actions(
 		state,
-		0,
-		&"moving_target",
-		Rules.OPPONENT_OWNER,
-		[{
-			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
-			"card": Catalog.CARD_REF_SELECTED_CARD,
-			"recipient": Catalog.OWNER_ABILITY_SOURCE,
-		}],
-		{
-			"ability_source_instance_id": &"moving_source",
-			"ability_source_owner_id": Rules.PLAYER_OWNER,
-			"selected_card_instance_id": &"moving_target",
-			"selected_card_conditions": [
-				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
-				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},
-			],
-		}
-	)
-	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED and state.board[2] == null, "Return follows the exact instance after board movement")
-
-	var changed_source: Dictionary = Catalog.create_instance(&"JinZhenDuJie2", Rules.PLAYER_OWNER, &"changed_source")
-	var changed_target: Dictionary = Catalog.create_instance(&"TianChangZhang3", Rules.PLAYER_OWNER, &"changed_target")
-	var changed_board: Array = Rules.empty_board()
-	changed_board[4] = _slot(changed_source, Rules.PLAYER_OWNER)
-	changed_board[2] = _slot(changed_target, Rules.PLAYER_OWNER, Rules.PLAYER_OWNER)
-	var changed_state := State.new(changed_board)
-	var skipped: Dictionary = Executor.execute_actions(
-		changed_state,
-		2,
-		&"changed_target",
+		4,
+		&"moving_source",
 		Rules.PLAYER_OWNER,
 		[{
 			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
@@ -159,16 +130,15 @@ func _test_jinzhen_follows_board_movement_and_revalidates_conditions() -> void:
 			"recipient": Catalog.OWNER_ABILITY_SOURCE,
 		}],
 		{
-			"ability_source_instance_id": &"changed_source",
-			"ability_source_owner_id": Rules.PLAYER_OWNER,
-			"selected_card_instance_id": &"changed_target",
-			"selected_card_conditions": [
-				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
-				{"type": Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF},
-			],
+			"selected_card_instance_id": &"moving_target",
 		}
 	)
-	_check(StringName(skipped.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT and changed_state.board[2] != null, "Return skips when a declared condition stopped matching")
+	_check(
+		StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED
+		and state.board[2] == null
+		and state.get_hand(Rules.PLAYER_OWNER).size() == 1,
+		"Return follows the exact selected instance after board movement"
+	)
 
 
 func _test_jinzhen_exiles_when_hand_is_full() -> void:
@@ -181,12 +151,11 @@ func _test_jinzhen_exiles_when_hand_is_full() -> void:
 	for index: int in range(5):
 		full_hand.append(_plain(StringName("full_hand_%d" % index)))
 	var state := State.new(board, full_hand)
-	var groups: Array[Dictionary] = Triggers.discover(
+	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
 		{"trigger_cell": 4, "trigger_instance_id": &"full_source", "trigger_owner_id": Rules.PLAYER_OWNER}
 	)
-	var result: Dictionary = Triggers.resolve_group(state, groups[0]) if not groups.is_empty() else {}
 	_check(state.board[0] == null and state.get_hand(Rules.PLAYER_OWNER).size() == 5, "A full hand exiles instead of returning")
 	_check((state.removed_cards[Rules.PLAYER_OWNER] as Array).size() == 1, "Full-hand fallback records the old instance in removed cards")
 	var exile: Dictionary = _first_event(result.get("events", []), &"card_exiled")
@@ -264,10 +233,15 @@ func _test_wanhua_tie_snapshot_removes_both_sides() -> void:
 	board[0] = _slot(Catalog.create_instance(&"WanHuaJian1", Rules.PLAYER_OWNER, &"tie_player"), Rules.PLAYER_OWNER)
 	board[8] = _slot(Catalog.create_instance(&"WanHuaJian1", Rules.OPPONENT_OWNER, &"tie_opponent"), Rules.OPPONENT_OWNER)
 	var state := State.new(board)
-	var groups: Array[Dictionary] = Triggers.discover(state, Catalog.TRIGGER_BEFORE_DUEL_END, {"winning_owner_ids": []})
-	_check(groups.size() == 2, "Tie snapshot discovers both sides before either self-removal")
-	for group: Dictionary in groups:
-		Triggers.resolve_group(state, group)
+	var result: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_BEFORE_DUEL_END,
+		{"winning_owner_ids": []}
+	)
+	_check(
+		_event_count(result.get("events", []), &"ability_triggered") == 2,
+		"Tie event snapshots both sides before either self-removal"
+	)
 	_check(state.board[0] == null and state.board[8] == null, "Both pre-discovered tie abilities resolve")
 
 

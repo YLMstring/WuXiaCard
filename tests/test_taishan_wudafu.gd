@@ -5,7 +5,6 @@ const State = preload("res://scripts/duel_state.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Selector = preload("res://scripts/duel_card_selector.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -17,7 +16,6 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_catalog_declarations_validate()
-	_test_exactly_one_adjacent_enemy_selection()
 	_test_taishan_swaps_in_every_direction()
 	_test_taishan_swaps_then_attacks_from_its_new_cell()
 	_test_taishan_does_not_swap_with_zero_or_two_adjacent_enemies()
@@ -61,61 +59,6 @@ func _test_catalog_declarations_validate() -> void:
 				Catalog.validate_ability(ability_value as Dictionary, card_id).is_empty(),
 				"%s ability declaration passes catalog validation" % card_id
 			)
-
-
-func _test_exactly_one_adjacent_enemy_selection() -> void:
-	var board: Array = Rules.empty_board()
-	var source: Dictionary = _make_card(
-		&"selector_source",
-		Rules.PLAYER_OWNER,
-		"重剑"
-	)
-	var first_enemy: Dictionary = _make_card(
-		&"selector_enemy_one",
-		Rules.OPPONENT_OWNER,
-		"重剑"
-	)
-	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
-	board[5] = {"card": first_enemy, "owner": Rules.OPPONENT_OWNER}
-	var state := State.new(board)
-	var selector: Dictionary = {
-		"zones": [Catalog.CARD_ZONE_BOARD],
-		"conditions": [
-			{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
-			{"type": Catalog.CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
-		],
-		"required_count": 1,
-	}
-	_check(
-		Selector.snapshot(state, selector, &"selector_source") == [&"selector_enemy_one"],
-		"Exact-count selector returns one orthogonally adjacent enemy"
-	)
-	state.board[3] = {
-		"card": _make_card(
-			&"selector_enemy_two",
-			Rules.OPPONENT_OWNER,
-			"重剑"
-		),
-		"owner": Rules.OPPONENT_OWNER,
-	}
-	_check(
-		Selector.snapshot(state, selector, &"selector_source").is_empty(),
-		"Exact-count selector returns no cards when two enemies match"
-	)
-	state.board[3] = null
-	state.board[5] = null
-	state.board[0] = {
-		"card": _make_card(
-			&"selector_diagonal_enemy",
-			Rules.OPPONENT_OWNER,
-			"重剑"
-		),
-		"owner": Rules.OPPONENT_OWNER,
-	}
-	_check(
-		Selector.snapshot(state, selector, &"selector_source").is_empty(),
-		"Diagonal enemies are not adjacent"
-	)
 
 
 func _test_taishan_swaps_in_every_direction() -> void:

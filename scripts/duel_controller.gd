@@ -1864,7 +1864,7 @@ func _perform_opponent_turn() -> void:
 
 
 func _wait_for_minimum_opponent_decision(decision_started_usec: int) -> void:
-	if opponent_min_decision_seconds > 0.0:
+	while is_inside_tree() and opponent_min_decision_seconds > 0.0:
 		var elapsed_seconds: float = (
 			float(Time.get_ticks_usec() - decision_started_usec) / 1_000_000.0
 		)
@@ -1872,8 +1872,9 @@ func _wait_for_minimum_opponent_decision(decision_started_usec: int) -> void:
 			opponent_min_decision_seconds - elapsed_seconds,
 			0.0
 		)
-		if remaining_seconds > 0.0:
-			await get_tree().create_timer(remaining_seconds).timeout
+		if remaining_seconds <= 0.0:
+			break
+		await get_tree().create_timer(remaining_seconds).timeout
 	while is_inside_tree() and _inspection_open:
 		await get_tree().process_frame
 

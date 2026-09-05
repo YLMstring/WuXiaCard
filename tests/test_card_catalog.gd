@@ -44,7 +44,6 @@ func _run() -> void:
 	_test_side_deck_pool()
 	_test_draw_action_validation()
 	_test_activate_ability_declarations()
-	_test_activate_ability_replacement()
 	_test_trigger_ability_schema()
 	_test_welcoming_pine_schema()
 
@@ -439,25 +438,6 @@ func _test_activate_ability_declarations() -> void:
 		Catalog.validate_definition(duplicate_activation_definition).is_empty(),
 		"More than one valid activation in a definition passes validation"
 	)
-
-
-func _test_activate_ability_replacement() -> void:
-	var card: Dictionary = Catalog.create_instance(&"TuNaShu2", 1, &"replacement_fixture")
-	var first_activate: Dictionary = Catalog.get_definition(&"YouFenLaiYi2")["abilities"][0]
-	Abilities.replace_activate_ability(card, first_activate)
-	_check((card.get("active_abilities", []) as Array).size() == 2, "Adding activation preserves unrelated passive ability")
-	var second_activate: Dictionary = Catalog.get_definition(&"YouFenLaiYi3")["abilities"][1]
-	(card.get("active_abilities", []) as Array).append(second_activate.duplicate(true))
-	var replacement: Dictionary = first_activate.duplicate(true)
-	(replacement["activation"] as Dictionary)["target_rule"] = Catalog.TARGET_ADJACENT_EMPTY_BOARD
-	Abilities.replace_activate_ability(card, replacement)
-	var active_abilities: Array = card.get("active_abilities", [])
-	var activate_count: int = 0
-	for ability_value: Variant in active_abilities:
-		if Abilities.is_activate_ability(ability_value as Dictionary):
-			activate_count += 1
-	_check(active_abilities.size() == 2 and activate_count == 1, "New activation replaces all old activation slots")
-	_check(not Abilities.get_activation(card).is_empty(), "Replacement activation becomes active")
 
 
 func _test_trigger_ability_schema() -> void:

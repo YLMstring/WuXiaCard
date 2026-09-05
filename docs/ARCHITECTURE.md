@@ -67,20 +67,24 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
   `DuelNativeCompactKernel`. It captures one compact root, rejects unsupported
   declarations atomically, restores production transitions, and converts
   native search actions/progress back into pure GDScript data.
-- `duel_rules.gd` — baseline board geometry, power comparison, scoring helpers, and some legacy prototype helpers. `DuelRules.make_card()` still accepts legacy `name` metadata for test fixtures; production card data does not.
-- `duel_abilities.gd` — ordered structural activation lookup, replace-all activation grants, flip retention, turn-scoped suppression batches, and ki-use detection.
-- `duel_ability_executor.gd` — generic costs and actions: draw, exact/fresh
-  card return and summon requests, exile, immediately serviced attack requests,
-  ki, signed exact-card power changes with dynamic values and zero-power
-  removal, movement with shared before/after boundaries, ordered swaps,
-  turn-scoped ability suppression, persistent pending suppression grants,
-  extra-card-play grants, normal flip, and invalid-context policy.
-- `duel_targeting.gd` — generic target discovery/validation. Implemented rules
-  cover adjacent empty, allied, enemy, and other-allied board cards.
-- `duel_card_selector.gd` — pure ordered hand/board selection, stable instance
-  snapshots, source-relative and previous-hand-play conditions, and
-  current-state revalidation.
-- `duel_triggers.gd` — deterministic trigger discovery, stable-context revalidation, composable conditions, the canonical passive-trigger presentation event, and delegation to the shared executor.
+- `duel_rules.gd` — shared owner/direction constants plus presentation-facing
+  board geometry, score counting, special-power display checks, and test-fixture
+  construction. It contains no attack, trigger, action, or AI implementation.
+  `DuelRules.make_card()` still accepts legacy `name` metadata for fixtures;
+  production card data does not.
+- `duel_abilities.gd` — catalog/presentation introspection only: ordered
+  activation lookup, ki-bead classification, and passive-modifier queries used
+  to render cards. Gameplay mutations and attack policy live only in native
+  code.
+- `native/duel_core/src/duel_native_compile.cpp` and
+  `duel_native_policy.cpp` — declaration compilation, runtime ability lookup,
+  selectors, target validation, and attack policy.
+- `native/duel_core/src/duel_native_events.cpp` and
+  `duel_native_actions.cpp` — deterministic trigger discovery/revalidation and
+  generic condition/action execution.
+- `native/duel_core/src/duel_native_resolution.cpp` and
+  `duel_native_lifecycle.cpp` — summon, attack, flip, exile, movement, and
+  owner-turn/terminal lifecycles.
 
 `DuelSimulator.apply_action()` is the only rules path and returns a transition
 dictionary containing pure-data events. Human play, testing, replay, greedy
@@ -96,9 +100,8 @@ Bagua at difficulties 3–5 and none at difficulties 6–9. A later opponent sti
 receives two adjacent Bagua; their four powers are set directly to 2 at
 difficulties 4–6 and to 4 at difficulties 7–9. The setup is static: board views
 reconcile without summon transitions, and replay snapshots it before the first
-action. Difficulty 9 uses an independent RNG to increase every power of one
-uniformly selected legal enemy opening-hand card by one; all-four-`-1` cards
-are excluded and the change has no presentation event.
+action. Difficulty 9 instead doubles the enemy's search deadline; it does not
+modify opening-hand powers.
 
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most
@@ -514,8 +517,8 @@ Current authority comes from native catalog audits, fine-grained semantic
 fixtures, complete-runtime card/action fixtures, search contracts, and
 controller integration tests. Production uses iterative deepening, structural
 ordering, alpha-beta, hard deadline/node checks, low-frequency cancellation,
-and same-turn plan extraction. A native transposition table remains future
-optimization work.
+same-turn plan extraction, PV/history ordering, and a fixed two-way 8 MiB
+per-root transposition table.
 
 Windows Debug loading and behavior are verified. Android ARM64 and release
 packaging remain distribution gates; benchmark those targets rather than

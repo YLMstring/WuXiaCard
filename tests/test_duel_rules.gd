@@ -1,7 +1,10 @@
 extends SceneTree
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const Simulator = preload("res://scripts/duel_simulator.gd")
+const State = preload("res://scripts/duel_state.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -12,7 +15,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	_test_four_direction_capture()
+	_test_four_direction_attack_targets()
 	_test_would_flip_query_is_pure()
 	_test_contextual_attack_eligibility()
 	_test_negative_powers_take_precedence_over_reversed_comparison()
@@ -30,125 +33,113 @@ func _run() -> void:
 
 func _test_would_flip_query_is_pure() -> void:
 	var board: Array = Rules.empty_board()
-	var attacker: Dictionary = Rules.make_card("Center", "中", [5, 5, 5, 5])
-	var weak_defender: Dictionary = Rules.make_card("Weak", "弱", [4, 4, 4, 4])
-	var equal_defender: Dictionary = Rules.make_card("Equal", "平", [5, 5, 5, 5])
+	var attacker: Dictionary = _runtime_card(&"pure_attacker", [5, 5, 5, 5])
 	board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
-	board[1] = {"card": weak_defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
-	board[5] = {"card": weak_defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
-	board[7] = {"card": equal_defender, "owner": Rules.OPPONENT_OWNER}
-	board[3] = {"card": weak_defender.duplicate(true), "owner": Rules.PLAYER_OWNER}
+	board[1] = {"card": _runtime_card(&"pure_top", [4, 4, 4, 4]), "owner": Rules.OPPONENT_OWNER}
+	board[5] = {"card": _runtime_card(&"pure_right", [4, 4, 4, 4]), "owner": Rules.OPPONENT_OWNER}
+	board[7] = {"card": _runtime_card(&"pure_bottom", [5, 5, 5, 5]), "owner": Rules.OPPONENT_OWNER}
+	board[3] = {"card": _runtime_card(&"pure_left", [4, 4, 4, 4]), "owner": Rules.PLAYER_OWNER}
 	var before: Array = board.duplicate(true)
 
-	var would_flip: Array[int] = Rules.get_would_flip_indices(board, 4)
+	var would_flip: Array[int] = BoardQueries.get_would_flip_indices(board, 4)
 	_check(would_flip == [1, 5], "Would-flip query returns valid targets in top-right-bottom-left order")
 	_check(board == before, "Would-flip query does not mutate board ownership")
-	_check(Rules.get_would_flip_indices(board, -1).is_empty(), "Would-flip query safely rejects an invalid source index")
+	_check(BoardQueries.get_would_flip_indices(board, -1).is_empty(), "Would-flip query safely rejects an invalid source index")
 
 
-func _test_four_direction_capture() -> void:
+func _test_four_direction_attack_targets() -> void:
 	var board: Array = Rules.empty_board()
-	var attacker: Dictionary = Rules.make_card("Center", "中", [5, 5, 5, 5])
-	var defender: Dictionary = Rules.make_card("Guard", "守", [4, 4, 4, 4])
+	board[4] = {"card": _runtime_card(&"four_attacker", [5, 5, 5, 5]), "owner": Rules.PLAYER_OWNER}
 	for neighbor_index: int in [1, 5, 7, 3]:
-		board[neighbor_index] = {"card": defender.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+		board[neighbor_index] = {
+			"card": _runtime_card(StringName("four_target_%d" % neighbor_index), [4, 4, 4, 4]),
+			"owner": Rules.OPPONENT_OWNER,
+		}
 
-	var captured: Array[int] = Rules.place_card(board, 4, attacker, Rules.PLAYER_OWNER)
-	_check(captured.size() == 4, "Center placement captures all four weaker neighbors")
-	for neighbor_index: int in [1, 5, 7, 3]:
-		_check(int((board[neighbor_index] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Captured owner updates at cell %d" % neighbor_index)
+	_check(
+		BoardQueries.get_would_flip_indices(board, 4) == [1, 5, 7, 3],
+		"Native center attack discovers all four weaker neighbors in direction order"
+	)
 
 
 func _test_contextual_attack_eligibility() -> void:
 	var board: Array = Rules.empty_board()
-	var attacker: Dictionary = Rules.make_card("Attacker", "攻", [5, 5, 5, 5])
-	var weak_enemy: Dictionary = Rules.make_card("Weak", "弱", [4, 4, 4, 4])
-	var equal_enemy: Dictionary = Rules.make_card("Equal", "平", [5, 5, 5, 5])
+	var attacker: Dictionary = _runtime_card(&"eligibility_attacker", [5, 5, 5, 5])
 	board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
-	board[1] = {"card": weak_enemy.duplicate(true), "owner": Rules.OPPONENT_OWNER}
-	board[5] = {"card": equal_enemy, "owner": Rules.OPPONENT_OWNER}
-	board[3] = {"card": weak_enemy.duplicate(true), "owner": Rules.PLAYER_OWNER}
-	board[8] = {"card": weak_enemy.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+	board[1] = {"card": _runtime_card(&"eligibility_top", [4, 4, 4, 4]), "owner": Rules.OPPONENT_OWNER}
+	board[5] = {"card": _runtime_card(&"eligibility_right", [5, 5, 5, 5]), "owner": Rules.OPPONENT_OWNER}
+	board[3] = {"card": _runtime_card(&"eligibility_left", [4, 4, 4, 4]), "owner": Rules.PLAYER_OWNER}
+	board[8] = {"card": _runtime_card(&"eligibility_diagonal", [4, 4, 4, 4]), "owner": Rules.OPPONENT_OWNER}
 	_check(
-		Rules.can_attack_target(board, 4, 1, {"reason": &"card_summoned_reaction"}),
+		BoardQueries.can_attack_target(board, 4, 1),
 		"Greater orthogonal enemy target is attackable with contextual reason"
 	)
-	_check(not Rules.can_attack_target(board, 4, 5), "Equal orthogonal power is not attackable")
-	_check(not Rules.can_attack_target(board, 4, 3), "Friendly orthogonal card is not attackable")
-	_check(not Rules.can_attack_target(board, 4, 8), "Diagonal enemy is not attackable")
-	_check(not Rules.can_attack_target(board, -1, 1), "Invalid source cell is not attackable")
-	_check(not Rules.can_attack_target(board, 4, 9), "Invalid target cell is not attackable")
+	_check(not BoardQueries.can_attack_target(board, 4, 5), "Equal orthogonal power is not attackable")
+	_check(not BoardQueries.can_attack_target(board, 4, 3), "Friendly orthogonal card is not attackable")
+	_check(not BoardQueries.can_attack_target(board, 4, 8), "Diagonal enemy is not attackable")
+	_check(not BoardQueries.can_attack_target(board, -1, 1), "Invalid source cell is not attackable")
+	_check(not BoardQueries.can_attack_target(board, 4, 9), "Invalid target cell is not attackable")
 	var missing_board: Array = Rules.empty_board()
 	missing_board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
-	_check(not Rules.can_attack_target(missing_board, 4, 1), "Missing target is not attackable")
-	_check(not Rules.can_attack_target(missing_board, 1, 4), "Missing source is not attackable")
+	_check(not BoardQueries.can_attack_target(missing_board, 4, 1), "Missing target is not attackable")
+	_check(not BoardQueries.can_attack_target(missing_board, 1, 4), "Missing source is not attackable")
 	var wrap_board: Array = Rules.empty_board()
 	wrap_board[2] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
-	wrap_board[3] = {"card": weak_enemy, "owner": Rules.OPPONENT_OWNER}
-	_check(not Rules.can_attack_target(wrap_board, 2, 3), "Horizontal row wrapping is not adjacency")
+	wrap_board[3] = {"card": _runtime_card(&"wrap_target", [4, 4, 4, 4]), "owner": Rules.OPPONENT_OWNER}
+	_check(not BoardQueries.can_attack_target(wrap_board, 2, 3), "Horizontal row wrapping is not adjacency")
 
 
 func _test_negative_powers_take_precedence_over_reversed_comparison() -> void:
 	var reversed_ability: Dictionary = {
 		"modifiers": [{"type": Catalog.MODIFIER_POWER_COMPARISON_REVERSED}],
 	}
-	var numbered: Dictionary = Rules.make_card("Numbered", "数", [5, 5, 5, 5])
-	var reversed_numbered: Dictionary = Rules.make_card(
-		"Reversed Numbered",
-		"逆",
-		[5, 5, 5, 5],
-		[reversed_ability]
-	)
-	var negative: Dictionary = Rules.make_card("Negative", "负", [-1, -1, -1, -1])
-	var reversed_negative: Dictionary = Rules.make_card(
-		"Reversed Negative",
-		"反",
-		[-1, -1, -1, -1],
-		[reversed_ability]
-	)
+	var numbered: Dictionary = _runtime_card(&"numbered", [5, 5, 5, 5])
+	var reversed_numbered: Dictionary = _runtime_card(&"reversed_numbered", [5, 5, 5, 5], [reversed_ability])
+	var negative: Dictionary = _runtime_card(&"negative", [-1, -1, -1, -1])
+	var reversed_negative: Dictionary = _runtime_card(&"reversed_negative", [-1, -1, -1, -1], [reversed_ability])
 	var board: Array = Rules.empty_board()
 	board[4] = {"card": reversed_numbered, "owner": Rules.PLAYER_OWNER}
 	board[5] = {"card": negative, "owner": Rules.OPPONENT_OWNER}
 	_check(
-		Rules.can_attack_target(board, 4, 5),
+		BoardQueries.can_attack_target(board, 4, 5),
 		"Reversal does not stop an ordinary numbered card from attacking four-sided -1"
 	)
 	(board[5] as Dictionary)["card"] = reversed_negative
 	_check(
-		Rules.can_attack_target(board, 4, 5),
+		BoardQueries.can_attack_target(board, 4, 5),
 		"Defender reversal does not protect a four-sided -1 card"
 	)
 	(board[4] as Dictionary)["card"] = reversed_negative
 	(board[5] as Dictionary)["card"] = numbered
 	_check(
-		not Rules.can_attack_target(board, 4, 5),
+		not BoardQueries.can_attack_target(board, 4, 5),
 		"Reversal does not let a four-sided -1 card attack an ordinary numbered card"
 	)
-	(board[5] as Dictionary)["card"] = reversed_negative.duplicate(true)
+	var second_negative: Dictionary = reversed_negative.duplicate(true)
+	second_negative["instance_id"] = &"second_reversed_negative"
+	(board[5] as Dictionary)["card"] = second_negative
 	_check(
-		not Rules.can_attack_target(board, 4, 5),
+		not BoardQueries.can_attack_target(board, 4, 5),
 		"Reversal does not let one four-sided -1 card attack another"
 	)
 
 
 func _test_equal_power_does_not_capture() -> void:
 	var board: Array = Rules.empty_board()
-	var attacker: Dictionary = Rules.make_card("Equal", "平", [1, 5, 1, 1])
-	var defender: Dictionary = Rules.make_card("Equal Guard", "衡", [1, 1, 1, 5])
+	var attacker: Dictionary = _runtime_card(&"equal_attacker", [1, 5, 1, 1])
+	var defender: Dictionary = _runtime_card(&"equal_defender", [1, 1, 1, 5])
+	board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
 	board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
-	var captured: Array[int] = Rules.place_card(board, 4, attacker, Rules.PLAYER_OWNER)
-	_check(captured.is_empty(), "Equal touching powers do not capture")
-	_check(int((board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Equal-power defender keeps ownership")
+	_check(not BoardQueries.can_attack_target(board, 4, 5), "Equal touching powers do not produce a legal native attack")
+	_check(int((board[5] as Dictionary)["owner"]) == Rules.OPPONENT_OWNER, "Pure native attack query leaves defender ownership unchanged")
 
 
 func _test_illegal_placement_is_rejected() -> void:
 	var board: Array = Rules.empty_board()
-	var card: Dictionary = Rules.make_card("First", "一", [1, 2, 3, 4])
-	Rules.place_card(board, 0, card, Rules.PLAYER_OWNER)
-	var before: Array = board.duplicate(true)
-	var captured: Array[int] = Rules.place_card(board, 0, card, Rules.OPPONENT_OWNER)
-	_check(captured.is_empty(), "Occupied-cell placement reports no captures")
-	_check(board == before, "Occupied-cell placement leaves board unchanged")
+	_check(Rules.can_place(board, 0), "Empty cell is a legal placement location")
+	board[0] = {"card": _runtime_card(&"occupied", [1, 2, 3, 4]), "owner": Rules.PLAYER_OWNER}
+	_check(not Rules.can_place(board, 0), "Occupied cell is not a legal placement location")
+	_check(not Rules.can_place(board, -1) and not Rules.can_place(board, 9), "Out-of-range cells are not legal placement locations")
 
 
 func _test_score_and_full_board() -> void:
@@ -159,22 +150,43 @@ func _test_score_and_full_board() -> void:
 			"card": card.duplicate(true),
 			"owner": Rules.PLAYER_OWNER if cell_index < 5 else Rules.OPPONENT_OWNER,
 		}
-	_check(Rules.is_board_full(board), "Nine occupied cells make a full board")
 	_check(Rules.count_owned(board, Rules.PLAYER_OWNER) == 5, "Player ownership score counts five")
 	_check(Rules.count_owned(board, Rules.OPPONENT_OWNER) == 4, "Opponent ownership score counts four")
+	_check(Rules.first_empty_cell(board) == -1, "A full board has no empty cell")
 
 
 func _test_ai_is_deterministic_and_legal() -> void:
 	var board: Array = Rules.empty_board()
 	var hand: Array = [
-		Rules.make_card("Crane", "鹤", [6, 2, 5, 7]),
-		Rules.make_card("Tiger", "虎", [4, 8, 3, 5]),
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"greedy_enemy_a"),
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"greedy_enemy_b"),
 	]
-	var first_choice: Vector2i = Rules.choose_ai_move(board, hand)
-	var second_choice: Vector2i = Rules.choose_ai_move(board, hand)
-	_check(first_choice == second_choice, "AI returns the same move for the same state")
-	_check(first_choice.x >= 0 and first_choice.x < hand.size(), "AI chooses a card in hand")
-	_check(Rules.can_place(board, first_choice.y), "AI chooses an empty board cell")
+	var player_hand: Array = [
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"greedy_player_card"),
+	]
+	var state := State.new(board, player_hand, hand, Rules.OPPONENT_OWNER)
+	var first_choice = Simulator.choose_greedy_action(state)
+	var second_choice = Simulator.choose_greedy_action(state)
+	_check(first_choice.is_same_as(second_choice), "Native greedy query returns the same move for the same state")
+	_check(Simulator.is_action_legal(state, first_choice), "Native greedy query returns a legal production action")
+
+
+func _runtime_card(
+	instance_id: StringName,
+	powers: Array[int],
+	active_abilities: Array = [],
+	original_owner: int = Rules.PLAYER_OWNER
+) -> Dictionary:
+	var card: Dictionary = Rules.make_card(
+		String(instance_id),
+		String(instance_id),
+		powers,
+		active_abilities,
+		original_owner,
+		instance_id
+	)
+	card["instance_id"] = instance_id
+	return card
 
 
 func _check(condition: bool, message: String) -> void:

@@ -2,7 +2,7 @@ extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const ProfileStore = preload("res://scripts/deck_profile_store.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
@@ -163,10 +163,6 @@ func _test_resummon_request_follows_exact_instance() -> void:
 	board[4] = _slot(Catalog.create_instance(&"MianLiCangZhen3", Rules.PLAYER_OWNER, &"moving_source"), Rules.PLAYER_OWNER)
 	board[0] = _slot(Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"moving_target"), Rules.PLAYER_OWNER)
 	var state := State.new(board)
-	var observed: Dictionary = {"request": {}}
-	var summon_resolver: Callable = func(request: Dictionary) -> Dictionary:
-		observed["request"] = request.duplicate(true)
-		return _empty_resolution()
 	var result: Dictionary = Executor.execute_actions(
 		state,
 		4,
@@ -176,16 +172,13 @@ func _test_resummon_request_follows_exact_instance() -> void:
 			"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
 			"card": Catalog.CARD_REF_TRIGGER_CARD,
 		}],
-		{"trigger_cell": 1, "trigger_instance_id": &"moving_target"},
-		Callable(),
-		Callable(),
-		summon_resolver
+		{"trigger_cell": 1, "trigger_instance_id": &"moving_target"}
 	)
 	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED, "Moved exact instance still produces a resummon")
-	_check(state.board[0] == null, "Moved old instance leaves its current cell")
-	var observed_request: Dictionary = observed.get("request", {})
-	_check(int(observed_request.get("target_cell", -1)) == 0, "Resummon request targets the exact instance's current cell")
-	_check(StringName(observed_request.get("old_instance_id", &"")) == &"moving_target", "Resummon request preserves old identity for presentation")
+	_check(_instance_at(state, 0) != &"moving_target", "Moved old instance leaves its current cell")
+	var departure: Dictionary = _first_event(result.get("events", []), &"card_departed_for_resummon")
+	_check(int(departure.get("target_cell", -1)) == 0, "Resummon follows the exact instance's current cell")
+	_check(StringName(departure.get("old_instance_id", &"")) == &"moving_target", "Resummon preserves old identity for presentation")
 
 
 func _test_resummon_skips_a_missing_instance() -> void:
@@ -204,7 +197,10 @@ func _test_resummon_skips_a_missing_instance() -> void:
 		{"trigger_cell": 1, "trigger_instance_id": &"missing_target"}
 	)
 	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT, "Missing trigger instance returns no effect")
-	_check((result.get("summon_requests", []) as Array).is_empty(), "Missing trigger instance creates no summon request")
+	_check(
+		not _event_types(result.get("events", [])).has(&"card_summoned"),
+		"Missing trigger instance creates no summon"
+	)
 
 
 func _test_abilities_are_lost_on_flip() -> void:
@@ -241,14 +237,11 @@ func _event_types(events: Array) -> Array[StringName]:
 	return types
 
 
-func _empty_resolution() -> Dictionary:
-	return {
-		"events": [],
-		"captures": [],
-		"exiles": [],
-		"extra_turn_requests": [],
-		"flip_prevention_requests": [],
-	}
+func _first_event(events: Array, event_type: StringName) -> Dictionary:
+	for value: Variant in events:
+		if value is Dictionary and StringName((value as Dictionary).get("type", &"")) == event_type:
+			return value as Dictionary
+	return {}
 
 
 func _check(condition: bool, message: String) -> void:

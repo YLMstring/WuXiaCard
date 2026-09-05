@@ -1,5 +1,7 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -122,10 +124,12 @@ func _test_remembered_reveal_and_weakness() -> void:
 	}
 	var target: Dictionary = Rules.make_card("Target", "靶", [9, 9, 9, 9], [weakness], Rules.OPPONENT_OWNER)
 	var attacker: Dictionary = Rules.make_card("Attacker", "攻", [2, 2, 2, 2], [], Rules.PLAYER_OWNER)
+	target["instance_id"] = &"weakness_target"
+	attacker["instance_id"] = &"weakness_attacker"
 	var board: Array = Rules.empty_board()
 	board[4] = {"card": attacker, "owner": Rules.PLAYER_OWNER}
 	board[5] = {"card": target, "owner": Rules.OPPONENT_OWNER}
-	_check(Rules.can_attack_target(board, 4, 5), "Weakness makes every defending edge count as one")
+	_check(BoardQueries.can_attack_target(board, 4, 5), "Weakness makes every defending edge count as one")
 	_check(int((target["powers"] as Array)[3]) == 9, "Weakness does not alter stored powers")
 	_check(Abilities.has_modifier(target, Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE), "Weakness remains queryable for presentation")
 

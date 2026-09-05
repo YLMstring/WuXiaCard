@@ -719,6 +719,13 @@ public:
 		const StringName &event_id,
 		const Dictionary &context
 	) const;
+	Dictionary resolve_actions_transition(
+		int64_t source_cell,
+		const StringName &source_instance_id,
+		int64_t expected_owner,
+		const Array &actions,
+		const Dictionary &context
+	);
 	Dictionary resolve_attack_transition(const Dictionary &request) const;
 	Dictionary resolve_non_attack_flip_transition(
 		const StringName &target_instance_id,
@@ -727,6 +734,26 @@ public:
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
 	int64_t count_legal_actions_for_owner(int64_t owner_id) const;
+	bool is_action_legal_for_owner(const Dictionary &action, int64_t owner_id) const;
+	bool is_terminal_state() const;
+	int64_t score_difference_for_owner(int64_t owner_id) const;
+	Dictionary choose_greedy_action_for_owner(int64_t owner_id) const;
+	Array get_attack_targets_for_source(
+		int64_t source_cell,
+		const Dictionary &attack_policy = Dictionary()
+	) const;
+	bool can_attack_target_cells(
+		int64_t source_cell,
+		int64_t target_cell,
+		const Dictionary &attack_policy = Dictionary(),
+		bool skip_power_comparison = false
+	) const;
+	bool is_target_in_attack_range_cells(
+		int64_t source_cell,
+		int64_t target_cell,
+		const Dictionary &attack_policy = Dictionary(),
+		bool skip_power_comparison = false
+	) const;
 	Array inspect_ordered_search_actions_for_owner(
 		int64_t owner_id,
 		const Dictionary &preferred_action = Dictionary()

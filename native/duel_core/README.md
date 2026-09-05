@@ -48,7 +48,9 @@ The kernel:
   latches;
 - compiles immutable catalog declarations and catalog-fresh prototypes once per
   loaded root;
-- enumerates and validates hand plays and catalog-ordered activations;
+- enumerates and validates hand plays and catalog-ordered activations, and
+  exposes the same legality, terminal, score, greedy, and board-attack queries
+  used by the GDScript facades and focused fixtures;
 - resolves the full summon, attack, flip, exile, discard, draw, transform,
   return, movement, swap, suppression, and turn-boundary lifecycles;
 - discovers full-board trigger groups in deterministic row-major order and
@@ -57,8 +59,8 @@ The kernel:
   generated attacks/summons without named-card branches;
 - returns complete compact state plus ordered pure-data events, captures, and
   exiles for controller presentation;
-- exposes direct event/attack/non-attack-flip adapters used by focused semantic
-  fixtures, all through the same production primitives;
+- exposes direct event/action/attack/non-attack-flip adapters used by focused
+  semantic fixtures, all through the same production primitives;
 - performs complete-round iterative deepening, structural ordering, alpha-beta
   pruning, hard deadline/node checks, minimum-depth guard diagnostics,
   cancellation, completed-depth snapshots, and same-owner principal actions;

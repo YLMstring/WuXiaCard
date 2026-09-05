@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-04
+Updated: 2026-09-05
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -37,6 +37,8 @@ release-ready Android package.
 - Logical viewport: `540×960`; portrait; `canvas_items` stretch
 - Production rules facade: `scripts/duel_simulator.gd`; strict native boundary:
   `scripts/duel_native_rules.gd`; C++ kernel: `native/duel_core/`
+- Legacy GDScript trigger, selector, targeting, and action-executor modules have
+  been retired; do not restore them as an Oracle or fallback path.
 - Card database: `scripts/card_catalog.gd`
 - Persistent deck profile: `scripts/deck_profile_store.gd`
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`

@@ -1,5 +1,7 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -72,13 +74,13 @@ func _test_reversed_comparison_once() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(ordinary, Rules.PLAYER_OWNER)
 	board[1] = _slot(reversed, Rules.OPPONENT_OWNER)
-	_check(Rules.can_attack_target(board, 4, 1), "A lower edge wins against a reversed defender")
-	_check(not Rules.can_attack_target(board, 1, 4), "A higher reversed attacker loses to a lower edge")
+	_check(BoardQueries.can_attack_target(board, 4, 1), "A lower edge wins against a reversed defender")
+	_check(not BoardQueries.can_attack_target(board, 1, 4), "A higher reversed attacker loses to a lower edge")
 	(board[4] as Dictionary)["card"] = Catalog.create_instance(
 		&"TaiJiLuanHuan4", Rules.PLAYER_OWNER, &"second_reversed"
 	)
 	_check(
-		not Rules.can_attack_target(board, 4, 1),
+		not BoardQueries.can_attack_target(board, 4, 1),
 		"Two reversed participants still reverse once and ties fail"
 	)
 
@@ -89,13 +91,13 @@ func _test_attack_target_policies() -> void:
 	board[1] = _slot(_plain(&"policy_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
 	board[3] = _slot(_plain(&"policy_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	_check(
-		Rules.can_attack_target(board, 4, 1, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY})
-		and not Rules.can_attack_target(board, 4, 3, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY}),
+		BoardQueries.can_attack_target(board, 4, 1, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY})
+		and not BoardQueries.can_attack_target(board, 4, 3, {"attack_target_policy": Catalog.ATTACK_TARGET_ALLIES_ONLY}),
 		"Allies-only attacks exclude enemies"
 	)
 	_check(
-		Rules.can_attack_target(board, 4, 1, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL})
-		and Rules.can_attack_target(board, 4, 3, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL}),
+		BoardQueries.can_attack_target(board, 4, 1, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL})
+		and BoardQueries.can_attack_target(board, 4, 3, {"attack_target_policy": Catalog.ATTACK_TARGET_ALL}),
 		"All-target attacks include both owners"
 	)
 

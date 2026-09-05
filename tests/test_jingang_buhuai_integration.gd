@@ -2,7 +2,7 @@ extends SceneTree
 
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")

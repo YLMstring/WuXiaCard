@@ -18,6 +18,187 @@ int64_t DuelNativeCompactKernel::count_legal_actions_for_owner(int64_t owner_id_
 	return count_legal_native_actions(state, static_cast<int32_t>(owner_id_value));
 }
 
+
+bool DuelNativeCompactKernel::is_action_legal_for_owner(
+	const Dictionary &action_value,
+	int64_t owner_id_value
+) const {
+	if (!loaded || action_value.is_empty()) return false;
+	const StringName action_type = StringName(
+		action_value.get("action_type", StringName())
+	);
+	const StringName source_zone = StringName(
+		action_value.get("source_zone", StringName())
+	);
+	const StringName target_kind = StringName(
+		action_value.get("target_kind", StringName())
+	);
+	NativeAction requested;
+	if (action_type == StringName("play")) {
+		if (source_zone != StringName("hand") || target_kind != StringName("board_cell")) {
+			return false;
+		}
+		requested.type = NativeActionType::PLAY;
+	} else if (action_type == StringName("activate")) {
+		if (
+			source_zone != StringName("board")
+			|| (target_kind != StringName("board_cell") && target_kind != StringName("hand_slot"))
+		) return false;
+		requested.type = NativeActionType::ACTIVATE;
+	} else {
+		return false;
+	}
+	requested.source_index = static_cast<int32_t>(
+		static_cast<int64_t>(action_value.get("source_index", -1))
+	);
+	requested.source_instance_id = StringName(
+		action_value.get("source_instance_id", StringName())
+	);
+	requested.target_is_hand_slot = target_kind == StringName("hand_slot");
+	requested.target_index = static_cast<int32_t>(
+		static_cast<int64_t>(action_value.get("target_index", -1))
+	);
+	requested.activation_index = static_cast<int32_t>(
+		static_cast<int64_t>(action_value.get("activation_index", 0))
+	);
+	for (const NativeAction &legal : get_legal_native_actions(
+		state,
+		static_cast<int32_t>(owner_id_value)
+	)) {
+		const bool instance_matches = requested.source_instance_id.is_empty()
+			|| requested.source_instance_id == legal.source_instance_id;
+		if (
+			instance_matches
+			&& requested.type == legal.type
+			&& requested.source_index == legal.source_index
+			&& requested.target_is_hand_slot == legal.target_is_hand_slot
+			&& requested.target_index == legal.target_index
+			&& requested.activation_index == legal.activation_index
+		) return true;
+	}
+	return false;
+}
+
+
+bool DuelNativeCompactKernel::is_terminal_state() const {
+	return !loaded || is_terminal(state);
+}
+
+
+int64_t DuelNativeCompactKernel::score_difference_for_owner(int64_t owner_id_value) const {
+	if (!loaded) return 0;
+	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
+	if (owner_id != 1 && owner_id != 2) return 0;
+	const int32_t opponent_owner = owner_id == 1 ? 2 : 1;
+	return count_owned(state, owner_id) - count_owned(state, opponent_owner);
+}
+
+
+Dictionary DuelNativeCompactKernel::choose_greedy_action_for_owner(int64_t owner_id_value) const {
+	Dictionary result;
+	if (!loaded) return result;
+	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
+	if (owner_id != state.scalars[0]) return result;
+	const std::vector<NativeAction> actions = get_legal_native_actions(state, owner_id);
+	bool has_best = false;
+	NativeAction best;
+	int32_t best_score = std::numeric_limits<int32_t>::min();
+
+	auto boundary_power = [&](const NativeAction &action) -> int32_t {
+		if (action.type != NativeActionType::PLAY) return 0;
+		const int32_t hand_zone = owner_id - 1;
+		if (
+			hand_zone < 0
+			|| hand_zone >= static_cast<int32_t>(state.zones.size())
+			|| action.source_index < 0
+			|| action.source_index >= static_cast<int32_t>(state.zones[hand_zone].size())
+		) return 0;
+		const int32_t card_index = state.zones[hand_zone][action.source_index];
+		if (card_index < 0) return 0;
+		int32_t total = 0;
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			if (neighbor_index(action.target_index, direction) < 0) {
+				total += state.card_powers[card_index * 4 + direction];
+			}
+		}
+		return total;
+	};
+
+	auto preferred_tie = [&](const NativeAction &candidate, const NativeAction &incumbent) -> bool {
+		if (candidate.type != incumbent.type) return candidate.type == NativeActionType::PLAY;
+		if (candidate.type == NativeActionType::PLAY) {
+			const int32_t candidate_power = boundary_power(candidate);
+			const int32_t incumbent_power = boundary_power(incumbent);
+			if (candidate_power != incumbent_power) return candidate_power > incumbent_power;
+		}
+		if (candidate.source_index != incumbent.source_index) {
+			return candidate.source_index < incumbent.source_index;
+		}
+		return candidate.target_index < incumbent.target_index;
+	};
+
+	for (const NativeAction &action : actions) {
+		NativeState next;
+		Resolution resolution;
+		bool supported = false;
+		String reason;
+		if (!transition_action(state, action, next, resolution, supported, reason, false)) continue;
+		const int32_t opponent_owner = owner_id == 1 ? 2 : 1;
+		const int32_t score = count_owned(next, owner_id) - count_owned(next, opponent_owner);
+		if (!has_best || score > best_score || (score == best_score && preferred_tie(action, best))) {
+			has_best = true;
+			best = action;
+			best_score = score;
+		}
+	}
+	return has_best ? materialize_action(best) : result;
+}
+
+Array DuelNativeCompactKernel::get_attack_targets_for_source(
+	int64_t source_cell_value,
+	const Dictionary &attack_policy
+) const {
+	Array result;
+	if (!loaded) return result;
+	const std::vector<int32_t> targets = get_attack_targets(
+		state,
+		static_cast<int32_t>(source_cell_value),
+		attack_policy_from_dictionary(attack_policy)
+	);
+	for (const int32_t target : targets) result.append(target);
+	return result;
+}
+
+bool DuelNativeCompactKernel::can_attack_target_cells(
+	int64_t source_cell_value,
+	int64_t target_cell_value,
+	const Dictionary &attack_policy,
+	bool skip_power_comparison
+) const {
+	return loaded && can_attack_target(
+		state,
+		static_cast<int32_t>(source_cell_value),
+		static_cast<int32_t>(target_cell_value),
+		attack_policy_from_dictionary(attack_policy),
+		skip_power_comparison
+	);
+}
+
+bool DuelNativeCompactKernel::is_target_in_attack_range_cells(
+	int64_t source_cell_value,
+	int64_t target_cell_value,
+	const Dictionary &attack_policy,
+	bool skip_power_comparison
+) const {
+	return loaded && is_target_in_attack_range(
+		state,
+		static_cast<int32_t>(source_cell_value),
+		static_cast<int32_t>(target_cell_value),
+		attack_policy_from_dictionary(attack_policy),
+		skip_power_comparison
+	);
+}
+
 Array DuelNativeCompactKernel::inspect_ordered_search_actions_for_owner(
 	int64_t owner_id_value,
 	const Dictionary &preferred_action

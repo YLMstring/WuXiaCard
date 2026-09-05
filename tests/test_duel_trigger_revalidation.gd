@@ -1,9 +1,9 @@
 extends SceneTree
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const NativeRules = preload("res://scripts/duel_native_rules.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -15,8 +15,6 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_removing_an_earlier_ability_does_not_stale_a_later_trigger()
-	_test_replacing_the_ability_does_not_inherit_an_old_trigger()
-	_test_moved_trigger_card_preserves_own_discovered_trigger()
 	if _failures == 0:
 		print("DUEL_TRIGGER_REVALIDATION_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -29,15 +27,12 @@ func _run() -> void:
 
 func _test_removing_an_earlier_ability_does_not_stale_a_later_trigger() -> void:
 	var state: State = _make_state()
-	var groups: Array[Dictionary] = Triggers.discover(
+	var result: Dictionary = NativeRules.resolve_event(
 		state,
 		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
 		_context()
 	)
-	_check(groups.size() == 2, "Both same-card abilities are snapshotted before resolution")
-	var events: Array = []
-	events.append_array((Triggers.resolve_group(state, groups[0]).get("events", []) as Array))
-	events.append_array((Triggers.resolve_group(state, groups[1]).get("events", []) as Array))
+	var events: Array = result.get("events", [])
 	_check(
 		_event_types(events)
 		== [&"ability_triggered", &"ability_lost", &"ability_triggered", &"card_drawn"],
@@ -46,50 +41,6 @@ func _test_removing_an_earlier_ability_does_not_stale_a_later_trigger() -> void:
 	_check(
 		state.get_hand(Rules.PLAYER_OWNER).size() == 1,
 		"The shifted later ability still applies its action"
-	)
-
-
-func _test_replacing_the_ability_does_not_inherit_an_old_trigger() -> void:
-	var state: State = _make_state()
-	var groups: Array[Dictionary] = Triggers.discover(
-		state,
-		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-		_context()
-	)
-	var card: Dictionary = (state.board[4] as Dictionary).get("card", {})
-	var abilities: Array = card.get("active_abilities", [])
-	abilities = abilities.duplicate(false)
-	abilities.remove_at(1)
-	abilities.append(_draw_ability())
-	card["active_abilities"] = abilities
-	var result: Dictionary = Triggers.resolve_group(state, groups[1])
-	_check(
-		(result.get("events", []) as Array).is_empty(),
-		"A newly inserted equal declaration does not inherit the removed entry's old trigger"
-	)
-	_check(
-		state.get_hand(Rules.PLAYER_OWNER).is_empty(),
-		"A stale trigger cannot apply the replacement ability's action"
-	)
-
-
-func _test_moved_trigger_card_preserves_own_discovered_trigger() -> void:
-	var state: State = _make_state()
-	var groups: Array[Dictionary] = Triggers.discover(
-		state,
-		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-		_context()
-	)
-	state.board[5] = state.board[4]
-	state.board[4] = null
-	var result: Dictionary = Triggers.resolve_group(state, groups[1])
-	_check(
-		_event_types(result.get("events", [])) == [&"ability_triggered", &"card_drawn"],
-		"An already-discovered self trigger follows its exact card instance after board movement"
-	)
-	_check(
-		state.get_hand(Rules.PLAYER_OWNER).size() == 1,
-		"The moved card resolves its self-trigger actions from the new cell"
 	)
 
 

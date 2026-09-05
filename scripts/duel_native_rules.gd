@@ -51,7 +51,14 @@ static func apply_action(state: StateData, action: ActionData) -> Dictionary:
 	if not bool(native_result.get("supported", false)):
 		return _integration_failure(state, "Native rules do not support this legal action: %s" % reason)
 	if not bool(native_result.get("valid", false)):
-		return _integration_failure(state, "Native rules rejected a GDScript-legal action: %s" % reason)
+		return {
+			"valid": false,
+			"state": state,
+			"captures": [],
+			"exiles": [],
+			"events": [],
+			"reason": reason,
+		}
 	var payload_value: Variant = native_result.get("payload", null)
 	if not payload_value is Dictionary:
 		return _integration_failure(state, "Native transition returned no compact payload")
@@ -73,6 +80,110 @@ static func apply_action(state: StateData, action: ActionData) -> Dictionary:
 	}
 
 
+static func get_legal_actions_for_owner(
+	state: StateData,
+	owner_id: int
+) -> Array[ActionData]:
+	var actions: Array[ActionData] = []
+	var kernel: Object = _load_query_kernel(state, "legal-action query")
+	if kernel == null:
+		return actions
+	for value: Variant in kernel.call("get_legal_actions_for_owner", owner_id):
+		if value is Dictionary:
+			actions.append(_action_from_native(value as Dictionary))
+	return actions
+
+
+static func count_legal_actions_for_owner(state: StateData, owner_id: int) -> int:
+	var kernel: Object = _load_query_kernel(state, "legal-action count")
+	return 0 if kernel == null else int(kernel.call("count_legal_actions_for_owner", owner_id))
+
+
+static func is_action_legal_for_owner(
+	state: StateData,
+	action: ActionData,
+	owner_id: int
+) -> bool:
+	if action == null:
+		return false
+	var kernel: Object = _load_query_kernel(state, "action-legality query")
+	return false if kernel == null else bool(kernel.call(
+		"is_action_legal_for_owner",
+		_action_to_native(action),
+		owner_id
+	))
+
+
+static func is_terminal(state: StateData) -> bool:
+	if state == null:
+		return true
+	var kernel: Object = _load_query_kernel(state, "terminal-state query")
+	return true if kernel == null else bool(kernel.call("is_terminal_state"))
+
+
+static func score_difference(state: StateData, owner_id: int) -> int:
+	var kernel: Object = _load_query_kernel(state, "score query")
+	return 0 if kernel == null else int(kernel.call("score_difference_for_owner", owner_id))
+
+
+static func choose_greedy_action(state: StateData, owner_id: int) -> ActionData:
+	var kernel: Object = _load_query_kernel(state, "greedy-action query")
+	if kernel == null:
+		return ActionData.new()
+	var value: Variant = kernel.call("choose_greedy_action_for_owner", owner_id)
+	return _action_from_native(value as Dictionary) if value is Dictionary else ActionData.new()
+
+
+static func get_attack_targets(
+	state: StateData,
+	source_cell: int,
+	attack_policy: Dictionary = {}
+) -> Array[int]:
+	var kernel: Object = _load_query_kernel(state, "get attack targets")
+	var result: Array[int] = []
+	if kernel == null:
+		return result
+	for value: Variant in kernel.call(
+		"get_attack_targets_for_source", source_cell, attack_policy
+	) as Array:
+		result.append(int(value))
+	return result
+
+
+static func can_attack_target(
+	state: StateData,
+	source_cell: int,
+	target_cell: int,
+	attack_policy: Dictionary = {},
+	skip_power_comparison: bool = false
+) -> bool:
+	var kernel: Object = _load_query_kernel(state, "check attack target")
+	return kernel != null and bool(kernel.call(
+		"can_attack_target_cells",
+		source_cell,
+		target_cell,
+		attack_policy,
+		skip_power_comparison
+	))
+
+
+static func is_target_in_attack_range(
+	state: StateData,
+	source_cell: int,
+	target_cell: int,
+	attack_policy: Dictionary = {},
+	skip_power_comparison: bool = false
+) -> bool:
+	var kernel: Object = _load_query_kernel(state, "check attack range")
+	return kernel != null and bool(kernel.call(
+		"is_target_in_attack_range_cells",
+		source_cell,
+		target_cell,
+		attack_policy,
+		skip_power_comparison
+	))
+
+
 static func resolve_event(
 	state: StateData,
 	event_id: StringName,
@@ -82,6 +193,32 @@ static func resolve_event(
 		state,
 		&"resolve_event_transition",
 		[event_id, context]
+	)
+
+
+static func execute_actions(
+	state: StateData,
+	source_cell: int,
+	source_instance_id: StringName,
+	expected_owner: int,
+	actions: Array,
+	context: Dictionary
+) -> Dictionary:
+	var action_context: Dictionary = context.duplicate(true)
+	# The explicit source arguments define this direct action batch. They must not
+	# leak through nested events and replace the source of a newly triggered ability.
+	for key: String in [
+		"ability_source_cell",
+		"ability_source_instance_id",
+		"ability_source_owner_id",
+		"ability_source_zone",
+		"ability_source_logical_index",
+	]:
+		action_context.erase(key)
+	return _resolve_direct_transition(
+		state,
+		&"resolve_actions_transition",
+		[source_cell, source_instance_id, expected_owner, actions, action_context]
 	)
 
 
@@ -145,13 +282,17 @@ static func _resolve_direct_transition(
 		if not native_result.get(field, null) is Array:
 			return _integration_failure(state, "Native direct transition field '%s' is not an Array" % field)
 	_overwrite_state(state, next_state)
-	return {
+	var result: Dictionary = {
 		"valid": true,
 		"state": state,
 		"captures": native_result.get("captures", []),
 		"exiles": native_result.get("exiles", []),
 		"events": native_result.get("events", []),
 	}
+	for field: String in ["source_cell", "result"]:
+		if native_result.has(field):
+			result[field] = native_result[field]
+	return result
 
 
 static func _overwrite_state(target: StateData, source: StateData) -> void:
@@ -351,6 +492,42 @@ static func _action_from_native(value: Dictionary) -> ActionData:
 		int(value.get("target_index", -1)),
 		int(value.get("activation_index", 0))
 	)
+
+
+static func _action_to_native(action: ActionData) -> Dictionary:
+	return {
+		"action_type": action.action_type,
+		"source_zone": action.source_zone,
+		"source_index": action.source_index,
+		"source_instance_id": action.source_instance_id,
+		"target_kind": action.target_kind,
+		"target_index": action.target_index,
+		"activation_index": action.activation_index,
+	}
+
+
+static func _load_query_kernel(state: StateData, operation_name: String) -> Object:
+	if state == null:
+		push_error("NATIVE_DUEL_QUERY_INTEGRATION_ERROR: %s received a null state" % operation_name)
+		return null
+	if not ClassDB.class_exists(KERNEL_CLASS):
+		push_error("NATIVE_DUEL_QUERY_INTEGRATION_ERROR: DuelNativeCompactKernel is unavailable")
+		return null
+	var compact := CompactState.new()
+	if not compact.capture_state(state) or not compact.is_structurally_valid():
+		push_error("NATIVE_DUEL_QUERY_INTEGRATION_ERROR: Duel state could not cross the compact native boundary")
+		return null
+	var kernel: Object = ClassDB.instantiate(KERNEL_CLASS)
+	if kernel == null:
+		push_error("NATIVE_DUEL_QUERY_INTEGRATION_ERROR: DuelNativeCompactKernel could not be instantiated")
+		return null
+	if not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+		push_error(
+			"NATIVE_DUEL_QUERY_INTEGRATION_ERROR: Native compact payload load failed: %s"
+			% String(kernel.call("get_last_error"))
+		)
+		return null
+	return kernel
 
 
 static func _search_integration_failure(reason: String) -> Dictionary:

@@ -25,10 +25,6 @@ static func card_effects_enabled(
 	return enabled_effect_gates is Array and gate in (enabled_effect_gates as Array)
 
 
-static func get_activate_ability(card: Dictionary) -> Dictionary:
-	return get_activate_ability_at(card, 0)
-
-
 static func get_activate_abilities(
 	card: Dictionary,
 	enabled_effect_gates: Variant = null
@@ -143,10 +139,6 @@ static func get_ki_bead_presentation(card: Dictionary) -> Dictionary:
 		),
 		"value": ki,
 	}
-
-
-static func has_temporary_flip_protection(card: Dictionary) -> bool:
-	return has_flip_prevention(card)
 
 
 static func has_flip_prevention(card: Dictionary) -> bool:
@@ -296,26 +288,6 @@ static func _is_own_summon_only_trigger(trigger: Dictionary) -> bool:
 	)
 
 
-static func _has_trigger_semantics(
-	triggers: Array,
-	event_type: StringName,
-	condition_type: StringName,
-	action_type: StringName
-) -> bool:
-	for trigger_value: Variant in triggers:
-		if not trigger_value is Dictionary:
-			continue
-		var trigger: Dictionary = trigger_value
-		if StringName(trigger.get("event", &"")) != event_type:
-			continue
-		if (
-			_list_has_type(trigger.get("conditions", []), condition_type)
-			and _list_has_type(trigger.get("actions", []), action_type)
-		):
-			return true
-	return false
-
-
 static func _list_has_type(values: Array, expected_type: StringName) -> bool:
 	for value: Variant in values:
 		if (
@@ -324,172 +296,6 @@ static func _list_has_type(values: Array, expected_type: StringName) -> bool:
 		):
 			return true
 	return false
-
-
-static func replace_activate_ability(card: Dictionary, new_ability: Dictionary) -> void:
-	var retained_abilities: Array = []
-	var active_abilities: Array = card.get("active_abilities", [])
-	for ability_value: Variant in active_abilities:
-		if not ability_value is Dictionary:
-			continue
-		var ability: Dictionary = ability_value
-		if not is_activate_ability(ability):
-			retained_abilities.append(ability)
-	if not new_ability.is_empty():
-		retained_abilities.append(new_ability.duplicate(true))
-	card["active_abilities"] = retained_abilities
-
-
-static func remove_non_retained_abilities(card: Dictionary) -> int:
-	var retained_abilities: Array = []
-	var removed_count: int = 0
-	for ability_value: Variant in card.get("active_abilities", []):
-		if not ability_value is Dictionary:
-			continue
-		var ability: Dictionary = ability_value
-		if bool(ability.get("retained_on_flip", false)):
-			retained_abilities.append(ability)
-		else:
-			removed_count += 1
-	card["active_abilities"] = retained_abilities
-	card.erase("temporary_suppression_batches")
-	return removed_count
-
-
-static func get_deferred_self_after_flip_abilities(card: Dictionary) -> Array[Dictionary]:
-	var deferred: Array[Dictionary] = []
-	for ability_value: Variant in card.get("active_abilities", []):
-		if not ability_value is Dictionary:
-			continue
-		var ability: Dictionary = ability_value
-		if (
-			not bool(ability.get("retained_on_flip", false))
-			and is_isolated_self_after_flip_ability(ability)
-		):
-			deferred.append(ability)
-	return deferred
-
-
-static func remove_non_retained_abilities_before_after_flip(card: Dictionary) -> int:
-	var retained_abilities: Array = []
-	var removed_count: int = 0
-	for ability_value: Variant in card.get("active_abilities", []):
-		if not ability_value is Dictionary:
-			continue
-		var ability: Dictionary = ability_value
-		if (
-			bool(ability.get("retained_on_flip", false))
-			or is_isolated_self_after_flip_ability(ability)
-		):
-			retained_abilities.append(ability)
-		else:
-			removed_count += 1
-	card["active_abilities"] = retained_abilities
-	card.erase("temporary_suppression_batches")
-	return removed_count
-
-
-static func remove_deferred_self_after_flip_abilities(
-	card: Dictionary,
-	deferred_snapshots: Array[Dictionary]
-) -> int:
-	var active_abilities: Array = card.get("active_abilities", [])
-	var removed_count: int = 0
-	for snapshot: Dictionary in deferred_snapshots:
-		for ability_index: int in range(active_abilities.size()):
-			var ability_value: Variant = active_abilities[ability_index]
-			if ability_value is Dictionary and is_same(ability_value, snapshot):
-				active_abilities.remove_at(ability_index)
-				removed_count += 1
-				break
-	card["active_abilities"] = active_abilities
-	return removed_count
-
-
-static func is_isolated_self_after_flip_ability(ability: Dictionary) -> bool:
-	if ability.has("activation") or ability.has("modifiers"):
-		return false
-	var triggers: Array = ability.get("triggers", [])
-	if triggers.size() != 1 or not triggers[0] is Dictionary:
-		return false
-	var trigger: Dictionary = triggers[0]
-	if StringName(trigger.get("event", &"")) != Catalog.CARD_AFTER_FLIPPED:
-		return false
-	return _list_has_type(
-		trigger.get("conditions", []),
-		Catalog.CONDITION_TRIGGER_CARD_IS_SELF
-	)
-
-
-static func temporarily_remove_non_retained_abilities(
-	card: Dictionary,
-	current_turn: int
-) -> Array[Dictionary]:
-	var retained_abilities: Array = []
-	var removed_entries: Array[Dictionary] = []
-	var active_abilities: Array = card.get("active_abilities", [])
-	for ability_index: int in range(active_abilities.size()):
-		var ability_value: Variant = active_abilities[ability_index]
-		if not ability_value is Dictionary:
-			continue
-		var ability: Dictionary = ability_value
-		if bool(ability.get("retained_on_flip", false)):
-			retained_abilities.append(ability)
-		else:
-			removed_entries.append({
-				"index": ability_index,
-				"ability": ability.duplicate(true),
-			})
-	if removed_entries.is_empty():
-		return removed_entries
-	card["active_abilities"] = retained_abilities
-	var batches: Array = card.get("temporary_suppression_batches", [])
-	batches.append({
-		"expires_after_turn": current_turn,
-		"entries": removed_entries.duplicate(true),
-	})
-	card["temporary_suppression_batches"] = batches
-	return removed_entries
-
-
-static func restore_temporarily_removed_abilities(
-	card: Dictionary,
-	completed_turn: int
-) -> Array[Dictionary]:
-	var batches: Array = card.get("temporary_suppression_batches", [])
-	if batches.is_empty():
-		return []
-	var restored: Array[Dictionary] = []
-	var remaining_batches: Array = []
-	for batch_index: int in range(batches.size() - 1, -1, -1):
-		var batch_value: Variant = batches[batch_index]
-		if not batch_value is Dictionary:
-			continue
-		var batch: Dictionary = batch_value
-		if int(batch.get("expires_after_turn", completed_turn)) > completed_turn:
-			remaining_batches.push_front(batch.duplicate(true))
-			continue
-		var entries: Array = batch.get("entries", [])
-		entries.sort_custom(func(first: Variant, second: Variant) -> bool:
-			return int((first as Dictionary).get("index", 0)) < int((second as Dictionary).get("index", 0))
-		)
-		var active_abilities: Array = card.get("active_abilities", [])
-		for entry_value: Variant in entries:
-			if not entry_value is Dictionary:
-				continue
-			var entry: Dictionary = entry_value
-			var ability_value: Variant = entry.get("ability", null)
-			if not ability_value is Dictionary:
-				continue
-			var insert_index: int = clampi(int(entry.get("index", active_abilities.size())), 0, active_abilities.size())
-			active_abilities.insert(insert_index, (ability_value as Dictionary).duplicate(true))
-			restored.append((ability_value as Dictionary).duplicate(true))
-		card["active_abilities"] = active_abilities
-	if remaining_batches.is_empty():
-		card.erase("temporary_suppression_batches")
-	else:
-		card["temporary_suppression_batches"] = remaining_batches
-	return restored
 
 
 static func has_modifier(
@@ -501,22 +307,6 @@ static func has_modifier(
 		if StringName(modifier.get("type", &"")) == modifier_type:
 			return true
 	return false
-
-
-static func get_modifiers(
-	card: Dictionary,
-	enabled_effect_gates: Variant = null
-) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	if not card_effects_enabled(card, enabled_effect_gates):
-		return result
-	for ability_value: Variant in card.get("active_abilities", []):
-		if not ability_value is Dictionary:
-			continue
-		for modifier_value: Variant in (ability_value as Dictionary).get("modifiers", []):
-			if modifier_value is Dictionary:
-				result.append((modifier_value as Dictionary).duplicate(true))
-	return result
 
 
 static func _get_modifier_views(
@@ -532,97 +322,4 @@ static func _get_modifier_views(
 		for modifier_value: Variant in (ability_value as Dictionary).get("modifiers", []):
 			if modifier_value is Dictionary:
 				result.append(modifier_value as Dictionary)
-	return result
-
-
-static func can_attack_at_orthogonal_distance_two(card: Dictionary) -> bool:
-	return has_modifier(card, Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO)
-
-
-static func can_attack_at_orthogonal_distance_two_with_gates(
-	card: Dictionary,
-	enabled_effect_gates: Variant
-) -> bool:
-	return has_modifier(
-		card,
-		Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
-		enabled_effect_gates
-	)
-
-
-static func allows_intervening_ally_at_orthogonal_distance_two(card: Dictionary) -> bool:
-	return allows_intervening_ally_at_orthogonal_distance_two_with_gates(card, null)
-
-
-static func allows_intervening_ally_at_orthogonal_distance_two_with_gates(
-	card: Dictionary,
-	enabled_effect_gates: Variant
-) -> bool:
-	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
-		if (
-			StringName(modifier.get("type", &""))
-			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
-			and bool(modifier.get("allow_intervening_ally", false))
-		):
-			return true
-	return false
-
-
-static func allows_intervening_enemy_at_orthogonal_distance_two_with_gates(
-	card: Dictionary,
-	enabled_effect_gates: Variant
-) -> bool:
-	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
-		if (
-			StringName(modifier.get("type", &""))
-			== Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO
-			and bool(modifier.get("allow_intervening_enemy", false))
-		):
-			return true
-	return false
-
-
-static func get_effective_defending_power(
-	card: Dictionary,
-	_direction: int,
-	base_power: int,
-	enabled_effect_gates: Variant = null
-) -> int:
-	var result: int = base_power
-	for modifier: Dictionary in _get_modifier_views(card, enabled_effect_gates):
-		if StringName(modifier.get("type", &"")) == Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE:
-			result = int(modifier.get("value", result))
-	return result
-
-
-static func get_minimum_effective_defending_power(
-	card: Dictionary,
-	fallback_direction: int,
-	fallback_power: int,
-	enabled_effect_gates: Variant = null
-) -> int:
-	var powers: Array = card.get("powers", [])
-	if powers.size() != 4:
-		return get_effective_defending_power(
-			card,
-			fallback_direction,
-			fallback_power,
-			enabled_effect_gates
-		)
-	var result: int = get_effective_defending_power(
-		card,
-		0,
-		int(powers[0]),
-		enabled_effect_gates
-	)
-	for direction: int in range(1, 4):
-		result = mini(
-			result,
-			get_effective_defending_power(
-				card,
-				direction,
-				int(powers[direction]),
-				enabled_effect_gates
-			)
-		)
 	return result

@@ -1394,7 +1394,11 @@ func _check_minimum_opponent_decision_delay() -> void:
 	var started_usec: int = Time.get_ticks_usec()
 	await timing_duel.call("_wait_for_minimum_opponent_decision", started_usec)
 	var elapsed_seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
-	_check(elapsed_seconds >= 0.04, "AI decision timing fills a short search to its configured minimum")
+	_check(
+		elapsed_seconds >= 0.04,
+		"AI decision timing fills a short search to its configured minimum (elapsed %.6fs)"
+		% elapsed_seconds
+	)
 	var completed_started_usec: int = Time.get_ticks_usec() - 100_000
 	var completed_wait_started_usec: int = Time.get_ticks_usec()
 	await timing_duel.call(

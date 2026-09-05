@@ -1,8 +1,10 @@
 extends SceneTree
 
+const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
+
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
@@ -140,9 +142,9 @@ func _test_fumo_four_attacks_across_enemy_only() -> void:
 	board[1] = _slot(_plain(&"range_middle_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	board[2] = _slot(_plain(&"range_far_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
 	var state := State.new(board)
-	_check(Rules.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four can attack across one enemy")
+	_check(BoardQueries.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four can attack across one enemy")
 	(state.board[1] as Dictionary)["owner"] = Rules.PLAYER_OWNER
-	_check(not Rules.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four cannot attack across one ally")
+	_check(not BoardQueries.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four cannot attack across one ally")
 
 
 func _test_qianshou_copies_complete_runtime_state_after_board_exile() -> void:

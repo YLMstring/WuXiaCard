@@ -2,11 +2,10 @@ extends SceneTree
 
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
-const Triggers = preload("res://scripts/duel_triggers.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -218,13 +217,11 @@ func _test_wanyue_entry_decay_and_adjacent_growth() -> void:
 			_power_amounts(transition.get("events", [])),
 		]
 	)
-	var groups: Array[Dictionary] = Triggers.discover(
+	Simulator._resolve_trigger_event(
 		next_state,
 		Catalog.TRIGGER_START_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
-	for group: Dictionary in groups:
-		Triggers.resolve_group(next_state, group)
 	_check(
 		runtime.get("powers", []) == [7, 6, 6, 7],
 		"WanYue loses one on its owner's turn start; got %s" % [runtime.get("powers", [])]

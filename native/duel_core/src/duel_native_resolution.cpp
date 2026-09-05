@@ -490,6 +490,10 @@ int32_t DuelNativeCompactKernel::find_board_card(
 	int32_t hint
 ) const {
 	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+	) return -1;
+	if (
 		hint >= 0
 		&& hint < static_cast<int32_t>(value.board_card_indices.size())
 		&& value.board_card_indices[hint] == card_index

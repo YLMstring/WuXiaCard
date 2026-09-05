@@ -34,6 +34,51 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::count_legal_actions_for_owner
 	);
 	ClassDB::bind_method(
+		D_METHOD("is_action_legal_for_owner", "action", "owner_id"),
+		&DuelNativeCompactKernel::is_action_legal_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD("is_terminal_state"),
+		&DuelNativeCompactKernel::is_terminal_state
+	);
+	ClassDB::bind_method(
+		D_METHOD("score_difference_for_owner", "owner_id"),
+		&DuelNativeCompactKernel::score_difference_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD("choose_greedy_action_for_owner", "owner_id"),
+		&DuelNativeCompactKernel::choose_greedy_action_for_owner
+	);
+	ClassDB::bind_method(
+		D_METHOD("get_attack_targets_for_source", "source_cell", "attack_policy"),
+		&DuelNativeCompactKernel::get_attack_targets_for_source,
+		DEFVAL(Dictionary())
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"can_attack_target_cells",
+			"source_cell",
+			"target_cell",
+			"attack_policy",
+			"skip_power_comparison"
+		),
+		&DuelNativeCompactKernel::can_attack_target_cells,
+		DEFVAL(Dictionary()),
+		DEFVAL(false)
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"is_target_in_attack_range_cells",
+			"source_cell",
+			"target_cell",
+			"attack_policy",
+			"skip_power_comparison"
+		),
+		&DuelNativeCompactKernel::is_target_in_attack_range_cells,
+		DEFVAL(Dictionary()),
+		DEFVAL(false)
+	);
+	ClassDB::bind_method(
 		D_METHOD(
 			"inspect_ordered_search_actions_for_owner",
 			"owner_id",
@@ -89,6 +134,17 @@ void DuelNativeCompactKernel::_bind_methods() {
 	ClassDB::bind_method(
 		D_METHOD("resolve_event_transition", "event_id", "context"),
 		&DuelNativeCompactKernel::resolve_event_transition
+	);
+	ClassDB::bind_method(
+		D_METHOD(
+			"resolve_actions_transition",
+			"source_cell",
+			"source_instance_id",
+			"expected_owner",
+			"actions",
+			"context"
+		),
+		&DuelNativeCompactKernel::resolve_actions_transition
 	);
 	ClassDB::bind_method(
 		D_METHOD("resolve_attack_transition", "request"),
@@ -925,6 +981,114 @@ Dictionary DuelNativeCompactKernel::resolve_event_transition(
 		exile_stack
 	);
 	return materialize_direct_transition(next, resolution, true);
+}
+
+Dictionary DuelNativeCompactKernel::resolve_actions_transition(
+	int64_t source_cell_value,
+	const StringName &source_instance_id,
+	int64_t expected_owner_value,
+	const Array &actions,
+	const Dictionary &context
+) {
+	if (!loaded) {
+		Resolution resolution;
+		resolution.supported = false;
+		return materialize_direct_transition(state, resolution, false, "No compact state is loaded");
+	}
+	std::vector<CompiledAction> compiled_actions;
+	compiled_actions.reserve(static_cast<size_t>(actions.size()));
+	for (int64_t index = 0; index < actions.size(); ++index) {
+		CompiledAction action = compile_action(actions[index]);
+		if (!action.declaration_valid) {
+			Resolution resolution;
+			resolution.supported = false;
+			return materialize_direct_transition(
+				state,
+				resolution,
+				false,
+				"Direct action declaration is unsupported"
+			);
+		}
+		compiled_actions.push_back(std::move(action));
+	}
+
+	NativeState next = state;
+	next.board_slot_extras = state.board_slot_extras.duplicate(true);
+	next.side_payload = state.side_payload.duplicate(true);
+	EventGroup group;
+	group.source_cell = static_cast<int32_t>(source_cell_value);
+	group.source_card_index = find_card_by_instance_id(next, source_instance_id);
+	group.source_owner = static_cast<int32_t>(expected_owner_value);
+	if (group.source_card_index >= 0) {
+		int32_t logical_index = -1;
+		locate_card(
+			next,
+			group.source_card_index,
+			group.source_zone,
+			group.source_owner,
+			logical_index
+		);
+		group.source_logical_index = logical_index;
+		if (group.source_zone == 0) group.source_cell = logical_index;
+	}
+
+	const EventContext event_context = event_context_from_dictionary(next, context);
+	ActionContext action_context;
+	action_context.ability_source_cell = group.source_cell;
+	action_context.ability_source_zone = group.source_zone;
+	action_context.ability_source_logical_index = group.source_logical_index;
+	action_context.ability_source_card_index = group.source_card_index;
+	action_context.ability_source_owner = group.source_owner;
+	action_context.action_subject_card_index = group.source_card_index;
+	action_context.action_subject_owner = group.source_owner;
+	action_context.action_subject_zone = group.source_zone;
+	action_context.action_subject_logical_index = group.source_logical_index;
+	action_context.trigger_card_index = event_context.trigger_card_index;
+	action_context.attacker_card_index = event_context.attacker_card_index;
+	action_context.activation_target_kind = StringName(context.get(
+		"activation_target_kind",
+		context.get("target_kind", StringName())
+	));
+	action_context.activation_target_index = static_cast<int32_t>(context.get(
+		"activation_target_index",
+		context.get("target_index", -1)
+	));
+	action_context.event_id = StringName(context.get("event_id", StringName()));
+	action_context.attack_flips = event_context.attack_flips;
+	action_context.selected_card_index = find_card_by_instance_id(
+		next,
+		StringName(context.get("selected_card_instance_id", StringName()))
+	);
+	if (action_context.selected_card_index >= 0) {
+		locate_card(
+			next,
+			action_context.selected_card_index,
+			action_context.selected_card_zone,
+			action_context.selected_card_owner,
+			action_context.selected_card_logical_index
+		);
+	}
+
+	std::vector<int32_t> exile_stack;
+	Resolution resolution;
+	const ActionOutcome outcome = execute_actions(
+		next,
+		group,
+		compiled_actions,
+		event_context,
+		action_context,
+		exile_stack,
+		resolution
+	);
+	if (outcome == ActionOutcome::UNSUPPORTED) resolution.supported = false;
+	Dictionary result = materialize_direct_transition(next, resolution, true);
+	result["source_cell"] = group.source_cell;
+	result["result"] = outcome == ActionOutcome::APPLIED
+		? StringName("applied")
+		: (outcome == ActionOutcome::INVALID_CONTEXT
+			? StringName("invalid_context")
+			: StringName("no_effect"));
+	return result;
 }
 
 Dictionary DuelNativeCompactKernel::resolve_attack_transition(const Dictionary &request) const {

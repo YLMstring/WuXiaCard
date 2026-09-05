@@ -12,10 +12,10 @@ extends RefCounted
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Executor = preload("res://scripts/duel_ability_executor.gd")
 
 const FORMAT_VERSION: int = 1
 const EMPTY_CARD_INDEX: int = -1
+const EMPTY_DECK_DRAW_CARD_ID: StringName = &"TaiZuChangQuan"
 
 const ZONE_PLAYER_HAND: int = 0
 const ZONE_OPPONENT_HAND: int = 1
@@ -274,7 +274,7 @@ func is_structurally_valid() -> bool:
 			return false
 		if StringName(
 			fresh_card_prototypes[empty_deck_draw_prototype_index].get("card_id", &"")
-		) != Executor.EMPTY_DECK_DRAW_CARD_ID:
+		) != EMPTY_DECK_DRAW_CARD_ID:
 			return false
 	return true
 
@@ -580,14 +580,14 @@ func _capture_fresh_card_prototypes() -> bool:
 					continue
 				queued_card_ids[target_card_id] = true
 				pending_card_ids.append(target_card_id)
-		if queued_card_ids.has(Executor.EMPTY_DECK_DRAW_CARD_ID):
+		if queued_card_ids.has(EMPTY_DECK_DRAW_CARD_ID):
 			break
-		queued_card_ids[Executor.EMPTY_DECK_DRAW_CARD_ID] = true
-		pending_card_ids.append(Executor.EMPTY_DECK_DRAW_CARD_ID)
+		queued_card_ids[EMPTY_DECK_DRAW_CARD_ID] = true
+		pending_card_ids.append(EMPTY_DECK_DRAW_CARD_ID)
 
 	for prototype_index: int in range(fresh_card_prototypes.size()):
 		if StringName(fresh_card_prototypes[prototype_index].get("card_id", &"")) == (
-			Executor.EMPTY_DECK_DRAW_CARD_ID
+			EMPTY_DECK_DRAW_CARD_ID
 		):
 			empty_deck_draw_prototype_index = prototype_index
 			break
