@@ -15,10 +15,7 @@ bool DuelNativeCompactKernel::conditions_match(
 		bool matched = false;
 		switch (condition.opcode) {
 			case ConditionOpcode::TRIGGER_CARD_IS_SELF:
-				matched = (
-					context.trigger_card_index == group.source_card_index
-					&& context.trigger_cell == group.source_cell
-				);
+				matched = context.trigger_card_index == group.source_card_index;
 				break;
 			case ConditionOpcode::TRIGGER_CARD_IS_ALLY:
 			case ConditionOpcode::TRIGGER_CARD_IS_ENEMY: {
@@ -329,7 +326,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		resolution.reason = discovery_reason;
 		return resolution;
 	}
-	for (const EventGroup &group : groups) {
+	for (const EventGroup &discovered_group : groups) {
+		EventGroup group = discovered_group;
 		const int32_t current_ability_index = find_runtime_ability_index(
 			value,
 			group.source_card_index,
@@ -353,6 +351,20 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 				&& current_owner == group.source_owner
 			);
 		} else {
+			const int32_t current_source_cell = find_board_card(
+				value,
+				group.source_card_index,
+				group.source_cell
+			);
+			if (
+				current_source_cell >= 0
+				&& current_source_cell != group.source_cell
+				&& group.source_card_index == context.trigger_card_index
+			) {
+				group.source_cell = current_source_cell;
+				group.source_logical_index = current_source_cell;
+				current_logical_index = current_source_cell;
+			}
 			source_is_current = (
 				find_board_card(value, group.source_card_index, group.source_cell) == group.source_cell
 				&& value.board_owners[group.source_cell] == group.source_owner

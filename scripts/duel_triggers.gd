@@ -59,7 +59,7 @@ static func resolve_group(
 		return result
 	var card: Dictionary = resolved.get("card", {})
 	var rule: Dictionary = resolved.get("rule", {})
-	var source_cell: int = int(group.get("source_cell", -1))
+	var source_cell: int = int(resolved.get("source_cell", group.get("source_cell", -1)))
 	var context: Dictionary = group.get("context", {})
 	context = context.duplicate(true)
 	context["resolving_ability_index"] = int(group.get("ability_index", -1))
@@ -213,15 +213,21 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 			return {}
 		card = location.get("card", {})
 	else:
-		if source_cell < 0 or source_cell >= state.board.size():
+		var source_instance_id := StringName(group.get("source_instance_id", &""))
+		var location: Dictionary = Selector.locate_card(state, source_instance_id)
+		if (
+			location.is_empty()
+			or StringName(location.get("zone", &"")) != Catalog.CARD_ZONE_BOARD
+			or int(location.get("owner_id", 0)) != source_owner
+		):
 			return {}
-		var slot_value: Variant = state.board[source_cell]
-		if slot_value == null:
-			return {}
-		var slot: Dictionary = slot_value
-		if int(slot.get("owner", 0)) != source_owner:
-			return {}
-		card = slot.get("card", {})
+		var current_source_cell: int = int(location.get("index", -1))
+		if current_source_cell != source_cell:
+			var context: Dictionary = group.get("context", {})
+			if source_instance_id != StringName(context.get("trigger_instance_id", &"")):
+				return {}
+			source_cell = current_source_cell
+		card = location.get("card", {})
 	if not Abilities.card_effects_enabled(
 		card,
 		state.get_enabled_effect_gates(source_owner)
@@ -255,7 +261,12 @@ static func _get_current_rule(state: StateData, group: Dictionary) -> Dictionary
 	var rule: Dictionary = rule_value
 	if StringName(rule.get("event", &"")) != StringName(group.get("event_id", &"")):
 		return {}
-	return {"card": card, "rule": rule, "ability_index": ability_index}
+	return {
+		"card": card,
+		"rule": rule,
+		"ability_index": ability_index,
+		"source_cell": source_cell,
+	}
 
 
 static func _find_runtime_ability_index(
@@ -333,7 +344,6 @@ static func _conditions_match(
 			if (
 				StringName(card.get("instance_id", &""))
 				!= StringName(context.get("trigger_instance_id", &""))
-				or source_cell != int(context.get("trigger_cell", -1))
 			):
 				return false
 		elif condition_type == Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF:

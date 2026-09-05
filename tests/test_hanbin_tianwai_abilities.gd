@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_hanbin_last_ki_flip_and_frozen_turn()
 	_test_tianwai_swap_and_attack()
 	_test_tianwai_tier_three_and_multiple_sources()
+	_test_tianwai_preserves_moved_summons_self_trigger()
 	_finish()
 
 
@@ -462,6 +463,53 @@ func _test_tianwai_tier_three_and_multiple_sources() -> void:
 	)
 
 
+func _test_tianwai_preserves_moved_summons_self_trigger() -> void:
+	var tianwai: Dictionary = Catalog.create_instance(
+		&"TianWaiYuLong2",
+		Rules.PLAYER_OWNER,
+		&"tianwai_before_yinyang"
+	)
+	var yinyang: Dictionary = Catalog.create_instance(
+		&"YinYangZhang3",
+		Rules.PLAYER_OWNER,
+		&"moved_yinyang"
+	)
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(tianwai, Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[yinyang],
+			[_plain(&"moved_yinyang_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER,
+			0,
+			[
+				_plain(&"moved_yinyang_draw_one", [2, 2, 2, 2], Rules.PLAYER_OWNER, "掌法"),
+				_plain(&"moved_yinyang_draw_two", [3, 3, 3, 3], Rules.PLAYER_OWNER, "掌法"),
+			],
+			[]
+		),
+		Action.make_play(0, 5, &"moved_yinyang")
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		bool(transition.get("valid", false))
+		and _instance_at(next_state, 5) == &"tianwai_before_yinyang"
+		and next_state.board[4] == null
+		and _removed_has(next_state, Rules.PLAYER_OWNER, &"moved_yinyang"),
+		"A summoned card's discovered self trigger follows the same instance after TianWai swaps it"
+	)
+	_check(
+		next_state.get_hand(Rules.PLAYER_OWNER).size() == 2
+		and _count_source_events(
+			transition.get("events", []),
+			&"ability_triggered",
+			&"moved_yinyang"
+		) == 1,
+		"Moved YinYang still resolves its draw-and-grant summon ability"
+	)
+
+
 func _plain(
 	instance_id: StringName,
 	powers: Array,
@@ -526,6 +574,16 @@ func _instance_at(state: State, cell: int) -> StringName:
 			&""
 		))
 	)
+
+
+func _removed_has(state: State, owner_id: int, instance_id: StringName) -> bool:
+	for card_value: Variant in state.removed_cards.get(owner_id, []):
+		if (
+			card_value is Dictionary
+			and StringName((card_value as Dictionary).get("instance_id", &"")) == instance_id
+		):
+			return true
+	return false
 
 
 func _first_event(events: Array, event_type: StringName) -> Dictionary:

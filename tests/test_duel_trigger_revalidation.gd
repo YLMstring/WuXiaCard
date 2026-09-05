@@ -16,6 +16,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_removing_an_earlier_ability_does_not_stale_a_later_trigger()
 	_test_replacing_the_ability_does_not_inherit_an_old_trigger()
+	_test_moved_trigger_card_preserves_own_discovered_trigger()
 	if _failures == 0:
 		print("DUEL_TRIGGER_REVALIDATION_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -69,6 +70,26 @@ func _test_replacing_the_ability_does_not_inherit_an_old_trigger() -> void:
 	_check(
 		state.get_hand(Rules.PLAYER_OWNER).is_empty(),
 		"A stale trigger cannot apply the replacement ability's action"
+	)
+
+
+func _test_moved_trigger_card_preserves_own_discovered_trigger() -> void:
+	var state: State = _make_state()
+	var groups: Array[Dictionary] = Triggers.discover(
+		state,
+		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		_context()
+	)
+	state.board[5] = state.board[4]
+	state.board[4] = null
+	var result: Dictionary = Triggers.resolve_group(state, groups[1])
+	_check(
+		_event_types(result.get("events", [])) == [&"ability_triggered", &"card_drawn"],
+		"An already-discovered self trigger follows its exact card instance after board movement"
+	)
+	_check(
+		state.get_hand(Rules.PLAYER_OWNER).size() == 1,
+		"The moved card resolves its self-trigger actions from the new cell"
 	)
 
 
