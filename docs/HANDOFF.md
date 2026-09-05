@@ -207,11 +207,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   active runs migrate as difficulty 2. `DifficultyRules` is the central table
   for all cumulative effects and exact current-tier prompt text.
 - Difficulty 5 changes the go-first gate from total tier `<=` to `<` the
-  opponent. Difficulty 8 stores a one-use simulator latch: the first atomic
-  enemy-hand change ending at one card draws one normally; batches expose only
-  their final size. Difficulty 9 statically increases all four powers of one
-  uniformly chosen legal enemy opening-hand card, excluding all-four-`-1`
-  cards and emitting no animation.
+  opponent. Below difficulty 8, unrevealed cards show their four powers while
+  identity, art, text, ki, abilities, tooltip, and inspection remain concealed;
+  all-four-`-1` cards still show none. Difficulty 8 conceals those powers in
+  battle, deck building, and rewards. Difficulty 9 doubles the base five-second
+  enemy search deadline to ten seconds. The former difficulty-8 one-card draw
+  and difficulty-9 opening-hand power increase are retired.
 - Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
   left copy is flipped, both wrap through the unlocked range, and each change
   saves immediately. They remain hidden when only difficulty 0 is unlocked.
@@ -238,7 +239,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
   returns fill the leftmost empty slot. Only discard closes its gap: every card
   physically to its right shifts left one slot in one simultaneous presentation
   batch. Normal play and hand exile/removal leave all other slots unchanged.
-- Normal draws retain the existing concealment rules. Every other successful
+- Normal draws retain identity concealment; below difficulty 8 their powers are
+  visible through the card back. Every other successful
   effect-driven hand addition is permanently public to the recipient's
   opponent, including created cards, copies, fresh board returns, and the same
   instance returning from discard. Newly public instances emit
@@ -254,6 +256,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   PVS, tactics, evaluation-cache, and
   alternate-evaluator profiles were removed with the old search backend.
   Search stays card-agnostic and canonical root ordering resolves equal scores.
+- Each enemy decision has a five-second base deadline; difficulty 9 doubles it
+  to ten seconds. The existing two-second minimum visible decision time is
+  unchanged and counts actual search time toward that minimum.
 - Native search transitions retain rule-semantic event skeletons but omit
   complete runtime-card snapshots and capture/exile summaries that are used
   only by presentation. Live gameplay transitions still materialize the full

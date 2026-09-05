@@ -67,33 +67,3 @@ static func build_opening_board(
 			"card": bagua,
 		}
 	return board
-
-
-static func apply_enemy_opening_hand_buff(
-	opponent_hand: Array,
-	difficulty: int,
-	rng: RandomNumberGenerator
-) -> StringName:
-	if (
-		not Difficulty.buffs_random_enemy_opening_hand_card(difficulty)
-		or rng == null
-	):
-		return &""
-	var legal_indices: Array[int] = []
-	for hand_index: int in range(opponent_hand.size()):
-		var card_value: Variant = opponent_hand[hand_index]
-		if card_value is Dictionary and Rules.can_change_powers(card_value as Dictionary):
-			legal_indices.append(hand_index)
-	if legal_indices.is_empty():
-		return &""
-	var selected_index: int = legal_indices[
-		rng.randi_range(0, legal_indices.size() - 1)
-	]
-	var selected_card: Dictionary = opponent_hand[selected_index]
-	var powers: Array = (selected_card.get("powers", []) as Array).duplicate()
-	if powers.size() != 4:
-		return &""
-	for power_index: int in range(powers.size()):
-		powers[power_index] = int(powers[power_index]) + 1
-	selected_card["powers"] = powers
-	return StringName(selected_card.get("instance_id", &""))

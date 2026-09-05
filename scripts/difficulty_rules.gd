@@ -13,8 +13,8 @@ const EFFECT_TEXTS: Array[String] = [
 	"卡组总品阶低于对手时方可选择先攻",
 	"后行动时，友方不占据八卦方位",
 	"先行动时，敌方占据的八卦方位点数变为四",
-	"敌方手牌数首次变为一时，其抽一张牌",
-	"对局开始时，随机一张敌方手牌点数加一",
+	"无法看到未揭示的卡牌的点数",
+	"敌方思考时间加倍",
 ]
 
 
@@ -57,9 +57,9 @@ static func player_must_be_strictly_lower_to_go_first(difficulty: int) -> bool:
 	return normalize(difficulty) >= 5
 
 
-static func enemy_draws_on_first_one_card_hand(difficulty: int) -> bool:
+static func hides_unrevealed_card_powers(difficulty: int) -> bool:
 	return normalize(difficulty) >= 8
 
 
-static func buffs_random_enemy_opening_hand_card(difficulty: int) -> bool:
-	return normalize(difficulty) >= 9
+static func enemy_search_time_multiplier(difficulty: int) -> float:
+	return 2.0 if normalize(difficulty) >= 9 else 1.0

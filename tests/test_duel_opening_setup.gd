@@ -22,7 +22,6 @@ func _run() -> void:
 	_test_exact_adjacent_pair_space()
 	_test_seeded_layout_and_ownership()
 	_test_difficulty_bagua_layouts()
-	_test_enemy_opening_hand_buff()
 	_test_initial_state_factory_determinism_and_isolation()
 	_test_initial_state_factory_complete_opening()
 	_test_bagua_exiles_before_flip()
@@ -212,66 +211,6 @@ func _test_difficulty_bagua_layouts() -> void:
 				"Difficulty %d statically sets enemy Bagua powers to %d"
 				% [int(fixture["difficulty"]), expected_power]
 			)
-
-
-func _test_enemy_opening_hand_buff() -> void:
-	var special_negative: Dictionary = Catalog.create_instance(
-		&"BaGuaFangWei",
-		Rules.OPPONENT_OWNER,
-		&"opening_buff_negative"
-	)
-	var legal_first: Dictionary = Catalog.create_instance(
-		&"TaiZuChangQuan",
-		Rules.OPPONENT_OWNER,
-		&"opening_buff_first"
-	)
-	var legal_second: Dictionary = Catalog.create_instance(
-		&"TuNaShu1",
-		Rules.OPPONENT_OWNER,
-		&"opening_buff_second"
-	)
-	var difficulty_eight_hand: Array = [
-		special_negative.duplicate(true),
-		legal_first.duplicate(true),
-		legal_second.duplicate(true),
-	]
-	_check(
-		OpeningSetup.apply_enemy_opening_hand_buff(
-			difficulty_eight_hand,
-			8,
-			_seeded_rng(7)
-		) == &"",
-		"Difficulty eight does not buff an opening hand card"
-	)
-	var difficulty_nine_hand: Array = [special_negative, legal_first, legal_second]
-	var selected_id: StringName = OpeningSetup.apply_enemy_opening_hand_buff(
-		difficulty_nine_hand,
-		9,
-		_seeded_rng(7)
-	)
-	_check(selected_id in [&"opening_buff_first", &"opening_buff_second"], "Difficulty nine skips special-negative cards")
-	_check(special_negative.get("powers", []) == [-1, -1, -1, -1], "Special-negative opening card remains unchanged")
-	var changed_count: int = 0
-	for card: Dictionary in [legal_first, legal_second]:
-		var original: Array = (
-			Catalog.get_definition(StringName(card.get("card_id", &""))).get("powers", [])
-			as Array
-		)
-		var expected: Array = []
-		for power_value: Variant in original:
-			expected.append(int(power_value) + 1)
-		if card.get("powers", []) == expected:
-			changed_count += 1
-	_check(changed_count == 1, "Difficulty nine buffs exactly one legal opening hand card on all sides")
-	var all_negative_hand: Array = [special_negative.duplicate(true)]
-	_check(
-		OpeningSetup.apply_enemy_opening_hand_buff(
-			all_negative_hand,
-			9,
-			_seeded_rng(7)
-		) == &"",
-		"Difficulty nine is inert when every opening hand card is special-negative"
-	)
 
 
 func _test_initial_state_factory_determinism_and_isolation() -> void:

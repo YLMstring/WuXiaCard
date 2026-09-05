@@ -30,8 +30,8 @@ func _test_normalization_and_text() -> void:
 		"卡组总品阶低于对手时方可选择先攻",
 		"后行动时，友方不占据八卦方位",
 		"先行动时，敌方占据的八卦方位点数变为四",
-		"敌方手牌数首次变为一时，其抽一张牌",
-		"对局开始时，随机一张敌方手牌点数加一",
+		"无法看到未揭示的卡牌的点数",
+		"敌方思考时间加倍",
 	]
 	for difficulty: int in range(expected_texts.size()):
 		_check(
@@ -76,10 +76,10 @@ func _test_cumulative_bagua_rules() -> void:
 func _test_remaining_thresholds() -> void:
 	_check(not Difficulty.player_must_be_strictly_lower_to_go_first(4), "Difficulty four permits equal tiers")
 	_check(Difficulty.player_must_be_strictly_lower_to_go_first(5), "Difficulty five requires lower tiers")
-	_check(not Difficulty.enemy_draws_on_first_one_card_hand(7), "Difficulty seven has no one-card draw")
-	_check(Difficulty.enemy_draws_on_first_one_card_hand(8), "Difficulty eight enables the one-card draw")
-	_check(not Difficulty.buffs_random_enemy_opening_hand_card(8), "Difficulty eight has no opening hand buff")
-	_check(Difficulty.buffs_random_enemy_opening_hand_card(9), "Difficulty nine enables the opening hand buff")
+	_check(not Difficulty.hides_unrevealed_card_powers(7), "Difficulty seven shows unrevealed powers")
+	_check(Difficulty.hides_unrevealed_card_powers(8), "Difficulty eight hides unrevealed powers")
+	_check(is_equal_approx(Difficulty.enemy_search_time_multiplier(8), 1.0), "Difficulty eight keeps normal search time")
+	_check(is_equal_approx(Difficulty.enemy_search_time_multiplier(9), 2.0), "Difficulty nine doubles search time")
 
 
 func _check(condition: bool, message: String) -> void:

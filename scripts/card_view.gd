@@ -50,6 +50,7 @@ var playable: bool = false
 var face_down: bool = false
 var ki_badge_enabled: bool = true
 var power_numbers_enabled: bool = true
+var concealed_power_numbers_enabled: bool = true
 
 var _dragging: bool = false
 var _drag_follows_pointer: bool = true
@@ -123,7 +124,8 @@ func _refresh_face_content() -> void:
 	left_power.text = str(powers[DuelRules.LEFT])
 	var show_power_numbers: bool = (
 		power_numbers_enabled
-		and not face_down
+		and (not face_down or concealed_power_numbers_enabled)
+		and card_data.has("powers")
 		and not DuelRules.has_special_negative_powers(card_data)
 	)
 	for power_label: Label in [top_power, right_power, bottom_power, left_power]:
@@ -232,6 +234,12 @@ func set_ki_badge_enabled(value: bool) -> void:
 
 func set_power_numbers_enabled(value: bool) -> void:
 	power_numbers_enabled = value
+	if is_node_ready():
+		_refresh_face_content()
+
+
+func set_concealed_power_numbers_enabled(value: bool) -> void:
+	concealed_power_numbers_enabled = value
 	if is_node_ready():
 		_refresh_face_content()
 

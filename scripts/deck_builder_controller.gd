@@ -210,6 +210,11 @@ func _spawn_card_in_slot(slot: PanelContainer, data: Dictionary, owner_id: int) 
 	slot.add_child(card)
 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	card.configure(data, owner_id, false)
+	card.set_concealed_power_numbers_enabled(
+		not Difficulty.hides_unrevealed_card_powers(
+			_profile_store.get_run_difficulty(profile)
+		)
+	)
 	card.inspection_requested.connect(_on_card_inspection_requested)
 	return card
 

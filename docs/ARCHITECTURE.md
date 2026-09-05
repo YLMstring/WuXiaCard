@@ -33,8 +33,9 @@ The simulator must remain authoritative. If live play and AI would resolve the s
   discard/removed zones, active player, turn count, owner-turn serial,
   remaining extra card plays, the per-owner-turn grant latch, end-boundary
   state, queued-effect scaffolding,
-  last successful hand plays, active-run difficulty, the difficulty-eight
-  one-card-draw latch, persistent pending suppression counts, and state version.
+  last successful hand plays, active-run difficulty, a retained legacy
+  difficulty-eight latch kept only for compact/replay compatibility, persistent
+  pending suppression counts, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
   independent initial/final `DuelState` snapshots, ordered duplicate
@@ -54,11 +55,10 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 
 - `difficulty_rules.gd` — the single pure-data table for difficulty prompt text,
   completion thresholds, first-player deck restriction, opening Bagua setup,
-  and difficulty-eight/nine feature gates.
+  unrevealed-power concealment, and enemy search-time multiplier.
 - `duel_opening_setup.gd` — pure initial-board construction. It owns the stable
-  12-pair orthogonal adjacency space, seeded uniform selection, difficulty-aware
-  fresh `BaGuaFangWei` instances, and the difficulty-nine enemy-hand power
-  increase. It emits no gameplay events.
+  12-pair orthogonal adjacency space, seeded uniform selection, and
+  difficulty-aware fresh `BaGuaFangWei` instances. It emits no gameplay events.
 - `duel_simulator.gd` — the authoritative facade for legal-action enumeration,
   legality checks, action application, terminal checks, scoring, and greedy
   fallback. All action application is strict-native; there is no second rules
@@ -139,12 +139,10 @@ one of those rules prevents the flip.
 
 An action with stale or missing context returns `NO_EFFECT` and later actions continue. Only a declaration with `on_invalid_context = STOP_RULE` stops that rule's remaining actions.
 
-At difficulty 8 and above, every authoritative enemy-hand mutation reports its
-atomic before/after size to the simulator. The first actual transition whose
-final size is exactly one consumes a state latch and performs one ordinary
-draw. A batch discard reports only its completed boundary, so `3 -> 0` does not
-trigger while `3 -> 1` does. The latch and difficulty are serialized in the
-search key and copied into replay state.
+The retired difficulty-eight draw latch remains serialized in compact and replay
+state so older payloads stay shape-compatible, but current rules never consume
+it or create a draw. Difficulty 8 is now presentation-only concealment; it does
+not alter authoritative actions, transitions, search keys, or AI information.
 
 ### Search
 
@@ -399,8 +397,9 @@ side-deck card was removed.
 `card_returned_to_hand` follows the same public-information rule for both fresh
 returns from the board and preserved-instance returns from discard. A newly
 public non-draw addition emits `card_revealed` immediately after its addition
-or return event. Normal `card_drawn` concealment remains unchanged unless an
-independent reveal effect applies.
+or return event. A normally drawn opponent card remains identity-concealed, but
+its powers are visible below difficulty 8. Difficulty 8 and above suppress those
+labels too; the AI still receives the same complete state.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.
 

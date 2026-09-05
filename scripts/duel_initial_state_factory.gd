@@ -32,11 +32,6 @@ static func build(config: Dictionary) -> StateData:
 		instance_namespace
 	)
 	var run_difficulty: int = clampi(int(config.get("run_difficulty", 0)), 0, 9)
-	OpeningSetup.apply_enemy_opening_hand_buff(
-		opponent_cards,
-		run_difficulty,
-		make_seeded_rng(int(config.get("difficulty_effect_seed", 0)))
-	)
 
 	var player_side_deck: Array = create_card_instances(
 		DeckRules.build_side_deck_card_ids(player_ids),

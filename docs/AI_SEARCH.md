@@ -76,7 +76,8 @@ the gameplay rule permits at most one successful grant per owner turn.
 
 Iterative deepening publishes only the deepest fully completed iteration. An
 incomplete deeper attempt is diagnostic data and never replaces the last
-complete action. Production uses a hard ten-second deadline. Node-limited
+complete action. Production uses a hard five-second base deadline; difficulty 9
+doubles it to ten seconds. Node-limited
 Quick and Extended diagnostics use `min_completed_depth = 1`: a nominal node
 limit may be exceeded until depth one completes, while deadlines and explicit
 cancellation remain hard.
@@ -205,7 +206,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extend
 - Quick: 7 matchups / 28 games, nominal 1,500 nodes per decision.
 - Extended: all 28 matchups / 112 games, nominal 1,500 nodes, one progress
   record written immediately after every game.
-- Production: 4 matchups / 16 games using the real ten-second budget.
+- Production: 4 matchups / 16 games using the benchmark's explicit historical
+  ten-second budget.
 
 All seats now run the same native backend. Historical `enhanced` and `baseline`
 labels remain in serialized benchmark records only as balanced assignment

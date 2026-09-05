@@ -31,11 +31,12 @@ func _run() -> void:
 	_check(fixture_store.save_profile(fixture_profile), "Duel integration fixture saves")
 	await _check_opening_bagua_layout()
 	await _check_difficulty_opening_effects()
+	await _check_search_budget_by_difficulty()
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
 	await process_frame
-	_check(is_equal_approx(float(duel.debug_get_search_budget_seconds()), 10.0), "Shen Lian defaults to the hard 10-second search profile")
+	_check(is_equal_approx(float(duel.debug_get_search_budget_seconds()), 5.0), "Enemies default to the hard five-second search profile")
 	_check(is_equal_approx(float(duel.get("opponent_min_decision_seconds")), 2.0), "AI decisions default to a two-second minimum")
 	_check(is_equal_approx(float(duel.get("summon_post_entry_delay")), 0.5), "Board entry pauses half a second before later effects")
 	duel.debug_set_fast_mode(true)
@@ -55,6 +56,7 @@ func _run() -> void:
 	_check_side_deck_setup(duel)
 	await _check_duplicate_enemy_instances()
 	_check_normal_opponent_concealment(duel)
+	await _check_difficulty_eight_power_concealment()
 	await _check_card_inspector_modal()
 	await _check_live_search_depth_status()
 	await _check_inspector_holds_completed_ai_move()
@@ -849,24 +851,41 @@ func _check_difficulty_opening_effects() -> void:
 		var card_id := StringName(card.get("card_id", &""))
 		var catalog_powers: Array = Catalog.get_definition(card_id).get("powers", [])
 		if card_id == &"BaGuaFangWei":
-			_check(card.get("powers", []) == [-1, -1, -1, -1], "Production opening buff skips special-negative enemy cards")
+			_check(card.get("powers", []) == [-1, -1, -1, -1], "Difficulty nine keeps special-negative enemy cards unchanged")
 			continue
 		var expected_buffed: Array = []
 		for power_value: Variant in catalog_powers:
 			expected_buffed.append(int(power_value) + 1)
 		if card.get("powers", []) == expected_buffed:
 			changed_count += 1
-	_check(changed_count == 1, "Production difficulty nine buffs exactly one enemy opening hand card")
-	_check(buff_duel.debug_get_presentation_trace().is_empty(), "Opening hand buff emits no power-change presentation")
+	_check(changed_count == 0, "Difficulty nine no longer buffs an enemy opening hand card")
+	_check(buff_duel.debug_get_presentation_trace().is_empty(), "Retired opening hand buff emits no presentation")
 	var buff_replay_record: Variant = buff_duel.get("_replay_record")
 	var buff_replay_initial_state: Variant = buff_replay_record.get_initial_state()
 	_check(
 		buff_replay_initial_state != null
 		and buff_replay_initial_state.get_hand(Rules.OPPONENT_OWNER)
 		== buff_state.get_hand(Rules.OPPONENT_OWNER),
-		"Replay snapshots the statically buffed enemy opening hand"
+		"Replay snapshots the unmodified difficulty-nine enemy opening hand"
 	)
 	buff_duel.queue_free()
+	await process_frame
+
+
+func _check_search_budget_by_difficulty() -> void:
+	var difficulty_nine_duel: Node = _instantiate_duel()
+	difficulty_nine_duel.set("run_difficulty", 9)
+	root.add_child(difficulty_nine_duel)
+	await process_frame
+	await process_frame
+	_check(
+		is_equal_approx(
+			float(difficulty_nine_duel.debug_get_search_budget_seconds()),
+			10.0
+		),
+		"Difficulty nine doubles the five-second enemy search limit"
+	)
+	difficulty_nine_duel.queue_free()
 	await process_frame
 
 
@@ -1082,14 +1101,14 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 			all_concealed
 			and card.has_method("is_face_down")
 			and bool(card.call("is_face_down"))
-			and not (card.get_node("Overlay/TopPower") as Label).visible
-			and not (card.get_node("Overlay/RightPower") as Label).visible
-			and not (card.get_node("Overlay/BottomPower") as Label).visible
-			and not (card.get_node("Overlay/LeftPower") as Label).visible
+			and (card.get_node("Overlay/TopPower") as Label).visible
+			and (card.get_node("Overlay/RightPower") as Label).visible
+			and (card.get_node("Overlay/BottomPower") as Label).visible
+			and (card.get_node("Overlay/LeftPower") as Label).visible
 			and not (card.get_node("Overlay/CardPicture") as TextureRect).visible
 			and card.tooltip_text.is_empty()
 		)
-	_check(all_concealed, "Normal mode presents every remaining opponent card face-down without power or tooltip leaks")
+	_check(all_concealed, "Normal mode shows powers while keeping opponent card identities concealed")
 	_check(all_private_data_retained, "Face-down opponent views retain complete private card data")
 
 	var first_card: Control = opponent_cards[0]
@@ -1109,6 +1128,30 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 		first_card.call("set_face_down", true)
 		first_card.call("set_face_down", true)
 		_check(bool(first_card.call("is_face_down")) and not revealed_picture.visible and (first_card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆" and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent and restore the card back")
+
+
+func _check_difficulty_eight_power_concealment() -> void:
+	var difficulty_duel: Node = _instantiate_duel()
+	difficulty_duel.set("run_difficulty", 8)
+	root.add_child(difficulty_duel)
+	await process_frame
+	await process_frame
+	var opponent_cards: Array[Control] = _cards_below(
+		difficulty_duel.get_node("DuelCanvas/OpponentHand")
+	)
+	var all_powers_hidden: bool = not opponent_cards.is_empty()
+	for card: Control in opponent_cards:
+		all_powers_hidden = (
+			all_powers_hidden
+			and bool(card.call("is_face_down"))
+			and not (card.get_node("Overlay/TopPower") as Label).visible
+			and not (card.get_node("Overlay/RightPower") as Label).visible
+			and not (card.get_node("Overlay/BottomPower") as Label).visible
+			and not (card.get_node("Overlay/LeftPower") as Label).visible
+		)
+	_check(all_powers_hidden, "Difficulty eight hides every unrevealed opponent power")
+	difficulty_duel.queue_free()
+	await process_frame
 
 
 func _check_card_inspector_modal() -> void:

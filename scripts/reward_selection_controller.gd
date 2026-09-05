@@ -7,6 +7,7 @@ signal reward_claimed(card_id: StringName)
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
@@ -150,6 +151,11 @@ func _spawn_card_in_slot(
 	slot.add_child(card)
 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	card.configure(data, owner_id, false)
+	card.set_concealed_power_numbers_enabled(
+		not Difficulty.hides_unrevealed_card_powers(
+			_profile_store.get_run_difficulty(profile)
+		)
+	)
 	card.inspection_requested.connect(_on_card_inspection_requested)
 	return card
 

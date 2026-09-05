@@ -25,6 +25,11 @@ The user has tuned several offsets/colors directly. Treat current scenes and scr
 - drag/tap gesture disambiguation;
 - flip, draw, exile, invalid, and ability-loss effects.
 
+Face-down cards normally retain their card back while showing the four power
+labels. Identity, art, text, ki, tooltip, and inspection stay concealed. The
+all-four-`-1` sentinel never shows powers, and difficulty 8 or above suppresses
+all face-down power labels in battle, deck building, and reward selection.
+
 Art scale is `CARD_PICTURE_SCALE = 0.8`: the full source texture, including transparent background, is fit relative to the card's shorter side. Power labels must render above art. Glyph/title display was disabled by the creator; do not re-enable it without asking.
 
 Hand slot backgrounds are separate from card backgrounds. If opponent and player empty slots differ, inspect slot styling and inherited/self modulation, not only the top red background.
@@ -54,7 +59,8 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
 
 - Single tap revealed card: inspect.
 - Drag beyond threshold: play or activate.
-- Tap face-down card: no metadata leak.
+- Tap face-down card: no inspection or identity metadata leak; visible powers
+  below difficulty 8 are intentional.
 - Tap during resolution: inspector does not open.
 - Inspector open: no duel action commits.
 - AI may think in background, but its move waits to apply.
@@ -110,11 +116,11 @@ Store requirements change over time and must be checked from official current so
 - tap-versus-drag threshold;
 - all four power labels;
 - fixed empty hand slots;
-- card-back concealment;
+- card-back identity concealment and difficulty-dependent power labels;
 - long Chinese description/flavor wrapping;
 - inspector scrolling and tap close;
 - VFX timing and performance;
 - lifecycle pause/resume;
 - exit behavior;
 - vibration behavior;
-- AI responsiveness during a 10-second search.
+- AI responsiveness during a 5-second base search and a difficulty-9 10-second search.

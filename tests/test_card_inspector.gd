@@ -155,8 +155,23 @@ func _check_card_view_gestures() -> void:
 	_submit_card_mouse_gesture(card, Vector2(48.0, 64.0), Vector2(48.0, 64.0))
 	_check(_inspection_requests == 2, "A revealed non-playable card can still be inspected")
 	card.call("set_face_down", true)
+	_check(
+		(card.get_node("Overlay/TopPower") as Label).visible
+		and (card.get_node("Overlay/RightPower") as Label).visible
+		and (card.get_node("Overlay/BottomPower") as Label).visible
+		and (card.get_node("Overlay/LeftPower") as Label).visible,
+		"A face-down card shows its numbered powers by default"
+	)
 	_submit_card_mouse_gesture(card, Vector2(48.0, 64.0), Vector2(48.0, 64.0))
 	_check(_inspection_requests == 2, "A face-down card never requests inspection")
+	card.call("set_concealed_power_numbers_enabled", false)
+	_check(
+		not (card.get_node("Overlay/TopPower") as Label).visible
+		and not (card.get_node("Overlay/RightPower") as Label).visible
+		and not (card.get_node("Overlay/BottomPower") as Label).visible
+		and not (card.get_node("Overlay/LeftPower") as Label).visible,
+		"Concealed-power suppression hides every face-down power label"
+	)
 
 	card.call("set_face_down", false)
 	card.call("set_playable", true)

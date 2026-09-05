@@ -85,8 +85,10 @@ func _run() -> void:
 	)
 	_check(
 		bool(opponent_card.call("is_face_down"))
-		and not (opponent_card.get_node("Overlay/TopPower") as Label).visible,
-		"Runtime synchronization does not reveal a face-down opponent card"
+		and (opponent_card.get_node("Overlay/TopPower") as Label).visible
+		and (opponent_card.get_node("Overlay/TopPower") as Label).text == "8"
+		and not (opponent_card.get_node("Overlay/CardPicture") as TextureRect).visible,
+		"Runtime synchronization updates visible powers without revealing a face-down opponent identity"
 	)
 	var trace: Array[StringName] = duel.call("debug_get_presentation_trace")
 	_check(

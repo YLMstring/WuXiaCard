@@ -153,35 +153,14 @@ bool DuelNativeCompactKernel::draw_cards(
 }
 
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_difficulty_hand_change(
-	NativeState &value,
-	int32_t owner_id,
-	int32_t previous_size,
-	int32_t current_size,
-	int32_t source_cell,
-	std::vector<int32_t> &exile_stack
+	NativeState &,
+	int32_t,
+	int32_t,
+	int32_t,
+	int32_t,
+	std::vector<int32_t> &
 ) const {
-	Resolution resolution;
-	if (
-		owner_id != 2
-		|| previous_size == current_size
-		|| current_size != 1
-		|| value.scalars[11] != 0
-		|| value.scalars[10] < 8
-	) return resolution;
-	value.scalars[11] = 1;
-	const std::vector<int32_t> &hand = value.zones[1];
-	if (hand.empty()) return resolution;
-	const int32_t source_card_index = hand.front();
-	EventContext context;
-	context.ability_source_cell = -1;
-	context.ability_source_zone = 1;
-	context.ability_source_logical_index = 0;
-	context.ability_source_card_index = source_card_index;
-	context.ability_source_owner = owner_id;
-	if (!draw_cards(value, owner_id, source_cell, 1, String(), context, exile_stack, resolution)) {
-		resolution.supported = false;
-	}
-	return resolution;
+	return Resolution();
 }
 
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_cards(

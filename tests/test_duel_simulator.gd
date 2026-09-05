@@ -32,9 +32,7 @@ func _run() -> void:
 	_test_draw_on_play_respects_hand_cap_and_event_order()
 	_test_draw_on_play_uses_top_deck_order_and_available_cards()
 	_test_draw_on_play_handles_empty_deck()
-	_test_difficulty_eight_one_card_draw()
-	_test_difficulty_eight_zero_to_one_addition()
-	_test_difficulty_eight_batch_boundaries()
+	_test_difficulty_eight_draw_effect_is_retired()
 	_test_turn_passes_to_owner_with_a_legal_move()
 	_test_empty_owner_turn_resolves_start_and_end_boundaries()
 	_test_empty_owner_turn_stops_when_start_creates_an_action()
@@ -86,24 +84,24 @@ func _run() -> void:
 	quit(_failures)
 
 
-func _test_difficulty_eight_one_card_draw() -> void:
+func _test_difficulty_eight_draw_effect_is_retired() -> void:
 	var first: Dictionary = _make_runtime_card(
-		"Difficulty First",
+		"Retired Difficulty First",
 		[1, 1, 1, 1],
 		Rules.OPPONENT_OWNER,
-		&"difficulty_first"
+		&"retired_difficulty_first"
 	)
 	var second: Dictionary = _make_runtime_card(
-		"Difficulty Second",
+		"Retired Difficulty Second",
 		[1, 1, 1, 1],
 		Rules.OPPONENT_OWNER,
-		&"difficulty_second"
+		&"retired_difficulty_second"
 	)
 	var deck_card: Dictionary = _make_runtime_card(
-		"Difficulty Draw",
+		"Retired Difficulty Draw",
 		[1, 1, 1, 1],
 		Rules.OPPONENT_OWNER,
-		&"difficulty_draw"
+		&"retired_difficulty_draw"
 	)
 	var state := State.new(
 		Rules.empty_board(),
@@ -113,198 +111,22 @@ func _test_difficulty_eight_one_card_draw() -> void:
 		0,
 		[],
 		[deck_card],
-		8
-	)
-	var first_transition: Dictionary = Simulator.apply_action(
-		state,
-		Action.make_play(0, 0, &"difficulty_first")
-	)
-	var next_state: State = first_transition.get("state", state)
-	_check(bool(first_transition.get("valid", false)), "Difficulty-eight fixture plays normally")
-	_check(
-		next_state.get_hand(Rules.OPPONENT_OWNER).size() == 2
-		and next_state.difficulty_eight_draw_consumed,
-		"Opponent immediately draws when its hand first changes from two to one"
-	)
-	_check(
-		_event_types(first_transition.get("events", [])).count(&"card_drawn") == 1,
-		"Difficulty-eight refill uses one ordinary draw event"
-	)
-	var remaining_instance_id := StringName(
-		(next_state.get_hand(Rules.OPPONENT_OWNER)[0] as Dictionary).get("instance_id", &"")
-	)
-	var second_transition: Dictionary = Simulator.apply_action(
-		next_state,
-		Action.make_play(0, 1, remaining_instance_id)
-	)
-	var final_state: State = second_transition.get("state", next_state)
-	_check(
-		final_state.get_hand(Rules.OPPONENT_OWNER).size() == 1
-		and _event_types(second_transition.get("events", [])).count(&"card_drawn") == 0,
-		"Difficulty-eight one-card refill cannot trigger a second time"
-	)
-
-	var difficulty_seven := State.new(
-		Rules.empty_board(),
-		[],
-		[first, second],
-		Rules.OPPONENT_OWNER,
-		0,
-		[],
-		[deck_card],
-		7
-	)
-	var inactive_transition: Dictionary = Simulator.apply_action(
-		difficulty_seven,
-		Action.make_play(0, 0, &"difficulty_first")
-	)
-	var inactive_state: State = inactive_transition.get("state", difficulty_seven)
-	_check(
-		inactive_state.get_hand(Rules.OPPONENT_OWNER).size() == 1
-		and not inactive_state.difficulty_eight_draw_consumed,
-		"Difficulty seven does not receive the one-card refill"
-	)
-
-
-func _test_difficulty_eight_batch_boundaries() -> void:
-	var discard_all_ability: Array = [{
-		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_SUMMONED,
-			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-			"actions": [{
-				"type": Catalog.ACTION_DISCARD_CARDS,
-				"selector": {
-					"zones": [Catalog.CARD_ZONE_HAND],
-					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
-				},
-			}],
-		}],
-	}]
-	var discard_all_source: Dictionary = _make_runtime_card(
-		"Discard All",
-		[1, 1, 1, 1],
-		Rules.OPPONENT_OWNER,
-		&"discard_all_source",
-		discard_all_ability
-	)
-	var three_to_zero := State.new(
-		Rules.empty_board(),
-		[],
-		[
-			discard_all_source,
-			_make_runtime_card("A", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_a"),
-			_make_runtime_card("B", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_b"),
-			_make_runtime_card("C", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_c"),
-		],
-		Rules.OPPONENT_OWNER,
-		0,
-		[],
-		[],
-		8
-	)
-	var zero_transition: Dictionary = Simulator.apply_action(
-		three_to_zero,
-		Action.make_play(0, 0, &"discard_all_source")
-	)
-	var zero_state: State = zero_transition.get("state", three_to_zero)
-	_check(
-		zero_state.get_hand(Rules.OPPONENT_OWNER).is_empty()
-		and not zero_state.difficulty_eight_draw_consumed,
-		"Atomic batch discard from three to zero never observes a one-card hand"
-	)
-
-	var discard_two_ability: Array = [{
-		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_SUMMONED,
-			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-			"actions": [{
-				"type": Catalog.ACTION_DISCARD_CARDS,
-				"selector": {
-					"zones": [Catalog.CARD_ZONE_HAND],
-					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
-					"limit": 2,
-				},
-			}],
-		}],
-	}]
-	var discard_two_source: Dictionary = _make_runtime_card(
-		"Discard Two",
-		[1, 1, 1, 1],
-		Rules.OPPONENT_OWNER,
-		&"discard_two_source",
-		discard_two_ability
-	)
-	var three_to_one := State.new(
-		Rules.empty_board(),
-		[],
-		[
-			discard_two_source,
-			_make_runtime_card("D", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_d"),
-			_make_runtime_card("E", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_e"),
-			_make_runtime_card("F", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_f"),
-		],
-		Rules.OPPONENT_OWNER,
-		0,
-		[],
-		[_make_runtime_card("Batch Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"batch_draw")],
-		8
-	)
-	var one_transition: Dictionary = Simulator.apply_action(
-		three_to_one,
-		Action.make_play(0, 0, &"discard_two_source")
-	)
-	var one_state: State = one_transition.get("state", three_to_one)
-	_check(
-		one_state.get_hand(Rules.OPPONENT_OWNER).size() == 2
-		and one_state.difficulty_eight_draw_consumed
-		and _event_types(one_transition.get("events", [])).count(&"card_drawn") == 1,
-		"Atomic batch discard from three to one triggers exactly one refill"
-	)
-
-
-func _test_difficulty_eight_zero_to_one_addition() -> void:
-	var add_card_ability: Array = [{
-		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_SUMMONED,
-			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-			"actions": [{
-				"type": Catalog.ACTION_ADD_CARD_TO_HAND,
-				"card_id": &"TaiZuChangQuan",
-				"recipient": Catalog.RECIPIENT_SELF,
-			}],
-		}],
-	}]
-	var source: Dictionary = _make_runtime_card(
-		"Add One",
-		[1, 1, 1, 1],
-		Rules.OPPONENT_OWNER,
-		&"difficulty_add_one",
-		add_card_ability
-	)
-	var state := State.new(
-		Rules.empty_board(),
-		[],
-		[source],
-		Rules.OPPONENT_OWNER,
-		0,
-		[],
-		[_make_runtime_card("Zero Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"zero_draw")],
 		8
 	)
 	var transition: Dictionary = Simulator.apply_action(
 		state,
-		Action.make_play(0, 0, &"difficulty_add_one")
+		Action.make_play(0, 0, &"retired_difficulty_first")
 	)
 	var next_state: State = transition.get("state", state)
-	_check(bool(transition.get("valid", false)), "Difficulty-eight zero-to-one fixture plays normally")
+	_check(bool(transition.get("valid", false)), "Difficulty-eight retired-draw fixture plays normally")
 	_check(
-		next_state.get_hand(Rules.OPPONENT_OWNER).size() == 2
-		and next_state.difficulty_eight_draw_consumed,
-		"A non-draw addition from zero to one consumes and resolves the refill"
+		next_state.get_hand(Rules.OPPONENT_OWNER).size() == 1
+		and not next_state.difficulty_eight_draw_consumed,
+		"Difficulty eight no longer refills a one-card enemy hand"
 	)
 	_check(
-		_event_types(transition.get("events", [])).count(&"card_drawn") == 1,
-		"Difficulty-eight zero-to-one refill still uses one ordinary draw event"
+		_event_types(transition.get("events", [])).count(&"card_drawn") == 0,
+		"Retired difficulty-eight effect emits no draw event"
 	)
 
 

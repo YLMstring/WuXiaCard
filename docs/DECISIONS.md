@@ -381,14 +381,15 @@ respectively, in row-major order. The source itself is eligible.
 - At difficulty 5, the player may choose to act first only when the five-card
   main deck's total tier is strictly lower than the opponent's. Lower
   difficulties retain the not-higher rule.
-- At difficulty 8, the first atomic enemy-hand mutation ending at exactly one
-  card consumes the effect and makes the enemy draw one normally. Intermediate
-  sizes inside a batch are not observed, so `3 -> 0` does not trigger and
-  `3 -> 1` does.
-- At difficulty 9, one uniformly random legal enemy opening-hand card has all
-  four powers increased by one in the initial state. All-four-`-1` cards are
-  excluded; if none is legal, nothing happens. It emits no animation and uses
-  an RNG independent of hand shuffle and Bagua placement.
+- By default, unrevealed hand cards expose only their four printed/current
+  powers while keeping identity, art, text, ki, abilities, tooltip, and
+  inspection concealed. All-four-`-1` cards continue to show no powers.
+- At difficulty 8, unrevealed card powers are concealed in battle, deck
+  building, and reward selection, restoring the earlier fully opaque card-back
+  presentation. This is presentation-only; AI information does not change.
+- The base opponent search deadline is five seconds. At difficulty 9 it is
+  multiplied by two to ten seconds. Difficulty changes no evaluator terms and
+  does not intentionally weaken move selection.
 
 ## Run Completion and Score
 
@@ -424,7 +425,9 @@ respectively, in row-major order. The source itself is eligible.
 
 - Deck building is a separate scene at `res://scenes/deck_builder.tscn`; it does not run the duel simulator, scores, AI, combat VFX, or audio.
 - It reuses the duel's fixed 9:16 presentation, decorative backdrop, top header, five-slot opponent hand, five-slot player hand, CardView, and CardInspector.
-- The opponent hand represents the upcoming enemy. It stays face-down in normal mode and is revealed in script-controlled testing mode.
+- The opponent hand represents the upcoming enemy. It stays face-down in normal
+  mode and is revealed in script-controlled testing mode. Face-down cards show
+  powers normally; difficulty 8 and above conceal those powers too.
 - The center parchment is titled `藏经阁` and displays four standard 3:4 library cards per row with exactly three visible rows.
 - Its exterior uses the exact same parchment geometry and shared style code as the card inspector.
 - The vertical scrollbar is hidden. Players navigate by swiping up/down; desktop mouse swipes are handled locally without enabling project-wide mouse-to-touch emulation.
@@ -446,7 +449,8 @@ respectively, in row-major order. The source itself is eligible.
 ## Inspector
 
 - A single tap on a revealed card opens an inspector occupying exactly the board rectangle.
-- A face-down card cannot open it or leak metadata.
+- A face-down card cannot open it or leak identity metadata. Its four powers are
+  visible below difficulty 8 unless they are the all-four-`-1` sentinel.
 - The inspector hides the board and score while keeping hands, top bar, and status visible.
 - It is modal: gameplay input is blocked.
 - It cannot open while an action is resolving.
@@ -457,7 +461,7 @@ respectively, in row-major order. The source itself is eligible.
 ## AI
 
 - Target behavior is near-perfect play within a fixed time budget.
-- Current hard-opponent budget is 10 seconds; future easier opponents can use 5 seconds.
+- Current base opponent budget is 5 seconds; difficulty 9 doubles it to 10 seconds.
 - Difficulty changes only the time budget, not the evaluator or intentional move weakening.
 - Use the best result from the deepest fully completed iteration.
 - Ignore an incomplete deeper iteration.

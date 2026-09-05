@@ -180,6 +180,14 @@ func _run() -> void:
 	for slot: Node in opponent_hand.get_children():
 		var card: CardView = slot.get_child(0) as CardView
 		_check(card.is_face_down(), "Normal mode keeps opponent card face-down")
+		var should_show_powers := not DuelRules.has_special_negative_powers(card.card_data)
+		_check(
+			(card.get_node("Overlay/TopPower") as Label).visible == should_show_powers
+			and (card.get_node("Overlay/RightPower") as Label).visible == should_show_powers
+			and (card.get_node("Overlay/BottomPower") as Label).visible == should_show_powers
+			and (card.get_node("Overlay/LeftPower") as Label).visible == should_show_powers,
+			"Normal deck building reveals ordinary unrevealed powers but keeps all-negative powers hidden"
+		)
 
 	builder.duel_requested.connect(func(owner_id: int) -> void: _duel_requests.append(owner_id))
 	var tier_totals: Vector2i = builder.debug_get_tier_totals()
@@ -363,6 +371,47 @@ func _run() -> void:
 		"Difficulty-five blocked press shows the strict lower-tier notice"
 	)
 	difficulty_five_builder.queue_free()
+	await process_frame
+	var difficulty_eight_reset: Dictionary = fixture_store.reset_run_and_save(
+		difficulty_five_begin.get("profile", {})
+	)
+	var difficulty_eight_base: Dictionary = difficulty_eight_reset.get("profile", {})
+	difficulty_eight_base["max_unlocked_difficulty"] = 8
+	difficulty_eight_base["last_selected_difficulty"] = 8
+	var difficulty_eight_begin: Dictionary = fixture_store.begin_run_and_save(
+		difficulty_eight_base,
+		&"HuaShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		8
+	)
+	_check(bool(difficulty_eight_begin.get("ok", false)), "Difficulty-eight concealment fixture begins")
+	var difficulty_eight_builder: Variant = BUILDER_SCENE.instantiate()
+	difficulty_eight_builder.profile_path = _save_path
+	difficulty_eight_builder.upcoming_enemy_card_ids = enemy_fixture_ids
+	root.add_child(difficulty_eight_builder)
+	await process_frame
+	var difficulty_eight_hand: HBoxContainer = difficulty_eight_builder.get_node(
+		"DuelCanvas/OpponentHand"
+	) as HBoxContainer
+	var difficulty_eight_powers_hidden: bool = true
+	for slot: Node in difficulty_eight_hand.get_children():
+		var card := slot.get_child(0) as CardView
+		difficulty_eight_powers_hidden = (
+			difficulty_eight_powers_hidden
+			and card.is_face_down()
+			and not (card.get_node("Overlay/TopPower") as Label).visible
+			and not (card.get_node("Overlay/RightPower") as Label).visible
+			and not (card.get_node("Overlay/BottomPower") as Label).visible
+			and not (card.get_node("Overlay/LeftPower") as Label).visible
+		)
+	_check(
+		difficulty_eight_powers_hidden,
+		"Difficulty eight hides unrevealed enemy powers while deck building"
+	)
+	difficulty_eight_builder.queue_free()
 	await process_frame
 	_cleanup()
 	_finish()

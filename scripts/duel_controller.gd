@@ -19,6 +19,7 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const StateData = preload("res://scripts/duel_state.gd")
@@ -73,7 +74,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var opening_layout_seed: int = 0
 @export var difficulty_effect_seed: int = 0
 @export_range(0.0, 10.0, 0.05) var opponent_min_decision_seconds: float = 2.0
-@export var opponent_search_budget_seconds: float = 10.0
+@export var opponent_search_budget_seconds: float = 5.0
 @export_range(0.0, 10.0, 0.05) var replay_turn_delay: float = 2.0
 @export var invalid_shake_duration: float = 0.18
 @export var placement_haptic_ms: int = 20
@@ -435,7 +436,7 @@ func debug_get_active_owner() -> int:
 
 
 func debug_get_search_budget_seconds() -> float:
-	return opponent_search_budget_seconds
+	return _effective_opponent_search_budget_seconds()
 
 
 func debug_get_last_search_report() -> Dictionary:
@@ -645,6 +646,9 @@ func _spawn_card_in_slot(slot: PanelContainer, card_data: Dictionary, owner_id: 
 	slot.add_child(card)
 	card.touch_drag_offset = drag_touch_offset
 	card.configure(card_data, owner_id, is_playable)
+	card.set_concealed_power_numbers_enabled(
+		not Difficulty.hides_unrevealed_card_powers(run_difficulty)
+	)
 	card.drag_started.connect(_on_card_drag_started)
 	card.drag_moved.connect(_on_card_drag_moved)
 	card.drag_ended.connect(_on_card_drag_ended)
@@ -1794,7 +1798,7 @@ func _perform_opponent_turn() -> void:
 	var started: bool = session.start(
 		duel_state,
 		DuelRules.OPPONENT_OWNER,
-		opponent_search_budget_seconds,
+		_effective_opponent_search_budget_seconds(),
 		greedy_fallback,
 		_opponent_search_test_limits
 	)
@@ -1872,6 +1876,12 @@ func _wait_for_minimum_opponent_decision(decision_started_usec: int) -> void:
 			await get_tree().create_timer(remaining_seconds).timeout
 	while is_inside_tree() and _inspection_open:
 		await get_tree().process_frame
+
+
+func _effective_opponent_search_budget_seconds() -> float:
+	return opponent_search_budget_seconds * Difficulty.enemy_search_time_multiplier(
+		run_difficulty
+	)
 
 
 func _take_planned_opponent_action() -> ActionData:
