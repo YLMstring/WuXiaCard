@@ -60,6 +60,20 @@ Catalog rules:
 `&"text"` is a Godot `StringName`, used for stable vocabulary identifiers.
 Display text remains a normal String.
 
+## Ability Design Specifications
+
+Every design document that adds or changes a catalog ability must include the
+complete catalog primitive declaration for each designed ability and the exact
+`abilities` array composition for every affected card. Natural-language effect
+text, a field-level diff, or a list of primitive names is not sufficient.
+
+The declaration must spell out trigger events, conditions, action order,
+selectors and zone order, costs, invalid-context policy, retention, modifiers,
+and batch metadata wherever they apply. Unchanged abilities that participate in
+an affected card's composition must also be shown when their ordering matters.
+Non-card systems such as progression unlocks should instead document their exact
+ordered data flow and must not invent catalog primitives.
+
 ## Card Families and Progression Unlocks
 
 Cards form an unlock family when both `glyph` and `sect` match. Whenever a card
