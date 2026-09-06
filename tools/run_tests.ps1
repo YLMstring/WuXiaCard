@@ -118,6 +118,8 @@ $testScripts = @(
 	"test_jinzhen_wanhua_integration.gd",
 	"test_mianli_cangzhen3.gd",
 	"test_mianli_cangzhen3_integration.gd",
+	"test_yusui_kungang_abilities.gd",
+	"test_yusui_kungang_integration.gd",
 	"test_ki_bead_presentation.gd",
     "test_youfen_integration.gd",
     "test_zixia_integration.gd",

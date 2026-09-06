@@ -239,6 +239,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ABILITY_SOURCE,
 		OPPONENT_OF_ABILITY_SOURCE,
 		CARD_CURRENT,
+		OPPONENT_OF_CARD_CURRENT,
 		CARD_ORIGINAL,
 		UNSUPPORTED,
 	};
@@ -323,6 +324,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		CardRefOpcode summon_card_ref = CardRefOpcode::UNSUPPORTED;
 		CardRefOpcode summon_cell_card_ref = CardRefOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode summon_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		RelativeOwnerOpcode summon_board_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		StringName change_reason;
 		String weapon;
 		bool stop_rule_on_invalid_context = false;
@@ -346,6 +348,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t current_source_cell = -1;
 		int32_t last_summoned_card_index = -1;
 		int32_t last_summoned_cell = -1;
+		std::vector<int32_t> departed_card_indices;
 	};
 
 	struct CompiledModifier {

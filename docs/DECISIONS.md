@@ -676,6 +676,20 @@ respectively, in row-major order. The source itself is eligible.
   failed ki payment stops only the copy, while a full hand after discard chains
   still spends the ki and makes the add action no-effect.
 
+## 玉碎昆冈
+
+- “我被移除时” is a `CARD_BEFORE_EXILED` reaction. It resolves before the
+  triggering card enters any removed zone; it is not an after-exile reaction.
+- Both tiers swap with the sole adjacent enemy after summon. Their locked
+  abilities reduce their points once at every turn start and once at every
+  turn end, regardless of which owner is acting, and survive ownership flips.
+- Before YuSui is exiled, every current adjacent card flips to the opponent of
+  that card's own current owner through the normal flip/prevention pipeline.
+- Tier 3 then transforms the exact runtime instance into `BaGuaFangWei`,
+  temporarily departs, and re-enters the same cell for the opponent of its
+  pre-exile current owner. Successful re-entry cancels the pending exile by
+  invalidating its target; the same instance never enters the removed zone.
+
 ## 场景背景音乐
 
 - Background music is owned by one persistent presentation node under

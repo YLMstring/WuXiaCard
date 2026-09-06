@@ -146,6 +146,7 @@ const OWNER_ABILITY_SOURCE: StringName = &"ability_source"
 const OWNER_CARD_CURRENT: StringName = &"card_current_owner"
 const OWNER_CARD_ORIGINAL: StringName = &"card_original_owner"
 const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
+const OWNER_OPPONENT_OF_CARD_CURRENT: StringName = &"opponent_of_card_current_owner"
 const VALUE_CARD_COUNT: StringName = &"card_count"
 const RESOURCE_KI: StringName = &"ki"
 const RESOURCE_POWERS: StringName = &"powers"
@@ -321,6 +322,7 @@ const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 	OWNER_CARD_CURRENT,
 	OWNER_CARD_ORIGINAL,
 	OWNER_OPPONENT_OF_ABILITY_SOURCE,
+	OWNER_OPPONENT_OF_CARD_CURRENT,
 ]
 const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
 const KNOWN_RESOURCES: Array[StringName] = [RESOURCE_KI, RESOURCE_POWERS]
@@ -2155,6 +2157,89 @@ const SANRU_END_TURN_EXILE: Dictionary = {
 	}],
 }
 
+const YUSUI_SWAP_SINGLE_ADJACENT_ENEMY: Dictionary = KUIHUA3_SWAP_SINGLE_ADJACENT_ENEMY
+
+const YUSUI_TURN_BOUNDARY_DECAY: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [
+		{
+			"event": TRIGGER_START_OWNER_TURN,
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_ABILITY_SOURCE,
+			}],
+		},
+		{
+			"event": TRIGGER_END_OWNER_TURN,
+			"actions": [{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_ABILITY_SOURCE,
+			}],
+		},
+	],
+}
+
+const YUSUI_FLIP_ADJACENT_BEFORE_EXILE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BEFORE_EXILED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE}],
+			},
+			"actions": [{
+				"type": ACTION_FLIP_SELF,
+				"new_owner": OWNER_OPPONENT_OF_CARD_CURRENT,
+			}],
+		}],
+	}],
+}
+
+const YUSUI_FLIP_ADJACENT_AND_REBIRTH_BEFORE_EXILE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BEFORE_EXILED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE}],
+				},
+				"actions": [{
+					"type": ACTION_FLIP_SELF,
+					"new_owner": OWNER_OPPONENT_OF_CARD_CURRENT,
+				}],
+			},
+			{
+				"type": ACTION_TRANSFORM_CARD,
+				"card": CARD_REF_TRIGGER_CARD,
+				"card_id": &"BaGuaFangWei",
+			},
+			{
+				"type": ACTION_DEPART_CARD_FOR_RESUMMON,
+				"card": CARD_REF_TRIGGER_CARD,
+				"on_invalid_context": STOP_RULE,
+			},
+			{
+				"type": ACTION_SUMMON_CARD,
+				"card": CARD_REF_TRIGGER_CARD,
+				"cell": {
+					"type": CELL_REF_INITIAL_CARD_CELL,
+					"card": CARD_REF_TRIGGER_CARD,
+				},
+				"owner": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			},
+		],
+	}],
+}
+
 const _CARD_DEFINITIONS: Dictionary = {
 	&"CangSongYingKe1": {
 		"id": &"CangSongYingKe1",
@@ -2722,7 +2807,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。锁定：回合开始和结束时，点数减一。锁定：我被移除时，使所有相邻牌翻面，然后将我变成八卦方位并作为敌方重新进场。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
 		"powers": [3, 5, 5, 3],
-		"abilities": [],
+		"abilities": [
+			YUSUI_SWAP_SINGLE_ADJACENT_ENEMY,
+			YUSUI_TURN_BOUNDARY_DECAY,
+			YUSUI_FLIP_ADJACENT_AND_REBIRTH_BEFORE_EXILE,
+		],
 	},
 	&"YuSuiKunGang4": {
 		"id": &"YuSuiKunGang4",
@@ -2734,7 +2823,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若只有一个相邻敌方，与其交换位置。锁定：回合开始和结束时，点数减一。锁定：我被移除时，使所有相邻牌翻面。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
 		"powers": [3, 5, 5, 3],
-		"abilities": [],
+		"abilities": [
+			YUSUI_SWAP_SINGLE_ADJACENT_ENEMY,
+			YUSUI_TURN_BOUNDARY_DECAY,
+			YUSUI_FLIP_ADJACENT_BEFORE_EXILE,
+		],
 	},
 	&"BaoCanShouQue2": {
 		"id": &"BaoCanShouQue2",
@@ -5627,6 +5720,7 @@ static func _validate_action(
 		if StringName(action.get("new_owner", &"")) not in [
 			OWNER_ABILITY_SOURCE,
 			OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			OWNER_OPPONENT_OF_CARD_CURRENT,
 		]:
 			errors.append(
 				"Card %s %s action %s requires a known new_owner"
@@ -5778,6 +5872,13 @@ static func _validate_action(
 	if action_type == ACTION_SUMMON_CARD:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"cell")
+		if action.has("owner"):
+			allowed_keys.append(&"owner")
+			if StringName(action.get("owner", &"")) not in KNOWN_OWNER_REFERENCES:
+				errors.append(
+					"Card %s %s summon action requires a known owner reference"
+					% [card_id, context_name]
+				)
 		_validate_summon_card_spec(card_id, context_name, action.get("card", null), errors)
 		_validate_summon_cell_spec(card_id, context_name, action.get("cell", null), errors)
 	if action_type == ACTION_RESUMMON_CARD_IN_PLACE:

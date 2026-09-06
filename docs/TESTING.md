@@ -131,6 +131,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   flip-loss behavior.
 - `test_mianli_cangzhen3_integration.gd` — production-controller old-view fade
   before fresh ink summon and final simulator/view identity synchronization.
+- `test_yusui_kungang_abilities.gd` — exact declarations, sole-adjacent-enemy
+  entry swaps, locked turn-boundary decay, before-exile adjacent flips, and
+  tier-three same-instance Bagua rebirth for the pre-exile owner's enemy.
+- `test_yusui_kungang_integration.gd` — production-controller fade/summon
+  ordering and exact view identity across tier-three transformation and
+  same-instance rebirth.
 
 These are `SceneTree` scripts run with:
 

@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-05
+Updated: 2026-09-06
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -43,6 +43,16 @@ release-ready Android package.
 - Persistent deck profile: `scripts/deck_profile_store.gd`
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`
 - Runtime/presentation bridge: `scripts/duel_controller.gd`
+- `YuSuiKunGang3` and `YuSuiKunGang4` use the shared sole-adjacent-enemy
+  after-summon swap and locked point decay at every turn start and end. Their
+  removal reaction is discovered at `CARD_BEFORE_EXILED`: every adjacent card
+  flips relative to its own current owner before the pending exile continues.
+  Tier 3 then transforms the exact source instance into `BaGuaFangWei`, departs,
+  and re-enters its original cell for the enemy of its pre-exile owner. A
+  successful re-entry invalidates the pending exile, so it emits no
+  `card_exiled`. See
+  `docs/superpowers/specs/2026-09-06-yusui-kungang-design.md` for the complete
+  declarations.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing switch: `scripts/game_settings.gd`, `TESTING_MODE`

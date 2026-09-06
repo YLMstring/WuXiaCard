@@ -546,17 +546,21 @@ those abilities never return.
 Ability-created summons use generic `ACTION_SUMMON_CARD`. Its `card` spec is
 either an exact reference such as `CARD_REF_SELECTED_CARD`, or a
 `CARD_SPEC_FRESH_COPY` of another card reference, or the declared owner's
-current `CARD_SPEC_TOP_DISCARD`. Its `cell` spec may refer to an exact card's
-initial cell, the lowest-index adjacent empty cell, the first empty cell
-adjacent to an enemy, or an adjacent-first/any-empty fallback. Exact hand,
-discard, and removed instances leave that zone; fresh specifications create a
-unique catalog instance. A discard instance keeps its point, ki,
-`instance_id`, and `original_owner`, but its board owner becomes the summoning
-ability's owner. Every successful summon resolves both summon trigger phases
-and a standard attack. Sequential summon actions finish each complete summon
-chain before attempting the next action, so a later top-discard specification
-reads the live pile after all earlier chains; an occupied destination makes
-only that later summon return `NO_EFFECT`.
+current `CARD_SPEC_TOP_DISCARD`. Its optional top-level `owner` sets the board
+owner; omitting it preserves the default ability-source owner. Its `cell` spec
+may refer to an exact card's initial cell, the lowest-index adjacent empty
+cell, the first empty cell adjacent to an enemy, or an adjacent-first/any-empty
+fallback. Exact hand, discard, and removed instances leave that zone; fresh
+specifications create a unique catalog instance. An exact reference that has
+just left the board through `ACTION_DEPART_CARD_FOR_RESUMMON` in the same action
+chain may also re-enter as that same runtime instance; a successful summon
+consumes its departure record. A discard instance keeps its point, ki,
+`instance_id`, and `original_owner`, but its board owner becomes the resolved
+summon owner. Every successful summon resolves both summon trigger phases and
+a standard attack. Sequential summon actions finish each complete summon chain
+before attempting the next action, so a later top-discard specification reads
+the live pile after all earlier chains; an occupied destination makes only
+that later summon return `NO_EFFECT`.
 
 `ACTION_RETURN_CARD_TO_HAND` accepts an exact card reference and owner-relative
 recipient, including `OWNER_CARD_ORIGINAL`. It follows the instance across
@@ -585,6 +589,10 @@ in `DuelState`, catalog definitions, or a replay record.
 
 ## Revelation, Prevention, and Passive Modifiers
 
+- `ACTION_FLIP_SELF.new_owner = OWNER_OPPONENT_OF_CARD_CURRENT` resolves from
+  each action subject's current owner. It is therefore suitable for one batch
+  that flips both allied and enemy selected cards, without treating the
+  ability source's owner as their shared reference.
 - `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and an `all` or `remembered`
   filter. It emits `card_revealed` only for newly revealed exact instances.
 - `ACTION_ENABLE_FUTURE_DRAW_REVEAL` stores a duel-state audience independently

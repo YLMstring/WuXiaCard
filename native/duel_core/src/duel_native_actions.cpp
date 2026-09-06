@@ -1310,10 +1310,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 	const int32_t target = action_context.action_subject_card_index;
 	const int32_t target_cell = find_board_card(value, target, action_context.action_subject_logical_index);
 	if (target_cell < 0 || value.board_owners[target_cell] != action_context.action_subject_owner) return ActionOutcome::NO_EFFECT;
-	int32_t new_owner = 0;
-	if (action.new_owner == RelativeOwnerOpcode::ABILITY_SOURCE) new_owner = action_context.ability_source_owner;
-	else if (action.new_owner == RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE) new_owner = other_owner(action_context.ability_source_owner);
-	else return ActionOutcome::UNSUPPORTED;
+	const int32_t new_owner = resolve_relative_owner(
+		value,
+		action.new_owner,
+		action_context,
+		target
+	);
+	if (new_owner != 1 && new_owner != 2) return ActionOutcome::UNSUPPORTED;
 	if (new_owner == value.board_owners[target_cell]) return ActionOutcome::NO_EFFECT;
 	EventContext flip_context;
 	flip_context.trigger_cell = target_cell;
@@ -2786,6 +2789,15 @@ int32_t DuelNativeCompactKernel::resolve_relative_owner(
 		int32_t logical_index = -1;
 		return locate_card(value, referenced_card_index, zone, owner, logical_index) ? owner : 0;
 	}
+	if (reference == RelativeOwnerOpcode::OPPONENT_OF_CARD_CURRENT) {
+		int32_t zone = -1;
+		int32_t owner = 0;
+		int32_t logical_index = -1;
+		return locate_card(value, referenced_card_index, zone, owner, logical_index)
+			&& (owner == 1 || owner == 2)
+			? other_owner(owner)
+			: 0;
+	}
 	return 0;
 }
 
@@ -2944,8 +2956,17 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
-	const int32_t source_owner = action_context.ability_source_owner;
-	if (source_owner != 1 && source_owner != 2) return ActionOutcome::NO_EFFECT;
+	const int32_t ability_source_owner = action_context.ability_source_owner;
+	if (ability_source_owner != 1 && ability_source_owner != 2) return ActionOutcome::NO_EFFECT;
+	const int32_t summon_board_owner = action.summon_board_owner == RelativeOwnerOpcode::UNSUPPORTED
+		? ability_source_owner
+		: resolve_relative_owner(
+			value,
+			action.summon_board_owner,
+			action_context,
+			action_context.ability_source_card_index
+		);
+	if (summon_board_owner != 1 && summon_board_owner != 2) return ActionOutcome::NO_EFFECT;
 	const int32_t source_card_index = action_context.ability_source_card_index;
 	int32_t source_cell = find_board_card(value, source_card_index, execution_state.current_source_cell);
 
@@ -2953,6 +2974,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	int32_t existing_zone = -1;
 	int32_t existing_owner = 0;
 	int32_t existing_logical_index = -1;
+	bool existing_was_departed = false;
 	StringName card_id;
 	if (action.card_spec == CardSpecOpcode::TOP_DISCARD) {
 		existing_owner = resolve_relative_owner(value, action.summon_owner, action_context);
@@ -2976,7 +2998,12 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		) return ActionOutcome::NO_EFFECT;
 		if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE) {
 			if (!locate_card(value, referenced_card_index, existing_zone, existing_owner, existing_logical_index)) {
-				return ActionOutcome::NO_EFFECT;
+				existing_was_departed = std::find(
+					execution_state.departed_card_indices.begin(),
+					execution_state.departed_card_indices.end(),
+					referenced_card_index
+				) != execution_state.departed_card_indices.end();
+				if (!existing_was_departed) return ActionOutcome::NO_EFFECT;
 			}
 		}
 	}
@@ -3059,21 +3086,25 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	StringName from_discard_instance_id;
 	int32_t previous_hand_size = -1;
 	if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE || action.card_spec == CardSpecOpcode::TOP_DISCARD) {
-		if (existing_zone != 1 && existing_zone != 3 && existing_zone != 4) return ActionOutcome::NO_EFFECT;
-		if ((existing_zone == 1 || existing_zone == 4) && existing_owner != source_owner) {
+		if (!existing_was_departed && existing_zone != 1 && existing_zone != 3 && existing_zone != 4) {
 			return ActionOutcome::NO_EFFECT;
 		}
-		const int32_t zone_index = existing_zone == 1
-			? existing_owner - 1
-			: (existing_zone == 3 ? existing_owner + 3 : existing_owner + 5);
-		std::vector<int32_t> &zone = value.zones[zone_index];
-		if (
-			existing_logical_index < 0
-			|| existing_logical_index >= static_cast<int32_t>(zone.size())
-			|| zone[existing_logical_index] != summoned_card_index
-		) return ActionOutcome::NO_EFFECT;
-		if (existing_zone == 1) previous_hand_size = static_cast<int32_t>(zone.size());
-		zone.erase(zone.begin() + existing_logical_index);
+		if ((existing_zone == 1 || existing_zone == 4) && existing_owner != ability_source_owner) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		if (!existing_was_departed) {
+			const int32_t zone_index = existing_zone == 1
+				? existing_owner - 1
+				: (existing_zone == 3 ? existing_owner + 3 : existing_owner + 5);
+			std::vector<int32_t> &zone = value.zones[zone_index];
+			if (
+				existing_logical_index < 0
+				|| existing_logical_index >= static_cast<int32_t>(zone.size())
+				|| zone[existing_logical_index] != summoned_card_index
+			) return ActionOutcome::NO_EFFECT;
+			if (existing_zone == 1) previous_hand_size = static_cast<int32_t>(zone.size());
+			zone.erase(zone.begin() + existing_logical_index);
+		}
 		instance_id = value.card_instance_ids[summoned_card_index];
 		if (existing_zone == 1) {
 			from_hand_instance_id = instance_id;
@@ -3089,7 +3120,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		String append_reason;
 		summoned_card_index = action.card_spec == CardSpecOpcode::PERFECT_COPY
 			? append_perfect_copy_board_card(value, referenced_card_index, instance_id, append_reason)
-			: append_fresh_board_card(value, card_id, instance_id, source_owner, append_reason);
+			: append_fresh_board_card(value, card_id, instance_id, summon_board_owner, append_reason);
 		if (summoned_card_index < 0) {
 			if (
 				action.card_spec != CardSpecOpcode::PERFECT_COPY
@@ -3101,7 +3132,14 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	}
 
 	value.board_card_indices[target_cell] = summoned_card_index;
-	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
+	value.board_owners[target_cell] = static_cast<uint8_t>(summon_board_owner);
+	if (existing_was_departed) {
+		execution_state.departed_card_indices.erase(std::remove(
+			execution_state.departed_card_indices.begin(),
+			execution_state.departed_card_indices.end(),
+			summoned_card_index
+		), execution_state.departed_card_indices.end());
+	}
 	if (target_cell < value.board_slot_extras.size()) value.board_slot_extras[target_cell] = Dictionary();
 	Dictionary summoned_event;
 	summoned_event["type"] = StringName("card_summoned");
@@ -3110,7 +3148,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		? value.card_instance_ids[source_card_index]
 		: StringName();
 	summoned_event["target_cell"] = target_cell;
-	summoned_event["owner_id"] = source_owner;
+	summoned_event["owner_id"] = summon_board_owner;
 	summoned_event["card_id"] = card_id;
 	summoned_event["instance_id"] = instance_id;
 	if (include_presentation_payloads) {
@@ -3119,24 +3157,26 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	summoned_event["from_hand_instance_id"] = from_hand_instance_id;
 	summoned_event["from_removed_instance_id"] = from_removed_instance_id;
 	summoned_event["from_discard_instance_id"] = from_discard_instance_id;
-	const StringName summon_reason = from_discard_instance_id.is_empty()
-		? StringName("ability_fresh_copy")
-		: StringName("ability_discard_summon");
+	const StringName summon_reason = existing_was_departed
+		? StringName("ability_resummon_same_instance")
+		: (from_discard_instance_id.is_empty()
+			? StringName("ability_fresh_copy")
+			: StringName("ability_discard_summon"));
 	summoned_event["summon_reason"] = summon_reason;
 
 	SummonRequest request;
 	request.summon_cell = target_cell;
 	request.card_index = summoned_card_index;
-	request.owner_id = source_owner;
+	request.owner_id = summon_board_owner;
 	request.summon_reason = summon_reason;
 	request.attack_reason = StringName("generated_summon_standard_attack");
 	request.buffered_placement_events.append(summoned_event);
 	if (previous_hand_size >= 0) {
 		Resolution hand_change = resolve_difficulty_hand_change(
 			value,
-			source_owner,
+			existing_owner,
 			previous_hand_size,
-			static_cast<int32_t>(value.zones[source_owner - 1].size()),
+			static_cast<int32_t>(value.zones[existing_owner - 1].size()),
 			target_cell,
 			exile_stack
 		);
@@ -3279,6 +3319,15 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::depart_card_for_
 	departed["old_instance_id"] = value.card_instance_ids[target_card_index];
 	departed["card_id"] = value.card_ids[target_card_index];
 	resolution.events.append(departed);
+	if (
+		std::find(
+			execution_state.departed_card_indices.begin(),
+			execution_state.departed_card_indices.end(),
+			target_card_index
+		) == execution_state.departed_card_indices.end()
+	) {
+		execution_state.departed_card_indices.push_back(target_card_index);
+	}
 	execution_state.current_source_cell = find_board_card(
 		value,
 		action_context.action_subject_card_index,

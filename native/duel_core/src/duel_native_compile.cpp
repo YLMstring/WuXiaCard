@@ -296,6 +296,7 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (owner == StringName("ability_source")) return RelativeOwnerOpcode::ABILITY_SOURCE;
 		if (owner == StringName("opponent_of_ability_source")) return RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE;
 		if (owner == StringName("card_current_owner")) return RelativeOwnerOpcode::CARD_CURRENT;
+		if (owner == StringName("opponent_of_card_current_owner")) return RelativeOwnerOpcode::OPPONENT_OF_CARD_CURRENT;
 		if (owner == StringName("card_original_owner")) return RelativeOwnerOpcode::CARD_ORIGINAL;
 		return RelativeOwnerOpcode::UNSUPPORTED;
 	};
@@ -402,9 +403,8 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		if (compiled.card_ref_explicit) compiled.card_ref = compile_card_ref(action.get("card", StringName()));
 	} else if (type == StringName("flip_self") && action.size() == 2 + generic_field_count) {
 		compiled.opcode = ActionOpcode::FLIP_SELF;
-		const StringName owner = action.get("new_owner", StringName());
-		if (owner == StringName("ability_source")) compiled.new_owner = RelativeOwnerOpcode::ABILITY_SOURCE;
-		else if (owner == StringName("opponent_of_ability_source")) compiled.new_owner = RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE;
+		compiled.new_owner = compile_relative_owner(action.get("new_owner", StringName()));
+		if (compiled.new_owner == RelativeOwnerOpcode::UNSUPPORTED) compiled.declaration_valid = false;
 	} else if (
 		(type == StringName("grant_trigger_card_ability") || type == StringName("grant_ability_to_self"))
 		&& action.size() == 2 + generic_field_count
@@ -686,10 +686,18 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		else compiled.declaration_valid = false;
 	} else if (
 		type == StringName("summon_card")
-		&& action.size() == 3 + generic_field_count
+		&& (action.size() == 3 + generic_field_count || action.size() == 4 + generic_field_count)
 		&& Variant(action.get("cell", Variant())).get_type() == Variant::DICTIONARY
 	) {
 		compiled.opcode = ActionOpcode::SUMMON_CARD;
+		if (action.has("owner")) {
+			compiled.summon_board_owner = compile_relative_owner(
+				action.get("owner", StringName())
+			);
+			if (compiled.summon_board_owner == RelativeOwnerOpcode::UNSUPPORTED) {
+				compiled.declaration_valid = false;
+			}
+		}
 		const Variant card_value = action.get("card", Variant());
 		if (card_value.get_type() == Variant::STRING_NAME || card_value.get_type() == Variant::STRING) {
 			compiled.card_spec = CardSpecOpcode::EXISTING_REFERENCE;
