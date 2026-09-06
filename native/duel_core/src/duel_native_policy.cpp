@@ -491,9 +491,9 @@ std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
 		for (int32_t direction = 0; direction < 4; ++direction) {
 			const int32_t adjacent_cell = neighbor_index(source_cell, direction);
 			if (adjacent_cell < 0) continue;
-			candidates.push_back(adjacent_cell);
 			const int32_t distance_two_cell = neighbor_index(adjacent_cell, direction);
 			if (distance_two_cell >= 0) candidates.push_back(distance_two_cell);
+			candidates.push_back(adjacent_cell);
 		}
 	}
 	const bool first_legal_only = card_has_modifier(

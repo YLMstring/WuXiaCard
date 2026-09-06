@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_fumo_grants_reaction_once_and_reacts_in_range()
 	_test_summon_reaction_keeps_entry_owner_identity()
 	_test_fumo_four_attacks_across_enemy_only()
+	_test_fumo_four_attacks_far_enemy_before_intervening_enemy()
 	_test_qianshou_copies_complete_runtime_state_after_board_exile()
 	_test_qianshou_responds_to_zero_power_exile()
 	_test_qianshou_skips_numberless_and_off_board_exiles()
@@ -207,6 +208,33 @@ func _test_fumo_four_attacks_across_enemy_only() -> void:
 	_check(BoardQueries.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four can attack across one enemy")
 	(state.board[1] as Dictionary)["owner"] = Rules.PLAYER_OWNER
 	_check(not BoardQueries.is_target_in_attack_range(state.board, 0, 2, {"skip_power_comparison": true}), "Fumo four cannot attack across one ally")
+
+
+func _test_fumo_four_attacks_far_enemy_before_intervening_enemy() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"FuMoQuan4", Rules.PLAYER_OWNER, &"fumo_attack_order"), Rules.PLAYER_OWNER)
+	board[1] = _slot(_plain(&"fumo_near_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[2] = _slot(_plain(&"fumo_far_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var state := State.new(board)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		0,
+		&"fumo_attack_order",
+		&"test_fumo_attack_order"
+	)
+	var attacked_cells: Array[int] = []
+	for event_value: Variant in result.get("events", []):
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == &"attack_started"
+		):
+			attacked_cells.append(int((event_value as Dictionary).get("target_cell", -1)))
+	_check(attacked_cells == [2, 1], "Fumo four attacks the far enemy before its intervening enemy")
+	_check(
+		int((state.board[1] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
+		and int((state.board[2] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Fumo four captures both enemies in one standard attack"
+	)
 
 
 func _test_qianshou_copies_complete_runtime_state_after_board_exile() -> void:
