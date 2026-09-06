@@ -513,7 +513,7 @@ const HANBIN_ACTIVATION: Dictionary = {
 		"actions": [
 			{
 				"type": ACTION_CHANGE_POWERS,
-				"amount": -1,
+				"amount": -3,
 				"card": CARD_REF_SELECTED_CARD,
 			},
 			{
@@ -4752,7 +4752,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "嵩山派",
 		"tier": 3,
 		"weapon": "心法",
-		"description": "指定：选择对手的一张手牌，使其点数减一并揭示。我翻面后：获得以下效果：回合开始时，我和最左侧的两张手牌点数减一。",
+		"description": "指定：选择对手的一张手牌，使其点数减三并揭示。我翻面后：获得以下效果：回合开始时，我和最左侧的两张手牌点数减一。",
 		"flavor": "左冷禅修炼十余年的至阴至寒功夫，所发寒气远胜冰雪，可将对手全身冻结为冰。",
 		"powers": [2, 1, 1, 2],
 		"starting_ki": 1,
@@ -4765,7 +4765,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "嵩山派",
 		"tier": 4,
 		"weapon": "心法",
-		"description": "失去最后的内力时，使我翻面。指定：选择对手的一张手牌，使其点数减一并揭示。我翻面后：获得以下效果：回合开始时，我和最左侧的两张手牌点数减一。",
+		"description": "失去最后的内力时，使我翻面。指定：选择对手的一张手牌，使其点数减三并揭示。我翻面后：获得以下效果：回合开始时，我和最左侧的两张手牌点数减一。",
 		"flavor": "左冷禅修炼十余年的至阴至寒功夫，所发寒气远胜冰雪，可将对手全身冻结为冰。",
 		"powers": [2, 1, 1, 2],
 		"starting_ki": 1,
