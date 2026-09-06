@@ -126,11 +126,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   blocks.
 - `QianShouRuLai5` uses the global post-exile snapshot boundary. A board card
   whose pre-exile powers pass `Rules.can_change_powers()`—including four
-  zeroes, excluding four `-1`s—makes each still-valid source try row-major to
-  summon a complete runtime perfect copy in the old cell through the normal
-  summon/attack pipeline. Its before-flip rule discards the physical-leftmost
-  hand card to prevent flipping, then spends one ki to add a new-ID perfect
-  runtime copy of that discarded snapshot.
+  zeroes, excluding four `-1`s—and whose catalog weapon is not `术数` makes each
+  still-valid source try row-major to summon a complete runtime perfect copy in
+  the old cell through the normal summon/attack pipeline. This uses generic
+  `CONDITION_TRIGGER_CARD_WEAPON` with optional boolean `inverted`. Its
+  before-flip rule discards the physical-leftmost hand card to prevent flipping,
+  then spends one ki to add a new-ID perfect runtime copy of that discarded
+  snapshot.
 - `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
   selection. Their point gains occur only after the required discard count.
   Locked prevented-flip reactions exile only the exact target attacked by that

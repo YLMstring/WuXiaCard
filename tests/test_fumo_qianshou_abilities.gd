@@ -27,7 +27,8 @@ func _run() -> void:
 	_test_fumo_four_attacks_far_enemy_before_intervening_enemy()
 	_test_qianshou_copies_complete_runtime_state_after_board_exile()
 	_test_qianshou_responds_to_zero_power_exile()
-	_test_qianshou_skips_numberless_and_off_board_exiles()
+	_test_trigger_card_weapon_condition_supports_default_and_inverted_matches()
+	_test_qianshou_skips_numberless_tactics_and_off_board_exiles()
 	_test_qianshou_sources_compete_for_original_cell()
 	_test_qianshou_does_not_copy_itself_after_its_own_exile()
 	_test_qianshou_flip_protection_gains_perfect_copy()
@@ -56,6 +57,10 @@ func _test_vocabulary_and_declarations() -> void:
 		Catalog.CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE in Catalog.KNOWN_TRIGGER_CONDITIONS,
 		"Power-change snapshot condition is registered"
 	)
+	_check(
+		Catalog.CONDITION_TRIGGER_CARD_WEAPON in Catalog.KNOWN_TRIGGER_CONDITIONS,
+		"Trigger-card weapon condition is registered"
+	)
 	_check(Catalog.validate_catalog().is_empty(), "Complete catalog validates")
 	for card_id: StringName in [&"FuMoQuan3", &"FuMoQuan4", &"QianShouRuLai5"]:
 		_check(
@@ -71,6 +76,18 @@ func _test_vocabulary_and_declarations() -> void:
 		and bool(modifier.get("allow_intervening_enemy", false))
 		and not bool(modifier.get("allow_intervening_ally", false)),
 		"Fumo four declares its locked enemy-intervening range"
+	)
+	var qianshou_trigger: Dictionary = (
+		((Catalog.get_definition(&"QianShouRuLai5").get("abilities", []) as Array)[0]
+		as Dictionary).get("triggers", []) as Array
+	)[0]
+	_check(
+		(qianshou_trigger.get("conditions", []) as Array).has({
+			"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON,
+			"weapon": "术数",
+			"inverted": true,
+		}),
+		"Qianshou declares the generic inverted tactics-weapon condition"
 	)
 
 
@@ -275,7 +292,63 @@ func _test_qianshou_responds_to_zero_power_exile() -> void:
 	_check(StringName(_card_at_cell(state, 4).get("card_id", &"")) == &"QianShouRuLai5", "Four-zero power exile triggers Qianshou")
 
 
-func _test_qianshou_skips_numberless_and_off_board_exiles() -> void:
+func _test_trigger_card_weapon_condition_supports_default_and_inverted_matches() -> void:
+	var board: Array = Rules.empty_board()
+	var positive_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"weapon_positive_source"
+	)
+	positive_source["active_abilities"] = [Catalog.normalize_ability({
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_EXILED,
+			"conditions": [{
+				"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON,
+				"weapon": "掌法",
+			}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	})]
+	var inverted_source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"weapon_inverted_source"
+	)
+	inverted_source["active_abilities"] = [Catalog.normalize_ability({
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_EXILED,
+			"conditions": [{
+				"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON,
+				"weapon": "术数",
+				"inverted": true,
+			}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	})]
+	board[0] = _slot(positive_source, Rules.PLAYER_OWNER)
+	board[2] = _slot(inverted_source, Rules.PLAYER_OWNER)
+	board[4] = _slot(
+		Catalog.create_instance(&"YinYangZhang3", Rules.OPPONENT_OWNER, &"weapon_palm"),
+		Rules.OPPONENT_OWNER
+	)
+	board[8] = _slot(_plain(&"weapon_exiler", Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	var state := State.new(board)
+	_exile_board_card(state, 8, &"weapon_exiler", &"weapon_palm")
+	_check(int(_board_card(state, &"weapon_positive_source").get("ki", 0)) == 1, "Omitted inversion matches the declared weapon")
+	_check(int(_board_card(state, &"weapon_inverted_source").get("ki", 0)) == 1, "Inverted weapon condition matches a different weapon")
+	var tactics: Dictionary = Catalog.create_instance(
+		&"BaGuaFangWei",
+		Rules.OPPONENT_OWNER,
+		&"weapon_tactics"
+	)
+	tactics["powers"] = [1, 1, 1, 1]
+	state.board[4] = _slot(tactics, Rules.OPPONENT_OWNER)
+	_exile_board_card(state, 8, &"weapon_exiler", &"weapon_tactics")
+	_check(int(_board_card(state, &"weapon_positive_source").get("ki", 0)) == 1, "Positive weapon condition rejects a different weapon")
+	_check(int(_board_card(state, &"weapon_inverted_source").get("ki", 0)) == 1, "Inverted weapon condition rejects the declared weapon")
+
+
+func _test_qianshou_skips_numberless_tactics_and_off_board_exiles() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(Catalog.create_instance(&"QianShouRuLai5", Rules.PLAYER_OWNER, &"qian_skip_source"), Rules.PLAYER_OWNER)
 	board[4] = _slot(_plain(&"qian_numberless", Rules.OPPONENT_OWNER, [-1, -1, -1, -1]), Rules.OPPONENT_OWNER)
@@ -283,6 +356,15 @@ func _test_qianshou_skips_numberless_and_off_board_exiles() -> void:
 	var state := State.new(board)
 	_exile_board_card(state, 8, &"qian_skip_exiler", &"qian_numberless")
 	_check(state.board[4] == null, "Numberless board exile does not trigger Qianshou")
+	var tactics: Dictionary = Catalog.create_instance(
+		&"BaGuaFangWei",
+		Rules.OPPONENT_OWNER,
+		&"qian_tactics"
+	)
+	tactics["powers"] = [1, 1, 1, 1]
+	state.board[4] = _slot(tactics, Rules.OPPONENT_OWNER)
+	_exile_board_card(state, 8, &"qian_skip_exiler", &"qian_tactics")
+	_check(state.board[4] == null, "Numbered tactics exile does not trigger Qianshou")
 
 	var hand_target: Dictionary = _plain(&"qian_hand_target", Rules.OPPONENT_OWNER)
 	state.get_hand(Rules.OPPONENT_OWNER).append(hand_target)

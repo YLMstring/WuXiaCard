@@ -95,6 +95,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ATTACK_FLIPPED_ENEMY,
 		ATTACK_FLIPPED_ALLY_IN_RANGE,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		TRIGGER_CARD_WEAPON,
 		DRAWN_CARD_IS_ENEMY,
 		TURN_OWNER_IS_SELF,
 		OWNER_DID_NOT_WIN,
@@ -276,6 +277,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct CompiledCondition {
 		ConditionOpcode opcode = ConditionOpcode::UNSUPPORTED;
 		int32_t amount = 0;
+		String weapon;
+		bool inverted = false;
 	};
 
 	struct CompiledSelectorCondition {

@@ -667,6 +667,11 @@ respectively, in row-major order. The source itself is eligible.
   owner's removed zone. Qianshou reacts only when the card was on the board and
   its pre-exile snapshot passes the same `Rules.can_change_powers()` predicate
   as selected-card power changes; four zeroes qualify and four `-1`s do not.
+  It also rejects tactics cards even if their runtime powers are numbered.
+- `CONDITION_TRIGGER_CARD_WEAPON` compares the trigger card's immutable catalog
+  weapon with a required nonempty `weapon` string. Optional boolean `inverted`
+  defaults to false and negates the comparison when true; a missing trigger or
+  catalog template never matches.
 - A Qianshou perfect copy preserves the source's complete current runtime card
   state while receiving a new instance ID. It enters the removed card's former
   cell through the full normal summon/attack path. Multiple sources resolve

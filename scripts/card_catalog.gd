@@ -64,6 +64,7 @@ const CONDITION_TRIGGER_CARD_WAS_ON_BOARD: StringName = &"trigger_card_was_on_bo
 const CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE: StringName = (
 	&"trigger_card_powers_could_change"
 )
+const CONDITION_TRIGGER_CARD_WEAPON: StringName = &"trigger_card_weapon"
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
@@ -233,6 +234,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_MOVING_CARD_IS_ALLY,
 	CONDITION_TRIGGER_CARD_WAS_ON_BOARD,
 	CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE,
+	CONDITION_TRIGGER_CARD_WEAPON,
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
@@ -890,6 +892,11 @@ const QIANSHOU_RESUMMON_PERFECT_COPY: Dictionary = {
 		"conditions": [
 			{"type": CONDITION_TRIGGER_CARD_WAS_ON_BOARD},
 			{"type": CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE},
+			{
+				"type": CONDITION_TRIGGER_CARD_WEAPON,
+				"weapon": "术数",
+				"inverted": true,
+			},
 		],
 		"actions": [{
 			"type": ACTION_SUMMON_CARD,
@@ -5491,6 +5498,21 @@ static func _validate_condition(
 		var threshold: Variant = condition.get("amount", null)
 		if typeof(threshold) != TYPE_INT or int(threshold) < 0:
 			errors.append("Card %s %s requires a non-negative integer ki_at_least amount" % [card_id, context_name])
+	if condition_type == CONDITION_TRIGGER_CARD_WEAPON:
+		allowed_keys.append(&"weapon")
+		var weapon_value: Variant = condition.get("weapon", null)
+		if typeof(weapon_value) != TYPE_STRING or String(weapon_value).is_empty():
+			errors.append(
+				"Card %s %s trigger-card weapon condition requires a non-empty String weapon"
+				% [card_id, context_name]
+			)
+		if condition.has("inverted"):
+			allowed_keys.append(&"inverted")
+			if typeof(condition.get("inverted")) != TYPE_BOOL:
+				errors.append(
+					"Card %s %s trigger-card weapon condition requires a boolean inverted"
+					% [card_id, context_name]
+				)
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])

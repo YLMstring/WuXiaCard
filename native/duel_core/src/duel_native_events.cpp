@@ -155,6 +155,24 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE:
 				matched = context.trigger_card_index >= 0 && can_change_powers(value, context.trigger_card_index);
 				break;
+			case ConditionOpcode::TRIGGER_CARD_WEAPON:
+				if (
+					context.trigger_card_index >= 0
+					&& context.trigger_card_index < static_cast<int32_t>(value.card_template_indices.size())
+				) {
+					const int32_t template_index = value.card_template_indices[context.trigger_card_index];
+					if (template_index >= 0 && template_index < value.card_template_pool.size()) {
+						const Variant template_value = value.card_template_pool[template_index];
+						if (template_value.get_type() == Variant::DICTIONARY) {
+							const Dictionary card_template = template_value;
+							const bool weapon_matches = (
+								String(card_template.get("weapon", String())) == condition.weapon
+							);
+							matched = condition.inverted ? !weapon_matches : weapon_matches;
+						}
+					}
+				}
+				break;
 			case ConditionOpcode::DRAWN_CARD_IS_ENEMY:
 				matched = context.trigger_owner != 0 && context.trigger_owner != group.source_owner;
 				break;

@@ -12,6 +12,7 @@
 - 千手如来掌在原格生成的复制视为普通进场：完整结算进场前、全场进场后能力和标准攻击。
 - 千手如来掌会响应“四边降为 0 而被移除”的普通点数牌。
 - 四边为 `-1` 的无点数牌不满足“有点数的牌”。
+- 即使术数牌具有普通点数，千手如来掌也不会响应其移除。
 - 金刚伏魔圈反复满足空手条件时，相同的获授反应能力只保留一份，不叠加。
 - 多个千手如来掌响应同一次移除时按全场行优先顺序结算；第一张成功占据原格后，其余进场动作因格位不空而无效。
 - 金刚伏魔圈授予的反应能力不标记 `retained_on_flip`，因此按通用规则在翻面时失去。
@@ -43,6 +44,20 @@ const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
 ```
 
 它读取离场前快照，并与 `CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE` 共用 `Rules.can_change_powers()` 判断。四边均为普通非负整数时成立，包含 `[0, 0, 0, 0]`；四边 `-1` 的无点数牌不成立。
+
+新增通用触发牌武器条件：
+
+```gdscript
+{
+    "type": CONDITION_TRIGGER_CARD_WEAPON,
+    "weapon": "术数",
+    "inverted": true,
+}
+```
+
+`weapon` 为必填非空字符串。`inverted` 为可省略布尔值，默认 `false`：省略时仅
+触发牌武器等于 `weapon` 才成立；设为 `true` 时仅不等于 `weapon` 才成立。无有效
+触发牌实例或目录模板时一律不成立，不能因反转而匹配空上下文。
 
 ### 运行时完美复制
 
@@ -174,6 +189,11 @@ const QIANSHOU_RESUMMON_PERFECT_COPY: Dictionary = {
         "conditions": [
             {"type": CONDITION_TRIGGER_CARD_WAS_ON_BOARD},
             {"type": CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE},
+            {
+                "type": CONDITION_TRIGGER_CARD_WEAPON,
+                "weapon": "术数",
+                "inverted": true,
+            },
         ],
         "actions": [{
             "type": ACTION_SUMMON_CARD,

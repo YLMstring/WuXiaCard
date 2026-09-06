@@ -89,6 +89,23 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(condition.get("amount", 0)));
 		return compiled;
 	}
+	if (
+		type == StringName("trigger_card_weapon")
+		&& (condition.size() == 2 || condition.size() == 3)
+		&& (
+			Variant(condition.get("weapon", Variant())).get_type() == Variant::STRING
+			|| Variant(condition.get("weapon", Variant())).get_type() == Variant::STRING_NAME
+		)
+		&& (
+			!condition.has("inverted")
+			|| Variant(condition.get("inverted", Variant())).get_type() == Variant::BOOL
+		)
+	) {
+		compiled.opcode = ConditionOpcode::TRIGGER_CARD_WEAPON;
+		compiled.weapon = String(condition.get("weapon", String()));
+		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
 	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;

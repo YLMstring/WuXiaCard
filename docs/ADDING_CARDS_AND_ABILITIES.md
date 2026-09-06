@@ -537,6 +537,12 @@ then discovered row-major from cards still on the board. Use
 filtering to the pre-exile snapshot. `[0,0,0,0]` therefore qualifies while the
 four-`-1` sentinel does not.
 
+Use `CONDITION_TRIGGER_CARD_WEAPON` to compare the trigger card's immutable
+catalog weapon category. Its required nonempty `weapon` string is an exact
+match by default; optional `"inverted": true` reverses the match. A missing
+trigger-card snapshot or template never satisfies the condition, including
+the inverted form.
+
 `ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES` stores each removed ability
 on that exact card until the current turn ends. Retained abilities are never
 removed. A later grant is immediately active; a later suppression may remove it
