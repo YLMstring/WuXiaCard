@@ -22,7 +22,7 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 	Store.DEFAULT_VICTORIES_REQUIRED
 )
 
-var testing_mode: bool = Settings.TESTING_MODE
+var testing_mode: bool = Settings.default_testing_mode()
 var _current_screen: Control = null
 var _normal_deck_profile_path: String = ""
 var _music_director: Node = null

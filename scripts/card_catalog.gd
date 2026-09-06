@@ -2164,6 +2164,7 @@ const YUSUI_TURN_BOUNDARY_DECAY: Dictionary = {
 	"triggers": [
 		{
 			"event": TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 			"actions": [{
 				"type": ACTION_CHANGE_POWERS,
 				"amount": -1,
@@ -2172,6 +2173,7 @@ const YUSUI_TURN_BOUNDARY_DECAY: Dictionary = {
 		},
 		{
 			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 			"actions": [{
 				"type": ACTION_CHANGE_POWERS,
 				"amount": -1,

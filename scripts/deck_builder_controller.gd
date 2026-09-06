@@ -29,7 +29,7 @@ const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
 
-var testing_mode: bool = Settings.TESTING_MODE
+var testing_mode: bool = Settings.default_testing_mode()
 var profile: Dictionary = {}
 var _profile_store: RefCounted
 var _inspection_open: bool = false

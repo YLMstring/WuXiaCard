@@ -88,7 +88,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export_range(0, 9) var run_difficulty: int = 0
 
 var turn_state: TurnState = TurnState.PLAYER
-var testing_mode: bool = Settings.TESTING_MODE
+var testing_mode: bool = Settings.default_testing_mode()
 var board: Array = DuelRules.empty_board()
 var duel_state: StateData = null
 var board_cells: Array[PanelContainer] = []

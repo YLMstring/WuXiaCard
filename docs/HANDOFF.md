@@ -44,7 +44,8 @@ release-ready Android package.
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`
 - Runtime/presentation bridge: `scripts/duel_controller.gd`
 - `YuSuiKunGang3` and `YuSuiKunGang4` use the shared sole-adjacent-enemy
-  after-summon swap and locked point decay at every turn start and end. Their
+  after-summon swap and locked point decay at their current owner's turn start
+  and end. Their
   removal reaction is discovered at `CARD_BEFORE_EXILED`: every adjacent card
   flips relative to its own current owner before the pending exile continues.
   Tier 3 then transforms the exact source instance into `BaGuaFangWei`, departs,
@@ -55,7 +56,8 @@ release-ready Android package.
   declarations.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
-- Testing switch: `scripts/game_settings.gd`, `TESTING_MODE`
+- Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
+  mode, while Windows and Android exports default to normal mode.
 - Android preset: `export_presets.cfg`
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`
@@ -397,6 +399,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
   diagnostic run recorded a lower real hit rate of `17.66%`, but those hits
   produced 50,425 exact returns and 24,188 bound cutoffs.
 - Testing mode is fixed when the duel is created and cannot be toggled in-game.
+  Summer Engine editor Play enables it automatically through the `editor`
+  runtime feature; exported Windows and Android builds remain in normal mode.
 - After victory or defeat, the black replay icon left of the board reconstructs
   the exact opening state and replays all successful actions. During a live
   duel or between replay actions, it instead opens the ordinary catalog-based

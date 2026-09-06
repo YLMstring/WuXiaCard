@@ -23,7 +23,7 @@ const DEFAULT_STATUS: String = "长按选择一张卡牌，然后拖至主牌组
 @export var library_aspect_ratio: float = 0.78
 @export var reward_color_seed: int = 0
 
-var testing_mode: bool = Settings.TESTING_MODE
+var testing_mode: bool = Settings.default_testing_mode()
 var profile: Dictionary = {}
 var _profile_store: RefCounted
 var _reward_ids: Array[StringName] = []

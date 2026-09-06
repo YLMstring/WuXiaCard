@@ -150,6 +150,11 @@ Agent-run visible or device playtests must be silent. Start them with a dummy
 audio driver or mute the master audio bus before entering the game. Do not
 change production music or sound-effect defaults for test convenience.
 
+Summer Engine editor Play automatically uses testing mode, revealing both hands
+and allowing manual control of both sides. Exported Windows and Android builds
+default to normal mode because export templates do not carry the `editor`
+runtime feature.
+
 Summer Engine may print `WARNING: ObjectDB instances leaked at exit` because of its own AuthManager lifecycle. The runner does not fail on warnings alone. Investigate any actual `ERROR:` line.
 
 ## Expected Baseline

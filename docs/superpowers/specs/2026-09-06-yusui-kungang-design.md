@@ -6,7 +6,8 @@
 统一落在 `CARD_BEFORE_EXILED`，不是移除完成后的 `CARD_AFTER_EXILED`。
 
 - 进场换位只在进场后恰有一个相邻敌方时发动；其它相邻友方不计入数量。
-- “回合开始和结束时”指任意一方的回合开始与回合结束，各减一次点数。
+- “回合开始和结束时”只指这张牌当前所属方的回合开始与回合结束，各减一次点数；
+  另一方的两个回合边界均不触发。翻面后跟随新的当前所属方判断。
 - 两条标记为“锁定”的能力均设置 `retained_on_flip = true`；进场换位不保留。
 - 移除前翻面按棋盘 `0 → 8` 快照所有当时相邻牌，并在每张结算前重新检查相邻条件。
   每张牌都翻为其当前所属方的敌方，且照常经过防止翻面与翻面触发流程。
@@ -64,6 +65,7 @@ const YUSUI_TURN_BOUNDARY_DECAY := {
     "triggers": [
         {
             "event": TRIGGER_START_OWNER_TURN,
+            "conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
             "actions": [{
                 "type": ACTION_CHANGE_POWERS,
                 "amount": -1,
@@ -72,6 +74,7 @@ const YUSUI_TURN_BOUNDARY_DECAY := {
         },
         {
             "event": TRIGGER_END_OWNER_TURN,
+            "conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
             "actions": [{
                 "type": ACTION_CHANGE_POWERS,
                 "amount": -1,

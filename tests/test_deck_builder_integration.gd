@@ -390,6 +390,7 @@ func _run() -> void:
 	_check(bool(difficulty_eight_begin.get("ok", false)), "Difficulty-eight concealment fixture begins")
 	var difficulty_eight_builder: Variant = BUILDER_SCENE.instantiate()
 	difficulty_eight_builder.profile_path = _save_path
+	difficulty_eight_builder.testing_mode = false
 	difficulty_eight_builder.upcoming_enemy_card_ids = enemy_fixture_ids
 	root.add_child(difficulty_eight_builder)
 	await process_frame

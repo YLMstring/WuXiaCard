@@ -27,7 +27,8 @@ These decisions were explicitly established during development and should not be
 - Future abilities may reveal hidden cards, so concealment is presentation state, not deletion of card data.
 - The AI is allowed perfect information, including both hands and shuffled deck order.
 - Testing mode lets the player manually control both sides and reveals both hands.
-- Testing mode is a script setting, not an in-game toggle.
+- Testing mode is not an in-game toggle. Summer Engine editor Play enables it
+  automatically; exported Windows and Android builds default to normal mode.
 
 ## Completed-Duel Replay
 
@@ -681,8 +682,9 @@ respectively, in row-major order. The source itself is eligible.
 - “我被移除时” is a `CARD_BEFORE_EXILED` reaction. It resolves before the
   triggering card enters any removed zone; it is not an after-exile reaction.
 - Both tiers swap with the sole adjacent enemy after summon. Their locked
-  abilities reduce their points once at every turn start and once at every
-  turn end, regardless of which owner is acting, and survive ownership flips.
+  abilities reduce their points once at their current owner's turn start and
+  once at that owner's turn end. The other owner's boundaries do nothing;
+  ownership flips transfer which turn qualifies. These abilities survive flips.
 - Before YuSui is exiled, every current adjacent card flips to the opponent of
   that card's own current owner through the normal flip/prevention pipeline.
 - Tier 3 then transforms the exact runtime instance into `BaGuaFangWei`,

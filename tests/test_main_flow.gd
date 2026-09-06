@@ -9,6 +9,7 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
+const Settings = preload("res://scripts/game_settings.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -21,7 +22,13 @@ func _init() -> void:
 
 func _run() -> void:
 	_cleanup()
+	_check(Settings.should_enable_testing_mode(true), "Editor runtime enables testing mode")
+	_check(not Settings.should_enable_testing_mode(false), "Export runtime keeps normal mode")
 	var flow: Variant = MAIN_SCENE.instantiate()
+	_check(
+		bool(flow.testing_mode) == Settings.default_testing_mode(),
+		"Main flow initializes from the shared runtime testing-mode policy"
+	)
 	flow.deck_profile_path = _save_path
 	flow.testing_mode = true
 	flow.victories_required = 15

@@ -17,7 +17,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_vocabulary_and_declarations()
 	_test_entry_swaps_only_with_exactly_one_adjacent_enemy()
-	_test_locked_decay_runs_at_both_turn_boundaries_after_flip()
+	_test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip()
 	_test_tier_four_exile_flips_every_adjacent_card()
 	_test_tier_three_reenters_as_enemy_bagua_with_same_instance()
 	_test_captured_tier_three_uses_pre_exile_owner_for_enemy_relation()
@@ -88,7 +88,7 @@ func _test_entry_swaps_only_with_exactly_one_adjacent_enemy() -> void:
 	_check(_event_count(double_result.get("events", []), &"card_moved") == 0, "Invalid enemy count emits no swap")
 
 
-func _test_locked_decay_runs_at_both_turn_boundaries_after_flip() -> void:
+func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(
 		Catalog.create_instance(&"YuSuiKunGang4", Rules.PLAYER_OWNER, &"decay_yusui"),
@@ -101,8 +101,17 @@ func _test_locked_decay_runs_at_both_turn_boundaries_after_flip() -> void:
 		{"turn_owner_id": Rules.OPPONENT_OWNER}
 	)
 	_check(
+		_board_card(state, &"decay_yusui").get("powers", []) == [3, 5, 5, 3],
+		"Opponent turn start does not reduce player-owned YuSui"
+	)
+	Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_START_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(
 		_board_card(state, &"decay_yusui").get("powers", []) == [2, 4, 4, 2],
-		"Opponent turn start reduces YuSui once"
+		"Player turn start reduces player-owned YuSui once"
 	)
 	Simulator.resolve_non_attack_flip(state, &"decay_yusui", Rules.OPPONENT_OWNER)
 	var flipped: Dictionary = _board_card(state, &"decay_yusui")
@@ -113,8 +122,17 @@ func _test_locked_decay_runs_at_both_turn_boundaries_after_flip() -> void:
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	_check(
+		_board_card(state, &"decay_yusui").get("powers", []) == [2, 4, 4, 2],
+		"Player turn end does not reduce opponent-owned YuSui"
+	)
+	Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.OPPONENT_OWNER}
+	)
+	_check(
 		_board_card(state, &"decay_yusui").get("powers", []) == [1, 3, 3, 1],
-		"Player turn end still reduces flipped YuSui once"
+		"Opponent turn end reduces opponent-owned YuSui once"
 	)
 
 
@@ -162,7 +180,7 @@ func _test_tier_three_reenters_as_enemy_bagua_with_same_instance() -> void:
 	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
-		{"turn_owner_id": Rules.OPPONENT_OWNER}
+		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	var reborn: Dictionary = _card_at(state, 4)
 	_check(StringName(reborn.get("instance_id", &"")) == &"rebirth_yusui", "Rebirth preserves the exact runtime instance")
@@ -197,7 +215,7 @@ func _test_captured_tier_three_uses_pre_exile_owner_for_enemy_relation() -> void
 	Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_START_OWNER_TURN,
-		{"turn_owner_id": Rules.PLAYER_OWNER}
+		{"turn_owner_id": Rules.OPPONENT_OWNER}
 	)
 	_check(_owner_at(state, 4) == Rules.PLAYER_OWNER, "Captured YuSui reenters for the enemy of its pre-exile owner")
 	_check(StringName(_card_at(state, 4).get("card_id", &"")) == &"BaGuaFangWei", "Captured YuSui still transforms")
