@@ -1128,6 +1128,7 @@ const WUXIANG_LOCKED_DISCARD_ACTIVATION: Dictionary = {
 				"on_invalid_context": STOP_RULE,
 			},
 			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 		],
 	},
 }
@@ -1891,7 +1892,7 @@ const LOCKED_RANGE_TWO_EMPTY_OR_ALLY: Dictionary = {
 
 const FUMO_SUMMON_REACTION: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"event": TRIGGER_CARD_SUMMONED,
 		"conditions": [
 			{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
 			{"type": CONDITION_TRIGGER_CARD_IN_RANGE},
@@ -2716,7 +2717,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "少林派",
 		"tier": 3,
 		"weapon": "阵法",
-		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场后，若在我的攻击范围内，我对其发起攻击。",
+		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场时，若在我的攻击范围内，我对其发起攻击。",
 		"flavor": "金刚伏魔圈乃佛力伏魔的精妙大法，以《金刚经》为最高旨义，最后要达“无我相、无人相、无众生相、无寿者相”的境界，于人我之分、生死之别，尽皆视作空幻。",
 		"powers": [8, 7, 2, 7],
 		"abilities": [FUMO_SHARED],
@@ -2728,7 +2729,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "少林派",
 		"tier": 4,
 		"weapon": "阵法",
-		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场后，若在我的攻击范围内，我对其发起攻击。锁定：我可以攻击直线上相隔一个空位，或相隔一个敌方的敌方。",
+		"description": "友方移动前，令其点数减一。回合结束时，若你手牌为空，所有友方获得以下效果：对手招式进场时，若在我的攻击范围内，我对其发起攻击。锁定：我可以攻击直线上相隔一个空位，或相隔一个敌方的敌方。",
 		"flavor": "金刚伏魔圈乃佛力伏魔的精妙大法，以《金刚经》为最高旨义，最后要达“无我相、无人相、无众生相、无寿者相”的境界，于人我之分、生死之别，尽皆视作空幻。",
 		"powers": [8, 7, 2, 7],
 		"abilities": [FUMO_SHARED, LOCKED_RANGE_TWO_ENEMY],
@@ -2821,7 +2822,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "少林派",
 		"tier": 3,
 		"weapon": "指法",
-		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，然后抽一张牌。",
+		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，抽一张牌，然后额外出一张牌。",
 		"flavor": "少林寺七十二绝技之一，指力从衣袖中暗暗发出，全无形迹。",
 		"powers": [6, 6, 2, 2],
 		"starting_ki": 2,
@@ -2837,7 +2838,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "少林派",
 		"tier": 4,
 		"weapon": "指法",
-		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，然后抽一张牌。锁定：你弃牌后，我发起攻击。",
+		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，抽一张牌，然后额外出一张牌。锁定：你弃牌后，我发起攻击。",
 		"flavor": "少林寺七十二绝技之一，指力从衣袖中暗暗发出，全无形迹。",
 		"powers": [6, 6, 2, 2],
 		"starting_ki": 2,
@@ -2856,7 +2857,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "指法",
 		"description": "我被丢弃后，将我变成二入地狱并抽回手牌。进场后，在首个相邻空位打出你弃牌堆最上方的牌。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
-		"powers": [2, 2, 4, 4],
+		"powers": [1, 1, 8, 8],
 		"abilities": [
 			SANRU_ONE_TRANSFORM,
 			SANRU_ONE_SUMMON,
@@ -2873,7 +2874,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "指法",
 		"description": "我被丢弃后，将我变成三入地狱并抽回手牌。进场后，在首两个相邻空位依次打出你弃牌堆最上方的两张牌。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
-		"powers": [2, 2, 4, 4],
+		"powers": [1, 1, 8, 8],
 		"abilities": [
 			SANRU_TWO_TRANSFORM,
 			SANRU_TWO_SUMMON,
@@ -2890,7 +2891,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "指法",
 		"description": "进场后，在首三个相邻空位依次打出你弃牌堆最上方的三张牌，如果相邻空位不足，在非相邻空位继续打出。回合结束时，将我移除。锁定：我可以攻击直线上相隔一个空位，或相隔一个友方的敌方。",
 		"flavor": "摩诃指的正宗招数，看似平凡无奇，但其中所蕴蓄的功力超凡入圣，修习这三捺时用功之苦，每捺一下，便如入了一次地狱一般，因此叫作“三入地狱”。",
-		"powers": [2, 2, 4, 4],
+		"powers": [1, 1, 8, 8],
 		"abilities": [
 			SANRU_THREE_SUMMON,
 			SANRU_END_TURN_EXILE,
