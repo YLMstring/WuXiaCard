@@ -1598,20 +1598,6 @@ const TAIJI_SWORD_REDIRECT_ONCE: Dictionary = {
 	}],
 }
 
-const YINYANG_REPEAT_ATTACK: Dictionary = {
-	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_ATTACK,
-		"conditions": [
-			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
-			{"type": CONDITION_ATTACK_IS_NOT_REPEAT},
-		],
-		"actions": [{
-			"type": ACTION_STANDARD_ATTACK_WITH_SELF,
-			"repeat_attack": true,
-		}],
-	}],
-}
-
 const YINYANG_RANGE_THREE: Dictionary = {
 	"modifiers": [{
 		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
@@ -1632,11 +1618,11 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
+			{"type": ACTION_DRAW_CARDS, "amount": 1, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
-					"zones": [CARD_ZONE_HAND],
+					"zones": [CARD_ZONE_BOARD],
 					"conditions": [
 						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 						{
@@ -1645,10 +1631,24 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 						},
 					],
 				},
-				"actions": [
-					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_REPEAT_ATTACK},
-					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_RANGE_THREE},
-				],
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": YINYANG_RANGE_THREE,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "掌法",
+						},
+					],
+				},
+				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 			},
 		],
 	}],
@@ -1660,11 +1660,11 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
+			{"type": ACTION_DRAW_CARDS, "amount": 1, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
-					"zones": [CARD_ZONE_HAND],
+					"zones": [CARD_ZONE_BOARD],
 					"conditions": [
 						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 						{
@@ -1673,10 +1673,24 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 						},
 					],
 				},
-				"actions": [
-					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_REPEAT_ATTACK},
-					{"type": ACTION_GRANT_ABILITY_TO_SELF, "ability": YINYANG_RANGE_FOUR},
-				],
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": YINYANG_RANGE_FOUR,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{
+							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+							"weapon": "掌法",
+						},
+					],
+				},
+				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 			},
 		],
 	}],

@@ -84,9 +84,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   repeated-instance visual coalescing, gain/loss styling, and hidden-card
   no-wait concealment.
 - `test_yinyang_zhangli_abilities.gd` — four-side `-1` presentation and
-  immunity, limited-selector skipping, tiered distance-two attacks,
-  exile/draw/grant ordering, newly drawn palm inclusion, nonrecursive repeat
-  attacks, duplicate-grant handling, and flip cleanup.
+  immunity, limited-selector skipping, tiered distance-two attacks, single
+  filtered draw, board-only range grants, grant-before-attack ordering,
+  row-major attacks, duplicate-grant handling, and flip cleanup.
 - `test_fumo_qianshou_abilities.gd` — movement-before power loss and stacking,
   empty-hand idempotent grants, enemy-intervening range, after-exile snapshots,
   zero-power and four-`-1` filtering, complete runtime perfect copies,

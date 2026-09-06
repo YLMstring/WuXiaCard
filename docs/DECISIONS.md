@@ -573,19 +573,19 @@ respectively, in row-major order. The source itself is eligible.
   defeats the corresponding `-1`, and signed power-change actions cannot
   affect or select that card. Limited selectors filter it before counting the
   limit.
-- YinYang resolves its own exile, then draws the first two palm cards from the
-  side deck, then grants every allied palm currently in hand. Skipped non-palms
-  remain in their original relative order. Hand capacity can reduce the count;
-  a filtered empty/no-match draw does not create the ordinary TaiZu fallback.
-  Both newly drawn palms are included in the later grant.
+- YinYang resolves its own exile, then draws the first palm card from the side
+  deck. Skipped non-palms remain in their original relative order. Hand
+  capacity can prevent the draw; a filtered empty/no-match draw does not create
+  the ordinary TaiZu fallback. Hand palms receive no granted effect.
 - Tier 3 palms may attack an orthogonal enemy two cells away only through one
   empty cell. Tier 4 also permits one intervening current ally; an enemy always
   blocks. Ordinary adjacent attacks remain unchanged.
-- The granted repeat begins one new complete standard attack after the first
-  completes. That attack re-reads the current cell, owner, and legal targets,
-  and still fires other after-attack abilities. A `repeat_attack` context flag
-  prevents only the same YinYang grant from recursively scheduling a third.
-- Exact duplicate grants are idempotent. Tier 4 range is the effective
+- YinYang first grants the tier's range ability to every allied board palm in
+  row-major order. After every grant completes, it takes a second row-major
+  allied-board-palm snapshot and makes those exact cards perform one normal
+  standard attack each. Later attackers revalidate after each complete attack
+  chain. This is not a repeat attack and does not grant an after-attack rule.
+- Exact duplicate range grants are idempotent. Tier 4 range is the effective
   superset if both tiers were granted. All YinYang grants are non-retained and
   disappear on flip.
 

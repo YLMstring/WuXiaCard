@@ -24,11 +24,10 @@ func _run() -> void:
 	await _test_special_power_presentation()
 	_test_power_change_immunity_and_selector_skip()
 	_test_distance_two_attack_rules()
-	_test_entry_draw_and_grant_order()
+	_test_entry_draw_grant_and_attack_order()
 	_test_empty_draw_and_no_palm_edges()
 	_test_filtered_draw_respects_hand_capacity()
-	_test_repeat_attack_is_nonrecursive()
-	_test_grant_deduplication_and_flip_loss()
+	_test_range_grant_deduplication_and_flip_loss()
 	_finish()
 
 
@@ -43,10 +42,6 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 		"Distance-two attack modifiers are registered"
 	)
 	_check(
-		Catalog.CONDITION_ATTACK_IS_NOT_REPEAT in Catalog.KNOWN_TRIGGER_CONDITIONS,
-		"Non-repeat attack conditions are registered"
-	)
-	_check(
 		Rules.has_special_negative_powers({"powers": [-1, -1, -1, -1]}),
 		"Four negative-one sides use special power rules"
 	)
@@ -58,14 +53,33 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 	for card_id: StringName in [&"YinYangZhang3", &"YinYangZhang4"]:
 		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
 		var actions: Array = (((abilities[0] as Dictionary).get("triggers", []) as Array)[0] as Dictionary).get("actions", [])
+		var expected_range: Dictionary = (
+			Catalog.YINYANG_RANGE_THREE
+			if card_id == &"YinYangZhang3"
+			else Catalog.YINYANG_RANGE_FOUR
+		)
 		_check(not abilities.is_empty(), "%s declares its complete ability" % card_id)
 		_check(
 			actions[1] == {
 				"type": Catalog.ACTION_DRAW_CARDS,
-				"amount": 2,
+				"amount": 1,
 				"weapon": "掌法",
 			},
-			"%s draws two palm cards with the generic filtered draw action" % card_id
+			"%s draws one palm card with the generic filtered draw action" % card_id
+		)
+		_check(
+			actions.size() == 4
+			and actions[2].get("selector", {}).get("zones", []) == [Catalog.CARD_ZONE_BOARD]
+			and actions[2].get("actions", []) == [{
+				"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": expected_range,
+			}]
+			and actions[3].get("selector", {}).get("zones", []) == [Catalog.CARD_ZONE_BOARD]
+			and actions[3].get("actions", []) == [{
+				"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF,
+			}],
+			"%s grants board palms their range before a separate board-palm attack pass"
+			% card_id
 		)
 
 
@@ -193,91 +207,122 @@ func _test_distance_two_attack_rules() -> void:
 	_check(not BoardQueries.can_attack_target(board, 6, 2), "Distance-two attacks remain orthogonal and do not wrap")
 
 
-func _test_entry_draw_and_grant_order() -> void:
+func _test_entry_draw_grant_and_attack_order() -> void:
 	var yinyang: Dictionary = Catalog.create_instance(
 		&"YinYangZhang3",
 		Rules.PLAYER_OWNER,
 		&"entry_yinyang"
 	)
-	var existing_palm: Dictionary = _plain(
-		&"existing_palm",
+	var board_palm_first: Dictionary = _plain(
+		&"board_palm_first",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	var board_palm_second: Dictionary = _plain(
+		&"board_palm_second",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	var board_sword: Dictionary = _plain(
+		&"board_sword",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER,
+		"剑法"
+	)
+	var hand_palm: Dictionary = _plain(
+		&"hand_palm",
 		[3, 3, 3, 3],
 		Rules.PLAYER_OWNER
 	)
-	var non_palm: Dictionary = _plain(
-		&"existing_sword",
+	var hand_sword: Dictionary = _plain(
+		&"hand_sword",
 		[3, 3, 3, 3],
 		Rules.PLAYER_OWNER,
 		"剑法"
 	)
 	var drawn_palm: Dictionary = _plain(
-		&"drawn_palm_one",
+		&"drawn_palm",
 		[4, 4, 4, 4],
 		Rules.PLAYER_OWNER
 	)
-	var drawn_palm_two: Dictionary = _plain(
-		&"drawn_palm_two",
-		[5, 5, 5, 5],
-		Rules.PLAYER_OWNER
+	var skipped_sword: Dictionary = _plain(
+		&"skipped_sword", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"
 	)
-	var skipped_sword_one: Dictionary = _plain(
-		&"skipped_sword_one", [1, 1, 1, 1], Rules.PLAYER_OWNER, "剑法"
+	var remaining_palm: Dictionary = _plain(
+		&"remaining_palm", [6, 6, 6, 6], Rules.PLAYER_OWNER
 	)
-	var skipped_sword_two: Dictionary = _plain(
-		&"skipped_sword_two", [2, 2, 2, 2], Rules.PLAYER_OWNER, "剑法"
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(board_palm_first, Rules.PLAYER_OWNER)
+	board[2] = _slot(board_palm_second, Rules.PLAYER_OWNER)
+	board[4] = _slot(board_sword, Rules.PLAYER_OWNER)
+	board[6] = _slot(
+		_plain(&"first_victim", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	board[8] = _slot(
+		_plain(&"second_victim", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
 	)
 	var transition: Dictionary = Simulator.apply_action(
 		State.new(
-			Rules.empty_board(),
-			[yinyang, existing_palm, non_palm],
+			board,
+			[yinyang, hand_palm, hand_sword],
 			[_plain(&"opponent_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
 			Rules.PLAYER_OWNER,
 			0,
-			[skipped_sword_one, drawn_palm, skipped_sword_two, drawn_palm_two],
+			[skipped_sword, drawn_palm, remaining_palm],
 			[]
 		),
-		Action.make_play(0, 4, &"entry_yinyang")
+		Action.make_play(0, 1, &"entry_yinyang")
 	)
 	var next_state: State = transition.get("state") as State
-	var runtime_existing: Dictionary = _find_hand_card(next_state, &"existing_palm")
-	var runtime_drawn: Dictionary = _find_hand_card(next_state, &"drawn_palm_one")
-	var runtime_drawn_two: Dictionary = _find_hand_card(next_state, &"drawn_palm_two")
-	var runtime_non_palm: Dictionary = _find_hand_card(next_state, &"existing_sword")
+	var runtime_first: Dictionary = _board_card(next_state, &"board_palm_first")
+	var runtime_second: Dictionary = _board_card(next_state, &"board_palm_second")
+	var runtime_sword: Dictionary = _board_card(next_state, &"board_sword")
+	var runtime_hand_palm: Dictionary = _find_hand_card(next_state, &"hand_palm")
+	var runtime_drawn: Dictionary = _find_hand_card(next_state, &"drawn_palm")
 	_check(
 		bool(transition.get("valid", false))
-		and next_state.board[4] == null
+		and next_state.board[1] == null
 		and _removed_has(next_state, Rules.PLAYER_OWNER, &"entry_yinyang"),
 		"YinYang exiles itself instead of remaining on the board"
 	)
 	_check(
-		(runtime_existing.get("active_abilities", []) as Array).size() == 2
-		and (runtime_drawn.get("active_abilities", []) as Array).size() == 2
-		and (runtime_drawn_two.get("active_abilities", []) as Array).size() == 2
-		and (runtime_non_palm.get("active_abilities", []) as Array).is_empty(),
-		"Existing and both newly drawn palm cards receive both effects, while non-palm cards do not"
+		(runtime_first.get("active_abilities", []) as Array).size() == 1
+		and (runtime_second.get("active_abilities", []) as Array).size() == 1
+		and (runtime_sword.get("active_abilities", []) as Array).is_empty()
+		and (runtime_hand_palm.get("active_abilities", []) as Array).is_empty()
+		and (runtime_drawn.get("active_abilities", []) as Array).is_empty(),
+		"Only allied board palms receive the range ability"
 	)
 	var events: Array = transition.get("events", [])
 	var exile_index: int = _event_index(events, &"card_exiled", &"entry_yinyang")
-	var draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm_one")
-	var second_draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm_two")
-	var grant_index: int = _event_index(events, &"ability_gained", &"drawn_palm_one")
+	var draw_index: int = _event_index(events, &"card_drawn", &"drawn_palm")
+	var first_grant_index: int = _event_index(events, &"ability_gained", &"board_palm_first")
+	var second_grant_index: int = _event_index(events, &"ability_gained", &"board_palm_second")
+	var first_attack_index: int = _event_index(events, &"attack_started", &"", &"board_palm_first")
+	var second_attack_index: int = _event_index(events, &"attack_started", &"", &"board_palm_second")
 	_check(
 		exile_index >= 0
 		and exile_index < draw_index
-		and draw_index < second_draw_index
-		and second_draw_index < grant_index,
-		"Entry events present exile, two filtered draws, then grants in order"
+		and draw_index < first_grant_index
+		and first_grant_index < second_grant_index
+		and second_grant_index < first_attack_index
+		and first_attack_index < second_attack_index,
+		"Entry events present exile, one filtered draw, every grant, then row-major attacks"
 	)
 	var remaining_deck: Array = next_state.decks.get(Rules.PLAYER_OWNER, [])
 	_check(
 		remaining_deck.size() == 2
-		and StringName((remaining_deck[0] as Dictionary).get("instance_id", &"")) == &"skipped_sword_one"
-		and StringName((remaining_deck[1] as Dictionary).get("instance_id", &"")) == &"skipped_sword_two",
-		"Filtered draws leave skipped non-palms in their original order"
+		and StringName((remaining_deck[0] as Dictionary).get("instance_id", &"")) == &"skipped_sword"
+		and StringName((remaining_deck[1] as Dictionary).get("instance_id", &"")) == &"remaining_palm",
+		"The single filtered draw leaves skipped and later cards in order"
 	)
 	_check(
-		_count_events(events, &"attack_started") == 0,
-		"The exiled YinYang card performs no summon standard attack"
+		_count_events(events, &"attack_started") == 2
+		and int((next_state.board[6] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
+		and int((next_state.board[8] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Both allied board palms attack once while the exiled YinYang never attacks"
 	)
 
 
@@ -341,58 +386,13 @@ func _test_filtered_draw_respects_hand_capacity() -> void:
 	)
 
 
-func _test_repeat_attack_is_nonrecursive() -> void:
-	var repeat_observer: Dictionary = {
-		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_AFTER_ATTACK,
-			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
-			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-		}],
-	}
-	var attacker: Dictionary = _plain(
-		&"repeat_palm",
-		[5, 5, 5, 5],
-		Rules.PLAYER_OWNER
-	)
-	attacker["active_abilities"] = [
-		Catalog.YINYANG_REPEAT_ATTACK.duplicate(true),
-		repeat_observer,
-	]
-	var board: Array = Rules.empty_board()
-	board[1] = _slot(
-		_plain(&"repeat_defender", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
-		Rules.OPPONENT_OWNER
-	)
-	var transition: Dictionary = Simulator.apply_action(
-		State.new(
-			board,
-			[attacker],
-			[_plain(&"repeat_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
-			Rules.PLAYER_OWNER
-		),
-		Action.make_play(0, 4, &"repeat_palm")
-	)
-	var next_state: State = transition.get("state") as State
-	var runtime: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
-	_check(
-		int(runtime.get("ki", 0)) == 1,
-		"After-attack abilities resolve only for the original attack that had a valid target"
-	)
-	_check(
-		_count_events(transition.get("events", []), &"card_flipped") == 1
-		and _count_events(transition.get("events", []), &"ki_changed") == 1,
-		"A repeat with no remaining legal target has no attack-after effects"
-	)
-
-
-func _test_grant_deduplication_and_flip_loss() -> void:
+func _test_range_grant_deduplication_and_flip_loss() -> void:
 	var palm: Dictionary = _plain(&"stacked_palm", [5, 5, 5, 5], Rules.PLAYER_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(palm, Rules.PLAYER_OWNER)
 	var state := State.new(board)
 	var actions: Array = [
-		{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": Catalog.YINYANG_REPEAT_ATTACK},
-		{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": Catalog.YINYANG_REPEAT_ATTACK},
+		{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": Catalog.YINYANG_RANGE_THREE},
 		{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": Catalog.YINYANG_RANGE_THREE},
 		{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": Catalog.YINYANG_RANGE_FOUR},
 	]
@@ -406,9 +406,9 @@ func _test_grant_deduplication_and_flip_loss() -> void:
 	)
 	var runtime: Dictionary = (state.board[4] as Dictionary).get("card", {})
 	_check(
-		(runtime.get("active_abilities", []) as Array).size() == 3
-		and _count_events(grant_result.get("events", []), &"ability_gained") == 3,
-		"Repeated grants deduplicate the shared repeat ability"
+		(runtime.get("active_abilities", []) as Array).size() == 2
+		and _count_events(grant_result.get("events", []), &"ability_gained") == 2,
+		"Repeated range grants deduplicate structurally identical abilities"
 	)
 	state.board[0] = _slot(
 		_plain(&"flip_source", [9, 9, 9, 9], Rules.OPPONENT_OWNER),
@@ -424,8 +424,8 @@ func _test_grant_deduplication_and_flip_loss() -> void:
 	)
 	_check(
 		(runtime.get("active_abilities", []) as Array).is_empty()
-		and _count_events(flip_events, &"ability_lost") == 3,
-		"All granted YinYang effects are non-retained and are lost on flip"
+		and _count_events(flip_events, &"ability_lost") == 2,
+		"All granted YinYang range effects are non-retained and are lost on flip"
 	)
 
 
@@ -487,6 +487,16 @@ func _find_hand_card(state: State, instance_id: StringName) -> Dictionary:
 	return {}
 
 
+func _board_card(state: State, instance_id: StringName) -> Dictionary:
+	for slot_value: Variant in state.board:
+		if not slot_value is Dictionary:
+			continue
+		var card: Dictionary = (slot_value as Dictionary).get("card", {})
+		if StringName(card.get("instance_id", &"")) == instance_id:
+			return card
+	return {}
+
+
 func _removed_has(state: State, owner_id: int, instance_id: StringName) -> bool:
 	for card_value: Variant in state.removed_cards.get(owner_id, []):
 		if (
@@ -501,15 +511,24 @@ func _removed_has(state: State, owner_id: int, instance_id: StringName) -> bool:
 func _event_index(
 	events: Array,
 	event_type: StringName,
-	instance_id: StringName
+	instance_id: StringName,
+	source_instance_id: StringName = &""
 ) -> int:
 	for event_index: int in range(events.size()):
 		var event_value: Variant = events[event_index]
 		if (
 			event_value is Dictionary
 			and StringName((event_value as Dictionary).get("type", &"")) == event_type
-			and StringName((event_value as Dictionary).get("instance_id", &""))
-			== instance_id
+			and (
+				instance_id == &""
+				or StringName((event_value as Dictionary).get("instance_id", &""))
+				== instance_id
+			)
+			and (
+				source_instance_id == &""
+				or StringName((event_value as Dictionary).get("source_instance_id", &""))
+				== source_instance_id
+			)
 		):
 			return event_index
 	return -1
