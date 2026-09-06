@@ -303,8 +303,10 @@ respectively, in row-major order. The source itself is eligible.
 - Follow the target across movement. If it has already left the board, do
   nothing; otherwise replace it in its current cell with a fresh exact-ID
   catalog instance owned currently and originally by the source owner.
-- The fresh instance resolves global summoned triggers, its own after-summoned
-  triggers, and then a standard attack if it still belongs to that owner.
+- The fresh instance resolves global summoned triggers and its own
+  after-summoned triggers, then performs a standard attack only if it still
+  belongs to that owner and was never flipped during this entrance lifecycle.
+  Flipping away and back still cancels the attack.
 - The old instance is not exiled. Its board view fades before the fresh
   instance uses the existing ink-summon effect.
 - Resummon and the existing one-use HengShan counterattack are both lost when

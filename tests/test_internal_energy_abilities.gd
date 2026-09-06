@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_initial_flip_grants_without_distribution()
 	_test_second_flip_distributes_then_attacks()
 	_test_entry_flip_cancels_standard_attack()
+	_test_entry_double_flip_still_cancels_standard_attack()
 	_test_xixing_later_attack_targets_all_while_beiming_does_not()
 	_test_standard_attack_stops_after_mid_chain_double_flip()
 	_test_yijin_strengthens_then_draws_and_repeats_on_return()
@@ -451,6 +452,84 @@ func _test_entry_flip_cancels_standard_attack() -> void:
 			and not _event_types(transition.get("events", [])).has(&"attack_started"),
 			"%s changing owner on entry cancels its standard summon attack" % card_id
 		)
+
+
+func _test_entry_double_flip_still_cancels_standard_attack() -> void:
+	var source: Dictionary = _plain(
+		&"entry_double_flip_source",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	source["active_abilities"] = [{
+		"retained_on_flip": true,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_FLIP_SELF,
+				"new_owner": Catalog.OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			}],
+		}],
+	}]
+	var counter: Dictionary = _plain(
+		&"entry_double_flip_counter",
+		[0, 0, 9, 0],
+		Rules.PLAYER_OWNER
+	)
+	counter["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_FLIPPED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY}],
+			"actions": [{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}]
+	var victim: Dictionary = _plain(
+		&"entry_double_flip_victim",
+		[0, 0, 0, 0],
+		Rules.OPPONENT_OWNER
+	)
+	var board: Array = Rules.empty_board()
+	board[1] = _slot(counter, Rules.PLAYER_OWNER)
+	board[5] = _slot(victim, Rules.OPPONENT_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(board, [source], [], Rules.PLAYER_OWNER),
+		Action.make_play(0, 4, &"entry_double_flip_source")
+	)
+	var state: State = transition.get("state") as State
+	var source_flip_count: int = 0
+	var summon_attack_count: int = 0
+	for event_value: Variant in transition.get("events", []):
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value as Dictionary
+		if (
+			StringName(event.get("type", &"")) == &"card_flipped"
+			and StringName(event.get("instance_id", &"")) == &"entry_double_flip_source"
+		):
+			source_flip_count += 1
+		if (
+			StringName(event.get("type", &"")) == &"attack_started"
+			and StringName(event.get("source_instance_id", &""))
+			== &"entry_double_flip_source"
+			and StringName(event.get("attack_reason", &"")) == &"summon_standard_attack"
+		):
+			summon_attack_count += 1
+	_check(
+		source_flip_count == 2
+		and int((state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
+		and int((state.board[5] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER
+		and summon_attack_count == 0,
+		(
+			"A summon that flips away and back still cancels its standard attack; "
+			+ "source_flips=%d source_owner=%d victim_owner=%d summon_attacks=%d"
+			% [
+				source_flip_count,
+				int((state.board[4] as Dictionary).get("owner", 0)),
+				int((state.board[5] as Dictionary).get("owner", 0)),
+				summon_attack_count,
+			]
+		)
+	)
 
 
 func _test_xixing_later_attack_targets_all_while_beiming_does_not() -> void:

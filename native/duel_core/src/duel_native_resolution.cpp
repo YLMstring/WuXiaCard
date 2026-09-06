@@ -338,6 +338,15 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 		if (!after_summoned.supported) return after_summoned;
 		append_resolution(resolution, after_summoned);
 	}
+	const StringName summoned_instance_id = value.card_instance_ids[request.card_index];
+	for (int64_t event_index = 0; event_index < resolution.events.size(); ++event_index) {
+		if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
+		const Dictionary event = resolution.events[event_index];
+		if (
+			StringName(event.get("type", StringName())) == StringName("card_flipped")
+			&& StringName(event.get("instance_id", StringName())) == summoned_instance_id
+		) return resolution;
+	}
 
 	AttackRequest attack_request;
 	attack_request.attacker_cell = after_cell;

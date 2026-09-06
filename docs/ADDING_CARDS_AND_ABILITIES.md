@@ -451,7 +451,9 @@ Normal summon:
    all matching `TRIGGER_CARD_AFTER_SUMMONED` rules across the board in
    row-major source order; use `CONDITION_TRIGGER_CARD_IS_SELF` for ordinary
    entrance abilities that should only respond to the summoned card itself;
-5. standard attack only if it still belongs to the summoning owner;
+5. standard attack only if it still belongs to the summoning owner and was
+   never flipped during this entrance lifecycle; flipping away and back still
+   cancels it;
 6. consume or grant any extra-card-play allowance; while a legal allowance
    remains, keep the same owner active without resolving turn boundaries;
 7. resolve end-turn rules once, service a possible coalesced end-trigger grant,

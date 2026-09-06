@@ -112,7 +112,9 @@ discovers and resolves `TRIGGER_CARD_AFTER_SUMMONED` across the full board in
 row-major source order. Self-only conditions still restrict ordinary entrance
 abilities to the exact summoned card.
 Its standard attack follows only if the exact instance remains on the board
-under the summoning owner. Board movement emits neither summon event.
+under the summoning owner and has never changed owner during that entrance
+lifecycle. Flipping away and back still cancels the attack. Board movement
+emits neither summon event.
 
 Every successful movement—including both conceptual legs of a swap—resolves
 `CARD_BEFORE_MOVED` for the exact moving instance before mutating board cells,
