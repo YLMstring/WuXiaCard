@@ -111,6 +111,10 @@ resolves global `TRIGGER_CARD_SUMMONED` groups in row-major source order, then
 discovers and resolves `TRIGGER_CARD_AFTER_SUMMONED` across the full board in
 row-major source order. Self-only conditions still restrict ordinary entrance
 abilities to the exact summoned card.
+For either summon window, an ally/enemy entrance condition must match both the
+owner for whom the card entered and its current owner. A card flipped during
+entry therefore becomes neither an allied nor an enemy summon for the opposite
+relation; flipping it does not open a second reaction chain from the new side.
 Its standard attack follows only if the exact instance remains on the board
 under the summoning owner and has never changed owner during that entrance
 lifecycle. Flipping away and back still cancels the attack. Board movement

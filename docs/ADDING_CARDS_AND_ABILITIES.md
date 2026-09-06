@@ -451,6 +451,10 @@ Normal summon:
    all matching `TRIGGER_CARD_AFTER_SUMMONED` rules across the board in
    row-major source order; use `CONDITION_TRIGGER_CARD_IS_SELF` for ordinary
    entrance abilities that should only respond to the summoned card itself;
+   `CONDITION_TRIGGER_CARD_IS_ALLY` and
+   `CONDITION_TRIGGER_CARD_IS_ENEMY` require the relation to match both the
+   owner at entry and the current owner, so an entry-time flip cannot make the
+   card count as a summon for the other side;
 5. standard attack only if it still belongs to the summoning owner and was
    never flipped during this entrance lifecycle; flipping away and back still
    cancels it;

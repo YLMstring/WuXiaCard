@@ -66,6 +66,28 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
 - AI may think in background, but its move waits to apply.
 - Mouse must mirror touch.
 
+## Battle Animation Ordering
+
+Simulator transition events form one presentation timeline. The duel controller
+must await each visible step before advancing to the next event. Parallel motion
+is reserved for one explicitly atomic visual group:
+
+- every card in one `power_change_batch_id` changes together after the shared
+  pre-change pause;
+- every card in one discard batch fades together;
+- all cards in one hand-slot shift move together;
+- the two reciprocal movement legs of one swap move together;
+- properties within one card animation (for example scale and color) may tween
+  together internally.
+
+A reciprocal swap may contain ability and power-change events between its two
+logical `card_moved` records. Presentation defers the first movement, plays all
+intervening effects in order, and only then animates both reciprocal legs as one
+swap. This prevents the first view from occupying the second card's cell while
+that card is still presenting its before-movement effects. Invalid-input shake
+is interaction feedback outside the resolution timeline and is not part of this
+queue.
+
 ## Android Environment
 
 The current machine was previously found to have:

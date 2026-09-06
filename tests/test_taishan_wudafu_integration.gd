@@ -22,7 +22,7 @@ func _run() -> void:
 	duel.set("opponent_hand_shuffle_seed", -1)
 	duel.set("opening_layout_seed", -1)
 	var opponent_ids: Array[StringName] = [
-		&"CangSongYingKe2",
+		&"FuMoQuan3",
 		&"LeiZHenJian1",
 		&"KuiHua1",
 		&"YouFenLaiYi2",
@@ -42,6 +42,17 @@ func _run() -> void:
 	var opponent_instance_id: StringName = duel.debug_get_hand_instance_ids(
 		Rules.OPPONENT_OWNER
 	)[0]
+	var fumo: Dictionary = Catalog.create_instance(
+		&"FuMoQuan3",
+		Rules.OPPONENT_OWNER,
+		opponent_instance_id
+	)
+	duel.duel_state.get_hand(Rules.OPPONENT_OWNER)[0] = fumo
+	var fumo_view: Node = duel._get_card_view_for_logical_index(
+		Rules.OPPONENT_OWNER,
+		0
+	)
+	fumo_view.sync_runtime_data(fumo, Rules.OPPONENT_OWNER)
 	var opponent_played: bool = await duel.debug_commit_move(
 		Rules.OPPONENT_OWNER,
 		0,
@@ -93,6 +104,22 @@ func _run() -> void:
 		duel.debug_get_board_card_instance_id(5) == player_instance_id
 		and duel.debug_get_board_card_instance_id(4) == opponent_instance_id,
 		"Production controller remaps both card views after a summon-triggered swap"
+	)
+	var movement_trace: Array[Dictionary] = duel.debug_get_movement_presentation_trace()
+	_check(
+		movement_trace.size() == 1
+		and StringName(movement_trace[0].get("kind", &"")) == &"swap",
+		"A Fumo power-loss reaction finishes before TaiShan presents one coherent swap"
+	)
+	_check(
+		not duel.debug_get_power_change_presentation_trace().is_empty(),
+		"Fumo still presents its required pre-movement power loss"
+	)
+	var presentation_trace: Array[StringName] = duel.debug_get_presentation_trace()
+	_check(
+		presentation_trace.rfind(&"powers_changed")
+		< presentation_trace.rfind(&"card_moved"),
+		"All pre-swap effect animations finish before the reciprocal movement starts"
 	)
 
 	duel.queue_free()

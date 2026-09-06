@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_fumo_reduces_moving_allies_and_can_cancel_move()
 	_test_fumo_ignores_numberless_moving_card()
 	_test_fumo_grants_reaction_once_and_reacts_in_range()
+	_test_summon_reaction_keeps_entry_owner_identity()
 	_test_fumo_four_attacks_across_enemy_only()
 	_test_qianshou_copies_complete_runtime_state_after_board_exile()
 	_test_qianshou_responds_to_zero_power_exile()
@@ -134,6 +135,67 @@ func _test_fumo_grants_reaction_once_and_reacts_in_range() -> void:
 	)
 	_check(int((state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Granted ability attacks an enemy summoned in range")
 	_check(_event_count(reaction.get("events", []), &"attack_started") == 1, "Granted reaction starts one real attack")
+
+
+func _test_summon_reaction_keeps_entry_owner_identity() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"FuMoQuan3", Rules.PLAYER_OWNER, &"entry_fumo"), Rules.PLAYER_OWNER)
+	board[1] = _slot(_plain(&"entry_qixin_ally", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[2] = _slot(Catalog.create_instance(&"QiXinLuoChangKong3", Rules.OPPONENT_OWNER, &"entry_qixin"), Rules.OPPONENT_OWNER)
+	board[4] = _slot(_plain(&"entry_fumo_attacker", Rules.PLAYER_OWNER, [9, 9, 9, 9]), Rules.PLAYER_OWNER)
+	var summoned: Dictionary = _plain(&"entry_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1])
+	var state := State.new(board, [], [summoned], Rules.OPPONENT_OWNER)
+	Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	var result: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 5, &"entry_enemy")
+	)
+	var next_state: State = result.get("state") as State
+	_check(
+		int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"A card flipped during its summon remains captured instead of becoming a new enemy summon"
+	)
+	_check(
+		_event_count(result.get("events", []), &"attack_started") == 1,
+		"Only the reaction matching both the entry owner and current owner attacks"
+	)
+
+	var mirror_board: Array = Rules.empty_board()
+	mirror_board[0] = _slot(Catalog.create_instance(&"FuMoQuan3", Rules.OPPONENT_OWNER, &"entry_mirror_fumo"), Rules.OPPONENT_OWNER)
+	mirror_board[2] = _slot(_plain(&"entry_mirror_fumo_attacker", Rules.OPPONENT_OWNER, [9, 9, 9, 9]), Rules.OPPONENT_OWNER)
+	var ally_reactor: Dictionary = _plain(&"entry_ally_reactor", Rules.OPPONENT_OWNER)
+	(ally_reactor["active_abilities"] as Array).append({
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ALLY}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	})
+	mirror_board[4] = _slot(ally_reactor, Rules.OPPONENT_OWNER)
+	var mirror_summoned: Dictionary = _plain(&"entry_friend", Rules.PLAYER_OWNER, [1, 1, 1, 1])
+	var mirror_state := State.new(mirror_board, [mirror_summoned], [], Rules.PLAYER_OWNER)
+	Simulator._resolve_trigger_event(
+		mirror_state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.OPPONENT_OWNER}
+	)
+	var mirror_result: Dictionary = Simulator.apply_action(
+		mirror_state,
+		Action.make_play(0, 1, &"entry_friend")
+	)
+	var mirror_next: State = mirror_result.get("state") as State
+	_check(
+		int((mirror_next.board[1] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER,
+		"A friendly summon captured during entry does not become an allied summon for enemy effects"
+	)
+	_check(
+		int(_board_card(mirror_next, &"entry_ally_reactor").get("ki", -1)) == 0,
+		"An ally-entry condition also requires the card to have entered for that ally"
+	)
 
 
 func _test_fumo_four_attacks_across_enemy_only() -> void:

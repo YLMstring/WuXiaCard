@@ -227,6 +227,9 @@ Whenever an enemy card is summoned into an orthogonally adjacent slot that CangS
   window after `card_placed` and before the standard attack.
 - Every matching source in that window, including the summoned card's own
   entrance abilities, is discovered and resolved in row-major board order.
+- "Allied/enemy summoned" means the summoned card had that relation to the
+  source both when it entered and when the reaction revalidates. An entry-time
+  flip does not reclassify it as a summon for its new side.
 - If an earlier source flips, removes, or otherwise invalidates a later queued
   source, that later group does not resolve. The turn still ends normally.
 - Multiple eligible reactors stop once the summoned card leaves or changes

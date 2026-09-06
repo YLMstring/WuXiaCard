@@ -878,14 +878,37 @@ func _movement_group_contains_instance(
 	var first: Dictionary = events[event_index] as Dictionary
 	if StringName(first.get("instance_id", &"")) == instance_id:
 		return true
-	if event_index + 1 >= events.size():
-		return false
-	var second: Dictionary = events[event_index + 1] as Dictionary
-	return (
-		StringName(second.get("type", &"")) == &"card_moved"
-		and StringName(second.get("instance_id", &"")) == instance_id
-		and _movement_events_are_reciprocal(first, second)
+	var reciprocal_index: int = _find_reciprocal_movement_event_index(
+		events,
+		event_index
 	)
+	if reciprocal_index < 0:
+		return false
+	var second: Dictionary = events[reciprocal_index] as Dictionary
+	return StringName(second.get("instance_id", &"")) == instance_id
+
+
+func _find_reciprocal_movement_event_index(
+	events: Array,
+	event_index: int
+) -> int:
+	if event_index < 0 or event_index >= events.size():
+		return -1
+	var first_value: Variant = events[event_index]
+	if not first_value is Dictionary:
+		return -1
+	var first: Dictionary = first_value
+	if StringName(first.get("type", &"")) != &"card_moved":
+		return -1
+	for candidate_index: int in range(event_index + 1, events.size()):
+		var candidate_value: Variant = events[candidate_index]
+		if not candidate_value is Dictionary:
+			continue
+		var candidate: Dictionary = candidate_value
+		if StringName(candidate.get("type", &"")) != &"card_moved":
+			continue
+		return candidate_index if _movement_events_are_reciprocal(first, candidate) else -1
+	return -1
 
 
 func _wait_for_summon_swap_readability(started_msec: int) -> void:
@@ -1158,6 +1181,7 @@ func _present_transition_events(
 	var event_index: int = 0
 	var consumed_power_event_indices: Dictionary = {}
 	var deferred_exile_events: Dictionary = {}
+	var deferred_swap_events: Dictionary = {}
 	while event_index < events.size():
 		if consumed_power_event_indices.has(event_index):
 			event_index += 1
@@ -1169,19 +1193,33 @@ func _present_transition_events(
 		if event_type == &"ability_activated":
 			_presentation_trace.append(event_type)
 		elif event_type == &"card_moved":
-			if (
-				is_play_action
-				and _movement_group_contains_instance(
+			if deferred_swap_events.has(event_index):
+				var first_swap_event: Dictionary = deferred_swap_events[event_index]
+				_presentation_trace.append(&"card_moved")
+				_presentation_trace.append(&"card_moved")
+				await _animate_reciprocal_swap(first_swap_event, event)
+				deferred_swap_events.erase(event_index)
+			else:
+				var reciprocal_index: int = _find_reciprocal_movement_event_index(
 					events,
-					event_index,
-					played_instance_id
+					event_index
 				)
-			):
-				await _wait_for_summon_swap_readability(presentation_started_msec)
-			consumed_events = await _present_movement_event_group(
-				events,
-				event_index
-			)
+				if reciprocal_index >= 0:
+					if (
+						is_play_action
+						and _movement_group_contains_instance(
+							events,
+							event_index,
+							played_instance_id
+						)
+					):
+						await _wait_for_summon_swap_readability(presentation_started_msec)
+					deferred_swap_events[reciprocal_index] = event
+				else:
+					consumed_events = await _present_movement_event_group(
+						events,
+						event_index
+					)
 		elif event_type == &"attack_started":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()

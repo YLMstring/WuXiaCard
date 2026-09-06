@@ -24,13 +24,18 @@ bool DuelNativeCompactKernel::conditions_match(
 					context.trigger_card_index,
 					context.trigger_cell
 				);
+				const bool expects_ally = condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_ALLY;
+				const bool is_summon_event = (
+					rule.event_id == StringName("card_before_summoned")
+					|| rule.event_id == StringName("card_summoned")
+					|| rule.event_id == StringName("card_after_summoned")
+				);
+				const bool entered_as_ally = context.trigger_previous_owner == group.source_owner;
 				matched = (
 					trigger_cell == context.trigger_cell
 					&& trigger_cell >= 0
-					&& (
-						(value.board_owners[trigger_cell] == group.source_owner)
-						== (condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_ALLY)
-					)
+					&& ((value.board_owners[trigger_cell] == group.source_owner) == expects_ally)
+					&& (!is_summon_event || entered_as_ally == expects_ally)
 				);
 				break;
 			}
