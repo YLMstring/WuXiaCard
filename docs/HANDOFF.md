@@ -109,8 +109,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - `FuMoQuan3`–`4` reduce every allied moving card before each movement/swap
   leg; multiple sources stack and a four-zero result removes the mover before
   it can relocate. Empty-hand owner-turn endings grant all current allies one
-  idempotent, non-retained after-summon counterattack. Tier 4's retained range
-  also crosses exactly one intervening enemy, while an ally still blocks.
+  idempotent, non-retained summoned-window counterattack. Tier 4's retained
+  range also crosses exactly one intervening enemy, while an ally still
+  blocks.
 - `QianShouRuLai5` uses the global post-exile snapshot boundary. A board card
   whose pre-exile powers pass `Rules.can_change_powers()`—including four
   zeroes, excluding four `-1`s—makes each still-valid source try row-major to

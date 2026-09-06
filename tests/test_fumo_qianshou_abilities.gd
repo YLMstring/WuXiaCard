@@ -129,7 +129,7 @@ func _test_fumo_grants_reaction_once_and_reacts_in_range() -> void:
 	board[5] = _slot(_plain(&"fumo_enemy", Rules.OPPONENT_OWNER, [1, 1, 1, 1]), Rules.OPPONENT_OWNER)
 	var reaction: Dictionary = Simulator._resolve_trigger_event(
 		state,
-		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		Catalog.TRIGGER_CARD_SUMMONED,
 		{"trigger_cell": 5, "trigger_instance_id": &"fumo_enemy", "trigger_owner_id": Rules.OPPONENT_OWNER}
 	)
 	_check(int((state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Granted ability attacks an enemy summoned in range")
@@ -372,7 +372,7 @@ func _count_summon_reactions(card: Dictionary) -> int:
 		if not ability_value is Dictionary:
 			continue
 		for trigger_value: Variant in (ability_value as Dictionary).get("triggers", []):
-			if trigger_value is Dictionary and StringName((trigger_value as Dictionary).get("event", &"")) == Catalog.TRIGGER_CARD_AFTER_SUMMONED:
+			if trigger_value is Dictionary and StringName((trigger_value as Dictionary).get("event", &"")) == Catalog.TRIGGER_CARD_SUMMONED:
 				count += 1
 	return count
 

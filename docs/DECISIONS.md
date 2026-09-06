@@ -641,10 +641,10 @@ respectively, in row-major order. The source itself is eligible.
   or swap leg. Sources resolve row-major and stack. Four-`-1` cards ignore the
   change; a card reduced to four zeroes is exiled and its pending movement ends.
 - At its current owner's turn end, an empty hand makes Fumo grant every current
-  ally the same non-retained after-summon reaction. Structurally identical
+  ally the same non-retained `CARD_SUMMONED` reaction. Structurally identical
   grants are idempotent. The reaction attacks only when the enemy summon is in
-  the recipient's current legal range and resolves before that summon's normal
-  standard attack.
+  the recipient's current legal range and resolves before the later
+  `CARD_AFTER_SUMMONED` window and that summon's normal standard attack.
 - Fumo tier 4's retained range permits orthogonal distance two through exactly
   one empty cell or one current enemy. An intervening ally remains illegal.
 - `CARD_AFTER_EXILED` runs after the exact card has entered its original
