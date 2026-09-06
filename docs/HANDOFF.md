@@ -437,7 +437,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
   of its own allies, every qualifying Taiji source removes its shared redirect
   ability, including friendly fire caused by YiZi or another effect. Failed or
   zero-target attacks do not consume it.
-- HanBinZhenQi3–4 now target an exact enemy hand instance, weaken it, and
+- HanBinZhenQi3–4 now target an exact enemy hand instance, reduce all four
+  powers by 4, and
   reveal it to the activating owner. An actively chosen YinYang card remains a
   legal target but ignores the power loss. Tier 4 flips immediately when its
   last ki is spent, then finishes resolving the locked target. After flipping,
@@ -483,10 +484,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
   0.25 seconds. Repeated exact-instance changes visually coalesce, zero-power
   removals wait behind both shared barriers, and concealed hand changes add no
   animation delay or leak.
-- LaiHeQinQuan1–5 now use generic exact-instance revelation, permanent
-  future-draw audiences, flip-prevention requests, granted passive modifiers,
-  and indexed self-removal. LaiHe4/5 use the active-run enemy-memory snapshot;
-  testing-mode visibility is not gameplay revelation.
+- LaiHeQinQuan1–4 now follow their current tier progression: tier 1 has no
+  ordinary in-duel ability, tier 2 has flip protection, tier 3 also reveals the
+  current enemy hand, and tier 4 also reveals future enemy draws. Carrying any
+  of those four cards in the opening five-card main deck enables the left
+  button to undo the last player decision together with all opponent replies;
+  replay actions and mastery candidates roll back with the state. LaiHe5 alone
+  retains remembered-glyph revelation and the revealed-summon weakness rule.
 - A card carrying `defending_power_override` keeps its stored/displayed powers,
   but attackability treats its facing edge as the modifier value. CardView fades
   only its central picture to 70% while that weakness is active.
@@ -516,8 +520,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   lowest-index adjacent empty cell. Tiers 3–4 draw only after a successful
   move. Tier 4 also suppresses adjacent enemies during `CARD_BEFORE_MOVED`,
   regardless of what effect initiated either movement or swap leg.
-- JianFaQinYin1–3 move after summoning into the lowest row-major empty cell
-  lying exactly between themselves and an enemy on the same row or column.
+- JianFaQinYin1–3 first draw one card after summoning, then independently move
+  into the lowest row-major empty cell lying exactly between themselves and an
+  enemy on the same row or column when one exists.
   Tiers 2–3 can spend one ki to move to an adjacent empty cell and gain one
   extra hand-card play. Tier 3 reacts on `CARD_AFTER_MOVED`, suppressing all
   adjacent enemies' non-retained abilities through the full owner turn.

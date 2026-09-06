@@ -71,7 +71,9 @@ func _test_exact_hand_card_moves_to_board(duel: Node) -> void:
 		"The exact selected hand view becomes the board view"
 	)
 	_check(
-		&"integration_light" not in hand_view_ids and hand_view_ids.size() == 1,
+		&"integration_light" not in hand_view_ids
+		and hand_view_ids.size()
+		== duel.duel_state.get_hand(Rules.OPPONENT_OWNER).size(),
 		"The moved hand view leaves no stale duplicate behind"
 	)
 	_check(

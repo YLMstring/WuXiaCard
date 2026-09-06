@@ -155,6 +155,27 @@ func _test_definition_schema_validation() -> void:
 			"Invalid guaranteed defeat reward declaration fails validation: %s"
 			% str(invalid_guarantee)
 		)
+	var main_deck_effect_fixture: Dictionary = valid_fixture.duplicate(true)
+	main_deck_effect_fixture["main_deck_effects"] = [
+		Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION,
+	]
+	_check(
+		Catalog.validate_definition(main_deck_effect_fixture).is_empty(),
+		"A known main-deck effect passes definition validation"
+	)
+	for invalid_main_deck_effects: Variant in [
+		Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION,
+		[&"unknown_main_deck_effect"],
+		[Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION, Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
+		[1],
+	]:
+		var invalid_main_deck_definition: Dictionary = valid_fixture.duplicate(true)
+		invalid_main_deck_definition["main_deck_effects"] = invalid_main_deck_effects
+		_check(
+			not Catalog.validate_definition(invalid_main_deck_definition).is_empty(),
+			"Invalid main-deck effect declaration fails validation: %s"
+			% str(invalid_main_deck_effects)
+		)
 	var retired_name: Dictionary = valid_fixture.duplicate(true)
 	retired_name["name"] = "Legacy"
 	_check(not Catalog.validate_definition(retired_name).is_empty(), "Retired name metadata fails validation")

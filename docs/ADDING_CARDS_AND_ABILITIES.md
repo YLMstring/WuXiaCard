@@ -28,6 +28,13 @@ Optional:
 "starting_ki": 1
 ```
 
+Effects that exist because a card was among the player's five opening
+main-deck cards, rather than because its runtime instance is in a zone, use the
+optional top-level `main_deck_effects` array. Entries must come from
+`KNOWN_MAIN_DECK_EFFECTS`; do not encode these effects as runtime abilities or
+hard-code card IDs in the controller. The current generic entry is
+`MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION`.
+
 A card that must enter one qualifying defeat offer per run may declare:
 
 ```gdscript

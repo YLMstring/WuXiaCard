@@ -263,6 +263,9 @@ func _check_enemy_hand_activation_target() -> void:
 		Rules.OPPONENT_OWNER,
 		0
 	)
+	var target_data: Dictionary = duel.duel_state.get_hand(Rules.OPPONENT_OWNER)[0]
+	target_data["powers"] = [5, 5, 5, 5]
+	target_view.sync_runtime_data(target_data, Rules.OPPONENT_OWNER)
 	var pointer_start: Vector2 = source_view.get_global_rect().get_center()
 	var pointer_target: Vector2 = target_view.get_global_rect().get_center()
 	source_view._try_begin_drag(pointer_start, -1)

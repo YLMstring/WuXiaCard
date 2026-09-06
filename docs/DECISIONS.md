@@ -500,19 +500,26 @@ respectively, in row-major order. The source itself is eligible.
   cards, copies, fresh board returns, and preserved-instance discard returns.
   The addition/return event precedes one `card_revealed` event when the
   instance was not already public. Failed full-hand additions reveal nothing.
-- LaiHe1 reveals the current enemy hand. LaiHe3 also records a permanent
+- LaiHe3 reveals the current enemy hand. LaiHe4 also records a permanent
   audience for later enemy draws, which survives the source flipping or
   leaving play. Each successful draw emits `card_drawn` before
-  `card_revealed`.
-- LaiHe4/5 reveal only glyphs remembered from earlier duels against the current
+  `card_revealed`. LaiHe1 has no ordinary in-duel ability.
+- LaiHe5 reveals only glyphs remembered from earlier duels against the current
   enemy. A revealed enemy summon receives a non-retained modifier that makes
   each defending edge count as 1 without changing its offensive or displayed
   powers. The granted weakness survives the granting source, but is lost when
   the affected card flips.
-- LaiHe2/3/5 prevent their own pending flip once per protection window. The
+- LaiHe2/3/4/5 prevent their own pending flip once per protection window. The
   protection is removed after any enemy card actually flips or at the start of
   the source owner's turn. A prevented attempt does not consume it and emits no
   `CARD_AFTER_FLIPPED` event.
+- LaiHe1–4 declare `undo_last_player_decision` as a main-deck effect. If any of
+  them is among the player's five opening main-deck cards, the left replay
+  button can restore the state immediately before the player's previous
+  decision, including removing all intervening opponent replies. The current
+  checkpoint is consumed on use; every later valid player decision creates a
+  new one, with no per-match use limit. Undo is unavailable during resolution,
+  opponent decisions, inspection, replay, and after duel completion.
 - Weakened presentation changes only the central artwork alpha to 70%; frame,
   powers, ki, ownership color, and interaction remain fully opaque.
 
@@ -538,7 +545,10 @@ respectively, in row-major order. The source itself is eligible.
 ## 剑发琴音 / 雁回祝融
 
 - JianFa entry movement chooses the lowest row-major empty cell lying exactly
-  between the source and an enemy on the same row or column.
+  between the source and an enemy on the same row or column. Every JianFa tier
+  first draws one card after summoning; draw and movement are separate
+  `CARD_AFTER_SUMMONED` abilities, so the draw still resolves when no movement
+  target exists and its event precedes any movement event.
 - JianFa tiers 2–3 spend one ki to move to an adjacent empty cell, then grant
   one additional hand-card play. Multiple ordinary grants stack. The extra
   play stays in the current owner turn, accepts no activation, and does not
@@ -600,6 +610,8 @@ respectively, in row-major order. The source itself is eligible.
 - Active targeting may choose a four-`-1` YinYang card. The activation still
   spends ki and reveals it, while its power-change action has no effect.
   Automatic limited selectors reject YinYang before counting their limit.
+- HanBin's targeted activation reduces all four powers by 4 before revealing
+  the locked enemy-hand instance.
 - HanBin tier 4's transition from positive ki to zero emits the ki change and
   resolves its self-flip before the activation's weaken/reveal actions. The
   observer remains the source owner captured before paying the cost.

@@ -16,6 +16,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_jianfa_entry_uses_lowest_qualifying_cell()
+	_test_jianfa_entry_draws_without_a_move_target()
 	_test_jianfa_activation_grants_only_an_extra_play()
 	_test_yanhui_replaces_itself_with_exact_leftmost_light_sword()
 	_test_yanhui_four_returns_other_ally_and_summons_copy()
@@ -37,12 +38,48 @@ func _test_jianfa_entry_uses_lowest_qualifying_cell() -> void:
 		&"JianFaQinYin1", Rules.PLAYER_OWNER, &"jianfa_entry"
 	)
 	var transition: Dictionary = Simulator.apply_action(
-		State.new(board, [source], [_plain(&"reply", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER),
+		State.new(
+			board,
+			[source],
+			[_plain(&"reply", Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER,
+			0,
+			[_plain(&"entry_draw", Rules.PLAYER_OWNER)],
+			[]
+		),
 		Action.make_play(0, 0, &"jianfa_entry")
 	)
 	var next_state: State = transition.get("state") as State
 	_check(_instance_at(next_state, 1) == &"jianfa_entry", "Entry movement chooses cell 1 before cell 3")
+	_check(_hand_contains_instance(next_state, Rules.PLAYER_OWNER, &"entry_draw"), "Entry draws one card before movement")
 	_check(_count_events(transition.get("events", []), &"card_moved") == 1, "Entry movement emits one movement event")
+	_check(
+		_event_index(transition.get("events", []), &"card_drawn")
+		< _event_index(transition.get("events", []), &"card_moved"),
+		"Entry draw resolves before conditional movement"
+	)
+
+
+func _test_jianfa_entry_draws_without_a_move_target() -> void:
+	var source: Dictionary = Catalog.create_instance(
+		&"JianFaQinYin1", Rules.PLAYER_OWNER, &"jianfa_stationary"
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			Rules.empty_board(),
+			[source],
+			[_plain(&"reply", Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER,
+			0,
+			[_plain(&"stationary_draw", Rules.PLAYER_OWNER)],
+			[]
+		),
+		Action.make_play(0, 4, &"jianfa_stationary")
+	)
+	var next_state: State = transition.get("state") as State
+	_check(_instance_at(next_state, 4) == &"jianfa_stationary", "JianFa remains in place without a qualifying enemy")
+	_check(_hand_contains_instance(next_state, Rules.PLAYER_OWNER, &"stationary_draw"), "JianFa still draws without a movement target")
+	_check(_count_events(transition.get("events", []), &"card_moved") == 0, "No movement event is emitted without a qualifying target")
 
 
 func _test_jianfa_activation_grants_only_an_extra_play() -> void:
@@ -167,6 +204,14 @@ func _count_events(events: Array, event_type: StringName) -> int:
 		if StringName((event_value as Dictionary).get("type", &"")) == event_type:
 			count += 1
 	return count
+
+
+func _event_index(events: Array, event_type: StringName) -> int:
+	for index: int in range(events.size()):
+		var event_value: Variant = events[index]
+		if StringName((event_value as Dictionary).get("type", &"")) == event_type:
+			return index
+	return -1
 
 
 func _check(condition: bool, message: String) -> void:

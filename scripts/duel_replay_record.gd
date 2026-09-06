@@ -30,6 +30,18 @@ func record_action(action: ActionData) -> void:
 	_actions.append(action.duplicate_action() as ActionData)
 
 
+func get_action_count() -> int:
+	return _actions.size()
+
+
+func truncate_actions(action_count: int) -> void:
+	var retained_count: int = clampi(action_count, 0, _actions.size())
+	_actions.resize(retained_count)
+	_final_state = null
+	_outcome = &""
+	_final_status = ""
+
+
 func complete(state: StateData, outcome: StringName, final_status: String) -> void:
 	_final_state = state.duplicate_state() as StateData if state != null else null
 	_outcome = outcome

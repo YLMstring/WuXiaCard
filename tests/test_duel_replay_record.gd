@@ -34,6 +34,7 @@ func _run() -> void:
 
 	var action: ActionData = ActionData.make_play(0, 4, &"player_card")
 	record.record_action(action)
+	_check(record.get_action_count() == 1, "Replay record exposes its action count")
 	action.target_index = 8
 	var stored_actions: Array[ActionData] = record.get_actions()
 	_check(stored_actions.size() == 1, "Replay record stores one action")
@@ -52,6 +53,12 @@ func _run() -> void:
 	var returned_final: StateData = record.get_final_state()
 	returned_final.turn_count = 55
 	_check(record.get_final_state().turn_count == 1, "Final-state accessor returns a fresh duplicate")
+
+	record.truncate_actions(0)
+	_check(record.get_action_count() == 0, "Truncation removes actions after an undo checkpoint")
+	_check(not record.is_ready(), "Truncation clears replay completion data")
+	_check(record.get_final_state() == null, "Truncation clears the final state")
+	_check(record.get_outcome() == &"" and record.get_final_status().is_empty(), "Truncation clears outcome metadata")
 
 	var reset_opening: StateData = _make_state(3)
 	record.begin(reset_opening)

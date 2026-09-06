@@ -133,6 +133,10 @@ var _is_replay_presenting_action: bool = false
 var _replay_generation: int = 0
 var _replay_feedback_tween: Tween = null
 var _replay_delay_remaining: float = 0.0
+var _undo_last_player_decision_enabled: bool = false
+var _undo_checkpoint_state: StateData = null
+var _undo_checkpoint_replay_action_count: int = 0
+var _undo_checkpoint_mastery_candidate_ids: Array[StringName] = []
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -176,6 +180,7 @@ func _ready() -> void:
 		deck_profile_path,
 		testing_mode
 	)
+	_configure_main_deck_effects(player_card_ids)
 	_set_mastery_eligible_card_ids(player_card_ids)
 	var effective_opponent_ids: Array[StringName] = opponent_card_ids.duplicate()
 	if effective_opponent_ids.size() != 5:
@@ -331,7 +336,15 @@ func debug_is_replaying() -> bool:
 
 
 func debug_get_replay_action_count() -> int:
-	return _replay_record.get_actions().size()
+	return _replay_record.get_action_count()
+
+
+func debug_can_undo_last_player_decision() -> bool:
+	return _can_undo_last_player_decision()
+
+
+func debug_undo_last_player_decision() -> bool:
+	return _undo_last_player_decision()
 
 
 func debug_get_replay_initial_decks() -> Dictionary:
@@ -785,10 +798,28 @@ func _commit_action(
 		return
 	if not Simulator.is_action_legal(duel_state, action):
 		return
+	var capture_undo_checkpoint: bool = (
+		_undo_last_player_decision_enabled
+		and not _is_replaying
+		and owner_id == DuelRules.PLAYER_OWNER
+	)
+	var undo_state_before_action: StateData = (
+		duel_state.duplicate_state() as StateData
+		if capture_undo_checkpoint
+		else null
+	)
+	var undo_replay_action_count: int = _replay_record.get_action_count()
+	var undo_mastery_candidates: Array[StringName] = []
+	if capture_undo_checkpoint:
+		undo_mastery_candidates.assign(_mastery_candidate_ids)
 	var presentation_started_msec: int = Time.get_ticks_msec()
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
+	if capture_undo_checkpoint:
+		_undo_checkpoint_state = undo_state_before_action
+		_undo_checkpoint_replay_action_count = undo_replay_action_count
+		_undo_checkpoint_mastery_candidate_ids = undo_mastery_candidates
 	if not _is_replaying:
 		_replay_record.record_action(action)
 	if not _is_replaying and owner_id == DuelRules.PLAYER_OWNER and action.action_type == ActionData.TYPE_PLAY:
@@ -1402,6 +1433,25 @@ func _set_mastery_eligible_card_ids(card_ids: Array[StringName]) -> void:
 	_mastery_candidate_set.clear()
 	for card_id: StringName in card_ids:
 		_mastery_eligible_card_ids[card_id] = true
+
+
+func _configure_main_deck_effects(card_ids: Array[StringName]) -> void:
+	_undo_last_player_decision_enabled = false
+	for card_id: StringName in card_ids:
+		var definition: Dictionary = Catalog.get_definition(card_id)
+		if (
+			Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION
+			in (definition.get("main_deck_effects", []) as Array)
+		):
+			_undo_last_player_decision_enabled = true
+			break
+
+
+func _restore_mastery_candidate_ids(card_ids: Array[StringName]) -> void:
+	_mastery_candidate_ids = card_ids.duplicate()
+	_mastery_candidate_set.clear()
+	for card_id: StringName in _mastery_candidate_ids:
+		_mastery_candidate_set[card_id] = true
 
 
 func _record_mastery_candidate(card_id: StringName) -> void:
@@ -2908,7 +2958,43 @@ func _on_replay_pressed() -> void:
 		if _replay_record.is_ready():
 			_start_replay()
 		return
+	if _can_undo_last_player_decision():
+		_undo_last_player_decision()
+		return
 	_inspect_last_opponent_hand_play()
+
+
+func _can_undo_last_player_decision() -> bool:
+	return (
+		_undo_last_player_decision_enabled
+		and _undo_checkpoint_state != null
+		and duel_state != null
+		and not _inspection_open
+		and not _is_replaying
+		and turn_state == TurnState.PLAYER
+		and duel_state.active_player == DuelRules.PLAYER_OWNER
+		and not Simulator.is_terminal(duel_state)
+	)
+
+
+func _undo_last_player_decision() -> bool:
+	if not _can_undo_last_player_decision():
+		return false
+	var restored_state: StateData = _undo_checkpoint_state
+	var restored_replay_action_count: int = _undo_checkpoint_replay_action_count
+	var restored_mastery_candidates: Array[StringName] = (
+		_undo_checkpoint_mastery_candidate_ids.duplicate()
+	)
+	_undo_checkpoint_state = null
+	_undo_checkpoint_replay_action_count = 0
+	_undo_checkpoint_mastery_candidate_ids.clear()
+	_cancel_opponent_search()
+	_replay_generation += 1
+	_replay_record.truncate_actions(restored_replay_action_count)
+	_restore_mastery_candidate_ids(restored_mastery_candidates)
+	_match_outcome = &""
+	_rebuild_views_from_state(restored_state)
+	return true
 
 
 func _inspect_last_opponent_hand_play() -> void:

@@ -5,6 +5,12 @@ const EFFECT_GATE_SELF_CASTRATION: StringName = &"self_castration"
 const KNOWN_EFFECT_GATES: Array[StringName] = [
 	EFFECT_GATE_SELF_CASTRATION,
 ]
+const MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION: StringName = (
+	&"undo_last_player_decision"
+)
+const KNOWN_MAIN_DECK_EFFECTS: Array[StringName] = [
+	MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION,
+]
 
 const ACTIVATION_DRAG_TO_TARGET: StringName = &"drag_to_target"
 const TARGET_ADJACENT_EMPTY_BOARD: StringName = &"adjacent_empty_board"
@@ -1521,6 +1527,57 @@ const JIANFA_ENTRY_MOVE: Dictionary = {
 		],
 		"actions": [{"type": ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY}],
 	}],
+}
+
+const JIANFA_ENTRY_DRAW: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+	}],
+}
+
+const LAIHE_REVEAL_CURRENT_HAND: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_REVEAL_HAND_CARDS,
+			"recipient": RECIPIENT_OPPONENT,
+			"filter": REVEAL_FILTER_ALL,
+		}],
+	}],
+}
+
+const LAIHE_REVEAL_FUTURE_DRAWS: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+			"recipient": RECIPIENT_OPPONENT,
+		}],
+	}],
+}
+
+const LAIHE_FLIP_PROTECTION: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
+		},
+		{
+			"event": CARD_AFTER_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+		{
+			"event": TRIGGER_START_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
 }
 
 const JIANFA_ACTIVATION: Dictionary = {
@@ -3586,21 +3643,8 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_REVEAL_HAND_CARDS,
-							"recipient": RECIPIENT_OPPONENT,
-							"filter": REVEAL_FILTER_ALL,
-						}],
-					},
-				],
-			},
-		],
+		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
+		"abilities": [],
 	},
 	&"LaiHeQinQuan2": {
 		"id": &"LaiHeQinQuan2",
@@ -3612,40 +3656,8 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [2, 2, 4, 4],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_REVEAL_HAND_CARDS,
-							"recipient": RECIPIENT_OPPONENT,
-							"filter": REVEAL_FILTER_ALL,
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": CARD_BEFORE_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
-					},
-					{
-						"event": CARD_AFTER_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-					{
-						"event": TRIGGER_START_OWNER_TURN,
-						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-				],
-			},
-		],
+		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
+		"abilities": [LAIHE_FLIP_PROTECTION],
 	},
 	&"LaiHeQinQuan3": {
 		"id": &"LaiHeQinQuan3",
@@ -3657,52 +3669,8 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示所有敌方手牌。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [3, 3, 5, 5],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_REVEAL_HAND_CARDS,
-							"recipient": RECIPIENT_OPPONENT,
-							"filter": REVEAL_FILTER_ALL,
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
-							"recipient": RECIPIENT_OPPONENT,
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": CARD_BEFORE_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
-					},
-					{
-						"event": CARD_AFTER_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-					{
-						"event": TRIGGER_START_OWNER_TURN,
-						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-				],
-			},
-		],
+		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
+		"abilities": [LAIHE_REVEAL_CURRENT_HAND, LAIHE_FLIP_PROTECTION],
 	},
 	&"LaiHeQinQuan4": {
 		"id": &"LaiHeQinQuan4",
@@ -3714,40 +3682,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，揭示所有敌方手牌以及后续抽到的牌。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [4, 4, 6, 6],
+		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
 		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_REVEAL_HAND_CARDS,
-							"recipient": RECIPIENT_OPPONENT,
-							"filter": REVEAL_FILTER_REMEMBERED,
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_SUMMONED,
-						"conditions": [
-							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-							{"type": CONDITION_TRIGGER_CARD_REVEALED_TO_SELF},
-						],
-						"actions": [{
-							"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
-							"ability": {
-								"modifiers": [{
-									"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
-									"value": 0,
-								}],
-							},
-						}],
-					},
-				],
-			},
+			LAIHE_REVEAL_CURRENT_HAND,
+			LAIHE_REVEAL_FUTURE_DRAWS,
+			LAIHE_FLIP_PROTECTION,
 		],
 	},
 	&"LaiHeQinQuan5": {
@@ -4532,7 +4471,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，抽一张牌，若与直线上的敌方相距一个空位，移动至该空位。",
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 7, 6, 5],
-		"abilities": [JIANFA_ENTRY_MOVE],
+		"abilities": [JIANFA_ENTRY_DRAW, JIANFA_ENTRY_MOVE],
 	},
 	&"JianFaQinYin2": {
 		"id": &"JianFaQinYin2",
@@ -4545,7 +4484,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 7, 6, 5],
 		"starting_ki": 1,
-		"abilities": [JIANFA_ENTRY_MOVE, JIANFA_ACTIVATION],
+		"abilities": [JIANFA_ENTRY_DRAW, JIANFA_ENTRY_MOVE, JIANFA_ACTIVATION],
 	},
 	&"JianFaQinYin3": {
 		"id": &"JianFaQinYin3",
@@ -4558,7 +4497,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "莫大先生的绝技，所谓“琴中藏剑，剑发琴音”，手中短剑嗡嗡作响，犹如灵蛇颤动不绝，将对手裹在剑光之中。",
 		"powers": [4, 7, 6, 5],
 		"starting_ki": 1,
-		"abilities": [JIANFA_ENTRY_MOVE, JIANFA_MOVE_SUPPRESSION, JIANFA_ACTIVATION],
+		"abilities": [
+			JIANFA_ENTRY_DRAW,
+			JIANFA_ENTRY_MOVE,
+			JIANFA_MOVE_SUPPRESSION,
+			JIANFA_ACTIVATION,
+		],
 	},
 	&"YanHuiZhuRong3": {
 		"id": &"YanHuiZhuRong3",
@@ -5146,6 +5090,28 @@ static func _validate_definition(
 			definition.get("guaranteed_defeat_reward"),
 			errors
 		)
+	if definition.has("main_deck_effects"):
+		var main_deck_effects_value: Variant = definition.get("main_deck_effects")
+		if not main_deck_effects_value is Array:
+			errors.append("Card %s requires an Array main_deck_effects" % card_id)
+		else:
+			var observed_main_deck_effects: Dictionary = {}
+			for effect_value: Variant in main_deck_effects_value as Array:
+				if typeof(effect_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+					errors.append(
+						"Card %s requires unique known main_deck_effects" % card_id
+					)
+					break
+				var effect_name := StringName(effect_value)
+				if (
+					effect_name not in KNOWN_MAIN_DECK_EFFECTS
+					or observed_main_deck_effects.has(effect_name)
+				):
+					errors.append(
+						"Card %s requires unique known main_deck_effects" % card_id
+					)
+					break
+				observed_main_deck_effects[effect_name] = true
 	var powers: Array = definition.get("powers", [])
 	if powers.size() != 4:
 		errors.append("Card %s requires four powers" % card_id)

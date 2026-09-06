@@ -174,7 +174,7 @@ func _test_hanbin_target_activation() -> void:
 		Rules.PLAYER_OWNER,
 		&"hanbin_three"
 	)
-	var target: Dictionary = _plain(&"hanbin_target", [3, 3, 3, 3], Rules.OPPONENT_OWNER)
+	var target: Dictionary = _plain(&"hanbin_target", [5, 5, 5, 5], Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(
@@ -185,7 +185,7 @@ func _test_hanbin_target_activation() -> void:
 	var runtime_target: Dictionary = next_state.get_hand(Rules.OPPONENT_OWNER)[0]
 	_check(
 		bool(transition.get("valid", false))
-		and runtime_target.get("powers", []) == [2, 2, 2, 2]
+		and runtime_target.get("powers", []) == [1, 1, 1, 1]
 		and Revelation.is_revealed_to(runtime_target, Rules.PLAYER_OWNER),
 		"HanBin spends ki to weaken and reveal the exact enemy hand target"
 	)
@@ -258,7 +258,7 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 		Rules.PLAYER_OWNER,
 		&"hanbin_four"
 	)
-	var target: Dictionary = _plain(&"hanbin_four_target", [3, 3, 3, 3], Rules.OPPONENT_OWNER)
+	var target: Dictionary = _plain(&"hanbin_four_target", [6, 6, 6, 6], Rules.OPPONENT_OWNER)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(

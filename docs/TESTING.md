@@ -72,6 +72,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   hand-play inspection, supplied icon and touch feedback, exact state
   reconstruction, repeated playback, side-effect suppression, concealment,
   inspection-paused timing, recovery, and exit.
+- `test_duel_undo.gd` — main-deck-gated last-player-decision restoration,
+  opponent-response rollback, replay truncation, mastery rollback, and
+  single-checkpoint use.
 - `test_card_mastery.gd` — exact-ID eligibility, successful-play capture,
   identical-copy qualification, namesake exclusion, and deduplication.
 - `test_zixia_integration.gd` — hand/board mutable-value presentation and
