@@ -20,6 +20,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::apply_iterative_transition_for_test
 	);
 	ClassDB::bind_method(
+		D_METHOD("resolve_event_iterative_for_test", "event_id", "context"),
+		&DuelNativeCompactKernel::resolve_event_iterative_for_test
+	);
+	ClassDB::bind_method(
 		D_METHOD(
 			"apply_play_transition",
 			"hand_index",

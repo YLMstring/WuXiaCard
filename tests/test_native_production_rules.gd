@@ -23,6 +23,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
 	_test_iterative_resolution_root_matches_recursive()
+	_test_iterative_event_group_loop_matches_recursive()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -94,6 +95,59 @@ func _test_iterative_resolution_root_matches_recursive() -> void:
 	_check(
 		iterative == recursive,
 		"Explicit root continuation preserves the complete recursive transition payload"
+	)
+
+
+func _test_iterative_event_group_loop_matches_recursive() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(
+			&"TuNaShu1", Rules.PLAYER_OWNER, &"iterative_event_source"
+		),
+	}
+	var state := State.new(
+		board,
+		[],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"iterative_event_opponent"
+		)],
+		Rules.PLAYER_OWNER,
+		0,
+		[Catalog.create_instance(
+			&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_event_draw"
+		)]
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Iterative-event fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Iterative-event fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Iterative-event fixture loads into the native kernel"
+	)
+	var context: Dictionary = {
+		"trigger_cell": 4,
+		"trigger_instance_id": &"iterative_event_source",
+		"trigger_owner_id": Rules.PLAYER_OWNER,
+		"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+		"trigger_zone": &"board",
+		"trigger_logical_index": 4,
+		"trigger_was_on_board": true,
+	}
+	var recursive: Dictionary = kernel.call(
+		"resolve_event_transition", &"card_after_summoned", context
+	) as Dictionary
+	var iterative: Dictionary = kernel.call(
+		"resolve_event_iterative_for_test", &"card_after_summoned", context
+	) as Dictionary
+	_check(
+		iterative == recursive,
+		"Explicit event-group frame preserves state, nested events, and presentation order"
 	)
 
 
