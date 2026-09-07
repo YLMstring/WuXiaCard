@@ -451,6 +451,24 @@ void ResolutionEngine::step_action_frame(
 		finish_action(state, exile_stack, outcome);
 		return;
 	}
+	if (frame.stage == ActionStage::WAIT_SUMMON) {
+		if (!completed_summon_resolution.supported) {
+			frame.resolution->reason = completed_summon_resolution.reason;
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			);
+			return;
+		}
+		kernel.append_resolution(*frame.resolution, completed_summon_resolution);
+		finish_action(
+			state,
+			exile_stack,
+			DuelNativeCompactKernel::ActionOutcome::APPLIED
+		);
+		return;
+	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
 		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
 		if (!completed_event_resolution.supported) {
@@ -604,6 +622,43 @@ void ResolutionEngine::step_action_frame(
 		: frame.resolution->events.size();
 	if (!action.declaration_valid) {
 		finish_action(state, exile_stack, DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED);
+		return;
+	}
+	if (
+		action.opcode == DuelNativeCompactKernel::ActionOpcode::SUMMON_CARD
+		|| action.opcode == DuelNativeCompactKernel::ActionOpcode::RESUMMON_CARD_IN_PLACE
+	) {
+		DuelNativeCompactKernel::SummonRequest request;
+		const DuelNativeCompactKernel::ActionOutcome outcome =
+			action.opcode == DuelNativeCompactKernel::ActionOpcode::SUMMON_CARD
+			? kernel.prepare_summon_card(
+				state,
+				frame.group,
+				action,
+				frame.event_context,
+				frame.action_context,
+				frame.execution_state,
+				exile_stack,
+				*frame.resolution,
+				request
+			)
+			: kernel.prepare_resummon_card_in_place(
+				state,
+				frame.group,
+				action,
+				frame.event_context,
+				frame.action_context,
+				frame.execution_state,
+				exile_stack,
+				*frame.resolution,
+				request
+			);
+		if (outcome != DuelNativeCompactKernel::ActionOutcome::APPLIED) {
+			finish_action(state, exile_stack, outcome);
+			return;
+		}
+		frame.stage = ActionStage::WAIT_SUMMON;
+		push_summon_frame(request);
 		return;
 	}
 	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::DRAW_CARDS) {

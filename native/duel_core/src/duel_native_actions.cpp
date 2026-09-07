@@ -2946,7 +2946,7 @@ int32_t DuelNativeCompactKernel::append_perfect_copy_board_card(
 	return card_index;
 }
 
-DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::prepare_summon_card(
 	NativeState &value,
 	const EventGroup &group,
 	const CompiledAction &action,
@@ -2954,7 +2954,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	const ActionContext &action_context,
 	ActionExecutionState &execution_state,
 	std::vector<int32_t> &exile_stack,
-	Resolution &resolution
+	Resolution &resolution,
+	SummonRequest &prepared_request
 ) const {
 	const int32_t ability_source_owner = action_context.ability_source_owner;
 	if (ability_source_owner != 1 && ability_source_owner != 2) return ActionOutcome::NO_EFFECT;
@@ -3188,18 +3189,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		hand_change.events = Array();
 		append_resolution(resolution, hand_change);
 	}
-	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
-	if (!nested.supported) {
-		resolution.reason = nested.reason;
-		return ActionOutcome::UNSUPPORTED;
-	}
-	append_resolution(resolution, nested);
 	execution_state.last_summoned_card_index = summoned_card_index;
 	execution_state.last_summoned_cell = target_cell;
+	prepared_request = std::move(request);
 	return ActionOutcome::APPLIED;
 }
 
-DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in_place(
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	NativeState &value,
 	const EventGroup &group,
 	const CompiledAction &action,
@@ -3208,6 +3204,39 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	ActionExecutionState &execution_state,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
+) const {
+	SummonRequest request;
+	const ActionOutcome outcome = prepare_summon_card(
+		value,
+		group,
+		action,
+		event_context,
+		action_context,
+		execution_state,
+		exile_stack,
+		resolution,
+		request
+	);
+	if (outcome != ActionOutcome::APPLIED) return outcome;
+	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
+	if (!nested.supported) {
+		resolution.reason = nested.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(resolution, nested);
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::prepare_resummon_card_in_place(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution,
+	SummonRequest &prepared_request
 ) const {
 	const int32_t source_card_index = action_context.action_subject_card_index;
 	const int32_t source_owner = action_context.action_subject_owner;
@@ -3279,6 +3308,33 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	request.summon_reason = StringName("ability_resummon_in_place");
 	request.attack_reason = StringName("generated_summon_standard_attack");
 	request.buffered_placement_events.append(summoned_event);
+	prepared_request = std::move(request);
+	return ActionOutcome::APPLIED;
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in_place(
+	NativeState &value,
+	const EventGroup &group,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	ActionExecutionState &execution_state,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	SummonRequest request;
+	const ActionOutcome outcome = prepare_resummon_card_in_place(
+		value,
+		group,
+		action,
+		event_context,
+		action_context,
+		execution_state,
+		exile_stack,
+		resolution,
+		request
+	);
+	if (outcome != ActionOutcome::APPLIED) return outcome;
 	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
 	if (!nested.supported) {
 		resolution.reason = nested.reason;
