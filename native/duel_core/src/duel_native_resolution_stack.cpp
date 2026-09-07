@@ -94,8 +94,6 @@ void ResolutionEngine::finish_action(
 	std::vector<int32_t> &exile_stack,
 	DuelNativeCompactKernel::ActionOutcome outcome
 ) {
-	(void)state;
-	(void)exile_stack;
 	ActionSequenceFrame &frame = resolution_frames.back()->actions;
 	if (frame.actions == nullptr || frame.resolution == nullptr) {
 		frame.aggregate = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
@@ -105,110 +103,30 @@ void ResolutionEngine::finish_action(
 	const DuelNativeCompactKernel::CompiledAction &action =
 		(*frame.actions)[frame.active_action_index];
 	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	frame.pending_outcome = outcome;
-	frame.direct_event_end = resolution.events.size();
-	frame.ki_event_index = frame.first_event_index;
-	if (
-		frame.direct_event_end > frame.first_event_index
-		&& (
-			action.opcode == DuelNativeCompactKernel::ActionOpcode::ATTACK_TRIGGER_CARD
-			|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_SELF
-			|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_CARD
-			|| action.opcode == DuelNativeCompactKernel::ActionOpcode::FLIP_SELF
-			|| action.opcode == DuelNativeCompactKernel::ActionOpcode::SUMMON_CARD
-			|| action.opcode == DuelNativeCompactKernel::ActionOpcode::RESUMMON_CARD_IN_PLACE
-		)
-	) {
-		resolution.protected_power_batch_ranges.push_back({
-			frame.first_event_index,
-			frame.direct_event_end,
-		});
-	}
-	frame.stage = ActionStage::NEXT_KI_EVENT;
-}
-
-void ResolutionEngine::finalize_action(DuelNativeCompactKernel::NativeState &state) {
-	ActionSequenceFrame &frame = resolution_frames.back()->actions;
-	const DuelNativeCompactKernel::CompiledAction &action =
-		(*frame.actions)[frame.active_action_index];
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	if (!frame.defer_power_change_batch) {
-		kernel.assign_power_change_batch(
-			state,
-			resolution,
-			frame.first_event_index,
-			frame.group,
-			action,
-			frame.action_context,
-			static_cast<int32_t>(frame.active_action_index)
-		);
-	}
-	if (frame.pending_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
-		if (resolution.reason.is_empty()) {
-			resolution.reason = String("Unsupported compiled action opcode ")
-				+ String::num_int64(static_cast<int64_t>(action.opcode))
-				+ String(" type=") + String(action.declaration_type);
-		}
-		frame.aggregate = frame.pending_outcome;
-		frame.stage = ActionStage::COMPLETE;
-		return;
-	}
-	if (frame.pending_outcome == DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT) {
-		frame.aggregate = frame.pending_outcome;
-		frame.stage = ActionStage::COMPLETE;
-		return;
-	}
-	if (
-		frame.pending_outcome == DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-		&& action.stop_rule_on_invalid_context
-	) {
-		frame.aggregate = DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT;
-		frame.stage = ActionStage::COMPLETE;
-		return;
-	}
-	if (frame.pending_outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
-		frame.aggregate = DuelNativeCompactKernel::ActionOutcome::APPLIED;
-	}
-	frame.stage = ActionStage::NEXT_ACTION;
-}
-
-void ResolutionEngine::step_action_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	ActionSequenceFrame &frame = resolution_frames.back()->actions;
-	if (frame.stage == ActionStage::COMPLETE || frame.actions == nullptr) {
-		complete_action_frame();
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
-		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			frame.stage = ActionStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(resolution, completed_event_resolution);
-		const int64_t ki_resolution_end = resolution.events.size();
-		if (ki_resolution_end > frame.ki_resolution_start) {
+	const int64_t direct_event_end = resolution.events.size();
+		if (
+			direct_event_end > frame.first_event_index
+			&& (
+				action.opcode == DuelNativeCompactKernel::ActionOpcode::ATTACK_TRIGGER_CARD
+				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_SELF
+				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_CARD
+				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::FLIP_SELF
+				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::SUMMON_CARD
+				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::RESUMMON_CARD_IN_PLACE
+			)
+		) {
 			resolution.protected_power_batch_ranges.push_back({
-				frame.ki_resolution_start,
-				ki_resolution_end,
+				frame.first_event_index,
+				direct_event_end,
 			});
 		}
-		frame.stage = ActionStage::NEXT_KI_EVENT;
-		return;
-	}
-	if (frame.stage == ActionStage::NEXT_KI_EVENT) {
-		const DuelNativeCompactKernel::CompiledAction &action =
-			(*frame.actions)[frame.active_action_index];
-		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-		while (
+		for (
+			int64_t event_index = frame.first_event_index;
 			action.opcode != DuelNativeCompactKernel::ActionOpcode::DISTRIBUTE_KI
-			&& frame.ki_event_index < frame.direct_event_end
+				&& event_index < direct_event_end;
+			++event_index
 		) {
-			const Variant event_value = resolution.events[frame.ki_event_index++];
+			const Variant event_value = resolution.events[event_index];
 			if (event_value.get_type() != Variant::DICTIONARY) continue;
 			const Dictionary ki_event = event_value;
 			if (StringName(ki_event.get("type", StringName())) != StringName("ki_changed")) {
@@ -234,12 +152,75 @@ void ResolutionEngine::step_action_frame(
 			ki_context.ki = static_cast<int32_t>(
 				static_cast<int64_t>(ki_event.get("ki", -1))
 			);
-			frame.ki_resolution_start = resolution.events.size();
-			frame.stage = ActionStage::WAIT_KI_EVENT;
-			push_event_frame(StringName("card_ki_changed"), ki_context);
+			DuelNativeCompactKernel::Resolution ki_resolution = kernel.resolve_event(
+				state,
+				StringName("card_ki_changed"),
+				ki_context,
+				exile_stack
+			);
+			if (!ki_resolution.supported) {
+				resolution.reason = ki_resolution.reason;
+				frame.aggregate = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+				frame.stage = ActionStage::COMPLETE;
+				return;
+			}
+			const int64_t ki_resolution_start = resolution.events.size();
+			kernel.append_resolution(resolution, ki_resolution);
+			const int64_t ki_resolution_end = resolution.events.size();
+			if (ki_resolution_end > ki_resolution_start) {
+				resolution.protected_power_batch_ranges.push_back({
+					ki_resolution_start,
+					ki_resolution_end,
+				});
+			}
+		}
+		if (!frame.defer_power_change_batch) {
+			kernel.assign_power_change_batch(
+				state,
+				resolution,
+				frame.first_event_index,
+				frame.group,
+				action,
+				frame.action_context,
+				static_cast<int32_t>(frame.active_action_index)
+			);
+		}
+		if (outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
+			if (resolution.reason.is_empty()) {
+				resolution.reason = String("Unsupported compiled action opcode ")
+					+ String::num_int64(static_cast<int64_t>(action.opcode))
+					+ String(" type=") + String(action.declaration_type);
+			}
+			frame.aggregate = outcome;
+			frame.stage = ActionStage::COMPLETE;
 			return;
 		}
-		finalize_action(state);
+		if (outcome == DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT) {
+			frame.aggregate = outcome;
+			frame.stage = ActionStage::COMPLETE;
+			return;
+		}
+		if (
+			outcome == DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			&& action.stop_rule_on_invalid_context
+		) {
+			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT;
+			frame.stage = ActionStage::COMPLETE;
+			return;
+		}
+		if (outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
+			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::APPLIED;
+		}
+	frame.stage = ActionStage::NEXT_ACTION;
+}
+
+void ResolutionEngine::step_action_frame(
+	DuelNativeCompactKernel::NativeState &state,
+	std::vector<int32_t> &exile_stack
+) {
+	ActionSequenceFrame &frame = resolution_frames.back()->actions;
+	if (frame.stage == ActionStage::COMPLETE || frame.actions == nullptr) {
+		complete_action_frame();
 		return;
 	}
 

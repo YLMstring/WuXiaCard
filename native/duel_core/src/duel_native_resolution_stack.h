@@ -61,8 +61,6 @@ private:
 		WAIT_IF_ACTIONS,
 		NEXT_SELECTED_CARD,
 		WAIT_SELECTED_CARD_ACTIONS,
-		NEXT_KI_EVENT,
-		WAIT_KI_EVENT,
 		COMPLETE,
 	};
 
@@ -84,11 +82,6 @@ private:
 		size_t selected_card_index = 0;
 		DuelNativeCompactKernel::ActionOutcome selected_aggregate =
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-		DuelNativeCompactKernel::ActionOutcome pending_outcome =
-			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-		int64_t direct_event_end = 0;
-		int64_t ki_event_index = 0;
-		int64_t ki_resolution_start = 0;
 	};
 
 	enum class FrameKind : uint8_t {
@@ -143,7 +136,6 @@ private:
 		std::vector<int32_t> &exile_stack,
 		DuelNativeCompactKernel::ActionOutcome outcome
 	);
-	void finalize_action(DuelNativeCompactKernel::NativeState &state);
 	void complete_action_frame();
 	void complete_event_frame();
 
