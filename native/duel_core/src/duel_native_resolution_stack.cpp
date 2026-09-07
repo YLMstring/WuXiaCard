@@ -267,6 +267,20 @@ void ResolutionEngine::push_transfer_resource_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
+void ResolutionEngine::push_finish_action_frame(
+	int32_t moving_owner,
+	int32_t played_card_index,
+	const std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest> &
+		extra_play_requests
+) {
+	auto frame = std::make_unique<ResolutionFrame>();
+	frame->kind = FrameKind::FINISH_ACTION;
+	frame->finish_action.moving_owner = moving_owner;
+	frame->finish_action.played_card_index = played_card_index;
+	frame->finish_action.extra_play_requests = extra_play_requests;
+	resolution_frames.push_back(std::move(frame));
+}
+
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -296,8 +310,10 @@ void ResolutionEngine::run_resolution_stack(
 			step_distribute_ki_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::POWER_CHANGE) {
 			step_power_change_frame(state, exile_stack);
-		} else {
+		} else if (resolution_frames.back()->kind == FrameKind::TRANSFER_RESOURCE) {
 			step_transfer_resource_frame(state, exile_stack);
+		} else {
+			step_finish_action_frame(state, exile_stack);
 		}
 	}
 }
@@ -373,6 +389,12 @@ void ResolutionEngine::complete_power_change_frame() {
 void ResolutionEngine::complete_transfer_resource_frame() {
 	completed_transfer_resource_outcome =
 		resolution_frames.back()->transfer_resource.outcome;
+	resolution_frames.pop_back();
+}
+
+void ResolutionEngine::complete_finish_action_frame() {
+	completed_finish_action_resolution =
+		std::move(resolution_frames.back()->finish_action.resolution);
 	resolution_frames.pop_back();
 }
 
@@ -3618,6 +3640,208 @@ void ResolutionEngine::step_transfer_resource_frame(
 	frame.stage = TransferResourceStage::COMPLETE;
 }
 
+void ResolutionEngine::step_finish_action_frame(
+	DuelNativeCompactKernel::NativeState &state,
+	std::vector<int32_t> &exile_stack
+) {
+	FinishActionFrame &frame = resolution_frames.back()->finish_action;
+	if (frame.stage == FinishActionStage::COMPLETE) {
+		complete_finish_action_frame();
+		return;
+	}
+	auto push_before_full_board_end = [&]() -> bool {
+		if (
+			std::find(
+				state.board_card_indices.begin(),
+				state.board_card_indices.end(),
+				-1
+			) != state.board_card_indices.end()
+		) return false;
+		int32_t owner_one_count = 0;
+		int32_t owner_two_count = 0;
+		for (const uint8_t owner : state.board_owners) {
+			if (owner == 1) owner_one_count += 1;
+			else if (owner == 2) owner_two_count += 1;
+		}
+		DuelNativeCompactKernel::EventContext context;
+		if (owner_one_count > owner_two_count) context.winning_owners.push_back(1);
+		else if (owner_two_count > owner_one_count) context.winning_owners.push_back(2);
+		push_event_frame(StringName("before_duel_end"), context);
+		return true;
+	};
+	auto append_child_or_fail = [&](DuelNativeCompactKernel::Resolution &child) -> bool {
+		if (!child.supported) {
+			frame.resolution = std::move(child);
+			frame.stage = FinishActionStage::COMPLETE;
+			return false;
+		}
+		kernel.append_resolution(frame.resolution, child);
+		return true;
+	};
+	auto complete_boundary_or_continue = [&](int32_t completed_owner) {
+		kernel.append_resolution(
+			frame.resolution,
+			kernel.complete_owner_turn_boundary(state)
+		);
+		if (kernel.is_terminal(state)) {
+			kernel.lock_terminal_reason(state);
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		frame.previous_owner = completed_owner;
+		frame.stage = FinishActionStage::NEXT_OWNER;
+	};
+
+	if (frame.stage == FinishActionStage::START) {
+		if (
+			frame.played_card_index >= 0
+			&& frame.played_card_index
+				< static_cast<int32_t>(state.card_instance_ids.size())
+		) {
+			Dictionary last_hand_plays = state.side_payload.get(
+				"last_hand_play_by_owner",
+				Dictionary()
+			);
+			last_hand_plays = last_hand_plays.duplicate(true);
+			Dictionary last_hand_play;
+			last_hand_play["played_by_owner_id"] = frame.moving_owner;
+			last_hand_play["card_id"] = state.card_ids[frame.played_card_index];
+			last_hand_play["instance_id"] =
+				state.card_instance_ids[frame.played_card_index];
+			last_hand_plays[frame.moving_owner] = last_hand_play;
+			state.side_payload["last_hand_play_by_owner"] = last_hand_plays;
+		}
+		state.scalars[1] += 1;
+		state.scalars[12] += 1;
+		kernel.apply_extra_card_play_requests(
+			state,
+			frame.moving_owner,
+			frame.extra_play_requests,
+			frame.resolution
+		);
+		if (
+			state.scalars[5] > 0
+			&& kernel.owner_has_legal_play(state, frame.moving_owner)
+		) {
+			state.scalars[0] = frame.moving_owner;
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		state.scalars[5] = 0;
+		if (state.scalars[6] == 0) {
+			DuelNativeCompactKernel::EventContext end_context;
+			end_context.turn_owner = frame.moving_owner;
+			frame.stage = FinishActionStage::WAIT_END_OWNER_TURN;
+			push_event_frame(StringName("end_owner_turn"), end_context);
+			return;
+		}
+		frame.stage = FinishActionStage::CHECK_BEFORE_END;
+		return;
+	}
+	if (frame.stage == FinishActionStage::WAIT_END_OWNER_TURN) {
+		if (!append_child_or_fail(completed_event_resolution)) return;
+		state.scalars[6] = 1;
+		kernel.apply_extra_card_play_requests(
+			state,
+			frame.moving_owner,
+			completed_event_resolution.extra_play_requests,
+			frame.resolution
+		);
+		frame.stage = FinishActionStage::CHECK_BEFORE_END;
+		return;
+	}
+	if (frame.stage == FinishActionStage::CHECK_BEFORE_END) {
+		if (push_before_full_board_end()) {
+			frame.stage = FinishActionStage::WAIT_BEFORE_END;
+			return;
+		}
+		if (
+			state.scalars[5] > 0
+			&& kernel.owner_has_legal_play(state, frame.moving_owner)
+		) {
+			state.scalars[0] = frame.moving_owner;
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		state.scalars[5] = 0;
+		complete_boundary_or_continue(frame.moving_owner);
+		return;
+	}
+	if (frame.stage == FinishActionStage::WAIT_BEFORE_END) {
+		if (!append_child_or_fail(completed_event_resolution)) return;
+		if (
+			state.scalars[5] > 0
+			&& kernel.owner_has_legal_play(state, frame.moving_owner)
+		) {
+			state.scalars[0] = frame.moving_owner;
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		state.scalars[5] = 0;
+		complete_boundary_or_continue(frame.moving_owner);
+		return;
+	}
+	if (frame.stage == FinishActionStage::NEXT_OWNER) {
+		frame.turn_owner = other_owner(frame.previous_owner);
+		state.scalars[0] = frame.turn_owner;
+		DuelNativeCompactKernel::EventContext start_context;
+		start_context.turn_owner = frame.turn_owner;
+		frame.stage = FinishActionStage::WAIT_START_OWNER_TURN;
+		push_event_frame(StringName("start_owner_turn"), start_context);
+		return;
+	}
+	if (frame.stage == FinishActionStage::WAIT_START_OWNER_TURN) {
+		if (!append_child_or_fail(completed_event_resolution)) return;
+		if (kernel.owner_has_legal_action(state, frame.turn_owner)) {
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		DuelNativeCompactKernel::EventContext empty_end_context;
+		empty_end_context.turn_owner = frame.turn_owner;
+		frame.stage = FinishActionStage::WAIT_EMPTY_END_OWNER_TURN;
+		push_event_frame(StringName("end_owner_turn"), empty_end_context);
+		return;
+	}
+	if (frame.stage == FinishActionStage::WAIT_EMPTY_END_OWNER_TURN) {
+		if (!append_child_or_fail(completed_event_resolution)) return;
+		state.scalars[6] = 1;
+		kernel.apply_extra_card_play_requests(
+			state,
+			frame.turn_owner,
+			completed_event_resolution.extra_play_requests,
+			frame.resolution
+		);
+		frame.stage = FinishActionStage::CHECK_EMPTY_BEFORE_END;
+		return;
+	}
+	if (frame.stage == FinishActionStage::CHECK_EMPTY_BEFORE_END) {
+		if (push_before_full_board_end()) {
+			frame.stage = FinishActionStage::WAIT_EMPTY_BEFORE_END;
+			return;
+		}
+		if (
+			state.scalars[5] > 0
+			&& kernel.owner_has_legal_play(state, frame.turn_owner)
+		) {
+			frame.stage = FinishActionStage::COMPLETE;
+			return;
+		}
+		state.scalars[5] = 0;
+		complete_boundary_or_continue(frame.turn_owner);
+		return;
+	}
+	if (!append_child_or_fail(completed_event_resolution)) return;
+	if (
+		state.scalars[5] > 0
+		&& kernel.owner_has_legal_play(state, frame.turn_owner)
+	) {
+		frame.stage = FinishActionStage::COMPLETE;
+		return;
+	}
+	state.scalars[5] = 0;
+	complete_boundary_or_continue(frame.turn_owner);
+}
+
 bool ResolutionEngine::run_transition(
 	const DuelNativeCompactKernel::NativeState &source,
 	const DuelNativeCompactKernel::NativeAction &action,
@@ -3733,7 +3957,7 @@ bool ResolutionEngine::run_transition(
 					}
 					if (valid) {
 						DuelNativeCompactKernel::Resolution finish_resolution =
-							kernel.finish_action(
+							run_finish_action(
 								next,
 								moving_owner,
 								-1,
@@ -3780,7 +4004,7 @@ bool ResolutionEngine::run_transition(
 					} else {
 						kernel.append_resolution(resolution, summon_resolution);
 						DuelNativeCompactKernel::Resolution finish_resolution =
-							kernel.finish_action(
+							run_finish_action(
 								next,
 								moving_owner,
 								played_card_index,
@@ -3839,6 +4063,24 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_attack(
 	push_attack_frame(request);
 	run_resolution_stack(state, exile_stack);
 	return std::move(completed_attack_resolution);
+}
+
+DuelNativeCompactKernel::Resolution ResolutionEngine::run_finish_action(
+	DuelNativeCompactKernel::NativeState &state,
+	int32_t moving_owner,
+	int32_t played_card_index,
+	const std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest> &
+		extra_play_requests,
+	std::vector<int32_t> &exile_stack
+) {
+	resolution_frames.clear();
+	push_finish_action_frame(
+		moving_owner,
+		played_card_index,
+		extra_play_requests
+	);
+	run_resolution_stack(state, exile_stack);
+	return std::move(completed_finish_action_resolution);
 }
 
 void ResolutionEngine::step_event_frame(

@@ -23,6 +23,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
 	_test_iterative_resolution_root_matches_recursive()
+	_test_iterative_empty_turn_progression_matches_recursive()
 	_test_iterative_event_group_loop_matches_recursive()
 	_test_iterative_summon_lifecycle_matches_recursive()
 	_test_iterative_summon_actions_match_recursive()
@@ -104,6 +105,69 @@ func _test_iterative_resolution_root_matches_recursive() -> void:
 	_check(
 		iterative == recursive,
 		"Explicit root continuation preserves the complete recursive transition payload"
+	)
+
+
+func _test_iterative_empty_turn_progression_matches_recursive() -> void:
+	var board: Array = Rules.empty_board()
+	var watcher: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_turn_watcher"
+	)
+	watcher["active_abilities"] = [{
+		"triggers": [
+			{
+				"event": Catalog.TRIGGER_START_OWNER_TURN,
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+			{
+				"event": Catalog.TRIGGER_END_OWNER_TURN,
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+		],
+	}]
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": watcher}
+	var state := State.new(
+		board,
+		[
+			Catalog.create_instance(
+				&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_turn_played"
+			),
+			Catalog.create_instance(
+				&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_turn_remaining"
+			),
+		],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Iterative empty-turn fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Iterative empty-turn fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Iterative empty-turn fixture loads into the native kernel"
+	)
+	var action: Dictionary = {
+		"action_type": &"play",
+		"source_zone": &"hand",
+		"source_index": 0,
+		"source_instance_id": &"iterative_turn_played",
+		"target_kind": &"board_cell",
+		"target_index": 0,
+	}
+	var recursive: Dictionary = kernel.call(
+		"apply_play_transition", 0, 0, &"iterative_turn_played"
+	) as Dictionary
+	var iterative: Dictionary = kernel.call(
+		"apply_iterative_transition_for_test", action
+	) as Dictionary
+	_check(
+		iterative == recursive,
+		"Finish-action frame preserves end, empty-turn start/end, boundary, and next start order"
 	)
 
 
