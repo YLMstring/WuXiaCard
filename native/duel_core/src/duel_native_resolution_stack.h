@@ -67,6 +67,7 @@ private:
 		WAIT_DRAW,
 		WAIT_DISCARD,
 		WAIT_MOVE,
+		WAIT_SWAP,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -195,6 +196,31 @@ private:
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
 
+	enum class SwapStage : uint8_t {
+		START,
+		WAIT_SOURCE_BEFORE,
+		WAIT_SOURCE_MOVE,
+		WAIT_TARGET_BEFORE,
+		WAIT_TARGET_MOVE,
+		COMPLETE,
+	};
+
+	struct SwapFrame {
+		SwapStage stage = SwapStage::START;
+		int32_t source_card_index = -1;
+		int32_t source_owner = 0;
+		int32_t source_cell = -1;
+		int32_t target_card_index = -1;
+		int32_t target_owner = 0;
+		int32_t target_cell = -1;
+		Variant reserved_target_extra;
+		Variant reserved_source_extra;
+		DuelNativeCompactKernel::Resolution swap_resolution;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	};
+
 	struct ActionSequenceFrame {
 		ActionStage stage = ActionStage::NEXT_ACTION;
 		const std::vector<DuelNativeCompactKernel::CompiledAction> *actions = nullptr;
@@ -219,6 +245,7 @@ private:
 		int64_t ki_event_index = 0;
 		int64_t ki_resolution_start = 0;
 		int32_t child_target_cell = -1;
+		bool update_source_after_swap = false;
 	};
 
 	enum class FrameKind : uint8_t {
@@ -229,6 +256,7 @@ private:
 		DRAW,
 		DISCARD,
 		MOVE,
+		SWAP,
 	};
 
 	struct ResolutionFrame {
@@ -240,6 +268,7 @@ private:
 		DrawFrame draw;
 		DiscardFrame discard;
 		MoveFrame move;
+		SwapFrame swap;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -311,6 +340,15 @@ private:
 		bool resolve_before_event,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
+	void push_swap_frame(
+		int32_t source_card_index,
+		int32_t source_owner,
+		int32_t source_cell,
+		int32_t target_card_index,
+		int32_t target_owner,
+		int32_t target_cell,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -343,6 +381,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_swap_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -356,6 +398,7 @@ private:
 	void complete_draw_frame();
 	void complete_discard_frame();
 	void complete_move_frame();
+	void complete_swap_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -370,6 +413,8 @@ private:
 	DuelNativeCompactKernel::ActionOutcome completed_discard_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::ActionOutcome completed_move_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	DuelNativeCompactKernel::ActionOutcome completed_swap_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 };
 

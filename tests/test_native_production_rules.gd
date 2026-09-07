@@ -116,7 +116,10 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 			"zones": [Catalog.CARD_ZONE_BOARD],
 			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
 		},
-		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		"actions": [
+			{"type": Catalog.ACTION_GAIN_KI, "amount": 1},
+			{"type": Catalog.ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE},
+		],
 	})
 	actions.insert(0, {
 		"type": Catalog.ACTION_IF,
@@ -173,7 +176,7 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 			},
 		],
 	}]
-	board[0] = {
+	board[1] = {
 		"owner": Rules.PLAYER_OWNER,
 		"card": exile_watcher,
 	}
