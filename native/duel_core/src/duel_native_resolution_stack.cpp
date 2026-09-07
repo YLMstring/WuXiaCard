@@ -169,27 +169,6 @@ void ResolutionEngine::push_move_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
-void ResolutionEngine::push_swap_frame(
-	int32_t source_card_index,
-	int32_t source_owner,
-	int32_t source_cell,
-	int32_t target_card_index,
-	int32_t target_owner,
-	int32_t target_cell,
-	DuelNativeCompactKernel::Resolution &resolution
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::SWAP;
-	frame->swap.source_card_index = source_card_index;
-	frame->swap.source_owner = source_owner;
-	frame->swap.source_cell = source_cell;
-	frame->swap.target_card_index = target_card_index;
-	frame->swap.target_owner = target_owner;
-	frame->swap.target_cell = target_cell;
-	frame->swap.resolution = &resolution;
-	resolution_frames.push_back(std::move(frame));
-}
-
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -207,10 +186,8 @@ void ResolutionEngine::run_resolution_stack(
 			step_draw_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::DISCARD) {
 			step_discard_frame(state, exile_stack);
-		} else if (resolution_frames.back()->kind == FrameKind::MOVE) {
-			step_move_frame(state, exile_stack);
 		} else {
-			step_swap_frame(state, exile_stack);
+			step_move_frame(state, exile_stack);
 		}
 	}
 }
@@ -255,11 +232,6 @@ void ResolutionEngine::complete_discard_frame() {
 
 void ResolutionEngine::complete_move_frame() {
 	completed_move_outcome = resolution_frames.back()->move.outcome;
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_swap_frame() {
-	completed_swap_outcome = resolution_frames.back()->swap.outcome;
 	resolution_frames.pop_back();
 }
 
@@ -408,20 +380,6 @@ void ResolutionEngine::step_action_frame(
 			);
 		}
 		finish_action(state, exile_stack, completed_move_outcome);
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_SWAP) {
-		if (
-			completed_swap_outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED
-			&& frame.update_source_after_swap
-		) {
-			frame.execution_state.current_source_cell = kernel.find_board_card(
-				state,
-				frame.group.source_card_index,
-				frame.child_target_cell
-			);
-		}
-		finish_action(state, exile_stack, completed_swap_outcome);
 		return;
 	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
@@ -763,102 +721,6 @@ void ResolutionEngine::step_action_frame(
 			moving_card,
 			moving_owner,
 			true,
-			*frame.resolution
-		);
-		return;
-	}
-	if (
-		action.opcode
-			== DuelNativeCompactKernel::ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE
-		|| action.opcode
-			== DuelNativeCompactKernel::ActionOpcode::SWAP_SELF_WITH_TRIGGER_CARD
-		|| action.opcode == DuelNativeCompactKernel::ActionOpcode::SWAP_SELF_WITH_TARGET
-	) {
-		const int32_t source_card = frame.group.source_card_index;
-		const int32_t source_owner = frame.action_context.ability_source_owner;
-		int32_t target_card = frame.action_context.action_subject_card_index;
-		int32_t target_owner = frame.action_context.action_subject_owner;
-		int32_t target_cell_hint = frame.action_context.action_subject_logical_index;
-		frame.update_source_after_swap = false;
-		if (
-			action.opcode
-			== DuelNativeCompactKernel::ActionOpcode::SWAP_SELF_WITH_TRIGGER_CARD
-		) {
-			if (frame.event_context.trigger_card_index < 0) {
-				finish_action(
-					state,
-					exile_stack,
-					DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-				);
-				return;
-			}
-			target_card = frame.event_context.trigger_card_index;
-			target_owner = frame.event_context.trigger_owner;
-			target_cell_hint = frame.event_context.trigger_cell;
-		} else if (
-			action.opcode == DuelNativeCompactKernel::ActionOpcode::SWAP_SELF_WITH_TARGET
-		) {
-			if (frame.action_context.activation_target_kind != StringName("board_cell")) {
-				finish_action(
-					state,
-					exile_stack,
-					DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-				);
-				return;
-			}
-			target_card = frame.action_context.selected_card_index;
-			target_owner = frame.action_context.selected_card_owner;
-			target_cell_hint = frame.action_context.activation_target_index;
-			if (
-				target_cell_hint < 0
-				|| target_cell_hint >= static_cast<int32_t>(state.board_card_indices.size())
-				|| state.board_card_indices[target_cell_hint] != target_card
-				|| state.board_owners[target_cell_hint] != target_owner
-			) {
-				finish_action(
-					state,
-					exile_stack,
-					DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-				);
-				return;
-			}
-			frame.update_source_after_swap = true;
-		}
-		const int32_t source_cell = kernel.find_board_card(
-			state,
-			source_card,
-			frame.group.source_cell
-		);
-		const int32_t target_cell = kernel.find_board_card(
-			state,
-			target_card,
-			target_cell_hint
-		);
-		if (
-			source_card < 0
-			|| target_card < 0
-			|| source_card == target_card
-			|| source_cell < 0
-			|| target_cell < 0
-			|| state.board_owners[source_cell] != source_owner
-			|| state.board_owners[target_cell] != target_owner
-		) {
-			finish_action(
-				state,
-				exile_stack,
-				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-			);
-			return;
-		}
-		frame.child_target_cell = target_cell;
-		frame.stage = ActionStage::WAIT_SWAP;
-		push_swap_frame(
-			source_card,
-			source_owner,
-			source_cell,
-			target_card,
-			target_owner,
-			target_cell,
 			*frame.resolution
 		);
 		return;
@@ -2057,209 +1919,6 @@ void ResolutionEngine::step_move_frame(
 	kernel.append_resolution(resolution, frame.movement_resolution);
 	frame.outcome = DuelNativeCompactKernel::ActionOutcome::APPLIED;
 	frame.stage = MoveStage::COMPLETE;
-}
-
-void ResolutionEngine::step_swap_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	(void)exile_stack;
-	SwapFrame &frame = resolution_frames.back()->swap;
-	if (frame.stage == SwapStage::COMPLETE || frame.resolution == nullptr) {
-		complete_swap_frame();
-		return;
-	}
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	auto movement_context = [&](
-		int32_t source_cell,
-		int32_t origin_cell,
-		int32_t target_cell,
-		int32_t moving_card,
-		int32_t moving_owner
-	) {
-		DuelNativeCompactKernel::EventContext context;
-		context.trigger_cell = source_cell;
-		context.trigger_card_index = moving_card;
-		context.trigger_owner = moving_owner;
-		context.trigger_zone = 0;
-		context.trigger_logical_index = source_cell;
-		context.trigger_was_on_board = true;
-		context.moving_source_cell = source_cell;
-		context.moving_origin_cell = origin_cell;
-		context.moving_target_cell = target_cell;
-		context.moving_card_index = moving_card;
-		context.moving_owner = moving_owner;
-		return context;
-	};
-	if (frame.stage == SwapStage::START) {
-		if (
-			frame.source_card_index < 0
-			|| frame.target_card_index < 0
-			|| frame.source_card_index == frame.target_card_index
-			|| frame.source_cell < 0
-			|| frame.target_cell < 0
-			|| state.board_owners[frame.source_cell] != frame.source_owner
-			|| state.board_owners[frame.target_cell] != frame.target_owner
-		) {
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		bool adjacent = false;
-		for (int32_t direction = 0; direction < 4; ++direction) {
-			if (neighbor_index(frame.source_cell, direction) == frame.target_cell) {
-				adjacent = true;
-				break;
-			}
-		}
-		if (!adjacent) {
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		frame.stage = SwapStage::WAIT_SOURCE_BEFORE;
-		push_event_frame(
-			StringName("card_before_moved"),
-			movement_context(
-				frame.source_cell,
-				frame.source_cell,
-				frame.target_cell,
-				frame.source_card_index,
-				frame.source_owner
-			)
-		);
-		return;
-	}
-	if (frame.stage == SwapStage::WAIT_SOURCE_BEFORE) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		if (
-			kernel.find_board_card(state, frame.source_card_index, frame.source_cell)
-				!= frame.source_cell
-			|| state.board_owners[frame.source_cell] != frame.source_owner
-			|| kernel.find_board_card(state, frame.target_card_index, frame.target_cell)
-				!= frame.target_cell
-			|| state.board_owners[frame.target_cell] != frame.target_owner
-		) {
-			kernel.append_resolution(resolution, completed_event_resolution);
-			frame.outcome = kernel.resolution_has_output(completed_event_resolution)
-				? DuelNativeCompactKernel::ActionOutcome::APPLIED
-				: DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		frame.reserved_target_extra = state.board_slot_extras[frame.target_cell];
-		state.board_card_indices[frame.target_cell] = -1;
-		state.board_owners[frame.target_cell] = 0;
-		state.board_slot_extras[frame.target_cell] = Dictionary();
-		kernel.append_resolution(frame.swap_resolution, completed_event_resolution);
-		frame.stage = SwapStage::WAIT_SOURCE_MOVE;
-		push_move_frame(
-			frame.source_cell,
-			frame.source_cell,
-			frame.target_cell,
-			frame.source_card_index,
-			frame.source_owner,
-			false,
-			frame.swap_resolution
-		);
-		return;
-	}
-	if (frame.stage == SwapStage::WAIT_SOURCE_MOVE) {
-		if (completed_move_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
-			resolution.reason = frame.swap_resolution.reason;
-			frame.outcome = completed_move_outcome;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		if (completed_move_outcome != DuelNativeCompactKernel::ActionOutcome::APPLIED) {
-			kernel.append_resolution(resolution, frame.swap_resolution);
-			frame.outcome = completed_move_outcome;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		if (
-			kernel.find_board_card(state, frame.source_card_index, frame.target_cell)
-				!= frame.target_cell
-			|| state.board_owners[frame.target_cell] != frame.source_owner
-		) {
-			resolution.reason = "First swap leg was invalidated after movement";
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		frame.reserved_source_extra = state.board_slot_extras[frame.target_cell];
-		state.board_card_indices[frame.target_cell] = frame.target_card_index;
-		state.board_owners[frame.target_cell] = static_cast<uint8_t>(frame.target_owner);
-		state.board_slot_extras[frame.target_cell] = frame.reserved_target_extra;
-		frame.stage = SwapStage::WAIT_TARGET_BEFORE;
-		push_event_frame(
-			StringName("card_before_moved"),
-			movement_context(
-				frame.target_cell,
-				frame.target_cell,
-				frame.source_cell,
-				frame.target_card_index,
-				frame.target_owner
-			)
-		);
-		return;
-	}
-	if (frame.stage == SwapStage::WAIT_TARGET_BEFORE) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		if (
-			kernel.find_board_card(state, frame.target_card_index, frame.target_cell)
-				!= frame.target_cell
-			|| state.board_owners[frame.target_cell] != frame.target_owner
-		) {
-			state.board_card_indices[frame.source_cell] = frame.source_card_index;
-			state.board_owners[frame.source_cell] = static_cast<uint8_t>(frame.source_owner);
-			state.board_slot_extras[frame.source_cell] = frame.reserved_source_extra;
-			state.board_card_indices[frame.target_cell] = frame.target_card_index;
-			state.board_owners[frame.target_cell] = static_cast<uint8_t>(frame.target_owner);
-			state.board_slot_extras[frame.target_cell] = frame.reserved_target_extra;
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-			frame.stage = SwapStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(frame.swap_resolution, completed_event_resolution);
-		frame.stage = SwapStage::WAIT_TARGET_MOVE;
-		push_move_frame(
-			frame.target_cell,
-			frame.target_cell,
-			frame.source_cell,
-			frame.target_card_index,
-			frame.target_owner,
-			false,
-			frame.swap_resolution
-		);
-		return;
-	}
-	if (completed_move_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
-		resolution.reason = frame.swap_resolution.reason;
-		frame.outcome = completed_move_outcome;
-		frame.stage = SwapStage::COMPLETE;
-		return;
-	}
-	if (completed_move_outcome != DuelNativeCompactKernel::ActionOutcome::APPLIED) {
-		resolution.reason = "Second swap leg could not move its exact instance";
-		frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-		frame.stage = SwapStage::COMPLETE;
-		return;
-	}
-	state.board_card_indices[frame.target_cell] = frame.source_card_index;
-	state.board_owners[frame.target_cell] = static_cast<uint8_t>(frame.source_owner);
-	state.board_slot_extras[frame.target_cell] = frame.reserved_source_extra;
-	kernel.append_resolution(resolution, frame.swap_resolution);
-	frame.outcome = DuelNativeCompactKernel::ActionOutcome::APPLIED;
-	frame.stage = SwapStage::COMPLETE;
 }
 
 bool ResolutionEngine::run_transition(
