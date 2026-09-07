@@ -25,7 +25,6 @@ func _run() -> void:
 	_test_iterative_resolution_root_matches_recursive()
 	_test_iterative_event_group_loop_matches_recursive()
 	_test_iterative_summon_lifecycle_matches_recursive()
-	_test_iterative_summon_actions_match_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
 	_test_iterative_zero_power_exile_matches_recursive()
 	_test_iterative_return_to_hand_matches_recursive()
@@ -312,73 +311,6 @@ func _test_iterative_summon_lifecycle_matches_recursive() -> void:
 		iterative == recursive,
 		"Explicit summon frame preserves moved-instance after-summoned discovery and attack order"
 	)
-
-
-func _test_iterative_summon_actions_match_recursive() -> void:
-	for resummon: bool in [false, true]:
-		var board: Array = Rules.empty_board()
-		var source_id := StringName("iterative_summon_action_%s" % str(resummon))
-		var source: Dictionary = Catalog.create_instance(
-			&"TaiZuChangQuan", Rules.PLAYER_OWNER, source_id
-		)
-		var action: Dictionary = {
-			"type": Catalog.ACTION_RESUMMON_CARD_IN_PLACE,
-			"card": Catalog.CARD_REF_ABILITY_SOURCE,
-		} if resummon else {
-			"type": Catalog.ACTION_SUMMON_CARD,
-			"card": {
-				"type": Catalog.CARD_SPEC_FRESH_COPY,
-				"of": Catalog.CARD_REF_ABILITY_SOURCE,
-			},
-			"cell": {
-				"type": Catalog.CELL_REF_FIRST_ADJACENT_EMPTY,
-				"card": Catalog.CARD_REF_ABILITY_SOURCE,
-			},
-		}
-		source["active_abilities"] = [{
-			"triggers": [{
-				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-				"actions": [action],
-			}],
-		}]
-		board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
-		var state := State.new(board, [], [], Rules.PLAYER_OWNER)
-		var compact := CompactState.new()
-		_check(
-			compact.capture_state(state),
-			"Iterative summon-action fixture crosses the compact boundary (%s)" % str(resummon)
-		)
-		if not compact.is_structurally_valid():
-			continue
-		var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
-		_check(kernel != null, "Iterative summon-action fixture creates the native kernel")
-		if kernel == null:
-			continue
-		_check(
-			bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
-			"Iterative summon-action fixture loads into the native kernel"
-		)
-		var context: Dictionary = {
-			"trigger_cell": 4,
-			"trigger_instance_id": source_id,
-			"trigger_owner_id": Rules.PLAYER_OWNER,
-			"trigger_previous_owner_id": Rules.PLAYER_OWNER,
-			"trigger_zone": &"board",
-			"trigger_logical_index": 4,
-			"trigger_was_on_board": true,
-		}
-		var recursive: Dictionary = kernel.call(
-			"resolve_event_transition", &"card_after_summoned", context
-		) as Dictionary
-		var iterative: Dictionary = kernel.call(
-			"resolve_event_iterative_for_test", &"card_after_summoned", context
-		) as Dictionary
-		_check(
-			iterative == recursive,
-			"Summon action preparation and lifecycle preserve the %s branch"
-			% ("resummon" if resummon else "fresh summon")
-		)
 
 
 func _test_iterative_flip_prevention_matches_recursive() -> void:

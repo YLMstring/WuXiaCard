@@ -1475,17 +1475,6 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
-	ActionOutcome prepare_summon_card(
-		NativeState &value,
-		const EventGroup &group,
-		const CompiledAction &action,
-		const EventContext &event_context,
-		const ActionContext &action_context,
-		ActionExecutionState &execution_state,
-		std::vector<int32_t> &exile_stack,
-		Resolution &resolution,
-		SummonRequest &request
-	) const;
 	ActionOutcome resummon_card_in_place(
 		NativeState &value,
 		const EventGroup &group,
@@ -1495,17 +1484,6 @@ private:
 		ActionExecutionState &execution_state,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
-	) const;
-	ActionOutcome prepare_resummon_card_in_place(
-		NativeState &value,
-		const EventGroup &group,
-		const CompiledAction &action,
-		const EventContext &event_context,
-		const ActionContext &action_context,
-		ActionExecutionState &execution_state,
-		std::vector<int32_t> &exile_stack,
-		Resolution &resolution,
-		SummonRequest &request
 	) const;
 	ActionOutcome depart_card_for_resummon(
 		NativeState &value,
