@@ -1364,12 +1364,47 @@ func _test_native_search_releases_temporary_dictionaries() -> void:
 
 func _assert_production_transition(state: State, action: Action, label: String) -> Dictionary:
 	var before: Dictionary = CompactState.exact_state_payload(state)
+	var source_compact := CompactState.new()
+	_check(
+		source_compact.capture_state(state) and source_compact.is_structurally_valid(),
+		"%s source crosses the iterative comparison boundary" % label
+	)
+	var iterative_kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(iterative_kernel != null, "%s creates the iterative comparison kernel" % label)
+	var iterative: Dictionary = {}
+	if iterative_kernel != null and source_compact.is_structurally_valid():
+		_check(
+			bool(iterative_kernel.call(
+				"load_compact_payload", source_compact.to_variant_payload()
+			)),
+			"%s loads the iterative comparison kernel" % label
+		)
+		iterative = iterative_kernel.call(
+			"apply_iterative_transition_for_test",
+			_native_action_payload(action)
+		) as Dictionary
 	var transition: Dictionary = Simulator.apply_action(state, action)
 	_check(bool(transition.get("valid", false)), "%s production native accepts the action" % label)
 	_check(CompactState.exact_state_payload(state) == before, "%s does not mutate its input state" % label)
 	_check(transition.get("captures", null) is Array, "%s returns an ordered capture array" % label)
 	_check(transition.get("exiles", null) is Array, "%s returns an ordered exile array" % label)
 	_check(transition.get("events", null) is Array, "%s returns an ordered event array" % label)
+	_check(
+		bool(iterative.get("valid", false)) == bool(transition.get("valid", false)),
+		"%s iterative and recursive roots agree on validity" % label
+	)
+	_check(
+		iterative.get("captures", null) == transition.get("captures", null),
+		"%s iterative and recursive roots preserve capture order" % label
+	)
+	_check(
+		iterative.get("exiles", null) == transition.get("exiles", null),
+		"%s iterative and recursive roots preserve exile order" % label
+	)
+	_check(
+		iterative.get("events", null) == transition.get("events", null),
+		"%s iterative and recursive roots preserve every event" % label
+	)
 	if not bool(transition.get("valid", false)):
 		return transition
 	var next_state: State = transition.get("state") as State
@@ -1381,8 +1416,38 @@ func _assert_production_transition(state: State, action: Action, label: String) 
 		compact.capture_state(next_state) and compact.is_structurally_valid(),
 		"%s returns a structurally valid production state" % label
 	)
+	var iterative_payload: Variant = iterative.get("payload", null)
+	var iterative_compact: CompactState = (
+		CompactState.from_variant_payload(iterative_payload as Dictionary)
+		if iterative_payload is Dictionary
+		else null
+	)
+	_check(
+		iterative_compact != null and iterative_compact.is_structurally_valid(),
+		"%s iterative root returns a structurally valid compact state" % label
+	)
+	if iterative_compact != null:
+		var iterative_state: State = iterative_compact.restore()
+		_check(
+			iterative_state != null
+			and CompactState.exact_state_payload(iterative_state)
+			== CompactState.exact_state_payload(next_state),
+			"%s iterative and recursive roots preserve the complete final state" % label
+		)
 	_check(next_state.turn_count == state.turn_count + 1, "%s consumes exactly one action" % label)
 	return transition
+
+
+func _native_action_payload(action: Action) -> Dictionary:
+	return {
+		"action_type": action.action_type,
+		"source_zone": action.source_zone,
+		"source_index": action.source_index,
+		"source_instance_id": action.source_instance_id,
+		"target_kind": action.target_kind,
+		"target_index": action.target_index,
+		"activation_index": action.activation_index,
+	}
 
 
 func _zone_has_instance(zone: Array, instance_id: StringName) -> bool:
