@@ -5,8 +5,8 @@ using namespace duel_native_internal;
 
 bool DuelNativeCompactKernel::validate_shape() {
 	const size_t card_count = state.card_instance_ids.size();
-	if (state.scalars.size() != 14) {
-		last_error = "Compact scalar count must be 13";
+	if (state.scalars.size() != 16) {
+		last_error = "Compact scalar count must be 16";
 		return false;
 	}
 	if (state.board_card_indices.size() != state.board_owners.size()) {

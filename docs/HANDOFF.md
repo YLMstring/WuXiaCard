@@ -104,6 +104,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - A higher opposing power captures; ties do not.
 - Player owner ID is `1`; opponent owner ID is `2`.
 - A turn permits either playing one hand card or activating one board card.
+- Each side may complete at most 20 ability- or effect-generated summons during
+  one actual owner turn. Ordinary hand plays are exempt. A 21st special summon
+  is a no-op before the source leaves its zone and emits no summon lifecycle;
+  later actions continue. Both counters reset at the real turn boundary, while
+  granted extra plays remain in the same capped turn.
 - Any activation costs one ki.
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
 - `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the

@@ -3078,6 +3078,35 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
 		|| value.board_card_indices[target_cell] >= 0
 	) return ActionOutcome::NO_EFFECT;
+	if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE || action.card_spec == CardSpecOpcode::TOP_DISCARD) {
+		if (!existing_was_departed && existing_zone != 1 && existing_zone != 3 && existing_zone != 4) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		if ((existing_zone == 1 || existing_zone == 4) && existing_owner != ability_source_owner) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		if (!existing_was_departed) {
+			const int32_t zone_index = existing_zone == 1
+				? existing_owner - 1
+				: (existing_zone == 3 ? existing_owner + 3 : existing_owner + 5);
+			const std::vector<int32_t> &zone = value.zones[zone_index];
+			if (
+				existing_logical_index < 0
+				|| existing_logical_index >= static_cast<int32_t>(zone.size())
+				|| zone[existing_logical_index] != referenced_card_index
+			) return ActionOutcome::NO_EFFECT;
+		}
+	} else if (
+		action.card_spec != CardSpecOpcode::PERFECT_COPY
+		&& find_fresh_card_prototype(value, card_id) == nullptr
+	) {
+		return ActionOutcome::NO_EFFECT;
+	}
+	const int32_t summon_count_scalar = special_summon_scalar_index(summon_board_owner);
+	if (value.scalars[summon_count_scalar] >= MAX_SPECIAL_SUMMONS_PER_OWNER_TURN) {
+		return ActionOutcome::NO_EFFECT;
+	}
+	value.scalars[summon_count_scalar] += 1;
 
 	int32_t summoned_card_index = referenced_card_index;
 	StringName instance_id;
@@ -3221,6 +3250,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	);
 	const int32_t target_cell = find_board_card(value, target_card_index);
 	if (target_cell < 0) return ActionOutcome::NO_EFFECT;
+	const int32_t summon_count_scalar = special_summon_scalar_index(source_owner);
+	if (value.scalars[summon_count_scalar] >= MAX_SPECIAL_SUMMONS_PER_OWNER_TURN) {
+		return ActionOutcome::NO_EFFECT;
+	}
+	value.scalars[summon_count_scalar] += 1;
 	const StringName card_id = value.card_ids[target_card_index];
 	const StringName old_instance_id = value.card_instance_ids[target_card_index];
 	const StringName new_instance_id = make_generated_instance_id(value, card_id);

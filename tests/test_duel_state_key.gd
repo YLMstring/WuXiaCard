@@ -147,6 +147,12 @@ func _test_state_semantics() -> void:
 		StateKey.build_compact(state) != StateKey.build_compact(copied),
 		"Per-turn extra-play grant usage affects compact identity"
 	)
+	copied = state.duplicate_state() as State
+	copied.special_summons_by_owner[1] = 1
+	_check(
+		StateKey.build_compact(state) != StateKey.build_compact(copied),
+		"Per-owner special summon usage affects compact identity"
+	)
 
 
 func _test_real_state_collision_corpus() -> void:

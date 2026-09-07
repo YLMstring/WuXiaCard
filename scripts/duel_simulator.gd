@@ -7,6 +7,7 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
 const MAX_ATTACKS_PER_OWNER_TURN: int = 20
+const MAX_SPECIAL_SUMMONS_PER_OWNER_TURN: int = 20
 
 
 static func get_legal_actions(state: StateData) -> Array[ActionData]:

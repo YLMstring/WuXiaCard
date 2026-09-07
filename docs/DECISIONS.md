@@ -120,6 +120,13 @@ These decisions were explicitly established during development and should not be
 - Owner-turn start triggers resolve after active-owner selection and before
   that owner can act. Granted extra card plays remain inside the same owner
   turn and do not repeat start- or end-owner-turn triggers.
+- Each owner may successfully enter at most 20 cards per actual owner turn by
+  abilities, triggers, resummons, or other non-ordinary-play paths. The owner is
+  the card's resulting board owner. Ordinary hand plays neither consume nor
+  read this allowance, though any extra summons they trigger do. A 21st request
+  leaves its source zone untouched, emits no summon events, and only skips that
+  one action. Both counters reset immediately before the next owner's
+  start-turn timing; granted extra plays do not reset them.
 
 ## Signed Power Changes
 

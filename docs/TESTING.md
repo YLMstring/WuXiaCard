@@ -54,6 +54,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
 - `test_extra_play_turn_cap.gd` — consecutive extra-play requests, action-to-end
   trigger interactions, simultaneous request coalescing, and owner-turn reset.
+- `test_special_summon_turn_cap.gd` — the twentieth special summon, capped
+  no-op continuation, independent owner counters, in-place resummon safety,
+  ordinary-hand-play exemption, and real owner-turn reset.
 - `test_native_production_rules.gd` — independent complete-runtime fixtures for
   every catalog hand play and legal catalog activation, strict declaration
   audits, direct native event/attack/flip semantics, node-budget behavior,

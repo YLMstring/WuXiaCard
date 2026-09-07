@@ -20,6 +20,15 @@
 namespace godot::duel_native_internal {
 
 inline constexpr int32_t HISTORY_SCORE_LIMIT = 1'000'000;
+inline constexpr int32_t PLAYER_SPECIAL_SUMMONS_SCALAR = 14;
+inline constexpr int32_t OPPONENT_SPECIAL_SUMMONS_SCALAR = 15;
+inline constexpr int32_t MAX_SPECIAL_SUMMONS_PER_OWNER_TURN = 20;
+
+inline int32_t special_summon_scalar_index(int32_t owner_id) {
+	return owner_id == 1
+		? PLAYER_SPECIAL_SUMMONS_SCALAR
+		: OPPONENT_SPECIAL_SUMMONS_SCALAR;
+}
 
 inline std::vector<int32_t> to_int_vector(const PackedInt32Array &source) {
 	std::vector<int32_t> result;

@@ -15,6 +15,7 @@ var active_player: int = Rules.PLAYER_OWNER
 var turn_count: int = 0
 var owner_turn_serial: int = 0
 var attacks_started_by_owner: Dictionary = {}
+var special_summons_by_owner: Dictionary = {}
 var extra_card_plays_remaining: int = 0
 var extra_card_play_granted_this_turn: bool = false
 var end_turn_triggers_resolved: bool = false
@@ -64,6 +65,10 @@ func _init(
 		Rules.OPPONENT_OWNER: [],
 	}
 	attacks_started_by_owner = {
+		Rules.PLAYER_OWNER: 0,
+		Rules.OPPONENT_OWNER: 0,
+	}
+	special_summons_by_owner = {
 		Rules.PLAYER_OWNER: 0,
 		Rules.OPPONENT_OWNER: 0,
 	}
@@ -205,6 +210,7 @@ func duplicate_state() -> DuelState:
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
+	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
 	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
@@ -238,6 +244,7 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
+	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
 	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved

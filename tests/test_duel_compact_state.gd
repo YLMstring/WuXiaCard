@@ -112,6 +112,10 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 		Rules.PLAYER_OWNER: 4,
 		Rules.OPPONENT_OWNER: 5,
 	}
+	state.special_summons_by_owner = {
+		Rules.PLAYER_OWNER: 6,
+		Rules.OPPONENT_OWNER: 7,
+	}
 	state.extra_card_plays_remaining = 2
 	state.extra_card_play_granted_this_turn = true
 	state.end_turn_triggers_resolved = true

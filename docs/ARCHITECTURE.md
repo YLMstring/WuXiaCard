@@ -31,8 +31,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks,
   discard/removed zones, active player, turn count, owner-turn serial,
-  remaining extra card plays, the per-owner-turn grant latch, end-boundary
-  state, queued-effect scaffolding,
+  per-owner attack and special-summon counts, remaining extra card plays, the
+  per-owner-turn grant latch, end-boundary state, queued-effect scaffolding,
   last successful hand plays, active-run difficulty, a retained legacy
   difficulty-eight latch kept only for compact/replay compatibility, persistent
   pending suppression counts, and state version.
@@ -429,6 +429,15 @@ by ordinary play. `card_returned_to_hand` atomically replaces a board instance
 with a fresh catalog hand instance; the controller fades the old view before
 presenting the new one. `card_exiled.self_removal` selects the same fade path,
 while an external exile retains the ink-slash presentation.
+
+Ability- and effect-generated summons share a per-resulting-owner limit of 20
+successful entries in one actual owner turn. The check runs after ordinary
+request validation but before source-zone removal, board mutation, instance
+creation, or presentation events. A capped request returns no effect so its
+surrounding action list continues. Ordinary hand-play placement bypasses this
+counter; summons caused by that play do not. Both owner counters are compact
+scalars, participate in search identity, and reset together only at the real
+owner-turn boundary, not between granted extra plays.
 
 `ACTION_RESUMMON_CARD_IN_PLACE` follows the exact instance named by its `card`
 reference across movement, removes that old instance without exile, and submits

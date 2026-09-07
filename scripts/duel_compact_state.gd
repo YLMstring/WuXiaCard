@@ -50,7 +50,9 @@ const SCALAR_RUN_DIFFICULTY: int = 10
 const SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED: int = 11
 const SCALAR_STATE_VERSION: int = 12
 const SCALAR_EXTRA_CARD_PLAY_GRANTED_THIS_TURN: int = 13
-const SCALAR_COUNT: int = 14
+const SCALAR_PLAYER_SPECIAL_SUMMONS: int = 14
+const SCALAR_OPPONENT_SPECIAL_SUMMONS: int = 15
+const SCALAR_COUNT: int = 16
 
 const MUTABLE_CARD_KEYS: Array[StringName] = [
 	&"instance_id",
@@ -157,6 +159,10 @@ func restore() -> StateData:
 	restored.attacks_started_by_owner = {
 		Rules.PLAYER_OWNER: scalars[SCALAR_PLAYER_ATTACKS],
 		Rules.OPPONENT_OWNER: scalars[SCALAR_OPPONENT_ATTACKS],
+	}
+	restored.special_summons_by_owner = {
+		Rules.PLAYER_OWNER: scalars[SCALAR_PLAYER_SPECIAL_SUMMONS],
+		Rules.OPPONENT_OWNER: scalars[SCALAR_OPPONENT_SPECIAL_SUMMONS],
 	}
 	restored.extra_card_plays_remaining = scalars[SCALAR_EXTRA_CARD_PLAYS]
 	restored.extra_card_play_granted_this_turn = bool(
@@ -427,6 +433,7 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"turn_count": state.turn_count,
 		"owner_turn_serial": state.owner_turn_serial,
 		"attacks_started_by_owner": state.attacks_started_by_owner,
+		"special_summons_by_owner": state.special_summons_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,
 		"extra_card_play_granted_this_turn": state.extra_card_play_granted_this_turn,
 		"end_turn_triggers_resolved": state.end_turn_triggers_resolved,
@@ -462,6 +469,8 @@ func _capture_state(state: StateData) -> bool:
 		int(state.difficulty_eight_draw_consumed),
 		state.state_version,
 		int(state.extra_card_play_granted_this_turn),
+		int(state.special_summons_by_owner.get(Rules.PLAYER_OWNER, 0)),
+		int(state.special_summons_by_owner.get(Rules.OPPONENT_OWNER, 0)),
 	])
 
 	board_card_indices.resize(state.board.size())

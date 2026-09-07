@@ -592,6 +592,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[4] = 0;
 	value.scalars[6] = 0;
 	value.scalars[13] = 0;
+	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;
+	value.scalars[OPPONENT_SPECIAL_SUMMONS_SCALAR] = 0;
 	Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 	repetition_hashes = repetition_hashes.duplicate(true);
 	repetition_hashes.append(board_repetition_signature(value));
