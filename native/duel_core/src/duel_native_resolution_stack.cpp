@@ -210,6 +210,25 @@ void ResolutionEngine::push_attack_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
+void ResolutionEngine::push_distribute_ki_frame(
+	const DuelNativeCompactKernel::EventGroup &group,
+	const DuelNativeCompactKernel::CompiledAction &action,
+	const DuelNativeCompactKernel::EventContext &event_context,
+	const DuelNativeCompactKernel::ActionContext &action_context,
+	const DuelNativeCompactKernel::ActionExecutionState &execution_state,
+	DuelNativeCompactKernel::Resolution &resolution
+) {
+	auto frame = std::make_unique<ResolutionFrame>();
+	frame->kind = FrameKind::DISTRIBUTE_KI;
+	frame->distribute_ki.group = group;
+	frame->distribute_ki.action = action;
+	frame->distribute_ki.event_context = event_context;
+	frame->distribute_ki.action_context = action_context;
+	frame->distribute_ki.execution_state = execution_state;
+	frame->distribute_ki.resolution = &resolution;
+	resolution_frames.push_back(std::move(frame));
+}
+
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -233,8 +252,10 @@ void ResolutionEngine::run_resolution_stack(
 			step_swap_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::SUMMON) {
 			step_summon_frame(state, exile_stack);
-		} else {
+		} else if (resolution_frames.back()->kind == FrameKind::ATTACK) {
 			step_attack_frame(state, exile_stack);
+		} else {
+			step_distribute_ki_frame(state, exile_stack);
 		}
 	}
 }
@@ -294,6 +315,11 @@ void ResolutionEngine::complete_summon_frame() {
 
 void ResolutionEngine::complete_attack_frame() {
 	completed_attack_resolution = std::move(resolution_frames.back()->attack.resolution);
+	resolution_frames.pop_back();
+}
+
+void ResolutionEngine::complete_distribute_ki_frame() {
+	completed_distribute_ki_outcome = resolution_frames.back()->distribute_ki.outcome;
 	resolution_frames.pop_back();
 }
 
@@ -508,6 +534,10 @@ void ResolutionEngine::step_action_frame(
 		);
 		return;
 	}
+	if (frame.stage == ActionStage::WAIT_DISTRIBUTE_KI) {
+		finish_action(state, exile_stack, completed_distribute_ki_outcome);
+		return;
+	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
 		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
 		if (!completed_event_resolution.supported) {
@@ -720,6 +750,18 @@ void ResolutionEngine::step_action_frame(
 		}
 		frame.stage = ActionStage::WAIT_ATTACK;
 		push_attack_frame(request);
+		return;
+	}
+	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::DISTRIBUTE_KI) {
+		frame.stage = ActionStage::WAIT_DISTRIBUTE_KI;
+		push_distribute_ki_frame(
+			frame.group,
+			action,
+			frame.event_context,
+			frame.action_context,
+			frame.execution_state,
+			*frame.resolution
+		);
 		return;
 	}
 	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::DRAW_CARDS) {
@@ -2932,6 +2974,235 @@ void ResolutionEngine::step_attack_frame(
 	after_attack_context.repeat_attack = frame.request.repeat_attack;
 	frame.stage = AttackStage::WAIT_AFTER_ATTACK;
 	push_event_frame(StringName("card_after_attack"), after_attack_context);
+}
+
+void ResolutionEngine::step_distribute_ki_frame(
+	DuelNativeCompactKernel::NativeState &state,
+	std::vector<int32_t> &exile_stack
+) {
+	DistributeKiFrame &frame = resolution_frames.back()->distribute_ki;
+	if (frame.stage == DistributeKiStage::COMPLETE || frame.resolution == nullptr) {
+		complete_distribute_ki_frame();
+		return;
+	}
+	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
+	if (frame.stage == DistributeKiStage::START) {
+		frame.distributor = kernel.resolve_action_card_reference(
+			frame.action.from_card_ref,
+			frame.event_context,
+			frame.action_context,
+			frame.execution_state
+		);
+		if (
+			frame.distributor < 0
+			|| !kernel.locate_card(
+				state,
+				frame.distributor,
+				frame.distributor_zone,
+				frame.distributor_owner,
+				frame.distributor_logical_index
+			)
+			|| frame.distributor_zone == 2
+		) {
+			frame.stage = DistributeKiStage::COMPLETE;
+			return;
+		}
+		frame.selector_context = frame.action_context;
+		frame.selector_context.ability_source_card_index = frame.distributor;
+		frame.selector_context.ability_source_owner = frame.distributor_owner;
+		frame.selector_context.ability_source_zone = frame.distributor_zone;
+		frame.selector_context.ability_source_logical_index =
+			frame.distributor_logical_index;
+		frame.selector_context.ability_source_cell = frame.distributor_zone == 0
+			? frame.distributor_logical_index
+			: -1;
+		bool selection_supported = true;
+		frame.selected_cards = kernel.snapshot_selected_cards(
+			state,
+			frame.action.selector,
+			frame.selector_context,
+			selection_supported
+		);
+		if (!selection_supported) {
+			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+			frame.stage = DistributeKiStage::COMPLETE;
+			return;
+		}
+		frame.stage = DistributeKiStage::NEXT_ROUND;
+		return;
+	}
+	if (frame.stage == DistributeKiStage::WAIT_KI_EVENT) {
+		if (!completed_event_resolution.supported) {
+			resolution.reason = completed_event_resolution.reason;
+			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+			frame.stage = DistributeKiStage::COMPLETE;
+			return;
+		}
+		kernel.append_resolution(resolution, completed_event_resolution);
+		frame.stage = DistributeKiStage::NEXT_KI_EVENT;
+		return;
+	}
+	if (frame.stage == DistributeKiStage::NEXT_KI_EVENT) {
+		while (frame.ki_event_index < frame.ki_event_end) {
+			const int64_t event_index = frame.ki_event_index++;
+			if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
+			Dictionary ki_event = resolution.events[event_index];
+			ki_event["ki_trigger_resolved"] = true;
+			resolution.events[event_index] = ki_event;
+			DuelNativeCompactKernel::EventContext ki_context;
+			ki_context.trigger_cell = static_cast<int32_t>(
+				static_cast<int64_t>(ki_event.get("target_cell", -1))
+			);
+			const StringName instance_id = ki_event.get("instance_id", StringName());
+			for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
+				if (state.card_instance_ids[card_index] == instance_id) {
+					ki_context.trigger_card_index = static_cast<int32_t>(card_index);
+					break;
+				}
+			}
+			ki_context.trigger_owner = static_cast<int32_t>(
+				static_cast<int64_t>(ki_event.get("owner_id", 0))
+			);
+			ki_context.previous_ki = static_cast<int32_t>(
+				static_cast<int64_t>(ki_event.get("previous_ki", 0))
+			);
+			ki_context.ki = static_cast<int32_t>(
+				static_cast<int64_t>(ki_event.get("ki", -1))
+			);
+			frame.stage = DistributeKiStage::WAIT_KI_EVENT;
+			push_event_frame(StringName("card_ki_changed"), ki_context);
+			return;
+		}
+		frame.transferred_in_round = true;
+		frame.outcome = DuelNativeCompactKernel::ActionOutcome::APPLIED;
+		frame.stage = DistributeKiStage::NEXT_RECIPIENT;
+		return;
+	}
+	if (frame.stage == DistributeKiStage::NEXT_ROUND) {
+		if (
+			!kernel.locate_card(
+				state,
+				frame.distributor,
+				frame.distributor_zone,
+				frame.distributor_owner,
+				frame.distributor_logical_index
+			)
+			|| frame.distributor_zone == 2
+			|| state.card_ki[frame.distributor] < frame.action.amount
+		) {
+			frame.stage = DistributeKiStage::COMPLETE;
+			return;
+		}
+		frame.recipient_index = 0;
+		frame.transferred_in_round = false;
+		frame.stage = DistributeKiStage::NEXT_RECIPIENT;
+		return;
+	}
+
+	while (frame.recipient_index < frame.selected_cards.size()) {
+		if (
+			!kernel.locate_card(
+				state,
+				frame.distributor,
+				frame.distributor_zone,
+				frame.distributor_owner,
+				frame.distributor_logical_index
+			)
+			|| frame.distributor_zone == 2
+			|| state.card_ki[frame.distributor] < frame.action.amount
+		) break;
+		const int32_t recipient = frame.selected_cards[frame.recipient_index++];
+		int32_t recipient_zone = -1;
+		int32_t recipient_owner = 0;
+		int32_t recipient_logical_index = -1;
+		if (
+			!kernel.locate_card(
+				state,
+				recipient,
+				recipient_zone,
+				recipient_owner,
+				recipient_logical_index
+			)
+			|| recipient_zone == 2
+		) continue;
+		frame.selector_context.ability_source_owner = frame.distributor_owner;
+		frame.selector_context.ability_source_zone = frame.distributor_zone;
+		frame.selector_context.ability_source_logical_index =
+			frame.distributor_logical_index;
+		frame.selector_context.ability_source_cell = frame.distributor_zone == 0
+			? frame.distributor_logical_index
+			: -1;
+		bool condition_supported = true;
+		if (!kernel.selector_conditions_match(
+			state,
+			recipient,
+			recipient_zone,
+			recipient_owner,
+			recipient_logical_index,
+			frame.action.selector,
+			frame.selector_context,
+			condition_supported
+		)) {
+			if (!condition_supported) {
+				frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+				frame.stage = DistributeKiStage::COMPLETE;
+				return;
+			}
+			continue;
+		}
+
+		frame.ki_event_index = resolution.events.size();
+		DuelNativeCompactKernel::CompiledAction donor_action;
+		donor_action.opcode = DuelNativeCompactKernel::ActionOpcode::SPEND_KI;
+		donor_action.card_ref_explicit = true;
+		donor_action.card_ref = DuelNativeCompactKernel::CardRefOpcode::SELECTED_CARD;
+		donor_action.amount = frame.action.amount;
+		donor_action.change_reason = StringName("transfer_card_resource");
+		DuelNativeCompactKernel::ActionContext donor_context = frame.action_context;
+		donor_context.selected_card_index = frame.distributor;
+		donor_context.selected_card_owner = frame.distributor_owner;
+		donor_context.action_subject_owner = frame.distributor_owner;
+		const DuelNativeCompactKernel::ActionOutcome donor_outcome = kernel.change_ki(
+			state,
+			frame.group,
+			donor_action,
+			frame.event_context,
+			donor_context,
+			frame.execution_state.current_source_cell,
+			exile_stack,
+			resolution
+		);
+		if (donor_outcome != DuelNativeCompactKernel::ActionOutcome::APPLIED) continue;
+		DuelNativeCompactKernel::CompiledAction receiver_action = donor_action;
+		receiver_action.opcode = DuelNativeCompactKernel::ActionOpcode::GAIN_KI;
+		DuelNativeCompactKernel::ActionContext receiver_context = frame.action_context;
+		receiver_context.selected_card_index = recipient;
+		receiver_context.selected_card_owner = recipient_owner;
+		receiver_context.action_subject_owner = recipient_owner;
+		const DuelNativeCompactKernel::ActionOutcome receiver_outcome = kernel.change_ki(
+			state,
+			frame.group,
+			receiver_action,
+			frame.event_context,
+			receiver_context,
+			frame.execution_state.current_source_cell,
+			exile_stack,
+			resolution
+		);
+		if (receiver_outcome != DuelNativeCompactKernel::ActionOutcome::APPLIED) {
+			frame.outcome = receiver_outcome;
+			frame.stage = DistributeKiStage::COMPLETE;
+			return;
+		}
+		frame.ki_event_end = resolution.events.size();
+		frame.stage = DistributeKiStage::NEXT_KI_EVENT;
+		return;
+	}
+	if (!frame.transferred_in_round) {
+		frame.stage = DistributeKiStage::COMPLETE;
+		return;
+	}
+	frame.stage = DistributeKiStage::NEXT_ROUND;
 }
 
 bool ResolutionEngine::run_transition(

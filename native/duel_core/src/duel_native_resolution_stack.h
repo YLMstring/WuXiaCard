@@ -81,6 +81,7 @@ private:
 		WAIT_RETURN_EXILE,
 		WAIT_SUMMON,
 		WAIT_ATTACK,
+		WAIT_DISTRIBUTE_KI,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -164,6 +165,37 @@ private:
 		bool stop_after_current_target = false;
 		int64_t flip_event_start = 0;
 		DuelNativeCompactKernel::EventContext attack_context;
+	};
+
+	enum class DistributeKiStage : uint8_t {
+		START,
+		NEXT_ROUND,
+		NEXT_RECIPIENT,
+		NEXT_KI_EVENT,
+		WAIT_KI_EVENT,
+		COMPLETE,
+	};
+
+	struct DistributeKiFrame {
+		DistributeKiStage stage = DistributeKiStage::START;
+		DuelNativeCompactKernel::EventGroup group;
+		DuelNativeCompactKernel::CompiledAction action;
+		DuelNativeCompactKernel::EventContext event_context;
+		DuelNativeCompactKernel::ActionContext action_context;
+		DuelNativeCompactKernel::ActionExecutionState execution_state;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		DuelNativeCompactKernel::ActionContext selector_context;
+		std::vector<int32_t> selected_cards;
+		int32_t distributor = -1;
+		int32_t distributor_zone = -1;
+		int32_t distributor_owner = 0;
+		int32_t distributor_logical_index = -1;
+		size_t recipient_index = 0;
+		bool transferred_in_round = false;
+		int64_t ki_event_index = 0;
+		int64_t ki_event_end = 0;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
 
 	enum class DrawStage : uint8_t {
@@ -323,6 +355,7 @@ private:
 		SWAP,
 		SUMMON,
 		ATTACK,
+		DISTRIBUTE_KI,
 	};
 
 	struct ResolutionFrame {
@@ -337,6 +370,7 @@ private:
 		SwapFrame swap;
 		SummonFrame summon;
 		AttackFrame attack;
+		DistributeKiFrame distribute_ki;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -420,6 +454,14 @@ private:
 	);
 	void push_summon_frame(const DuelNativeCompactKernel::SummonRequest &request);
 	void push_attack_frame(const DuelNativeCompactKernel::AttackRequest &request);
+	void push_distribute_ki_frame(
+		const DuelNativeCompactKernel::EventGroup &group,
+		const DuelNativeCompactKernel::CompiledAction &action,
+		const DuelNativeCompactKernel::EventContext &event_context,
+		const DuelNativeCompactKernel::ActionContext &action_context,
+		const DuelNativeCompactKernel::ActionExecutionState &execution_state,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -464,6 +506,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_distribute_ki_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -480,6 +526,7 @@ private:
 	void complete_swap_frame();
 	void complete_summon_frame();
 	void complete_attack_frame();
+	void complete_distribute_ki_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -499,6 +546,8 @@ private:
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::Resolution completed_summon_resolution;
 	DuelNativeCompactKernel::Resolution completed_attack_resolution;
+	DuelNativeCompactKernel::ActionOutcome completed_distribute_ki_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 };
 
 } // namespace godot::duel_native_internal
