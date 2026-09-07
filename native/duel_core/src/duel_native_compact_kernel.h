@@ -728,6 +728,10 @@ public:
 		const StringName &event_id,
 		const Dictionary &context
 	) const;
+	Dictionary resolve_summon_lifecycle_for_test(
+		const Dictionary &request,
+		bool iterative
+	) const;
 	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,

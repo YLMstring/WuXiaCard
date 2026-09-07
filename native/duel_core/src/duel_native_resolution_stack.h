@@ -27,6 +27,11 @@ public:
 		const DuelNativeCompactKernel::EventContext &context,
 		std::vector<int32_t> &exile_stack
 	);
+	DuelNativeCompactKernel::Resolution run_summon(
+		DuelNativeCompactKernel::NativeState &state,
+		const DuelNativeCompactKernel::SummonRequest &request,
+		std::vector<int32_t> &exile_stack
+	);
 
 private:
 	enum class RootStage : uint8_t {
@@ -222,6 +227,24 @@ private:
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
 
+	enum class SummonStage : uint8_t {
+		START,
+		WAIT_BEFORE_SUMMONED,
+		WAIT_SUMMONED,
+		WAIT_AFTER_SUMMONED,
+		RESOLVE_ATTACK,
+		COMPLETE,
+	};
+
+	struct SummonFrame {
+		SummonStage stage = SummonStage::START;
+		DuelNativeCompactKernel::SummonRequest request;
+		std::vector<int32_t> attack_redirect_source_card_indices;
+		DuelNativeCompactKernel::EventContext summon_context;
+		DuelNativeCompactKernel::Resolution resolution;
+		int32_t after_summoned_cell = -1;
+	};
+
 	struct ActionSequenceFrame {
 		ActionStage stage = ActionStage::NEXT_ACTION;
 		const std::vector<DuelNativeCompactKernel::CompiledAction> *actions = nullptr;
@@ -259,6 +282,7 @@ private:
 		DISCARD,
 		MOVE,
 		SWAP,
+		SUMMON,
 	};
 
 	struct ResolutionFrame {
@@ -271,6 +295,7 @@ private:
 		DiscardFrame discard;
 		MoveFrame move;
 		SwapFrame swap;
+		SummonFrame summon;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -351,6 +376,7 @@ private:
 		int32_t target_cell,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
+	void push_summon_frame(const DuelNativeCompactKernel::SummonRequest &request);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -387,6 +413,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_summon_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -401,6 +431,7 @@ private:
 	void complete_discard_frame();
 	void complete_move_frame();
 	void complete_swap_frame();
+	void complete_summon_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -418,6 +449,7 @@ private:
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::ActionOutcome completed_swap_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	DuelNativeCompactKernel::Resolution completed_summon_resolution;
 };
 
 } // namespace godot::duel_native_internal
