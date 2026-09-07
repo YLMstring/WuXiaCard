@@ -1968,58 +1968,16 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		case ActionOpcode::ATTACK_TRIGGER_CARD:
 		case ActionOpcode::STANDARD_ATTACK_WITH_SELF:
 		case ActionOpcode::STANDARD_ATTACK_WITH_CARD: {
-			int32_t source_zone = -1;
-			int32_t source_owner = 0;
-			int32_t source_logical_index = -1;
-			const int32_t attacker_card_index = action.opcode == ActionOpcode::STANDARD_ATTACK_WITH_CARD
-				? resolve_action_card_reference(
-					action.card_ref,
-					event_context,
-					action_context,
-					execution_state
-				)
-				: action_context.action_subject_card_index;
-			if (
-				attacker_card_index < 0
-				|| !locate_card(
-					value,
-					attacker_card_index,
-					source_zone,
-					source_owner,
-					source_logical_index
-				)
-				|| source_zone != 0
-				|| (
-					action.opcode != ActionOpcode::STANDARD_ATTACK_WITH_CARD
-					&& source_owner != action_context.action_subject_owner
-				)
-			) return ActionOutcome::NO_EFFECT;
 			AttackRequest request;
-			request.attacker_cell = source_logical_index;
-			request.attacker_card_index = attacker_card_index;
-			request.attacker_owner = source_owner;
-			if (action.opcode == ActionOpcode::ATTACK_TRIGGER_CARD) {
-				const int32_t target_cell = find_board_card(
-					value,
-					event_context.trigger_card_index,
-					event_context.trigger_cell
-				);
-				if (target_cell != event_context.trigger_cell || target_cell < 0) {
-					return ActionOutcome::NO_EFFECT;
-				}
-				request.targeted = true;
-				request.locked_target_cell = target_cell;
-				request.locked_target_card_index = event_context.trigger_card_index;
-				request.locked_target_owner = value.board_owners[target_cell];
-				request.reason = StringName("card_summoned_reaction");
-			} else {
-				request.repeat_attack = action.repeat_attack;
-				request.reason = StringName("activated_ability");
-				if (action.target_policy_specified) {
-					request.requested_policy.specified = true;
-					request.requested_policy.target_policy = action.target_policy;
-				}
-			}
+			const ActionOutcome prepared = prepare_attack_action(
+				value,
+				action,
+				event_context,
+				action_context,
+				execution_state,
+				request
+			);
+			if (prepared != ActionOutcome::APPLIED) return prepared;
 			Resolution nested = resolve_attack_request(value, request, exile_stack);
 			if (!nested.supported) {
 				resolution.reason = nested.reason;
@@ -2717,6 +2675,68 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		default:
 			return ActionOutcome::UNSUPPORTED;
 	}
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::prepare_attack_action(
+	NativeState &value,
+	const CompiledAction &action,
+	const EventContext &event_context,
+	const ActionContext &action_context,
+	const ActionExecutionState &execution_state,
+	AttackRequest &request
+) const {
+	int32_t source_zone = -1;
+	int32_t source_owner = 0;
+	int32_t source_logical_index = -1;
+	const int32_t attacker_card_index = action.opcode == ActionOpcode::STANDARD_ATTACK_WITH_CARD
+		? resolve_action_card_reference(
+			action.card_ref,
+			event_context,
+			action_context,
+			execution_state
+		)
+		: action_context.action_subject_card_index;
+	if (
+		attacker_card_index < 0
+		|| !locate_card(
+			value,
+			attacker_card_index,
+			source_zone,
+			source_owner,
+			source_logical_index
+		)
+		|| source_zone != 0
+		|| (
+			action.opcode != ActionOpcode::STANDARD_ATTACK_WITH_CARD
+			&& source_owner != action_context.action_subject_owner
+		)
+	) return ActionOutcome::NO_EFFECT;
+	request.attacker_cell = source_logical_index;
+	request.attacker_card_index = attacker_card_index;
+	request.attacker_owner = source_owner;
+	if (action.opcode == ActionOpcode::ATTACK_TRIGGER_CARD) {
+		const int32_t target_cell = find_board_card(
+			value,
+			event_context.trigger_card_index,
+			event_context.trigger_cell
+		);
+		if (target_cell != event_context.trigger_cell || target_cell < 0) {
+			return ActionOutcome::NO_EFFECT;
+		}
+		request.targeted = true;
+		request.locked_target_cell = target_cell;
+		request.locked_target_card_index = event_context.trigger_card_index;
+		request.locked_target_owner = value.board_owners[target_cell];
+		request.reason = StringName("card_summoned_reaction");
+	} else {
+		request.repeat_attack = action.repeat_attack;
+		request.reason = StringName("activated_ability");
+		if (action.target_policy_specified) {
+			request.requested_policy.specified = true;
+			request.requested_policy.target_policy = action.target_policy;
+		}
+	}
+	return ActionOutcome::APPLIED;
 }
 
 int32_t DuelNativeCompactKernel::resolve_action_card_reference(

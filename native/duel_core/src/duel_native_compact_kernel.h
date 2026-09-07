@@ -732,6 +732,7 @@ public:
 		const Dictionary &request,
 		bool iterative
 	) const;
+	Dictionary resolve_attack_iterative_for_test(const Dictionary &request) const;
 	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,
@@ -1256,6 +1257,14 @@ private:
 		int32_t source_cell,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
+	) const;
+	ActionOutcome prepare_attack_action(
+		NativeState &value,
+		const CompiledAction &action,
+		const EventContext &event_context,
+		const ActionContext &action_context,
+		const ActionExecutionState &execution_state,
+		AttackRequest &request
 	) const;
 	void assign_power_change_batch(
 		const NativeState &value,
