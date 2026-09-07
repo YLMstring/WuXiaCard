@@ -37,14 +37,6 @@ public:
 		const DuelNativeCompactKernel::AttackRequest &request,
 		std::vector<int32_t> &exile_stack
 	);
-	DuelNativeCompactKernel::Resolution run_finish_action(
-		DuelNativeCompactKernel::NativeState &state,
-		int32_t moving_owner,
-		int32_t played_card_index,
-		const std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest> &
-			extra_play_requests,
-		std::vector<int32_t> &exile_stack
-	);
 
 private:
 	enum class RootStage : uint8_t {
@@ -249,30 +241,6 @@ private:
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
 
-	enum class FinishActionStage : uint8_t {
-		START,
-		WAIT_END_OWNER_TURN,
-		CHECK_BEFORE_END,
-		WAIT_BEFORE_END,
-		NEXT_OWNER,
-		WAIT_START_OWNER_TURN,
-		WAIT_EMPTY_END_OWNER_TURN,
-		CHECK_EMPTY_BEFORE_END,
-		WAIT_EMPTY_BEFORE_END,
-		COMPLETE,
-	};
-
-	struct FinishActionFrame {
-		FinishActionStage stage = FinishActionStage::START;
-		int32_t moving_owner = 0;
-		int32_t played_card_index = -1;
-		std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest>
-			extra_play_requests;
-		DuelNativeCompactKernel::Resolution resolution;
-		int32_t previous_owner = 0;
-		int32_t turn_owner = 0;
-	};
-
 	enum class DrawStage : uint8_t {
 		START,
 		NEXT_CARD,
@@ -433,7 +401,6 @@ private:
 		DISTRIBUTE_KI,
 		POWER_CHANGE,
 		TRANSFER_RESOURCE,
-		FINISH_ACTION,
 	};
 
 	struct ResolutionFrame {
@@ -451,7 +418,6 @@ private:
 		DistributeKiFrame distribute_ki;
 		PowerChangeFrame power_change;
 		TransferResourceFrame transfer_resource;
-		FinishActionFrame finish_action;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -559,12 +525,6 @@ private:
 		int32_t source_cell,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
-	void push_finish_action_frame(
-		int32_t moving_owner,
-		int32_t played_card_index,
-		const std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest> &
-			extra_play_requests
-	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -621,10 +581,6 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
-	void step_finish_action_frame(
-		DuelNativeCompactKernel::NativeState &state,
-		std::vector<int32_t> &exile_stack
-	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -644,7 +600,6 @@ private:
 	void complete_distribute_ki_frame();
 	void complete_power_change_frame();
 	void complete_transfer_resource_frame();
-	void complete_finish_action_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -670,7 +625,6 @@ private:
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::ActionOutcome completed_transfer_resource_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-	DuelNativeCompactKernel::Resolution completed_finish_action_resolution;
 };
 
 } // namespace godot::duel_native_internal
