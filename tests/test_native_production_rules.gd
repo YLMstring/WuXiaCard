@@ -100,23 +100,11 @@ func _test_iterative_resolution_root_matches_recursive() -> void:
 
 func _test_iterative_event_group_loop_matches_recursive() -> void:
 	var board: Array = Rules.empty_board()
-	var source: Dictionary = Catalog.create_instance(
-		&"TuNaShu1", Rules.PLAYER_OWNER, &"iterative_event_source"
-	)
-	var active_abilities: Array = (source.get("active_abilities", []) as Array).duplicate(true)
-	var trigger: Dictionary = (active_abilities[0] as Dictionary).duplicate(true)
-	var triggers: Array = (trigger.get("triggers", []) as Array).duplicate(true)
-	var after_summoned: Dictionary = (triggers[0] as Dictionary).duplicate(true)
-	var actions: Array = (after_summoned.get("actions", []) as Array).duplicate(true)
-	actions.append({"type": Catalog.ACTION_GAIN_KI, "amount": 1})
-	after_summoned["actions"] = actions
-	triggers[0] = after_summoned
-	trigger["triggers"] = triggers
-	active_abilities[0] = trigger
-	source["active_abilities"] = active_abilities
 	board[4] = {
 		"owner": Rules.PLAYER_OWNER,
-		"card": source,
+		"card": Catalog.create_instance(
+			&"TuNaShu1", Rules.PLAYER_OWNER, &"iterative_event_source"
+		),
 	}
 	var state := State.new(
 		board,

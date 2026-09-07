@@ -7,155 +7,6 @@ namespace godot::duel_native_internal {
 ResolutionEngine::ResolutionEngine(const DuelNativeCompactKernel &kernel_value)
 	: kernel(kernel_value) {}
 
-DuelNativeCompactKernel::ActionOutcome ResolutionEngine::run_actions(
-	DuelNativeCompactKernel::NativeState &state,
-	const DuelNativeCompactKernel::EventGroup &group,
-	const std::vector<DuelNativeCompactKernel::CompiledAction> &actions,
-	const DuelNativeCompactKernel::EventContext &event_context,
-	const DuelNativeCompactKernel::ActionContext &action_context,
-	DuelNativeCompactKernel::ActionExecutionState execution_state,
-	std::vector<int32_t> &exile_stack,
-	DuelNativeCompactKernel::Resolution &resolution,
-	bool defer_power_change_batch
-) {
-	action_frames.clear();
-	ActionSequenceFrame root;
-	root.actions = &actions;
-	root.group = group;
-	root.event_context = event_context;
-	root.action_context = action_context;
-	root.execution_state = std::move(execution_state);
-	root.defer_power_change_batch = defer_power_change_batch;
-	action_frames.push_back(std::move(root));
-
-	while (!action_frames.empty()) {
-		ActionSequenceFrame &frame = action_frames.back();
-		if (frame.actions == nullptr || frame.action_index >= frame.actions->size()) {
-			const DuelNativeCompactKernel::ActionOutcome result = frame.aggregate;
-			action_frames.pop_back();
-			return result;
-		}
-		const size_t action_index = frame.action_index++;
-		const DuelNativeCompactKernel::CompiledAction &action = (*frame.actions)[action_index];
-		const int64_t first_event_index = resolution.events.size();
-		const DuelNativeCompactKernel::ActionOutcome outcome = kernel.execute_action(
-			state,
-			frame.group,
-			action,
-			frame.event_context,
-			frame.action_context,
-			frame.execution_state,
-			exile_stack,
-			resolution
-		);
-		const int64_t direct_event_end = resolution.events.size();
-		if (
-			direct_event_end > first_event_index
-			&& (
-				action.opcode == DuelNativeCompactKernel::ActionOpcode::ATTACK_TRIGGER_CARD
-				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_SELF
-				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_CARD
-				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::FLIP_SELF
-				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::SUMMON_CARD
-				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::RESUMMON_CARD_IN_PLACE
-			)
-		) {
-			resolution.protected_power_batch_ranges.push_back({
-				first_event_index,
-				direct_event_end,
-			});
-		}
-		for (
-			int64_t event_index = first_event_index;
-			action.opcode != DuelNativeCompactKernel::ActionOpcode::DISTRIBUTE_KI
-				&& event_index < direct_event_end;
-			++event_index
-		) {
-			const Variant event_value = resolution.events[event_index];
-			if (event_value.get_type() != Variant::DICTIONARY) continue;
-			const Dictionary ki_event = event_value;
-			if (StringName(ki_event.get("type", StringName())) != StringName("ki_changed")) {
-				continue;
-			}
-			DuelNativeCompactKernel::EventContext ki_context;
-			ki_context.trigger_cell = static_cast<int32_t>(
-				static_cast<int64_t>(ki_event.get("target_cell", -1))
-			);
-			const StringName instance_id = ki_event.get("instance_id", StringName());
-			for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
-				if (state.card_instance_ids[card_index] == instance_id) {
-					ki_context.trigger_card_index = static_cast<int32_t>(card_index);
-					break;
-				}
-			}
-			ki_context.trigger_owner = static_cast<int32_t>(
-				static_cast<int64_t>(ki_event.get("owner_id", 0))
-			);
-			ki_context.previous_ki = static_cast<int32_t>(
-				static_cast<int64_t>(ki_event.get("previous_ki", 0))
-			);
-			ki_context.ki = static_cast<int32_t>(
-				static_cast<int64_t>(ki_event.get("ki", -1))
-			);
-			DuelNativeCompactKernel::Resolution ki_resolution = kernel.resolve_event(
-				state,
-				StringName("card_ki_changed"),
-				ki_context,
-				exile_stack
-			);
-			if (!ki_resolution.supported) {
-				resolution.reason = ki_resolution.reason;
-				action_frames.clear();
-				return DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			}
-			const int64_t ki_resolution_start = resolution.events.size();
-			kernel.append_resolution(resolution, ki_resolution);
-			const int64_t ki_resolution_end = resolution.events.size();
-			if (ki_resolution_end > ki_resolution_start) {
-				resolution.protected_power_batch_ranges.push_back({
-					ki_resolution_start,
-					ki_resolution_end,
-				});
-			}
-		}
-		if (!frame.defer_power_change_batch) {
-			kernel.assign_power_change_batch(
-				state,
-				resolution,
-				first_event_index,
-				frame.group,
-				action,
-				frame.action_context,
-				static_cast<int32_t>(action_index)
-			);
-		}
-		if (outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
-			if (resolution.reason.is_empty()) {
-				resolution.reason = String("Unsupported compiled action opcode ")
-					+ String::num_int64(static_cast<int64_t>(action.opcode))
-					+ String(" type=") + String(action.declaration_type);
-			}
-			action_frames.clear();
-			return outcome;
-		}
-		if (outcome == DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT) {
-			action_frames.clear();
-			return outcome;
-		}
-		if (
-			outcome == DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-			&& action.stop_rule_on_invalid_context
-		) {
-			action_frames.clear();
-			return DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT;
-		}
-		if (outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
-			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::APPLIED;
-		}
-	}
-	return DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-}
-
 bool ResolutionEngine::run_transition(
 	const DuelNativeCompactKernel::NativeState &source,
 	const DuelNativeCompactKernel::NativeAction &action,
@@ -350,15 +201,12 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_event(
 		action_context.discovery_ability_index = group.ability_index;
 		action_context.trigger_index = group.trigger_index;
 		action_context.attack_flips = frame.context.attack_flips;
-		DuelNativeCompactKernel::ActionExecutionState execution_state;
-		execution_state.current_source_cell = group.source_cell;
-		const DuelNativeCompactKernel::ActionOutcome outcome = run_actions(
+		const DuelNativeCompactKernel::ActionOutcome outcome = kernel.execute_actions(
 			state,
 			group,
 			rule.actions,
 			frame.context,
 			action_context,
-			std::move(execution_state),
 			exile_stack,
 			frame.resolution
 		);
