@@ -62,6 +62,7 @@ private:
 		NEXT_SELECTED_CARD,
 		WAIT_SELECTED_CARD_ACTIONS,
 		WAIT_EXILE,
+		WAIT_FLIP,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -90,6 +91,29 @@ private:
 		int32_t initial_owner = 0;
 		int32_t initial_index = -1;
 		int32_t exiled_cell = -1;
+		bool success = true;
+	};
+
+	enum class FlipStage : uint8_t {
+		START,
+		WAIT_BEFORE,
+		WAIT_PREVENTED,
+		WAIT_AFTER,
+		COMPLETE,
+	};
+
+	struct FlipFrame {
+		FlipStage stage = FlipStage::START;
+		int32_t attacker_cell = -1;
+		int32_t attacker_card_index = -1;
+		int32_t target_cell = -1;
+		int32_t target_card_index = -1;
+		int32_t new_owner = 0;
+		DuelNativeCompactKernel::EventContext context;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		bool record_capture_index = false;
+		std::vector<uint64_t> remove_before_after_flip;
+		std::vector<uint64_t> remove_after_after_flip;
 		bool success = true;
 	};
 
@@ -122,6 +146,7 @@ private:
 		EVENT,
 		ACTION_SEQUENCE,
 		EXILE,
+		FLIP,
 	};
 
 	struct ResolutionFrame {
@@ -129,6 +154,7 @@ private:
 		EventFrame event;
 		ActionSequenceFrame actions;
 		ExileFrame exile;
+		FlipFrame flip;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -165,6 +191,16 @@ private:
 		DuelNativeCompactKernel::Resolution &resolution,
 		bool record_exile_index
 	);
+	void push_flip_frame(
+		int32_t attacker_cell,
+		int32_t attacker_card_index,
+		int32_t target_cell,
+		int32_t target_card_index,
+		int32_t new_owner,
+		const DuelNativeCompactKernel::EventContext &context,
+		DuelNativeCompactKernel::Resolution &resolution,
+		bool record_capture_index
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -181,6 +217,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_flip_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -190,6 +230,7 @@ private:
 	void complete_action_frame();
 	void complete_event_frame();
 	void complete_exile_frame(std::vector<int32_t> &exile_stack);
+	void complete_flip_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -199,6 +240,7 @@ private:
 	DuelNativeCompactKernel::ActionExecutionState completed_action_execution_state;
 	DuelNativeCompactKernel::Resolution completed_event_resolution;
 	bool completed_exile_success = true;
+	bool completed_flip_success = true;
 };
 
 } // namespace godot::duel_native_internal
