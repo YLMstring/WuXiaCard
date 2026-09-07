@@ -65,6 +65,7 @@ private:
 		WAIT_FLIP,
 		WAIT_POWER_EXILE,
 		WAIT_DRAW,
+		WAIT_DISCARD,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -139,6 +140,38 @@ private:
 		bool success = true;
 	};
 
+	enum class DiscardStage : uint8_t {
+		START,
+		NEXT_CARD_EVENT,
+		WAIT_CARD_EVENT,
+		WAIT_BATCH_EVENT,
+		COMPLETE,
+	};
+
+	struct DiscardRecord {
+		int32_t card_index = -1;
+		int32_t logical_hand_index = -1;
+		int32_t hand_slot_index = -1;
+	};
+
+	struct DiscardFrame {
+		DiscardStage stage = DiscardStage::START;
+		DuelNativeCompactKernel::EventGroup group;
+		std::vector<int32_t> locked_cards;
+		DuelNativeCompactKernel::EventContext event_context;
+		DuelNativeCompactKernel::ActionContext action_context;
+		DuelNativeCompactKernel::ActionExecutionState *execution_state = nullptr;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		std::vector<DiscardRecord> records;
+		size_t record_index = 0;
+		int32_t owner = 0;
+		int32_t source_cell = -1;
+		StringName source_instance_id;
+		StringName batch_id;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	};
+
 	struct ActionSequenceFrame {
 		ActionStage stage = ActionStage::NEXT_ACTION;
 		const std::vector<DuelNativeCompactKernel::CompiledAction> *actions = nullptr;
@@ -170,6 +203,7 @@ private:
 		EXILE,
 		FLIP,
 		DRAW,
+		DISCARD,
 	};
 
 	struct ResolutionFrame {
@@ -179,6 +213,7 @@ private:
 		ExileFrame exile;
 		FlipFrame flip;
 		DrawFrame draw;
+		DiscardFrame discard;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -233,6 +268,14 @@ private:
 		const DuelNativeCompactKernel::EventContext &draw_context,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
+	void push_discard_frame(
+		const DuelNativeCompactKernel::EventGroup &group,
+		std::vector<int32_t> locked_cards,
+		const DuelNativeCompactKernel::EventContext &event_context,
+		const DuelNativeCompactKernel::ActionContext &action_context,
+		DuelNativeCompactKernel::ActionExecutionState &execution_state,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -257,6 +300,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_discard_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -268,6 +315,7 @@ private:
 	void complete_exile_frame(std::vector<int32_t> &exile_stack);
 	void complete_flip_frame();
 	void complete_draw_frame();
+	void complete_discard_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -279,6 +327,8 @@ private:
 	bool completed_exile_success = true;
 	bool completed_flip_success = true;
 	bool completed_draw_success = true;
+	DuelNativeCompactKernel::ActionOutcome completed_discard_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 };
 
 } // namespace godot::duel_native_internal

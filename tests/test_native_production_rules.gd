@@ -123,6 +123,13 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 		"conditions": [{"type": Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY}],
 		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 	})
+	actions.insert(0, {
+		"type": Catalog.ACTION_DISCARD_CARDS,
+		"selector": {
+			"zones": [Catalog.CARD_ZONE_HAND],
+			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+		},
+	})
 	actions.append({"type": Catalog.ACTION_GAIN_KI, "amount": 1})
 	actions.append({
 		"type": Catalog.ACTION_FLIP_SELF,
@@ -146,10 +153,16 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_event_exile_watcher"
 	)
 	exile_watcher["active_abilities"] = [{
-		"triggers": [{
+		"triggers": [
+			{
 			"event": Catalog.CARD_AFTER_EXILED,
 			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-		}],
+			},
+			{
+				"event": Catalog.CARD_AFTER_DISCARDED,
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+		],
 	}]
 	board[0] = {
 		"owner": Rules.PLAYER_OWNER,
@@ -161,7 +174,14 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 	}
 	var state := State.new(
 		board,
-		[],
+		[
+			Catalog.create_instance(
+				&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_discard_a"
+			),
+			Catalog.create_instance(
+				&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_discard_b"
+			),
+		],
 		[Catalog.create_instance(
 			&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"iterative_event_opponent"
 		)],
