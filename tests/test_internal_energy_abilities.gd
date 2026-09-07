@@ -624,7 +624,7 @@ func _test_standard_attack_stops_after_mid_chain_double_flip() -> void:
 		{
 			"triggers": [{
 				"event": Catalog.CARD_BE_ATTACKED,
-				"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
 				"actions": [
 					{
 						"type": Catalog.ACTION_CHANGE_POWERS,

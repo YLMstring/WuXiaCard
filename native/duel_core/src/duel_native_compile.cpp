@@ -106,6 +106,18 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
 		return compiled;
 	}
+	if (
+		type == StringName("attack_flipped_any_card")
+		&& (condition.size() == 1 || condition.size() == 2)
+		&& (
+			!condition.has("inverted")
+			|| Variant(condition.get("inverted", Variant())).get_type() == Variant::BOOL
+		)
+	) {
+		compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ANY_CARD;
+		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
 	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
@@ -116,7 +128,6 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_revealed_to_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF;
 	else if (type == StringName("trigger_card_was_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ENEMY;
 	else if (type == StringName("trigger_card_original_owner_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF;
-	else if (type == StringName("attacked_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKED_CARD_IS_SELF;
 	else if (type == StringName("attacker_card_is_self")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_SELF;
 	else if (type == StringName("attacker_card_is_enemy")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_ENEMY;
 	else if (type == StringName("attacker_card_is_other_ally")) compiled.opcode = ConditionOpcode::ATTACKER_CARD_IS_OTHER_ALLY;
@@ -408,6 +419,15 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 				else if (owner == StringName("card_current_owner")) compiled.amount_owner = RelativeOwnerOpcode::CARD_CURRENT;
 			}
 		}
+	} else if (
+		type == StringName("set_attack_used_powers")
+		&& action.size() == 3 + generic_field_count
+		&& StringName(action.get("card", StringName())) == StringName("attacker_card")
+		&& Variant(action.get("value", Variant())).get_type() == Variant::INT
+	) {
+		compiled.opcode = ActionOpcode::SET_ATTACK_USED_POWERS;
+		compiled.card_ref = CardRefOpcode::ATTACKER_CARD;
+		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("value", 0)));
 	} else if (
 		(type == StringName("gain_ki") || type == StringName("spend_ki"))
 		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count)
@@ -831,6 +851,16 @@ DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modif
 		else if (type == StringName("standard_attack_first_legal_target")) compiled.opcode = ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET;
 		else if (type == StringName("enemy_cannot_attack_during_owner_turn")) compiled.opcode = ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN;
 		else if (type == StringName("self_attacks_all")) compiled.opcode = ModifierOpcode::SELF_ATTACKS_ALL;
+		else if (type == StringName("cannot_attack")) compiled.opcode = ModifierOpcode::CANNOT_ATTACK;
+	} else if (
+		type == StringName("opponent_play_cell_only_if_no_other_action")
+		&& modifier.size() == 2
+		&& Variant(modifier.get("cell", Variant())).get_type() == Variant::INT
+		&& static_cast<int64_t>(modifier.get("cell", -1)) >= 0
+		&& static_cast<int64_t>(modifier.get("cell", -1)) < 9
+	) {
+		compiled.opcode = ModifierOpcode::OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION;
+		compiled.value = static_cast<int32_t>(static_cast<int64_t>(modifier.get("cell", -1)));
 	}
 	return compiled;
 }
@@ -955,7 +985,33 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 		return compiled;
 	}
 	const Dictionary ability = value;
+	const Array ability_keys = ability.keys();
+	for (int64_t key_index = 0; key_index < ability_keys.size(); ++key_index) {
+		const StringName key = ability_keys[key_index];
+		if (
+			key != StringName("retained_on_flip") && key != StringName("triggers")
+			&& key != StringName("activation") && key != StringName("modifiers")
+			&& key != StringName("active_zones") && key != StringName("auras")
+		) compiled.declaration_valid = false;
+	}
 	compiled.retained_on_flip = static_cast<bool>(ability.get("retained_on_flip", false));
+	if (ability.has("active_zones")) {
+		compiled.active_zone_mask = 0;
+		const Variant zones_value = ability.get("active_zones", Variant());
+		if (zones_value.get_type() != Variant::ARRAY || Array(zones_value).is_empty()) {
+			compiled.declaration_valid = false;
+		} else {
+			const Array zones = zones_value;
+			for (int64_t zone_index = 0; zone_index < zones.size(); ++zone_index) {
+				const StringName zone = zones[zone_index];
+				if (zone == StringName("board")) compiled.active_zone_mask |= 1 << 0;
+				else if (zone == StringName("hand")) compiled.active_zone_mask |= 1 << 1;
+				else if (zone == StringName("discard")) compiled.active_zone_mask |= 1 << 3;
+				else if (zone == StringName("removed")) compiled.active_zone_mask |= 1 << 4;
+				else compiled.declaration_valid = false;
+			}
+		}
+	}
 	if (ability.has("activation")) {
 		const Variant activation = ability["activation"];
 		compiled.has_activation = (
@@ -988,6 +1044,37 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 	const Array triggers = triggers_value;
 	for (int64_t index = 0; index < triggers.size(); ++index) {
 		compiled.triggers.push_back(compile_trigger_rule(triggers[index], compiled.declaration_valid));
+	}
+	if (ability.has("auras")) {
+		const Variant auras_value = ability.get("auras", Variant());
+		if (auras_value.get_type() != Variant::ARRAY || Array(auras_value).is_empty()) {
+			compiled.declaration_valid = false;
+		} else {
+			const Array auras = auras_value;
+			for (int64_t aura_index = 0; aura_index < auras.size(); ++aura_index) {
+				CompiledAura compiled_aura;
+				if (auras[aura_index].get_type() != Variant::DICTIONARY) {
+					compiled.declaration_valid = false;
+					compiled.auras.push_back(compiled_aura);
+					continue;
+				}
+				const Dictionary aura = auras[aura_index];
+				if (aura.size() != 2) compiled.declaration_valid = false;
+				compiled_aura.selector = compile_selector(aura.get("selector", Variant()));
+				if (!compiled_aura.selector.declaration_valid) compiled.declaration_valid = false;
+				const Variant granted = aura.get("ability", Variant());
+				if (granted.get_type() != Variant::DICTIONARY || Dictionary(granted).is_empty()) {
+					compiled.declaration_valid = false;
+				} else {
+					compiled_aura.ability_pool_index = intern_compiled_ability(granted);
+					if (
+						compiled_aura.ability_pool_index < 0
+						|| !compiled_ability_pool[compiled_aura.ability_pool_index].declaration_valid
+					) compiled.declaration_valid = false;
+				}
+				compiled.auras.push_back(compiled_aura);
+			}
+		}
 	}
 	compiled.isolated_self_after_flip = (
 		!compiled.has_activation

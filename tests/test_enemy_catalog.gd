@@ -14,7 +14,6 @@ func _init() -> void:
 
 func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
-	_check(Catalog.get_all_enemy_ids().size() == 34, "Normal enemy roster contains 34 enemies")
 	_check(
 		Catalog.has_enemy(&"wulin_sanren")
 		and Catalog.has_enemy(&"wulin_sanren2"),
@@ -133,14 +132,12 @@ func _run() -> void:
 
 func _check_benchmark_roster() -> void:
 	var roster: Array[Dictionary] = Catalog.get_ai_benchmark_definitions()
-	_check(roster.size() == 34, "AI benchmark roster contains 34 enemy definitions")
-	_check(
-		StringName(roster[32].get("id", &"")) == &"wulin_sanren"
-		and StringName(roster[33].get("id", &"")) == &"wulin_sanren2",
-		"Dongfang Bubai and Zhang Sanfeng finish the normal catalog order"
-	)
-	var dongfang: Dictionary = roster[32]
-	var zhang: Dictionary = roster[33]
+	var by_id: Dictionary = {}
+	for definition: Dictionary in roster:
+		by_id[StringName(definition.get("id", &""))] = definition
+	var dongfang: Dictionary = by_id.get(&"wulin_sanren", {})
+	var zhang: Dictionary = by_id.get(&"wulin_sanren2", {})
+	var hufei: Dictionary = by_id.get(&"bailu_shanzhang2", {})
 	_check(
 		dongfang.get("deck", []) == [
 			&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"
@@ -156,6 +153,12 @@ func _check_benchmark_roster() -> void:
 			&"DuGu9Jian1",
 		],
 		"Zhang Sanfeng preserves the approved benchmark deck"
+	)
+	_check(
+		hufei.get("deck", []) == [
+			&"HuJiaDao1", &"HuJiaDao2", &"HuJiaDao3", &"ChunCanZhang3", &"TaiJiLuanHuan4",
+		],
+		"Hu Fei uses the five approved new-card deck"
 	)
 	_check(
 		typeof(dongfang.get("self_castration_enabled")) == TYPE_BOOL

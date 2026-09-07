@@ -25,6 +25,7 @@ const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
+const TRIGGER_DUEL_STARTED: StringName = &"duel_started"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
 const CARD_AFTER_EXILED: StringName = &"card_after_exiled"
@@ -55,7 +56,7 @@ const CONDITION_ATTACKER_CARD_IS_OTHER_ALLY: StringName = &"attacker_card_is_oth
 const CONDITION_DRAWN_CARD_IS_ENEMY: StringName = &"drawn_card_is_enemy"
 const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
 const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
-const CONDITION_ATTACKED_CARD_IS_SELF: StringName = &"attacked_card_is_self"
+const CONDITION_ATTACK_FLIPPED_ANY_CARD: StringName = &"attack_flipped_any_card"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
 const CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"trigger_card_original_owner_is_self"
 const CONDITION_MOVING_CARD_IS_SELF: StringName = &"moving_card_is_self"
@@ -130,6 +131,7 @@ const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_no
 const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
 const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
 const ACTION_DISTRIBUTE_KI: StringName = &"distribute_ki"
+const ACTION_SET_ATTACK_USED_POWERS: StringName = &"set_attack_used_powers"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
@@ -165,6 +167,10 @@ const MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS: StringName = &"non_orthogonal_att
 const MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET: StringName = &"standard_attack_first_legal_target"
 const MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN: StringName = &"enemy_cannot_attack_during_owner_turn"
 const MODIFIER_SELF_ATTACKS_ALL: StringName = &"self_attacks_all"
+const MODIFIER_CANNOT_ATTACK: StringName = &"cannot_attack"
+const MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION: StringName = (
+	&"opponent_play_cell_only_if_no_other_action"
+)
 const ATTACK_TARGET_ENEMIES_ONLY: StringName = &"enemies_only"
 const ATTACK_TARGET_ALLIES_ONLY: StringName = &"allies_only"
 const ATTACK_TARGET_ALL: StringName = &"all"
@@ -191,6 +197,7 @@ const KNOWN_TARGET_RULES: Array[StringName] = [
 	TARGET_ANY_ENEMY_BOARD,
 ]
 const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
+	TRIGGER_DUEL_STARTED,
 	TRIGGER_CARD_SUMMONED,
 	TRIGGER_CARD_BEFORE_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
@@ -227,7 +234,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_DRAWN_CARD_IS_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
 	CONDITION_ATTACK_FLIPPED_ENEMY,
-	CONDITION_ATTACKED_CARD_IS_SELF,
+	CONDITION_ATTACK_FLIPPED_ANY_CARD,
 	CONDITION_OWNER_DID_NOT_WIN,
 	CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
 	CONDITION_MOVING_CARD_IS_SELF,
@@ -264,6 +271,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_OWNER_HAND_EMPTY,
 	CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
+	CONDITION_ATTACK_FLIPPED_ANY_CARD,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [
 	CARD_ZONE_HAND,
@@ -311,6 +319,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DEPART_CARD_FOR_RESUMMON,
 	ACTION_TRANSFER_CARD_RESOURCE,
 	ACTION_DISTRIBUTE_KI,
+	ACTION_SET_ATTACK_USED_POWERS,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
@@ -343,6 +352,8 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET,
 	MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
 	MODIFIER_SELF_ATTACKS_ALL,
+	MODIFIER_CANNOT_ATTACK,
+	MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
@@ -487,6 +498,107 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"KuiHua4",
 	&"KuiHua0",
 ]
+
+const HUJIA_HIDDEN_BLADE: Dictionary = {
+	"active_zones": [CARD_ZONE_HAND],
+	"triggers": [{
+		"event": TRIGGER_DUEL_STARTED,
+		"actions": [
+			{
+				"type": ACTION_REVEAL_CARD,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			},
+			{
+				"type": ACTION_REVEAL_HAND_CARDS,
+				"recipient": RECIPIENT_OPPONENT,
+				"filter": REVEAL_FILTER_ALL,
+			},
+		],
+	}],
+	"modifiers": [{
+		"type": MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
+		"cell": 4,
+	}],
+}
+
+const HUJIA_EMBRACE_MOON_GRANTED: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+		"value": 0,
+	}],
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{"type": ACTION_EXILE_SELF},
+		],
+	}],
+}
+
+const HUJIA_EMBRACE_MOON_HAND: Dictionary = {
+	"active_zones": [CARD_ZONE_HAND],
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [
+			{
+				"type": ACTION_REVEAL_CARD,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			},
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": -1,
+				"card": CARD_REF_ABILITY_SOURCE,
+			},
+		],
+	}],
+	"auras": [{
+		"selector": {
+			"zones": [CARD_ZONE_BOARD],
+			"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+		},
+		"ability": HUJIA_EMBRACE_MOON_GRANTED,
+	}],
+}
+
+const HUJIA_CLOSED_DOOR_HAND: Dictionary = {
+	"active_zones": [CARD_ZONE_HAND],
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_ATTACK,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_ENEMY}],
+		"actions": [
+			{
+				"type": ACTION_REVEAL_CARD,
+				"card": CARD_REF_ABILITY_SOURCE,
+				"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+			},
+			{
+				"type": ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": CARD_REF_ABILITY_SOURCE,
+			},
+			{
+				"type": ACTION_IF,
+				"conditions": [{
+					"type": CONDITION_ATTACK_FLIPPED_ANY_CARD,
+					"inverted": true,
+				}],
+				"actions": [{
+					"type": ACTION_SET_ATTACK_USED_POWERS,
+					"card": CARD_REF_ATTACKER_CARD,
+					"value": 0,
+				}],
+			},
+		],
+	}],
+}
+
+const CHUNCAN_CANNOT_ATTACK: Dictionary = {
+	"modifiers": [{"type": MODIFIER_CANNOT_ATTACK}],
+}
 
 const HANBIN_POWER_BATCH: StringName = &"hanbin_frozen_turn"
 
@@ -1016,7 +1128,7 @@ const BAOCAN_MUTUAL_EXILE: Dictionary = {
 	"retained_on_flip": true,
 	"triggers": [{
 		"event": CARD_BE_ATTACKED,
-		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ABILITY_SOURCE},
 			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ATTACKER_CARD},
@@ -1028,7 +1140,7 @@ const BAOCAN_MUTUAL_EXILE_WITH_COPIES: Dictionary = {
 	"retained_on_flip": true,
 	"triggers": [{
 		"event": CARD_BE_ATTACKED,
-		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ABILITY_SOURCE},
 			{"type": ACTION_EXILE_CARD, "card": CARD_REF_ATTACKER_CARD},
@@ -1389,7 +1501,7 @@ const JINZHEN_RETURN: Dictionary = {
 
 const WANHUA_COPY_TRIGGER: Dictionary = {
 	"event": CARD_BE_ATTACKED,
-	"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+	"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 	"actions": [{
 		"type": ACTION_SUMMON_CARD,
 		"card": {
@@ -1862,7 +1974,7 @@ const DUGU_BREAK_ALL: Dictionary = {
 const KUIHUA_RETURN_TO_HAND: Dictionary = {
 	"triggers": [{
 		"event": CARD_BE_ATTACKED,
-		"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [{
 			"type": ACTION_RETURN_CARD_TO_HAND,
 			"card": CARD_REF_ABILITY_SOURCE,
@@ -3441,7 +3553,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 									"retained_on_flip": true,
 									"triggers": [{
 										"event": CARD_BE_ATTACKED,
-										"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+										"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 										"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
 									}],
 								},
@@ -4886,7 +4998,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对局开始时，揭示我和所有敌方手牌。若我在你的手牌中，除非别无选择，对手不能在中央格出牌。",
 		"flavor": "胡家刀法中的招式，舞动单刀，身形转动，一阵猛砍快剁，迅捷如风。外表上看去，跟武林中一般大路刀法并无多大不同，只变化奇妙，攻则去势凌厉，守则门户严谨，攻中有守，守中有攻，令人莫测高深。",
 		"powers": [8, 8, 8, 8],
-		"abilities": [],
+		"abilities": [HUJIA_HIDDEN_BLADE],
 	},
 	&"HuJiaDao2": {
 		"id": &"HuJiaDao2",
@@ -4898,7 +5010,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "若我在你的手牌中，友方被攻击时，揭示我并点数减一，且所有友方视为具有以下效果：判断是否能被攻击时，所有点数视为零。被攻击时，抽一张牌，然后将我移除。",
 		"flavor": "胡家刀法中的招式，回刀轻削，妙在虚实互用，忽虚忽实。外表上看去，跟武林中一般大路刀法并无多大不同，只变化奇妙，攻则去势凌厉，守则门户严谨，攻中有守，守中有攻，令人莫测高深。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [],
+		"abilities": [HUJIA_EMBRACE_MOON_HAND],
 	},
 	&"HuJiaDao3": {
 		"id": &"HuJiaDao3",
@@ -4910,7 +5022,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "若我在你的手牌中，敌方攻击后，揭示我并点数加一，然后若本次攻击未造成翻面，敌方在攻击中使用过的点数变为零。",
 		"flavor": "胡家刀法中的招式，单刀先推后横，讲究缓慢收敛，嫩胜于老，迟胜于急。外表上看去，跟武林中一般大路刀法并无多大不同，只变化奇妙，攻则去势凌厉，守则门户严谨，攻中有守，守中有攻，令人莫测高深。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [],
+		"abilities": [HUJIA_CLOSED_DOOR_HAND],
 	},
 	&"ChunCanZhang2": {
 		"id": &"ChunCanZhang2",
@@ -4922,7 +5034,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我无法攻击。",
 		"flavor": "春蚕掌法招招全是守势，出手奇短，抬手踢足，全不出半尺之外，但招术绵密无比，周身始终不露半点破绽。这路掌法原本用于遭人围攻而大处劣势之时，不求有功，但求无过，虽守得紧密，却有一个极大不好处，一开头即立于不胜之地，名目叫做春蚕掌法，确有作茧自缚之意，并无反击的招数，不论敌人招数中露出如何重大破绽，若非改变掌法，永难克敌制胜。",
 		"powers": [8, 8, 8, 8],
-		"abilities": [],
+		"abilities": [CHUNCAN_CANNOT_ATTACK],
 	},
 	&"ChunCanZhang3": {
 		"id": &"ChunCanZhang3",
@@ -4934,7 +5046,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我无法攻击。",
 		"flavor": "春蚕掌法招招全是守势，出手奇短，抬手踢足，全不出半尺之外，但招术绵密无比，周身始终不露半点破绽。这路掌法原本用于遭人围攻而大处劣势之时，不求有功，但求无过，虽守得紧密，却有一个极大不好处，一开头即立于不胜之地，名目叫做春蚕掌法，确有作茧自缚之意，并无反击的招数，不论敌人招数中露出如何重大破绽，若非改变掌法，永难克敌制胜。",
 		"powers": [9, 9, 9, 9],
-		"abilities": [],
+		"abilities": [CHUNCAN_CANNOT_ATTACK],
 	},
 	&"DuGu9Jian1": {
 		"id": &"DuGu9Jian1",
@@ -4988,7 +5100,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 				"retained_on_flip": true,
 				"triggers": [{
 					"event": CARD_BE_ATTACKED,
-					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 					"actions": [{
 						"type": ACTION_EXILE_CARD,
 						"card": CARD_REF_TRIGGER_CARD,
@@ -5013,7 +5125,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 				"retained_on_flip": true,
 				"triggers": [{
 					"event": CARD_BE_ATTACKED,
-					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 					"actions": [{"type": ACTION_EXILE_SELF}],
 				}],
 			},
@@ -5042,7 +5154,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 				"retained_on_flip": true,
 				"triggers": [{
 					"event": CARD_BE_ATTACKED,
-					"conditions": [{"type": CONDITION_ATTACKED_CARD_IS_SELF}],
+					"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 					"actions": [{"type": ACTION_EXILE_SELF}],
 				}],
 			},
@@ -5395,6 +5507,13 @@ static func normalize_ability(raw_ability: Dictionary) -> Dictionary:
 		_normalize_nested_grants((trigger_value as Dictionary).get("actions", []))
 	if ability.has("activation") and ability["activation"] is Dictionary:
 		_normalize_nested_grants((ability["activation"] as Dictionary).get("actions", []))
+	for aura_value: Variant in ability.get("auras", []):
+		if not aura_value is Dictionary:
+			continue
+		var aura: Dictionary = aura_value
+		var granted_value: Variant = aura.get("ability", null)
+		if granted_value is Dictionary:
+			aura["ability"] = normalize_ability(granted_value as Dictionary)
 	return ability
 
 
@@ -5423,18 +5542,34 @@ static func _validate_ability(
 	if ability.has("id"):
 		errors.append("Card %s ability must not declare an id" % card_id)
 	for key: Variant in ability.keys():
-		if StringName(key) not in [&"retained_on_flip", &"triggers", &"activation", &"modifiers"]:
+		if StringName(key) not in [
+			&"retained_on_flip", &"triggers", &"activation", &"modifiers",
+			&"active_zones", &"auras",
+		]:
 			errors.append("Card %s ability has unsupported field %s" % [card_id, key])
 	if ability.has("retained_on_flip") and typeof(ability["retained_on_flip"]) != TYPE_BOOL:
 		errors.append("Card %s ability has non-Boolean retained_on_flip" % card_id)
-	if not ability.has("triggers") and not ability.has("activation") and not ability.has("modifiers"):
-		errors.append("Card %s ability requires triggers, activation, or modifiers" % card_id)
+	if (
+		not ability.has("triggers") and not ability.has("activation")
+		and not ability.has("modifiers") and not ability.has("auras")
+	):
+		errors.append("Card %s ability requires triggers, activation, modifiers, or auras" % card_id)
+	if ability.has("active_zones"):
+		var zones_value: Variant = ability.get("active_zones")
+		if not zones_value is Array or (zones_value as Array).is_empty():
+			errors.append("Card %s active_zones requires a non-empty Array" % card_id)
+		else:
+			for zone_value: Variant in zones_value as Array:
+				if StringName(zone_value) not in KNOWN_CARD_ZONES:
+					errors.append("Card %s uses unknown active zone %s" % [card_id, zone_value])
 	if ability.has("triggers"):
 		_validate_triggers(card_id, ability["triggers"], errors)
 	if ability.has("activation"):
 		_validate_activation(card_id, ability["activation"], errors)
 	if ability.has("modifiers"):
 		_validate_modifiers(card_id, ability["modifiers"], errors)
+	if ability.has("auras"):
+		_validate_auras(card_id, ability["auras"], errors)
 	if _ability_has_self_after_flip_trigger(ability):
 		var triggers_value: Variant = ability.get("triggers", [])
 		if (
@@ -5464,6 +5599,29 @@ static func _ability_has_self_after_flip_trigger(ability: Dictionary) -> bool:
 			):
 				return true
 	return false
+
+
+static func _validate_auras(card_id: StringName, auras_value: Variant, errors: Array[String]) -> void:
+	if not auras_value is Array or (auras_value as Array).is_empty():
+		errors.append("Card %s aura ability requires a non-empty aura array" % card_id)
+		return
+	for aura_value: Variant in auras_value as Array:
+		if not aura_value is Dictionary:
+			errors.append("Card %s has a non-dictionary aura" % card_id)
+			continue
+		var aura: Dictionary = aura_value
+		for key: Variant in aura.keys():
+			if StringName(key) not in [&"selector", &"ability"]:
+				errors.append("Card %s aura has unsupported field %s" % [card_id, key])
+		_validate_selector(card_id, "aura", aura.get("selector", null), errors)
+		var granted_value: Variant = aura.get("ability", null)
+		if not granted_value is Dictionary:
+			errors.append("Card %s aura requires an ability Dictionary" % card_id)
+		else:
+			var granted: Dictionary = granted_value
+			if granted.has("active_zones") or granted.has("auras") or granted.has("activation"):
+				errors.append("Card %s aura ability cannot declare active_zones, auras, or activation" % card_id)
+			_validate_ability(card_id, granted, errors)
 
 
 static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, errors: Array[String]) -> void:
@@ -5498,6 +5656,14 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 			):
 				errors.append(
 					"Card %s modifier %s requires a Boolean allow_intervening_enemy"
+					% [card_id, modifier_type]
+				)
+		if modifier_type == MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION:
+			allowed_keys.append(&"cell")
+			var cell_value: Variant = modifier.get("cell", null)
+			if typeof(cell_value) != TYPE_INT or int(cell_value) < 0 or int(cell_value) > 8:
+				errors.append(
+					"Card %s modifier %s requires a board cell from 0 through 8"
 					% [card_id, modifier_type]
 				)
 		for key: Variant in modifier.keys():
@@ -5578,6 +5744,13 @@ static func _validate_condition(
 					"Card %s %s trigger-card weapon condition requires a boolean inverted"
 					% [card_id, context_name]
 				)
+	if condition_type == CONDITION_ATTACK_FLIPPED_ANY_CARD and condition.has("inverted"):
+		allowed_keys.append(&"inverted")
+		if typeof(condition.get("inverted")) != TYPE_BOOL:
+			errors.append(
+				"Card %s %s attack-flipped condition requires a boolean inverted"
+				% [card_id, context_name]
+			)
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])
@@ -5603,6 +5776,13 @@ static func _validate_action_condition(
 		if typeof(amount_value) != TYPE_INT or int(amount_value) <= 0:
 			errors.append(
 				"Card %s %s discard batch condition requires a positive integer amount"
+				% [card_id, context_name]
+			)
+	if condition_type == CONDITION_ATTACK_FLIPPED_ANY_CARD and condition.has("inverted"):
+		allowed_keys.append(&"inverted")
+		if typeof(condition.get("inverted")) != TYPE_BOOL:
+			errors.append(
+				"Card %s %s attack-flipped condition requires a boolean inverted"
 				% [card_id, context_name]
 			)
 	for key: Variant in condition.keys():
@@ -5773,6 +5953,19 @@ static func _validate_action(
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
 				"Card %s %s action %s requires a known card reference"
+				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_SET_ATTACK_USED_POWERS:
+		allowed_keys.append(&"card")
+		allowed_keys.append(&"value")
+		if StringName(action.get("card", &"")) != CARD_REF_ATTACKER_CARD:
+			errors.append(
+				"Card %s %s action %s requires attacker_card"
+				% [card_id, context_name, action_type]
+			)
+		if typeof(action.get("value", null)) != TYPE_INT:
+			errors.append(
+				"Card %s %s action %s requires an integer value"
 				% [card_id, context_name, action_type]
 			)
 	if action_type in [ACTION_EXILE_CARD, ACTION_DISCARD_CARD]:

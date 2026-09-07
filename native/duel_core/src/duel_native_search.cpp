@@ -355,6 +355,55 @@ DuelNativeCompactKernel::get_legal_native_actions(
 		|| value.board_card_indices.size() != 9
 		|| value.zones.size() < 2
 	) return actions;
+	auto apply_opponent_cell_restrictions = [&]() {
+		bool restricted_cells[9] = {false, false, false, false, false, false, false, false, false};
+		const int32_t restricting_owner = other_owner(owner_id);
+		const std::vector<int32_t> &restricting_hand = value.zones[restricting_owner - 1];
+		for (const int32_t card_index : restricting_hand) {
+			if (!card_effects_enabled(value, card_index, restricting_owner)) continue;
+			for (
+				size_t ability_index = 0;
+				ability_index < value.card_runtime_abilities[card_index].size();
+				++ability_index
+			) {
+				const CompiledAbility *ability = runtime_ability(
+					value,
+					card_index,
+					static_cast<int32_t>(ability_index)
+				);
+				if (ability == nullptr || !ability_active_in_zone(*ability, 1)) continue;
+				for (const CompiledModifier &modifier : ability->modifiers) {
+					if (
+						modifier.opcode == ModifierOpcode::OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION
+						&& modifier.value >= 0 && modifier.value < 9
+					) restricted_cells[modifier.value] = true;
+				}
+			}
+		}
+		bool has_restriction = false;
+		for (const bool restricted : restricted_cells) has_restriction = has_restriction || restricted;
+		if (!has_restriction) return;
+		bool has_other_action = false;
+		for (const NativeAction &action : actions) {
+			if (
+				action.type == NativeActionType::ACTIVATE
+				|| (
+					action.type == NativeActionType::PLAY
+					&& action.target_index >= 0 && action.target_index < 9
+					&& !restricted_cells[action.target_index]
+				)
+			) {
+				has_other_action = true;
+				break;
+			}
+		}
+		if (!has_other_action) return;
+		actions.erase(std::remove_if(actions.begin(), actions.end(), [&](const NativeAction &action) {
+			return action.type == NativeActionType::PLAY
+				&& action.target_index >= 0 && action.target_index < 9
+				&& restricted_cells[action.target_index];
+		}), actions.end());
+	};
 	const int32_t hand_zone_index = owner_id - 1;
 	for (size_t hand_index = 0; hand_index < value.zones[hand_zone_index].size(); ++hand_index) {
 		const int32_t card_index = value.zones[hand_zone_index][hand_index];
@@ -372,7 +421,10 @@ DuelNativeCompactKernel::get_legal_native_actions(
 			actions.push_back(action);
 		}
 	}
-	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return actions;
+	if (owner_id == value.scalars[0] && value.scalars[5] > 0) {
+		apply_opponent_cell_restrictions();
+		return actions;
+	}
 
 	for (size_t source_cell = 0; source_cell < value.board_card_indices.size(); ++source_cell) {
 		const int32_t card_index = value.board_card_indices[source_cell];
@@ -411,6 +463,7 @@ DuelNativeCompactKernel::get_legal_native_actions(
 			}
 		}
 	}
+	apply_opponent_cell_restrictions();
 	return actions;
 }
 
@@ -418,51 +471,7 @@ int64_t DuelNativeCompactKernel::count_legal_native_actions(
 	const NativeState &value,
 	int32_t owner_id
 ) const {
-	if (
-		(owner_id != 1 && owner_id != 2)
-		|| value.board_card_indices.size() != 9
-		|| value.zones.size() < 2
-	) return 0;
-	int64_t empty_cells = 0;
-	for (const int32_t card_index : value.board_card_indices) {
-		if (card_index < 0) empty_cells += 1;
-	}
-	const int32_t hand_zone_index = owner_id - 1;
-	int64_t valid_hand_cards = 0;
-	for (const int32_t card_index : value.zones[hand_zone_index]) {
-		if (
-			card_index >= 0
-			&& card_index < static_cast<int32_t>(value.card_instance_ids.size())
-		) valid_hand_cards += 1;
-	}
-	int64_t action_count = valid_hand_cards * empty_cells;
-	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return action_count;
-	for (size_t source_cell = 0; source_cell < value.board_card_indices.size(); ++source_cell) {
-		const int32_t card_index = value.board_card_indices[source_cell];
-		if (card_index < 0 || value.board_owners[source_cell] != owner_id) continue;
-		if (!card_effects_enabled(value, card_index, owner_id)) continue;
-		for (
-			size_t ability_index = 0;
-			ability_index < value.card_runtime_abilities[card_index].size();
-			++ability_index
-		) {
-			const CompiledAbility *ability = runtime_ability(
-				value,
-				card_index,
-				static_cast<int32_t>(ability_index)
-			);
-			if (ability == nullptr || !ability->has_activation) continue;
-			const CompiledActivation &activation = ability->activation;
-			if (!can_pay_activation_cost(value, card_index, activation)) continue;
-			action_count += count_activation_target_indices(
-				value,
-				owner_id,
-				static_cast<int32_t>(source_cell),
-				activation
-			);
-		}
-	}
-	return action_count;
+	return static_cast<int64_t>(get_legal_native_actions(value, owner_id).size());
 }
 
 Dictionary DuelNativeCompactKernel::materialize_action(const NativeAction &action) const {

@@ -920,6 +920,21 @@ DuelNativeCompactKernel::EventContext DuelNativeCompactKernel::event_context_fro
 	result.activation_target_index = static_cast<int32_t>(context.get("activation_target_index", -1));
 	result.repeat_attack = bool(context.get("repeat_attack", false));
 	result.attack_flipped_enemy = bool(context.get("attack_flipped_enemy", false));
+	result.attack_flipped_any_card = bool(context.get("attack_flipped_any_card", false));
+	const Variant used_directions_value = context.get("used_attacker_power_directions", Variant());
+	if (used_directions_value.get_type() == Variant::INT) {
+		result.used_attacker_power_directions = static_cast<uint8_t>(
+			static_cast<int64_t>(used_directions_value) & 0x0f
+		);
+	} else if (used_directions_value.get_type() == Variant::ARRAY) {
+		const Array used_directions = used_directions_value;
+		for (int64_t index = 0; index < used_directions.size(); ++index) {
+			const int32_t direction = static_cast<int32_t>(static_cast<int64_t>(used_directions[index]));
+			if (direction >= 0 && direction < 4) {
+				result.used_attacker_power_directions |= static_cast<uint8_t>(1 << direction);
+			}
+		}
+	}
 	result.attack_reason = StringName(context.get("attack_reason", StringName()));
 	result.flip_reason = StringName(context.get("flip_reason", StringName()));
 	result.exile_reason = StringName(context.get("exile_reason", StringName()));

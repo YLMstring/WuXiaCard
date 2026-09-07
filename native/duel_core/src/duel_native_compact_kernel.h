@@ -85,7 +85,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_REVEALED_TO_SELF,
 		TRIGGER_CARD_WAS_ENEMY,
 		TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
-		ATTACKED_CARD_IS_SELF,
 		ATTACKER_CARD_IS_SELF,
 		ATTACKER_CARD_IS_ENEMY,
 		ATTACKER_CARD_IS_OTHER_ALLY,
@@ -94,6 +93,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_WAS_ON_BOARD,
 		ATTACK_FLIPPED_ENEMY,
 		ATTACK_FLIPPED_ALLY_IN_RANGE,
+		ATTACK_FLIPPED_ANY_CARD,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
 		TRIGGER_CARD_WEAPON,
 		DRAWN_CARD_IS_ENEMY,
@@ -151,6 +151,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SUMMON_CARD,
 		RESUMMON_CARD_IN_PLACE,
 		DEPART_CARD_FOR_RESUMMON,
+		SET_ATTACK_USED_POWERS,
 		UNSUPPORTED,
 	};
 
@@ -265,6 +266,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		STANDARD_ATTACK_FIRST_LEGAL_TARGET,
 		ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
 		SELF_ATTACKS_ALL,
+		CANNOT_ATTACK,
+		OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 		UNSUPPORTED,
 	};
 
@@ -365,14 +368,21 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<CompiledAction> actions;
 	};
 
+	struct CompiledAura {
+		CompiledSelector selector;
+		int32_t ability_pool_index = -1;
+	};
+
 	struct CompiledAbility {
 		bool declaration_valid = true;
 		bool retained_on_flip = false;
 		bool has_activation = false;
 		CompiledActivation activation;
 		bool isolated_self_after_flip = false;
+		uint8_t active_zone_mask = 1;
 		std::vector<CompiledTriggerRule> triggers;
 		std::vector<CompiledModifier> modifiers;
+		std::vector<CompiledAura> auras;
 	};
 
 	struct CompiledAbilitySet {
@@ -431,6 +441,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t new_owner = 0;
 		bool trigger_was_on_board = false;
 		bool attack_flipped_enemy = false;
+		bool attack_flipped_any_card = false;
 		int32_t previous_ki = 0;
 		int32_t ki = -1;
 		int32_t moving_source_cell = -1;
@@ -453,6 +464,7 @@ class DuelNativeCompactKernel : public RefCounted {
 			int32_t previous_owner = 0;
 		};
 		std::vector<AttackFlipRecord> attack_flips;
+		uint8_t used_attacker_power_directions = 0;
 		StringName attack_reason;
 		StringName flip_reason;
 		StringName exile_reason;
@@ -468,6 +480,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t ability_index = -1;
 		uint64_t ability_handle = 0;
 		int32_t trigger_index = -1;
+		int32_t virtual_ability_pool_index = -1;
 	};
 
 	struct ActionContext {
@@ -1062,6 +1075,16 @@ private:
 		ModifierOpcode opcode,
 		int32_t *out_value = nullptr
 	) const;
+	bool ability_active_in_zone(const CompiledAbility &ability, int32_t zone) const;
+	bool card_receives_aura_modifier(
+		const NativeState &value,
+		int32_t card_index,
+		int32_t owner_id,
+		int32_t zone,
+		int32_t logical_index,
+		ModifierOpcode opcode,
+		int32_t *out_value = nullptr
+	) const;
 	bool card_modifier_has_flag(
 		const NativeState &value,
 		int32_t card_index,
@@ -1117,6 +1140,12 @@ private:
 		int32_t attacking_direction,
 		int32_t defending_direction,
 		bool comparison_reversed
+	) const;
+	uint8_t winning_attack_direction_mask(
+		const NativeState &value,
+		int32_t source_cell,
+		int32_t target_cell,
+		const AttackPolicy &policy
 	) const;
 	void append_resolution(Resolution &destination, const Resolution &addition) const;
 	bool resolution_has_output(const Resolution &resolution) const;
@@ -1194,6 +1223,7 @@ private:
 	bool action_conditions_match(
 		const NativeState &value,
 		const std::vector<CompiledCondition> &conditions,
+		const EventContext &event_context,
 		const ActionContext &action_context,
 		const ActionExecutionState &execution_state,
 		bool &supported

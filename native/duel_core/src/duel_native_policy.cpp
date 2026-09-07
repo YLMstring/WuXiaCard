@@ -299,6 +299,110 @@ bool DuelNativeCompactKernel::card_has_unsupported_enabled_modifier(
 	return false;
 }
 
+bool DuelNativeCompactKernel::ability_active_in_zone(
+	const CompiledAbility &ability,
+	int32_t zone
+) const {
+	return zone >= 0 && zone < 8 && (ability.active_zone_mask & (1 << zone)) != 0;
+}
+
+bool DuelNativeCompactKernel::card_receives_aura_modifier(
+	const NativeState &value,
+	int32_t card_index,
+	int32_t owner_id,
+	int32_t zone,
+	int32_t logical_index,
+	ModifierOpcode opcode,
+	int32_t *out_value
+) const {
+	bool found = false;
+	auto selector_contains_zone = [](const CompiledSelector &selector, int32_t candidate_zone) {
+		const SelectorZoneOpcode expected = candidate_zone == 0
+			? SelectorZoneOpcode::BOARD
+			: (candidate_zone == 1
+				? SelectorZoneOpcode::HAND
+				: (candidate_zone == 3 ? SelectorZoneOpcode::DISCARD : SelectorZoneOpcode::REMOVED));
+		return std::find(selector.zones.begin(), selector.zones.end(), expected) != selector.zones.end();
+	};
+	auto inspect_provider = [&](
+		int32_t provider_card_index,
+		int32_t provider_owner,
+		int32_t provider_zone,
+		int32_t provider_logical_index
+	) {
+		if (!card_effects_enabled(value, provider_card_index, provider_owner)) return;
+		for (
+			size_t ability_index = 0;
+			ability_index < value.card_runtime_abilities[provider_card_index].size();
+			++ability_index
+		) {
+			const CompiledAbility *provider = runtime_ability(
+				value,
+				provider_card_index,
+				static_cast<int32_t>(ability_index)
+			);
+			if (provider == nullptr || !ability_active_in_zone(*provider, provider_zone)) continue;
+			for (const CompiledAura &aura : provider->auras) {
+				if (
+					aura.ability_pool_index < 0
+					|| aura.ability_pool_index >= static_cast<int32_t>(compiled_ability_pool.size())
+					|| !selector_contains_zone(aura.selector, zone)
+				) continue;
+				ActionContext context;
+				context.ability_source_cell = provider_zone == 0 ? provider_logical_index : -1;
+				context.ability_source_zone = provider_zone;
+				context.ability_source_logical_index = provider_logical_index;
+				context.ability_source_card_index = provider_card_index;
+				context.ability_source_owner = provider_owner;
+				context.action_subject_card_index = provider_card_index;
+				context.action_subject_owner = provider_owner;
+				context.action_subject_zone = provider_zone;
+				context.action_subject_logical_index = provider_logical_index;
+				context.selected_card_index = card_index;
+				context.selected_card_owner = owner_id;
+				context.selected_card_zone = zone;
+				context.selected_card_logical_index = logical_index;
+				bool supported = true;
+				if (!selector_conditions_match(
+					value,
+					card_index,
+					zone,
+					owner_id,
+					logical_index,
+					aura.selector,
+					context,
+					supported
+				)) continue;
+				const CompiledAbility &granted = compiled_ability_pool[aura.ability_pool_index];
+				for (const CompiledModifier &modifier : granted.modifiers) {
+					if (modifier.opcode != opcode) continue;
+					found = true;
+					if (out_value != nullptr) *out_value = modifier.value;
+				}
+			}
+		}
+	};
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		const int32_t provider = value.board_card_indices[cell];
+		if (provider >= 0) inspect_provider(provider, value.board_owners[cell], 0, static_cast<int32_t>(cell));
+	}
+	static constexpr int32_t source_zone_kinds[8] = {1, 1, 2, 2, 3, 3, 4, 4};
+	for (int32_t zone_index = 0; zone_index < static_cast<int32_t>(value.zones.size()); ++zone_index) {
+		const int32_t provider_zone = source_zone_kinds[zone_index];
+		if (provider_zone == 2) continue;
+		const int32_t provider_owner = zone_index % 2 + 1;
+		for (size_t index = 0; index < value.zones[zone_index].size(); ++index) {
+			inspect_provider(
+				value.zones[zone_index][index],
+				provider_owner,
+				provider_zone,
+				static_cast<int32_t>(index)
+			);
+		}
+	}
+	return found;
+}
+
 bool DuelNativeCompactKernel::card_has_modifier(
 	const NativeState &value,
 	int32_t card_index,
@@ -306,18 +410,32 @@ bool DuelNativeCompactKernel::card_has_modifier(
 	ModifierOpcode opcode,
 	int32_t *out_value
 ) const {
-	if (!card_effects_enabled(value, card_index, owner_id)) return false;
+	int32_t zone = -1;
+	int32_t current_owner = 0;
+	int32_t logical_index = -1;
+	if (!locate_card(value, card_index, zone, current_owner, logical_index)) return false;
 	bool found = false;
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-		if (ability == nullptr) continue;
-		for (const CompiledModifier &modifier : ability->modifiers) {
-			if (modifier.opcode == opcode) {
-				found = true;
-				if (out_value != nullptr) *out_value = modifier.value;
+	if (card_effects_enabled(value, card_index, owner_id)) {
+		for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+			const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
+			if (ability == nullptr || !ability_active_in_zone(*ability, zone)) continue;
+			for (const CompiledModifier &modifier : ability->modifiers) {
+				if (modifier.opcode == opcode) {
+					found = true;
+					if (out_value != nullptr) *out_value = modifier.value;
+				}
 			}
 		}
 	}
+	if (card_receives_aura_modifier(
+		value,
+		card_index,
+		owner_id,
+		zone,
+		logical_index,
+		opcode,
+		out_value
+	)) found = true;
 	return found;
 }
 
@@ -524,6 +642,12 @@ bool DuelNativeCompactKernel::can_attack_target(
 	) return false;
 	const int32_t source_card_index = value.board_card_indices[source_cell];
 	const int32_t source_owner = value.board_owners[source_cell];
+	if (card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::CANNOT_ATTACK
+	)) return false;
 	if (
 		card_has_modifier(
 			value,
@@ -623,7 +747,24 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 		}
 	}
 	if (skip_power_comparison) return true;
+	return winning_attack_direction_mask(value, source_cell, target_cell, policy) != 0;
+}
 
+
+uint8_t DuelNativeCompactKernel::winning_attack_direction_mask(
+	const NativeState &value,
+	int32_t source_cell,
+	int32_t target_cell,
+	const AttackPolicy &policy
+) const {
+	if (!is_target_in_attack_range(value, source_cell, target_cell, policy, true)) return 0;
+	const int32_t source_card_index = value.board_card_indices[source_cell];
+	const int32_t target_card_index = value.board_card_indices[target_cell];
+	const int32_t source_owner = value.board_owners[source_cell];
+	const int32_t target_owner = value.board_owners[target_cell];
+	const int32_t row_delta = target_cell / 3 - source_cell / 3;
+	const int32_t column_delta = target_cell % 3 - source_cell % 3;
+	const bool same_axis = row_delta == 0 || column_delta == 0;
 	const bool comparison_reversed = (
 		card_has_modifier(
 			value,
@@ -640,6 +781,11 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 	);
 	static constexpr int32_t opposite[4] = {2, 3, 0, 1};
 	if (same_axis) {
+		int32_t direction = -1;
+		if (row_delta < 0) direction = 0;
+		else if (column_delta > 0) direction = 1;
+		else if (row_delta > 0) direction = 2;
+		else if (column_delta < 0) direction = 3;
 		return power_pair_wins(
 			value,
 			source_card_index,
@@ -649,12 +795,12 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 			direction,
 			opposite[direction],
 			comparison_reversed
-		);
+		) ? static_cast<uint8_t>(1 << direction) : 0;
 	}
 	const int32_t vertical_direction = row_delta < 0 ? 0 : 2;
 	const int32_t horizontal_direction = column_delta < 0 ? 3 : 1;
-	return (
-		power_pair_wins(
+	uint8_t result = 0;
+	if (power_pair_wins(
 			value,
 			source_card_index,
 			source_owner,
@@ -663,8 +809,8 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 			vertical_direction,
 			opposite[vertical_direction],
 			comparison_reversed
-		)
-		|| power_pair_wins(
+		)) result |= static_cast<uint8_t>(1 << vertical_direction);
+	if (power_pair_wins(
 			value,
 			source_card_index,
 			source_owner,
@@ -673,8 +819,8 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 			horizontal_direction,
 			opposite[horizontal_direction],
 			comparison_reversed
-		)
-	);
+		)) result |= static_cast<uint8_t>(1 << horizontal_direction);
+	return result;
 }
 
 bool DuelNativeCompactKernel::power_pair_wins(

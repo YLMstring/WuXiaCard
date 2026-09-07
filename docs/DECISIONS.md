@@ -704,6 +704,25 @@ respectively, in row-major order. The source itself is eligible.
   pre-exile current owner. Successful re-entry cancels the pending exile by
   invalidating its target; the same instance never enters the removed zone.
 
+## 胡家刀法 / 春蚕掌法
+
+- `HuJiaDao1` reveals its current instance and the current opposing hand once
+  at duel start. While its ability remains active in hand, an opponent may play
+  into the center only when no legal activation or non-center hand play exists.
+- `HuJiaDao2` is a hand-zone aura source. Friendly board cards defend as zero
+  and receive a virtual attacked reaction that draws once and exiles that exact
+  recipient. Board abilities resolve first, then hand sources in physical-slot
+  order, then virtual aura reactions. A virtual reaction already discovered for
+  the event survives its aura source leaving hand.
+- `HuJiaDao3` reacts only after an attack performed at least one successful
+  attack comparison. It reveals and gains one; if the attack itself flipped no
+  card, it sets every attacker direction that won a comparison to zero. Ability
+  chains that flip cards do not satisfy the direct-flip test.
+- `ChunCanZhang2` and `ChunCanZhang3` cannot initiate any attack while their
+  non-retained modifier remains. A flip removes the modifier normally.
+- Aura declarations remain state owned by the provider. They are derived for
+  recipients and never copied into recipient runtime state or search identity.
+
 ## 场景背景音乐
 
 - Background music is owned by one persistent presentation node under

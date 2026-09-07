@@ -254,7 +254,7 @@ func _test_ability_declarations() -> void:
 		_check(bool(removal.get("retained_on_flip", false)), "LeiZHenJian1 retains self-removal after ownership flips")
 		var removal_trigger: Dictionary = (removal.get("triggers", []) as Array)[0]
 		_check(StringName(removal_trigger.get("event", &"")) == Catalog.CARD_BE_ATTACKED, "LeiZHenJian1 reacts when attacked")
-		_check(removal_trigger.get("conditions", []) == [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}], "LeiZHenJian1 only removes itself when attacked")
+		_check(removal_trigger.get("conditions", []) == [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "LeiZHenJian1 only removes itself when attacked")
 		_check(
 			removal_trigger.get("actions", []) == [{
 				"type": Catalog.ACTION_EXILE_CARD,

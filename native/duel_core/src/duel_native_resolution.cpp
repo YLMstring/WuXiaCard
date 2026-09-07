@@ -19,6 +19,12 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		|| value.board_owners[initial_attack_cell] != request.attacker_owner
 		|| value.scalars[request.attacker_owner == 1 ? 3 : 4] >= 20
 		|| attack_is_prohibited(value, request.attacker_owner)
+		|| card_has_modifier(
+			value,
+			request.attacker_card_index,
+			request.attacker_owner,
+			ModifierOpcode::CANNOT_ATTACK
+		)
 	) {
 		return resolution;
 	}
@@ -60,6 +66,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 	}
 	bool attack_started = false;
 	bool attack_flipped_enemy = false;
+	bool attack_flipped_any_card = false;
+	uint8_t used_attacker_power_directions = 0;
 	std::vector<EventContext::AttackFlipRecord> attack_flips;
 	auto resolution_flipped_attacker = [&](const Resolution &candidate) -> bool {
 		const StringName attacker_instance_id = value.card_instance_ids[request.attacker_card_index];
@@ -90,6 +98,12 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		if (!can_attack_target(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
 		const int32_t attacked_owner = value.board_owners[attacked_cell];
 		const StringName attacked_instance_id = value.card_instance_ids[attacked_card_index];
+		used_attacker_power_directions |= winning_attack_direction_mask(
+			value,
+			attacker_cell,
+			attacked_cell,
+			attack_policy
+		);
 
 		Dictionary attack_event;
 		attack_event["type"] = StringName("attack_started");
@@ -251,6 +265,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			attack_flipped_enemy
 			|| flipped_previous_owner != request.attacker_owner
 		);
+		attack_flipped_any_card = true;
 		EventContext::AttackFlipRecord flip_record;
 		flip_record.card_index = attacked_card_index;
 		flip_record.previous_owner = flipped_previous_owner;
@@ -267,7 +282,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		after_attack_context.attacker_card_index = request.attacker_card_index;
 		after_attack_context.attacker_owner = request.attacker_owner;
 		after_attack_context.attack_flipped_enemy = attack_flipped_enemy;
+		after_attack_context.attack_flipped_any_card = attack_flipped_any_card;
 		after_attack_context.attack_flips = attack_flips;
+		after_attack_context.used_attacker_power_directions = used_attacker_power_directions;
 		after_attack_context.repeat_attack = request.repeat_attack;
 		Resolution after_attack = resolve_event(
 			value,

@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -54,6 +54,10 @@ release-ready Android package.
   `card_exiled`. See
   `docs/superpowers/specs/2026-09-06-yusui-kungang-design.md` for the complete
   declarations.
+- `HuJiaDao1`–`3` and `ChunCanZhang2`–`3` are implemented through generic
+  hand-zone abilities, derived auras, attack-result context, and attack
+  prohibition. Their complete declarations and ordering rules are in
+  `docs/superpowers/specs/2026-09-07-hujia-chuncan-five-cards-design.md`.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
@@ -111,6 +115,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   granted extra plays remain in the same capped turn.
 - Any activation costs one ki.
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
+- Abilities default to board-only. An ability may explicitly declare
+  `active_zones`; hand triggers resolve after ordinary board triggers in fixed
+  physical hand-slot order. Derived aura abilities are computed from their
+  current source and recipient rather than copied into recipient runtime state.
+- A duel-start event resolves once after both hands, decks, difficulty state,
+  and static opening Bagua have been created, but before the replay opening
+  snapshot or first owner-turn event. Its changes are shown as initial state,
+  without entrance animation.
 - `BaGuaFangWei` retains a locked `CARD_BEFORE_FLIPPED` trigger that exiles the
   exact pending target before ownership can change.
 - `JinGangBuHuai1`–`4` use generic physical-leftmost discard and flip

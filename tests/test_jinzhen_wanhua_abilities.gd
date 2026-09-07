@@ -39,7 +39,7 @@ func _run() -> void:
 func _test_vocabulary_and_declarations() -> void:
 	_check(Catalog.TRIGGER_BEFORE_DUEL_END in Catalog.KNOWN_TRIGGER_EVENTS, "Before-duel-end event is registered")
 	_check(Catalog.CONDITION_OWNER_DID_NOT_WIN in Catalog.KNOWN_TRIGGER_CONDITIONS, "Nonwinner condition is registered")
-	_check(Catalog.CONDITION_ATTACKED_CARD_IS_SELF in Catalog.KNOWN_TRIGGER_CONDITIONS, "Attacked-self condition is registered")
+	_check(Catalog.CONDITION_TRIGGER_CARD_IS_SELF in Catalog.KNOWN_TRIGGER_CONDITIONS, "Trigger-self condition is registered")
 	_check(Catalog.CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF in Catalog.KNOWN_SELECTOR_CONDITIONS, "Original-owner selector condition is registered")
 	for action_type: StringName in [
 		Catalog.ACTION_RETURN_CARD_TO_HAND,

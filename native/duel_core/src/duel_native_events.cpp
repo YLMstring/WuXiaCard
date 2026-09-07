@@ -100,9 +100,6 @@ bool DuelNativeCompactKernel::conditions_match(
 					&& value.card_original_owners[context.trigger_card_index] == group.source_owner
 				);
 				break;
-			case ConditionOpcode::ATTACKED_CARD_IS_SELF:
-				matched = context.attacked_card_index == group.source_card_index;
-				break;
 			case ConditionOpcode::ATTACKER_CARD_IS_SELF:
 				matched = context.attacker_card_index == group.source_card_index;
 				break;
@@ -130,6 +127,11 @@ bool DuelNativeCompactKernel::conditions_match(
 				break;
 			case ConditionOpcode::ATTACK_FLIPPED_ENEMY:
 				matched = context.attack_flipped_enemy;
+				break;
+			case ConditionOpcode::ATTACK_FLIPPED_ANY_CARD:
+				matched = condition.inverted
+					? !context.attack_flipped_any_card
+					: context.attack_flipped_any_card;
 				break;
 			case ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE: {
 				AttackPolicy policy;
@@ -253,11 +255,14 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 ) const {
 	std::vector<EventGroup> groups;
 	supported = true;
-	auto discover_card = [&](int32_t card_index, int32_t owner_id, int32_t source_cell, int32_t source_zone, int32_t logical_index) -> bool {
+	auto discover_card = [&](int32_t card_index, int32_t owner_id, int32_t source_cell, int32_t source_zone, int32_t logical_index, bool enforce_active_zone = true) -> bool {
 		if (!card_effects_enabled(value, card_index, owner_id)) return true;
 		for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
 			const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-			if (ability == nullptr) continue;
+			if (
+				ability == nullptr
+				|| (enforce_active_zone && !ability_active_in_zone(*ability, source_zone))
+			) continue;
 			for (size_t trigger_index = 0; trigger_index < ability->triggers.size(); ++trigger_index) {
 				const CompiledTriggerRule &rule = ability->triggers[trigger_index];
 				if (rule.event_id != event_id) continue;
@@ -292,7 +297,7 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 			&& zone == 3
 			&& owner_id == context.trigger_owner
 		) {
-			discover_card(context.trigger_card_index, owner_id, -1, 3, logical_index);
+			discover_card(context.trigger_card_index, owner_id, -1, 3, logical_index, false);
 		}
 		return groups;
 	}
@@ -325,6 +330,134 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 		);
 		if (!supported) return groups;
 	}
+	auto physical_hand_indices = [&](int32_t owner_id) {
+		std::vector<int32_t> logical_indices;
+		const std::vector<int32_t> &hand = value.zones[owner_id - 1];
+		logical_indices.reserve(hand.size());
+		for (size_t index = 0; index < hand.size(); ++index) {
+			logical_indices.push_back(static_cast<int32_t>(index));
+		}
+		std::stable_sort(logical_indices.begin(), logical_indices.end(), [&](int32_t first, int32_t second) {
+			const int32_t first_card = hand[first];
+			const int32_t second_card = hand[second];
+			const int32_t first_slot = value.card_hand_slots[first_card] >= 0
+				? value.card_hand_slots[first_card]
+				: first;
+			const int32_t second_slot = value.card_hand_slots[second_card] >= 0
+				? value.card_hand_slots[second_card]
+				: second;
+			return first_slot == second_slot ? first < second : first_slot < second_slot;
+		});
+		return logical_indices;
+	};
+	for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
+		const std::vector<int32_t> &hand = value.zones[owner_id - 1];
+		for (const int32_t logical_index : physical_hand_indices(owner_id)) {
+			discover_card(hand[logical_index], owner_id, -1, 1, logical_index);
+			if (!supported) return groups;
+		}
+	}
+	for (const int32_t zone_kind : {3, 4}) {
+		for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
+			const int32_t zone_index = zone_kind == 3 ? owner_id + 3 : owner_id + 5;
+			for (size_t index = 0; index < value.zones[zone_index].size(); ++index) {
+				discover_card(
+					value.zones[zone_index][index],
+					owner_id,
+					-1,
+					zone_kind,
+					static_cast<int32_t>(index)
+				);
+				if (!supported) return groups;
+			}
+		}
+	}
+	for (size_t recipient_cell = 0; recipient_cell < value.board_card_indices.size(); ++recipient_cell) {
+		const int32_t recipient_card = value.board_card_indices[recipient_cell];
+		if (recipient_card < 0) continue;
+		const int32_t recipient_owner = value.board_owners[recipient_cell];
+		for (int32_t provider_owner = 1; provider_owner <= 2; ++provider_owner) {
+			const std::vector<int32_t> &hand = value.zones[provider_owner - 1];
+			for (const int32_t provider_logical_index : physical_hand_indices(provider_owner)) {
+				const int32_t provider_card = hand[provider_logical_index];
+				if (!card_effects_enabled(value, provider_card, provider_owner)) continue;
+				for (
+					size_t provider_ability_index = 0;
+					provider_ability_index < value.card_runtime_abilities[provider_card].size();
+					++provider_ability_index
+				) {
+					const CompiledAbility *provider_ability = runtime_ability(
+						value,
+						provider_card,
+						static_cast<int32_t>(provider_ability_index)
+					);
+					if (
+						provider_ability == nullptr
+						|| !ability_active_in_zone(*provider_ability, 1)
+					) continue;
+					for (const CompiledAura &aura : provider_ability->auras) {
+						if (
+							aura.ability_pool_index < 0
+							|| aura.ability_pool_index >= static_cast<int32_t>(compiled_ability_pool.size())
+							|| std::find(
+								aura.selector.zones.begin(),
+								aura.selector.zones.end(),
+								SelectorZoneOpcode::BOARD
+							) == aura.selector.zones.end()
+						) continue;
+						ActionContext selector_context;
+						selector_context.ability_source_zone = 1;
+						selector_context.ability_source_logical_index = provider_logical_index;
+						selector_context.ability_source_card_index = provider_card;
+						selector_context.ability_source_owner = provider_owner;
+						selector_context.action_subject_card_index = provider_card;
+						selector_context.action_subject_owner = provider_owner;
+						selector_context.action_subject_zone = 1;
+						selector_context.action_subject_logical_index = provider_logical_index;
+						bool selector_supported = true;
+						if (!selector_conditions_match(
+							value,
+							recipient_card,
+							0,
+							recipient_owner,
+							static_cast<int32_t>(recipient_cell),
+							aura.selector,
+							selector_context,
+							selector_supported
+						)) {
+							if (!selector_supported) {
+								supported = false;
+								reason = "Aura selector uses an unsupported condition";
+								return groups;
+							}
+							continue;
+						}
+						const CompiledAbility &granted = compiled_ability_pool[aura.ability_pool_index];
+						for (size_t trigger_index = 0; trigger_index < granted.triggers.size(); ++trigger_index) {
+							const CompiledTriggerRule &rule = granted.triggers[trigger_index];
+							if (rule.event_id != event_id) continue;
+							EventGroup group;
+							group.source_cell = static_cast<int32_t>(recipient_cell);
+							group.source_zone = 0;
+							group.source_logical_index = static_cast<int32_t>(recipient_cell);
+							group.source_card_index = recipient_card;
+							group.source_owner = recipient_owner;
+							group.trigger_index = static_cast<int32_t>(trigger_index);
+							group.virtual_ability_pool_index = aura.ability_pool_index;
+							bool condition_supported = true;
+							if (conditions_match(value, group, rule, context, condition_supported)) {
+								groups.push_back(group);
+							} else if (!condition_supported) {
+								supported = false;
+								reason = "Aura event uses an unsupported trigger condition";
+								return groups;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 	return groups;
 }
 
@@ -351,15 +484,18 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 	}
 	for (const EventGroup &discovered_group : groups) {
 		EventGroup group = discovered_group;
-		const int32_t current_ability_index = find_runtime_ability_index(
-			value,
-			group.source_card_index,
-			group.ability_handle,
-			group.ability_index
-		);
+		const bool virtual_ability = group.virtual_ability_pool_index >= 0;
+		const int32_t current_ability_index = virtual_ability
+			? -1
+			: find_runtime_ability_index(
+				value,
+				group.source_card_index,
+				group.ability_handle,
+				group.ability_index
+			);
 		bool source_is_current = false;
 		int32_t current_logical_index = group.source_logical_index;
-		if (group.source_zone == 3) {
+		if (group.source_zone != 0) {
 			int32_t current_zone = -1;
 			int32_t current_owner = 0;
 			source_is_current = (
@@ -370,7 +506,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 					current_owner,
 					current_logical_index
 				)
-				&& current_zone == 3
+				&& current_zone == group.source_zone
 				&& current_owner == group.source_owner
 			);
 		} else {
@@ -395,14 +531,12 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		}
 		if (
 			!source_is_current
-			|| !card_effects_enabled(value, group.source_card_index, group.source_owner)
-			|| current_ability_index < 0
+			|| (!virtual_ability && !card_effects_enabled(value, group.source_card_index, group.source_owner))
+			|| (!virtual_ability && current_ability_index < 0)
 		) continue;
-		const CompiledAbility *ability = runtime_ability(
-			value,
-			group.source_card_index,
-			current_ability_index
-		);
+		const CompiledAbility *ability = virtual_ability
+			? &compiled_ability_pool[group.virtual_ability_pool_index]
+			: runtime_ability(value, group.source_card_index, current_ability_index);
 		if (
 			ability == nullptr
 			|| group.trigger_index < 0

@@ -112,6 +112,41 @@ creates `active_abilities`.
 Abilities without `retained_on_flip` normalize to `false`. Add the flag only
 for an unusual ability that survives an ownership flip.
 
+Abilities are board-active by default. To make an ability operate from another
+zone, declare the complete set explicitly:
+
+```gdscript
+"active_zones": [CARD_ZONE_HAND]
+```
+
+Do not assume that scanning a zone makes every old ability active there. The
+native event and modifier paths always check the individual ability's zone
+mask. Hand event sources use physical slot order, not compact hand-array order.
+
+For a derived aura, keep the granted behavior nested under its source:
+
+```gdscript
+"auras": [{
+    "selector": {
+        "zones": [CARD_ZONE_BOARD],
+        "conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+    },
+    "ability": {
+        "modifiers": [{
+            "type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+            "value": 0,
+        }],
+    },
+}]
+```
+
+The nested declaration is never written into a recipient's
+`active_abilities`. Its source's zone, owner, effect gate, and current runtime
+ability determine whether it exists. Event discovery may snapshot a virtual
+trigger for the current event, but execution still revalidates the exact
+recipient and selector conditions. Nested aura abilities currently cannot
+declare their own `active_zones`, `auras`, or activation.
+
 Starting encounter hands are in `scripts/duel_decks.gd`. Each owner's side deck
 is derived from that owner's main deck through `scripts/deck_rules.gd`. A
 non-`江湖` main card contributes every catalog card of the same sect whose tier

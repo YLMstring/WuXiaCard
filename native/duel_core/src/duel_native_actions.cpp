@@ -1632,6 +1632,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 bool DuelNativeCompactKernel::action_conditions_match(
 	const NativeState &value,
 	const std::vector<CompiledCondition> &conditions,
+	const EventContext &event_context,
 	const ActionContext &action_context,
 	const ActionExecutionState &execution_state,
 	bool &supported
@@ -1653,6 +1654,11 @@ bool DuelNativeCompactKernel::action_conditions_match(
 				break;
 			case ConditionOpcode::LAST_DISCARD_BATCH_SIZE_AT_LEAST:
 				matched = execution_state.last_discard_batch_size >= condition.amount;
+				break;
+			case ConditionOpcode::ATTACK_FLIPPED_ANY_CARD:
+				matched = condition.inverted
+					? !event_context.attack_flipped_any_card
+					: event_context.attack_flipped_any_card;
 				break;
 			default:
 				supported = false;
@@ -1780,6 +1786,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			if (!action_conditions_match(
 				value,
 				action.conditions,
+				event_context,
 				action_context,
 				execution_state,
 				conditions_supported
@@ -1799,6 +1806,65 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		}
 		case ActionOpcode::CHANGE_POWERS:
 			return change_powers(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
+		case ActionOpcode::SET_ATTACK_USED_POWERS: {
+			const int32_t target = event_context.attacker_card_index;
+			int32_t zone = -1;
+			int32_t owner = 0;
+			int32_t logical_index = -1;
+			if (
+				target < 0
+				|| event_context.used_attacker_power_directions == 0
+				|| !locate_card(value, target, zone, owner, logical_index)
+				|| zone == 2
+				|| !can_change_powers(value, target)
+			) return ActionOutcome::NO_EFFECT;
+			Array previous_powers;
+			Array resulting_powers;
+			bool changed = false;
+			bool all_zero = true;
+			for (int32_t direction = 0; direction < 4; ++direction) {
+				const int32_t previous = value.card_powers[target * 4 + direction];
+				int32_t resulting = previous;
+				if ((event_context.used_attacker_power_directions & (1 << direction)) != 0) {
+					resulting = action.amount;
+				}
+				previous_powers.append(previous);
+				resulting_powers.append(resulting);
+				value.card_powers[target * 4 + direction] = resulting;
+				changed = changed || resulting != previous;
+				all_zero = all_zero && resulting == 0;
+			}
+			if (!changed) return ActionOutcome::NO_EFFECT;
+			Dictionary event;
+			event["type"] = StringName("powers_changed");
+			event["source_cell"] = action_source_cell;
+			event["target_cell"] = zone == 0 ? logical_index : -1;
+			event["owner_id"] = owner;
+			event["instance_id"] = value.card_instance_ids[target];
+			event["ability_source_instance_id"] = value.card_instance_ids[group.source_card_index];
+			event["previous_powers"] = previous_powers;
+			event["powers"] = resulting_powers;
+			event["amount"] = 0;
+			event["change_reason"] = StringName("set_attack_used_powers");
+			event["zone"] = zone == 0 ? StringName("board") : (zone == 1 ? StringName("hand") : (zone == 3 ? StringName("discard") : StringName("removed")));
+			event["logical_index"] = logical_index;
+			resolution.events.append(event);
+			if (all_zero) {
+				if (!exile_card(
+					value,
+					target,
+					action_source_cell,
+					group.source_card_index,
+					target == group.source_card_index,
+					StringName("power_reached_zero"),
+					event_context,
+					exile_stack,
+					resolution,
+					action_context.record_direct_board_changes
+				)) return ActionOutcome::UNSUPPORTED;
+			}
+			return ActionOutcome::APPLIED;
+		}
 		case ActionOpcode::GAIN_KI:
 		case ActionOpcode::SPEND_KI: {
 			if (action.card_ref_explicit && action.card_ref == CardRefOpcode::LAST_SUMMONED_CARD) {

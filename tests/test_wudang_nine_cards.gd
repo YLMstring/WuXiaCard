@@ -89,7 +89,7 @@ func _test_committed_attack_does_not_compare_powers_twice() -> void:
 	var defender_ability: Dictionary = {
 		"triggers": [{
 			"event": Catalog.CARD_BE_ATTACKED,
-			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
 			"actions": [{
 				"type": Catalog.ACTION_CHANGE_POWERS,
 				"amount": 9,
@@ -157,7 +157,7 @@ func _test_raozhi_commits_without_fallback_and_targeted_attacks_stay_explicit() 
 	var exile_on_attack: Dictionary = {
 		"triggers": [{
 			"event": Catalog.CARD_BE_ATTACKED,
-			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
 			"actions": [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD}],
 		}],
 	}
@@ -194,7 +194,7 @@ func _test_attack_recheck_uses_range_but_not_powers() -> void:
 	var move_on_attack: Dictionary = {
 		"triggers": [{
 			"event": Catalog.CARD_BE_ATTACKED,
-			"conditions": [{"type": Catalog.CONDITION_ATTACKED_CARD_IS_SELF}],
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
 			"actions": [{"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}],
 		}],
 	}

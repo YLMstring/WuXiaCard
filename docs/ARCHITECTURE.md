@@ -103,6 +103,27 @@ reconcile without summon transitions, and replay snapshots it before the first
 action. Difficulty 9 instead doubles the enemy's search deadline; it does not
 modify opening-hand powers.
 
+After the complete initial state is assembled, `DuelInitialStateFactory`
+resolves one native `duel_started` event. This is the only pre-turn global
+event; its resulting state becomes the replay opening snapshot and the first
+rendered frame. It therefore supports opening revelation without a delayed
+animation or a controller-only gameplay branch.
+
+Catalog abilities default to the board zone. `active_zones` can opt an ability
+into hand, discard, or removed-zone event/modifier discovery. Ordinary global
+events discover board sources in cells `0..8`, then both hands in fixed
+physical-slot order, followed by explicitly active discard and removed-zone
+sources. The historical self-`CARD_AFTER_DISCARDED` discovery remains its
+dedicated compatibility boundary.
+
+An ability-owned `auras` declaration selects recipients and exposes a nested
+ability virtually. The source ability remains the only stored runtime state;
+recipients never gain copied ability declarations or search-key fields. Aura
+modifiers are derived on query. Aura event groups are snapshotted during event
+discovery, then revalidate the exact recipient before execution; removing the
+aura source later in the same event does not erase an already discovered
+virtual group.
+
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most
 one applicable pending non-heart suppression layer,
@@ -142,6 +163,11 @@ relocated and flipped in its current cell. Removal, source ownership change,
 or the target already belonging to the intended owner still cancels it.
 Successful flips then emit `CARD_AFTER_FLIPPED`. Non-attack flips use the same
 before/after boundary and target-following behavior.
+The attack context separately records whether the comparison-driven attack
+itself flipped any card and which attacker directions actually won a point
+comparison. Trigger-chain flips do not enter that record. A diagonal attack
+records its vertical and horizontal winning directions independently, so later
+generic actions can modify exactly the powers that established the attack.
 Gate General and Tiger General exile through an ordinary trigger action; there
 is no separate replacement subsystem. The initial attack cue remains even when
 one of those rules prevents the flip.

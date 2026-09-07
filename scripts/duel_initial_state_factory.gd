@@ -5,6 +5,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const OpeningSetup = preload("res://scripts/duel_opening_setup.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
+const NativeRules = preload("res://scripts/duel_native_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 
 
@@ -80,7 +81,16 @@ static func build(config: Dictionary) -> StateData:
 		opponent_cards
 	)
 	state.max_turns = int(config.get("max_turns", state.max_turns))
-	return state
+	var duel_started: Dictionary = NativeRules.resolve_event(
+		state,
+		Catalog.TRIGGER_DUEL_STARTED,
+		{}
+	)
+	assert(
+		bool(duel_started.get("valid", false)),
+		"Failed to resolve duel-start abilities: %s" % String(duel_started.get("reason", ""))
+	)
+	return duel_started.get("state", state) as StateData
 
 
 static func create_card_instances(
