@@ -98,10 +98,6 @@ non-loop state and presentation event exactly.
   resolution. Continue through appearance nineteen; on appearance twenty,
   preserve the current state, clear pending frames, lock `RESOLUTION_LOOP`, and
   score immediately without turn-boundary or before-duel-end triggers.
-- Separately detect a causal frame block nested twenty times while the board
-  ID/owner structure and `turn_count` at each frame creation remain equal. This
-  catches recursive stack growth that can never return to the same full-stack
-  fingerprint; keep the ordinary full-stack detector for fixed-depth cycles.
 - Add positive numeric-growth and fresh-instance loops; verify state changes
   deliberately omitted from the key still accumulate; add different-frame and
   different-`turn_count` negative tests.
