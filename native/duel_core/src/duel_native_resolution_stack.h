@@ -68,7 +68,6 @@ private:
 		WAIT_DISCARD,
 		WAIT_MOVE,
 		WAIT_SWAP,
-		WAIT_RETURN_EXILE,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -247,7 +246,6 @@ private:
 		int64_t ki_resolution_start = 0;
 		int32_t child_target_cell = -1;
 		bool update_source_after_swap = false;
-		int64_t return_previous_event_count = 0;
 	};
 
 	enum class FrameKind : uint8_t {
