@@ -32,11 +32,6 @@ public:
 		const DuelNativeCompactKernel::SummonRequest &request,
 		std::vector<int32_t> &exile_stack
 	);
-	DuelNativeCompactKernel::Resolution run_attack(
-		DuelNativeCompactKernel::NativeState &state,
-		const DuelNativeCompactKernel::AttackRequest &request,
-		std::vector<int32_t> &exile_stack
-	);
 
 private:
 	enum class RootStage : uint8_t {
@@ -80,7 +75,6 @@ private:
 		WAIT_SWAP,
 		WAIT_RETURN_EXILE,
 		WAIT_SUMMON,
-		WAIT_ATTACK,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -130,40 +124,9 @@ private:
 		DuelNativeCompactKernel::EventContext context;
 		DuelNativeCompactKernel::Resolution *resolution = nullptr;
 		bool record_capture_index = false;
-		int32_t required_attacker_owner = 0;
 		std::vector<uint64_t> remove_before_after_flip;
 		std::vector<uint64_t> remove_after_after_flip;
 		bool success = true;
-	};
-
-	enum class AttackStage : uint8_t {
-		START,
-		NEXT_TARGET,
-		WAIT_BE_ATTACKED,
-		WAIT_FLIP,
-		WAIT_AFTER_ATTACK,
-		COMPLETE,
-	};
-
-	struct AttackFrame {
-		AttackStage stage = AttackStage::START;
-		DuelNativeCompactKernel::AttackRequest request;
-		DuelNativeCompactKernel::AttackPolicy attack_policy;
-		std::vector<int32_t> target_cells;
-		size_t target_index = 0;
-		DuelNativeCompactKernel::Resolution resolution;
-		bool attack_started = false;
-		bool attack_flipped_enemy = false;
-		std::vector<DuelNativeCompactKernel::EventContext::AttackFlipRecord> attack_flips;
-		int32_t attacker_cell = -1;
-		int32_t attacked_cell = -1;
-		int32_t attacked_card_index = -1;
-		int32_t attacked_owner = 0;
-		int32_t resolved_capture_owner = 0;
-		int32_t flipped_previous_owner = 0;
-		bool stop_after_current_target = false;
-		int64_t flip_event_start = 0;
-		DuelNativeCompactKernel::EventContext attack_context;
 	};
 
 	enum class DrawStage : uint8_t {
@@ -271,7 +234,6 @@ private:
 		WAIT_SUMMONED,
 		WAIT_AFTER_SUMMONED,
 		RESOLVE_ATTACK,
-		WAIT_ATTACK,
 		COMPLETE,
 	};
 
@@ -322,7 +284,6 @@ private:
 		MOVE,
 		SWAP,
 		SUMMON,
-		ATTACK,
 	};
 
 	struct ResolutionFrame {
@@ -336,7 +297,6 @@ private:
 		MoveFrame move;
 		SwapFrame swap;
 		SummonFrame summon;
-		AttackFrame attack;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -381,8 +341,7 @@ private:
 		int32_t new_owner,
 		const DuelNativeCompactKernel::EventContext &context,
 		DuelNativeCompactKernel::Resolution &resolution,
-		bool record_capture_index,
-		int32_t required_attacker_owner = 0
+		bool record_capture_index
 	);
 	void push_draw_frame(
 		int32_t owner,
@@ -419,7 +378,6 @@ private:
 		DuelNativeCompactKernel::Resolution &resolution
 	);
 	void push_summon_frame(const DuelNativeCompactKernel::SummonRequest &request);
-	void push_attack_frame(const DuelNativeCompactKernel::AttackRequest &request);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -460,10 +418,6 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
-	void step_attack_frame(
-		DuelNativeCompactKernel::NativeState &state,
-		std::vector<int32_t> &exile_stack
-	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -479,7 +433,6 @@ private:
 	void complete_move_frame();
 	void complete_swap_frame();
 	void complete_summon_frame();
-	void complete_attack_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -498,7 +451,6 @@ private:
 	DuelNativeCompactKernel::ActionOutcome completed_swap_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::Resolution completed_summon_resolution;
-	DuelNativeCompactKernel::Resolution completed_attack_resolution;
 };
 
 } // namespace godot::duel_native_internal
