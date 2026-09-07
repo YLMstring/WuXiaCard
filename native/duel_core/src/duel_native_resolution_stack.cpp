@@ -110,25 +110,6 @@ void ResolutionEngine::push_flip_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
-void ResolutionEngine::push_draw_frame(
-	int32_t owner,
-	int32_t source_cell,
-	int32_t amount,
-	const String &weapon_filter,
-	const DuelNativeCompactKernel::EventContext &draw_context,
-	DuelNativeCompactKernel::Resolution &resolution
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::DRAW;
-	frame->draw.owner = owner;
-	frame->draw.source_cell = source_cell;
-	frame->draw.amount = amount;
-	frame->draw.weapon_filter = weapon_filter;
-	frame->draw.draw_context = draw_context;
-	frame->draw.resolution = &resolution;
-	resolution_frames.push_back(std::move(frame));
-}
-
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -140,10 +121,8 @@ void ResolutionEngine::run_resolution_stack(
 			step_action_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::EXILE) {
 			step_exile_frame(state, exile_stack);
-		} else if (resolution_frames.back()->kind == FrameKind::FLIP) {
-			step_flip_frame(state, exile_stack);
 		} else {
-			step_draw_frame(state, exile_stack);
+			step_flip_frame(state, exile_stack);
 		}
 	}
 }
@@ -173,11 +152,6 @@ void ResolutionEngine::complete_exile_frame(std::vector<int32_t> &exile_stack) {
 
 void ResolutionEngine::complete_flip_frame() {
 	completed_flip_success = resolution_frames.back()->flip.success;
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_draw_frame() {
-	completed_draw_success = resolution_frames.back()->draw.success;
 	resolution_frames.pop_back();
 }
 
@@ -298,16 +272,6 @@ void ResolutionEngine::step_action_frame(
 			state,
 			exile_stack,
 			completed_exile_success
-				? DuelNativeCompactKernel::ActionOutcome::APPLIED
-				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-		);
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_DRAW) {
-		finish_action(
-			state,
-			exile_stack,
-			completed_draw_success
 				? DuelNativeCompactKernel::ActionOutcome::APPLIED
 				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
 		);
@@ -466,25 +430,6 @@ void ResolutionEngine::step_action_frame(
 		: frame.resolution->events.size();
 	if (!action.declaration_valid) {
 		finish_action(state, exile_stack, DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED);
-		return;
-	}
-	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::DRAW_CARDS) {
-		DuelNativeCompactKernel::EventContext draw_context = frame.event_context;
-		draw_context.ability_source_cell = frame.action_context.ability_source_cell;
-		draw_context.ability_source_zone = frame.action_context.ability_source_zone;
-		draw_context.ability_source_logical_index =
-			frame.action_context.ability_source_logical_index;
-		draw_context.ability_source_card_index = frame.action_context.ability_source_card_index;
-		draw_context.ability_source_owner = frame.action_context.ability_source_owner;
-		frame.stage = ActionStage::WAIT_DRAW;
-		push_draw_frame(
-			frame.action_context.action_subject_owner,
-			frame.execution_state.current_source_cell,
-			action.amount,
-			action.weapon,
-			draw_context,
-			*frame.resolution
-		);
 		return;
 	}
 	if (
@@ -1146,194 +1091,6 @@ void ResolutionEngine::step_flip_frame(
 	after_context.trigger_logical_index = current_target_cell;
 	frame.stage = FlipStage::WAIT_AFTER;
 	push_event_frame(StringName("card_after_flipped"), after_context);
-}
-
-void ResolutionEngine::step_draw_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	DrawFrame &frame = resolution_frames.back()->draw;
-	if (frame.stage == DrawStage::COMPLETE || frame.resolution == nullptr) {
-		complete_draw_frame();
-		return;
-	}
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	if (frame.stage == DrawStage::START) {
-		if (frame.owner != 1 && frame.owner != 2) {
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		const Dictionary audiences_by_owner = state.side_payload.get(
-			"future_draw_reveal_audiences",
-			Dictionary()
-		);
-		const Variant audiences_value = audiences_by_owner.get(frame.owner, Array());
-		if (audiences_value.get_type() != Variant::ARRAY) {
-			resolution.reason = "Future-draw reveal audiences are not an Array";
-			frame.success = false;
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		frame.reveal_audiences = audiences_value;
-		frame.stage = DrawStage::NEXT_CARD;
-		return;
-	}
-	if (frame.stage == DrawStage::WAIT_AFTER_DRAWN) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.success = false;
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(resolution, completed_event_resolution);
-		frame.stage = DrawStage::NEXT_CARD;
-		return;
-	}
-
-	std::vector<int32_t> &hand = state.zones[frame.owner - 1];
-	std::vector<int32_t> &deck = state.zones[frame.owner + 1];
-	if (frame.draw_index >= frame.amount || hand.size() >= 5) {
-		frame.stage = DrawStage::COMPLETE;
-		return;
-	}
-	int32_t card_index = -1;
-	if (!frame.weapon_filter.is_empty()) {
-		const auto matching = std::find_if(
-			deck.begin(),
-			deck.end(),
-			[&](const int32_t candidate) {
-				if (
-					candidate < 0
-					|| candidate >= static_cast<int32_t>(state.card_template_indices.size())
-				) return false;
-				const int32_t template_index = state.card_template_indices[candidate];
-				if (
-					template_index < 0
-					|| template_index >= state.card_template_pool.size()
-				) return false;
-				const Variant template_value = state.card_template_pool[template_index];
-				if (template_value.get_type() != Variant::DICTIONARY) return false;
-				return String(Dictionary(template_value).get("weapon", String()))
-					== frame.weapon_filter;
-			}
-		);
-		if (matching == deck.end()) {
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		card_index = *matching;
-		deck.erase(matching);
-	} else if (!deck.empty()) {
-		card_index = deck.front();
-		deck.erase(deck.begin());
-	} else {
-		if (
-			state.empty_deck_draw_prototype_index < 0
-			|| state.empty_deck_draw_prototype_index
-				>= static_cast<int32_t>(state.fresh_card_prototypes.size())
-		) {
-			resolution.reason = "Draw has no generated empty-deck fallback prototype";
-			frame.success = false;
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		const StringName fallback_id = state.fresh_card_prototypes[
-			state.empty_deck_draw_prototype_index
-		].card_id;
-		String append_reason;
-		card_index = kernel.append_fresh_board_card(
-			state,
-			fallback_id,
-			kernel.make_generated_instance_id(state, fallback_id),
-			frame.owner,
-			append_reason
-		);
-		if (card_index < 0) {
-			resolution.reason = append_reason;
-			frame.success = false;
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-	}
-	const int32_t slot = kernel.leftmost_empty_hand_slot(state, frame.owner);
-	if (slot < 0) {
-		frame.stage = DrawStage::COMPLETE;
-		return;
-	}
-	const int32_t previous_hand_size = static_cast<int32_t>(hand.size());
-	state.card_runtime_flags[card_index] |= static_cast<uint8_t>(1 << 7);
-	state.card_hand_slots[card_index] = slot;
-	hand.push_back(card_index);
-	const int32_t logical_hand_index = static_cast<int32_t>(hand.size()) - 1;
-	Dictionary event;
-	event["type"] = StringName("card_drawn");
-	event["source_cell"] = frame.source_cell;
-	event["owner_id"] = frame.owner;
-	event["card_id"] = state.card_ids[card_index];
-	event["instance_id"] = state.card_instance_ids[card_index];
-	event["logical_hand_index"] = logical_hand_index;
-	event["hand_slot_index"] = slot;
-	if (kernel.include_presentation_payloads) {
-		event["card"] = kernel.restore_runtime_card(state, card_index);
-	}
-	resolution.events.append(event);
-	for (int64_t audience_index = 0; audience_index < frame.reveal_audiences.size(); ++audience_index) {
-		const Variant observer_value = frame.reveal_audiences[audience_index];
-		if (observer_value.get_type() != Variant::INT) {
-			resolution.reason = "Future-draw reveal audience is not an owner integer";
-			frame.success = false;
-			frame.stage = DrawStage::COMPLETE;
-			return;
-		}
-		const int32_t observer_owner = static_cast<int32_t>(
-			static_cast<int64_t>(observer_value)
-		);
-		if (observer_owner != 1 && observer_owner != 2) continue;
-		uint8_t &reveal_code = state.card_reveal_codes[card_index];
-		const bool already_revealed = (
-			(observer_owner == 1 && (reveal_code == 1 || reveal_code == 3 || reveal_code == 4))
-			|| (observer_owner == 2 && (reveal_code == 2 || reveal_code == 3 || reveal_code == 4))
-		);
-		if (already_revealed) continue;
-		if (observer_owner == 1) reveal_code = reveal_code == 2 ? 4 : 1;
-		else reveal_code = reveal_code == 1 ? 3 : 2;
-		Dictionary revealed;
-		revealed["type"] = StringName("card_revealed");
-		revealed["source_cell"] = frame.source_cell;
-		revealed["owner_id"] = frame.owner;
-		revealed["observer_owner_id"] = observer_owner;
-		revealed["card_id"] = state.card_ids[card_index];
-		revealed["instance_id"] = state.card_instance_ids[card_index];
-		revealed["logical_hand_index"] = logical_hand_index;
-		resolution.events.append(revealed);
-	}
-
-	DuelNativeCompactKernel::Resolution hand_change = kernel.resolve_difficulty_hand_change(
-		state,
-		frame.owner,
-		previous_hand_size,
-		static_cast<int32_t>(hand.size()),
-		frame.source_cell,
-		exile_stack
-	);
-	if (!hand_change.supported) {
-		resolution.reason = hand_change.reason;
-		frame.success = false;
-		frame.stage = DrawStage::COMPLETE;
-		return;
-	}
-	kernel.append_resolution(resolution, hand_change);
-	DuelNativeCompactKernel::EventContext after_draw_context = frame.draw_context;
-	after_draw_context.trigger_cell = -1;
-	after_draw_context.trigger_card_index = card_index;
-	after_draw_context.trigger_owner = frame.owner;
-	after_draw_context.trigger_previous_owner = frame.owner;
-	after_draw_context.trigger_zone = 1;
-	after_draw_context.trigger_logical_index = logical_hand_index;
-	after_draw_context.trigger_was_on_board = false;
-	++frame.draw_index;
-	frame.stage = DrawStage::WAIT_AFTER_DRAWN;
-	push_event_frame(StringName("card_after_drawn"), after_draw_context);
 }
 
 bool ResolutionEngine::run_transition(
