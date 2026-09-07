@@ -5028,7 +5028,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "需自宫。被攻击时，移回手牌。锁定：防御者的点数视为其最小一侧的点数。我攻击后，获得以下效果：敌方攻击时不分敌我。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
-		"powers": [6, 4, 6, 4],
+		"powers": [6, 5, 6, 5],
 		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
 		"abilities": [
 			KUIHUA_RETURN_TO_HAND,
@@ -5046,7 +5046,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "需自宫。被攻击时，移回手牌。进场后，若只有一个相邻敌方，与其交换位置。我攻击后，若本次攻击中有敌方被翻面，我重新进场。",
 		"flavor": "林家七十二路辟邪剑法中的招式，看似平平无奇，中间却藏有许多旁人猜测不透的奥妙，突然之间会变得迅速无比，如鬼似魅，令人难防。",
-		"powers": [4, 6, 4, 6],
+		"powers": [5, 6, 5, 6],
 		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
 		"abilities": [
 			KUIHUA_RETURN_TO_HAND,
