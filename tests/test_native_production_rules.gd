@@ -122,11 +122,32 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 	})
 	actions.append({"type": Catalog.ACTION_GAIN_KI, "amount": 1})
+	actions.append({"type": Catalog.ACTION_EXILE_SELF})
 	after_summoned["actions"] = actions
 	triggers[0] = after_summoned
 	trigger["triggers"] = triggers
 	active_abilities[0] = trigger
+	active_abilities.append({
+		"triggers": [{
+			"event": Catalog.CARD_BEFORE_EXILED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	})
 	source["active_abilities"] = active_abilities
+	var exile_watcher: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_event_exile_watcher"
+	)
+	exile_watcher["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_EXILED,
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	board[0] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": exile_watcher,
+	}
 	board[4] = {
 		"owner": Rules.PLAYER_OWNER,
 		"card": source,
