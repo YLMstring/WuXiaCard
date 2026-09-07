@@ -18,94 +18,39 @@ DuelNativeCompactKernel::ActionOutcome ResolutionEngine::run_actions(
 	DuelNativeCompactKernel::Resolution &resolution,
 	bool defer_power_change_batch
 ) {
-	resolution_frames.clear();
-	push_action_frame(
-		group,
-		actions,
-		event_context,
-		action_context,
-		std::move(execution_state),
-		resolution,
-		defer_power_change_batch
-	);
-	run_resolution_stack(state, exile_stack);
-	return completed_action_outcome;
-}
+	action_frames.clear();
+	ActionSequenceFrame root;
+	root.actions = &actions;
+	root.group = group;
+	root.event_context = event_context;
+	root.action_context = action_context;
+	root.execution_state = std::move(execution_state);
+	root.defer_power_change_batch = defer_power_change_batch;
+	action_frames.push_back(std::move(root));
 
-void ResolutionEngine::push_event_frame(
-	const StringName &event_id,
-	const DuelNativeCompactKernel::EventContext &context
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::EVENT;
-	frame->event.event_id = event_id;
-	frame->event.context = context;
-	resolution_frames.push_back(std::move(frame));
-}
-
-void ResolutionEngine::push_action_frame(
-	const DuelNativeCompactKernel::EventGroup &group,
-	const std::vector<DuelNativeCompactKernel::CompiledAction> &actions,
-	const DuelNativeCompactKernel::EventContext &event_context,
-	const DuelNativeCompactKernel::ActionContext &action_context,
-	DuelNativeCompactKernel::ActionExecutionState execution_state,
-	DuelNativeCompactKernel::Resolution &resolution,
-	bool defer_power_change_batch
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::ACTION_SEQUENCE;
-	frame->actions.actions = &actions;
-	frame->actions.group = group;
-	frame->actions.event_context = event_context;
-	frame->actions.action_context = action_context;
-	frame->actions.execution_state = std::move(execution_state);
-	frame->actions.resolution = &resolution;
-	frame->actions.defer_power_change_batch = defer_power_change_batch;
-	resolution_frames.push_back(std::move(frame));
-}
-
-void ResolutionEngine::run_resolution_stack(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	while (!resolution_frames.empty()) {
-		if (resolution_frames.back()->kind == FrameKind::EVENT) {
-			step_event_frame(state, exile_stack);
-		} else {
-			step_action_frame(state, exile_stack);
+	while (!action_frames.empty()) {
+		ActionSequenceFrame &frame = action_frames.back();
+		if (frame.actions == nullptr || frame.action_index >= frame.actions->size()) {
+			const DuelNativeCompactKernel::ActionOutcome result = frame.aggregate;
+			action_frames.pop_back();
+			return result;
 		}
-	}
-}
-
-void ResolutionEngine::complete_action_frame() {
-	ActionSequenceFrame &frame = resolution_frames.back()->actions;
-	completed_action_outcome = frame.aggregate;
-	completed_action_execution_state = std::move(frame.execution_state);
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_event_frame() {
-	completed_event_resolution = std::move(resolution_frames.back()->event.resolution);
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::finish_action(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack,
-	DuelNativeCompactKernel::ActionOutcome outcome
-) {
-	ActionSequenceFrame &frame = resolution_frames.back()->actions;
-	if (frame.actions == nullptr || frame.resolution == nullptr) {
-		frame.aggregate = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-		frame.stage = ActionStage::COMPLETE;
-		return;
-	}
-	const DuelNativeCompactKernel::CompiledAction &action =
-		(*frame.actions)[frame.active_action_index];
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	const int64_t direct_event_end = resolution.events.size();
+		const size_t action_index = frame.action_index++;
+		const DuelNativeCompactKernel::CompiledAction &action = (*frame.actions)[action_index];
+		const int64_t first_event_index = resolution.events.size();
+		const DuelNativeCompactKernel::ActionOutcome outcome = kernel.execute_action(
+			state,
+			frame.group,
+			action,
+			frame.event_context,
+			frame.action_context,
+			frame.execution_state,
+			exile_stack,
+			resolution
+		);
+		const int64_t direct_event_end = resolution.events.size();
 		if (
-			direct_event_end > frame.first_event_index
+			direct_event_end > first_event_index
 			&& (
 				action.opcode == DuelNativeCompactKernel::ActionOpcode::ATTACK_TRIGGER_CARD
 				|| action.opcode == DuelNativeCompactKernel::ActionOpcode::STANDARD_ATTACK_WITH_SELF
@@ -116,12 +61,12 @@ void ResolutionEngine::finish_action(
 			)
 		) {
 			resolution.protected_power_batch_ranges.push_back({
-				frame.first_event_index,
+				first_event_index,
 				direct_event_end,
 			});
 		}
 		for (
-			int64_t event_index = frame.first_event_index;
+			int64_t event_index = first_event_index;
 			action.opcode != DuelNativeCompactKernel::ActionOpcode::DISTRIBUTE_KI
 				&& event_index < direct_event_end;
 			++event_index
@@ -160,9 +105,8 @@ void ResolutionEngine::finish_action(
 			);
 			if (!ki_resolution.supported) {
 				resolution.reason = ki_resolution.reason;
-				frame.aggregate = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-				frame.stage = ActionStage::COMPLETE;
-				return;
+				action_frames.clear();
+				return DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
 			}
 			const int64_t ki_resolution_start = resolution.events.size();
 			kernel.append_resolution(resolution, ki_resolution);
@@ -178,11 +122,11 @@ void ResolutionEngine::finish_action(
 			kernel.assign_power_change_batch(
 				state,
 				resolution,
-				frame.first_event_index,
+				first_event_index,
 				frame.group,
 				action,
 				frame.action_context,
-				static_cast<int32_t>(frame.active_action_index)
+				static_cast<int32_t>(action_index)
 			);
 		}
 		if (outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
@@ -191,190 +135,25 @@ void ResolutionEngine::finish_action(
 					+ String::num_int64(static_cast<int64_t>(action.opcode))
 					+ String(" type=") + String(action.declaration_type);
 			}
-			frame.aggregate = outcome;
-			frame.stage = ActionStage::COMPLETE;
-			return;
+			action_frames.clear();
+			return outcome;
 		}
 		if (outcome == DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT) {
-			frame.aggregate = outcome;
-			frame.stage = ActionStage::COMPLETE;
-			return;
+			action_frames.clear();
+			return outcome;
 		}
 		if (
 			outcome == DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
 			&& action.stop_rule_on_invalid_context
 		) {
-			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT;
-			frame.stage = ActionStage::COMPLETE;
-			return;
+			action_frames.clear();
+			return DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT;
 		}
 		if (outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
 			frame.aggregate = DuelNativeCompactKernel::ActionOutcome::APPLIED;
 		}
-	frame.stage = ActionStage::NEXT_ACTION;
-}
-
-void ResolutionEngine::step_action_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	ActionSequenceFrame &frame = resolution_frames.back()->actions;
-	if (frame.stage == ActionStage::COMPLETE || frame.actions == nullptr) {
-		complete_action_frame();
-		return;
 	}
-
-	if (frame.stage == ActionStage::WAIT_IF_ACTIONS) {
-		frame.execution_state = std::move(completed_action_execution_state);
-		finish_action(state, exile_stack, completed_action_outcome);
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_SELECTED_CARD_ACTIONS) {
-		if (
-			completed_action_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-			|| completed_action_outcome == DuelNativeCompactKernel::ActionOutcome::INVALID_CONTEXT
-		) {
-			finish_action(state, exile_stack, completed_action_outcome);
-			return;
-		}
-		if (completed_action_outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
-			frame.selected_aggregate = DuelNativeCompactKernel::ActionOutcome::APPLIED;
-		}
-		frame.stage = ActionStage::NEXT_SELECTED_CARD;
-		return;
-	}
-	if (frame.stage == ActionStage::NEXT_SELECTED_CARD) {
-		const DuelNativeCompactKernel::CompiledAction &action =
-			(*frame.actions)[frame.active_action_index];
-		while (frame.selected_card_index < frame.selected_cards.size()) {
-			const int32_t selected_card = frame.selected_cards[frame.selected_card_index++];
-			int32_t zone = -1;
-			int32_t owner = 0;
-			int32_t logical_index = -1;
-			if (!kernel.locate_card(state, selected_card, zone, owner, logical_index) || zone == 2) {
-				continue;
-			}
-			bool condition_supported = true;
-			if (!kernel.selector_conditions_match(
-				state,
-				selected_card,
-				zone,
-				owner,
-				logical_index,
-				action.selector,
-				frame.action_context,
-				condition_supported
-			)) {
-				if (!condition_supported) {
-					finish_action(
-						state,
-						exile_stack,
-						DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-					);
-					return;
-				}
-				continue;
-			}
-			DuelNativeCompactKernel::ActionContext nested_context = frame.action_context;
-			nested_context.action_subject_card_index = selected_card;
-			nested_context.action_subject_owner = owner;
-			nested_context.action_subject_zone = zone;
-			nested_context.action_subject_logical_index = logical_index;
-			nested_context.selected_card_index = selected_card;
-			nested_context.selected_card_owner = owner;
-			nested_context.selected_card_zone = zone;
-			nested_context.selected_card_logical_index = logical_index;
-			DuelNativeCompactKernel::ActionExecutionState nested_execution_state =
-				frame.execution_state;
-			nested_execution_state.current_source_cell = zone == 0 ? logical_index : -1;
-			frame.stage = ActionStage::WAIT_SELECTED_CARD_ACTIONS;
-			push_action_frame(
-				frame.group,
-				action.child_actions,
-				frame.event_context,
-				nested_context,
-				std::move(nested_execution_state),
-				*frame.resolution,
-				true
-			);
-			return;
-		}
-		finish_action(state, exile_stack, frame.selected_aggregate);
-		return;
-	}
-	if (frame.action_index >= frame.actions->size()) {
-		complete_action_frame();
-		return;
-	}
-
-	frame.active_action_index = frame.action_index++;
-	const DuelNativeCompactKernel::CompiledAction &action =
-		(*frame.actions)[frame.active_action_index];
-	frame.first_event_index = frame.resolution == nullptr
-		? 0
-		: frame.resolution->events.size();
-	if (!action.declaration_valid) {
-		finish_action(state, exile_stack, DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED);
-		return;
-	}
-	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::IF) {
-		bool conditions_supported = true;
-		if (!kernel.action_conditions_match(
-			state,
-			action.conditions,
-			frame.action_context,
-			frame.execution_state,
-			conditions_supported
-		)) {
-			finish_action(
-				state,
-				exile_stack,
-				conditions_supported
-					? DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-					: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-			);
-			return;
-		}
-		frame.stage = ActionStage::WAIT_IF_ACTIONS;
-		push_action_frame(
-			frame.group,
-			action.child_actions,
-			frame.event_context,
-			frame.action_context,
-			frame.execution_state,
-			*frame.resolution,
-			false
-		);
-		return;
-	}
-	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::FOR_EACH_SELECTED_CARD) {
-		bool selection_supported = true;
-		frame.selected_cards = kernel.snapshot_selected_cards(
-			state,
-			action.selector,
-			frame.action_context,
-			selection_supported
-		);
-		frame.selected_card_index = 0;
-		frame.selected_aggregate = DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-		if (!selection_supported) {
-			finish_action(state, exile_stack, DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED);
-			return;
-		}
-		frame.stage = ActionStage::NEXT_SELECTED_CARD;
-		return;
-	}
-	const DuelNativeCompactKernel::ActionOutcome outcome = kernel.execute_action(
-		state,
-		frame.group,
-		action,
-		frame.event_context,
-		frame.action_context,
-		frame.execution_state,
-		exile_stack,
-		*frame.resolution
-	);
-	finish_action(state, exile_stack, outcome);
+	return DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 }
 
 bool ResolutionEngine::run_transition(
@@ -422,54 +201,40 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_event(
 	const DuelNativeCompactKernel::EventContext &context,
 	std::vector<int32_t> &exile_stack
 ) {
-	resolution_frames.clear();
-	push_event_frame(event_id, context);
-	run_resolution_stack(state, exile_stack);
-	return std::move(completed_event_resolution);
-}
+	event_frames.clear();
+	EventFrame root;
+	root.event_id = event_id;
+	root.context = context;
+	event_frames.push_back(std::move(root));
 
-void ResolutionEngine::step_event_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	EventFrame &frame = resolution_frames.back()->event;
-	if (frame.stage == EventStage::DISCOVER) {
-		bool discovery_supported = true;
-		String discovery_reason;
-		frame.groups = kernel.discover_event(
-			state,
-			frame.event_id,
-			frame.context,
-			discovery_supported,
-			discovery_reason
-		);
-		if (!discovery_supported) {
-			frame.resolution.supported = false;
-			frame.resolution.reason = discovery_reason;
-			frame.stage = EventStage::COMPLETE;
-			return;
-		}
-		frame.stage = EventStage::NEXT_GROUP;
-		return;
-	}
-	if (frame.stage == EventStage::WAIT_ACTIONS) {
-		if (completed_action_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
-			frame.resolution.supported = false;
-			if (frame.resolution.reason.is_empty()) {
-				frame.resolution.reason = "Relevant event uses an unsupported action";
+	while (!event_frames.empty()) {
+		EventFrame &frame = event_frames.back();
+		if (frame.stage == EventStage::DISCOVER) {
+			bool discovery_supported = true;
+			String discovery_reason;
+			frame.groups = kernel.discover_event(
+				state,
+				frame.event_id,
+				frame.context,
+				discovery_supported,
+				discovery_reason
+			);
+			if (!discovery_supported) {
+				frame.resolution.supported = false;
+				frame.resolution.reason = discovery_reason;
+				frame.stage = EventStage::COMPLETE;
+				continue;
 			}
-			frame.stage = EventStage::COMPLETE;
-		} else {
 			frame.stage = EventStage::NEXT_GROUP;
+			continue;
 		}
-		return;
-	}
-	if (frame.stage == EventStage::COMPLETE || frame.group_index >= frame.groups.size()) {
-		complete_event_frame();
-		return;
-	}
+		if (frame.stage == EventStage::COMPLETE || frame.group_index >= frame.groups.size()) {
+			DuelNativeCompactKernel::Resolution result = std::move(frame.resolution);
+			event_frames.pop_back();
+			return result;
+		}
 
-	DuelNativeCompactKernel::EventGroup group = frame.groups[frame.group_index++];
+		DuelNativeCompactKernel::EventGroup group = frame.groups[frame.group_index++];
 		const int32_t current_ability_index = kernel.find_runtime_ability_index(
 			state,
 			group.source_card_index,
@@ -521,7 +286,7 @@ void ResolutionEngine::step_event_frame(
 				group.source_owner
 			)
 			|| current_ability_index < 0
-		) return;
+		) continue;
 		const DuelNativeCompactKernel::CompiledAbility *ability = kernel.runtime_ability(
 			state,
 			group.source_card_index,
@@ -531,7 +296,7 @@ void ResolutionEngine::step_event_frame(
 			ability == nullptr
 			|| group.trigger_index < 0
 			|| group.trigger_index >= static_cast<int32_t>(ability->triggers.size())
-		) return;
+		) continue;
 		const DuelNativeCompactKernel::CompiledTriggerRule &rule =
 			ability->triggers[group.trigger_index];
 		bool condition_supported = true;
@@ -548,7 +313,7 @@ void ResolutionEngine::step_event_frame(
 					"Relevant event uses an unsupported trigger condition";
 				frame.stage = EventStage::COMPLETE;
 			}
-			return;
+			continue;
 		}
 
 		Dictionary triggered;
@@ -587,17 +352,25 @@ void ResolutionEngine::step_event_frame(
 		action_context.attack_flips = frame.context.attack_flips;
 		DuelNativeCompactKernel::ActionExecutionState execution_state;
 		execution_state.current_source_cell = group.source_cell;
-		frame.stage = EventStage::WAIT_ACTIONS;
-		push_action_frame(
+		const DuelNativeCompactKernel::ActionOutcome outcome = run_actions(
+			state,
 			group,
 			rule.actions,
 			frame.context,
 			action_context,
 			std::move(execution_state),
-			frame.resolution,
-			false
+			exile_stack,
+			frame.resolution
 		);
-		return;
+		if (outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
+			frame.resolution.supported = false;
+			if (frame.resolution.reason.is_empty()) {
+				frame.resolution.reason = "Relevant event uses an unsupported action";
+			}
+			frame.stage = EventStage::COMPLETE;
+		}
+	}
+	return DuelNativeCompactKernel::Resolution();
 }
 
 } // namespace godot::duel_native_internal

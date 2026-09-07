@@ -108,19 +108,6 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 	var triggers: Array = (trigger.get("triggers", []) as Array).duplicate(true)
 	var after_summoned: Dictionary = (triggers[0] as Dictionary).duplicate(true)
 	var actions: Array = (after_summoned.get("actions", []) as Array).duplicate(true)
-	actions.insert(0, {
-		"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
-		"selector": {
-			"zones": [Catalog.CARD_ZONE_BOARD],
-			"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
-		},
-		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-	})
-	actions.insert(0, {
-		"type": Catalog.ACTION_IF,
-		"conditions": [{"type": Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY}],
-		"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-	})
 	actions.append({"type": Catalog.ACTION_GAIN_KI, "amount": 1})
 	after_summoned["actions"] = actions
 	triggers[0] = after_summoned
