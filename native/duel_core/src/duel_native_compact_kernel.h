@@ -969,6 +969,19 @@ private:
 		bool &supported,
 		String &reason
 	) const;
+	bool prepare_activate_transition(
+		const NativeState &source,
+		const NativeAction &action,
+		NativeState &next,
+		Resolution &resolution,
+		bool &supported,
+		String &reason,
+		EventGroup &group,
+		ActionContext &action_context,
+		EventContext &activation_context,
+		const CompiledActivation *&activation,
+		int32_t &moving_owner
+	) const;
 	int32_t evaluate_baseline(
 		const NativeState &value,
 		int32_t root_owner,

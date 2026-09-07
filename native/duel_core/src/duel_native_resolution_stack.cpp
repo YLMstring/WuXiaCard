@@ -3639,20 +3639,118 @@ bool ResolutionEngine::run_transition(
 		switch (frame.stage) {
 			case RootStage::START: {
 				frame.stage = RootStage::COMPLETE;
+				const bool previous_payload_setting = kernel.include_presentation_payloads;
+				kernel.include_presentation_payloads = frame.materialize_presentation_payloads;
 				if (frame.action.type != DuelNativeCompactKernel::NativeActionType::PLAY) {
-					valid = kernel.transition_action(
+					DuelNativeCompactKernel::EventGroup group;
+					DuelNativeCompactKernel::ActionContext action_context;
+					DuelNativeCompactKernel::EventContext activation_context;
+					const DuelNativeCompactKernel::CompiledActivation *activation = nullptr;
+					int32_t moving_owner = 0;
+					valid = kernel.prepare_activate_transition(
 						source,
 						frame.action,
 						next,
 						resolution,
 						supported,
 						reason,
-						frame.materialize_presentation_payloads
+						group,
+						action_context,
+						activation_context,
+						activation,
+						moving_owner
 					);
+					std::vector<int32_t> exile_stack;
+					if (valid) {
+						DuelNativeCompactKernel::ActionExecutionState cost_state;
+						cost_state.current_source_cell = group.source_cell;
+						const DuelNativeCompactKernel::ActionOutcome cost_outcome = run_actions(
+							next,
+							group,
+							activation->costs,
+							activation_context,
+							action_context,
+							std::move(cost_state),
+							exile_stack,
+							resolution
+						);
+						if (cost_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
+							supported = false;
+							reason = resolution.reason.is_empty()
+								? String("Activation cost reached unsupported native behavior")
+								: resolution.reason;
+							valid = false;
+						}
+					}
+					if (valid) {
+						DuelNativeCompactKernel::ActionExecutionState body_state;
+						body_state.current_source_cell = group.source_cell;
+						const DuelNativeCompactKernel::ActionOutcome action_outcome = run_actions(
+							next,
+							group,
+							activation->actions,
+							activation_context,
+							action_context,
+							std::move(body_state),
+							exile_stack,
+							resolution
+						);
+						if (action_outcome == DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED) {
+							supported = false;
+							reason = resolution.reason.is_empty()
+								? String("Activation action reached unsupported native behavior")
+								: resolution.reason;
+							valid = false;
+						}
+					}
+					if (valid) {
+						DuelNativeCompactKernel::EventContext after_context;
+						after_context.activation_owner = moving_owner;
+						after_context.activation_source_cell = kernel.find_board_card(
+							next,
+							action_context.ability_source_card_index,
+							action_context.ability_source_cell
+						);
+						after_context.activation_source_card_index =
+							action_context.ability_source_card_index;
+						after_context.activation_target_kind =
+							action_context.activation_target_kind;
+						after_context.activation_target_index =
+							action_context.activation_target_index;
+						DuelNativeCompactKernel::Resolution after_activation = run_event(
+							next,
+							StringName("card_after_targeted_activation"),
+							after_context,
+							exile_stack
+						);
+						if (!after_activation.supported) {
+							supported = false;
+							reason = after_activation.reason;
+							valid = false;
+						} else {
+							kernel.append_resolution(resolution, after_activation);
+						}
+					}
+					if (valid) {
+						DuelNativeCompactKernel::Resolution finish_resolution =
+							kernel.finish_action(
+								next,
+								moving_owner,
+								-1,
+								resolution.extra_play_requests,
+								exile_stack
+							);
+						if (!finish_resolution.supported) {
+							supported = false;
+							reason = finish_resolution.reason;
+							valid = false;
+						} else {
+							kernel.append_resolution(resolution, finish_resolution);
+						}
+					}
+					kernel.include_presentation_payloads = previous_payload_setting;
 					break;
 				}
-				const bool previous_payload_setting = kernel.include_presentation_payloads;
-				kernel.include_presentation_payloads = frame.materialize_presentation_payloads;
 				DuelNativeCompactKernel::SummonRequest summon_request;
 				int32_t moving_owner = 0;
 				int32_t played_card_index = -1;
