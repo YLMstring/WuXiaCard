@@ -30,6 +30,9 @@ func _run() -> void:
 	_test_iterative_attack_lifecycle_matches_recursive()
 	_test_iterative_attack_actions_match_recursive()
 	_test_iterative_distribute_ki_matches_recursive()
+	_test_iterative_horizontal_resolution_loop_stops_on_twentieth_occurrence()
+	_test_iterative_recursive_growth_loop_stops_on_twentieth_nesting()
+	_test_resolution_loop_key_uses_turn_count_but_ignores_numeric_card_state()
 	_test_iterative_transfer_resource_matches_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
 	_test_iterative_zero_power_exile_matches_recursive()
@@ -681,6 +684,200 @@ func _test_iterative_distribute_ki_matches_recursive() -> void:
 	_check(
 		iterative == recursive,
 		"Explicit ki-distribution frame preserves recipient order and immediate ki reactions"
+	)
+
+
+func _test_iterative_horizontal_resolution_loop_stops_on_twentieth_occurrence() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"horizontal_loop_source"
+	)
+	source["ki"] = 1
+	source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_DISTRIBUTE_KI,
+				"from": Catalog.CARD_REF_ABILITY_SOURCE,
+				"amount": 1,
+				"selector": {
+					"zones": [Catalog.CARD_ZONE_BOARD],
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+				},
+			}],
+		}],
+	}]
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	state.turn_count = 7
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Horizontal-loop fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Horizontal-loop fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Horizontal-loop fixture loads into the native kernel"
+	)
+	var result: Dictionary = kernel.call(
+		"resolve_event_iterative_for_test",
+		Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		{
+			"trigger_cell": 4,
+			"trigger_instance_id": &"horizontal_loop_source",
+			"trigger_owner_id": Rules.PLAYER_OWNER,
+			"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+			"trigger_zone": &"board",
+			"trigger_logical_index": 4,
+			"trigger_was_on_board": true,
+		}
+	) as Dictionary
+	var next_compact := CompactState.from_variant_payload(
+		result.get("payload", {}) as Dictionary
+	)
+	var next_state: State = next_compact.restore() if next_compact != null else null
+	_check(bool(result.get("supported", false)), "Horizontal loop remains a supported rule result")
+	_check(
+		next_state != null and next_state.terminal_reason == State.TERMINAL_REASON_RESOLUTION_LOOP,
+		"Same full stack, turn count, and board structure terminates as a resolution loop"
+	)
+	_check(
+		next_state != null and next_state.turn_count == 7,
+		"Resolution-loop termination preserves the matching turn count"
+	)
+	var ki_changes: int = 0
+	for event_value: Variant in result.get("events", []) as Array:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == &"ki_changed"
+		):
+			ki_changes += 1
+	_check(
+		ki_changes >= 30,
+		"Horizontal loop preserves late-cycle events before termination (count=%d)" % ki_changes
+	)
+
+
+func _test_iterative_recursive_growth_loop_stops_on_twentieth_nesting() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"recursive_growth_loop_source"
+	)
+	source["ki"] = 1
+	source["active_abilities"] = [{
+		"triggers": [{
+			"event": Catalog.CARD_KI_CHANGED,
+			"conditions": [{"type": Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}]
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	state.turn_count = 11
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Recursive-growth fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Recursive-growth fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Recursive-growth fixture loads into the native kernel"
+	)
+	var result: Dictionary = kernel.call(
+		"resolve_event_iterative_for_test",
+		Catalog.CARD_KI_CHANGED,
+		{
+			"trigger_cell": 4,
+			"trigger_instance_id": &"recursive_growth_loop_source",
+			"trigger_owner_id": Rules.PLAYER_OWNER,
+			"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+			"trigger_zone": &"board",
+			"trigger_logical_index": 4,
+			"trigger_was_on_board": true,
+			"previous_ki": 0,
+			"ki": 1,
+		}
+	) as Dictionary
+	var next_compact := CompactState.from_variant_payload(
+		result.get("payload", {}) as Dictionary
+	)
+	var next_state: State = next_compact.restore() if next_compact != null else null
+	_check(bool(result.get("supported", false)), "Recursive growth remains a supported rule result")
+	_check(
+		next_state != null and next_state.terminal_reason == State.TERMINAL_REASON_RESOLUTION_LOOP,
+		"Twenty repeated causal frame blocks terminate recursive stack growth"
+	)
+	_check(
+		next_state != null and int((next_state.board[4] as Dictionary).card.ki) >= 20,
+		"Recursive growth preserves the numeric state reached at loop termination"
+	)
+
+
+func _test_resolution_loop_key_uses_turn_count_but_ignores_numeric_card_state() -> void:
+	var board: Array = Rules.empty_board()
+	var source: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"loop_key_source"
+	)
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+	var baseline := State.new(board, [], [], Rules.PLAYER_OWNER)
+	baseline.turn_count = 9
+	var numeric_change: State = baseline.duplicate_state()
+	(numeric_change.board[4] as Dictionary).card["powers"] = [91, 92, 93, 94]
+	(numeric_change.board[4] as Dictionary).card["ki"] = 37
+	var next_turn: State = numeric_change.duplicate_state()
+	next_turn.turn_count = 10
+	var context: Dictionary = {
+		"trigger_cell": 4,
+		"trigger_instance_id": &"loop_key_source",
+		"trigger_owner_id": Rules.PLAYER_OWNER,
+		"trigger_zone": &"board",
+		"trigger_logical_index": 4,
+		"trigger_was_on_board": true,
+	}
+	var keys: Array = []
+	for candidate: State in [baseline, numeric_change, next_turn]:
+		var compact := CompactState.new()
+		_check(compact.capture_state(candidate), "Loop-key fixture crosses the compact boundary")
+		if not compact.is_structurally_valid():
+			return
+		var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+		_check(kernel != null, "Loop-key fixture creates the native kernel")
+		if kernel == null:
+			return
+		_check(
+			bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+			"Loop-key fixture loads into the native kernel"
+		)
+		keys.append(kernel.call(
+			"inspect_resolution_loop_key_for_test", Catalog.CARD_KI_CHANGED, context
+		) as Array)
+	_check(keys.size() == 3 and keys[0] == keys[1], "Loop key ignores powers and ki")
+	_check(keys.size() == 3 and keys[1] != keys[2], "Loop key distinguishes turn_count")
+	var compact := CompactState.new()
+	_check(compact.capture_state(baseline), "Different-frame loop-key fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Different-frame loop-key fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Different-frame loop-key fixture loads into the native kernel"
+	)
+	var different_event_key: Array = kernel.call(
+		"inspect_resolution_loop_key_for_test", Catalog.CARD_AFTER_DRAWN, context
+	) as Array
+	_check(
+		keys.size() == 3 and keys[0] != different_event_key,
+		"Loop key distinguishes different pending event frames"
 	)
 
 

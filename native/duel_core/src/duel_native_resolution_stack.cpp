@@ -18,6 +18,11 @@ DuelNativeCompactKernel::ActionOutcome ResolutionEngine::run_actions(
 	DuelNativeCompactKernel::Resolution &resolution,
 	bool defer_power_change_batch
 ) {
+	const bool owns_loop_detection = !loop_detection_active;
+	if (owns_loop_detection) {
+		reset_loop_detection();
+		loop_detection_active = true;
+	}
 	resolution_frames.clear();
 	push_action_frame(
 		group,
@@ -29,6 +34,14 @@ DuelNativeCompactKernel::ActionOutcome ResolutionEngine::run_actions(
 		defer_power_change_batch
 	);
 	run_resolution_stack(state, exile_stack);
+	if (resolution_loop_detected || resolution_aborted) {
+		resolution = resolution_loop_output;
+		if (owns_loop_detection) loop_detection_active = false;
+		return resolution_aborted
+			? DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			: DuelNativeCompactKernel::ActionOutcome::APPLIED;
+	}
+	if (owns_loop_detection) loop_detection_active = false;
 	return completed_action_outcome;
 }
 
@@ -285,6 +298,7 @@ void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
 ) {
+	if (detect_resolution_loop(state)) return;
 	while (!resolution_frames.empty()) {
 		if (resolution_frames.back()->kind == FrameKind::EVENT) {
 			step_event_frame(state, exile_stack);
@@ -315,6 +329,7 @@ void ResolutionEngine::run_resolution_stack(
 		} else {
 			step_finish_action_frame(state, exile_stack);
 		}
+		if (detect_resolution_loop(state)) return;
 	}
 }
 
@@ -3851,6 +3866,8 @@ bool ResolutionEngine::run_transition(
 	String &reason,
 	bool materialize_presentation_payloads
 ) {
+	reset_loop_detection();
+	loop_detection_active = true;
 	frames.clear();
 	RootTransitionFrame root;
 	root.action = action;
@@ -3885,7 +3902,7 @@ bool ResolutionEngine::run_transition(
 						moving_owner
 					);
 					std::vector<int32_t> exile_stack;
-					if (valid) {
+					if (valid && !resolution_loop_detected && !resolution_aborted) {
 						DuelNativeCompactKernel::ActionExecutionState cost_state;
 						cost_state.current_source_cell = group.source_cell;
 						const DuelNativeCompactKernel::ActionOutcome cost_outcome = run_actions(
@@ -3906,7 +3923,7 @@ bool ResolutionEngine::run_transition(
 							valid = false;
 						}
 					}
-					if (valid) {
+					if (valid && !resolution_loop_detected && !resolution_aborted) {
 						DuelNativeCompactKernel::ActionExecutionState body_state;
 						body_state.current_source_cell = group.source_cell;
 						const DuelNativeCompactKernel::ActionOutcome action_outcome = run_actions(
@@ -3927,7 +3944,7 @@ bool ResolutionEngine::run_transition(
 							valid = false;
 						}
 					}
-					if (valid) {
+					if (valid && !resolution_loop_detected && !resolution_aborted) {
 						DuelNativeCompactKernel::EventContext after_context;
 						after_context.activation_owner = moving_owner;
 						after_context.activation_source_cell = kernel.find_board_card(
@@ -3955,7 +3972,7 @@ bool ResolutionEngine::run_transition(
 							kernel.append_resolution(resolution, after_activation);
 						}
 					}
-					if (valid) {
+					if (valid && !resolution_loop_detected && !resolution_aborted) {
 						DuelNativeCompactKernel::Resolution finish_resolution =
 							run_finish_action(
 								next,
@@ -3971,6 +3988,11 @@ bool ResolutionEngine::run_transition(
 						} else {
 							kernel.append_resolution(resolution, finish_resolution);
 						}
+					}
+					if (resolution_aborted) {
+						supported = false;
+						reason = resolution_loop_output.reason;
+						valid = false;
 					}
 					kernel.include_presentation_payloads = previous_payload_setting;
 					break;
@@ -3991,13 +4013,15 @@ bool ResolutionEngine::run_transition(
 					played_card_index,
 					exile_stack
 				);
-				if (valid) {
+				if (valid && !resolution_loop_detected && !resolution_aborted) {
 					DuelNativeCompactKernel::Resolution summon_resolution = run_summon(
 						next,
 						summon_request,
 						exile_stack
 					);
-					if (!summon_resolution.supported) {
+					if (resolution_loop_detected) {
+						kernel.append_resolution(resolution, summon_resolution);
+					} else if (!summon_resolution.supported) {
 						supported = false;
 						reason = summon_resolution.reason;
 						valid = false;
@@ -4020,6 +4044,11 @@ bool ResolutionEngine::run_transition(
 						}
 					}
 				}
+				if (resolution_aborted) {
+					supported = false;
+					reason = resolution_loop_output.reason;
+					valid = false;
+				}
 				kernel.include_presentation_payloads = previous_payload_setting;
 				break;
 			}
@@ -4028,6 +4057,7 @@ bool ResolutionEngine::run_transition(
 				break;
 		}
 	}
+	loop_detection_active = false;
 	return valid;
 }
 
@@ -4037,9 +4067,19 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_event(
 	const DuelNativeCompactKernel::EventContext &context,
 	std::vector<int32_t> &exile_stack
 ) {
+	const bool owns_loop_detection = !loop_detection_active;
+	if (owns_loop_detection) {
+		reset_loop_detection();
+		loop_detection_active = true;
+	}
 	resolution_frames.clear();
 	push_event_frame(event_id, context);
 	run_resolution_stack(state, exile_stack);
+	if (resolution_loop_detected || resolution_aborted) {
+		if (owns_loop_detection) loop_detection_active = false;
+		return resolution_loop_output;
+	}
+	if (owns_loop_detection) loop_detection_active = false;
 	return std::move(completed_event_resolution);
 }
 
@@ -4048,9 +4088,19 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_summon(
 	const DuelNativeCompactKernel::SummonRequest &request,
 	std::vector<int32_t> &exile_stack
 ) {
+	const bool owns_loop_detection = !loop_detection_active;
+	if (owns_loop_detection) {
+		reset_loop_detection();
+		loop_detection_active = true;
+	}
 	resolution_frames.clear();
 	push_summon_frame(request);
 	run_resolution_stack(state, exile_stack);
+	if (resolution_loop_detected || resolution_aborted) {
+		if (owns_loop_detection) loop_detection_active = false;
+		return resolution_loop_output;
+	}
+	if (owns_loop_detection) loop_detection_active = false;
 	return std::move(completed_summon_resolution);
 }
 
@@ -4059,9 +4109,19 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_attack(
 	const DuelNativeCompactKernel::AttackRequest &request,
 	std::vector<int32_t> &exile_stack
 ) {
+	const bool owns_loop_detection = !loop_detection_active;
+	if (owns_loop_detection) {
+		reset_loop_detection();
+		loop_detection_active = true;
+	}
 	resolution_frames.clear();
 	push_attack_frame(request);
 	run_resolution_stack(state, exile_stack);
+	if (resolution_loop_detected || resolution_aborted) {
+		if (owns_loop_detection) loop_detection_active = false;
+		return resolution_loop_output;
+	}
+	if (owns_loop_detection) loop_detection_active = false;
 	return std::move(completed_attack_resolution);
 }
 
@@ -4073,6 +4133,11 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_finish_action(
 		extra_play_requests,
 	std::vector<int32_t> &exile_stack
 ) {
+	const bool owns_loop_detection = !loop_detection_active;
+	if (owns_loop_detection) {
+		reset_loop_detection();
+		loop_detection_active = true;
+	}
 	resolution_frames.clear();
 	push_finish_action_frame(
 		moving_owner,
@@ -4080,6 +4145,11 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_finish_action(
 		extra_play_requests
 	);
 	run_resolution_stack(state, exile_stack);
+	if (resolution_loop_detected || resolution_aborted) {
+		if (owns_loop_detection) loop_detection_active = false;
+		return resolution_loop_output;
+	}
+	if (owns_loop_detection) loop_detection_active = false;
 	return std::move(completed_finish_action_resolution);
 }
 
@@ -4362,6 +4432,23 @@ Dictionary DuelNativeCompactKernel::resolve_event_iterative_for_test(
 		exile_stack
 	);
 	return materialize_direct_transition(next, resolution, true);
+}
+
+Array DuelNativeCompactKernel::inspect_resolution_loop_key_for_test(
+	const StringName &event_id,
+	const Dictionary &context
+) const {
+	Array result;
+	if (!loaded) return result;
+	ResolutionEngine engine(*this);
+	const auto fingerprint = engine.inspect_loop_key_for_test(
+		state,
+		event_id,
+		event_context_from_dictionary(state, context)
+	);
+	result.append(static_cast<int64_t>(fingerprint.first));
+	result.append(static_cast<int64_t>(fingerprint.second));
+	return result;
 }
 
 Dictionary DuelNativeCompactKernel::resolve_summon_lifecycle_for_test(

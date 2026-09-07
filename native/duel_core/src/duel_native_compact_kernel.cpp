@@ -32,6 +32,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::resolve_attack_iterative_for_test
 	);
 	ClassDB::bind_method(
+		D_METHOD("inspect_resolution_loop_key_for_test", "event_id", "context"),
+		&DuelNativeCompactKernel::inspect_resolution_loop_key_for_test
+	);
+	ClassDB::bind_method(
 		D_METHOD(
 			"apply_play_transition",
 			"hand_index",

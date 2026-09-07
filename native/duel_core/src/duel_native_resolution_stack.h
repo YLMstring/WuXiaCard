@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace godot::duel_native_internal {
@@ -44,6 +46,11 @@ public:
 		const std::vector<DuelNativeCompactKernel::Resolution::ExtraPlayRequest> &
 			extra_play_requests,
 		std::vector<int32_t> &exile_stack
+	);
+	std::pair<uint64_t, uint64_t> inspect_loop_key_for_test(
+		const DuelNativeCompactKernel::NativeState &state,
+		const StringName &event_id,
+		const DuelNativeCompactKernel::EventContext &context
 	);
 
 private:
@@ -438,6 +445,9 @@ private:
 
 	struct ResolutionFrame {
 		FrameKind kind = FrameKind::EVENT;
+		uint64_t causal_board_first = 0;
+		uint64_t causal_board_second = 0;
+		bool causal_board_initialized = false;
 		EventFrame event;
 		ActionSequenceFrame actions;
 		ExileFrame exile;
@@ -452,6 +462,24 @@ private:
 		PowerChangeFrame power_change;
 		TransferResourceFrame transfer_resource;
 		FinishActionFrame finish_action;
+	};
+
+	struct LoopFingerprint {
+		uint64_t first = 0;
+		uint64_t second = 0;
+
+		bool operator==(const LoopFingerprint &other) const {
+			return first == other.first && second == other.second;
+		}
+	};
+
+	struct LoopFingerprintHash {
+		size_t operator()(const LoopFingerprint &value) const {
+			return static_cast<size_t>(
+				value.first ^ (value.second + 0x9e3779b97f4a7c15ULL
+					+ (value.first << 6) + (value.first >> 2))
+			);
+		}
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -645,6 +673,24 @@ private:
 	void complete_power_change_frame();
 	void complete_transfer_resource_frame();
 	void complete_finish_action_frame();
+	void reset_loop_detection();
+	bool detect_resolution_loop(DuelNativeCompactKernel::NativeState &state);
+	LoopFingerprint fingerprint_frame_range(
+		const DuelNativeCompactKernel::NativeState &state,
+		size_t begin,
+		size_t end,
+		bool causal
+	) const;
+	LoopFingerprint fingerprint_loop_key(
+		const DuelNativeCompactKernel::NativeState &state
+	) const;
+	LoopFingerprint fingerprint_board_turn(
+		const DuelNativeCompactKernel::NativeState &state
+	) const;
+	bool has_repeated_causal_suffix(
+		const DuelNativeCompactKernel::NativeState &state
+	) const;
+	DuelNativeCompactKernel::Resolution collect_partial_resolution() const;
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -671,6 +717,13 @@ private:
 	DuelNativeCompactKernel::ActionOutcome completed_transfer_resource_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	DuelNativeCompactKernel::Resolution completed_finish_action_resolution;
+	std::unordered_map<LoopFingerprint, uint8_t, LoopFingerprintHash>
+		loop_occurrences;
+	bool loop_detection_active = false;
+	bool resolution_loop_detected = false;
+	bool resolution_aborted = false;
+	DuelNativeCompactKernel::Resolution resolution_loop_output;
+	uint64_t resolution_step_count = 0;
 };
 
 } // namespace godot::duel_native_internal

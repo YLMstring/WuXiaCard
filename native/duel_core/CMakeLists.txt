@@ -33,6 +33,7 @@ target_sources(
         src/duel_native_compact_kernel_internal.h
         src/duel_native_events.cpp
         src/duel_native_lifecycle.cpp
+        src/duel_native_loop.cpp
         src/duel_native_policy.cpp
         src/duel_native_resolution.cpp
         src/duel_native_resolution_stack.cpp
