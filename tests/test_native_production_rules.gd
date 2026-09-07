@@ -24,7 +24,6 @@ func _run() -> void:
 	_test_live_catalog_compiles_natively()
 	_test_iterative_resolution_root_matches_recursive()
 	_test_iterative_event_group_loop_matches_recursive()
-	_test_iterative_summon_lifecycle_matches_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
 	_test_iterative_zero_power_exile_matches_recursive()
 	_test_iterative_return_to_hand_matches_recursive()
@@ -235,81 +234,6 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 	_check(
 		iterative == recursive,
 		"Explicit event-group frame preserves state, nested events, and presentation order"
-	)
-
-
-func _test_iterative_summon_lifecycle_matches_recursive() -> void:
-	var board: Array = Rules.empty_board()
-	var summoned: Dictionary = Catalog.create_instance(
-		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_summon_source"
-	)
-	summoned["active_abilities"] = [
-		{
-			"triggers": [{
-				"event": Catalog.TRIGGER_CARD_SUMMONED,
-				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-				"actions": [{"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}],
-			}],
-		},
-		{
-			"triggers": [{
-				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-			}],
-		},
-	]
-	var watcher: Dictionary = Catalog.create_instance(
-		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_summon_watcher"
-	)
-	watcher["active_abilities"] = [{
-		"triggers": [
-			{
-				"event": Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
-				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-			},
-			{
-				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-			},
-		],
-	}]
-	board[4] = {"owner": Rules.PLAYER_OWNER, "card": summoned}
-	board[8] = {"owner": Rules.PLAYER_OWNER, "card": watcher}
-	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
-	var compact := CompactState.new()
-	_check(compact.capture_state(state), "Iterative summon fixture crosses the compact boundary")
-	if not compact.is_structurally_valid():
-		return
-	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
-	_check(kernel != null, "Iterative summon fixture creates the native kernel")
-	if kernel == null:
-		return
-	_check(
-		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
-		"Iterative summon fixture loads into the native kernel"
-	)
-	var request: Dictionary = {
-		"summon_cell": 4,
-		"instance_id": &"iterative_summon_source",
-		"owner_id": Rules.PLAYER_OWNER,
-		"summon_reason": &"test_summon",
-		"attack_reason": &"summon_standard_attack",
-		"buffered_placement_events": [{
-			"type": &"test_card_placed",
-			"target_cell": 4,
-			"instance_id": &"iterative_summon_source",
-		}],
-	}
-	var recursive: Dictionary = kernel.call(
-		"resolve_summon_lifecycle_for_test", request, false
-	) as Dictionary
-	var iterative: Dictionary = kernel.call(
-		"resolve_summon_lifecycle_for_test", request, true
-	) as Dictionary
-	_check(
-		iterative == recursive,
-		"Explicit summon frame preserves moved-instance after-summoned discovery and attack order"
 	)
 
 

@@ -24,10 +24,6 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::resolve_event_iterative_for_test
 	);
 	ClassDB::bind_method(
-		D_METHOD("resolve_summon_lifecycle_for_test", "request", "iterative"),
-		&DuelNativeCompactKernel::resolve_summon_lifecycle_for_test
-	);
-	ClassDB::bind_method(
 		D_METHOD(
 			"apply_play_transition",
 			"hand_index",

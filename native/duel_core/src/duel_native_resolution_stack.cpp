@@ -190,15 +190,6 @@ void ResolutionEngine::push_swap_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
-void ResolutionEngine::push_summon_frame(
-	const DuelNativeCompactKernel::SummonRequest &request
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::SUMMON;
-	frame->summon.request = request;
-	resolution_frames.push_back(std::move(frame));
-}
-
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -218,10 +209,8 @@ void ResolutionEngine::run_resolution_stack(
 			step_discard_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::MOVE) {
 			step_move_frame(state, exile_stack);
-		} else if (resolution_frames.back()->kind == FrameKind::SWAP) {
-			step_swap_frame(state, exile_stack);
 		} else {
-			step_summon_frame(state, exile_stack);
+			step_swap_frame(state, exile_stack);
 		}
 	}
 }
@@ -271,11 +260,6 @@ void ResolutionEngine::complete_move_frame() {
 
 void ResolutionEngine::complete_swap_frame() {
 	completed_swap_outcome = resolution_frames.back()->swap.outcome;
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_summon_frame() {
-	completed_summon_resolution = std::move(resolution_frames.back()->summon.resolution);
 	resolution_frames.pop_back();
 }
 
@@ -2401,133 +2385,6 @@ void ResolutionEngine::step_swap_frame(
 	frame.stage = SwapStage::COMPLETE;
 }
 
-void ResolutionEngine::step_summon_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	SummonFrame &frame = resolution_frames.back()->summon;
-	if (frame.stage == SummonStage::COMPLETE) {
-		complete_summon_frame();
-		return;
-	}
-	if (frame.stage == SummonStage::START) {
-		frame.attack_redirect_source_card_indices =
-			frame.request.attack_redirect_snapshot_taken
-			? frame.request.attack_redirect_source_card_indices
-			: kernel.snapshot_summon_attack_redirect_sources(
-				state,
-				frame.request.summon_cell,
-				frame.request.owner_id
-			);
-		frame.summon_context.trigger_cell = frame.request.summon_cell;
-		frame.summon_context.trigger_card_index = frame.request.card_index;
-		frame.summon_context.trigger_owner = frame.request.owner_id;
-		frame.summon_context.trigger_previous_owner = frame.request.owner_id;
-		frame.summon_context.trigger_zone = 0;
-		frame.summon_context.trigger_logical_index = frame.request.summon_cell;
-		frame.summon_context.trigger_was_on_board = true;
-		frame.stage = SummonStage::WAIT_BEFORE_SUMMONED;
-		push_event_frame(StringName("card_before_summoned"), frame.summon_context);
-		return;
-	}
-	if (frame.stage == SummonStage::WAIT_BEFORE_SUMMONED) {
-		if (!completed_event_resolution.supported) {
-			frame.resolution = std::move(completed_event_resolution);
-			frame.stage = SummonStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(frame.resolution, completed_event_resolution);
-		frame.resolution.events.append_array(frame.request.buffered_placement_events);
-		frame.stage = SummonStage::WAIT_SUMMONED;
-		push_event_frame(StringName("card_summoned"), frame.summon_context);
-		return;
-	}
-	if (frame.stage == SummonStage::WAIT_SUMMONED) {
-		if (!completed_event_resolution.supported) {
-			frame.resolution.supported = false;
-			frame.resolution.reason = completed_event_resolution.reason;
-			frame.stage = SummonStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(frame.resolution, completed_event_resolution);
-		frame.after_summoned_cell = kernel.find_board_card(
-			state,
-			frame.request.card_index,
-			frame.request.summon_cell
-		);
-		if (frame.after_summoned_cell < 0) {
-			frame.stage = SummonStage::RESOLVE_ATTACK;
-			return;
-		}
-		DuelNativeCompactKernel::EventContext after_context = frame.summon_context;
-		after_context.trigger_cell = frame.after_summoned_cell;
-		after_context.trigger_owner = state.board_owners[frame.after_summoned_cell];
-		after_context.trigger_logical_index = frame.after_summoned_cell;
-		frame.stage = SummonStage::WAIT_AFTER_SUMMONED;
-		push_event_frame(StringName("card_after_summoned"), after_context);
-		return;
-	}
-	if (frame.stage == SummonStage::WAIT_AFTER_SUMMONED) {
-		if (!completed_event_resolution.supported) {
-			frame.resolution.supported = false;
-			frame.resolution.reason = completed_event_resolution.reason;
-			frame.stage = SummonStage::COMPLETE;
-			return;
-		}
-		kernel.append_resolution(frame.resolution, completed_event_resolution);
-		frame.stage = SummonStage::RESOLVE_ATTACK;
-		return;
-	}
-
-	const StringName summoned_instance_id =
-		state.card_instance_ids[frame.request.card_index];
-	for (int64_t event_index = 0; event_index < frame.resolution.events.size(); ++event_index) {
-		if (frame.resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
-		const Dictionary event = frame.resolution.events[event_index];
-		if (
-			StringName(event.get("type", StringName())) == StringName("card_flipped")
-			&& StringName(event.get("instance_id", StringName())) == summoned_instance_id
-		) {
-			frame.stage = SummonStage::COMPLETE;
-			return;
-		}
-	}
-
-	DuelNativeCompactKernel::AttackRequest attack_request;
-	attack_request.attacker_cell = frame.after_summoned_cell;
-	attack_request.attacker_card_index = frame.request.card_index;
-	attack_request.attacker_owner = frame.request.owner_id;
-	const int32_t initial_attack_cell = kernel.find_board_card(
-		state,
-		frame.request.card_index,
-		frame.request.summon_cell
-	);
-	if (initial_attack_cell >= 0) {
-		attack_request.requested_policy = kernel.get_summon_attack_policy(
-			state,
-			initial_attack_cell,
-			frame.request.owner_id,
-			frame.attack_redirect_source_card_indices
-		);
-	}
-	attack_request.reason = frame.request.attack_reason.is_empty()
-		? StringName("summon_standard_attack")
-		: frame.request.attack_reason;
-	DuelNativeCompactKernel::Resolution attack_resolution = kernel.resolve_attack_request(
-		state,
-		attack_request,
-		exile_stack
-	);
-	if (!attack_resolution.supported) {
-		frame.resolution.supported = false;
-		frame.resolution.reason = attack_resolution.reason;
-		frame.stage = SummonStage::COMPLETE;
-		return;
-	}
-	kernel.append_resolution(frame.resolution, attack_resolution);
-	frame.stage = SummonStage::COMPLETE;
-}
-
 bool ResolutionEngine::run_transition(
 	const DuelNativeCompactKernel::NativeState &source,
 	const DuelNativeCompactKernel::NativeAction &action,
@@ -2577,17 +2434,6 @@ DuelNativeCompactKernel::Resolution ResolutionEngine::run_event(
 	push_event_frame(event_id, context);
 	run_resolution_stack(state, exile_stack);
 	return std::move(completed_event_resolution);
-}
-
-DuelNativeCompactKernel::Resolution ResolutionEngine::run_summon(
-	DuelNativeCompactKernel::NativeState &state,
-	const DuelNativeCompactKernel::SummonRequest &request,
-	std::vector<int32_t> &exile_stack
-) {
-	resolution_frames.clear();
-	push_summon_frame(request);
-	run_resolution_stack(state, exile_stack);
-	return std::move(completed_summon_resolution);
 }
 
 void ResolutionEngine::step_event_frame(
@@ -2868,64 +2714,6 @@ Dictionary DuelNativeCompactKernel::resolve_event_iterative_for_test(
 		event_context_from_dictionary(next, context),
 		exile_stack
 	);
-	return materialize_direct_transition(next, resolution, true);
-}
-
-Dictionary DuelNativeCompactKernel::resolve_summon_lifecycle_for_test(
-	const Dictionary &request_value,
-	bool iterative
-) const {
-	if (!loaded) {
-		Resolution resolution;
-		resolution.supported = false;
-		return materialize_direct_transition(
-			state,
-			resolution,
-			false,
-			"No compact state is loaded"
-		);
-	}
-	NativeState next = state;
-	next.board_slot_extras = state.board_slot_extras.duplicate(true);
-	next.side_payload = state.side_payload.duplicate(true);
-	SummonRequest request;
-	request.summon_cell = static_cast<int32_t>(
-		static_cast<int64_t>(request_value.get("summon_cell", -1))
-	);
-	request.card_index = find_card_by_instance_id(
-		next,
-		StringName(request_value.get("instance_id", StringName()))
-	);
-	request.owner_id = static_cast<int32_t>(
-		static_cast<int64_t>(request_value.get("owner_id", 0))
-	);
-	request.summon_reason = StringName(request_value.get(
-		"summon_reason",
-		StringName("test_summon")
-	));
-	request.attack_reason = StringName(request_value.get(
-		"attack_reason",
-		StringName("summon_standard_attack")
-	));
-	const Variant buffered_events = request_value.get("buffered_placement_events", Array());
-	if (buffered_events.get_type() == Variant::ARRAY) {
-		request.buffered_placement_events = buffered_events;
-	}
-	if (
-		request.card_index < 0
-		|| request.summon_cell < 0
-		|| request.summon_cell >= static_cast<int32_t>(next.board_card_indices.size())
-		|| request.owner_id < 1
-		|| request.owner_id > 2
-	) return materialize_direct_transition(next, Resolution(), true);
-	std::vector<int32_t> exile_stack;
-	Resolution resolution;
-	if (iterative) {
-		ResolutionEngine engine(*this);
-		resolution = engine.run_summon(next, request, exile_stack);
-	} else {
-		resolution = resolve_summon_lifecycle(next, request, exile_stack);
-	}
 	return materialize_direct_transition(next, resolution, true);
 }
 
