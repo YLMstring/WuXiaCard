@@ -129,25 +129,6 @@ void ResolutionEngine::push_draw_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
-void ResolutionEngine::push_discard_frame(
-	const DuelNativeCompactKernel::EventGroup &group,
-	std::vector<int32_t> locked_cards,
-	const DuelNativeCompactKernel::EventContext &event_context,
-	const DuelNativeCompactKernel::ActionContext &action_context,
-	DuelNativeCompactKernel::ActionExecutionState &execution_state,
-	DuelNativeCompactKernel::Resolution &resolution
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::DISCARD;
-	frame->discard.group = group;
-	frame->discard.locked_cards = std::move(locked_cards);
-	frame->discard.event_context = event_context;
-	frame->discard.action_context = action_context;
-	frame->discard.execution_state = &execution_state;
-	frame->discard.resolution = &resolution;
-	resolution_frames.push_back(std::move(frame));
-}
-
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -161,10 +142,8 @@ void ResolutionEngine::run_resolution_stack(
 			step_exile_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::FLIP) {
 			step_flip_frame(state, exile_stack);
-		} else if (resolution_frames.back()->kind == FrameKind::DRAW) {
-			step_draw_frame(state, exile_stack);
 		} else {
-			step_discard_frame(state, exile_stack);
+			step_draw_frame(state, exile_stack);
 		}
 	}
 }
@@ -199,11 +178,6 @@ void ResolutionEngine::complete_flip_frame() {
 
 void ResolutionEngine::complete_draw_frame() {
 	completed_draw_success = resolution_frames.back()->draw.success;
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_discard_frame() {
-	completed_discard_outcome = resolution_frames.back()->discard.outcome;
 	resolution_frames.pop_back();
 }
 
@@ -337,10 +311,6 @@ void ResolutionEngine::step_action_frame(
 				? DuelNativeCompactKernel::ActionOutcome::APPLIED
 				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
 		);
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_DISCARD) {
-		finish_action(state, exile_stack, completed_discard_outcome);
 		return;
 	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
@@ -513,59 +483,6 @@ void ResolutionEngine::step_action_frame(
 			action.amount,
 			action.weapon,
 			draw_context,
-			*frame.resolution
-		);
-		return;
-	}
-	if (
-		action.opcode == DuelNativeCompactKernel::ActionOpcode::DISCARD_CARD
-		|| action.opcode == DuelNativeCompactKernel::ActionOpcode::DISCARD_CARDS
-	) {
-		frame.execution_state.last_discard_batch_size = 0;
-		std::vector<int32_t> locked_cards;
-		if (action.opcode == DuelNativeCompactKernel::ActionOpcode::DISCARD_CARD) {
-			int32_t target = -1;
-			if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::SELECTED_CARD) {
-				target = frame.action_context.selected_card_index;
-			} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::TRIGGER_CARD) {
-				target = frame.event_context.trigger_card_index;
-			} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ABILITY_SOURCE) {
-				target = frame.action_context.ability_source_card_index;
-			} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ATTACKER_CARD) {
-				target = frame.event_context.attacker_card_index;
-			} else {
-				finish_action(
-					state,
-					exile_stack,
-					DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-				);
-				return;
-			}
-			if (target >= 0) locked_cards.push_back(target);
-		} else {
-			bool selection_supported = true;
-			locked_cards = kernel.snapshot_selected_cards(
-				state,
-				action.selector,
-				frame.action_context,
-				selection_supported
-			);
-			if (!selection_supported) {
-				finish_action(
-					state,
-					exile_stack,
-					DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-				);
-				return;
-			}
-		}
-		frame.stage = ActionStage::WAIT_DISCARD;
-		push_discard_frame(
-			frame.group,
-			std::move(locked_cards),
-			frame.event_context,
-			frame.action_context,
-			frame.execution_state,
 			*frame.resolution
 		);
 		return;
@@ -1417,245 +1334,6 @@ void ResolutionEngine::step_draw_frame(
 	++frame.draw_index;
 	frame.stage = DrawStage::WAIT_AFTER_DRAWN;
 	push_event_frame(StringName("card_after_drawn"), after_draw_context);
-}
-
-void ResolutionEngine::step_discard_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	DiscardFrame &frame = resolution_frames.back()->discard;
-	if (
-		frame.stage == DiscardStage::COMPLETE
-		|| frame.execution_state == nullptr
-		|| frame.resolution == nullptr
-	) {
-		complete_discard_frame();
-		return;
-	}
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	auto append_event_payload = [&](const DuelNativeCompactKernel::Resolution &child) {
-		resolution.events.append_array(child.events);
-		resolution.captures.append_array(child.captures);
-		resolution.exiles.append_array(child.exiles);
-	};
-	if (frame.stage == DiscardStage::WAIT_CARD_EVENT) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-			frame.stage = DiscardStage::COMPLETE;
-			return;
-		}
-		append_event_payload(completed_event_resolution);
-		frame.stage = DiscardStage::NEXT_CARD_EVENT;
-		return;
-	}
-	if (frame.stage == DiscardStage::WAIT_BATCH_EVENT) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-		} else {
-			append_event_payload(completed_event_resolution);
-			frame.outcome = DuelNativeCompactKernel::ActionOutcome::APPLIED;
-		}
-		frame.stage = DiscardStage::COMPLETE;
-		return;
-	}
-	if (frame.stage == DiscardStage::NEXT_CARD_EVENT) {
-		while (frame.record_index < frame.records.size()) {
-			const DiscardRecord &record = frame.records[frame.record_index++];
-			int32_t trigger_zone = -1;
-			int32_t trigger_owner = 0;
-			int32_t trigger_logical_index = -1;
-			if (!kernel.locate_card(
-				state,
-				record.card_index,
-				trigger_zone,
-				trigger_owner,
-				trigger_logical_index
-			)) continue;
-			DuelNativeCompactKernel::EventContext discard_context = frame.event_context;
-			discard_context.ability_source_cell = frame.action_context.ability_source_cell;
-			discard_context.ability_source_zone = frame.action_context.ability_source_zone;
-			discard_context.ability_source_logical_index =
-				frame.action_context.ability_source_logical_index;
-			discard_context.ability_source_card_index =
-				frame.action_context.ability_source_card_index;
-			discard_context.ability_source_owner = frame.action_context.ability_source_owner;
-			discard_context.trigger_cell = -1;
-			discard_context.trigger_card_index = record.card_index;
-			discard_context.trigger_owner = frame.owner;
-			discard_context.trigger_zone = trigger_zone;
-			discard_context.trigger_logical_index = trigger_logical_index;
-			discard_context.discard_owner = frame.owner;
-			discard_context.discard_batch_id = frame.batch_id;
-			discard_context.discard_batch_size = static_cast<int32_t>(frame.records.size());
-			frame.stage = DiscardStage::WAIT_CARD_EVENT;
-			push_event_frame(StringName("card_after_discarded"), discard_context);
-			return;
-		}
-		DuelNativeCompactKernel::EventContext batch_context;
-		batch_context.ability_source_cell = frame.action_context.ability_source_cell;
-		batch_context.ability_source_zone = frame.action_context.ability_source_zone;
-		batch_context.ability_source_logical_index =
-			frame.action_context.ability_source_logical_index;
-		batch_context.ability_source_card_index = frame.action_context.ability_source_card_index;
-		batch_context.ability_source_owner = frame.action_context.ability_source_owner;
-		batch_context.discard_owner = frame.owner;
-		batch_context.discard_batch_id = frame.batch_id;
-		batch_context.discard_batch_size = static_cast<int32_t>(frame.records.size());
-		frame.stage = DiscardStage::WAIT_BATCH_EVENT;
-		push_event_frame(StringName("discard_batch_finished"), batch_context);
-		return;
-	}
-
-	frame.execution_state->last_discard_batch_size = 0;
-	std::vector<int32_t> candidates;
-	for (const int32_t card_index : frame.locked_cards) {
-		int32_t zone = -1;
-		int32_t candidate_owner = 0;
-		int32_t logical_index = -1;
-		if (!kernel.locate_card(
-			state,
-			card_index,
-			zone,
-			candidate_owner,
-			logical_index
-		) || zone != 1) continue;
-		if (frame.owner == 0) frame.owner = candidate_owner;
-		if (candidate_owner != frame.owner) continue;
-		candidates.push_back(card_index);
-	}
-	if (frame.owner < 1 || frame.owner > 2 || candidates.empty()) {
-		frame.outcome = DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-		frame.stage = DiscardStage::COMPLETE;
-		return;
-	}
-	std::vector<int32_t> &hand = state.zones[frame.owner - 1];
-	std::vector<int32_t> &discard_pile = state.zones[frame.owner + 3];
-	const int32_t previous_hand_size = static_cast<int32_t>(hand.size());
-	const int32_t discard_size_before = static_cast<int32_t>(discard_pile.size());
-	frame.source_instance_id = frame.action_context.ability_source_card_index >= 0
-		? state.card_instance_ids[frame.action_context.ability_source_card_index]
-		: StringName();
-	frame.batch_id = StringName(
-		String("discard:")
-		+ String(frame.source_instance_id)
-		+ ":" + String::num_int64(frame.owner)
-		+ ":" + String::num_int64(state.scalars[1])
-		+ ":" + String::num_int64(discard_size_before)
-	);
-	std::vector<int32_t> discarded_slots;
-	for (const int32_t card_index : candidates) {
-		int32_t zone = -1;
-		int32_t current_owner = 0;
-		int32_t logical_index = -1;
-		if (
-			!kernel.locate_card(state, card_index, zone, current_owner, logical_index)
-			|| zone != 1
-			|| current_owner != frame.owner
-			|| logical_index < 0
-			|| logical_index >= static_cast<int32_t>(hand.size())
-			|| hand[logical_index] != card_index
-		) continue;
-		DiscardRecord record;
-		record.card_index = card_index;
-		record.logical_hand_index = logical_index;
-		record.hand_slot_index = state.card_hand_slots[card_index] >= 0
-			? state.card_hand_slots[card_index]
-			: logical_index;
-		hand.erase(hand.begin() + logical_index);
-		state.card_runtime_flags[card_index] &= static_cast<uint8_t>(~(1 << 7));
-		state.card_hand_slots[card_index] = -1;
-		discard_pile.push_back(card_index);
-		frame.records.push_back(record);
-		discarded_slots.push_back(record.hand_slot_index);
-	}
-	frame.execution_state->last_discard_batch_size = static_cast<int32_t>(frame.records.size());
-	if (frame.records.empty()) {
-		frame.outcome = DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
-		frame.stage = DiscardStage::COMPLETE;
-		return;
-	}
-	frame.source_cell = kernel.find_board_card(
-		state,
-		frame.action_context.ability_source_card_index,
-		frame.action_context.ability_source_cell
-	);
-	if (frame.source_cell < 0) frame.source_cell = frame.execution_state->current_source_cell;
-	frame.execution_state->current_source_cell = frame.source_cell;
-	for (const DiscardRecord &record : frame.records) {
-		Dictionary discarded;
-		discarded["type"] = StringName("card_discarded");
-		discarded["source_cell"] = frame.source_cell;
-		discarded["source_instance_id"] = frame.source_instance_id;
-		discarded["owner_id"] = frame.owner;
-		discarded["instance_id"] = state.card_instance_ids[record.card_index];
-		discarded["zone"] = StringName("hand");
-		discarded["logical_hand_index"] = record.logical_hand_index;
-		discarded["hand_slot_index"] = record.hand_slot_index;
-		discarded["discard_batch_id"] = frame.batch_id;
-		discarded["discard_batch_size"] = static_cast<int32_t>(frame.records.size());
-		if (kernel.include_presentation_payloads) {
-			discarded["card"] = kernel.restore_runtime_card(state, record.card_index);
-		}
-		resolution.events.append(discarded);
-	}
-	std::sort(discarded_slots.begin(), discarded_slots.end());
-	struct SlotMove {
-		int32_t card_index = -1;
-		int32_t from_slot = -1;
-		int32_t to_slot = -1;
-	};
-	std::vector<SlotMove> slot_moves;
-	for (const int32_t card_index : hand) {
-		const int32_t from_slot = state.card_hand_slots[card_index];
-		if (from_slot < 0) continue;
-		const int32_t removed_before = static_cast<int32_t>(std::count_if(
-			discarded_slots.begin(),
-			discarded_slots.end(),
-			[&](int32_t discarded_slot) { return discarded_slot < from_slot; }
-		));
-		const int32_t to_slot = from_slot - removed_before;
-		if (to_slot == from_slot) continue;
-		slot_moves.push_back({card_index, from_slot, to_slot});
-		state.card_hand_slots[card_index] = to_slot;
-	}
-	std::sort(slot_moves.begin(), slot_moves.end(), [](const SlotMove &left, const SlotMove &right) {
-		return left.from_slot < right.from_slot;
-	});
-	if (!slot_moves.empty()) {
-		Array moves;
-		for (const SlotMove &move : slot_moves) {
-			Dictionary move_payload;
-			move_payload["instance_id"] = state.card_instance_ids[move.card_index];
-			move_payload["from_slot"] = move.from_slot;
-			move_payload["to_slot"] = move.to_slot;
-			moves.append(move_payload);
-		}
-		Dictionary shifted;
-		shifted["type"] = StringName("hand_cards_shifted");
-		shifted["source_cell"] = frame.source_cell;
-		shifted["source_instance_id"] = frame.source_instance_id;
-		shifted["owner_id"] = frame.owner;
-		shifted["moves"] = moves;
-		resolution.events.append(shifted);
-	}
-	DuelNativeCompactKernel::Resolution hand_change = kernel.resolve_difficulty_hand_change(
-		state,
-		frame.owner,
-		previous_hand_size,
-		static_cast<int32_t>(hand.size()),
-		frame.source_cell,
-		exile_stack
-	);
-	if (!hand_change.supported) {
-		resolution.reason = hand_change.reason;
-		frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
-		frame.stage = DiscardStage::COMPLETE;
-		return;
-	}
-	kernel.append_resolution(resolution, hand_change);
-	frame.stage = DiscardStage::NEXT_CARD_EVENT;
 }
 
 bool ResolutionEngine::run_transition(
