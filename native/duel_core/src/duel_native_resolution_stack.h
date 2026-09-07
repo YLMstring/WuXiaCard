@@ -66,6 +66,7 @@ private:
 		WAIT_POWER_EXILE,
 		WAIT_DRAW,
 		WAIT_DISCARD,
+		WAIT_MOVE,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -172,6 +173,28 @@ private:
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
 
+	enum class MoveStage : uint8_t {
+		START,
+		WAIT_BEFORE,
+		MOVE,
+		WAIT_AFTER,
+		COMPLETE,
+	};
+
+	struct MoveFrame {
+		MoveStage stage = MoveStage::START;
+		int32_t source_cell = -1;
+		int32_t origin_cell = -1;
+		int32_t target_cell = -1;
+		int32_t moving_card_index = -1;
+		int32_t moving_owner = 0;
+		bool resolve_before_event = true;
+		DuelNativeCompactKernel::Resolution movement_resolution;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	};
+
 	struct ActionSequenceFrame {
 		ActionStage stage = ActionStage::NEXT_ACTION;
 		const std::vector<DuelNativeCompactKernel::CompiledAction> *actions = nullptr;
@@ -195,6 +218,7 @@ private:
 		int64_t direct_event_end = 0;
 		int64_t ki_event_index = 0;
 		int64_t ki_resolution_start = 0;
+		int32_t child_target_cell = -1;
 	};
 
 	enum class FrameKind : uint8_t {
@@ -204,6 +228,7 @@ private:
 		FLIP,
 		DRAW,
 		DISCARD,
+		MOVE,
 	};
 
 	struct ResolutionFrame {
@@ -214,6 +239,7 @@ private:
 		FlipFrame flip;
 		DrawFrame draw;
 		DiscardFrame discard;
+		MoveFrame move;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -276,6 +302,15 @@ private:
 		DuelNativeCompactKernel::ActionExecutionState &execution_state,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
+	void push_move_frame(
+		int32_t source_cell,
+		int32_t origin_cell,
+		int32_t target_cell,
+		int32_t moving_card_index,
+		int32_t moving_owner,
+		bool resolve_before_event,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -304,6 +339,10 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_move_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -316,6 +355,7 @@ private:
 	void complete_flip_frame();
 	void complete_draw_frame();
 	void complete_discard_frame();
+	void complete_move_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -328,6 +368,8 @@ private:
 	bool completed_flip_success = true;
 	bool completed_draw_success = true;
 	DuelNativeCompactKernel::ActionOutcome completed_discard_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	DuelNativeCompactKernel::ActionOutcome completed_move_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 };
 

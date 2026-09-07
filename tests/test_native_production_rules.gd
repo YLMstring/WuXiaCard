@@ -131,6 +131,7 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 		},
 	})
 	actions.append({"type": Catalog.ACTION_GAIN_KI, "amount": 1})
+	actions.append({"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY})
 	actions.append({
 		"type": Catalog.ACTION_FLIP_SELF,
 		"new_owner": Catalog.OWNER_OPPONENT_OF_CARD_CURRENT,
@@ -160,6 +161,14 @@ func _test_iterative_event_group_loop_matches_recursive() -> void:
 			},
 			{
 				"event": Catalog.CARD_AFTER_DISCARDED,
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+			{
+				"event": Catalog.CARD_BEFORE_MOVED,
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			},
+			{
+				"event": Catalog.CARD_AFTER_MOVED,
 				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
 			},
 		],

@@ -148,6 +148,27 @@ void ResolutionEngine::push_discard_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
+void ResolutionEngine::push_move_frame(
+	int32_t source_cell,
+	int32_t origin_cell,
+	int32_t target_cell,
+	int32_t moving_card_index,
+	int32_t moving_owner,
+	bool resolve_before_event,
+	DuelNativeCompactKernel::Resolution &resolution
+) {
+	auto frame = std::make_unique<ResolutionFrame>();
+	frame->kind = FrameKind::MOVE;
+	frame->move.source_cell = source_cell;
+	frame->move.origin_cell = origin_cell;
+	frame->move.target_cell = target_cell;
+	frame->move.moving_card_index = moving_card_index;
+	frame->move.moving_owner = moving_owner;
+	frame->move.resolve_before_event = resolve_before_event;
+	frame->move.resolution = &resolution;
+	resolution_frames.push_back(std::move(frame));
+}
+
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -163,8 +184,10 @@ void ResolutionEngine::run_resolution_stack(
 			step_flip_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::DRAW) {
 			step_draw_frame(state, exile_stack);
-		} else {
+		} else if (resolution_frames.back()->kind == FrameKind::DISCARD) {
 			step_discard_frame(state, exile_stack);
+		} else {
+			step_move_frame(state, exile_stack);
 		}
 	}
 }
@@ -204,6 +227,11 @@ void ResolutionEngine::complete_draw_frame() {
 
 void ResolutionEngine::complete_discard_frame() {
 	completed_discard_outcome = resolution_frames.back()->discard.outcome;
+	resolution_frames.pop_back();
+}
+
+void ResolutionEngine::complete_move_frame() {
+	completed_move_outcome = resolution_frames.back()->move.outcome;
 	resolution_frames.pop_back();
 }
 
@@ -341,6 +369,17 @@ void ResolutionEngine::step_action_frame(
 	}
 	if (frame.stage == ActionStage::WAIT_DISCARD) {
 		finish_action(state, exile_stack, completed_discard_outcome);
+		return;
+	}
+	if (frame.stage == ActionStage::WAIT_MOVE) {
+		if (completed_move_outcome == DuelNativeCompactKernel::ActionOutcome::APPLIED) {
+			frame.execution_state.current_source_cell = kernel.find_board_card(
+				state,
+				frame.group.source_card_index,
+				frame.child_target_cell
+			);
+		}
+		finish_action(state, exile_stack, completed_move_outcome);
 		return;
 	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
@@ -566,6 +605,122 @@ void ResolutionEngine::step_action_frame(
 			frame.event_context,
 			frame.action_context,
 			frame.execution_state,
+			*frame.resolution
+		);
+		return;
+	}
+	if (
+		action.opcode == DuelNativeCompactKernel::ActionOpcode::MOVE_SELF_TO_TARGET
+		|| action.opcode
+			== DuelNativeCompactKernel::ActionOpcode::MOVE_SELF_TO_FIRST_ADJACENT_EMPTY
+		|| action.opcode
+			== DuelNativeCompactKernel::ActionOpcode::MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY
+	) {
+		const int32_t moving_card = frame.action_context.action_subject_card_index;
+		const int32_t moving_owner = frame.action_context.action_subject_owner;
+		int32_t source_zone = -1;
+		int32_t source_owner = 0;
+		int32_t current_cell = -1;
+		if (
+			moving_card < 0
+			|| !kernel.locate_card(
+				state,
+				moving_card,
+				source_zone,
+				source_owner,
+				current_cell
+			)
+			|| source_zone != 0
+			|| source_owner != moving_owner
+		) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		int32_t target_cell = -1;
+		if (action.opcode == DuelNativeCompactKernel::ActionOpcode::MOVE_SELF_TO_TARGET) {
+			if (frame.action_context.activation_target_kind != StringName("board_cell")) {
+				finish_action(
+					state,
+					exile_stack,
+					DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+				);
+				return;
+			}
+			target_cell = frame.action_context.activation_target_index;
+			if (
+				current_cell != frame.execution_state.current_source_cell
+				|| target_cell < 0
+				|| target_cell >= static_cast<int32_t>(state.board_card_indices.size())
+				|| state.board_card_indices[target_cell] >= 0
+			) target_cell = -1;
+			bool adjacent = false;
+			for (int32_t direction = 0; target_cell >= 0 && direction < 4; ++direction) {
+				if (neighbor_index(current_cell, direction) == target_cell) {
+					adjacent = true;
+					break;
+				}
+			}
+			if (!adjacent) target_cell = -1;
+		} else if (
+			action.opcode
+			== DuelNativeCompactKernel::ActionOpcode::MOVE_SELF_TO_FIRST_ADJACENT_EMPTY
+		) {
+			for (
+				int32_t candidate = 0;
+				candidate < static_cast<int32_t>(state.board_card_indices.size());
+				++candidate
+			) {
+				if (state.board_card_indices[candidate] >= 0) continue;
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					if (neighbor_index(current_cell, direction) == candidate) {
+						target_cell = candidate;
+						break;
+					}
+				}
+				if (target_cell >= 0) break;
+			}
+		} else {
+			for (
+				int32_t middle_cell = 0;
+				middle_cell < static_cast<int32_t>(state.board_card_indices.size());
+				++middle_cell
+			) {
+				if (state.board_card_indices[middle_cell] >= 0) continue;
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					if (neighbor_index(current_cell, direction) != middle_cell) continue;
+					const int32_t far_cell = neighbor_index(middle_cell, direction);
+					if (
+						far_cell < 0
+						|| state.board_card_indices[far_cell] < 0
+						|| state.board_owners[far_cell] == moving_owner
+					) continue;
+					target_cell = middle_cell;
+					break;
+				}
+				if (target_cell >= 0) break;
+			}
+		}
+		if (target_cell < 0) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		frame.child_target_cell = target_cell;
+		frame.stage = ActionStage::WAIT_MOVE;
+		push_move_frame(
+			current_cell,
+			current_cell,
+			target_cell,
+			moving_card,
+			moving_owner,
+			true,
 			*frame.resolution
 		);
 		return;
@@ -1656,6 +1811,114 @@ void ResolutionEngine::step_discard_frame(
 	}
 	kernel.append_resolution(resolution, hand_change);
 	frame.stage = DiscardStage::NEXT_CARD_EVENT;
+}
+
+void ResolutionEngine::step_move_frame(
+	DuelNativeCompactKernel::NativeState &state,
+	std::vector<int32_t> &exile_stack
+) {
+	(void)exile_stack;
+	MoveFrame &frame = resolution_frames.back()->move;
+	if (frame.stage == MoveStage::COMPLETE || frame.resolution == nullptr) {
+		complete_move_frame();
+		return;
+	}
+	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
+	auto movement_context = [&](int32_t source_cell) {
+		DuelNativeCompactKernel::EventContext context;
+		context.trigger_cell = source_cell;
+		context.trigger_card_index = frame.moving_card_index;
+		context.trigger_owner = frame.moving_owner;
+		context.trigger_zone = 0;
+		context.trigger_logical_index = source_cell;
+		context.trigger_was_on_board = true;
+		context.moving_source_cell = source_cell;
+		context.moving_origin_cell = frame.origin_cell;
+		context.moving_target_cell = frame.target_cell;
+		context.moving_card_index = frame.moving_card_index;
+		context.moving_owner = frame.moving_owner;
+		return context;
+	};
+	if (frame.stage == MoveStage::START) {
+		if (
+			frame.source_cell < 0
+			|| frame.target_cell < 0
+			|| frame.source_cell >= static_cast<int32_t>(state.board_card_indices.size())
+			|| frame.target_cell >= static_cast<int32_t>(state.board_card_indices.size())
+			|| state.board_card_indices[frame.source_cell] != frame.moving_card_index
+			|| state.board_owners[frame.source_cell] != frame.moving_owner
+			|| state.board_card_indices[frame.target_cell] >= 0
+		) {
+			frame.stage = MoveStage::COMPLETE;
+			return;
+		}
+		if (frame.resolve_before_event) {
+			frame.stage = MoveStage::WAIT_BEFORE;
+			push_event_frame(
+				StringName("card_before_moved"),
+				movement_context(frame.source_cell)
+			);
+			return;
+		}
+		frame.stage = MoveStage::MOVE;
+		return;
+	}
+	if (frame.stage == MoveStage::WAIT_BEFORE) {
+		if (!completed_event_resolution.supported) {
+			resolution.reason = completed_event_resolution.reason;
+			frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+			frame.stage = MoveStage::COMPLETE;
+			return;
+		}
+		kernel.append_resolution(frame.movement_resolution, completed_event_resolution);
+		if (
+			kernel.find_board_card(state, frame.moving_card_index, frame.source_cell)
+				!= frame.source_cell
+			|| state.board_owners[frame.source_cell] != frame.moving_owner
+			|| state.board_card_indices[frame.target_cell] >= 0
+		) {
+			kernel.append_resolution(resolution, frame.movement_resolution);
+			frame.outcome = kernel.resolution_has_output(frame.movement_resolution)
+				? DuelNativeCompactKernel::ActionOutcome::APPLIED
+				: DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+			frame.stage = MoveStage::COMPLETE;
+			return;
+		}
+		frame.stage = MoveStage::MOVE;
+		return;
+	}
+	if (frame.stage == MoveStage::MOVE) {
+		const Variant moving_extra = state.board_slot_extras[frame.source_cell];
+		state.board_card_indices[frame.source_cell] = -1;
+		state.board_owners[frame.source_cell] = 0;
+		state.board_slot_extras[frame.source_cell] = Dictionary();
+		state.board_card_indices[frame.target_cell] = frame.moving_card_index;
+		state.board_owners[frame.target_cell] = static_cast<uint8_t>(frame.moving_owner);
+		state.board_slot_extras[frame.target_cell] = moving_extra;
+		Dictionary moved;
+		moved["type"] = StringName("card_moved");
+		moved["source_cell"] = frame.source_cell;
+		moved["target_cell"] = frame.target_cell;
+		moved["owner_id"] = frame.moving_owner;
+		moved["instance_id"] = state.card_instance_ids[frame.moving_card_index];
+		frame.movement_resolution.events.append(moved);
+		frame.stage = MoveStage::WAIT_AFTER;
+		push_event_frame(
+			StringName("card_after_moved"),
+			movement_context(frame.target_cell)
+		);
+		return;
+	}
+	if (!completed_event_resolution.supported) {
+		resolution.reason = completed_event_resolution.reason;
+		frame.outcome = DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+		frame.stage = MoveStage::COMPLETE;
+		return;
+	}
+	kernel.append_resolution(frame.movement_resolution, completed_event_resolution);
+	kernel.append_resolution(resolution, frame.movement_resolution);
+	frame.outcome = DuelNativeCompactKernel::ActionOutcome::APPLIED;
+	frame.stage = MoveStage::COMPLETE;
 }
 
 bool ResolutionEngine::run_transition(
