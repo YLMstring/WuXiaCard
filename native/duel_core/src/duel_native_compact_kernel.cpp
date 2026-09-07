@@ -562,17 +562,13 @@ Dictionary DuelNativeCompactKernel::apply_play_transition(
 	return result;
 }
 
-bool DuelNativeCompactKernel::prepare_play_transition(
+bool DuelNativeCompactKernel::transition_play(
 	const NativeState &source,
 	const NativeAction &action,
 	NativeState &next,
 	Resolution &resolution,
 	bool &supported,
-	String &reason,
-	SummonRequest &summon_request,
-	int32_t &moving_owner,
-	int32_t &played_card_index,
-	std::vector<int32_t> &exile_stack
+	String &reason
 ) const {
 	supported = false;
 	reason = String();
@@ -580,7 +576,7 @@ bool DuelNativeCompactKernel::prepare_play_transition(
 	supported = true;
 	const int32_t hand_index = action.source_index;
 	const int32_t target_cell = action.target_index;
-	moving_owner = source.scalars[0];
+	const int32_t moving_owner = source.scalars[0];
 	const int32_t hand_zone_index = moving_owner - 1;
 	if (hand_zone_index < 0 || hand_zone_index >= static_cast<int32_t>(source.zones.size())) {
 		reason = "Active owner has no compact hand zone";
@@ -599,7 +595,7 @@ bool DuelNativeCompactKernel::prepare_play_transition(
 		reason = "Target board cell is occupied";
 		return false;
 	}
-	played_card_index = source_hand[static_cast<size_t>(hand_index)];
+	const int32_t played_card_index = source_hand[static_cast<size_t>(hand_index)];
 	if (played_card_index < 0 || played_card_index >= static_cast<int32_t>(source.card_instance_ids.size())) {
 		reason = "Hand references an invalid card index";
 		return false;
@@ -670,6 +666,7 @@ bool DuelNativeCompactKernel::prepare_play_transition(
 	}
 
 	resolution = Resolution();
+	std::vector<int32_t> exile_stack;
 	Dictionary placed_event;
 	placed_event["type"] = StringName("card_placed");
 	placed_event["source_cell"] = target_cell;
@@ -700,6 +697,7 @@ bool DuelNativeCompactKernel::prepare_play_transition(
 	);
 	append_resolution(resolution, suppression_resolution);
 
+	SummonRequest summon_request;
 	summon_request.summon_cell = static_cast<int32_t>(target_cell);
 	summon_request.card_index = played_card_index;
 	summon_request.owner_id = moving_owner;
@@ -714,33 +712,6 @@ bool DuelNativeCompactKernel::prepare_play_transition(
 	summon_request.attack_redirect_snapshot_taken = true;
 	summon_request.buffered_placement_events.append(placed_event);
 	summon_request.buffered_placement_events.append_array(hand_change_events);
-	return true;
-}
-
-bool DuelNativeCompactKernel::transition_play(
-	const NativeState &source,
-	const NativeAction &action,
-	NativeState &next,
-	Resolution &resolution,
-	bool &supported,
-	String &reason
-) const {
-	SummonRequest summon_request;
-	int32_t moving_owner = 0;
-	int32_t played_card_index = -1;
-	std::vector<int32_t> exile_stack;
-	if (!prepare_play_transition(
-		source,
-		action,
-		next,
-		resolution,
-		supported,
-		reason,
-		summon_request,
-		moving_owner,
-		played_card_index,
-		exile_stack
-	)) return false;
 	Resolution summon_resolution = resolve_summon_lifecycle(
 		next,
 		summon_request,
