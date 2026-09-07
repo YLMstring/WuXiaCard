@@ -267,6 +267,16 @@ void ResolutionEngine::step_action_frame(
 		);
 		return;
 	}
+	if (frame.stage == ActionStage::WAIT_POWER_EXILE) {
+		finish_action(
+			state,
+			exile_stack,
+			completed_exile_success
+				? DuelNativeCompactKernel::ActionOutcome::APPLIED
+				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+		);
+		return;
+	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
 		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
 		if (!completed_event_resolution.supported) {
@@ -468,6 +478,143 @@ void ResolutionEngine::step_action_frame(
 			*frame.resolution,
 			frame.action_context.record_direct_board_changes
 		);
+		return;
+	}
+	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::CHANGE_POWERS) {
+		int32_t target = -1;
+		int32_t expected_owner = 0;
+		if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::SELECTED_CARD) {
+			target = frame.action_context.selected_card_index;
+			expected_owner = frame.action_context.selected_card_owner != 0
+				? frame.action_context.selected_card_owner
+				: frame.action_context.action_subject_owner;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ABILITY_SOURCE) {
+			target = frame.action_context.ability_source_card_index;
+			expected_owner = frame.action_context.ability_source_owner;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::TRIGGER_CARD) {
+			target = frame.event_context.trigger_card_index;
+			expected_owner = frame.event_context.trigger_owner;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ATTACKER_CARD) {
+			target = frame.event_context.attacker_card_index;
+			expected_owner = frame.event_context.attacker_owner;
+		} else {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			);
+			return;
+		}
+		int32_t zone = -1;
+		int32_t owner = 0;
+		int32_t logical_index = -1;
+		if (
+			target < 0
+			|| !kernel.locate_card(state, target, zone, owner, logical_index)
+			|| zone == 2
+			|| (expected_owner != 0 && owner != expected_owner)
+			|| !kernel.can_change_powers(state, target)
+		) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		int32_t amount = action.amount;
+		if (action.amount_is_hand_count) {
+			int32_t count_owner = 0;
+			if (action.amount_owner == DuelNativeCompactKernel::RelativeOwnerOpcode::CARD_CURRENT) {
+				count_owner = owner;
+			} else if (
+				action.amount_owner
+				== DuelNativeCompactKernel::RelativeOwnerOpcode::ABILITY_SOURCE
+			) {
+				int32_t source_zone = -1;
+				int32_t source_index = -1;
+				if (
+					!kernel.locate_card(
+						state,
+						frame.action_context.ability_source_card_index,
+						source_zone,
+						count_owner,
+						source_index
+					)
+					|| source_zone == 2
+				) {
+					finish_action(
+						state,
+						exile_stack,
+						DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+					);
+					return;
+				}
+			} else {
+				finish_action(
+					state,
+					exile_stack,
+					DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+				);
+				return;
+			}
+			amount = static_cast<int32_t>(state.zones[count_owner - 1].size());
+		}
+		if (amount == 0) {
+			finish_action(
+				state,
+				exile_stack,
+				action.amount_is_hand_count
+					? DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+					: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			);
+			return;
+		}
+		Array previous_powers;
+		Array resulting_powers;
+		bool all_zero = true;
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			const int32_t previous = state.card_powers[target * 4 + direction];
+			const int32_t resulting = std::max(0, previous + amount);
+			previous_powers.append(previous);
+			resulting_powers.append(resulting);
+			state.card_powers[target * 4 + direction] = resulting;
+			all_zero = all_zero && resulting == 0;
+		}
+		Dictionary event;
+		event["type"] = StringName("powers_changed");
+		event["source_cell"] = frame.execution_state.current_source_cell;
+		event["target_cell"] = zone == 0 ? logical_index : -1;
+		event["owner_id"] = owner;
+		event["instance_id"] = state.card_instance_ids[target];
+		event["ability_source_instance_id"] =
+			state.card_instance_ids[frame.group.source_card_index];
+		event["previous_powers"] = previous_powers;
+		event["powers"] = resulting_powers;
+		event["amount"] = amount;
+		event["change_reason"] = StringName("change_powers");
+		event["zone"] = zone == 0
+			? StringName("board")
+			: (zone == 1
+				? StringName("hand")
+				: (zone == 3 ? StringName("discard") : StringName("removed")));
+		event["logical_index"] = logical_index;
+		frame.resolution->events.append(event);
+		if (amount < 0 && all_zero) {
+			frame.stage = ActionStage::WAIT_POWER_EXILE;
+			push_exile_frame(
+				target,
+				frame.execution_state.current_source_cell,
+				frame.group.source_card_index,
+				target == frame.group.source_card_index,
+				StringName("power_reached_zero"),
+				frame.event_context,
+				*frame.resolution,
+				frame.action_context.record_direct_board_changes
+			);
+			return;
+		}
+		finish_action(state, exile_stack, DuelNativeCompactKernel::ActionOutcome::APPLIED);
 		return;
 	}
 	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::FLIP_SELF) {
