@@ -949,6 +949,18 @@ private:
 		bool &supported,
 		String &reason
 	) const;
+	bool prepare_play_transition(
+		const NativeState &source,
+		const NativeAction &action,
+		NativeState &next,
+		Resolution &resolution,
+		bool &supported,
+		String &reason,
+		SummonRequest &summon_request,
+		int32_t &moving_owner,
+		int32_t &played_card_index,
+		std::vector<int32_t> &exile_stack
+	) const;
 	bool transition_activate(
 		const NativeState &source,
 		const NativeAction &action,

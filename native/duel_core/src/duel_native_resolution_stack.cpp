@@ -3637,18 +3637,70 @@ bool ResolutionEngine::run_transition(
 	while (!frames.empty()) {
 		RootTransitionFrame &frame = frames.back();
 		switch (frame.stage) {
-			case RootStage::START:
+			case RootStage::START: {
 				frame.stage = RootStage::COMPLETE;
-				valid = kernel.transition_action(
+				if (frame.action.type != DuelNativeCompactKernel::NativeActionType::PLAY) {
+					valid = kernel.transition_action(
+						source,
+						frame.action,
+						next,
+						resolution,
+						supported,
+						reason,
+						frame.materialize_presentation_payloads
+					);
+					break;
+				}
+				const bool previous_payload_setting = kernel.include_presentation_payloads;
+				kernel.include_presentation_payloads = frame.materialize_presentation_payloads;
+				DuelNativeCompactKernel::SummonRequest summon_request;
+				int32_t moving_owner = 0;
+				int32_t played_card_index = -1;
+				std::vector<int32_t> exile_stack;
+				valid = kernel.prepare_play_transition(
 					source,
 					frame.action,
 					next,
 					resolution,
 					supported,
 					reason,
-					frame.materialize_presentation_payloads
+					summon_request,
+					moving_owner,
+					played_card_index,
+					exile_stack
 				);
+				if (valid) {
+					DuelNativeCompactKernel::Resolution summon_resolution = run_summon(
+						next,
+						summon_request,
+						exile_stack
+					);
+					if (!summon_resolution.supported) {
+						supported = false;
+						reason = summon_resolution.reason;
+						valid = false;
+					} else {
+						kernel.append_resolution(resolution, summon_resolution);
+						DuelNativeCompactKernel::Resolution finish_resolution =
+							kernel.finish_action(
+								next,
+								moving_owner,
+								played_card_index,
+								resolution.extra_play_requests,
+								exile_stack
+							);
+						if (!finish_resolution.supported) {
+							supported = false;
+							reason = finish_resolution.reason;
+							valid = false;
+						} else {
+							kernel.append_resolution(resolution, finish_resolution);
+						}
+					}
+				}
+				kernel.include_presentation_payloads = previous_payload_setting;
 				break;
+			}
 			case RootStage::COMPLETE:
 				frames.pop_back();
 				break;
