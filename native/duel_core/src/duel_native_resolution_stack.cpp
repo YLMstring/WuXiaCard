@@ -87,29 +87,6 @@ void ResolutionEngine::push_exile_frame(
 	resolution_frames.push_back(std::move(frame));
 }
 
-void ResolutionEngine::push_flip_frame(
-	int32_t attacker_cell,
-	int32_t attacker_card_index,
-	int32_t target_cell,
-	int32_t target_card_index,
-	int32_t new_owner,
-	const DuelNativeCompactKernel::EventContext &context,
-	DuelNativeCompactKernel::Resolution &resolution,
-	bool record_capture_index
-) {
-	auto frame = std::make_unique<ResolutionFrame>();
-	frame->kind = FrameKind::FLIP;
-	frame->flip.attacker_cell = attacker_cell;
-	frame->flip.attacker_card_index = attacker_card_index;
-	frame->flip.target_cell = target_cell;
-	frame->flip.target_card_index = target_card_index;
-	frame->flip.new_owner = new_owner;
-	frame->flip.context = context;
-	frame->flip.resolution = &resolution;
-	frame->flip.record_capture_index = record_capture_index;
-	resolution_frames.push_back(std::move(frame));
-}
-
 void ResolutionEngine::run_resolution_stack(
 	DuelNativeCompactKernel::NativeState &state,
 	std::vector<int32_t> &exile_stack
@@ -119,10 +96,8 @@ void ResolutionEngine::run_resolution_stack(
 			step_event_frame(state, exile_stack);
 		} else if (resolution_frames.back()->kind == FrameKind::ACTION_SEQUENCE) {
 			step_action_frame(state, exile_stack);
-		} else if (resolution_frames.back()->kind == FrameKind::EXILE) {
-			step_exile_frame(state, exile_stack);
 		} else {
-			step_flip_frame(state, exile_stack);
+			step_exile_frame(state, exile_stack);
 		}
 	}
 }
@@ -147,11 +122,6 @@ void ResolutionEngine::complete_exile_frame(std::vector<int32_t> &exile_stack) {
 		frame.guard_pushed = false;
 	}
 	completed_exile_success = frame.success;
-	resolution_frames.pop_back();
-}
-
-void ResolutionEngine::complete_flip_frame() {
-	completed_flip_success = resolution_frames.back()->flip.success;
 	resolution_frames.pop_back();
 }
 
@@ -252,16 +222,6 @@ void ResolutionEngine::step_action_frame(
 			state,
 			exile_stack,
 			completed_exile_success
-				? DuelNativeCompactKernel::ActionOutcome::APPLIED
-				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-		);
-		return;
-	}
-	if (frame.stage == ActionStage::WAIT_FLIP) {
-		finish_action(
-			state,
-			exile_stack,
-			completed_flip_success
 				? DuelNativeCompactKernel::ActionOutcome::APPLIED
 				: DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
 		);
@@ -465,66 +425,6 @@ void ResolutionEngine::step_action_frame(
 			self_removal || target == frame.action_context.ability_source_card_index,
 			reason,
 			frame.event_context,
-			*frame.resolution,
-			frame.action_context.record_direct_board_changes
-		);
-		return;
-	}
-	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::FLIP_SELF) {
-		const int32_t target = frame.action_context.action_subject_card_index;
-		const int32_t target_cell = kernel.find_board_card(
-			state,
-			target,
-			frame.action_context.action_subject_logical_index
-		);
-		if (
-			target_cell < 0
-			|| state.board_owners[target_cell] != frame.action_context.action_subject_owner
-		) {
-			finish_action(
-				state,
-				exile_stack,
-				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-			);
-			return;
-		}
-		const int32_t new_owner = kernel.resolve_relative_owner(
-			state,
-			action.new_owner,
-			frame.action_context,
-			target
-		);
-		if (new_owner != 1 && new_owner != 2) {
-			finish_action(
-				state,
-				exile_stack,
-				DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
-			);
-			return;
-		}
-		if (new_owner == state.board_owners[target_cell]) {
-			finish_action(
-				state,
-				exile_stack,
-				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
-			);
-			return;
-		}
-		DuelNativeCompactKernel::EventContext flip_context;
-		flip_context.trigger_cell = target_cell;
-		flip_context.trigger_card_index = target;
-		flip_context.trigger_owner = state.board_owners[target_cell];
-		flip_context.trigger_was_on_board = true;
-		flip_context.new_owner = new_owner;
-		flip_context.flip_reason = StringName("ability_non_attack_flip");
-		frame.stage = ActionStage::WAIT_FLIP;
-		push_flip_frame(
-			-1,
-			-1,
-			target_cell,
-			target,
-			new_owner,
-			flip_context,
 			*frame.resolution,
 			frame.action_context.record_direct_board_changes
 		);
@@ -777,173 +677,6 @@ void ResolutionEngine::step_exile_frame(
 		resolution.exiles.append(frame.exiled_cell);
 	}
 	frame.stage = ExileStage::COMPLETE;
-}
-
-void ResolutionEngine::step_flip_frame(
-	DuelNativeCompactKernel::NativeState &state,
-	std::vector<int32_t> &exile_stack
-) {
-	(void)exile_stack;
-	FlipFrame &frame = resolution_frames.back()->flip;
-	if (frame.stage == FlipStage::COMPLETE || frame.resolution == nullptr) {
-		complete_flip_frame();
-		return;
-	}
-	DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
-	auto append_event_payload = [&](const DuelNativeCompactKernel::Resolution &child) {
-		resolution.events.append_array(child.events);
-		resolution.captures.append_array(child.captures);
-		resolution.exiles.append_array(child.exiles);
-	};
-
-	if (frame.stage == FlipStage::START) {
-		const int32_t current_target_cell = kernel.find_board_card(
-			state,
-			frame.target_card_index,
-			frame.target_cell
-		);
-		if (
-			current_target_cell < 0
-			|| state.board_owners[current_target_cell] == frame.new_owner
-		) {
-			frame.stage = FlipStage::COMPLETE;
-			return;
-		}
-		frame.target_cell = current_target_cell;
-		frame.stage = FlipStage::WAIT_BEFORE;
-		push_event_frame(StringName("card_before_flipped"), frame.context);
-		return;
-	}
-
-	if (frame.stage == FlipStage::WAIT_PREVENTED) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.success = false;
-		} else {
-			append_event_payload(completed_event_resolution);
-		}
-		frame.stage = FlipStage::COMPLETE;
-		return;
-	}
-
-	if (frame.stage == FlipStage::WAIT_AFTER) {
-		if (!completed_event_resolution.supported) {
-			resolution.reason = completed_event_resolution.reason;
-			frame.success = false;
-			frame.stage = FlipStage::COMPLETE;
-			return;
-		}
-		append_event_payload(completed_event_resolution);
-		const int32_t post_cell = kernel.find_board_card(
-			state,
-			frame.target_card_index,
-			frame.target_cell
-		);
-		if (post_cell >= 0) {
-			for (const uint64_t ability_handle : frame.remove_after_after_flip) {
-				kernel.remove_ability_with_event(
-					state,
-					frame.target_card_index,
-					ability_handle,
-					frame.attacker_cell,
-					frame.attacker_card_index,
-					post_cell,
-					frame.new_owner,
-					resolution.events
-				);
-			}
-		}
-		frame.stage = FlipStage::COMPLETE;
-		return;
-	}
-
-	if (!completed_event_resolution.supported) {
-		resolution.reason = completed_event_resolution.reason;
-		frame.success = false;
-		frame.stage = FlipStage::COMPLETE;
-		return;
-	}
-	const bool flip_prevented = completed_event_resolution.flip_prevented;
-	append_event_payload(completed_event_resolution);
-	if (flip_prevented) {
-		Dictionary prevented;
-		prevented["type"] = StringName("card_flip_prevented");
-		prevented["source_cell"] = frame.attacker_cell;
-		prevented["target_cell"] = frame.target_cell;
-		prevented["owner_id"] = frame.context.trigger_owner;
-		prevented["new_owner_id"] = frame.new_owner;
-		prevented["instance_id"] = state.card_instance_ids[frame.target_card_index];
-		resolution.events.append(prevented);
-		frame.stage = FlipStage::WAIT_PREVENTED;
-		push_event_frame(StringName("card_flip_prevented"), frame.context);
-		return;
-	}
-
-	const int32_t current_target_cell = kernel.find_board_card(
-		state,
-		frame.target_card_index,
-		frame.target_cell
-	);
-	if (
-		current_target_cell < 0
-		|| state.board_owners[current_target_cell] == frame.new_owner
-	) {
-		frame.stage = FlipStage::COMPLETE;
-		return;
-	}
-	frame.target_cell = current_target_cell;
-	for (
-		size_t ability_index = 0;
-		ability_index < state.card_runtime_abilities[frame.target_card_index].size();
-		++ability_index
-	) {
-		const DuelNativeCompactKernel::CompiledAbility *ability = kernel.runtime_ability(
-			state,
-			frame.target_card_index,
-			static_cast<int32_t>(ability_index)
-		);
-		if (ability == nullptr || ability->retained_on_flip) continue;
-		const uint64_t handle =
-			state.card_runtime_abilities[frame.target_card_index][ability_index].handle;
-		if (ability->isolated_self_after_flip) {
-			frame.remove_after_after_flip.push_back(handle);
-		} else {
-			frame.remove_before_after_flip.push_back(handle);
-		}
-	}
-	state.board_owners[current_target_cell] = static_cast<uint8_t>(frame.new_owner);
-	Dictionary flipped;
-	flipped["type"] = StringName("card_flipped");
-	flipped["source_cell"] = frame.attacker_cell;
-	flipped["target_cell"] = current_target_cell;
-	flipped["owner_id"] = frame.new_owner;
-	flipped["instance_id"] = state.card_instance_ids[frame.target_card_index];
-	resolution.events.append(flipped);
-	kernel.clear_runtime_suppression(state, frame.target_card_index);
-	for (const uint64_t ability_handle : frame.remove_before_after_flip) {
-		kernel.remove_ability_with_event(
-			state,
-			frame.target_card_index,
-			ability_handle,
-			frame.attacker_cell,
-			frame.attacker_card_index,
-			current_target_cell,
-			frame.new_owner,
-			resolution.events
-		);
-	}
-	if (kernel.include_presentation_payloads && frame.record_capture_index) {
-		resolution.captures.append(current_target_cell);
-	}
-	DuelNativeCompactKernel::EventContext after_context = frame.context;
-	after_context.trigger_cell = current_target_cell;
-	after_context.trigger_card_index = frame.target_card_index;
-	after_context.trigger_previous_owner = frame.context.trigger_owner;
-	after_context.trigger_owner = frame.context.trigger_owner;
-	after_context.trigger_zone = 0;
-	after_context.trigger_logical_index = current_target_cell;
-	frame.stage = FlipStage::WAIT_AFTER;
-	push_event_frame(StringName("card_after_flipped"), after_context);
 }
 
 bool ResolutionEngine::run_transition(
