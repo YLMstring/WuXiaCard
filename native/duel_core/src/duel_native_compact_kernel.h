@@ -724,10 +724,6 @@ public:
 	Dictionary inspect_layout() const;
 	Dictionary benchmark_core_clone(int64_t iterations) const;
 	Dictionary apply_iterative_transition_for_test(const Dictionary &action) const;
-	Dictionary resolve_event_iterative_for_test(
-		const StringName &event_id,
-		const Dictionary &context
-	) const;
 	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,
