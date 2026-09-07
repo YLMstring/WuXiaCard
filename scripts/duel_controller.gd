@@ -2057,15 +2057,30 @@ func _finish_match() -> void:
 	_sync_hand_playability()
 	var player_total: int = DuelRules.count_owned(board, DuelRules.PLAYER_OWNER)
 	var opponent_total: int = DuelRules.count_owned(board, DuelRules.OPPONENT_OWNER)
+	var terminal_prefix: String = _terminal_result_prefix()
 	if player_total > opponent_total:
 		_match_outcome = OUTCOME_VICTORY
-		turn_status.text = "获胜 · %d–%d" % [player_total, opponent_total]
+		turn_status.text = "%s获胜 · %d–%d" % [terminal_prefix, player_total, opponent_total]
 	else:
 		_match_outcome = OUTCOME_DEFEAT
-		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
+		turn_status.text = "%s失败 · %d–%d" % [terminal_prefix, player_total, opponent_total]
 	if not _is_replaying:
 		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
+
+
+func _terminal_result_prefix() -> String:
+	if duel_state == null:
+		return ""
+	match duel_state.terminal_reason:
+		StateData.TERMINAL_REASON_ACTION_LIMIT:
+			return "行动上限 "
+		StateData.TERMINAL_REASON_FIVEFOLD_REPETITION:
+			return "五次重复 "
+		StateData.TERMINAL_REASON_RESOLUTION_LOOP:
+			return "结算循环 "
+		_:
+			return ""
 
 
 func _sync_hand_playability() -> void:

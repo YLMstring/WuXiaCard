@@ -173,6 +173,15 @@ class DuelNativeCompactKernel : public RefCounted {
 		UNSUPPORTED,
 	};
 
+	enum class TerminalReason : int32_t {
+		NONE = 0,
+		ACTION_LIMIT = 1,
+		FIVEFOLD_REPETITION = 2,
+		RESOLUTION_LOOP = 3,
+		FULL_BOARD = 4,
+		NO_LEGAL_ACTIONS = 5,
+	};
+
 	enum class CardRefOpcode : uint8_t {
 		SELECTED_CARD,
 		TRIGGER_CARD,
@@ -1495,6 +1504,8 @@ private:
 	bool owner_has_legal_play(const NativeState &value, int32_t owner_id) const;
 	bool owner_has_legal_action(const NativeState &value, int32_t owner_id) const;
 	bool is_terminal(const NativeState &value) const;
+	TerminalReason terminal_reason(const NativeState &value) const;
+	void lock_terminal_reason(NativeState &value) const;
 	void apply_extra_card_play_requests(
 		NativeState &value,
 		int32_t moving_owner,

@@ -119,6 +119,7 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 	state.run_difficulty = 9
 	state.difficulty_eight_draw_consumed = true
 	state.state_version = 42
+	state.terminal_reason = State.TERMINAL_REASON_RESOLUTION_LOOP
 
 	var compact: CompactState = _capture(state)
 	_check(compact != null, "Nonempty runtime state can be captured")
