@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_iterative_attack_lifecycle_matches_recursive()
 	_test_iterative_attack_actions_match_recursive()
 	_test_iterative_distribute_ki_matches_recursive()
+	_test_iterative_transfer_resource_matches_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
 	_test_iterative_zero_power_exile_matches_recursive()
 	_test_iterative_return_to_hand_matches_recursive()
@@ -617,6 +618,89 @@ func _test_iterative_distribute_ki_matches_recursive() -> void:
 		iterative == recursive,
 		"Explicit ki-distribution frame preserves recipient order and immediate ki reactions"
 	)
+
+
+func _test_iterative_transfer_resource_matches_recursive() -> void:
+	for donor_has_ki: bool in [true, false]:
+		var board: Array = Rules.empty_board()
+		var source_id := StringName("iterative_transfer_source_%s" % str(donor_has_ki))
+		var source: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan", Rules.PLAYER_OWNER, source_id
+		)
+		source["active_abilities"] = [{
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [Catalog.CARD_ZONE_BOARD],
+						"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY}],
+						"limit": 1,
+					},
+					"actions": [{
+						"type": Catalog.ACTION_TRANSFER_CARD_RESOURCE,
+						"from": Catalog.CARD_REF_SELECTED_CARD,
+						"to": Catalog.CARD_REF_ABILITY_SOURCE,
+						"amount": 1,
+						"resource": Catalog.RESOURCE_KI,
+						"fallback_resource": Catalog.RESOURCE_POWERS,
+					}],
+				}],
+			}],
+		}]
+		var donor: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			StringName("iterative_transfer_donor_%s" % str(donor_has_ki))
+		)
+		donor["ki"] = 1 if donor_has_ki else 0
+		donor["powers"] = [1, 1, 1, 1]
+		donor["active_abilities"] = [{
+			"triggers": [{
+				"event": Catalog.CARD_BEFORE_EXILED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			}],
+		}]
+		board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+		board[0] = {"owner": Rules.OPPONENT_OWNER, "card": donor}
+		var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+		var compact := CompactState.new()
+		_check(
+			compact.capture_state(state),
+			"Iterative transfer fixture crosses the compact boundary (%s)" % str(donor_has_ki)
+		)
+		if not compact.is_structurally_valid():
+			continue
+		var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+		_check(kernel != null, "Iterative transfer fixture creates the native kernel")
+		if kernel == null:
+			continue
+		_check(
+			bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+			"Iterative transfer fixture loads into the native kernel"
+		)
+		var context: Dictionary = {
+			"trigger_cell": 4,
+			"trigger_instance_id": source_id,
+			"trigger_owner_id": Rules.PLAYER_OWNER,
+			"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+			"trigger_zone": &"board",
+			"trigger_logical_index": 4,
+			"trigger_was_on_board": true,
+		}
+		var recursive: Dictionary = kernel.call(
+			"resolve_event_transition", &"card_after_summoned", context
+		) as Dictionary
+		var iterative: Dictionary = kernel.call(
+			"resolve_event_iterative_for_test", &"card_after_summoned", context
+		) as Dictionary
+		_check(
+			iterative == recursive,
+			"Resource-transfer frame preserves the %s path"
+			% ("ki" if donor_has_ki else "power-with-zero-exile")
+		)
 
 
 func _test_iterative_flip_prevention_matches_recursive() -> void:

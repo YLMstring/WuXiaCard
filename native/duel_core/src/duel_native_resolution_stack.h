@@ -74,6 +74,7 @@ private:
 		WAIT_EXILE,
 		WAIT_FLIP,
 		WAIT_POWER_EXILE,
+		WAIT_POWER_CHANGE,
 		WAIT_DRAW,
 		WAIT_DISCARD,
 		WAIT_MOVE,
@@ -82,6 +83,7 @@ private:
 		WAIT_SUMMON,
 		WAIT_ATTACK,
 		WAIT_DISTRIBUTE_KI,
+		WAIT_TRANSFER_RESOURCE,
 		NEXT_KI_EVENT,
 		WAIT_KI_EVENT,
 		COMPLETE,
@@ -194,6 +196,47 @@ private:
 		bool transferred_in_round = false;
 		int64_t ki_event_index = 0;
 		int64_t ki_event_end = 0;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	};
+
+	enum class PowerChangeStage : uint8_t {
+		START,
+		WAIT_EXILE,
+		COMPLETE,
+	};
+
+	struct PowerChangeFrame {
+		PowerChangeStage stage = PowerChangeStage::START;
+		DuelNativeCompactKernel::EventGroup group;
+		DuelNativeCompactKernel::CompiledAction action;
+		DuelNativeCompactKernel::EventContext event_context;
+		DuelNativeCompactKernel::ActionContext action_context;
+		int32_t source_cell = -1;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	};
+
+	enum class TransferResourceStage : uint8_t {
+		START,
+		WAIT_DONOR_POWERS,
+		WAIT_RECEIVER_POWERS,
+		COMPLETE,
+	};
+
+	struct TransferResourceFrame {
+		TransferResourceStage stage = TransferResourceStage::START;
+		DuelNativeCompactKernel::EventGroup group;
+		DuelNativeCompactKernel::CompiledAction action;
+		DuelNativeCompactKernel::EventContext event_context;
+		DuelNativeCompactKernel::ActionContext action_context;
+		int32_t source_cell = -1;
+		DuelNativeCompactKernel::Resolution *resolution = nullptr;
+		int32_t donor = -1;
+		int32_t donor_owner = 0;
+		int32_t receiver = -1;
+		int32_t receiver_owner = 0;
 		DuelNativeCompactKernel::ActionOutcome outcome =
 			DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 	};
@@ -356,6 +399,8 @@ private:
 		SUMMON,
 		ATTACK,
 		DISTRIBUTE_KI,
+		POWER_CHANGE,
+		TRANSFER_RESOURCE,
 	};
 
 	struct ResolutionFrame {
@@ -371,6 +416,8 @@ private:
 		SummonFrame summon;
 		AttackFrame attack;
 		DistributeKiFrame distribute_ki;
+		PowerChangeFrame power_change;
+		TransferResourceFrame transfer_resource;
 	};
 
 	DuelNativeCompactKernel::ActionOutcome run_actions(
@@ -462,6 +509,22 @@ private:
 		const DuelNativeCompactKernel::ActionExecutionState &execution_state,
 		DuelNativeCompactKernel::Resolution &resolution
 	);
+	void push_power_change_frame(
+		const DuelNativeCompactKernel::EventGroup &group,
+		const DuelNativeCompactKernel::CompiledAction &action,
+		const DuelNativeCompactKernel::EventContext &event_context,
+		const DuelNativeCompactKernel::ActionContext &action_context,
+		int32_t source_cell,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
+	void push_transfer_resource_frame(
+		const DuelNativeCompactKernel::EventGroup &group,
+		const DuelNativeCompactKernel::CompiledAction &action,
+		const DuelNativeCompactKernel::EventContext &event_context,
+		const DuelNativeCompactKernel::ActionContext &action_context,
+		int32_t source_cell,
+		DuelNativeCompactKernel::Resolution &resolution
+	);
 	void run_resolution_stack(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
@@ -510,6 +573,14 @@ private:
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack
 	);
+	void step_power_change_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
+	void step_transfer_resource_frame(
+		DuelNativeCompactKernel::NativeState &state,
+		std::vector<int32_t> &exile_stack
+	);
 	void finish_action(
 		DuelNativeCompactKernel::NativeState &state,
 		std::vector<int32_t> &exile_stack,
@@ -527,6 +598,8 @@ private:
 	void complete_summon_frame();
 	void complete_attack_frame();
 	void complete_distribute_ki_frame();
+	void complete_power_change_frame();
+	void complete_transfer_resource_frame();
 
 	const DuelNativeCompactKernel &kernel;
 	std::vector<RootTransitionFrame> frames;
@@ -547,6 +620,10 @@ private:
 	DuelNativeCompactKernel::Resolution completed_summon_resolution;
 	DuelNativeCompactKernel::Resolution completed_attack_resolution;
 	DuelNativeCompactKernel::ActionOutcome completed_distribute_ki_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	DuelNativeCompactKernel::ActionOutcome completed_power_change_outcome =
+		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+	DuelNativeCompactKernel::ActionOutcome completed_transfer_resource_outcome =
 		DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
 };
 
