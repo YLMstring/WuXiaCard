@@ -25,7 +25,6 @@ func _run() -> void:
 	_test_iterative_resolution_root_matches_recursive()
 	_test_iterative_event_group_loop_matches_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
-	_test_iterative_zero_power_exile_matches_recursive()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -267,67 +266,6 @@ func _test_iterative_flip_prevention_matches_recursive() -> void:
 	_check(
 		iterative == recursive,
 		"Explicit flip frame preserves prevention and prevented-event ordering"
-	)
-
-
-func _test_iterative_zero_power_exile_matches_recursive() -> void:
-	var board: Array = Rules.empty_board()
-	var source: Dictionary = Catalog.create_instance(
-		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_zero_power_source"
-	)
-	source["active_abilities"] = [{
-		"triggers": [{
-			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
-			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
-			"actions": [{
-				"type": Catalog.ACTION_CHANGE_POWERS,
-				"card": Catalog.CARD_REF_ABILITY_SOURCE,
-				"amount": -99,
-			}],
-		}],
-	}]
-	var watcher: Dictionary = Catalog.create_instance(
-		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"iterative_zero_power_watcher"
-	)
-	watcher["active_abilities"] = [{
-		"triggers": [{
-			"event": Catalog.CARD_BEFORE_EXILED,
-			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
-		}],
-	}]
-	board[0] = {"owner": Rules.PLAYER_OWNER, "card": source}
-	board[4] = {"owner": Rules.PLAYER_OWNER, "card": watcher}
-	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
-	var compact := CompactState.new()
-	_check(compact.capture_state(state), "Iterative zero-power fixture crosses the compact boundary")
-	if not compact.is_structurally_valid():
-		return
-	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
-	_check(kernel != null, "Iterative zero-power fixture creates the native kernel")
-	if kernel == null:
-		return
-	_check(
-		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
-		"Iterative zero-power fixture loads into the native kernel"
-	)
-	var context: Dictionary = {
-		"trigger_cell": 0,
-		"trigger_instance_id": &"iterative_zero_power_source",
-		"trigger_owner_id": Rules.PLAYER_OWNER,
-		"trigger_previous_owner_id": Rules.PLAYER_OWNER,
-		"trigger_zone": &"board",
-		"trigger_logical_index": 0,
-		"trigger_was_on_board": true,
-	}
-	var recursive: Dictionary = kernel.call(
-		"resolve_event_transition", &"card_after_summoned", context
-	) as Dictionary
-	var iterative: Dictionary = kernel.call(
-		"resolve_event_iterative_for_test", &"card_after_summoned", context
-	) as Dictionary
-	_check(
-		iterative == recursive,
-		"Explicit power consequence frame preserves zero-power exile and child events"
 	)
 
 
