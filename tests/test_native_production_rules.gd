@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_iterative_event_group_loop_matches_recursive()
 	_test_iterative_flip_prevention_matches_recursive()
 	_test_iterative_zero_power_exile_matches_recursive()
+	_test_iterative_return_to_hand_matches_recursive()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -361,6 +362,94 @@ func _test_iterative_zero_power_exile_matches_recursive() -> void:
 		iterative == recursive,
 		"Explicit power consequence frame preserves zero-power exile and child events"
 	)
+
+
+func _test_iterative_return_to_hand_matches_recursive() -> void:
+	for full_hand: bool in [false, true]:
+		var board: Array = Rules.empty_board()
+		var target: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			StringName("iterative_return_target_%s" % str(full_hand))
+		)
+		target["active_abilities"] = [{
+			"triggers": [{
+				"event": Catalog.CARD_BEFORE_EXILED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+			}],
+		}]
+		var source: Dictionary = Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			StringName("iterative_return_source_%s" % str(full_hand))
+		)
+		source["active_abilities"] = [{
+			"triggers": [{
+				"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+				"actions": [{
+					"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [Catalog.CARD_ZONE_BOARD],
+						"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+						"limit": 1,
+					},
+					"actions": [{
+						"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+						"card": Catalog.CARD_REF_SELECTED_CARD,
+						"recipient": Catalog.OWNER_ABILITY_SOURCE,
+					}],
+				}],
+			}],
+		}]
+		board[0] = {"owner": Rules.PLAYER_OWNER, "card": target}
+		board[4] = {"owner": Rules.PLAYER_OWNER, "card": source}
+		var hand: Array = []
+		if full_hand:
+			for hand_index: int in range(5):
+				hand.append(Catalog.create_instance(
+					&"TaiZuChangQuan",
+					Rules.PLAYER_OWNER,
+					StringName("iterative_return_hand_%d" % hand_index)
+				))
+		var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+		var compact := CompactState.new()
+		_check(
+			compact.capture_state(state),
+			"Iterative return fixture crosses the compact boundary (%s)" % str(full_hand)
+		)
+		if not compact.is_structurally_valid():
+			continue
+		var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+		_check(kernel != null, "Iterative return fixture creates the native kernel")
+		if kernel == null:
+			continue
+		_check(
+			bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+			"Iterative return fixture loads into the native kernel"
+		)
+		var source_id := StringName("iterative_return_source_%s" % str(full_hand))
+		var context: Dictionary = {
+			"trigger_cell": 4,
+			"trigger_instance_id": source_id,
+			"trigger_owner_id": Rules.PLAYER_OWNER,
+			"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+			"trigger_zone": &"board",
+			"trigger_logical_index": 4,
+			"trigger_was_on_board": true,
+		}
+		var recursive: Dictionary = kernel.call(
+			"resolve_event_transition", &"card_after_summoned", context
+		) as Dictionary
+		var iterative: Dictionary = kernel.call(
+			"resolve_event_iterative_for_test", &"card_after_summoned", context
+		) as Dictionary
+		_check(
+			iterative == recursive,
+			"Return-to-hand frame preserves %s branch"
+			% ("full-hand exile" if full_hand else "fresh return")
+		)
 
 
 func _test_live_catalog_compiles_natively() -> void:

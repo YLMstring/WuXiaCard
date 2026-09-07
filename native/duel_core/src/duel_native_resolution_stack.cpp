@@ -424,6 +424,17 @@ void ResolutionEngine::step_action_frame(
 		finish_action(state, exile_stack, completed_swap_outcome);
 		return;
 	}
+	if (frame.stage == ActionStage::WAIT_RETURN_EXILE) {
+		DuelNativeCompactKernel::ActionOutcome outcome =
+			DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED;
+		if (completed_exile_success) {
+			outcome = frame.resolution->events.size() > frame.return_previous_event_count
+				? DuelNativeCompactKernel::ActionOutcome::APPLIED
+				: DuelNativeCompactKernel::ActionOutcome::NO_EFFECT;
+		}
+		finish_action(state, exile_stack, outcome);
+		return;
+	}
 	if (frame.stage == ActionStage::WAIT_KI_EVENT) {
 		DuelNativeCompactKernel::Resolution &resolution = *frame.resolution;
 		if (!completed_event_resolution.supported) {
@@ -596,6 +607,118 @@ void ResolutionEngine::step_action_frame(
 			draw_context,
 			*frame.resolution
 		);
+		return;
+	}
+	if (action.opcode == DuelNativeCompactKernel::ActionOpcode::RETURN_CARD_TO_HAND) {
+		int32_t target = -1;
+		if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::SELECTED_CARD) {
+			target = frame.action_context.selected_card_index;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::TRIGGER_CARD) {
+			target = frame.event_context.trigger_card_index;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ABILITY_SOURCE) {
+			target = frame.action_context.ability_source_card_index;
+		} else if (action.card_ref == DuelNativeCompactKernel::CardRefOpcode::ATTACKER_CARD) {
+			target = frame.event_context.attacker_card_index;
+		} else {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			);
+			return;
+		}
+		if (target < 0 || target >= static_cast<int32_t>(state.card_instance_ids.size())) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		int32_t target_zone = -1;
+		int32_t target_owner = 0;
+		int32_t target_index = -1;
+		if (
+			!kernel.locate_card(state, target, target_zone, target_owner, target_index)
+			|| (action.preserve_instance ? target_zone != 3 : target_zone != 0)
+		) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		int32_t recipient_owner = 0;
+		if (
+			action.recipient_owner
+			== DuelNativeCompactKernel::RelativeOwnerOpcode::CARD_CURRENT
+		) {
+			recipient_owner = target_owner;
+		} else if (
+			action.recipient_owner
+			== DuelNativeCompactKernel::RelativeOwnerOpcode::CARD_ORIGINAL
+		) {
+			recipient_owner = state.card_original_owners[target];
+		} else if (
+			action.recipient_owner
+			== DuelNativeCompactKernel::RelativeOwnerOpcode::ABILITY_SOURCE
+		) {
+			recipient_owner = frame.action_context.ability_source_owner;
+		} else if (
+			action.recipient_owner
+			== DuelNativeCompactKernel::RelativeOwnerOpcode::OPPONENT_OF_ABILITY_SOURCE
+		) {
+			recipient_owner = other_owner(frame.action_context.ability_source_owner);
+		} else {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::UNSUPPORTED
+			);
+			return;
+		}
+		if (recipient_owner != 1 && recipient_owner != 2) {
+			finish_action(
+				state,
+				exile_stack,
+				DuelNativeCompactKernel::ActionOutcome::NO_EFFECT
+			);
+			return;
+		}
+		if (state.zones[recipient_owner - 1].size() >= 5) {
+			const int32_t current_source = kernel.find_board_card(
+				state,
+				frame.action_context.ability_source_card_index,
+				frame.action_context.ability_source_cell
+			);
+			const int32_t source_cell = current_source >= 0
+				? current_source
+				: frame.action_context.ability_source_cell;
+			frame.return_previous_event_count = frame.resolution->events.size();
+			frame.stage = ActionStage::WAIT_RETURN_EXILE;
+			push_exile_frame(
+				target,
+				source_cell,
+				frame.action_context.ability_source_card_index,
+				target == frame.action_context.ability_source_card_index,
+				StringName("return_to_full_hand"),
+				frame.event_context,
+				*frame.resolution,
+				frame.action_context.record_direct_board_changes
+			);
+			return;
+		}
+		const DuelNativeCompactKernel::ActionOutcome outcome = kernel.return_card_to_hand(
+			state,
+			frame.group,
+			action,
+			frame.event_context,
+			frame.action_context,
+			exile_stack,
+			*frame.resolution
+		);
+		finish_action(state, exile_stack, outcome);
 		return;
 	}
 	if (
