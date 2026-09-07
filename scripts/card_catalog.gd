@@ -3803,7 +3803,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"LaiHeQinQuan4": {
 		"id": &"LaiHeQinQuan4",
 		"glyph": "来鹤清泉",
-		"picture": "res://pics/LKT010_004.png",
+		"picture": "res://pics/LKT010_001.png",
 		"sect": "泰山派",
 		"tier": 4,
 		"weapon": "重剑",
