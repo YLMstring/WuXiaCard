@@ -12,9 +12,8 @@ non-loop state and presentation event exactly.
   turn-boundary terminal checks; reserve `RESOLUTION_LOOP` for the new engine.
 - Keep full-board and neither-side-can-act as normal terminal values with no
   displayed reason.
-- Format victory and defeat results using the approved prefixes while
-  preserving player-first scores, the existing tie-as-defeat rule, and replayed
-  final text.
+- Format victory, defeat, and draw results using the approved prefixes while
+  preserving player-first scores and replayed final text.
 - Add compact round-trip, native terminal, controller, and replay regressions.
 
 ## Task 2: Introduce the explicit engine and test-only dual path

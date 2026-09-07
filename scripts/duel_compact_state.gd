@@ -50,8 +50,7 @@ const SCALAR_RUN_DIFFICULTY: int = 10
 const SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED: int = 11
 const SCALAR_STATE_VERSION: int = 12
 const SCALAR_EXTRA_CARD_PLAY_GRANTED_THIS_TURN: int = 13
-const SCALAR_TERMINAL_REASON: int = 14
-const SCALAR_COUNT: int = 15
+const SCALAR_COUNT: int = 14
 
 const MUTABLE_CARD_KEYS: Array[StringName] = [
 	&"instance_id",
@@ -176,7 +175,6 @@ func restore() -> StateData:
 		scalars[SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED]
 	)
 	restored.state_version = scalars[SCALAR_STATE_VERSION]
-	restored.terminal_reason = scalars[SCALAR_TERMINAL_REASON]
 
 	for key: StringName in SIDE_PAYLOAD_KEYS:
 		restored.set(String(key), side_payload.get(key).duplicate(true))
@@ -445,7 +443,6 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"run_difficulty": state.run_difficulty,
 		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
 		"state_version": state.state_version,
-		"terminal_reason": state.terminal_reason,
 	}
 
 
@@ -465,7 +462,6 @@ func _capture_state(state: StateData) -> bool:
 		int(state.difficulty_eight_draw_consumed),
 		state.state_version,
 		int(state.extra_card_play_granted_this_turn),
-		state.terminal_reason,
 	])
 
 	board_card_indices.resize(state.board.size())

@@ -993,10 +993,6 @@ func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
 		fivefold_result.active_player == Rules.PLAYER_OWNER,
 		"Fivefold repetition ends after the current turn and before the next owner starts"
 	)
-	_check(
-		fivefold_result.terminal_reason == State.TERMINAL_REASON_FIVEFOLD_REPETITION,
-		"Fivefold repetition records its exact terminal reason"
-	)
 
 
 func _test_reopened_cell_keeps_match_alive() -> void:
@@ -1200,10 +1196,6 @@ func _test_turn_cap_ends_before_next_turn_starts() -> void:
 		next_state.active_player == Rules.PLAYER_OWNER and Simulator.is_terminal(next_state),
 		"Turn cap becomes terminal before active ownership changes"
 	)
-	_check(
-		next_state.terminal_reason == State.TERMINAL_REASON_ACTION_LIMIT,
-		"Turn cap records its exact terminal reason"
-	)
 
 
 func _test_turn_cap_waits_for_pending_extra_plays() -> void:
@@ -1258,10 +1250,6 @@ func _test_turn_cap_waits_for_pending_extra_plays() -> void:
 		and second_state.active_player == Rules.PLAYER_OWNER
 		and Simulator.is_terminal(second_state),
 		"Turn cap becomes terminal only after all pending extra plays finish"
-	)
-	_check(
-		second_state.terminal_reason == State.TERMINAL_REASON_ACTION_LIMIT,
-		"Turn-cap reason is recorded only after pending extra plays finish"
 	)
 
 

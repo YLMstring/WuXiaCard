@@ -388,28 +388,15 @@ bool DuelNativeCompactKernel::owner_has_legal_action(
 }
 
 bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
-	return terminal_reason(value) != TerminalReason::NONE;
-}
-
-DuelNativeCompactKernel::TerminalReason DuelNativeCompactKernel::terminal_reason(
-	const NativeState &value
-) const {
-	if (value.scalars.size() > 14) {
-		const int32_t locked_reason = value.scalars[14];
-		if (
-			locked_reason >= static_cast<int32_t>(TerminalReason::ACTION_LIMIT)
-			&& locked_reason <= static_cast<int32_t>(TerminalReason::NO_LEGAL_ACTIONS)
-		) return static_cast<TerminalReason>(locked_reason);
-	}
 	const Array effect_queue = value.side_payload.get("effect_queue", Array());
 	if (!effect_queue.is_empty()) {
-		return TerminalReason::NONE;
+		return false;
 	}
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
-		return TerminalReason::NONE;
+		return false;
 	}
 	if (value.scalars[1] >= value.scalars[7]) {
-		return TerminalReason::ACTION_LIMIT;
+		return true;
 	}
 	const Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 	Dictionary counts;
@@ -417,24 +404,15 @@ DuelNativeCompactKernel::TerminalReason DuelNativeCompactKernel::terminal_reason
 		const String signature = repetition_hashes[index];
 		const int64_t count = static_cast<int64_t>(counts.get(signature, 0)) + 1;
 		if (count >= 5) {
-			return TerminalReason::FIVEFOLD_REPETITION;
+			return true;
 		}
 		counts[signature] = count;
 	}
 	if (std::find(value.board_card_indices.begin(), value.board_card_indices.end(), -1)
 		== value.board_card_indices.end()) {
-		return TerminalReason::FULL_BOARD;
+		return true;
 	}
-	return (
-		!owner_has_legal_action(value, 1) && !owner_has_legal_action(value, 2)
-		? TerminalReason::NO_LEGAL_ACTIONS
-		: TerminalReason::NONE
-	);
-}
-
-void DuelNativeCompactKernel::lock_terminal_reason(NativeState &value) const {
-	if (value.scalars.size() <= 14 || value.scalars[14] != 0) return;
-	value.scalars[14] = static_cast<int32_t>(terminal_reason(value));
+	return !owner_has_legal_action(value, 1) && !owner_has_legal_action(value, 2);
 }
 
 void DuelNativeCompactKernel::apply_extra_card_play_requests(
@@ -556,10 +534,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	value.scalars[5] = 0;
 
 	append_resolution(resolution, complete_owner_turn_boundary(value));
-	if (is_terminal(value)) {
-		lock_terminal_reason(value);
-		return resolution;
-	}
+	if (is_terminal(value)) return resolution;
 
 	int32_t previous_owner = moving_owner;
 	while (true) {
@@ -602,10 +577,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		}
 		value.scalars[5] = 0;
 		append_resolution(resolution, complete_owner_turn_boundary(value));
-		if (is_terminal(value)) {
-			lock_terminal_reason(value);
-			return resolution;
-		}
+		if (is_terminal(value)) return resolution;
 		previous_owner = turn_owner;
 	}
 	return resolution;

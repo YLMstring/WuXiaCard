@@ -6,13 +6,6 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const HAND_SLOT_COUNT: int = 5
 const HAND_SLOT_INDEX_KEY: StringName = &"hand_slot_index"
 
-const TERMINAL_REASON_NONE: int = 0
-const TERMINAL_REASON_ACTION_LIMIT: int = 1
-const TERMINAL_REASON_FIVEFOLD_REPETITION: int = 2
-const TERMINAL_REASON_RESOLUTION_LOOP: int = 3
-const TERMINAL_REASON_FULL_BOARD: int = 4
-const TERMINAL_REASON_NO_LEGAL_ACTIONS: int = 5
-
 var board: Array = []
 var hands: Dictionary = {}
 var decks: Dictionary = {}
@@ -38,7 +31,6 @@ var enabled_effect_gates_by_owner: Dictionary = {}
 var run_difficulty: int = 0
 var difficulty_eight_draw_consumed: bool = false
 var state_version: int = 0
-var terminal_reason: int = TERMINAL_REASON_NONE
 
 
 func _init(
@@ -217,7 +209,6 @@ func duplicate_state() -> DuelState:
 	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
-	copied.terminal_reason = terminal_reason
 	return copied
 
 
@@ -251,7 +242,6 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.extra_card_play_granted_this_turn = extra_card_play_granted_this_turn
 	copied.end_turn_triggers_resolved = end_turn_triggers_resolved
 	copied.state_version = state_version
-	copied.terminal_reason = terminal_reason
 	return copied
 
 
