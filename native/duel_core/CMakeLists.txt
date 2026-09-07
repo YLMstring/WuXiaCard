@@ -35,8 +35,6 @@ target_sources(
         src/duel_native_lifecycle.cpp
         src/duel_native_policy.cpp
         src/duel_native_resolution.cpp
-        src/duel_native_resolution_stack.cpp
-        src/duel_native_resolution_stack.h
         src/duel_native_search.cpp
         src/register_types.cpp
         src/register_types.h
