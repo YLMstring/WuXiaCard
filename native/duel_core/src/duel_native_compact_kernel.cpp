@@ -16,6 +16,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::benchmark_core_clone
 	);
 	ClassDB::bind_method(
+		D_METHOD("apply_iterative_transition_for_test", "action"),
+		&DuelNativeCompactKernel::apply_iterative_transition_for_test
+	);
+	ClassDB::bind_method(
 		D_METHOD(
 			"apply_play_transition",
 			"hand_index",

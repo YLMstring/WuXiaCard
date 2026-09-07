@@ -18,8 +18,13 @@
 
 namespace godot {
 
+namespace duel_native_internal {
+class ResolutionEngine;
+}
+
 class DuelNativeCompactKernel : public RefCounted {
 	GDCLASS(DuelNativeCompactKernel, RefCounted)
+	friend class duel_native_internal::ResolutionEngine;
 
 	struct RuntimeAbilityEntry {
 		int32_t compiled_ability_index = -1;
@@ -718,6 +723,7 @@ public:
 	String get_last_error() const;
 	Dictionary inspect_layout() const;
 	Dictionary benchmark_core_clone(int64_t iterations) const;
+	Dictionary apply_iterative_transition_for_test(const Dictionary &action) const;
 	Dictionary apply_play_transition(
 		int64_t hand_index,
 		int64_t target_cell,

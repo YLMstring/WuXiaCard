@@ -22,6 +22,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
+	_test_iterative_resolution_root_matches_recursive()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -45,6 +46,55 @@ func _run() -> void:
 	else:
 		push_error("NATIVE_PRODUCTION_RULES_TESTS_FAILED failures=%d checks=%d" % [_failures, _checks])
 	quit(_failures)
+
+
+func _test_iterative_resolution_root_matches_recursive() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.PLAYER_OWNER,
+			&"iterative_root_player"
+		)],
+		[Catalog.create_instance(
+			&"TaiZuChangQuan",
+			Rules.OPPONENT_OWNER,
+			&"iterative_root_opponent"
+		)],
+		Rules.PLAYER_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Iterative-root fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Iterative-root fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Iterative-root fixture loads into the native kernel"
+	)
+	var actions: Array = kernel.call(
+		"get_legal_actions_for_owner", Rules.PLAYER_OWNER
+	) as Array
+	_check(not actions.is_empty(), "Iterative-root fixture has a legal action")
+	if actions.is_empty():
+		return
+	var action: Dictionary = actions[0] as Dictionary
+	var recursive: Dictionary = kernel.call(
+		"apply_play_transition",
+		int(action.get("source_index", -1)),
+		int(action.get("target_index", -1)),
+		StringName(action.get("source_instance_id", &""))
+	) as Dictionary
+	var iterative: Dictionary = kernel.call(
+		"apply_iterative_transition_for_test", action
+	) as Dictionary
+	_check(
+		iterative == recursive,
+		"Explicit root continuation preserves the complete recursive transition payload"
+	)
 
 
 func _test_live_catalog_compiles_natively() -> void:
