@@ -1276,18 +1276,13 @@ Dictionary DuelNativeCompactKernel::resolve_non_attack_flip_transition(
 	return materialize_direct_transition(next, resolution, true);
 }
 
-bool DuelNativeCompactKernel::prepare_activate_transition(
+bool DuelNativeCompactKernel::transition_activate(
 	const NativeState &source,
 	const NativeAction &action,
 	NativeState &next,
 	Resolution &resolution,
 	bool &supported,
-	String &reason,
-	EventGroup &group,
-	ActionContext &action_context,
-	EventContext &activation_context,
-	const CompiledActivation *&prepared_activation,
-	int32_t &moving_owner
+	String &reason
 ) const {
 	supported = false;
 	reason = String();
@@ -1297,7 +1292,7 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 		reason = "Activation is unavailable during an extra card play";
 		return false;
 	}
-	moving_owner = source.scalars[0];
+	const int32_t moving_owner = source.scalars[0];
 	const int32_t source_cell = action.source_index;
 	const int32_t target_index = action.target_index;
 	const int32_t requested_activation_index = action.activation_index;
@@ -1391,6 +1386,7 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 	next.board_slot_extras = source.board_slot_extras.duplicate(true);
 	next.side_payload = source.side_payload.duplicate(true);
 	resolution = Resolution();
+	std::vector<int32_t> exile_stack;
 	Dictionary activated;
 	activated["type"] = StringName("ability_activated");
 	activated["source_cell"] = source_cell;
@@ -1399,6 +1395,7 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 	activated["instance_id"] = source.card_instance_ids[source_card_index];
 	resolution.events.append(activated);
 
+	EventGroup group;
 	group.source_cell = source_cell;
 	group.source_zone = 0;
 	group.source_logical_index = source_cell;
@@ -1406,6 +1403,7 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 	group.source_owner = moving_owner;
 	group.ability_index = runtime_ability_index;
 	group.ability_handle = ability_handle;
+	ActionContext action_context;
 	action_context.ability_source_cell = source_cell;
 	action_context.ability_source_zone = 0;
 	action_context.ability_source_logical_index = source_cell;
@@ -1424,6 +1422,7 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 		: StringName("board_cell");
 	action_context.activation_target_index = target_index;
 	action_context.record_direct_board_changes = false;
+	EventContext activation_context;
 	activation_context.ability_source_cell = source_cell;
 	activation_context.ability_source_zone = 0;
 	activation_context.ability_source_logical_index = source_cell;
@@ -1434,42 +1433,11 @@ bool DuelNativeCompactKernel::prepare_activate_transition(
 	activation_context.activation_source_card_index = source_card_index;
 	activation_context.activation_target_kind = action_context.activation_target_kind;
 	activation_context.activation_target_index = target_index;
-	prepared_activation = &activation;
-	return true;
-}
-
-bool DuelNativeCompactKernel::transition_activate(
-	const NativeState &source,
-	const NativeAction &action,
-	NativeState &next,
-	Resolution &resolution,
-	bool &supported,
-	String &reason
-) const {
-	EventGroup group;
-	ActionContext action_context;
-	EventContext activation_context;
-	const CompiledActivation *activation = nullptr;
-	int32_t moving_owner = 0;
-	if (!prepare_activate_transition(
-		source,
-		action,
-		next,
-		resolution,
-		supported,
-		reason,
-		group,
-		action_context,
-		activation_context,
-		activation,
-		moving_owner
-	)) return false;
-	std::vector<int32_t> exile_stack;
 
 	const ActionOutcome cost_outcome = execute_actions(
 		next,
 		group,
-		activation->costs,
+		activation.costs,
 		activation_context,
 		action_context,
 		exile_stack,
@@ -1485,7 +1453,7 @@ bool DuelNativeCompactKernel::transition_activate(
 	const ActionOutcome action_outcome = execute_actions(
 		next,
 		group,
-		activation->actions,
+		activation.actions,
 		activation_context,
 		action_context,
 		exile_stack,
@@ -1503,12 +1471,12 @@ bool DuelNativeCompactKernel::transition_activate(
 	after_context.activation_owner = moving_owner;
 	after_context.activation_source_cell = find_board_card(
 		next,
-		action_context.ability_source_card_index,
-		action_context.ability_source_cell
+		source_card_index,
+		source_cell
 	);
-	after_context.activation_source_card_index = action_context.ability_source_card_index;
+	after_context.activation_source_card_index = source_card_index;
 	after_context.activation_target_kind = action_context.activation_target_kind;
-	after_context.activation_target_index = action_context.activation_target_index;
+	after_context.activation_target_index = target_index;
 	Resolution after_activation = resolve_event(
 		next,
 		StringName("card_after_targeted_activation"),
