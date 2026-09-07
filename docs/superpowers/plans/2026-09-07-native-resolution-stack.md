@@ -87,15 +87,20 @@ non-loop state and presentation event exactly.
 
 ## Task 8: Add canonical loop fingerprints and loop terminal
 
-- Fingerprint all rule-relevant native state plus every pending frame and
-  continuation.
-- Canonicalize reachable card identities while preserving same-instance
-  relationships; exclude raw instance ID values and presentation-only data.
-- Detect the first repeated complete resolution configuration, preserve the
-  repeated state, clear pending frames, lock `RESOLUTION_LOOP`, and score
-  immediately without turn-boundary or before-duel-end triggers.
-- Add positive loops, fresh-instance loops, and same-board/different-state or
-  different-continuation negative tests.
+- Build the loop key from the complete pending-frame/continuation fingerprint,
+  authoritative `turn_count`, and board cells in `0..8` order containing only
+  catalog ID plus owner. Deliberately exclude powers, ki, off-board zones,
+  ability state, and `owner_turn_serial` from the state portion of the key.
+- Canonicalize instance references inside frame payloads while preserving
+  same-instance relationships; exclude raw instance ID values and
+  presentation-only data.
+- Count non-consecutive appearances of each loop key within one root
+  resolution. Continue through appearance nineteen; on appearance twenty,
+  preserve the current state, clear pending frames, lock `RESOLUTION_LOOP`, and
+  score immediately without turn-boundary or before-duel-end triggers.
+- Add positive numeric-growth and fresh-instance loops; verify state changes
+  deliberately omitted from the key still accumulate; add different-frame and
+  different-`turn_count` negative tests.
 - Add a separate high emergency step ceiling that reports an internal error and
   is never presented as a gameplay loop.
 
