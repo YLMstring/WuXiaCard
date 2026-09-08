@@ -492,6 +492,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"LeiZHenJian1",
 	&"LeiZHenJian2",
 	&"LeiZHenJian3",
+	&"FeiTian5",
 	&"KuiHua1",
 	&"KuiHua2",
 	&"KuiHua3",
@@ -5166,6 +5167,32 @@ const _CARD_DEFINITIONS: Dictionary = {
 				}],
 			},
 			{"modifiers": [{"type": MODIFIER_ENEMY_ATTACKS_ALL}]},
+		],
+	},
+	&"FeiTian5": {
+		"id": &"FeiTian5",
+		"glyph": "飞天神行",
+		"picture": "res://pics/LKT010_300.png",
+		"sect": "江湖",
+		"tier": 5,
+		"weapon": "轻功",
+		"description": "回合结束时，额外出一张牌。",
+		"flavor": "飞天狐狸家传的轻功绝技，纵上前去可连出六招，退回原处时一晃即回，这一瞬之间倏忽来去，竟似并未移动过身子。",
+		"powers": [3, 3, 3, 3],
+		"abilities": [
+			{
+				"triggers": [
+					{
+						"event": TRIGGER_END_OWNER_TURN,
+						"conditions": [
+							{"type": CONDITION_TURN_OWNER_IS_SELF},
+						],
+						"actions": [
+							{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+						],
+					},
+				],
+			},
 		],
 	},
 	&"KuiHua1": {
