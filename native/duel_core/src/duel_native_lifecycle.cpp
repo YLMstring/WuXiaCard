@@ -710,7 +710,28 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	payload["suppression_set_pool"] = materialized_suppression_pool;
 	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
 	payload["empty_deck_draw_prototype_index"] = empty_deck_draw_prototype_index;
-	payload["side_payload"] = value.side_payload;
+	Dictionary side_payload = value.side_payload.duplicate(true);
+	Dictionary owner_auras;
+	for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
+		Array entries;
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[owner_id - 1]) {
+			if (
+				entry.source_card_index < 0
+				|| entry.source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+				|| entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(ability_declaration_pool.size())
+			) continue;
+			Dictionary materialized;
+			materialized["handle"] = static_cast<int64_t>(entry.handle);
+			materialized["source_instance_id"] = value.card_instance_ids[entry.source_card_index];
+			materialized["aura"] = ability_declaration_pool[entry.compiled_ability_index];
+			entries.append(materialized);
+		}
+		owner_auras[owner_id] = entries;
+	}
+	side_payload["owner_auras_by_owner"] = owner_auras;
+	side_payload["next_owner_aura_handle"] = static_cast<int64_t>(value.next_owner_aura_handle);
+	payload["side_payload"] = side_payload;
 	return payload;
 }
 
@@ -733,6 +754,20 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 			hash *= 1099511628211ULL;
 		}
 	}
+	for (int32_t owner_index = 0; owner_index < 2; ++owner_index) {
+		hash ^= static_cast<uint64_t>(owner_index + 1);
+		hash *= 1099511628211ULL;
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[owner_index]) {
+			hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
+			hash *= 1099511628211ULL;
+			hash ^= static_cast<uint64_t>(entry.source_card_index);
+			hash *= 1099511628211ULL;
+			hash ^= entry.handle;
+			hash *= 1099511628211ULL;
+		}
+	}
+	hash ^= value.next_owner_aura_handle;
+	hash *= 1099511628211ULL;
 	for (const std::vector<RuntimeSuppressionBatch> &batches : value.card_runtime_suppression_batches) {
 		for (const RuntimeSuppressionBatch &batch : batches) {
 			hash ^= static_cast<uint64_t>(batch.expires_after_turn);

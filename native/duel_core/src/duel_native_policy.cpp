@@ -255,25 +255,18 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 				: (candidate_zone == 3 ? SelectorZoneOpcode::DISCARD : SelectorZoneOpcode::REMOVED));
 		return std::find(selector.zones.begin(), selector.zones.end(), expected) != selector.zones.end();
 	};
-	auto inspect_provider = [&](
-		int32_t provider_card_index,
-		int32_t provider_owner,
-		int32_t provider_zone,
-		int32_t provider_logical_index
-	) {
-		if (!card_effects_enabled(value, provider_card_index, provider_owner)) return;
-		for (
-			size_t ability_index = 0;
-			ability_index < value.card_runtime_abilities[provider_card_index].size();
-			++ability_index
-		) {
-			const CompiledAbility *provider = runtime_ability(
-				value,
-				provider_card_index,
-				static_cast<int32_t>(ability_index)
-			);
-			if (provider == nullptr || !ability_active_in_zone(*provider, provider_zone)) continue;
-			for (const CompiledAura &aura : provider->auras) {
+	for (int32_t provider_owner = 1; provider_owner <= 2; ++provider_owner) {
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[provider_owner - 1]) {
+			if (
+				entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) continue;
+			const CompiledAbility &provider = compiled_ability_pool[entry.compiled_ability_index];
+			int32_t provider_zone = -1;
+			int32_t provider_current_owner = 0;
+			int32_t provider_logical_index = -1;
+			locate_card(value, entry.source_card_index, provider_zone, provider_current_owner, provider_logical_index);
+			for (const CompiledAura &aura : provider.auras) {
 				if (
 					aura.ability_pool_index < 0
 					|| aura.ability_pool_index >= static_cast<int32_t>(compiled_ability_pool.size())
@@ -283,9 +276,9 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 				context.ability_source_cell = provider_zone == 0 ? provider_logical_index : -1;
 				context.ability_source_zone = provider_zone;
 				context.ability_source_logical_index = provider_logical_index;
-				context.ability_source_card_index = provider_card_index;
+				context.ability_source_card_index = entry.source_card_index;
 				context.ability_source_owner = provider_owner;
-				context.action_subject_card_index = provider_card_index;
+				context.action_subject_card_index = entry.source_card_index;
 				context.action_subject_owner = provider_owner;
 				context.action_subject_zone = provider_zone;
 				context.action_subject_logical_index = provider_logical_index;
@@ -311,24 +304,6 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 					if (out_value != nullptr) *out_value = modifier.value;
 				}
 			}
-		}
-	};
-	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-		const int32_t provider = value.board_card_indices[cell];
-		if (provider >= 0) inspect_provider(provider, value.board_owners[cell], 0, static_cast<int32_t>(cell));
-	}
-	static constexpr int32_t source_zone_kinds[8] = {1, 1, 2, 2, 3, 3, 4, 4};
-	for (int32_t zone_index = 0; zone_index < static_cast<int32_t>(value.zones.size()); ++zone_index) {
-		const int32_t provider_zone = source_zone_kinds[zone_index];
-		if (provider_zone == 2) continue;
-		const int32_t provider_owner = zone_index % 2 + 1;
-		for (size_t index = 0; index < value.zones[zone_index].size(); ++index) {
-			inspect_provider(
-				value.zones[zone_index][index],
-				provider_owner,
-				provider_zone,
-				static_cast<int32_t>(index)
-			);
 		}
 	}
 	return found;

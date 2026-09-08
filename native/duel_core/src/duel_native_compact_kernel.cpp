@@ -409,7 +409,86 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 			}
 			state.card_runtime_abilities.push_back(runtime_entries);
 		}
-		loaded = compile_runtime_suppression_batches();
+		for (std::vector<RuntimeOwnerAuraEntry> &auras : state.owner_auras) auras.clear();
+		const Variant owner_auras_value = state.side_payload.get("owner_auras_by_owner", Dictionary());
+		const Variant next_aura_handle_value = state.side_payload.get("next_owner_aura_handle", 1);
+		if (
+			owner_auras_value.get_type() != Variant::DICTIONARY
+			|| next_aura_handle_value.get_type() != Variant::INT
+			|| static_cast<int64_t>(next_aura_handle_value) < 1
+		) {
+			last_error = "Owner aura runtime state has an invalid shape";
+			loaded = false;
+		} else {
+			state.next_owner_aura_handle = static_cast<uint64_t>(
+				static_cast<int64_t>(next_aura_handle_value)
+			);
+			const Dictionary owner_auras = owner_auras_value;
+			std::unordered_set<uint64_t> aura_handles;
+			for (int32_t owner_id = 1; loaded && owner_id <= 2; ++owner_id) {
+				const Variant entries_value = owner_auras.get(owner_id, Array());
+				if (entries_value.get_type() != Variant::ARRAY) {
+					last_error = "Owner aura list is not an Array";
+					loaded = false;
+					break;
+				}
+				const Array entries = entries_value;
+				state.owner_auras[owner_id - 1].reserve(static_cast<size_t>(entries.size()));
+				for (int64_t entry_index = 0; entry_index < entries.size(); ++entry_index) {
+					const Variant entry_value = entries[entry_index];
+					if (entry_value.get_type() != Variant::DICTIONARY) {
+						last_error = "Owner aura entry is not a Dictionary";
+						loaded = false;
+						break;
+					}
+					const Dictionary entry = entry_value;
+					const Variant handle_value = entry.get("handle", Variant());
+					const Variant source_value = entry.get("source_instance_id", Variant());
+					const Variant aura_value = entry.get("aura", Variant());
+					if (
+						entry.size() != 3
+						|| handle_value.get_type() != Variant::INT
+						|| static_cast<int64_t>(handle_value) < 1
+						|| (source_value.get_type() != Variant::STRING_NAME && source_value.get_type() != Variant::STRING)
+						|| aura_value.get_type() != Variant::DICTIONARY
+					) {
+						last_error = "Owner aura entry has an invalid declaration shape";
+						loaded = false;
+						break;
+					}
+					const uint64_t handle = static_cast<uint64_t>(static_cast<int64_t>(handle_value));
+					if (!aura_handles.insert(handle).second || handle >= state.next_owner_aura_handle) {
+						last_error = "Owner aura handle is duplicated or outside the next-handle range";
+						loaded = false;
+						break;
+					}
+					const StringName source_instance_id = source_value;
+					int32_t source_card_index = -1;
+					for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
+						if (state.card_instance_ids[card_index] == source_instance_id) {
+							source_card_index = static_cast<int32_t>(card_index);
+							break;
+						}
+					}
+					if (source_card_index < 0) {
+						last_error = "Owner aura source instance is unknown";
+						loaded = false;
+						break;
+					}
+					RuntimeOwnerAuraEntry compiled_entry;
+					compiled_entry.handle = handle;
+					compiled_entry.source_card_index = source_card_index;
+					compiled_entry.compiled_ability_index = intern_compiled_ability(aura_value, true);
+					if (!compiled_ability_pool[compiled_entry.compiled_ability_index].declaration_valid) {
+						last_error = "Owner aura declaration is unsupported";
+						loaded = false;
+						break;
+					}
+					state.owner_auras[owner_id - 1].push_back(compiled_entry);
+				}
+			}
+		}
+		if (loaded) loaded = compile_runtime_suppression_batches();
 		if (loaded) {
 			for (size_t ability_index = 0; ability_index < compiled_ability_pool.size(); ++ability_index) {
 				if (compiled_ability_pool[ability_index].declaration_valid) continue;

@@ -92,6 +92,7 @@ const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_c
 const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
 const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
+const CONDITION_ABILITY_SOURCE_IN_ZONE: StringName = &"ability_source_in_zone"
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_DISCARD_CARD: StringName = &"discard_card"
@@ -133,6 +134,7 @@ const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_no
 const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
 const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
 const ACTION_SET_ATTACK_USED_POWERS: StringName = &"set_attack_used_powers"
+const ACTION_GRANT_OWNER_AURA: StringName = &"grant_owner_aura"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
 const CARD_REF_TRIGGER_CARD: StringName = &"trigger_card"
@@ -249,6 +251,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ACTIVATION_OWNER_IS_ALLY,
 	CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
 	CONDITION_DISCARD_OWNER_IS_SELF,
+	CONDITION_ABILITY_SOURCE_IN_ZONE,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -318,6 +321,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_DEPART_CARD_FOR_RESUMMON,
 	ACTION_TRANSFER_CARD_RESOURCE,
 	ACTION_SET_ATTACK_USED_POWERS,
+	ACTION_GRANT_OWNER_AURA,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
@@ -498,8 +502,25 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"KuiHua0",
 ]
 
+const HUJIA_OWNER_AURA_EXPIRE: Dictionary = {
+	"event": TRIGGER_END_OWNER_TURN,
+	"conditions": [{
+		"type": CONDITION_ABILITY_SOURCE_IN_ZONE,
+		"zone": CARD_ZONE_HAND,
+		"inverted": true,
+	}],
+	"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+}
+
+const HUJIA_HIDDEN_BLADE_AURA: Dictionary = {
+	"triggers": [HUJIA_OWNER_AURA_EXPIRE],
+	"modifiers": [{
+		"type": MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
+		"cell": 4,
+	}],
+}
+
 const HUJIA_HIDDEN_BLADE: Dictionary = {
-	"active_zones": [CARD_ZONE_HAND],
 	"triggers": [{
 		"event": TRIGGER_DUEL_STARTED,
 		"actions": [
@@ -513,11 +534,11 @@ const HUJIA_HIDDEN_BLADE: Dictionary = {
 				"recipient": RECIPIENT_OPPONENT,
 				"filter": REVEAL_FILTER_ALL,
 			},
+			{
+				"type": ACTION_GRANT_OWNER_AURA,
+				"aura": HUJIA_HIDDEN_BLADE_AURA,
+			},
 		],
-	}],
-	"modifiers": [{
-		"type": MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
-		"cell": 4,
 	}],
 }
 
@@ -536,24 +557,26 @@ const HUJIA_EMBRACE_MOON_GRANTED: Dictionary = {
 	}],
 }
 
-const HUJIA_EMBRACE_MOON_HAND: Dictionary = {
-	"active_zones": [CARD_ZONE_HAND],
-	"triggers": [{
-		"event": CARD_BE_ATTACKED,
-		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
-		"actions": [
-			{
-				"type": ACTION_REVEAL_CARD,
-				"card": CARD_REF_ABILITY_SOURCE,
-				"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
-			},
-			{
-				"type": ACTION_CHANGE_POWERS,
-				"amount": -1,
-				"card": CARD_REF_ABILITY_SOURCE,
-			},
-		],
-	}],
+const HUJIA_EMBRACE_MOON_AURA: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BE_ATTACKED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+			"actions": [
+				{
+					"type": ACTION_REVEAL_CARD,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				},
+				{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": -1,
+					"card": CARD_REF_ABILITY_SOURCE,
+				},
+			],
+		},
+		HUJIA_OWNER_AURA_EXPIRE,
+	],
 	"auras": [{
 		"selector": {
 			"zones": [CARD_ZONE_BOARD],
@@ -563,35 +586,57 @@ const HUJIA_EMBRACE_MOON_HAND: Dictionary = {
 	}],
 }
 
-const HUJIA_CLOSED_DOOR_HAND: Dictionary = {
-	"active_zones": [CARD_ZONE_HAND],
+const HUJIA_EMBRACE_MOON: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_ATTACK,
-		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_ENEMY}],
-		"actions": [
-			{
-				"type": ACTION_REVEAL_CARD,
-				"card": CARD_REF_ABILITY_SOURCE,
-				"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
-			},
-			{
-				"type": ACTION_CHANGE_POWERS,
-				"amount": 1,
-				"card": CARD_REF_ABILITY_SOURCE,
-			},
-			{
-				"type": ACTION_IF,
-				"conditions": [{
-					"type": CONDITION_ATTACK_FLIPPED_ANY_CARD,
-					"inverted": true,
-				}],
-				"actions": [{
-					"type": ACTION_SET_ATTACK_USED_POWERS,
-					"card": CARD_REF_ATTACKER_CARD,
-					"value": 0,
-				}],
-			},
-		],
+		"event": TRIGGER_DUEL_STARTED,
+		"actions": [{
+			"type": ACTION_GRANT_OWNER_AURA,
+			"aura": HUJIA_EMBRACE_MOON_AURA,
+		}],
+	}],
+}
+
+const HUJIA_CLOSED_DOOR_AURA: Dictionary = {
+	"triggers": [
+		{
+			"event": TRIGGER_CARD_AFTER_ATTACK,
+			"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_ENEMY}],
+			"actions": [
+				{
+					"type": ACTION_REVEAL_CARD,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"observer": OWNER_OPPONENT_OF_ABILITY_SOURCE,
+				},
+				{
+					"type": ACTION_CHANGE_POWERS,
+					"amount": 1,
+					"card": CARD_REF_ABILITY_SOURCE,
+				},
+				{
+					"type": ACTION_IF,
+					"conditions": [{
+						"type": CONDITION_ATTACK_FLIPPED_ANY_CARD,
+						"inverted": true,
+					}],
+					"actions": [{
+						"type": ACTION_SET_ATTACK_USED_POWERS,
+						"card": CARD_REF_ATTACKER_CARD,
+						"value": 0,
+					}],
+				},
+			],
+		},
+		HUJIA_OWNER_AURA_EXPIRE,
+	],
+}
+
+const HUJIA_CLOSED_DOOR: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_DUEL_STARTED,
+		"actions": [{
+			"type": ACTION_GRANT_OWNER_AURA,
+			"aura": HUJIA_CLOSED_DOOR_AURA,
+		}],
 	}],
 }
 
@@ -1685,7 +1730,6 @@ const LAIHE_REVEAL_CURRENT_HAND: Dictionary = {
 }
 
 const LAIHE_DUEL_START_REVEAL: Dictionary = {
-	"active_zones": [CARD_ZONE_HAND],
 	"triggers": [{
 		"event": TRIGGER_DUEL_STARTED,
 		"actions": [{
@@ -5022,7 +5066,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对局开始时，你获得以下效果：【友方被攻击时，揭示此效果的来源牌并使其点数减一。双方回合结束时，若此效果的来源牌不在手牌中，失去此效果。所有友方视为具有以下效果：判断是否能被攻击时，所有点数视为零。被攻击时，抽一张牌，然后将我移除。】",
 		"flavor": "胡家刀法中的招式，回刀轻削，妙在虚实互用，忽虚忽实。外表上看去，跟武林中一般大路刀法并无多大不同，只变化奇妙，攻则去势凌厉，守则门户严谨，攻中有守，守中有攻，令人莫测高深。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [HUJIA_EMBRACE_MOON_HAND],
+		"abilities": [HUJIA_EMBRACE_MOON],
 	},
 	&"HuJiaDao3": {
 		"id": &"HuJiaDao3",
@@ -5034,7 +5078,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对局开始时，你获得以下效果：【敌方攻击后，揭示此效果的来源牌并使其点数加一，然后若本次攻击未造成翻面，敌方在攻击中使用过的点数变为零。双方回合结束时，若此效果的来源牌不在手牌中，失去此效果。】",
 		"flavor": "胡家刀法中的招式，单刀先推后横，讲究缓慢收敛，嫩胜于老，迟胜于急。外表上看去，跟武林中一般大路刀法并无多大不同，只变化奇妙，攻则去势凌厉，守则门户严谨，攻中有守，守中有攻，令人莫测高深。",
 		"powers": [4, 4, 4, 4],
-		"abilities": [HUJIA_CLOSED_DOOR_HAND],
+		"abilities": [HUJIA_CLOSED_DOOR],
 	},
 	&"ChunCanZhang2": {
 		"id": &"ChunCanZhang2",
@@ -5526,14 +5570,22 @@ static func normalize_ability(raw_ability: Dictionary) -> Dictionary:
 		_normalize_nested_grants((trigger_value as Dictionary).get("actions", []))
 	if ability.has("activation") and ability["activation"] is Dictionary:
 		_normalize_nested_grants((ability["activation"] as Dictionary).get("actions", []))
-	for aura_value: Variant in ability.get("auras", []):
+	return ability
+
+
+static func normalize_owner_aura(raw_aura: Dictionary) -> Dictionary:
+	var aura_declaration: Dictionary = raw_aura.duplicate(true)
+	for trigger_value: Variant in aura_declaration.get("triggers", []):
+		if trigger_value is Dictionary:
+			_normalize_nested_grants((trigger_value as Dictionary).get("actions", []))
+	for aura_value: Variant in aura_declaration.get("auras", []):
 		if not aura_value is Dictionary:
 			continue
 		var aura: Dictionary = aura_value
 		var granted_value: Variant = aura.get("ability", null)
 		if granted_value is Dictionary:
 			aura["ability"] = normalize_ability(granted_value as Dictionary)
-	return ability
+	return aura_declaration
 
 
 static func _normalize_nested_grants(actions_value: Variant) -> void:
@@ -5550,6 +5602,10 @@ static func _normalize_nested_grants(actions_value: Variant) -> void:
 			var granted_value: Variant = action.get("ability", null)
 			if granted_value is Dictionary:
 				action["ability"] = normalize_ability(granted_value as Dictionary)
+		if StringName(action.get("type", &"")) == ACTION_GRANT_OWNER_AURA:
+			var aura_value: Variant = action.get("aura", null)
+			if aura_value is Dictionary:
+				action["aura"] = normalize_owner_aura(aura_value as Dictionary)
 		_normalize_nested_grants(action.get("actions", []))
 
 
@@ -5563,32 +5619,21 @@ static func _validate_ability(
 	for key: Variant in ability.keys():
 		if StringName(key) not in [
 			&"retained_on_flip", &"triggers", &"activation", &"modifiers",
-			&"active_zones", &"auras",
 		]:
 			errors.append("Card %s ability has unsupported field %s" % [card_id, key])
 	if ability.has("retained_on_flip") and typeof(ability["retained_on_flip"]) != TYPE_BOOL:
 		errors.append("Card %s ability has non-Boolean retained_on_flip" % card_id)
 	if (
 		not ability.has("triggers") and not ability.has("activation")
-		and not ability.has("modifiers") and not ability.has("auras")
+		and not ability.has("modifiers")
 	):
-		errors.append("Card %s ability requires triggers, activation, modifiers, or auras" % card_id)
-	if ability.has("active_zones"):
-		var zones_value: Variant = ability.get("active_zones")
-		if not zones_value is Array or (zones_value as Array).is_empty():
-			errors.append("Card %s active_zones requires a non-empty Array" % card_id)
-		else:
-			for zone_value: Variant in zones_value as Array:
-				if StringName(zone_value) not in KNOWN_CARD_ZONES:
-					errors.append("Card %s uses unknown active zone %s" % [card_id, zone_value])
+		errors.append("Card %s ability requires triggers, activation, or modifiers" % card_id)
 	if ability.has("triggers"):
 		_validate_triggers(card_id, ability["triggers"], errors)
 	if ability.has("activation"):
 		_validate_activation(card_id, ability["activation"], errors)
 	if ability.has("modifiers"):
 		_validate_modifiers(card_id, ability["modifiers"], errors)
-	if ability.has("auras"):
-		_validate_auras(card_id, ability["auras"], errors)
 	if _ability_has_self_after_flip_trigger(ability):
 		var triggers_value: Variant = ability.get("triggers", [])
 		if (
@@ -5641,6 +5686,24 @@ static func _validate_auras(card_id: StringName, auras_value: Variant, errors: A
 			if granted.has("active_zones") or granted.has("auras") or granted.has("activation"):
 				errors.append("Card %s aura ability cannot declare active_zones, auras, or activation" % card_id)
 			_validate_ability(card_id, granted, errors)
+
+
+static func _validate_owner_aura(
+	card_id: StringName,
+	aura: Dictionary,
+	errors: Array[String]
+) -> void:
+	for key: Variant in aura.keys():
+		if StringName(key) not in [&"triggers", &"modifiers", &"auras"]:
+			errors.append("Card %s owner aura has unsupported field %s" % [card_id, key])
+	if aura.is_empty():
+		errors.append("Card %s owner aura cannot be empty" % card_id)
+	if aura.has("triggers"):
+		_validate_triggers(card_id, aura["triggers"], errors)
+	if aura.has("modifiers"):
+		_validate_modifiers(card_id, aura["modifiers"], errors)
+	if aura.has("auras"):
+		_validate_auras(card_id, aura["auras"], errors)
 
 
 static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, errors: Array[String]) -> void:
@@ -5777,6 +5840,20 @@ static func _validate_condition(
 				"Card %s %s attack-flipped condition requires a boolean inverted"
 				% [card_id, context_name]
 			)
+	if condition_type == CONDITION_ABILITY_SOURCE_IN_ZONE:
+		allowed_keys.append(&"zone")
+		if StringName(condition.get("zone", &"")) not in KNOWN_CARD_ZONES:
+			errors.append(
+				"Card %s %s ability-source zone condition requires a known zone"
+				% [card_id, context_name]
+			)
+		if condition.has("inverted"):
+			allowed_keys.append(&"inverted")
+			if typeof(condition.get("inverted")) != TYPE_BOOL:
+				errors.append(
+					"Card %s %s ability-source zone condition requires a boolean inverted"
+					% [card_id, context_name]
+				)
 	for key: Variant in condition.keys():
 		if StringName(key) not in allowed_keys:
 			errors.append("Card %s %s condition %s has unsupported field %s" % [card_id, context_name, condition_type, key])
@@ -6214,6 +6291,13 @@ static func _validate_action(
 			errors.append("Card %s %s grant action requires an ability Dictionary" % [card_id, context_name])
 		else:
 			_validate_ability(card_id, granted_value as Dictionary, errors)
+	if action_type == ACTION_GRANT_OWNER_AURA:
+		allowed_keys.append(&"aura")
+		var aura_value: Variant = action.get("aura", null)
+		if not aura_value is Dictionary:
+			errors.append("Card %s %s grant-owner-aura action requires an aura Dictionary" % [card_id, context_name])
+		else:
+			_validate_owner_aura(card_id, aura_value as Dictionary, errors)
 	if action.has("on_invalid_context"):
 		if StringName(action.get("on_invalid_context", &"")) != STOP_RULE:
 			errors.append("Card %s %s action %s has invalid on_invalid_context policy" % [card_id, context_name, action_type])

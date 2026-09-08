@@ -703,22 +703,33 @@ respectively, in row-major order. The source itself is eligible.
 
 ## 胡家刀法 / 春蚕掌法
 
+- `duel_started` is the only whole-hand trigger scan. Ordinary triggers scan
+  the board only; exact-card lifecycle entries such as `CARD_AFTER_DISCARDED`
+  remain explicit exceptions rather than off-board-zone scans. Card abilities
+  cannot declare `active_zones` or own auras.
 - `HuJiaDao1` reveals its current instance and the current opposing hand once
-  at duel start. While its ability remains active in hand, an opponent may play
-  into the center only when no legal activation or non-center hand play exists.
-- `HuJiaDao2` is a hand-zone aura source. Friendly board cards defend as zero
-  and receive a virtual attacked reaction that draws once and exiles that exact
-  recipient. Board abilities resolve first, then hand sources in physical-slot
-  order, then virtual aura reactions. A virtual reaction already discovered for
-  the event survives its aura source leaving hand.
+  at duel start, then grants its current owner an aura. While that aura exists,
+  an opponent may play into the center only when no legal activation or
+  non-center hand play exists.
+- `HuJiaDao2` grants its owner an aura. Friendly board cards defend as zero and
+  receive a virtual attacked reaction that draws once and exiles that exact
+  recipient. Board abilities resolve first, then owner-aura triggers in owner
+  and acquisition order, then virtual reactions in recipient cell order.
 - `HuJiaDao3` reacts only after an attack performed at least one successful
   attack comparison. It reveals and gains one; if the attack itself flipped no
   card, it sets every attacker direction that won a comparison to zero. Ability
   chains that flip cards do not satisfy the direct-flip test.
+- Each HuJia aura stores an independent handle, its fixed holder, and its exact
+  source-card reference. It is removed at either owner's turn end if that exact
+  source is no longer in hand; leaving hand does not remove it immediately.
+  The source's zone, owner, gate, and runtime abilities are never generic aura
+  validity checks, though declared conditions/actions may inspect the source.
 - `ChunCanZhang2` and `ChunCanZhang3` cannot initiate any attack while their
   non-retained modifier remains. A flip removes the modifier normally.
-- Aura declarations remain state owned by the provider. They are derived for
-  recipients and never copied into recipient runtime state or search identity.
+- Ordinary queued triggers require the exact source to remain in its discovery
+  zone and retain the exact ability handle/trigger entry. They follow movement
+  within that zone, accept ownership changes, rerun conditions using current
+  position/current owner, and do not recheck the effect gate.
 
 ## 场景背景音乐
 

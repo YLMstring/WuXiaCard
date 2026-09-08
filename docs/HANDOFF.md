@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-08
+Updated: 2026-09-09
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -54,10 +54,12 @@ release-ready Android package.
   `card_exiled`. See
   `docs/superpowers/specs/2026-09-06-yusui-kungang-design.md` for the complete
   declarations.
-- `HuJiaDao1`–`3` and `ChunCanZhang2`–`3` are implemented through generic
-  hand-zone abilities, derived auras, attack-result context, and attack
-  prohibition. Their complete declarations and ordering rules are in
-  `docs/superpowers/specs/2026-09-07-hujia-chuncan-five-cards-design.md`.
+- `HuJiaDao1`–`3` grant ordered owner-held auras during the one-time opening
+  hand scan. Cards never hold aura declarations directly; each runtime aura
+  stores an independent handle, its fixed holder, and the exact source-card
+  reference. `ChunCanZhang2`–`3` continue to use ordinary board modifiers.
+  The current declarations and revalidation rules are in
+  `docs/superpowers/specs/2026-09-08-owner-aura-redesign.md`.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
@@ -115,10 +117,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   granted extra plays remain in the same capped turn.
 - Any activation costs one ki.
 - Ki survives ownership flips; abilities are lost unless the catalog ability explicitly declares `retained_on_flip = true`.
-- Abilities default to board-only. An ability may explicitly declare
-  `active_zones`; hand triggers resolve after ordinary board triggers in fixed
-  physical hand-slot order. Derived aura abilities are computed from their
-  current source and recipient rather than copied into recipient runtime state.
+- Ordinary card triggers scan only the board. `TRIGGER_DUEL_STARTED` is the
+  sole whole-hand discovery pass and scans both hands in fixed physical-slot
+  order; exact-card lifecycle entries such as `CARD_AFTER_DISCARDED` remain
+  dedicated exceptions rather than whole-zone scans. Cards cannot declare
+  `active_zones` or own `auras`. Owner-held auras may expose virtual board
+  abilities without copying them into recipient runtime state.
 - A duel-start event resolves once after both hands, decks, difficulty state,
   and static opening Bagua have been created, but before the replay opening
   snapshot or first owner-turn event. Its changes are shown as initial state,
@@ -420,15 +424,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
   depth-two openings, and reduced the two incomplete linear estimates to
   `15.20s` and `10.60s`. Use `Release + template_debug` native builds for
   performance comparisons; `Debug + template_debug` is about half-speed.
-- A derived-aura ablation on three real Quick openings at 5,000 nodes each took
-  `5.239s` normally versus `1.849s` with only derived-aura queries
-  diagnostically disabled (`2.83x`; apply `-69.33%`, attack `-89.09%`, event
-  discovery `-69.86%`). Actions, scores, depths, traversal counts, and TT
-  outcomes matched. The temporary switch must not ship as gameplay behavior;
-  replace unconditional aura scans with compiled catalog capability summaries
-  that skip only impossible aura event/modifier kinds. Repository policy now
-  requires hot-path review during card design and immediate reporting of every
-  repeatable performance regression.
+- The retired card-owned derived-aura path took `5.239s` on the three real
+  Quick openings at 5,000 nodes each versus `1.849s` with aura queries disabled
+  (`2.83x`). After moving auras into compact per-owner runtime lists, the same
+  15,000-node probe on 2026-09-09 took `1.318s` normally versus `1.323s` with
+  aura queries disabled. The `-0.4%` difference is measurement noise, while
+  normal runtime is about `74.8%` faster than the retired implementation.
+  The diagnostic switch remains default-off and benchmark-only; it must never
+  change production gameplay. Repository policy requires hot-path review
+  during card design and immediate reporting of every repeatable regression.
 - Native transposition opportunity diagnostics are available through
   `CollectTranspositionDiagnostics` on the opening profile. The 2026-09-04 four
   extra-play-cap openings produced 333,262 previously completed exact-key hits

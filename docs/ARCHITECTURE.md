@@ -33,7 +33,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
   discard/removed zones, active player, turn count, owner-turn serial,
   per-owner attack and special-summon counts, remaining extra card plays, the
   per-owner-turn grant latch, end-boundary state, queued-effect scaffolding,
-  last successful hand plays, active-run difficulty, a retained legacy
+  last successful hand plays, ordered owner-held aura entries and their next
+  handle, active-run difficulty, a retained legacy
   difficulty-eight latch kept only for compact/replay compatibility, persistent
   pending suppression counts, and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
@@ -117,20 +118,30 @@ event; its resulting state becomes the replay opening snapshot and the first
 rendered frame. It therefore supports opening revelation without a delayed
 animation or a controller-only gameplay branch.
 
-Catalog abilities default to the board zone. `active_zones` can opt an ability
-into hand, discard, or removed-zone event/modifier discovery. Ordinary global
-events discover board sources in cells `0..8`, then both hands in fixed
-physical-slot order, followed by explicitly active discard and removed-zone
-sources. The historical self-`CARD_AFTER_DISCARDED` discovery remains its
-dedicated compatibility boundary.
+Ordinary card events discover board sources only, in cells `0..8`.
+`duel_started` is the sole whole-hand discovery pass and scans player then
+opponent hands in fixed physical-slot order. Exact-card lifecycle entries such
+as self-`CARD_AFTER_DISCARDED` remain dedicated boundaries; they do not scan an
+entire off-board zone. Card ability declarations cannot opt into other zones
+and cannot own auras.
 
-An ability-owned `auras` declaration selects recipients and exposes a nested
-ability virtually. The source ability remains the only stored runtime state;
-recipients never gain copied ability declarations or search-key fields. Aura
-modifiers are derived on query. Aura event groups are snapshotted during event
-discovery, then revalidate the exact recipient before execution; removing the
-aura source later in the same event does not erase an already discovered
-virtual group.
+Only players hold runtime auras. Each ordered entry stores an independent
+handle, a fixed holder, the exact source-card reference, and an immutable
+compiled declaration. It can own triggers and modifiers or select board
+recipients and expose a nested ability virtually; recipients never gain copied
+runtime abilities or search-key fields. Aura lookup iterates only the two
+compact owner lists. Removing an aura deletes its exact handle.
+
+Ordinary trigger discovery snapshots the exact source instance, source zone,
+ability handle, trigger index, and event context. Immediately before execution,
+the source must still be locatable in the same zone, the same ability handle
+and trigger entry must still exist, and declared conditions are rerun using its
+current position and current owner. Moving within a zone and changing owner do
+not invalidate the group; crossing zones or losing the exact ability does.
+Effect gates are checked only during discovery. An owner-aura group instead
+revalidates its aura handle and declaration; the saved source card's current
+zone, owner, gate, and runtime abilities are not generic vetoes. Explicit
+conditions and actions may still inspect that exact source reference.
 
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most

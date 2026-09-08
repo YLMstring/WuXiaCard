@@ -107,6 +107,15 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 		Rules.PLAYER_OWNER: [&"fixture_gate"],
 		Rules.OPPONENT_OWNER: [],
 	}
+	state.owner_auras_by_owner = {
+		Rules.PLAYER_OWNER: [{
+			"handle": 7,
+			"source_instance_id": &"compact_hand",
+			"aura": Catalog.HUJIA_HIDDEN_BLADE_AURA,
+		}],
+		Rules.OPPONENT_OWNER: [],
+	}
+	state.next_owner_aura_handle = 8
 	state.owner_turn_serial = 12
 	state.attacks_started_by_owner = {
 		Rules.PLAYER_OWNER: 4,

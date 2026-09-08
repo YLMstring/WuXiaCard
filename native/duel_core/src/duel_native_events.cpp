@@ -208,6 +208,20 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::DISCARD_OWNER_IS_SELF:
 				matched = context.discard_owner != 0 && context.discard_owner == group.source_owner;
 				break;
+			case ConditionOpcode::ABILITY_SOURCE_IN_ZONE: {
+				int32_t current_zone = -1;
+				int32_t current_owner = 0;
+				int32_t current_logical_index = -1;
+				matched = locate_card(
+					value,
+					group.source_card_index,
+					current_zone,
+					current_owner,
+					current_logical_index
+				) && current_zone == condition.amount;
+				if (condition.inverted) matched = !matched;
+				break;
+			}
 			case ConditionOpcode::SOURCE_HAS_ADJACENT_EMPTY_CELL:
 				for (int32_t direction = 0; direction < 4; ++direction) {
 					const int32_t candidate = neighbor_index(group.source_cell, direction);
@@ -282,49 +296,6 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 		}
 		return true;
 	};
-	if (event_id == StringName("card_after_discarded")) {
-		int32_t zone = -1;
-		int32_t owner_id = 0;
-		int32_t logical_index = -1;
-		if (
-			context.trigger_card_index >= 0
-			&& locate_card(value, context.trigger_card_index, zone, owner_id, logical_index)
-			&& zone == 3
-			&& owner_id == context.trigger_owner
-		) {
-			discover_card(context.trigger_card_index, owner_id, -1, 3, logical_index, false);
-		}
-		return groups;
-	}
-	if (event_id == StringName("card_before_summoned")) {
-		const int32_t trigger_cell = find_board_card(
-			value,
-			context.trigger_card_index,
-			context.trigger_cell
-		);
-		if (trigger_cell == context.trigger_cell && trigger_cell >= 0) {
-			discover_card(
-				context.trigger_card_index,
-				value.board_owners[trigger_cell],
-				trigger_cell,
-				0,
-				trigger_cell
-			);
-		}
-		return groups;
-	}
-	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-		const int32_t card_index = value.board_card_indices[cell];
-		if (card_index < 0) continue;
-		discover_card(
-			card_index,
-			value.board_owners[cell],
-			static_cast<int32_t>(cell),
-			0,
-			static_cast<int32_t>(cell)
-		);
-		if (!supported) return groups;
-	}
 	auto physical_hand_indices = [&](int32_t owner_id) {
 		std::vector<int32_t> logical_indices;
 		const std::vector<int32_t> &hand = value.zones[owner_id - 1];
@@ -345,53 +316,99 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 		});
 		return logical_indices;
 	};
-	for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
-		const std::vector<int32_t> &hand = value.zones[owner_id - 1];
-		for (const int32_t logical_index : physical_hand_indices(owner_id)) {
-			discover_card(hand[logical_index], owner_id, -1, 1, logical_index);
-			if (!supported) return groups;
+	bool used_exact_card_entry = false;
+	if (event_id == StringName("card_after_discarded")) {
+		used_exact_card_entry = true;
+		int32_t zone = -1;
+		int32_t owner_id = 0;
+		int32_t logical_index = -1;
+		if (
+			context.trigger_card_index >= 0
+			&& locate_card(value, context.trigger_card_index, zone, owner_id, logical_index)
+			&& zone == 3
+			&& owner_id == context.trigger_owner
+		) discover_card(context.trigger_card_index, owner_id, -1, 3, logical_index, false);
+	} else if (event_id == StringName("card_before_summoned")) {
+		used_exact_card_entry = true;
+		const int32_t trigger_cell = find_board_card(value, context.trigger_card_index, context.trigger_cell);
+		if (trigger_cell == context.trigger_cell && trigger_cell >= 0) {
+			discover_card(
+				context.trigger_card_index,
+				value.board_owners[trigger_cell],
+				trigger_cell,
+				0,
+				trigger_cell
+			);
 		}
-	}
-	for (const int32_t zone_kind : {3, 4}) {
+	} else if (event_id == StringName("duel_started")) {
+		used_exact_card_entry = true;
 		for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
-			const int32_t zone_index = zone_kind == 3 ? owner_id + 3 : owner_id + 5;
-			for (size_t index = 0; index < value.zones[zone_index].size(); ++index) {
-				discover_card(
-					value.zones[zone_index][index],
-					owner_id,
-					-1,
-					zone_kind,
-					static_cast<int32_t>(index)
-				);
+			const std::vector<int32_t> &hand = value.zones[owner_id - 1];
+			for (const int32_t logical_index : physical_hand_indices(owner_id)) {
+				discover_card(hand[logical_index], owner_id, -1, 1, logical_index, false);
 				if (!supported) return groups;
 			}
 		}
 	}
+	if (!used_exact_card_entry) {
+		for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+			const int32_t card_index = value.board_card_indices[cell];
+			if (card_index < 0) continue;
+			discover_card(
+				card_index,
+				value.board_owners[cell],
+				static_cast<int32_t>(cell),
+				0,
+				static_cast<int32_t>(cell)
+			);
+			if (!supported) return groups;
+		}
+	}
 	if (diagnostic_disable_aura_queries) return groups;
+	for (int32_t aura_owner = 1; aura_owner <= 2; ++aura_owner) {
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[aura_owner - 1]) {
+			if (
+				entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) continue;
+			const CompiledAbility &aura = compiled_ability_pool[entry.compiled_ability_index];
+			for (size_t trigger_index = 0; trigger_index < aura.triggers.size(); ++trigger_index) {
+				const CompiledTriggerRule &rule = aura.triggers[trigger_index];
+				if (rule.event_id != event_id) continue;
+				EventGroup group;
+				group.source_card_index = entry.source_card_index;
+				group.source_owner = aura_owner;
+				group.trigger_index = static_cast<int32_t>(trigger_index);
+				group.owner_aura_owner = aura_owner;
+				group.owner_aura_source_card_index = entry.source_card_index;
+				group.owner_aura_handle = entry.handle;
+				int32_t located_owner = 0;
+				locate_card(value, entry.source_card_index, group.source_zone, located_owner, group.source_logical_index);
+				group.source_cell = group.source_zone == 0 ? group.source_logical_index : -1;
+				bool condition_supported = true;
+				if (conditions_match(value, group, rule, context, condition_supported)) {
+					groups.push_back(group);
+				} else if (!condition_supported) {
+					supported = false;
+					reason = "Owner aura event uses an unsupported trigger condition";
+					return groups;
+				}
+			}
+		}
+	}
 	for (size_t recipient_cell = 0; recipient_cell < value.board_card_indices.size(); ++recipient_cell) {
 		const int32_t recipient_card = value.board_card_indices[recipient_cell];
 		if (recipient_card < 0) continue;
 		const int32_t recipient_owner = value.board_owners[recipient_cell];
 		for (int32_t provider_owner = 1; provider_owner <= 2; ++provider_owner) {
-			const std::vector<int32_t> &hand = value.zones[provider_owner - 1];
-			for (const int32_t provider_logical_index : physical_hand_indices(provider_owner)) {
-				const int32_t provider_card = hand[provider_logical_index];
-				if (!card_effects_enabled(value, provider_card, provider_owner)) continue;
-				for (
-					size_t provider_ability_index = 0;
-					provider_ability_index < value.card_runtime_abilities[provider_card].size();
-					++provider_ability_index
-				) {
-					const CompiledAbility *provider_ability = runtime_ability(
-						value,
-						provider_card,
-						static_cast<int32_t>(provider_ability_index)
-					);
-					if (
-						provider_ability == nullptr
-						|| !ability_active_in_zone(*provider_ability, 1)
-					) continue;
-					for (const CompiledAura &aura : provider_ability->auras) {
+			for (const RuntimeOwnerAuraEntry &provider_entry : value.owner_auras[provider_owner - 1]) {
+				if (
+					provider_entry.compiled_ability_index < 0
+					|| provider_entry.compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+				) continue;
+				const CompiledAbility &provider_ability = compiled_ability_pool[provider_entry.compiled_ability_index];
+				for (size_t nested_index = 0; nested_index < provider_ability.auras.size(); ++nested_index) {
+					const CompiledAura &aura = provider_ability.auras[nested_index];
 						if (
 							aura.ability_pool_index < 0
 							|| aura.ability_pool_index >= static_cast<int32_t>(compiled_ability_pool.size())
@@ -402,13 +419,18 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 							) == aura.selector.zones.end()
 						) continue;
 						ActionContext selector_context;
-						selector_context.ability_source_zone = 1;
+						int32_t provider_zone = -1;
+						int32_t provider_current_owner = 0;
+						int32_t provider_logical_index = -1;
+						locate_card(value, provider_entry.source_card_index, provider_zone, provider_current_owner, provider_logical_index);
+						selector_context.ability_source_cell = provider_zone == 0 ? provider_logical_index : -1;
+						selector_context.ability_source_zone = provider_zone;
 						selector_context.ability_source_logical_index = provider_logical_index;
-						selector_context.ability_source_card_index = provider_card;
+						selector_context.ability_source_card_index = provider_entry.source_card_index;
 						selector_context.ability_source_owner = provider_owner;
-						selector_context.action_subject_card_index = provider_card;
+						selector_context.action_subject_card_index = provider_entry.source_card_index;
 						selector_context.action_subject_owner = provider_owner;
-						selector_context.action_subject_zone = 1;
+						selector_context.action_subject_zone = provider_zone;
 						selector_context.action_subject_logical_index = provider_logical_index;
 						bool selector_supported = true;
 						if (!selector_conditions_match(
@@ -440,6 +462,10 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 							group.source_owner = recipient_owner;
 							group.trigger_index = static_cast<int32_t>(trigger_index);
 							group.virtual_ability_pool_index = aura.ability_pool_index;
+							group.owner_aura_owner = provider_owner;
+							group.owner_aura_source_card_index = provider_entry.source_card_index;
+							group.owner_aura_handle = provider_entry.handle;
+							group.owner_aura_nested_index = static_cast<int32_t>(nested_index);
 							bool condition_supported = true;
 							if (conditions_match(value, group, rule, context, condition_supported)) {
 								groups.push_back(group);
@@ -449,7 +475,6 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 								return groups;
 							}
 						}
-					}
 				}
 			}
 		}
@@ -492,58 +517,109 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 	for (const EventGroup &discovered_group : groups) {
 		EventGroup group = discovered_group;
 		const bool virtual_ability = group.virtual_ability_pool_index >= 0;
-		const int32_t current_ability_index = virtual_ability
-			? -1
-			: find_runtime_ability_index(
+		const bool owner_aura = group.owner_aura_handle != 0;
+		int32_t current_ability_index = -1;
+		int32_t current_logical_index = group.source_logical_index;
+		const CompiledAbility *ability = nullptr;
+		if (owner_aura) {
+			const RuntimeOwnerAuraEntry *entry = owner_aura_by_handle(
+				value,
+				group.owner_aura_owner,
+				group.owner_aura_handle
+			);
+			if (
+				entry == nullptr
+				|| entry->compiled_ability_index < 0
+				|| entry->compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) continue;
+			if (virtual_ability) {
+				const CompiledAbility &provider = compiled_ability_pool[entry->compiled_ability_index];
+				if (
+					group.owner_aura_nested_index < 0
+					|| group.owner_aura_nested_index >= static_cast<int32_t>(provider.auras.size())
+				) continue;
+				const CompiledAura &nested = provider.auras[group.owner_aura_nested_index];
+				if (nested.ability_pool_index != group.virtual_ability_pool_index) continue;
+				int32_t current_zone = -1;
+				int32_t current_owner = 0;
+				if (
+					!locate_card(value, group.source_card_index, current_zone, current_owner, current_logical_index)
+					|| current_zone != group.source_zone
+				) continue;
+				group.source_owner = current_owner;
+				group.source_logical_index = current_logical_index;
+				group.source_cell = current_zone == 0 ? current_logical_index : -1;
+				ActionContext selector_context;
+				int32_t provider_zone = -1;
+				int32_t provider_current_owner = 0;
+				int32_t provider_logical_index = -1;
+				locate_card(value, entry->source_card_index, provider_zone, provider_current_owner, provider_logical_index);
+				selector_context.ability_source_cell = provider_zone == 0 ? provider_logical_index : -1;
+				selector_context.ability_source_zone = provider_zone;
+				selector_context.ability_source_logical_index = provider_logical_index;
+				selector_context.ability_source_card_index = entry->source_card_index;
+				selector_context.ability_source_owner = group.owner_aura_owner;
+				selector_context.action_subject_card_index = entry->source_card_index;
+				selector_context.action_subject_owner = group.owner_aura_owner;
+				selector_context.action_subject_zone = provider_zone;
+				selector_context.action_subject_logical_index = provider_logical_index;
+				selector_context.selected_card_index = group.source_card_index;
+				selector_context.selected_card_owner = current_owner;
+				selector_context.selected_card_zone = current_zone;
+				selector_context.selected_card_logical_index = current_logical_index;
+				bool selector_supported = true;
+				if (!selector_conditions_match(
+					value,
+					group.source_card_index,
+					current_zone,
+					current_owner,
+					current_logical_index,
+					nested.selector,
+					selector_context,
+					selector_supported
+				)) {
+					if (!selector_supported) {
+						resolution.supported = false;
+						resolution.reason = "Aura selector uses an unsupported condition";
+						return resolution;
+					}
+					continue;
+				}
+				ability = &compiled_ability_pool[group.virtual_ability_pool_index];
+			} else {
+				group.source_card_index = entry->source_card_index;
+				group.source_owner = group.owner_aura_owner;
+				int32_t current_zone = -1;
+				int32_t ignored_owner = 0;
+				if (locate_card(value, entry->source_card_index, current_zone, ignored_owner, current_logical_index)) {
+					group.source_zone = current_zone;
+					group.source_logical_index = current_logical_index;
+					group.source_cell = current_zone == 0 ? current_logical_index : -1;
+				}
+				ability = &compiled_ability_pool[entry->compiled_ability_index];
+			}
+		} else {
+			int32_t current_zone = -1;
+			int32_t current_owner = 0;
+			if (!locate_card(
+				value,
+				group.source_card_index,
+				current_zone,
+				current_owner,
+				current_logical_index
+			) || current_zone != group.source_zone) continue;
+			group.source_owner = current_owner;
+			group.source_logical_index = current_logical_index;
+			group.source_cell = current_zone == 0 ? current_logical_index : -1;
+			current_ability_index = find_runtime_ability_index(
 				value,
 				group.source_card_index,
 				group.ability_handle,
 				group.ability_index
 			);
-		bool source_is_current = false;
-		int32_t current_logical_index = group.source_logical_index;
-		if (group.source_zone != 0) {
-			int32_t current_zone = -1;
-			int32_t current_owner = 0;
-			source_is_current = (
-				locate_card(
-					value,
-					group.source_card_index,
-					current_zone,
-					current_owner,
-					current_logical_index
-				)
-				&& current_zone == group.source_zone
-				&& current_owner == group.source_owner
-			);
-		} else {
-			const int32_t current_source_cell = find_board_card(
-				value,
-				group.source_card_index,
-				group.source_cell
-			);
-			if (
-				current_source_cell >= 0
-				&& current_source_cell != group.source_cell
-				&& group.source_card_index == context.trigger_card_index
-			) {
-				group.source_cell = current_source_cell;
-				group.source_logical_index = current_source_cell;
-				current_logical_index = current_source_cell;
-			}
-			source_is_current = (
-				find_board_card(value, group.source_card_index, group.source_cell) == group.source_cell
-				&& value.board_owners[group.source_cell] == group.source_owner
-			);
+			if (current_ability_index < 0) continue;
+			ability = runtime_ability(value, group.source_card_index, current_ability_index);
 		}
-		if (
-			!source_is_current
-			|| (!virtual_ability && !card_effects_enabled(value, group.source_card_index, group.source_owner))
-			|| (!virtual_ability && current_ability_index < 0)
-		) continue;
-		const CompiledAbility *ability = virtual_ability
-			? &compiled_ability_pool[group.virtual_ability_pool_index]
-			: runtime_ability(value, group.source_card_index, current_ability_index);
 		if (
 			ability == nullptr
 			|| group.trigger_index < 0
@@ -566,7 +642,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 		triggered["source_owner_id"] = group.source_owner;
 		resolution.events.append(triggered);
 		ActionContext action_context;
-		if (context.ability_source_card_index >= 0) {
+		if (!owner_aura && context.ability_source_card_index >= 0) {
 			action_context.ability_source_cell = context.ability_source_cell;
 			action_context.ability_source_zone = context.ability_source_zone;
 			action_context.ability_source_logical_index = context.ability_source_logical_index;

@@ -142,40 +142,50 @@ creates `active_abilities`.
 Abilities without `retained_on_flip` normalize to `false`. Add the flag only
 for an unusual ability that survives an ownership flip.
 
-Abilities are board-active by default. To make an ability operate from another
-zone, declare the complete set explicitly:
+Ordinary abilities are board-only. Do not add `active_zones`: the one-time
+`TRIGGER_DUEL_STARTED` event is the only whole-hand scan, while exact-card
+lifecycle hooks such as `CARD_AFTER_DISCARDED` are discovered through their
+dedicated event entry. All other ordinary events scan the board only.
+
+Cards cannot contain `auras` directly. To create a continuing player effect,
+grant an owner-held aura from an opening or board trigger:
 
 ```gdscript
-"active_zones": [CARD_ZONE_HAND]
-```
-
-Do not assume that scanning a zone makes every old ability active there. The
-native event and modifier paths always check the individual ability's zone
-mask. Hand event sources use physical slot order, not compact hand-array order.
-
-For a derived aura, keep the granted behavior nested under its source:
-
-```gdscript
-"auras": [{
-    "selector": {
-        "zones": [CARD_ZONE_BOARD],
-        "conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
-    },
-    "ability": {
-        "modifiers": [{
-            "type": MODIFIER_DEFENDING_POWER_OVERRIDE,
-            "value": 0,
+{
+    "type": ACTION_GRANT_OWNER_AURA,
+    "aura": {
+        "auras": [{
+            "selector": {
+                "zones": [CARD_ZONE_BOARD],
+                "conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+            },
+            "ability": {
+                "modifiers": [{
+                    "type": MODIFIER_DEFENDING_POWER_OVERRIDE,
+                    "value": 0,
+                }],
+            },
         }],
     },
-}]
+}
 ```
 
-The nested declaration is never written into a recipient's
-`active_abilities`. Its source's zone, owner, effect gate, and current runtime
-ability determine whether it exists. Event discovery may snapshot a virtual
-trigger for the current event, but execution still revalidates the exact
-recipient and selector conditions. Nested aura abilities currently cannot
+Each grant creates an independent ordered aura entry for the ability source's
+current owner and stores the exact source instance. The nested declaration is
+never written into a recipient's `active_abilities`. The aura holder remains
+fixed even if the source later changes owner. Nested aura abilities cannot
 declare their own `active_zones`, `auras`, or activation.
+
+Ordinary triggers discovered together remain queued independently. Before each
+one resolves, the exact source must still be locatable in its discovery-time
+zone, the same ability handle and trigger entry must exist, and conditions are
+rerun from the source's current position and current owner. Moving within the
+zone or changing owner is allowed; crossing zones or losing the ability cancels
+that group. Effect gates are not rechecked. Owner-aura groups do not use the
+saved source card's zone, owner, gate, or abilities as generic validity checks;
+declare `CONDITION_ABILITY_SOURCE_IN_ZONE` when an aura explicitly needs to
+inspect its source, and use `ACTION_REMOVE_THIS_ABILITY` to remove that exact
+aura handle.
 
 Starting encounter hands are in `scripts/duel_decks.gd`. Each owner's side deck
 is derived from that owner's main deck through `scripts/deck_rules.gd`. A

@@ -74,6 +74,8 @@ const SIDE_PAYLOAD_KEYS: Array[StringName] = [
 	&"future_draw_reveal_audiences",
 	&"last_hand_play_by_owner",
 	&"enabled_effect_gates_by_owner",
+	&"owner_auras_by_owner",
+	&"next_owner_aura_handle",
 ]
 
 var scalars: PackedInt32Array = PackedInt32Array()
@@ -183,7 +185,13 @@ func restore() -> StateData:
 	restored.state_version = scalars[SCALAR_STATE_VERSION]
 
 	for key: StringName in SIDE_PAYLOAD_KEYS:
-		restored.set(String(key), side_payload.get(key).duplicate(true))
+		var restored_value: Variant = side_payload.get(key)
+		restored.set(
+			String(key),
+			restored_value.duplicate(true)
+			if restored_value is Array or restored_value is Dictionary
+			else restored_value
+		)
 	return restored
 
 
@@ -447,6 +455,8 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"last_hand_play_by_owner": state.last_hand_play_by_owner,
 		"pending_non_retained_suppression_by_owner": state.pending_non_retained_suppression_by_owner,
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+		"owner_auras_by_owner": state.owner_auras_by_owner,
+		"next_owner_aura_handle": state.next_owner_aura_handle,
 		"run_difficulty": state.run_difficulty,
 		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
 		"state_version": state.state_version,
@@ -525,7 +535,12 @@ func _capture_state(state: StateData) -> bool:
 		return false
 
 	for key: StringName in SIDE_PAYLOAD_KEYS:
-		side_payload[key] = state.get(String(key)).duplicate(true)
+		var state_value: Variant = state.get(String(key))
+		side_payload[key] = (
+			state_value.duplicate(true)
+			if state_value is Array or state_value is Dictionary
+			else state_value
+		)
 	return is_structurally_valid()
 
 

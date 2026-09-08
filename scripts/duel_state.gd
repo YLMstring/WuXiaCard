@@ -29,6 +29,8 @@ var future_draw_reveal_audiences: Dictionary = {}
 var last_hand_play_by_owner: Dictionary = {}
 var pending_non_retained_suppression_by_owner: Dictionary = {}
 var enabled_effect_gates_by_owner: Dictionary = {}
+var owner_auras_by_owner: Dictionary = {}
+var next_owner_aura_handle: int = 1
 var run_difficulty: int = 0
 var difficulty_eight_draw_consumed: bool = false
 var state_version: int = 0
@@ -83,6 +85,10 @@ func _init(
 	enabled_effect_gates_by_owner = {
 		Rules.PLAYER_OWNER: [],
 		Rules.OPPONENT_OWNER: [Rules.EFFECT_GATE_SELF_CASTRATION],
+	}
+	owner_auras_by_owner = {
+		Rules.PLAYER_OWNER: [],
+		Rules.OPPONENT_OWNER: [],
 	}
 	active_player = new_active_player
 	turn_count = new_turn_count
@@ -208,6 +214,8 @@ func duplicate_state() -> DuelState:
 	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
 	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
+	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
+	copied.next_owner_aura_handle = next_owner_aura_handle
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
@@ -242,6 +250,8 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
 	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
+	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
+	copied.next_owner_aura_handle = next_owner_aura_handle
 	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
@@ -277,6 +287,20 @@ func _duplicate_card_zones(source: Dictionary) -> Dictionary:
 			source.get(Rules.OPPONENT_OWNER, []) as Array
 		),
 	}
+
+
+func _duplicate_owner_auras(source: Dictionary) -> Dictionary:
+	var copied: Dictionary = {
+		Rules.PLAYER_OWNER: [],
+		Rules.OPPONENT_OWNER: [],
+	}
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var copied_entries: Array = copied[owner_id]
+		for entry_value: Variant in source.get(owner_id, []):
+			if entry_value is Dictionary:
+				# Runtime entries are mutable, while their normalized aura declaration is immutable.
+				copied_entries.append((entry_value as Dictionary).duplicate())
+	return copied
 
 
 func _duplicate_card_array(source: Array) -> Array:

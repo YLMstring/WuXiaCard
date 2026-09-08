@@ -64,7 +64,7 @@ func _run() -> void:
 	_test_FeiTian5_extra_turn_cannot_chain()
 	_test_flipped_FeiTian5_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
-	_test_after_summon_group_stales_after_owner_flip()
+	_test_after_summon_group_uses_current_owner_after_flip()
 	_test_invalid_context_defaults_to_no_effect()
 	_test_activation_costs_validate_as_a_batch()
 	_test_card_be_attacked_triggers_use_row_major_order()
@@ -2133,7 +2133,7 @@ func _test_unusable_extra_turn_expires() -> void:
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
 
 
-func _test_after_summon_group_stales_after_owner_flip() -> void:
+func _test_after_summon_group_uses_current_owner_after_flip() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = {
 		"card": Catalog.create_instance(
@@ -2177,16 +2177,18 @@ func _test_after_summon_group_stales_after_owner_flip() -> void:
 			&"ability_triggered",
 			&"attack_started",
 			&"card_flipped",
+			&"ability_triggered",
+			&"card_drawn",
 		],
-		"Earlier after-summoned reaction invalidates a queued group whose source changes owner"
+		"Retained queued trigger continues after its source changes owner"
 	)
 	_check(
-		next_state.get_hand(Rules.PLAYER_OWNER).is_empty(),
-		"Retained queued ability does not transfer its trigger to the new owner"
+		next_state.get_hand(Rules.PLAYER_OWNER).size() == 1,
+		"Retained queued ability resolves for the source's new owner"
 	)
 	_check(
-		(next_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1,
-		"Invalidated queued ability leaves the new owner's deck untouched"
+		(next_state.decks[Rules.PLAYER_OWNER] as Array).is_empty(),
+		"Retained queued ability draws from the new owner's deck"
 	)
 	_check(
 		(next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1,

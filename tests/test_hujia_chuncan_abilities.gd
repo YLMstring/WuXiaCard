@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_hidden_blade_center_restriction()
 	_test_embrace_moon_aura_and_snapshot()
 	_test_closed_door_attack_context()
+	_test_owner_aura_expires_at_any_turn_end()
 	_test_chuncan_cannot_attack_until_flipped()
 	_finish()
 
@@ -31,6 +32,8 @@ func _test_catalog_declarations() -> void:
 	_check(Catalog.TRIGGER_DUEL_STARTED in Catalog.KNOWN_TRIGGER_EVENTS, "Duel-start event is registered")
 	_check(Catalog.CONDITION_ATTACK_FLIPPED_ANY_CARD in Catalog.KNOWN_ACTION_CONDITIONS, "Attack-flip action condition is registered")
 	_check(Catalog.ACTION_SET_ATTACK_USED_POWERS in Catalog.KNOWN_ACTIONS, "Directional power-set action is registered")
+	_check(Catalog.ACTION_GRANT_OWNER_AURA in Catalog.KNOWN_ACTIONS, "Owner-aura grant action is registered")
+	_check(Catalog.CONDITION_ABILITY_SOURCE_IN_ZONE in Catalog.KNOWN_TRIGGER_CONDITIONS, "Ability-source zone condition is registered")
 	_check(Catalog.MODIFIER_CANNOT_ATTACK in Catalog.KNOWN_MODIFIERS, "Cannot-attack modifier is registered")
 	_check(
 		Catalog.MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION in Catalog.KNOWN_MODIFIERS,
@@ -41,11 +44,11 @@ func _test_catalog_declarations() -> void:
 		"HuJiaDao1 uses the approved full declaration"
 	)
 	_check(
-		Catalog.get_definition(&"HuJiaDao2").get("abilities", []) == [Catalog.HUJIA_EMBRACE_MOON_HAND],
+		Catalog.get_definition(&"HuJiaDao2").get("abilities", []) == [Catalog.HUJIA_EMBRACE_MOON],
 		"HuJiaDao2 uses the approved full declaration"
 	)
 	_check(
-		Catalog.get_definition(&"HuJiaDao3").get("abilities", []) == [Catalog.HUJIA_CLOSED_DOOR_HAND],
+		Catalog.get_definition(&"HuJiaDao3").get("abilities", []) == [Catalog.HUJIA_CLOSED_DOOR],
 		"HuJiaDao3 uses the approved full declaration"
 	)
 	for card_id: StringName in [&"ChunCanZhang2", &"ChunCanZhang3"]:
@@ -71,6 +74,10 @@ func _test_duel_start_reveal() -> void:
 	for card_value: Variant in state.get_hand(Rules.OPPONENT_OWNER):
 		all_enemy_revealed = all_enemy_revealed and _revealed_to(card_value as Dictionary, Rules.PLAYER_OWNER)
 	_check(all_enemy_revealed, "Duel start reveals the current enemy hand to HuJiaDao1's owner")
+	_check(
+		(state.owner_auras_by_owner.get(Rules.PLAYER_OWNER, []) as Array).size() == 1,
+		"Duel start grants HuJiaDao1's owner aura"
+	)
 
 
 func _test_hidden_blade_center_restriction() -> void:
@@ -80,6 +87,7 @@ func _test_hidden_blade_center_restriction() -> void:
 		[Catalog.create_instance(&"HuJiaDao1", Rules.OPPONENT_OWNER, &"enemy_hidden_blade")],
 		Rules.PLAYER_OWNER
 	)
+	restricted = _resolve_duel_started(restricted)
 	var actions: Array = Simulator.get_legal_actions_for_owner(restricted, Rules.PLAYER_OWNER)
 	_check(not _has_play_to(actions, 4), "Center play is removed while another cell is legal")
 	_check(_has_play_to(actions, 0), "Non-center plays remain legal")
@@ -98,6 +106,7 @@ func _test_hidden_blade_center_restriction() -> void:
 		[Catalog.create_instance(&"HuJiaDao1", Rules.OPPONENT_OWNER, &"only_hidden_blade")],
 		Rules.PLAYER_OWNER
 	)
+	center_only = _resolve_duel_started(center_only)
 	_check(_has_play_to(Simulator.get_legal_actions(center_only), 4), "Center remains legal when it is the only action")
 
 
@@ -118,6 +127,7 @@ func _test_embrace_moon_aura_and_snapshot() -> void:
 		[_plain(&"aura_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER)],
 		[]
 	)
+	state = _resolve_duel_started(state)
 	var result: Dictionary = Simulator._resolve_standard_attacks(state, 4, &"aura_attacker", &"aura_test")
 	_check(_count_events(result.get("events", []), &"attack_started") == 1, "Aura defense zero applies even when the recipient's own effects are gated")
 	_check(_removed_has(state, Rules.PLAYER_OWNER, &"embrace_last"), "The final HuJiaDao2 loses one on all sides and is exiled")
@@ -150,6 +160,7 @@ func _test_closed_door_attack_context() -> void:
 		[],
 		Rules.OPPONENT_OWNER
 	)
+	state = _resolve_duel_started(state)
 	var result: Dictionary = Simulator._resolve_standard_attacks(state, 4, &"closed_attacker", &"closed_test")
 	_check(_board_powers(state, &"closed_attacker") == [0, 5, 5, 5], "Trigger-chain flips do not count and only the used top side becomes zero")
 	_check(_find_hand_card(state, &"closed_door").get("powers", []) == [5, 5, 5, 5], "HuJiaDao3 reveals and gains one after an enemy attack")
@@ -164,6 +175,7 @@ func _test_closed_door_attack_context() -> void:
 		[],
 		Rules.OPPONENT_OWNER
 	)
+	direct_state = _resolve_duel_started(direct_state)
 	Simulator._resolve_standard_attacks(direct_state, 4, &"direct_attacker", &"direct_test")
 	_check(_board_powers(direct_state, &"direct_attacker") == [5, 5, 5, 5], "An attack-caused flip prevents directional reset")
 
@@ -187,6 +199,37 @@ func _test_chuncan_cannot_attack_until_flipped() -> void:
 	_check(((state.board[4] as Dictionary).get("card", {}) as Dictionary).get("active_abilities", []).is_empty(), "ChunCan loses the non-retained restriction when flipped")
 
 
+func _test_owner_aura_expires_at_any_turn_end() -> void:
+	var source: Dictionary = Catalog.create_instance(
+		&"HuJiaDao1",
+		Rules.PLAYER_OWNER,
+		&"expiring_hidden_blade"
+	)
+	var state := _resolve_duel_started(State.new(
+		Rules.empty_board(),
+		[source],
+		[],
+		Rules.PLAYER_OWNER
+	))
+	var current_source: Dictionary = _find_hand_card(state, &"expiring_hidden_blade")
+	state.get_hand(Rules.PLAYER_OWNER).erase(current_source)
+	(state.discard_piles[Rules.PLAYER_OWNER] as Array).append(current_source)
+	_check(
+		(state.owner_auras_by_owner[Rules.PLAYER_OWNER] as Array).size() == 1,
+		"Leaving hand does not remove an owner aura immediately"
+	)
+	var ended: Dictionary = NativeRules.resolve_event(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.OPPONENT_OWNER}
+	)
+	_check(bool(ended.get("valid", false)), "Either side's turn end can resolve aura expiry")
+	_check(
+		(state.owner_auras_by_owner[Rules.PLAYER_OWNER] as Array).is_empty(),
+		"Owner aura expires when its exact source is no longer in hand"
+	)
+
+
 func _plain(instance_id: StringName, raw_powers: Array, owner_id: int, abilities: Array = []) -> Dictionary:
 	var powers: Array[int] = []
 	for power_value: Variant in raw_powers:
@@ -194,6 +237,15 @@ func _plain(instance_id: StringName, raw_powers: Array, owner_id: int, abilities
 	var card: Dictionary = Rules.make_card(String(instance_id), String(instance_id), powers, abilities, owner_id, instance_id)
 	card["instance_id"] = instance_id
 	return card
+
+
+func _resolve_duel_started(state: State) -> State:
+	var transition: Dictionary = NativeRules.resolve_event(state, Catalog.TRIGGER_DUEL_STARTED, {})
+	_check(
+		bool(transition.get("valid", false)),
+		"Duel-start owner-aura setup is supported: %s" % transition.get("reason", "")
+	)
+	return transition.get("state") as State
 
 
 func _slot(card: Dictionary, owner_id: int) -> Dictionary:

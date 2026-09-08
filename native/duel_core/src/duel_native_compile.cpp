@@ -124,6 +124,24 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
 		return compiled;
 	}
+	if (
+		type == StringName("ability_source_in_zone")
+		&& (condition.size() == 2 || condition.size() == 3)
+		&& (
+			!condition.has("inverted")
+			|| Variant(condition.get("inverted", Variant())).get_type() == Variant::BOOL
+		)
+	) {
+		const StringName zone = condition.get("zone", StringName());
+		if (zone == StringName("board")) compiled.amount = 0;
+		else if (zone == StringName("hand")) compiled.amount = 1;
+		else if (zone == StringName("discard")) compiled.amount = 3;
+		else if (zone == StringName("removed")) compiled.amount = 4;
+		else return compiled;
+		compiled.opcode = ConditionOpcode::ABILITY_SOURCE_IN_ZONE;
+		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
 	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
@@ -489,6 +507,20 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		const Variant granted = action.get("ability", Variant());
 		if (granted.get_type() == Variant::DICTIONARY && !Dictionary(granted).is_empty()) {
 			compiled.granted_ability_index = intern_compiled_ability(granted);
+			if (!compiled_ability_pool[compiled.granted_ability_index].declaration_valid) {
+				compiled.declaration_valid = false;
+			}
+		} else {
+			compiled.declaration_valid = false;
+		}
+	} else if (
+		type == StringName("grant_owner_aura")
+		&& action.size() == 2 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::GRANT_OWNER_AURA;
+		const Variant aura = action.get("aura", Variant());
+		if (aura.get_type() == Variant::DICTIONARY && !Dictionary(aura).is_empty()) {
+			compiled.granted_ability_index = intern_compiled_ability(aura, true);
 			if (!compiled_ability_pool[compiled.granted_ability_index].declaration_valid) {
 				compiled.declaration_valid = false;
 			}
@@ -1013,7 +1045,8 @@ DuelNativeCompactKernel::CompiledActivation DuelNativeCompactKernel::compile_act
 }
 
 DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_ability(
-	const Variant &value
+	const Variant &value,
+	bool owner_aura
 ) {
 	CompiledAbility compiled;
 	if (value.get_type() != Variant::DICTIONARY) {
@@ -1024,30 +1057,14 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 	const Array ability_keys = ability.keys();
 	for (int64_t key_index = 0; key_index < ability_keys.size(); ++key_index) {
 		const StringName key = ability_keys[key_index];
-		if (
-			key != StringName("retained_on_flip") && key != StringName("triggers")
-			&& key != StringName("activation") && key != StringName("modifiers")
-			&& key != StringName("active_zones") && key != StringName("auras")
-		) compiled.declaration_valid = false;
+		const bool allowed = owner_aura
+			? (key == StringName("triggers") || key == StringName("modifiers") || key == StringName("auras"))
+			: (key == StringName("retained_on_flip") || key == StringName("triggers")
+				|| key == StringName("activation") || key == StringName("modifiers"));
+		if (!allowed) compiled.declaration_valid = false;
 	}
+	if (ability.is_empty()) compiled.declaration_valid = false;
 	compiled.retained_on_flip = static_cast<bool>(ability.get("retained_on_flip", false));
-	if (ability.has("active_zones")) {
-		compiled.active_zone_mask = 0;
-		const Variant zones_value = ability.get("active_zones", Variant());
-		if (zones_value.get_type() != Variant::ARRAY || Array(zones_value).is_empty()) {
-			compiled.declaration_valid = false;
-		} else {
-			const Array zones = zones_value;
-			for (int64_t zone_index = 0; zone_index < zones.size(); ++zone_index) {
-				const StringName zone = zones[zone_index];
-				if (zone == StringName("board")) compiled.active_zone_mask |= 1 << 0;
-				else if (zone == StringName("hand")) compiled.active_zone_mask |= 1 << 1;
-				else if (zone == StringName("discard")) compiled.active_zone_mask |= 1 << 3;
-				else if (zone == StringName("removed")) compiled.active_zone_mask |= 1 << 4;
-				else compiled.declaration_valid = false;
-			}
-		}
-	}
 	if (ability.has("activation")) {
 		const Variant activation = ability["activation"];
 		compiled.has_activation = (
@@ -1082,6 +1099,7 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 		compiled.triggers.push_back(compile_trigger_rule(triggers[index], compiled.declaration_valid));
 	}
 	if (ability.has("auras")) {
+		if (!owner_aura) compiled.declaration_valid = false;
 		const Variant auras_value = ability.get("auras", Variant());
 		if (auras_value.get_type() != Variant::ARRAY || Array(auras_value).is_empty()) {
 			compiled.declaration_valid = false;
@@ -1128,14 +1146,17 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 	return compiled;
 }
 
-int32_t DuelNativeCompactKernel::intern_compiled_ability(const Variant &value) {
+int32_t DuelNativeCompactKernel::intern_compiled_ability(const Variant &value, bool owner_aura) {
 	for (size_t index = 0; index < ability_declaration_pool.size(); ++index) {
-		if (ability_declaration_pool[index] == value) return static_cast<int32_t>(index);
+		if (ability_declaration_owner_aura[index] == owner_aura && ability_declaration_pool[index] == value) {
+			return static_cast<int32_t>(index);
+		}
 	}
 	const int32_t index = static_cast<int32_t>(compiled_ability_pool.size());
 	ability_declaration_pool.push_back(value);
+	ability_declaration_owner_aura.push_back(owner_aura);
 	compiled_ability_pool.push_back(CompiledAbility());
-	compiled_ability_pool[index] = compile_ability(value);
+	compiled_ability_pool[index] = compile_ability(value, owner_aura);
 	return index;
 }
 
@@ -1143,6 +1164,7 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 	compiled_ability_sets.clear();
 	compiled_ability_pool.clear();
 	ability_declaration_pool.clear();
+	ability_declaration_owner_aura.clear();
 	compiled_ability_sets.reserve(static_cast<size_t>(state.active_ability_set_pool.size()));
 	for (int64_t set_index = 0; set_index < state.active_ability_set_pool.size(); ++set_index) {
 		CompiledAbilitySet compiled;
@@ -1340,6 +1362,22 @@ const DuelNativeCompactKernel::CompiledAbility *DuelNativeCompactKernel::runtime
 		return nullptr;
 	}
 	return &compiled_ability_pool[compiled_index];
+}
+
+const DuelNativeCompactKernel::RuntimeOwnerAuraEntry *DuelNativeCompactKernel::owner_aura_by_handle(
+	const NativeState &value,
+	int32_t owner_id,
+	uint64_t handle,
+	int32_t *out_index
+) const {
+	if (owner_id < 1 || owner_id > 2 || handle == 0) return nullptr;
+	const std::vector<RuntimeOwnerAuraEntry> &auras = value.owner_auras[owner_id - 1];
+	for (size_t index = 0; index < auras.size(); ++index) {
+		if (auras[index].handle != handle) continue;
+		if (out_index != nullptr) *out_index = static_cast<int32_t>(index);
+		return &auras[index];
+	}
+	return nullptr;
 }
 
 

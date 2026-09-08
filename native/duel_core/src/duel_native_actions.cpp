@@ -1704,6 +1704,24 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			resolution.flip_prevented = true;
 			return ActionOutcome::APPLIED;
 		case ActionOpcode::REMOVE_THIS_ABILITY: {
+			if (group.owner_aura_handle != 0) {
+				int32_t aura_index = -1;
+				if (owner_aura_by_handle(
+					value,
+					group.owner_aura_owner,
+					group.owner_aura_handle,
+					&aura_index
+				) == nullptr) return ActionOutcome::NO_EFFECT;
+				std::vector<RuntimeOwnerAuraEntry> &auras = value.owner_auras[group.owner_aura_owner - 1];
+				auras.erase(auras.begin() + aura_index);
+				Dictionary removed;
+				removed["type"] = StringName("owner_aura_removed");
+				removed["owner_id"] = group.owner_aura_owner;
+				removed["source_instance_id"] = value.card_instance_ids[group.owner_aura_source_card_index];
+				removed["aura_handle"] = static_cast<int64_t>(group.owner_aura_handle);
+				resolution.events.append(removed);
+				return ActionOutcome::APPLIED;
+			}
 			const int32_t current_cell = find_board_card(value, group.source_card_index, group.source_cell);
 			if (current_cell >= 0 && value.board_owners[current_cell] == group.source_owner) {
 				const int32_t current_ability_index = find_runtime_ability_index(
@@ -1717,6 +1735,28 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				return ActionOutcome::APPLIED;
 			}
 			return ActionOutcome::NO_EFFECT;
+		}
+		case ActionOpcode::GRANT_OWNER_AURA: {
+			if (
+				action_context.ability_source_owner < 1
+				|| action_context.ability_source_owner > 2
+				|| action_context.ability_source_card_index < 0
+				|| action_context.ability_source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
+				|| action.granted_ability_index < 0
+				|| action.granted_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) return ActionOutcome::NO_EFFECT;
+			RuntimeOwnerAuraEntry entry;
+			entry.compiled_ability_index = action.granted_ability_index;
+			entry.source_card_index = action_context.ability_source_card_index;
+			entry.handle = value.next_owner_aura_handle++;
+			value.owner_auras[action_context.ability_source_owner - 1].push_back(entry);
+			Dictionary granted;
+			granted["type"] = StringName("owner_aura_granted");
+			granted["owner_id"] = action_context.ability_source_owner;
+			granted["source_instance_id"] = value.card_instance_ids[entry.source_card_index];
+			granted["aura_handle"] = static_cast<int64_t>(entry.handle);
+			resolution.events.append(granted);
+			return ActionOutcome::APPLIED;
 		}
 		case ActionOpcode::FOR_EACH_SELECTED_CARD:
 			return execute_for_each_selected_card(value, group, action, event_context, action_context, execution_state, exile_stack, resolution);

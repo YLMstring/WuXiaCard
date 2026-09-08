@@ -153,6 +153,22 @@ func _test_state_semantics() -> void:
 		StateKey.build_compact(state) != StateKey.build_compact(copied),
 		"Per-owner special summon usage affects compact identity"
 	)
+	copied = state.duplicate_state() as State
+	copied.owner_auras_by_owner[1] = [{
+		"handle": 1,
+		"source_instance_id": &"aura_source",
+		"aura": {"modifiers": [{"type": &"cannot_attack"}]},
+	}]
+	_check(
+		StateKey.build_compact(state) != StateKey.build_compact(copied),
+		"Owner aura runtime state affects compact identity"
+	)
+	copied = state.duplicate_state() as State
+	copied.next_owner_aura_handle = 2
+	_check(
+		StateKey.build_compact(state) != StateKey.build_compact(copied),
+		"Next owner-aura handle affects compact identity"
+	)
 
 
 func _test_real_state_collision_corpus() -> void:

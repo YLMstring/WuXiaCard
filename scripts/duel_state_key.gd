@@ -66,6 +66,8 @@ static func _state_payload(state: StateData) -> Dictionary:
 		"last_hand_play_by_owner": state.last_hand_play_by_owner,
 		"pending_non_retained_suppression_by_owner": state.pending_non_retained_suppression_by_owner,
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
+		"owner_auras_by_owner": state.owner_auras_by_owner,
+		"next_owner_aura_handle": state.next_owner_aura_handle,
 		"run_difficulty": state.run_difficulty,
 		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
 	}

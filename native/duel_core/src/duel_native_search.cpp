@@ -414,28 +414,20 @@ DuelNativeCompactKernel::get_legal_native_actions(
 		|| value.zones.size() < 2
 	) return actions;
 	auto apply_opponent_cell_restrictions = [&]() {
+		if (diagnostic_disable_aura_queries) return;
 		bool restricted_cells[9] = {false, false, false, false, false, false, false, false, false};
 		const int32_t restricting_owner = other_owner(owner_id);
-		const std::vector<int32_t> &restricting_hand = value.zones[restricting_owner - 1];
-		for (const int32_t card_index : restricting_hand) {
-			if (!card_effects_enabled(value, card_index, restricting_owner)) continue;
-			for (
-				size_t ability_index = 0;
-				ability_index < value.card_runtime_abilities[card_index].size();
-				++ability_index
-			) {
-				const CompiledAbility *ability = runtime_ability(
-					value,
-					card_index,
-					static_cast<int32_t>(ability_index)
-				);
-				if (ability == nullptr || !ability_active_in_zone(*ability, 1)) continue;
-				for (const CompiledModifier &modifier : ability->modifiers) {
-					if (
-						modifier.opcode == ModifierOpcode::OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION
-						&& modifier.value >= 0 && modifier.value < 9
-					) restricted_cells[modifier.value] = true;
-				}
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[restricting_owner - 1]) {
+			if (
+				entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) continue;
+			const CompiledAbility &aura = compiled_ability_pool[entry.compiled_ability_index];
+			for (const CompiledModifier &modifier : aura.modifiers) {
+				if (
+					modifier.opcode == ModifierOpcode::OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION
+					&& modifier.value >= 0 && modifier.value < 9
+				) restricted_cells[modifier.value] = true;
 			}
 		}
 		bool has_restriction = false;

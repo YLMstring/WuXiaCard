@@ -26,6 +26,12 @@ class DuelNativeCompactKernel : public RefCounted {
 		uint64_t handle = 0;
 	};
 
+	struct RuntimeOwnerAuraEntry {
+		int32_t compiled_ability_index = -1;
+		int32_t source_card_index = -1;
+		uint64_t handle = 0;
+	};
+
 	struct RuntimeSuppressionEntry {
 		int32_t original_index = -1;
 		int32_t compiled_ability_index = -1;
@@ -58,6 +64,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<int32_t> card_ki;
 		std::vector<int32_t> card_active_ability_set_indices;
 		std::vector<std::vector<RuntimeAbilityEntry>> card_runtime_abilities;
+		std::array<std::vector<RuntimeOwnerAuraEntry>, 2> owner_auras;
 		std::vector<std::vector<RuntimeSuppressionBatch>> card_runtime_suppression_batches;
 		std::vector<uint8_t> card_reveal_codes;
 		std::vector<int32_t> card_suppression_set_indices;
@@ -71,6 +78,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		Dictionary side_payload;
 		bool has_rule_metadata = false;
 		uint64_t next_ability_handle = 1;
+		uint64_t next_owner_aura_handle = 1;
 	};
 
 	enum class ConditionOpcode : uint8_t {
@@ -106,6 +114,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 		DISCARD_OWNER_IS_SELF,
 		SELECTED_CARD_REVEALED_TO_SELF,
+		ABILITY_SOURCE_IN_ZONE,
 		UNSUPPORTED,
 	};
 
@@ -149,6 +158,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		RESUMMON_CARD_IN_PLACE,
 		DEPART_CARD_FOR_RESUMMON,
 		SET_ATTACK_USED_POWERS,
+		GRANT_OWNER_AURA,
 		UNSUPPORTED,
 	};
 
@@ -477,6 +487,10 @@ class DuelNativeCompactKernel : public RefCounted {
 		uint64_t ability_handle = 0;
 		int32_t trigger_index = -1;
 		int32_t virtual_ability_pool_index = -1;
+		int32_t owner_aura_owner = 0;
+		int32_t owner_aura_source_card_index = -1;
+		uint64_t owner_aura_handle = 0;
+		int32_t owner_aura_nested_index = -1;
 	};
 
 	struct ActionContext {
@@ -802,6 +816,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
 	std::vector<Variant> ability_declaration_pool;
+	std::vector<bool> ability_declaration_owner_aura;
 	std::vector<FreshCardPrototype> fresh_card_prototypes;
 	int32_t empty_deck_draw_prototype_index = -1;
 	bool loaded = false;
@@ -1086,8 +1101,8 @@ private:
 	CompiledModifier compile_modifier(const Variant &value) const;
 	CompiledTriggerRule compile_trigger_rule(const Variant &value, bool &valid);
 	CompiledActivation compile_activation(const Variant &value);
-	CompiledAbility compile_ability(const Variant &value);
-	int32_t intern_compiled_ability(const Variant &value);
+	CompiledAbility compile_ability(const Variant &value, bool owner_aura = false);
+	int32_t intern_compiled_ability(const Variant &value, bool owner_aura = false);
 	bool validate_play_support(const NativeState &value, String &reason) const;
 	bool card_effects_enabled(
 		const NativeState &value,
@@ -1098,6 +1113,12 @@ private:
 		const NativeState &value,
 		int32_t card_index,
 		int32_t ability_index
+	) const;
+	const RuntimeOwnerAuraEntry *owner_aura_by_handle(
+		const NativeState &value,
+		int32_t owner_id,
+		uint64_t handle,
+		int32_t *out_index = nullptr
 	) const;
 	int32_t find_runtime_ability_index(
 		const NativeState &value,
