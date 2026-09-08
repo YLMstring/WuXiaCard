@@ -395,22 +395,6 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 	return resolution;
 }
 
-bool DuelNativeCompactKernel::board_has_enabled_event(
-	const NativeState &value,
-	const StringName &event_id
-) const {
-	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-		const int32_t card_index = value.board_card_indices[cell];
-		if (
-			card_index >= 0
-			&& card_has_enabled_event(value, card_index, value.board_owners[cell], event_id)
-		) {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool DuelNativeCompactKernel::board_has_enabled_activation_for_owner(
 	const NativeState &value,
 	int32_t owner_id

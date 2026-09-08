@@ -705,7 +705,7 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	payload["active_ability_set_pool"] = materialized_pool;
 	payload["suppression_set_pool"] = materialized_suppression_pool;
 	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
-	payload["empty_deck_draw_prototype_index"] = value.empty_deck_draw_prototype_index;
+	payload["empty_deck_draw_prototype_index"] = empty_deck_draw_prototype_index;
 	payload["side_payload"] = value.side_payload;
 	return payload;
 }

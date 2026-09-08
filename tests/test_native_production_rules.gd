@@ -23,6 +23,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
 	_test_native_rejects_unsupported_rule_at_load()
+	_test_native_fresh_prototype_roots_are_isolated()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -111,6 +112,89 @@ func _test_native_rejects_unsupported_rule_at_load() -> void:
 	_check(
 		"unsupported" in String(kernel.call("get_last_error")).to_lower(),
 		"Unsupported compact loading reports the rule declaration failure"
+	)
+
+
+func _test_native_fresh_prototype_roots_are_isolated() -> void:
+	var first_board: Array = Rules.empty_board()
+	first_board[4] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(
+			&"CangSongYingKe3",
+			Rules.PLAYER_OWNER,
+			&"prototype_root_first"
+		),
+	}
+	var second_board: Array = Rules.empty_board()
+	second_board[4] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(
+			&"TuNaShu1",
+			Rules.PLAYER_OWNER,
+			&"prototype_root_second"
+		),
+	}
+	var first_compact := CompactState.new()
+	var second_compact := CompactState.new()
+	_check(
+		first_compact.capture_state(State.new(first_board))
+		and second_compact.capture_state(State.new(second_board)),
+		"Independent fresh-prototype fixtures cross the compact boundary"
+	)
+	if not first_compact.is_structurally_valid() or not second_compact.is_structurally_valid():
+		return
+	var first_kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	var second_kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(first_kernel != null and second_kernel != null, "Two native kernels can coexist")
+	if first_kernel == null or second_kernel == null:
+		return
+	var first_payload: Dictionary = first_compact.to_variant_payload()
+	var second_payload: Dictionary = second_compact.to_variant_payload()
+	_check(
+		bool(first_kernel.call("load_compact_payload", first_payload))
+		and bool(second_kernel.call("load_compact_payload", second_payload)),
+		"Each native kernel loads its own immutable prototype root"
+	)
+	var add_cangsong: Array = [{
+		"type": Catalog.ACTION_ADD_CARD_TO_HAND,
+		"card_id": &"CangSongYingKe3",
+		"recipient": Catalog.RECIPIENT_SELF,
+	}]
+	var first_result: Dictionary = first_kernel.call(
+		"resolve_actions_transition",
+		4,
+		&"prototype_root_first",
+		Rules.PLAYER_OWNER,
+		add_cangsong,
+		{}
+	) as Dictionary
+	var second_result: Dictionary = second_kernel.call(
+		"resolve_actions_transition",
+		4,
+		&"prototype_root_second",
+		Rules.PLAYER_OWNER,
+		add_cangsong,
+		{}
+	) as Dictionary
+	_check(
+		_has_event(first_result.get("events", []), &"card_added_to_hand")
+		and not _has_event(second_result.get("events", []), &"card_added_to_hand"),
+		"Interleaved kernels read only their own immutable fresh-card prototypes"
+	)
+	_check(
+		bool(first_kernel.call("load_compact_payload", second_payload))
+		and not _has_event(
+			(first_kernel.call(
+				"resolve_actions_transition",
+				4,
+				&"prototype_root_second",
+				Rules.PLAYER_OWNER,
+				add_cangsong,
+				{}
+			) as Dictionary).get("events", []),
+			&"card_added_to_hand"
+		),
+		"Reloading a kernel replaces rather than leaks its prior prototype root"
 	)
 
 
@@ -1374,6 +1458,16 @@ func _zone_has_instance(zone: Array, instance_id: StringName) -> bool:
 		if (
 			card_value is Dictionary
 			and StringName((card_value as Dictionary).get("instance_id", &"")) == instance_id
+		):
+			return true
+	return false
+
+
+func _has_event(events: Array, event_type: StringName) -> bool:
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
 		):
 			return true
 	return false

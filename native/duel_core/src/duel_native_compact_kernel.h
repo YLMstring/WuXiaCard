@@ -68,8 +68,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array active_ability_set_pool;
 		Array suppression_set_pool;
 		Array fresh_card_prototype_pool;
-		std::vector<FreshCardPrototype> fresh_card_prototypes;
-		int32_t empty_deck_draw_prototype_index = -1;
 		Dictionary side_payload;
 		bool has_rule_metadata = false;
 		uint64_t next_ability_handle = 1;
@@ -706,6 +704,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
 	std::vector<Variant> ability_declaration_pool;
+	std::vector<FreshCardPrototype> fresh_card_prototypes;
+	int32_t empty_deck_draw_prototype_index = -1;
 	bool loaded = false;
 	String last_error;
 	// Search keeps semantic event skeletons but omits UI-only nested payloads.
@@ -988,8 +988,6 @@ private:
 		int32_t card_index,
 		int32_t owner_id
 	) const;
-	bool card_has_abilities(const NativeState &value, int32_t card_index) const;
-	bool ability_enabled(const NativeState &value, int32_t card_index, int32_t ability_index) const;
 	const CompiledAbility *runtime_ability(
 		const NativeState &value,
 		int32_t card_index,
@@ -1001,35 +999,9 @@ private:
 		uint64_t ability_handle,
 		int32_t preferred_index = -1
 	) const;
-	bool card_has_enabled_activation(
-		const NativeState &value,
-		int32_t card_index,
-		int32_t owner_id
-	) const;
-	bool card_has_enabled_modifiers(
-		const NativeState &value,
-		int32_t card_index,
-		int32_t owner_id
-	) const;
-	bool card_has_enabled_event(
-		const NativeState &value,
-		int32_t card_index,
-		int32_t owner_id,
-		const StringName &event_id
-	) const;
-	bool board_has_enabled_event(
-		const NativeState &value,
-		const StringName &event_id
-	) const;
 	bool board_has_enabled_activation_for_owner(
 		const NativeState &value,
 		int32_t owner_id
-	) const;
-	const CompiledActivation *get_activation_at(
-		const NativeState &value,
-		int32_t card_index,
-		int32_t owner_id,
-		int32_t activation_index
 	) const;
 	bool can_pay_activation_cost(
 		const NativeState &value,
@@ -1276,6 +1248,15 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
+	ActionOutcome resolve_non_attack_flip(
+		NativeState &value,
+		int32_t target_card_index,
+		int32_t new_owner,
+		const StringName &reason,
+		bool record_direct_board_changes,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
+	) const;
 	ActionOutcome grant_ability_to_subject(
 		NativeState &value,
 		const EventGroup &group,
@@ -1434,10 +1415,9 @@ private:
 		const ActionContext &action_context,
 		int32_t referenced_card_index = -1
 	) const;
-	const FreshCardPrototype *find_fresh_card_prototype(
-		const NativeState &value,
-		const StringName &card_id
-	) const;
+	const FreshCardPrototype *find_fresh_card_prototype(const StringName &card_id) const;
+	bool reveal_code_contains(uint8_t reveal_code, int32_t observer_owner) const;
+	bool add_reveal_observer(uint8_t &reveal_code, int32_t observer_owner) const;
 	StringName make_generated_instance_id(
 		const NativeState &value,
 		const StringName &card_id

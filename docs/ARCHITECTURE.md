@@ -93,10 +93,12 @@ invoke direct native event, attack, and non-attack-flip adapters, but those
 adapters resolve through the same production primitives.
 
 The compact kernel compiles and validates every immutable ability declaration
-when a root payload is loaded. Any unsupported ability or ability set rejects
-the whole payload before play or search begins; production transitions therefore
-do not rescan the board for unsupported modifiers or clone a temporary state for
-pending hand-play suppression.
+and fresh-card prototype when a root payload is loaded. Both compiled pools are
+owned by that kernel root rather than copied into mutable search-branch states.
+Any unsupported ability, ability set, or prototype rejects the whole payload
+before play or search begins; production transitions therefore do not rescan the
+board for unsupported modifiers or clone a temporary state for pending hand-play
+suppression.
 
 Before constructing `DuelState`, the controller chooses the first owner and
 passes it, the active difficulty, and a dedicated layout RNG to

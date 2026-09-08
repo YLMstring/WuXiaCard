@@ -234,6 +234,8 @@ void DuelNativeCompactKernel::_bind_methods() {
 bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	loaded = false;
 	last_error = String();
+	fresh_card_prototypes.clear();
+	empty_deck_draw_prototype_index = -1;
 	if (static_cast<int64_t>(payload.get("format_version", 0)) != 1) {
 		last_error = "Unsupported compact-state format version";
 		return false;
@@ -282,7 +284,7 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		last_error = "Empty-deck fallback prototype index is not an integer";
 		return false;
 	}
-	state.empty_deck_draw_prototype_index = static_cast<int32_t>(
+	empty_deck_draw_prototype_index = static_cast<int32_t>(
 		static_cast<int64_t>(fallback_index_value)
 	);
 	state.side_payload = payload.get("side_payload", Dictionary());
@@ -306,8 +308,8 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		state.zones.push_back(to_int_vector(zones[index]));
 	}
 
-	state.fresh_card_prototypes.clear();
-	state.fresh_card_prototypes.reserve(
+	fresh_card_prototypes.clear();
+	fresh_card_prototypes.reserve(
 		static_cast<size_t>(state.fresh_card_prototype_pool.size())
 	);
 	for (int64_t index = 0; index < state.fresh_card_prototype_pool.size(); ++index) {
@@ -352,13 +354,13 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		compiled.active_ability_set_index = static_cast<int32_t>(
 			static_cast<int64_t>(prototype.get("active_ability_set_index", -1))
 		);
-		for (const FreshCardPrototype &existing : state.fresh_card_prototypes) {
+		for (const FreshCardPrototype &existing : fresh_card_prototypes) {
 			if (existing.card_id == compiled.card_id) {
 				last_error = "Fresh-card prototype IDs must be unique";
 				return false;
 			}
 		}
-		state.fresh_card_prototypes.push_back(compiled);
+		fresh_card_prototypes.push_back(compiled);
 	}
 
 	state.card_ids.clear();
@@ -514,7 +516,7 @@ Dictionary DuelNativeCompactKernel::inspect_layout() const {
 	result["invalid_compiled_ability_diagnostics"] = invalid_ability_diagnostics;
 	result["invalid_compiled_ability_set_indices"] = invalid_ability_set_indices;
 	result["fresh_card_prototype_count"] = static_cast<int64_t>(
-		state.fresh_card_prototypes.size()
+		fresh_card_prototypes.size()
 	);
 	result["checksum"] = static_cast<int64_t>(checksum(state) & 0x7fffffffffffffffULL);
 	return result;
@@ -618,19 +620,7 @@ bool DuelNativeCompactKernel::transition_play(
 	next_hand.erase(next_hand.begin() + hand_index);
 	next.card_runtime_flags[played_card_index] &= static_cast<uint8_t>(~(1 << 7));
 	next.card_hand_slots[played_card_index] = -1;
-	if (moving_owner == 1) {
-		if (next.card_reveal_codes[played_card_index] == 0) {
-			next.card_reveal_codes[played_card_index] = 1;
-		} else if (next.card_reveal_codes[played_card_index] == 2) {
-			next.card_reveal_codes[played_card_index] = 4;
-		}
-	} else if (moving_owner == 2) {
-		if (next.card_reveal_codes[played_card_index] == 0) {
-			next.card_reveal_codes[played_card_index] = 2;
-		} else if (next.card_reveal_codes[played_card_index] == 1) {
-			next.card_reveal_codes[played_card_index] = 3;
-		}
-	}
+	add_reveal_observer(next.card_reveal_codes[played_card_index], moving_owner);
 	next.board_card_indices[static_cast<size_t>(target_cell)] = played_card_index;
 	next.board_owners[static_cast<size_t>(target_cell)] = static_cast<uint8_t>(moving_owner);
 	if (target_cell < next.board_slot_extras.size()) {
@@ -1152,67 +1142,22 @@ Dictionary DuelNativeCompactKernel::resolve_non_attack_flip_transition(
 	next.side_payload = state.side_payload.duplicate(true);
 	Resolution resolution;
 	const int32_t target_card_index = find_card_by_instance_id(next, target_instance_id);
-	const int32_t target_cell = find_board_card(next, target_card_index);
 	const int32_t new_owner = static_cast<int32_t>(new_owner_value);
-	if (
-		target_cell < 0
-		|| (new_owner != 1 && new_owner != 2)
-		|| next.board_owners[target_cell] == new_owner
-	) return materialize_direct_transition(next, resolution, true);
-
 	std::vector<int32_t> exile_stack;
-	EventContext flip_context;
-	flip_context.trigger_cell = target_cell;
-	flip_context.trigger_card_index = target_card_index;
-	flip_context.trigger_owner = next.board_owners[target_cell];
-	flip_context.trigger_previous_owner = flip_context.trigger_owner;
-	flip_context.trigger_zone = 0;
-	flip_context.trigger_logical_index = target_cell;
-	flip_context.trigger_was_on_board = true;
-	flip_context.new_owner = new_owner;
-	flip_context.flip_reason = reason;
-	Resolution before = resolve_event(
+	const ActionOutcome outcome = resolve_non_attack_flip(
 		next,
-		StringName("card_before_flipped"),
-		flip_context,
-		exile_stack
-	);
-	if (!before.supported) return materialize_direct_transition(next, before, false);
-	append_resolution(resolution, before);
-	if (before.flip_prevented) {
-		Dictionary prevented;
-		prevented["type"] = StringName("card_flip_prevented");
-		prevented["source_cell"] = -1;
-		prevented["target_cell"] = target_cell;
-		prevented["owner_id"] = flip_context.trigger_owner;
-		prevented["new_owner_id"] = new_owner;
-		prevented["instance_id"] = target_instance_id;
-		resolution.events.append(prevented);
-		Resolution after_prevented = resolve_event(
-			next,
-			StringName("card_flip_prevented"),
-			flip_context,
-			exile_stack
-		);
-		append_resolution(resolution, after_prevented);
-		return materialize_direct_transition(next, resolution, true);
-	}
-	Resolution flipped;
-	if (!flip_card(
-		next,
-		-1,
-		-1,
-		target_cell,
 		target_card_index,
 		new_owner,
-		flip_context,
+		reason,
+		true,
 		exile_stack,
-		flipped
-	)) {
-		return materialize_direct_transition(next, flipped, false);
-	}
-	append_resolution(resolution, flipped);
-	return materialize_direct_transition(next, resolution, true);
+		resolution
+	);
+	return materialize_direct_transition(
+		next,
+		resolution,
+		outcome != ActionOutcome::UNSUPPORTED
+	);
 }
 
 bool DuelNativeCompactKernel::transition_activate(

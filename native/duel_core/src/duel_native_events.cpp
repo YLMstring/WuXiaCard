@@ -77,10 +77,10 @@ bool DuelNativeCompactKernel::conditions_match(
 					&& find_board_card(value, context.trigger_card_index, context.trigger_cell)
 						== context.trigger_cell
 				) {
-					const uint8_t reveal_code = value.card_reveal_codes[context.trigger_card_index];
-					matched = group.source_owner == 1
-						? (reveal_code == 1 || reveal_code == 3 || reveal_code == 4)
-						: (reveal_code == 2 || reveal_code == 3 || reveal_code == 4);
+					matched = reveal_code_contains(
+						value.card_reveal_codes[context.trigger_card_index],
+						group.source_owner
+					);
 				}
 				break;
 			case ConditionOpcode::TRIGGER_CARD_WAS_ENEMY: {

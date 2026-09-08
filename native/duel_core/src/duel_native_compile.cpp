@@ -31,7 +31,7 @@ bool DuelNativeCompactKernel::validate_shape() {
 		last_error = "Compact card arrays differ in length";
 		return false;
 	}
-	for (const FreshCardPrototype &prototype : state.fresh_card_prototypes) {
+	for (const FreshCardPrototype &prototype : fresh_card_prototypes) {
 		if (prototype.card_id.is_empty()) {
 			last_error = "Fresh-card prototype card ID cannot be empty";
 			return false;
@@ -52,9 +52,9 @@ bool DuelNativeCompactKernel::validate_shape() {
 		}
 	}
 	if (
-		state.empty_deck_draw_prototype_index < -1
-		|| state.empty_deck_draw_prototype_index
-			>= static_cast<int32_t>(state.fresh_card_prototypes.size())
+		empty_deck_draw_prototype_index < -1
+		|| empty_deck_draw_prototype_index
+			>= static_cast<int32_t>(fresh_card_prototypes.size())
 	) {
 		last_error = "Empty-deck fallback prototype index is out of range";
 		return false;
@@ -1320,25 +1320,6 @@ bool DuelNativeCompactKernel::card_effects_enabled(
 		}
 	}
 	return false;
-}
-
-bool DuelNativeCompactKernel::card_has_abilities(
-	const NativeState &value,
-	int32_t card_index
-) const {
-	return (
-		card_index >= 0
-		&& card_index < static_cast<int32_t>(value.card_runtime_abilities.size())
-		&& !value.card_runtime_abilities[card_index].empty()
-	);
-}
-
-bool DuelNativeCompactKernel::ability_enabled(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t ability_index
-) const {
-	return runtime_ability(value, card_index, ability_index) != nullptr;
 }
 
 const DuelNativeCompactKernel::CompiledAbility *DuelNativeCompactKernel::runtime_ability(

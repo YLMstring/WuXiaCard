@@ -46,15 +46,15 @@ bool DuelNativeCompactKernel::draw_cards(
 			deck.erase(deck.begin());
 		} else {
 			if (
-				value.empty_deck_draw_prototype_index < 0
-				|| value.empty_deck_draw_prototype_index
-					>= static_cast<int32_t>(value.fresh_card_prototypes.size())
+				empty_deck_draw_prototype_index < 0
+				|| empty_deck_draw_prototype_index
+					>= static_cast<int32_t>(fresh_card_prototypes.size())
 			) {
 				resolution.reason = "Draw has no generated empty-deck fallback prototype";
 				return false;
 			}
-			const StringName fallback_id = value.fresh_card_prototypes[
-				value.empty_deck_draw_prototype_index
+			const StringName fallback_id = fresh_card_prototypes[
+				empty_deck_draw_prototype_index
 			].card_id;
 			String append_reason;
 			card_index = append_fresh_card_instance(
@@ -96,13 +96,7 @@ bool DuelNativeCompactKernel::draw_cards(
 			const int32_t observer_owner = static_cast<int32_t>(static_cast<int64_t>(observer_value));
 			if (observer_owner != 1 && observer_owner != 2) continue;
 			uint8_t &reveal_code = value.card_reveal_codes[card_index];
-			const bool already_revealed = (
-				(observer_owner == 1 && (reveal_code == 1 || reveal_code == 3 || reveal_code == 4))
-				|| (observer_owner == 2 && (reveal_code == 2 || reveal_code == 3 || reveal_code == 4))
-			);
-			if (already_revealed) continue;
-			if (observer_owner == 1) reveal_code = reveal_code == 2 ? 4 : 1;
-			else reveal_code = reveal_code == 1 ? 3 : 2;
+			if (!add_reveal_observer(reveal_code, observer_owner)) continue;
 			Dictionary revealed;
 			revealed["type"] = StringName("card_revealed");
 			revealed["source_cell"] = source_cell;
@@ -358,13 +352,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 	else return ActionOutcome::UNSUPPORTED;
 	if (target < 0) return ActionOutcome::NO_EFFECT;
 
-	const FreshCardPrototype *prototype = nullptr;
-	for (const FreshCardPrototype &candidate : value.fresh_card_prototypes) {
-		if (candidate.card_id == action.card_id) {
-			prototype = &candidate;
-			break;
-		}
-	}
+	const FreshCardPrototype *prototype = find_fresh_card_prototype(action.card_id);
 	if (prototype == nullptr) {
 		resolution.reason = "Transform target has no reachable fresh-card prototype";
 		return ActionOutcome::UNSUPPORTED;
@@ -400,11 +388,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 		value.card_runtime_abilities[target].push_back(entry);
 	}
 	clear_runtime_suppression(value, target);
-	uint8_t &reveal_code = value.card_reveal_codes[target];
-	if (owner_id == 1 && reveal_code == 0) reveal_code = 1;
-	else if (owner_id == 1 && reveal_code == 2) reveal_code = 4;
-	else if (owner_id == 2 && reveal_code == 0) reveal_code = 2;
-	else if (owner_id == 2 && reveal_code == 1) reveal_code = 3;
+	add_reveal_observer(value.card_reveal_codes[target], owner_id);
 
 	Dictionary transformed;
 	transformed["type"] = StringName("card_transformed");
@@ -1244,6 +1228,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	(void)group;
 	(void)event_context;
 	const int32_t target = action_context.action_subject_card_index;
 	const int32_t target_cell = find_board_card(value, target, action_context.action_subject_logical_index);
@@ -1255,22 +1240,48 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 		target
 	);
 	if (new_owner != 1 && new_owner != 2) return ActionOutcome::UNSUPPORTED;
-	if (new_owner == value.board_owners[target_cell]) return ActionOutcome::NO_EFFECT;
+	return resolve_non_attack_flip(
+		value,
+		target,
+		new_owner,
+		StringName("ability_non_attack_flip"),
+		action_context.record_direct_board_changes,
+		exile_stack,
+		resolution
+	);
+}
+
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resolve_non_attack_flip(
+	NativeState &value,
+	int32_t target_card_index,
+	int32_t new_owner,
+	const StringName &reason,
+	bool record_direct_board_changes,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	const int32_t target_cell = find_board_card(value, target_card_index);
+	if (
+		target_cell < 0
+		|| (new_owner != 1 && new_owner != 2)
+		|| value.board_owners[target_cell] == new_owner
+	) return ActionOutcome::NO_EFFECT;
 	EventContext flip_context;
 	flip_context.trigger_cell = target_cell;
-	flip_context.trigger_card_index = target;
+	flip_context.trigger_card_index = target_card_index;
 	flip_context.trigger_owner = value.board_owners[target_cell];
+	flip_context.trigger_previous_owner = flip_context.trigger_owner;
+	flip_context.trigger_zone = 0;
+	flip_context.trigger_logical_index = target_cell;
 	flip_context.trigger_was_on_board = true;
 	flip_context.new_owner = new_owner;
-	flip_context.flip_reason = StringName("ability_non_attack_flip");
+	flip_context.flip_reason = reason;
 	Resolution before = resolve_event(value, StringName("card_before_flipped"), flip_context, exile_stack);
 	if (!before.supported) {
-		resolution.reason = before.reason;
+		append_resolution(resolution, before);
 		return ActionOutcome::UNSUPPORTED;
 	}
-	resolution.events.append_array(before.events);
-	resolution.captures.append_array(before.captures);
-	resolution.exiles.append_array(before.exiles);
+	append_resolution(resolution, before);
 	if (before.flip_prevented) {
 		Dictionary prevented;
 		prevented["type"] = StringName("card_flip_prevented");
@@ -1278,16 +1289,14 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 		prevented["target_cell"] = target_cell;
 		prevented["owner_id"] = flip_context.trigger_owner;
 		prevented["new_owner_id"] = new_owner;
-		prevented["instance_id"] = value.card_instance_ids[target];
+		prevented["instance_id"] = value.card_instance_ids[target_card_index];
 		resolution.events.append(prevented);
 		Resolution after_prevented = resolve_event(value, StringName("card_flip_prevented"), flip_context, exile_stack);
 		if (!after_prevented.supported) {
-			resolution.reason = after_prevented.reason;
+			append_resolution(resolution, after_prevented);
 			return ActionOutcome::UNSUPPORTED;
 		}
-		resolution.events.append_array(after_prevented.events);
-		resolution.captures.append_array(after_prevented.captures);
-		resolution.exiles.append_array(after_prevented.exiles);
+		append_resolution(resolution, after_prevented);
 		return ActionOutcome::APPLIED;
 	}
 	Resolution flipped;
@@ -1296,19 +1305,18 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 		-1,
 		-1,
 		target_cell,
-		target,
+		target_card_index,
 		new_owner,
 		flip_context,
 		exile_stack,
 		flipped,
-		action_context.record_direct_board_changes
+		record_direct_board_changes
 	)) {
-		resolution.reason = flipped.reason;
+		append_resolution(resolution, flipped);
+		if (resolution.reason.is_empty()) resolution.reason = flipped.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
-	resolution.events.append_array(flipped.events);
-	resolution.captures.append_array(flipped.captures);
-	resolution.exiles.append_array(flipped.exiles);
+	append_resolution(resolution, flipped);
 	return ActionOutcome::APPLIED;
 }
 
@@ -1581,10 +1589,10 @@ bool DuelNativeCompactKernel::action_conditions_match(
 					matched = false;
 					break;
 				}
-				const uint8_t reveal_code = value.card_reveal_codes[selected];
-				matched = observer_owner == 1
-					? (reveal_code == 1 || reveal_code == 3 || reveal_code == 4)
-					: (reveal_code == 2 || reveal_code == 3 || reveal_code == 4);
+				matched = reveal_code_contains(
+					value.card_reveal_codes[selected],
+					observer_owner
+				);
 				break;
 			}
 			default:
@@ -2271,7 +2279,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			if (added_card_index < 0) {
 				if (
 					action.card_spec != CardSpecOpcode::PERFECT_COPY
-					&& find_fresh_card_prototype(value, card_id) == nullptr
+					&& find_fresh_card_prototype(card_id) == nullptr
 				) return ActionOutcome::NO_EFFECT;
 				resolution.reason = append_reason;
 				return ActionOutcome::UNSUPPORTED;
@@ -2282,14 +2290,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 
 			const int32_t observer_owner = other_owner(recipient_owner);
 			uint8_t &reveal_code = value.card_reveal_codes[added_card_index];
-			const bool already_revealed = (
-				(observer_owner == 1 && (reveal_code == 1 || reveal_code == 3 || reveal_code == 4))
-				|| (observer_owner == 2 && (reveal_code == 2 || reveal_code == 3 || reveal_code == 4))
-			);
-			if (!already_revealed) {
-				if (observer_owner == 1) reveal_code = reveal_code == 2 ? 4 : 1;
-				else reveal_code = reveal_code == 1 ? 3 : 2;
-			}
+			const bool newly_revealed = add_reveal_observer(reveal_code, observer_owner);
 			const int32_t current_source_cell = source_zone == 0 ? source_logical_index : -1;
 			Dictionary added;
 			added["type"] = StringName("card_added_to_hand");
@@ -2304,7 +2305,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				added["card"] = restore_runtime_card(value, added_card_index);
 			}
 			resolution.events.append(added);
-			if (!already_revealed) {
+			if (newly_revealed) {
 				Dictionary revealed;
 				revealed["type"] = StringName("card_revealed");
 				revealed["source_cell"] = current_source_cell;
@@ -2333,13 +2334,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			for (size_t hand_index = 0; hand_index < hand.size(); ++hand_index) {
 				const int32_t card_index = hand[hand_index];
 				uint8_t &code = value.card_reveal_codes[card_index];
-				const bool already_revealed = (
-					(observer_owner == 1 && (code == 1 || code == 3 || code == 4))
-					|| (observer_owner == 2 && (code == 2 || code == 3 || code == 4))
-				);
-				if (already_revealed) continue;
-				if (observer_owner == 1) code = code == 2 ? 4 : 1;
-				else code = code == 1 ? 3 : 2;
+				if (!add_reveal_observer(code, observer_owner)) continue;
 				Dictionary revealed;
 				revealed["type"] = StringName("card_revealed");
 				revealed["source_cell"] = action_source_cell;
@@ -2391,13 +2386,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			else if (zone == 4) zone_name = StringName("removed");
 			else return ActionOutcome::NO_EFFECT;
 			uint8_t &code = value.card_reveal_codes[target];
-			const bool already_revealed = (
-				(observer_owner == 1 && (code == 1 || code == 3 || code == 4))
-				|| (observer_owner == 2 && (code == 2 || code == 3 || code == 4))
-			);
-			if (already_revealed) return ActionOutcome::NO_EFFECT;
-			if (observer_owner == 1) code = code == 2 ? 4 : 1;
-			else code = code == 1 ? 3 : 2;
+			if (!add_reveal_observer(code, observer_owner)) return ActionOutcome::NO_EFFECT;
 			Dictionary revealed;
 			revealed["type"] = StringName("card_revealed");
 			revealed["source_cell"] = action_source_cell;
@@ -2627,10 +2616,9 @@ int32_t DuelNativeCompactKernel::resolve_relative_owner(
 }
 
 const DuelNativeCompactKernel::FreshCardPrototype *DuelNativeCompactKernel::find_fresh_card_prototype(
-	const NativeState &value,
 	const StringName &card_id
 ) const {
-	for (const FreshCardPrototype &prototype : value.fresh_card_prototypes) {
+	for (const FreshCardPrototype &prototype : fresh_card_prototypes) {
 		if (prototype.card_id == card_id) return &prototype;
 	}
 	return nullptr;
@@ -2666,7 +2654,7 @@ int32_t DuelNativeCompactKernel::append_fresh_card_instance(
 	int32_t owner_id,
 	String &reason
 ) const {
-	const FreshCardPrototype *prototype_pointer = find_fresh_card_prototype(value, card_id);
+	const FreshCardPrototype *prototype_pointer = find_fresh_card_prototype(card_id);
 	if (prototype_pointer == nullptr) {
 		reason = "Summoned card has no fresh-card prototype";
 		return -1;
@@ -2923,7 +2911,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		}
 	} else if (
 		action.card_spec != CardSpecOpcode::PERFECT_COPY
-		&& find_fresh_card_prototype(value, card_id) == nullptr
+		&& find_fresh_card_prototype(card_id) == nullptr
 	) {
 		return ActionOutcome::NO_EFFECT;
 	}
@@ -2976,7 +2964,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		if (summoned_card_index < 0) {
 			if (
 				action.card_spec != CardSpecOpcode::PERFECT_COPY
-				&& find_fresh_card_prototype(value, card_id) == nullptr
+				&& find_fresh_card_prototype(card_id) == nullptr
 			) return ActionOutcome::NO_EFFECT;
 			resolution.reason = append_reason;
 			return ActionOutcome::UNSUPPORTED;
@@ -3277,14 +3265,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 
 		const int32_t observer_owner = other_owner(recipient_owner);
 		uint8_t &reveal_code = value.card_reveal_codes[target_card_index];
-		const bool already_revealed = (
-			(observer_owner == 1 && (reveal_code == 1 || reveal_code == 3 || reveal_code == 4))
-			|| (observer_owner == 2 && (reveal_code == 2 || reveal_code == 3 || reveal_code == 4))
-		);
-		if (!already_revealed) {
-			if (observer_owner == 1) reveal_code = reveal_code == 2 ? 4 : 1;
-			else reveal_code = reveal_code == 1 ? 3 : 2;
-		}
+		const bool newly_revealed = add_reveal_observer(reveal_code, observer_owner);
 		const StringName source_instance_id = (
 			action_context.ability_source_card_index >= 0
 			? value.card_instance_ids[action_context.ability_source_card_index]
@@ -3305,7 +3286,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 			returned["card"] = restore_runtime_card(value, target_card_index);
 		}
 		resolution.events.append(returned);
-		if (!already_revealed) {
+		if (newly_revealed) {
 			Dictionary revealed;
 			revealed["type"] = StringName("card_revealed");
 			revealed["source_cell"] = source_current_cell;
@@ -3320,13 +3301,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		return ActionOutcome::APPLIED;
 	}
 
-	const FreshCardPrototype *prototype = nullptr;
-	for (const FreshCardPrototype &candidate : value.fresh_card_prototypes) {
-		if (candidate.card_id == card_id) {
-			prototype = &candidate;
-			break;
-		}
-	}
+	const FreshCardPrototype *prototype = find_fresh_card_prototype(card_id);
 	if (prototype == nullptr) {
 		return ActionOutcome::NO_EFFECT;
 	}
@@ -3361,7 +3336,10 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		return ActionOutcome::UNSUPPORTED;
 	}
 	value.card_runtime_flags[new_card_index] |= static_cast<uint8_t>(1 << 7);
-	value.card_reveal_codes[new_card_index] = static_cast<uint8_t>(recipient_owner == 1 ? 3 : 4);
+	add_reveal_observer(
+		value.card_reveal_codes[new_card_index],
+		other_owner(recipient_owner)
+	);
 	value.card_hand_slots[new_card_index] = hand_slot;
 	recipient_hand.push_back(new_card_index);
 

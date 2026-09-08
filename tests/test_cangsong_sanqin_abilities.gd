@@ -3,10 +3,12 @@ extends SceneTree
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
+const StateKey = preload("res://scripts/duel_state_key.gd")
 const TEST_PROFILE_PATH: String = "user://cangsong_sanqin_test_profile.json"
 
 var _checks: int = 0
@@ -23,6 +25,7 @@ func _run() -> void:
 	_test_cangsong_spends_with_full_hand()
 	_test_exiled_attack_target_emits_no_flip_triggers()
 	_test_non_attack_flip_uses_before_and_after_events()
+	_test_non_attack_flip_entry_points_match()
 	_test_sanqin_three_attacks_in_row_major_order()
 	_test_sanqin_spends_without_attack_targets()
 	await _test_opponent_hand_addition_is_revealed()
@@ -227,6 +230,46 @@ func _test_non_attack_flip_uses_before_and_after_events() -> void:
 		and state.get_hand(Rules.OPPONENT_OWNER).size() == 1
 		and types.find(&"card_added_to_hand") < types.find(&"card_flipped"),
 		"Non-attack flip resolves the reusable before-flip trigger"
+	)
+
+
+func _test_non_attack_flip_entry_points_match() -> void:
+	var target: Dictionary = Catalog.create_instance(
+		&"CangSongYingKe3",
+		Rules.OPPONENT_OWNER,
+		&"shared_flip_target"
+	)
+	target["ki"] = 1
+	var board: Array = Rules.empty_board()
+	board[8] = {"card": target, "owner": Rules.OPPONENT_OWNER}
+	var initial := State.new(board)
+	var direct_state: State = initial.duplicate_state()
+	var action_state: State = initial.duplicate_state()
+	var direct_result: Dictionary = Simulator.resolve_non_attack_flip(
+		direct_state,
+		&"shared_flip_target",
+		Rules.PLAYER_OWNER,
+		&"ability_non_attack_flip"
+	)
+	var action_result: Dictionary = Executor.execute_actions(
+		action_state,
+		8,
+		&"shared_flip_target",
+		Rules.OPPONENT_OWNER,
+		[{
+			"type": Catalog.ACTION_FLIP_SELF,
+			"new_owner": Catalog.OWNER_OPPONENT_OF_CARD_CURRENT,
+		}],
+		{}
+	)
+	_check(
+		bool(direct_result.get("valid", false))
+		and bool(action_result.get("valid", false))
+		and StateKey.build_compact(direct_state) == StateKey.build_compact(action_state)
+		and direct_result.get("events", []) == action_result.get("events", [])
+		and direct_result.get("captures", []) == action_result.get("captures", [])
+		and direct_result.get("exiles", []) == action_result.get("exiles", []),
+		"Direct and action-driven non-attack flips share state and resolution semantics"
 	)
 
 

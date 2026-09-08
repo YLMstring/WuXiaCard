@@ -30,53 +30,33 @@ int32_t DuelNativeCompactKernel::find_runtime_ability_index(
 	return -1;
 }
 
-bool DuelNativeCompactKernel::card_has_enabled_activation(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t owner_id
+bool DuelNativeCompactKernel::reveal_code_contains(
+	uint8_t reveal_code,
+	int32_t observer_owner
 ) const {
-	if (!card_effects_enabled(value, card_index, owner_id)) {
-		return false;
+	if (observer_owner == 1) {
+		return reveal_code == 1 || reveal_code == 3 || reveal_code == 4;
 	}
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-		if (
-			ability != nullptr
-			&& ability->has_activation
-			&& ability->activation.declaration_valid
-		) return true;
+	if (observer_owner == 2) {
+		return reveal_code == 2 || reveal_code == 3 || reveal_code == 4;
 	}
 	return false;
 }
 
-const DuelNativeCompactKernel::CompiledActivation *DuelNativeCompactKernel::get_activation_at(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t owner_id,
-	int32_t activation_index
+bool DuelNativeCompactKernel::add_reveal_observer(
+	uint8_t &reveal_code,
+	int32_t observer_owner
 ) const {
-	if (
-		activation_index < 0
-		|| !card_effects_enabled(value, card_index, owner_id)
-		|| card_index < 0
-		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
-	) {
-		return nullptr;
+	if (reveal_code_contains(reveal_code, observer_owner)) return false;
+	if (observer_owner == 1) {
+		reveal_code = reveal_code == 2 ? 4 : 1;
+		return true;
 	}
-	int32_t current_activation_index = 0;
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(
-			value,
-			card_index,
-			static_cast<int32_t>(ability_index)
-		);
-		if (ability == nullptr || !ability->has_activation) continue;
-		if (current_activation_index == activation_index) {
-			return ability->activation.declaration_valid ? &ability->activation : nullptr;
-		}
-		++current_activation_index;
+	if (observer_owner == 2) {
+		reveal_code = reveal_code == 1 ? 3 : 2;
+		return true;
 	}
-	return nullptr;
+	return false;
 }
 
 bool DuelNativeCompactKernel::can_pay_activation_cost(
@@ -247,40 +227,6 @@ std::vector<int32_t> DuelNativeCompactKernel::get_activation_target_indices(
 		)) targets.push_back(target_cell);
 	}
 	return targets;
-}
-
-bool DuelNativeCompactKernel::card_has_enabled_modifiers(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t owner_id
-) const {
-	if (!card_effects_enabled(value, card_index, owner_id)) {
-		return false;
-	}
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-		if (ability != nullptr && !ability->modifiers.empty()) return true;
-	}
-	return false;
-}
-
-bool DuelNativeCompactKernel::card_has_enabled_event(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t owner_id,
-	const StringName &event_id
-) const {
-	if (!card_effects_enabled(value, card_index, owner_id)) {
-		return false;
-	}
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-		if (ability == nullptr) continue;
-		for (const CompiledTriggerRule &rule : ability->triggers) {
-			if (rule.event_id == event_id) return true;
-		}
-	}
-	return false;
 }
 
 bool DuelNativeCompactKernel::ability_active_in_zone(
