@@ -404,6 +404,24 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 			state.card_runtime_abilities.push_back(runtime_entries);
 		}
 		loaded = compile_runtime_suppression_batches();
+		if (loaded) {
+			for (size_t ability_index = 0; ability_index < compiled_ability_pool.size(); ++ability_index) {
+				if (compiled_ability_pool[ability_index].declaration_valid) continue;
+				last_error = String("Unsupported compiled ability declaration at index ")
+					+ String::num_int64(static_cast<int64_t>(ability_index));
+				loaded = false;
+				break;
+			}
+		}
+		if (loaded) {
+			for (size_t set_index = 0; set_index < compiled_ability_sets.size(); ++set_index) {
+				if (compiled_ability_sets[set_index].declaration_valid) continue;
+				last_error = String("Unsupported compiled ability-set declaration at index ")
+					+ String::num_int64(static_cast<int64_t>(set_index));
+				loaded = false;
+				break;
+			}
+		}
 	}
 	return loaded;
 }
@@ -589,35 +607,6 @@ bool DuelNativeCompactKernel::transition_play(
 		reason = "Expected instance ID does not match the hand card";
 		return false;
 	}
-	const NativeState *support_state = &source;
-	NativeState pending_adjusted_state;
-	const int32_t pending_scalar_index = moving_owner == 1 ? 8 : 9;
-	if (
-		source.scalars[pending_scalar_index] > 0
-	) {
-		pending_adjusted_state = source;
-		std::vector<RuntimeAbilityEntry> retained_entries;
-		for (const RuntimeAbilityEntry &entry : pending_adjusted_state.card_runtime_abilities[played_card_index]) {
-			if (
-				entry.compiled_ability_index >= 0
-				&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
-				&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
-			) retained_entries.push_back(entry);
-		}
-		pending_adjusted_state.card_runtime_abilities[played_card_index] = retained_entries;
-		clear_runtime_suppression(pending_adjusted_state, played_card_index);
-		support_state = &pending_adjusted_state;
-	}
-	if (!validate_action_rule_support(
-			*support_state,
-			played_card_index,
-			target_cell,
-			reason
-		)) {
-		supported = false;
-		return false;
-	}
-
 	next = source;
 	next.board_slot_extras = source.board_slot_extras.duplicate(true);
 	next.side_payload = source.side_payload.duplicate(true);
@@ -656,22 +645,6 @@ bool DuelNativeCompactKernel::transition_play(
 	placed_event["target_cell"] = target_cell;
 	placed_event["owner_id"] = moving_owner;
 	placed_event["instance_id"] = played_instance_id;
-	Resolution hand_change_resolution = resolve_difficulty_hand_change(
-		next,
-		moving_owner,
-		static_cast<int32_t>(source_hand.size()),
-		static_cast<int32_t>(next_hand.size()),
-		static_cast<int32_t>(target_cell),
-		exile_stack
-	);
-	if (!hand_change_resolution.supported) {
-		supported = false;
-		reason = hand_change_resolution.reason;
-		return false;
-	}
-	const Array hand_change_events = hand_change_resolution.events;
-	hand_change_resolution.events = Array();
-	append_resolution(resolution, hand_change_resolution);
 	Resolution suppression_resolution = consume_pending_hand_play_suppression(
 		next,
 		played_card_index,
@@ -694,7 +667,6 @@ bool DuelNativeCompactKernel::transition_play(
 		);
 	summon_request.attack_redirect_snapshot_taken = true;
 	summon_request.buffered_placement_events.append(placed_event);
-	summon_request.buffered_placement_events.append_array(hand_change_events);
 	Resolution summon_resolution = resolve_summon_lifecycle(
 		next,
 		summon_request,

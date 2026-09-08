@@ -283,22 +283,6 @@ bool DuelNativeCompactKernel::card_has_enabled_event(
 	return false;
 }
 
-bool DuelNativeCompactKernel::card_has_unsupported_enabled_modifier(
-	const NativeState &value,
-	int32_t card_index,
-	int32_t owner_id
-) const {
-	if (!card_effects_enabled(value, card_index, owner_id)) return false;
-	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
-		const CompiledAbility *ability = runtime_ability(value, card_index, static_cast<int32_t>(ability_index));
-		if (ability == nullptr) continue;
-		for (const CompiledModifier &modifier : ability->modifiers) {
-			if (modifier.opcode == ModifierOpcode::UNSUPPORTED) return true;
-		}
-	}
-	return false;
-}
-
 bool DuelNativeCompactKernel::ability_active_in_zone(
 	const CompiledAbility &ability,
 	int32_t zone

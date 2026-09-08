@@ -990,12 +990,6 @@ private:
 	CompiledAbility compile_ability(const Variant &value);
 	int32_t intern_compiled_ability(const Variant &value);
 	bool validate_play_support(const NativeState &value, String &reason) const;
-	bool validate_action_rule_support(
-		const NativeState &value,
-		int32_t played_card_index,
-		int32_t target_cell,
-		String &reason
-	) const;
 	bool card_effects_enabled(
 		const NativeState &value,
 		int32_t card_index,
@@ -1068,11 +1062,6 @@ private:
 		TargetRuleOpcode target_rule
 	) const;
 	bool activation_targets_hand(const CompiledActivation &activation) const;
-	bool card_has_unsupported_enabled_modifier(
-		const NativeState &value,
-		int32_t card_index,
-		int32_t owner_id
-	) const;
 	bool card_has_modifier(
 		const NativeState &value,
 		int32_t card_index,
@@ -1353,14 +1342,6 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
-	Resolution resolve_difficulty_hand_change(
-		NativeState &value,
-		int32_t owner_id,
-		int32_t previous_size,
-		int32_t current_size,
-		int32_t source_cell,
-		std::vector<int32_t> &exile_stack
-	) const;
 	ActionOutcome discard_locked_cards(
 		NativeState &value,
 		const EventGroup &group,
@@ -1470,7 +1451,7 @@ private:
 		const NativeState &value,
 		const StringName &card_id
 	) const;
-	int32_t append_fresh_board_card(
+	int32_t append_fresh_card_instance(
 		NativeState &value,
 		const StringName &card_id,
 		const StringName &instance_id,

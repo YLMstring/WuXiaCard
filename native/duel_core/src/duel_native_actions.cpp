@@ -57,7 +57,7 @@ bool DuelNativeCompactKernel::draw_cards(
 				value.empty_deck_draw_prototype_index
 			].card_id;
 			String append_reason;
-			card_index = append_fresh_board_card(
+			card_index = append_fresh_card_instance(
 				value,
 				fallback_id,
 				make_generated_instance_id(value, fallback_id),
@@ -71,7 +71,6 @@ bool DuelNativeCompactKernel::draw_cards(
 		}
 		const int32_t slot = leftmost_empty_hand_slot(value, owner_id);
 		if (slot < 0) break;
-		const int32_t previous_hand_size = static_cast<int32_t>(hand.size());
 		value.card_runtime_flags[card_index] |= static_cast<uint8_t>(1 << 7);
 		value.card_hand_slots[card_index] = slot;
 		hand.push_back(card_index);
@@ -115,20 +114,6 @@ bool DuelNativeCompactKernel::draw_cards(
 			resolution.events.append(revealed);
 		}
 
-		Resolution hand_change = resolve_difficulty_hand_change(
-			value,
-			owner_id,
-			previous_hand_size,
-			static_cast<int32_t>(hand.size()),
-			source_cell,
-			exile_stack
-		);
-		if (!hand_change.supported) {
-			resolution.reason = hand_change.reason;
-			return false;
-		}
-		append_resolution(resolution, hand_change);
-
 		EventContext after_draw_context = draw_context;
 		after_draw_context.trigger_cell = -1;
 		after_draw_context.trigger_card_index = card_index;
@@ -150,17 +135,6 @@ bool DuelNativeCompactKernel::draw_cards(
 		append_resolution(resolution, after_drawn);
 	}
 	return true;
-}
-
-DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_difficulty_hand_change(
-	NativeState &,
-	int32_t,
-	int32_t,
-	int32_t,
-	int32_t,
-	std::vector<int32_t> &
-) const {
-	return Resolution();
 }
 
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_cards(
@@ -194,7 +168,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 
 	std::vector<int32_t> &hand = value.zones[owner_id - 1];
 	std::vector<int32_t> &discard_pile = value.zones[owner_id + 3];
-	const int32_t previous_hand_size = static_cast<int32_t>(hand.size());
 	const int32_t discard_size_before = static_cast<int32_t>(discard_pile.size());
 	const StringName source_instance_id = (
 		action_context.ability_source_card_index >= 0
@@ -303,20 +276,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 		shifted["moves"] = moves;
 		resolution.events.append(shifted);
 	}
-	Resolution hand_change = resolve_difficulty_hand_change(
-		value,
-		owner_id,
-		previous_hand_size,
-		static_cast<int32_t>(hand.size()),
-		source_cell,
-		exile_stack
-	);
-	if (!hand_change.supported) {
-		resolution.reason = hand_change.reason;
-		return ActionOutcome::UNSUPPORTED;
-	}
-	append_resolution(resolution, hand_change);
-
 	for (const DiscardRecord &record : records) {
 		int32_t trigger_zone = -1;
 		int32_t trigger_owner = 0;
@@ -2556,7 +2515,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					instance_id,
 					append_reason
 				)
-				: append_fresh_board_card(
+				: append_fresh_card_instance(
 					value,
 					card_id,
 					instance_id,
@@ -2573,7 +2532,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			}
 			value.card_runtime_flags[added_card_index] |= static_cast<uint8_t>(1 << 7);
 			value.card_hand_slots[added_card_index] = hand_slot;
-			const int32_t previous_hand_size = static_cast<int32_t>(hand.size());
 			hand.push_back(added_card_index);
 
 			const int32_t observer_owner = other_owner(recipient_owner);
@@ -2612,19 +2570,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				revealed["logical_hand_index"] = static_cast<int32_t>(hand.size()) - 1;
 				resolution.events.append(revealed);
 			}
-			Resolution hand_change = resolve_difficulty_hand_change(
-				value,
-				recipient_owner,
-				previous_hand_size,
-				static_cast<int32_t>(hand.size()),
-				action_source_cell,
-				exile_stack
-			);
-			if (!hand_change.supported) {
-				resolution.reason = hand_change.reason;
-				return ActionOutcome::UNSUPPORTED;
-			}
-			append_resolution(resolution, hand_change);
 			return ActionOutcome::APPLIED;
 		}
 		case ActionOpcode::REVEAL_HAND_CARDS: {
@@ -2986,7 +2931,7 @@ StringName DuelNativeCompactKernel::make_generated_instance_id(
 	}
 }
 
-int32_t DuelNativeCompactKernel::append_fresh_board_card(
+int32_t DuelNativeCompactKernel::append_fresh_card_instance(
 	NativeState &value,
 	const StringName &card_id,
 	const StringName &instance_id,
@@ -3265,7 +3210,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	StringName from_hand_instance_id;
 	StringName from_removed_instance_id;
 	StringName from_discard_instance_id;
-	int32_t previous_hand_size = -1;
 	if (action.card_spec == CardSpecOpcode::EXISTING_REFERENCE || action.card_spec == CardSpecOpcode::TOP_DISCARD) {
 		if (!existing_was_departed && existing_zone != 1 && existing_zone != 3 && existing_zone != 4) {
 			return ActionOutcome::NO_EFFECT;
@@ -3283,7 +3227,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 				|| existing_logical_index >= static_cast<int32_t>(zone.size())
 				|| zone[existing_logical_index] != summoned_card_index
 			) return ActionOutcome::NO_EFFECT;
-			if (existing_zone == 1) previous_hand_size = static_cast<int32_t>(zone.size());
 			zone.erase(zone.begin() + existing_logical_index);
 		}
 		instance_id = value.card_instance_ids[summoned_card_index];
@@ -3301,7 +3244,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 		String append_reason;
 		summoned_card_index = action.card_spec == CardSpecOpcode::PERFECT_COPY
 			? append_perfect_copy_board_card(value, referenced_card_index, instance_id, append_reason)
-			: append_fresh_board_card(value, card_id, instance_id, summon_board_owner, append_reason);
+			: append_fresh_card_instance(value, card_id, instance_id, summon_board_owner, append_reason);
 		if (summoned_card_index < 0) {
 			if (
 				action.card_spec != CardSpecOpcode::PERFECT_COPY
@@ -3352,23 +3295,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	request.summon_reason = summon_reason;
 	request.attack_reason = StringName("generated_summon_standard_attack");
 	request.buffered_placement_events.append(summoned_event);
-	if (previous_hand_size >= 0) {
-		Resolution hand_change = resolve_difficulty_hand_change(
-			value,
-			existing_owner,
-			previous_hand_size,
-			static_cast<int32_t>(value.zones[existing_owner - 1].size()),
-			target_cell,
-			exile_stack
-		);
-		if (!hand_change.supported) {
-			resolution.reason = hand_change.reason;
-			return ActionOutcome::UNSUPPORTED;
-		}
-		request.buffered_placement_events.append_array(hand_change.events);
-		hand_change.events = Array();
-		append_resolution(resolution, hand_change);
-	}
 	Resolution nested = resolve_summon_lifecycle(value, request, exile_stack);
 	if (!nested.supported) {
 		resolution.reason = nested.reason;
@@ -3425,7 +3351,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	resolution.events.append(departed);
 
 	String append_reason;
-	const int32_t new_card_index = append_fresh_board_card(
+	const int32_t new_card_index = append_fresh_card_instance(
 		value,
 		card_id,
 		new_instance_id,
@@ -3585,7 +3511,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		return current >= 0 ? current : action_context.ability_source_cell;
 	}();
 	std::vector<int32_t> &recipient_hand = value.zones[recipient_owner - 1];
-	const int32_t recipient_previous_hand_size = static_cast<int32_t>(recipient_hand.size());
 	if (recipient_hand.size() >= 5) {
 		const int64_t previous_event_count = resolution.events.size();
 		if (!exile_card(
@@ -3664,19 +3589,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 			revealed["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
 			resolution.events.append(revealed);
 		}
-		Resolution hand_change = resolve_difficulty_hand_change(
-			value,
-			recipient_owner,
-			recipient_previous_hand_size,
-			static_cast<int32_t>(recipient_hand.size()),
-			source_current_cell,
-			exile_stack
-		);
-		if (!hand_change.supported) {
-			resolution.reason = hand_change.reason;
-			return ActionOutcome::UNSUPPORTED;
-		}
-		append_resolution(resolution, hand_change);
 		return ActionOutcome::APPLIED;
 	}
 
@@ -3698,27 +3610,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		return ActionOutcome::UNSUPPORTED;
 	}
 
-	auto instance_id_is_located = [&](const StringName &candidate) {
-		for (const int32_t card_index : value.board_card_indices) {
-			if (card_index >= 0 && value.card_instance_ids[card_index] == candidate) return true;
-		}
-		for (const std::vector<int32_t> &zone : value.zones) {
-			for (const int32_t card_index : zone) {
-				if (value.card_instance_ids[card_index] == candidate) return true;
-			}
-		}
-		return false;
-	};
-	StringName new_instance_id;
-	for (int64_t serial = 1; ; ++serial) {
-		const StringName candidate(
-			String("generated_") + String(card_id) + "_" + String::num_int64(serial)
-		);
-		if (!instance_id_is_located(candidate)) {
-			new_instance_id = candidate;
-			break;
-		}
-	}
+	const StringName new_instance_id = make_generated_instance_id(value, card_id);
 	const int32_t hand_slot = leftmost_empty_hand_slot(value, recipient_owner);
 	if (hand_slot < 0) return ActionOutcome::NO_EFFECT;
 
@@ -3728,35 +3620,21 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 		value.board_slot_extras[target_cell] = Dictionary();
 	}
 
-	const int32_t new_card_index = static_cast<int32_t>(value.card_instance_ids.size());
-	value.card_instance_ids.push_back(new_instance_id);
-	value.card_template_indices.push_back(prototype->template_index);
-	static constexpr uint8_t fresh_runtime_flags = (
-		(1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
-		| (1 << 4) | (1 << 5) | (1 << 7)
+	String append_reason;
+	const int32_t new_card_index = append_fresh_card_instance(
+		value,
+		card_id,
+		new_instance_id,
+		recipient_owner,
+		append_reason
 	);
-	value.card_runtime_flags.push_back(fresh_runtime_flags);
-	for (const int32_t power : prototype->powers) value.card_powers.push_back(power);
-	value.card_original_owners.push_back(static_cast<uint8_t>(recipient_owner));
-	value.card_ki.push_back(prototype->ki);
-	value.card_active_ability_set_indices.push_back(prototype->active_ability_set_index);
-	std::vector<RuntimeAbilityEntry> runtime_entries;
-	const std::vector<int32_t> &ability_indices = compiled_ability_sets[
-		prototype->active_ability_set_index
-	].ability_pool_indices;
-	runtime_entries.reserve(ability_indices.size());
-	for (const int32_t compiled_ability_index : ability_indices) {
-		RuntimeAbilityEntry entry;
-		entry.compiled_ability_index = compiled_ability_index;
-		entry.handle = value.next_ability_handle++;
-		runtime_entries.push_back(entry);
+	if (new_card_index < 0) {
+		resolution.reason = append_reason;
+		return ActionOutcome::UNSUPPORTED;
 	}
-	value.card_runtime_abilities.push_back(runtime_entries);
-	value.card_runtime_suppression_batches.push_back({});
-	value.card_reveal_codes.push_back(static_cast<uint8_t>(recipient_owner == 1 ? 3 : 4));
-	value.card_suppression_set_indices.push_back(-1);
-	value.card_hand_slots.push_back(hand_slot);
-	value.card_ids.push_back(card_id);
+	value.card_runtime_flags[new_card_index] |= static_cast<uint8_t>(1 << 7);
+	value.card_reveal_codes[new_card_index] = static_cast<uint8_t>(recipient_owner == 1 ? 3 : 4);
+	value.card_hand_slots[new_card_index] = hand_slot;
 	recipient_hand.push_back(new_card_index);
 
 	const StringName source_instance_id = (
@@ -3791,19 +3669,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	revealed["instance_id"] = new_instance_id;
 	revealed["logical_hand_index"] = static_cast<int32_t>(recipient_hand.size()) - 1;
 	resolution.events.append(revealed);
-	Resolution hand_change = resolve_difficulty_hand_change(
-		value,
-		recipient_owner,
-		recipient_previous_hand_size,
-		static_cast<int32_t>(recipient_hand.size()),
-		source_current_cell,
-		exile_stack
-	);
-	if (!hand_change.supported) {
-		resolution.reason = hand_change.reason;
-		return ActionOutcome::UNSUPPORTED;
-	}
-	append_resolution(resolution, hand_change);
 	return ActionOutcome::APPLIED;
 }
 

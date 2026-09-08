@@ -92,6 +92,12 @@ fallback, AI-selected actions, and rule/card tests all use it. Focused tests can
 invoke direct native event, attack, and non-attack-flip adapters, but those
 adapters resolve through the same production primitives.
 
+The compact kernel compiles and validates every immutable ability declaration
+when a root payload is loaded. Any unsupported ability or ability set rejects
+the whole payload before play or search begins; production transitions therefore
+do not rescan the board for unsupported modifiers or clone a temporary state for
+pending hand-play suppression.
+
 Before constructing `DuelState`, the controller chooses the first owner and
 passes it, the active difficulty, and a dedicated layout RNG to
 `DuelOpeningSetup`. Before difficulty 3, the returned board contains two

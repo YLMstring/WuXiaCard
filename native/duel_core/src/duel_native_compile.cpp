@@ -1307,32 +1307,6 @@ bool DuelNativeCompactKernel::validate_play_support(
 	return true;
 }
 
-bool DuelNativeCompactKernel::validate_action_rule_support(
-	const NativeState &value,
-	int32_t played_card_index,
-	int32_t,
-	String &reason
-) const {
-	const int32_t moving_owner = value.scalars[0];
-	const bool source_enabled = card_effects_enabled(value, played_card_index, moving_owner);
-	if (source_enabled && card_has_unsupported_enabled_modifier(value, played_card_index, moving_owner)) {
-		reason = "Played card has an unsupported modifier";
-		return false;
-	}
-	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-		const int32_t card_index = value.board_card_indices[cell];
-		if (card_index < 0) {
-			continue;
-		}
-		const int32_t owner_id = value.board_owners[cell];
-		if (card_has_unsupported_enabled_modifier(value, card_index, owner_id)) {
-			reason = "Board contains an unsupported active modifier";
-			return false;
-		}
-	}
-	return true;
-}
-
 bool DuelNativeCompactKernel::card_effects_enabled(
 	const NativeState &value,
 	int32_t card_index,

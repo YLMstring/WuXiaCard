@@ -22,6 +22,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
+	_test_native_rejects_unsupported_rule_at_load()
 	_test_every_catalog_card_hand_play_runs_in_production()
 	_test_every_catalog_activation_runs_in_production()
 	_test_native_whole_tree_search_is_deterministic()
@@ -77,6 +78,39 @@ func _test_live_catalog_compiles_natively() -> void:
 	_check(
 		int(layout.get("invalid_compiled_ability_set_count", -1)) == 0,
 		"Every live catalog ability set compiles natively"
+	)
+
+
+func _test_native_rejects_unsupported_rule_at_load() -> void:
+	var unsupported: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan",
+		Rules.PLAYER_OWNER,
+		&"unsupported_rule_fixture"
+	)
+	unsupported["active_abilities"] = [{
+		"modifiers": [{"type": &"unsupported_fixture_modifier"}],
+	}]
+	var state := State.new(
+		Rules.empty_board(),
+		[unsupported],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"unsupported_reply")],
+		Rules.PLAYER_OWNER
+	)
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Unsupported-rule fixture crosses the compact boundary")
+	if not compact.is_structurally_valid():
+		return
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	_check(kernel != null, "Unsupported-rule fixture creates the native kernel")
+	if kernel == null:
+		return
+	_check(
+		not bool(kernel.call("load_compact_payload", compact.to_variant_payload())),
+		"Native compact loading rejects unsupported rule declarations"
+	)
+	_check(
+		"unsupported" in String(kernel.call("get_last_error")).to_lower(),
+		"Unsupported compact loading reports the rule declaration failure"
 	)
 
 

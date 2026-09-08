@@ -604,9 +604,6 @@ bool DuelNativeCompactKernel::exile_card(
 	int32_t logical_index = -1;
 	if (!locate_card(value, card_index, zone, current_owner, logical_index)) return true;
 	if (zone != initial_zone || current_owner != initial_owner || logical_index != initial_index) return true;
-	const int32_t previous_hand_size = zone == 1
-		? static_cast<int32_t>(value.zones[current_owner - 1].size())
-		: -1;
 	if (zone == 0) {
 		value.board_card_indices[logical_index] = -1;
 		value.board_owners[logical_index] = 0;
@@ -639,22 +636,6 @@ bool DuelNativeCompactKernel::exile_card(
 	event["exile_reason"] = exile_reason;
 	resolution.events.append(event);
 	const int32_t exiled_cell = zone == 0 ? logical_index : -1;
-	if (previous_hand_size >= 0) {
-		Resolution hand_change = resolve_difficulty_hand_change(
-			value,
-			current_owner,
-			previous_hand_size,
-			static_cast<int32_t>(value.zones[current_owner - 1].size()),
-			source_cell,
-			exile_stack
-		);
-		if (!hand_change.supported) {
-			resolution.reason = hand_change.reason;
-			return false;
-		}
-		append_resolution(resolution, hand_change);
-	}
-
 	EventContext after_context = parent_context;
 	after_context.trigger_cell = zone == 0 ? logical_index : -1;
 	after_context.trigger_card_index = card_index;
