@@ -33,15 +33,6 @@ func _test_catalog_vocabulary_and_declarations() -> void:
 		"Enemy-hand activation targets are registered"
 	)
 	_check(
-		Catalog.CARD_KI_CHANGED in Catalog.KNOWN_TRIGGER_EVENTS,
-		"Ki-change trigger events are registered"
-	)
-	_check(
-		Catalog.CONDITION_KI_CHANGED_CARD_IS_SELF in Catalog.KNOWN_TRIGGER_CONDITIONS
-		and Catalog.CONDITION_KI_REACHED_ZERO in Catalog.KNOWN_TRIGGER_CONDITIONS,
-		"Ki-change trigger conditions are registered"
-	)
-	_check(
 		Catalog.ACTION_REVEAL_CARD in Catalog.KNOWN_ACTIONS
 		and Catalog.ACTION_SWAP_SELF_WITH_TRIGGER_CARD in Catalog.KNOWN_ACTIONS,
 		"HanBin and TianWai generic actions are registered"

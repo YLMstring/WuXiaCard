@@ -100,8 +100,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		TURN_OWNER_IS_SELF,
 		OWNER_DID_NOT_WIN,
 		KI_AT_LEAST,
-		KI_CHANGED_CARD_IS_SELF,
-		KI_REACHED_ZERO,
 		MOVING_CARD_IS_SELF,
 		MOVING_CARD_IS_ALLY,
 		SOURCE_OWNER_HAND_EMPTY,
@@ -141,7 +139,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 		MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 		TRANSFER_CARD_RESOURCE,
-		DISTRIBUTE_KI,
 		ADD_CARD_TO_HAND,
 		REVEAL_HAND_CARDS,
 		REVEAL_CARD,
@@ -193,7 +190,6 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	enum class RevealFilterOpcode : uint8_t {
 		ALL,
-		REMEMBERED,
 		UNSUPPORTED,
 	};
 
@@ -234,7 +230,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		POWERS_CAN_CHANGE,
 		HAS_NONZERO_POWER,
 		IS_PREVIOUS_HAND_PLAY,
-		CAN_SPEND_KI,
 		CAN_TRANSFER_RESOURCE,
 		UNSUPPORTED,
 	};
@@ -447,8 +442,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool trigger_was_on_board = false;
 		bool attack_flipped_enemy = false;
 		bool attack_flipped_any_card = false;
-		int32_t previous_ki = 0;
-		int32_t ki = -1;
 		int32_t moving_source_cell = -1;
 		int32_t moving_origin_cell = -1;
 		int32_t moving_target_cell = -1;
@@ -1245,8 +1238,6 @@ private:
 		int32_t &owner,
 		int32_t &logical_index
 	) const;
-	bool card_declarations_can_spend_ki(const NativeState &value, int32_t card_index) const;
-	bool action_declarations_can_spend_ki(const Variant &value) const;
 	ActionOutcome change_powers(
 		NativeState &value,
 		const EventGroup &group,

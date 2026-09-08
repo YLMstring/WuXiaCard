@@ -146,8 +146,6 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("drawn_card_is_enemy")) compiled.opcode = ConditionOpcode::DRAWN_CARD_IS_ENEMY;
 	else if (type == StringName("turn_owner_is_self")) compiled.opcode = ConditionOpcode::TURN_OWNER_IS_SELF;
 	else if (type == StringName("owner_did_not_win")) compiled.opcode = ConditionOpcode::OWNER_DID_NOT_WIN;
-	else if (type == StringName("ki_changed_card_is_self")) compiled.opcode = ConditionOpcode::KI_CHANGED_CARD_IS_SELF;
-	else if (type == StringName("ki_reached_zero")) compiled.opcode = ConditionOpcode::KI_REACHED_ZERO;
 	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
 	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;
 	else if (type == StringName("source_owner_hand_empty")) compiled.opcode = ConditionOpcode::SOURCE_OWNER_HAND_EMPTY;
@@ -179,7 +177,6 @@ DuelNativeCompactKernel::CompiledSelectorCondition DuelNativeCompactKernel::comp
 		else if (type == StringName("selected_card_flipped_by_current_attack")) compiled.opcode = SelectorConditionOpcode::FLIPPED_BY_CURRENT_ATTACK;
 		else if (type == StringName("selected_card_powers_can_change")) compiled.opcode = SelectorConditionOpcode::POWERS_CAN_CHANGE;
 		else if (type == StringName("selected_card_has_nonzero_power")) compiled.opcode = SelectorConditionOpcode::HAS_NONZERO_POWER;
-		else if (type == StringName("selected_card_can_spend_ki")) compiled.opcode = SelectorConditionOpcode::CAN_SPEND_KI;
 	} else if (
 		type == StringName("selected_card_weapon_is")
 		&& condition.size() == 2
@@ -644,21 +641,6 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 			|| compiled.resource == compiled.fallback_resource
 		) compiled.declaration_valid = false;
 	} else if (
-		type == StringName("distribute_ki")
-		&& action.size() == 4 + generic_field_count
-		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
-		&& static_cast<int64_t>(action.get("amount", 0)) > 0
-		&& Variant(action.get("selector", Variant())).get_type() == Variant::DICTIONARY
-	) {
-		compiled.opcode = ActionOpcode::DISTRIBUTE_KI;
-		compiled.from_card_ref = compile_card_ref(action.get("from", StringName()));
-		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
-		compiled.selector = compile_selector(action.get("selector", Dictionary()));
-		if (
-			compiled.from_card_ref == CardRefOpcode::UNSUPPORTED
-			|| !compiled.selector.declaration_valid
-		) compiled.declaration_valid = false;
-	} else if (
 		type == StringName("add_card_to_hand")
 		&& action.size() == 3 + generic_field_count
 		&& (action.has("card_id") != action.has("card"))
@@ -712,7 +694,6 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		else if (recipient == StringName("opponent")) compiled.recipient = RecipientOpcode::OPPONENT;
 		const StringName filter = action.get("filter", StringName());
 		if (filter == StringName("all")) compiled.reveal_filter = RevealFilterOpcode::ALL;
-		else if (filter == StringName("remembered")) compiled.reveal_filter = RevealFilterOpcode::REMEMBERED;
 		if (
 			compiled.recipient == RecipientOpcode::UNSUPPORTED
 			|| compiled.reveal_filter == RevealFilterOpcode::UNSUPPORTED

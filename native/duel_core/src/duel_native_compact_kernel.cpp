@@ -869,8 +869,6 @@ DuelNativeCompactKernel::EventContext DuelNativeCompactKernel::event_context_fro
 	) result.attacked_owner = value.board_owners[result.attacked_cell];
 
 	result.new_owner = static_cast<int32_t>(context.get("new_owner_id", 0));
-	result.previous_ki = static_cast<int32_t>(context.get("previous_ki", 0));
-	result.ki = static_cast<int32_t>(context.get("ki", -1));
 	result.moving_source_cell = static_cast<int32_t>(context.get("moving_source_cell", -1));
 	result.moving_origin_cell = static_cast<int32_t>(context.get("moving_origin_cell", result.moving_source_cell));
 	result.moving_target_cell = static_cast<int32_t>(context.get("moving_target_cell", -1));

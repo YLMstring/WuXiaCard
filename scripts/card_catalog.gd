@@ -38,7 +38,6 @@ const CARD_BEFORE_FLIPPED: StringName = &"card_before_flipped"
 const CARD_AFTER_FLIPPED: StringName = &"card_after_flipped"
 const CARD_FLIP_PREVENTED: StringName = &"card_flip_prevented"
 const CARD_AFTER_TARGETED_ACTIVATION: StringName = &"card_after_targeted_activation"
-const CARD_KI_CHANGED: StringName = &"card_ki_changed"
 const TRIGGER_START_OWNER_TURN: StringName = &"start_owner_turn"
 const TRIGGER_END_OWNER_TURN: StringName = &"end_owner_turn"
 const TRIGGER_BEFORE_DUEL_END: StringName = &"before_duel_end"
@@ -69,8 +68,6 @@ const CONDITION_TRIGGER_CARD_WEAPON: StringName = &"trigger_card_weapon"
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
-const CONDITION_KI_CHANGED_CARD_IS_SELF: StringName = &"ki_changed_card_is_self"
-const CONDITION_KI_REACHED_ZERO: StringName = &"ki_reached_zero"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
 const CONDITION_SELECTED_CARD_IS_ENEMY: StringName = &"selected_card_is_enemy"
 const CONDITION_SELECTED_CARD_WEAPON_IS: StringName = &"selected_card_weapon_is"
@@ -83,7 +80,6 @@ const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
 const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_has_nonzero_power"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
-const CONDITION_SELECTED_CARD_CAN_SPEND_KI: StringName = &"selected_card_can_spend_ki"
 const CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE: StringName = (
 	&"selected_card_can_transfer_resource"
 )
@@ -136,7 +132,6 @@ const ACTION_SWAP_SELF_WITH_TRIGGER_CARD: StringName = &"swap_self_with_trigger_
 const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_non_retained_suppression"
 const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
 const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
-const ACTION_DISTRIBUTE_KI: StringName = &"distribute_ki"
 const ACTION_SET_ATTACK_USED_POWERS: StringName = &"set_attack_used_powers"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
@@ -161,7 +156,6 @@ const VALUE_CARD_KI: StringName = &"card_ki"
 const RESOURCE_KI: StringName = &"ki"
 const RESOURCE_POWERS: StringName = &"powers"
 const REVEAL_FILTER_ALL: StringName = &"all"
-const REVEAL_FILTER_REMEMBERED: StringName = &"remembered"
 const MODIFIER_DEFENDING_POWER_OVERRIDE: StringName = &"defending_power_override"
 const MODIFIER_ATTACK_REQUIRES_OTHER_ALLY: StringName = &"attack_requires_other_ally"
 const MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE: StringName = &"defending_power_uses_minimum_side"
@@ -221,7 +215,6 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	CARD_AFTER_FLIPPED,
 	CARD_FLIP_PREVENTED,
 	CARD_AFTER_TARGETED_ACTIVATION,
-	CARD_KI_CHANGED,
 	TRIGGER_START_OWNER_TURN,
 	TRIGGER_END_OWNER_TURN,
 	TRIGGER_BEFORE_DUEL_END,
@@ -252,8 +245,6 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
-	CONDITION_KI_CHANGED_CARD_IS_SELF,
-	CONDITION_KI_REACHED_ZERO,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
 	CONDITION_ACTIVATION_OWNER_IS_ALLY,
 	CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
@@ -272,7 +263,6 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
 	CONDITION_SELECTED_CARD_HAS_NONZERO_POWER,
 	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
-	CONDITION_SELECTED_CARD_CAN_SPEND_KI,
 	CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE,
 ]
 const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
@@ -327,7 +317,6 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION,
 	ACTION_DEPART_CARD_FOR_RESUMMON,
 	ACTION_TRANSFER_CARD_RESOURCE,
-	ACTION_DISTRIBUTE_KI,
 	ACTION_SET_ATTACK_USED_POWERS,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
@@ -347,7 +336,7 @@ const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT, VALUE_CARD_KI]
 const KNOWN_RESOURCES: Array[StringName] = [RESOURCE_KI, RESOURCE_POWERS]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
-const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
+const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL]
 const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_DEFENDING_POWER_OVERRIDE,
 	MODIFIER_ATTACK_REQUIRES_OTHER_ALLY,
@@ -5933,22 +5922,6 @@ static func _validate_action(
 				"Card %s %s transfer action requires distinct primary and fallback resources"
 				% [card_id, context_name]
 			)
-	if action_type == ACTION_DISTRIBUTE_KI:
-		allowed_keys.append(&"from")
-		allowed_keys.append(&"amount")
-		allowed_keys.append(&"selector")
-		if StringName(action.get("from", &"")) not in KNOWN_CARD_REFERENCES:
-			errors.append(
-				"Card %s %s distribute action requires a known source card reference"
-				% [card_id, context_name]
-			)
-		var distribute_amount: Variant = action.get("amount", null)
-		if typeof(distribute_amount) != TYPE_INT or int(distribute_amount) <= 0:
-			errors.append(
-				"Card %s %s distribute action requires a positive integer amount"
-				% [card_id, context_name]
-			)
-		_validate_selector(card_id, context_name, action.get("selector", null), errors)
 	if action_type == ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION:
 		allowed_keys.append(&"recipient")
 		allowed_keys.append(&"amount")

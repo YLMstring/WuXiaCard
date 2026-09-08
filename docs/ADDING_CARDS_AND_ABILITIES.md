@@ -653,8 +653,8 @@ in `DuelState`, catalog definitions, or a replay record.
   each action subject's current owner. It is therefore suitable for one batch
   that flips both allied and enemy selected cards, without treating the
   ability source's owner as their shared reference.
-- `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and an `all` or `remembered`
-  filter. It emits `card_revealed` only for newly revealed exact instances.
+- `ACTION_REVEAL_HAND_CARDS` accepts `recipient` and the `all` filter. It emits
+  `card_revealed` only for newly revealed exact instances.
 - `ACTION_ENABLE_FUTURE_DRAW_REVEAL` stores a duel-state audience independently
   of the source card. Future successful draws reveal after `card_drawn`.
 - `CONDITION_TRIGGER_CARD_REVEALED_TO_SELF` checks gameplay reveal data, never

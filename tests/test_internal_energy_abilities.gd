@@ -21,7 +21,6 @@ func _run() -> void:
 	_test_can_spend_ki_semantics()
 	_test_transfer_ki_and_power_fallback()
 	_test_failed_leftmost_hand_absorb_advances()
-	_test_distribute_ki_cycles_board_then_hand()
 	_test_initial_flip_grants_without_distribution()
 	_test_second_flip_distributes_then_attacks()
 	_test_zero_ki_second_flip_still_attacks()
@@ -35,15 +34,13 @@ func _run() -> void:
 
 func _test_catalog_vocabulary_and_declarations() -> void:
 	_check(
-		Catalog.ACTION_TRANSFER_CARD_RESOURCE in Catalog.KNOWN_ACTIONS
-		and Catalog.ACTION_DISTRIBUTE_KI in Catalog.KNOWN_ACTIONS,
-		"Generic resource-transfer actions are registered"
+		Catalog.ACTION_TRANSFER_CARD_RESOURCE in Catalog.KNOWN_ACTIONS,
+		"Generic resource-transfer action is registered"
 	)
 	_check(
-		Catalog.CONDITION_SELECTED_CARD_CAN_SPEND_KI in Catalog.KNOWN_SELECTOR_CONDITIONS
-		and Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE
+		Catalog.CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE
 		in Catalog.KNOWN_SELECTOR_CONDITIONS,
-		"Ki-use and transferable-resource selector conditions are registered"
+		"Transferable-resource selector condition is registered"
 	)
 	_check(
 		Catalog.MODIFIER_SELF_ATTACKS_ALL in Catalog.KNOWN_MODIFIERS,
@@ -243,96 +240,6 @@ func _test_failed_leftmost_hand_absorb_advances() -> void:
 		and valid.get("powers", []) == [2, 2, 2, 2]
 		and source.get("powers", []) == [2, 2, 2, 2],
 		"Failed leftmost hand absorption advances to the next transferable card"
-	)
-
-
-func _test_distribute_ki_cycles_board_then_hand() -> void:
-	var source: Dictionary = _plain(&"distribution_source", [2, 2, 2, 2], Rules.PLAYER_OWNER)
-	source["ki"] = 5
-	var board_auto: Dictionary = Catalog.create_instance(
-		&"SanQinFeng1",
-		Rules.PLAYER_OWNER,
-		&"distribution_board_auto"
-	)
-	var board_active: Dictionary = Catalog.create_instance(
-		&"YouFenLaiYi2",
-		Rules.PLAYER_OWNER,
-		&"distribution_board_active"
-	)
-	board_active["ki"] = 0
-	var board_passive: Dictionary = _plain(
-		&"distribution_board_passive",
-		[1, 1, 1, 1],
-		Rules.PLAYER_OWNER
-	)
-	var hand_auto: Dictionary = Catalog.create_instance(
-		&"SanQinFeng1",
-		Rules.PLAYER_OWNER,
-		&"distribution_hand_auto"
-	)
-	var board: Array = Rules.empty_board()
-	board[0] = _slot(board_auto, Rules.PLAYER_OWNER)
-	board[1] = _slot(board_passive, Rules.PLAYER_OWNER)
-	board[2] = _slot(board_active, Rules.PLAYER_OWNER)
-	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var state := State.new(board, [hand_auto])
-	source = _runtime_card(state, &"distribution_source")
-	board_auto = _runtime_card(state, &"distribution_board_auto")
-	board_active = _runtime_card(state, &"distribution_board_active")
-	board_passive = _runtime_card(state, &"distribution_board_passive")
-	hand_auto = _runtime_card(state, &"distribution_hand_auto")
-	var result: Dictionary = Executor.execute_actions(
-		state,
-		4,
-		&"distribution_source",
-		Rules.PLAYER_OWNER,
-		[_distribution_action()],
-		{}
-	)
-	var recipients: Array[StringName] = []
-	for instance_id: StringName in _event_instance_ids(result.get("events", []), &"ki_changed"):
-		if instance_id != &"distribution_source":
-			recipients.append(instance_id)
-	_check(
-		int(source.get("ki", -1)) == 0
-		and int(board_auto.get("ki", -1)) == 2
-		and int(board_active.get("ki", -1)) == 2
-		and int(hand_auto.get("ki", -1)) == 1
-		and int(board_passive.get("ki", -1)) == 0,
-		"Distribution includes automatic and active ki spenders but skips passive cards"
-	)
-	_check(
-		recipients == [
-			&"distribution_board_auto",
-			&"distribution_board_active",
-			&"distribution_hand_auto",
-			&"distribution_board_auto",
-			&"distribution_board_active",
-		],
-		"Distribution cycles board row-major then hand left-to-right until empty"
-	)
-
-	var quiet_source: Dictionary = _plain(&"quiet_source", [1, 1, 1, 1], Rules.PLAYER_OWNER)
-	quiet_source["ki"] = 3
-	var quiet_board: Array = Rules.empty_board()
-	quiet_board[4] = _slot(quiet_source, Rules.PLAYER_OWNER)
-	var quiet_state := State.new(
-		quiet_board,
-		[_plain(&"quiet_passive", [1, 1, 1, 1], Rules.PLAYER_OWNER)]
-	)
-	quiet_source = _runtime_card(quiet_state, &"quiet_source")
-	var quiet_result: Dictionary = Executor.execute_actions(
-		quiet_state,
-		4,
-		&"quiet_source",
-		Rules.PLAYER_OWNER,
-		[_distribution_action()],
-		{}
-	)
-	_check(
-		int(quiet_source.get("ki", -1)) == 3
-		and StringName(quiet_result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT,
-		"No eligible recipient leaves remaining source ki untouched"
 	)
 
 
@@ -814,22 +721,6 @@ func _transferable_condition() -> Dictionary:
 		"amount": 1,
 		"resource": Catalog.RESOURCE_KI,
 		"fallback_resource": Catalog.RESOURCE_POWERS,
-	}
-
-
-func _distribution_action() -> Dictionary:
-	return {
-		"type": Catalog.ACTION_DISTRIBUTE_KI,
-		"from": Catalog.CARD_REF_ABILITY_SOURCE,
-		"amount": 1,
-		"selector": {
-			"zones": [Catalog.CARD_ZONE_BOARD, Catalog.CARD_ZONE_HAND],
-			"conditions": [
-				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
-				{"type": Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
-				{"type": Catalog.CONDITION_SELECTED_CARD_CAN_SPEND_KI},
-			],
-		},
 	}
 
 
