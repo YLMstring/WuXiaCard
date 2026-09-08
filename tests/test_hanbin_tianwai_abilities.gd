@@ -275,14 +275,14 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 	)
 	_check(
 		int((next_state.board[4] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER
-		and runtime_target.get("powers", []) == [1, 1, 1, 1]
+		and runtime_target.get("powers", []) == [2, 2, 2, 2]
 		and StringName(first_power_event.get("instance_id", &"")) == &"hanbin_four_target"
 		and first_power_event.get("powers", []) == [2, 2, 2, 2]
 		and Revelation.is_revealed_to(runtime_target, Rules.PLAYER_OWNER)
 		and types.find(&"card_flipped") >= 0
-		and types.find(&"card_flipped") < types.find(&"powers_changed")
-		and types.find(&"card_flipped") < types.find(&"card_revealed"),
-		"HanBin4 flips immediately on its last ki, then resolves its locked hand target: owner=%d target=%s revealed=%s events=%s"
+		and types.find(&"powers_changed") < types.find(&"card_revealed")
+		and types.find(&"card_revealed") < types.find(&"card_flipped"),
+		"HanBin4 finishes its activation before the zero-ki end-turn flip: owner=%d target=%s revealed=%s events=%s"
 		% [
 			int((next_state.board[4] as Dictionary).get("owner", 0)),
 			str(runtime_target.get("powers", [])),
@@ -294,7 +294,7 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 		(runtime_source.get("active_abilities", []) as Array).size() == 1
 		and (runtime_source.get("active_abilities", []) as Array)[0]
 		== Catalog.normalize_ability(Catalog.HANBIN_FROZEN_TURN),
-		"HanBin4 keeps only the newly granted frozen-turn ability after that flip"
+		"HanBin4 keeps only the newly granted frozen-turn ability after its end-turn flip"
 	)
 
 	var frozen: Dictionary = Catalog.create_instance(
@@ -317,7 +317,7 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 	)
 	var frozen_result: Dictionary = Simulator._resolve_trigger_event(
 		frozen_state,
-		Catalog.TRIGGER_START_OWNER_TURN,
+		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	var runtime_frozen: Dictionary = (frozen_state.board[4] as Dictionary).get("card", {})
@@ -331,8 +331,8 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 		and (runtime_hand[0] as Dictionary).get("powers", []) == [-1, -1, -1, -1]
 		and (runtime_hand[1] as Dictionary).get("powers", []) == [2, 2, 2, 2]
 		and (runtime_hand[2] as Dictionary).get("powers", []) == [3, 3, 3, 3]
-		and (runtime_hand[3] as Dictionary).get("powers", []) == [5, 5, 5, 5],
-		"Frozen turn skips YinYang and weakens the next two legal leftmost hand cards: self=%s hand=%s"
+		and (runtime_hand[3] as Dictionary).get("powers", []) == [4, 4, 4, 4],
+		"Frozen turn skips YinYang and weakens every legal hand card at owner-turn end: self=%s hand=%s"
 		% [str(runtime_frozen.get("powers", [])), str([
 			(runtime_hand[0] as Dictionary).get("powers", []),
 			(runtime_hand[1] as Dictionary).get("powers", []),
@@ -340,7 +340,7 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 			(runtime_hand[3] as Dictionary).get("powers", []),
 		])]
 	)
-	var shared_batch: bool = power_events.size() == 3
+	var shared_batch: bool = power_events.size() == 4
 	var batch_id := StringName(power_events[0].get("power_change_batch_id", &"")) if not power_events.is_empty() else &""
 	for power_event: Dictionary in power_events:
 		shared_batch = shared_batch and StringName(
@@ -348,7 +348,25 @@ func _test_hanbin_last_ki_flip_and_frozen_turn() -> void:
 		) == batch_id
 	_check(
 		shared_batch and batch_id != &"",
-		"Frozen turn emits self and both hand changes in one simultaneous presentation batch"
+		"Frozen turn emits self and all hand changes in one simultaneous presentation batch"
+	)
+	var charged: Dictionary = Catalog.create_instance(
+		&"HanBinZhenQi4",
+		Rules.PLAYER_OWNER,
+		&"charged_hanbin"
+	)
+	var charged_board: Array = Rules.empty_board()
+	charged_board[4] = _slot(charged, Rules.PLAYER_OWNER)
+	var charged_state := State.new(charged_board, [], [], Rules.PLAYER_OWNER)
+	var charged_result: Dictionary = Simulator._resolve_trigger_event(
+		charged_state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(
+		int((charged_state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
+		and _count_events(charged_result.get("events", []), &"card_flipped") == 0,
+		"HanBin4 does not flip at owner-turn end while it still has ki"
 	)
 	Simulator.resolve_non_attack_flip(
 		frozen_state,

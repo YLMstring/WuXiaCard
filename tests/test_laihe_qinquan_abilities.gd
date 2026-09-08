@@ -3,10 +3,12 @@ extends SceneTree
 const BoardQueries = preload("res://tests/helpers/duel_native_board_queries.gd")
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
 const CardScene = preload("res://scenes/card_view.tscn")
@@ -22,11 +24,10 @@ func _init() -> void:
 func _run() -> void:
 	_test_catalog_declarations()
 	_test_revelation_state_is_clone_safe()
-	_test_reveal_all_and_future_draws()
-	_test_remembered_reveal_and_weakness()
-	_test_enemy_remembered_reveal_and_weakness()
+	_test_laihe_four_reveals_only_opening_hand()
+	_test_daizong_activation_on_hidden_card()
+	_test_daizong_activation_on_revealed_card()
 	_test_flip_protection()
-	await _test_picture_fade()
 	if _failures == 0:
 		print("LAIHE_QINQUAN_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -39,8 +40,8 @@ func _test_catalog_declarations() -> void:
 		&"LaiHeQinQuan1": 0,
 		&"LaiHeQinQuan2": 1,
 		&"LaiHeQinQuan3": 2,
-		&"LaiHeQinQuan4": 3,
-		&"LaiHeQinQuan5": 3,
+		&"LaiHeQinQuan4": 2,
+		&"LaiHeQinQuan5": 2,
 	}
 	for card_id: StringName in expected_counts:
 		var definition: Dictionary = Catalog.get_definition(card_id)
@@ -50,9 +51,10 @@ func _test_catalog_declarations() -> void:
 			(
 				Catalog.MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION
 				in (definition.get("main_deck_effects", []) as Array)
-			) == (card_id != &"LaiHeQinQuan5"),
+			),
 			"%s declares the approved main-deck undo eligibility" % card_id
 		)
+	_check(int(Catalog.get_definition(&"LaiHeQinQuan5").get("starting_ki", -1)) == 3, "DaiZong starts with three ki")
 	_check(Catalog.validate_catalog().is_empty(), "LaiHe declarations pass catalog validation")
 
 
@@ -68,6 +70,102 @@ func _test_revelation_state_is_clone_safe() -> void:
 	_check((state.remembered_glyphs_by_owner[Rules.PLAYER_OWNER] as Array) == ["吐纳术"], "Remembered glyphs deep-copy")
 	_check((state.future_draw_reveal_audiences[Rules.OPPONENT_OWNER] as Array) == [Rules.PLAYER_OWNER], "Future reveal audiences deep-copy")
 	_check(StateKey.build(state) != StateKey.build(copied), "Knowledge state changes the search key")
+
+
+func _test_laihe_four_reveals_only_opening_hand() -> void:
+	var state: State = InitialStateFactory.build({
+		"player_main_card_ids": [&"LaiHeQinQuan4", &"TuNaShu1", &"TaiZuChangQuan", &"SanQinFeng1", &"ZiXiaGong1"],
+		"opponent_main_card_ids": [&"ChunCanZhang2", &"HuJiaDao2", &"HuJiaDao3", &"TaiZuChangQuan", &"TuNaShu1"],
+		"player_hand_shuffle_seed": -1,
+		"opponent_hand_shuffle_seed": -1,
+		"opening_layout_seed": -1,
+		"side_deck_shuffle_seed": 902,
+		"opening_owner": Rules.PLAYER_OWNER,
+	})
+	_check(_all_revealed(state.get_hand(Rules.OPPONENT_OWNER), Rules.PLAYER_OWNER), "LaiHe4 reveals all five opposing opening cards at duel start")
+	_check(
+		not (state.future_draw_reveal_audiences.get(Rules.OPPONENT_OWNER, []) as Array).has(Rules.PLAYER_OWNER),
+		"LaiHe4 does not enable future-draw reveal"
+	)
+	state.get_hand(Rules.OPPONENT_OWNER).pop_back()
+	var future: Dictionary = Catalog.create_instance(&"TuNaShu2", Rules.OPPONENT_OWNER, &"later_hidden_draw")
+	state.decks[Rules.OPPONENT_OWNER] = [future]
+	var source_cell: int = state.board.find(null)
+	var draw_source: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"draw_source")
+	state.board[source_cell] = {"card": draw_source, "owner": Rules.OPPONENT_OWNER}
+	Executor.execute_actions(
+		state, source_cell, &"draw_source", Rules.OPPONENT_OWNER,
+		[{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}], {}
+	)
+	_check(
+		not _is_revealed(_find_hand_card(state, &"later_hidden_draw"), Rules.PLAYER_OWNER),
+		"A card drawn after the opening remains concealed"
+	)
+
+
+func _test_daizong_activation_on_hidden_card() -> void:
+	var source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan5", Rules.PLAYER_OWNER, &"daizong_hidden_source")
+	var hidden: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"daizong_hidden_target")
+	hidden["active_abilities"] = [
+		_before_summon_ability(false),
+		_before_summon_ability(true),
+	]
+	var board: Array = Rules.empty_board()
+	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(board, [], [hidden], Rules.PLAYER_OWNER),
+		Action.make_activate(4, &"daizong_hidden_source", Action.TARGET_HAND_SLOT, 0)
+	)
+	var next_state: State = transition.get("state") as State
+	var target: Dictionary = _find_hand_card(next_state, &"daizong_hidden_target")
+	var runtime_source: Dictionary = (((next_state.board[4] as Dictionary).get("card", {})) as Dictionary)
+	_check(bool(transition.get("valid", false)), "DaiZong can target a concealed opposing hand card")
+	_check(
+		int(runtime_source.get("ki", -1)) == 2
+		and (target.get("active_abilities", []) as Array).size() == 1
+		and bool(((target.get("active_abilities", []) as Array)[0] as Dictionary).get("retained_on_flip", false)),
+		"DaiZong spends one ki and permanently removes only non-retained abilities"
+	)
+	_check(
+		next_state.extra_card_plays_remaining == 0
+		and _event_count(transition.get("events", []), &"extra_card_play_granted") == 0,
+		"Suppressing a concealed card grants no extra play"
+	)
+
+
+func _test_daizong_activation_on_revealed_card() -> void:
+	var source: Dictionary = Catalog.create_instance(&"LaiHeQinQuan5", Rules.PLAYER_OWNER, &"daizong_revealed_source")
+	var revealed: Dictionary = Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"daizong_revealed_target")
+	revealed["active_abilities"] = [_before_summon_ability(false)]
+	(revealed["revealed_to_owner_ids"] as Array).append(Rules.PLAYER_OWNER)
+	var board: Array = Rules.empty_board()
+	board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"daizong_followup")],
+			[revealed],
+			Rules.PLAYER_OWNER
+		),
+		Action.make_activate(4, &"daizong_revealed_source", Action.TARGET_HAND_SLOT, 0)
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		(_find_hand_card(next_state, &"daizong_revealed_target").get("active_abilities", []) as Array).is_empty(),
+		"DaiZong removes non-retained heart-method abilities"
+	)
+	_check(
+		next_state.extra_card_plays_remaining == 1
+		and next_state.active_player == Rules.PLAYER_OWNER
+		and _event_count(transition.get("events", []), &"extra_card_play_granted") == 1,
+		"Suppressing a revealed card grants an extra play; remaining=%d active=%d events=%s target=%s"
+		% [
+			next_state.extra_card_plays_remaining,
+			next_state.active_player,
+			_event_count(transition.get("events", []), &"extra_card_play_granted"),
+			_find_hand_card(next_state, &"daizong_revealed_target"),
+		]
+	)
 
 
 func _test_reveal_all_and_future_draws() -> void:
@@ -285,6 +383,25 @@ func _test_picture_fade() -> void:
 	_check(is_equal_approx(picture.self_modulate.a, 1.0), "Removing weakness restores full picture opacity")
 	card.queue_free()
 	await process_frame
+
+
+func _before_summon_ability(retained: bool) -> Dictionary:
+	return {
+		"retained_on_flip": retained,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}],
+		}],
+	}
+
+
+func _find_hand_card(state: State, instance_id: StringName) -> Dictionary:
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		for card_value: Variant in state.get_hand(owner_id):
+			if card_value is Dictionary and StringName((card_value as Dictionary).get("instance_id", &"")) == instance_id:
+				return card_value as Dictionary
+	return {}
 
 
 func _all_revealed(cards: Array, observer: int) -> bool:

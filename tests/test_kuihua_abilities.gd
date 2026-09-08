@@ -134,32 +134,65 @@ func _test_player_gate_controls_kuihua_one() -> void:
 		disabled,
 		Action.make_play(0, 4, &"disabled_kuihua")
 	)
+	var disabled_state: State = disabled_transition.get("state") as State
 	_check(
-		_count_events(disabled_transition.get("events", []), &"extra_card_play_granted") == 0
-		and (disabled_transition.get("state") as State).active_player == Rules.OPPONENT_OWNER,
-		"A player without the gate gets no KuiHua1 extra play"
+		disabled_state.board[4] != null
+		and _count_events(disabled_transition.get("events", []), &"card_exiled") == 0
+		and _count_events(disabled_transition.get("events", []), &"extra_card_play_granted") == 0
+		and disabled_state.active_player == Rules.OPPONENT_OWNER,
+		"A player without the gate summons an inert KuiHua1 normally"
 	)
 
+	var enabled_board: Array = Rules.empty_board()
+	enabled_board[1] = _slot(
+		Catalog.create_instance(&"CangSongYingKe1", Rules.OPPONENT_OWNER, &"enemy_previous"),
+		Rules.PLAYER_OWNER
+	)
+	enabled_board[3] = _slot(
+		Catalog.create_instance(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"own_previous"),
+		Rules.PLAYER_OWNER
+	)
 	var enabled := State.new(
-		Rules.empty_board(),
+		enabled_board,
 		[
 			Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"enabled_kuihua"),
 			_plain(&"enabled_followup", [1, 1, 1, 1], Rules.PLAYER_OWNER),
 		],
-		[_plain(&"enabled_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)],
-		Rules.PLAYER_OWNER
+		[_plain(&"enabled_reply", [1, 1, 1, 1], Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER, 0,
+		[_plain(&"enabled_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER)]
 	)
 	enabled.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
 		Catalog.EFFECT_GATE_SELF_CASTRATION,
 	]
+	enabled.last_hand_play_by_owner = {
+		Rules.PLAYER_OWNER: {
+			"played_by_owner_id": Rules.PLAYER_OWNER,
+			"card_id": &"CangSongYingKe2",
+			"instance_id": &"own_previous",
+		},
+		Rules.OPPONENT_OWNER: {
+			"played_by_owner_id": Rules.OPPONENT_OWNER,
+			"card_id": &"CangSongYingKe1",
+			"instance_id": &"enemy_previous",
+		},
+	}
 	var enabled_transition: Dictionary = Simulator.apply_action(
 		enabled,
 		Action.make_play(0, 4, &"enabled_kuihua")
 	)
+	var enabled_state: State = enabled_transition.get("state") as State
+	_check(
+		enabled_state.board[1] == null and enabled_state.board[3] == null
+		and enabled_state.board[4] == null
+		and enabled_state.get_hand(Rules.OPPONENT_OWNER).size() == 2
+		and enabled_state.get_hand(Rules.PLAYER_OWNER).size() == 3,
+		"Enabled KuiHua1 exiles itself, draws, and returns both previous hand plays"
+	)
 	_check(
 		_count_events(enabled_transition.get("events", []), &"extra_card_play_granted") == 1
-		and (enabled_transition.get("state") as State).active_player == Rules.PLAYER_OWNER,
-		"An enabled player receives the KuiHua1 extra play"
+		and enabled_state.extra_card_plays_remaining == 1
+		and enabled_state.active_player == Rules.PLAYER_OWNER,
+		"Enabled KuiHua1 grants a usable extra hand play"
 	)
 
 

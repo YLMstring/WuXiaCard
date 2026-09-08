@@ -594,7 +594,6 @@ bool DuelNativeCompactKernel::transition_play(
 	const int32_t pending_scalar_index = moving_owner == 1 ? 8 : 9;
 	if (
 		source.scalars[pending_scalar_index] > 0
-		&& !card_is_heart_method(source, played_card_index)
 	) {
 		pending_adjusted_state = source;
 		std::vector<RuntimeAbilityEntry> retained_entries;

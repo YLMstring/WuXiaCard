@@ -426,8 +426,10 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 	const StringName old_card_id = value.card_ids[target];
 	value.card_template_indices[target] = prototype->template_index;
 	value.card_ids[target] = prototype->card_id;
-	for (int32_t direction = 0; direction < 4; ++direction) {
-		value.card_powers[target * 4 + direction] = prototype->powers[direction];
+	if (!action.preserve_powers) {
+		for (int32_t direction = 0; direction < 4; ++direction) {
+			value.card_powers[target * 4 + direction] = prototype->powers[direction];
+		}
 	}
 	value.card_ki[target] = prototype->ki;
 	value.card_active_ability_set_indices[target] = prototype->active_ability_set_index;
@@ -513,6 +515,77 @@ void DuelNativeCompactKernel::clear_runtime_suppression(
 	value.card_suppression_set_indices[card_index] = -1;
 }
 
+DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::permanently_remove_non_retained_abilities(
+	NativeState &value,
+	int32_t card_index,
+	int32_t source_card_index,
+	int32_t source_cell,
+	Resolution &resolution
+) const {
+	if (
+		card_index < 0
+		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
+	) return ActionOutcome::NO_EFFECT;
+	int32_t zone = -1;
+	int32_t owner_id = 0;
+	int32_t logical_index = -1;
+	if (!locate_card(value, card_index, zone, owner_id, logical_index) || zone == 2) {
+		return ActionOutcome::NO_EFFECT;
+	}
+	const StringName zone_name = (
+		zone == 0 ? StringName("board")
+		: (zone == 1 ? StringName("hand")
+		: (zone == 3 ? StringName("discard") : StringName("removed")))
+	);
+	const int32_t target_cell = zone == 0 ? logical_index : -1;
+	const StringName source_instance_id = (
+		source_card_index >= 0
+		&& source_card_index < static_cast<int32_t>(value.card_instance_ids.size())
+		? value.card_instance_ids[source_card_index]
+		: StringName()
+	);
+	auto emit_loss = [&]() {
+		Dictionary lost;
+		lost["type"] = StringName("ability_lost");
+		lost["source_instance_id"] = source_instance_id;
+		lost["source_cell"] = source_cell;
+		lost["target_cell"] = target_cell;
+		lost["owner_id"] = owner_id;
+		lost["instance_id"] = value.card_instance_ids[card_index];
+		lost["zone"] = zone_name;
+		lost["logical_index"] = logical_index;
+		lost["permanent"] = true;
+		resolution.events.append(lost);
+	};
+
+	bool removed_any = false;
+	std::vector<RuntimeAbilityEntry> retained_entries;
+	retained_entries.reserve(value.card_runtime_abilities[card_index].size());
+	for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[card_index]) {
+		const bool retained = (
+			entry.compiled_ability_index >= 0
+			&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
+			&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
+		);
+		if (retained) {
+			retained_entries.push_back(entry);
+			continue;
+		}
+		emit_loss();
+		removed_any = true;
+	}
+	for (const RuntimeSuppressionBatch &batch : value.card_runtime_suppression_batches[card_index]) {
+		for (const RuntimeSuppressionEntry &entry : batch.entries) {
+			(void)entry;
+			emit_loss();
+			removed_any = true;
+		}
+	}
+	value.card_runtime_abilities[card_index] = retained_entries;
+	clear_runtime_suppression(value, card_index);
+	return removed_any ? ActionOutcome::APPLIED : ActionOutcome::NO_EFFECT;
+}
+
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_hand_play_suppression(
 	NativeState &value,
 	int32_t card_index,
@@ -525,7 +598,6 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_han
 		|| owner_id > 2
 		|| card_index < 0
 		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
-		|| card_is_heart_method(value, card_index)
 	) return resolution;
 	const int32_t scalar_index = owner_id == 1 ? 8 : 9;
 	if (value.scalars[scalar_index] <= 0) return resolution;
@@ -540,32 +612,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_han
 	consumed["pending_count"] = value.scalars[scalar_index];
 	resolution.events.append(consumed);
 
-	std::vector<RuntimeAbilityEntry> retained_entries;
-	retained_entries.reserve(value.card_runtime_abilities[card_index].size());
-	for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[card_index]) {
-		const bool retained = (
-			entry.compiled_ability_index >= 0
-			&& entry.compiled_ability_index < static_cast<int32_t>(compiled_ability_pool.size())
-			&& compiled_ability_pool[entry.compiled_ability_index].retained_on_flip
-		);
-		if (retained) {
-			retained_entries.push_back(entry);
-			continue;
-		}
-		Dictionary lost;
-		lost["type"] = StringName("ability_lost");
-		lost["source_instance_id"] = StringName();
-		lost["source_cell"] = cell;
-		lost["target_cell"] = cell;
-		lost["owner_id"] = owner_id;
-		lost["instance_id"] = value.card_instance_ids[card_index];
-		lost["zone"] = StringName("board");
-		lost["logical_index"] = cell;
-		lost["permanent"] = true;
-		resolution.events.append(lost);
-	}
-	value.card_runtime_abilities[card_index] = retained_entries;
-	clear_runtime_suppression(value, card_index);
+	permanently_remove_non_retained_abilities(value, card_index, -1, cell, resolution);
 	return resolution;
 }
 
@@ -842,22 +889,6 @@ bool DuelNativeCompactKernel::card_declarations_can_spend_ki(
 		}
 	}
 	return false;
-}
-
-bool DuelNativeCompactKernel::card_is_heart_method(
-	const NativeState &value,
-	int32_t card_index
-) const {
-	if (
-		card_index < 0
-		|| card_index >= static_cast<int32_t>(value.card_template_indices.size())
-	) return false;
-	const int32_t template_index = value.card_template_indices[card_index];
-	if (template_index < 0 || template_index >= value.card_template_pool.size()) return false;
-	const Variant template_value = value.card_template_pool[template_index];
-	if (template_value.get_type() != Variant::DICTIONARY) return false;
-	const Dictionary card_template = template_value;
-	return String(card_template.get("weapon", String())) == String::utf8("心法");
 }
 
 bool DuelNativeCompactKernel::selector_conditions_match(
@@ -1660,6 +1691,30 @@ bool DuelNativeCompactKernel::action_conditions_match(
 					? !event_context.attack_flipped_any_card
 					: event_context.attack_flipped_any_card;
 				break;
+			case ConditionOpcode::SELECTED_CARD_REVEALED_TO_SELF: {
+				const int32_t selected = action_context.selected_card_index;
+				const int32_t observer_owner = action_context.ability_source_owner;
+				if (
+					selected < 0
+					|| selected >= static_cast<int32_t>(value.card_reveal_codes.size())
+					|| (observer_owner != 1 && observer_owner != 2)
+				) {
+					matched = false;
+					break;
+				}
+				int32_t zone = -1;
+				int32_t owner = 0;
+				int32_t logical_index = -1;
+				if (!locate_card(value, selected, zone, owner, logical_index) || zone == 2) {
+					matched = false;
+					break;
+				}
+				const uint8_t reveal_code = value.card_reveal_codes[selected];
+				matched = observer_owner == 1
+					? (reveal_code == 1 || reveal_code == 3 || reveal_code == 4)
+					: (reveal_code == 2 || reveal_code == 3 || reveal_code == 4);
+				break;
+			}
 			default:
 				supported = false;
 				return false;
@@ -1867,7 +1922,23 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		}
 		case ActionOpcode::GAIN_KI:
 		case ActionOpcode::SPEND_KI: {
-			if (action.card_ref_explicit && action.card_ref == CardRefOpcode::LAST_SUMMONED_CARD) {
+			CompiledAction resolved_action = action;
+			if (action.amount_is_card_ki) {
+				const int32_t amount_card_index = resolve_action_card_reference(
+					action.amount_card_ref,
+					event_context,
+					action_context,
+					execution_state
+				);
+				if (
+					amount_card_index < 0
+					|| amount_card_index >= static_cast<int32_t>(value.card_ki.size())
+				) return ActionOutcome::NO_EFFECT;
+				resolved_action.amount = value.card_ki[amount_card_index];
+				resolved_action.amount_is_card_ki = false;
+				if (resolved_action.amount <= 0) return ActionOutcome::NO_EFFECT;
+			}
+			if (resolved_action.card_ref_explicit && resolved_action.card_ref == CardRefOpcode::LAST_SUMMONED_CARD) {
 				const int32_t target = execution_state.last_summoned_card_index;
 				int32_t zone = -1;
 				int32_t owner = 0;
@@ -1875,7 +1946,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				if (target < 0 || !locate_card(value, target, zone, owner, logical_index)) {
 					return ActionOutcome::NO_EFFECT;
 				}
-				CompiledAction selected_action = action;
+				CompiledAction selected_action = resolved_action;
 				selected_action.card_ref = CardRefOpcode::SELECTED_CARD;
 				ActionContext selected_context = action_context;
 				selected_context.selected_card_index = target;
@@ -1892,7 +1963,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					resolution
 				);
 			}
-			return change_ki(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
+			return change_ki(value, group, resolved_action, event_context, action_context, action_source_cell, exile_stack, resolution);
 		}
 		case ActionOpcode::FLIP_SELF:
 			return flip_action_subject(value, group, action, event_context, action_context, exile_stack, resolution);
@@ -2729,6 +2800,21 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				action_source_cell,
 				resolution
 			);
+		case ActionOpcode::PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES: {
+			const int32_t target = resolve_action_card_reference(
+				action.card_ref,
+				event_context,
+				action_context,
+				execution_state
+			);
+			return permanently_remove_non_retained_abilities(
+				value,
+				target,
+				action_context.ability_source_card_index,
+				action_source_cell,
+				resolution
+			);
+		}
 		case ActionOpcode::ENABLE_FUTURE_DRAW_REVEAL: {
 			const int32_t observer_owner = action_context.action_subject_owner;
 			if (observer_owner != 1 && observer_owner != 2) return ActionOutcome::NO_EFFECT;

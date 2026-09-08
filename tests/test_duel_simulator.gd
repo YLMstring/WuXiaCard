@@ -60,9 +60,9 @@ func _run() -> void:
 	_test_summon_reaction_conditions_and_ability_loss()
 	_test_summon_reactions_use_board_order_and_stop_after_flip()
 	_test_summon_reaction_exile_and_successful_flip_trigger()
-	_test_KuiHua1_end_turn_extra_play()
-	_test_KuiHua1_extra_turn_can_chain()
-	_test_flipped_KuiHua1_loses_ability_but_keeps_ki()
+	_test_FeiTian5_end_turn_extra_play()
+	_test_FeiTian5_extra_turn_cannot_chain()
+	_test_flipped_FeiTian5_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
 	_test_after_summon_group_stales_after_owner_flip()
 	_test_invalid_context_defaults_to_no_effect()
@@ -455,9 +455,9 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 		&"zixia_extra_start"
 	)
 	var meng: Dictionary = Catalog.create_instance(
-		&"KuiHua1",
+		&"FeiTian5",
 		Rules.PLAYER_OWNER,
-		&"zixia_extra_meng"
+		&"zixia_extra_feitian"
 	)
 	meng["ki"] = 1
 	var played: Dictionary = _make_runtime_card(
@@ -481,9 +481,6 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 		[],
 		Rules.PLAYER_OWNER
 	)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition.get("state") as State
 	_check(
@@ -1258,9 +1255,9 @@ func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
 		Rules.empty_board(),
 		[
 			Catalog.create_instance(
-				&"KuiHua1",
+				&"FeiTian5",
 				Rules.PLAYER_OWNER,
-				&"turn_cap_kuihua"
+				&"turn_cap_feitian"
 			),
 			_make_runtime_card(
 				"Granted Followup",
@@ -1278,13 +1275,9 @@ func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
 		Rules.PLAYER_OWNER
 	)
 	state.max_turns = 1
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
-
 	var first_transition: Dictionary = Simulator.apply_action(
 		state,
-		Action.make_play(0, 0, &"turn_cap_kuihua")
+		Action.make_play(0, 0, &"turn_cap_feitian")
 	)
 	var first_state: State = first_transition.get("state") as State
 	_check(
@@ -1663,23 +1656,20 @@ func _test_search_can_choose_activate_action() -> void:
 
 func _test_trigger_groups_resolve_atomically() -> void:
 	var board: Array = Rules.empty_board()
-	var first: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"trigger_first")
-	var second: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"trigger_second")
+	var first: Dictionary = Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"trigger_first")
+	var second: Dictionary = Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"trigger_second")
 	first["ki"] = 2
 	second["ki"] = 3
 	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
 	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	var events: Array = result.get("events", [])
-	_check(events.size() == 2, "Both eligible KuiHua1 rules emit trigger cues")
+	_check(events.size() == 2, "Both eligible FeiTian5 rules emit trigger cues")
 	_check(
 		int((events[0] as Dictionary).get("source_cell", -1)) == 0
 			and int((events[1] as Dictionary).get("source_cell", -1)) == 8,
@@ -2015,15 +2005,12 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 	_check(int((((momentum_next.board[4] as Dictionary)["card"] as Dictionary).get("ki", 0))) == 1, "Reaction source retains gained ki")
 
 
-func _test_KuiHua1_end_turn_extra_play() -> void:
+func _test_FeiTian5_end_turn_extra_play() -> void:
 	var hand: Array = [
-		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"momentum_meng"),
+		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"momentum_feitian"),
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
 	var state := State.new(Rules.empty_board(), hand, [], Rules.PLAYER_OWNER)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
@@ -2034,11 +2021,11 @@ func _test_KuiHua1_end_turn_extra_play() -> void:
 			&"ability_triggered",
 			&"extra_card_play_granted",
 		],
-		"KuiHua1 cues its end-turn rule before granting an extra play"
+		"FeiTian5 cues its end-turn rule before granting an extra play"
 	)
 	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra card play retains the acting owner after one action")
-	_check(next_state.extra_card_plays_remaining == 1, "KuiHua1 grants exactly one pending card play")
-	_check(_count_events(events, &"ki_changed") == 0, "KuiHua1 no longer uses ki")
+	_check(next_state.extra_card_plays_remaining == 1, "FeiTian5 grants exactly one pending card play")
+	_check(_count_events(events, &"ki_changed") == 0, "FeiTian5 uses no ki")
 
 
 func _test_KuiHua1_multiple_flips_gain_in_order() -> void:
@@ -2092,23 +2079,16 @@ func _test_KuiHua1_exile_grants_no_ki() -> void:
 	_check(_count_events(events, &"ki_changed") == 0 and _count_events(events, &"extra_card_play_granted") == 0, "Exile grants no ki or extra card play")
 
 
-func _test_KuiHua1_extra_turn_can_chain() -> void:
-	var board: Array = Rules.empty_board()
-	var weak: Dictionary = Rules.make_card("Weak", "弱", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)
-	board[1] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
-	board[4] = {"card": weak.duplicate(true), "owner": Rules.OPPONENT_OWNER}
+func _test_FeiTian5_extra_turn_cannot_chain() -> void:
 	var hand: Array = [
-		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"chain_first"),
-		Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"chain_second"),
+		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"chain_first"),
+		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"chain_second"),
 		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
 	]
-	var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
+	var state := State.new(Rules.empty_board(), hand, [], Rules.PLAYER_OWNER)
 	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var first_state: State = first_transition["state"] as State
-	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First KuiHua1 grants an extra card play")
+	_check(first_state.active_player == Rules.PLAYER_OWNER and _count_events(first_transition.get("events", []), &"extra_card_play_granted") == 1, "First FeiTian5 grants an extra card play")
 	var second_transition: Dictionary = Simulator.apply_action(first_state, Action.make_play(0, 3))
 	var second_state: State = second_transition["state"] as State
 	_check(
@@ -2119,19 +2099,19 @@ func _test_KuiHua1_extra_turn_can_chain() -> void:
 	_check(second_state.turn_count == 2, "The original play and extra play each increment action count once")
 
 
-func _test_flipped_KuiHua1_loses_ability_but_keeps_ki() -> void:
+func _test_flipped_FeiTian5_loses_ability_but_keeps_ki() -> void:
 	var board: Array = Rules.empty_board()
-	var meng: Dictionary = Catalog.create_instance(&"KuiHua1", Rules.OPPONENT_OWNER, &"flipped_meng")
-	meng["ki"] = 3
-	board[5] = {"card": meng, "owner": Rules.OPPONENT_OWNER}
+	var feitian: Dictionary = Catalog.create_instance(&"FeiTian5", Rules.OPPONENT_OWNER, &"flipped_feitian")
+	feitian["ki"] = 3
+	board[5] = {"card": feitian, "owner": Rules.OPPONENT_OWNER}
 	var attacker: Dictionary = Rules.make_card("Recruiter", "招", [1, 9, 1, 1], [], Rules.PLAYER_OWNER)
 	var state := State.new(board, [attacker], [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
 	var next_state: State = transition["state"] as State
 	var flipped: Dictionary = (next_state.board[5] as Dictionary)["card"]
-	_check(int(flipped.get("ki", -1)) == 3, "Flipped KuiHua1 keeps accumulated ki")
-	_check((flipped.get("active_abilities", []) as Array).is_empty(), "Flipped KuiHua1 loses its extra-play ability")
-	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "KuiHua1 ability loss emits the standard loss event")
+	_check(int(flipped.get("ki", -1)) == 3, "Flipped FeiTian5 keeps accumulated ki")
+	_check((flipped.get("active_abilities", []) as Array).is_empty(), "Flipped FeiTian5 loses its extra-play ability")
+	_check(_count_events(transition.get("events", []), &"ability_lost") == 1, "FeiTian5 ability loss emits the standard loss event")
 
 
 func _test_unusable_extra_turn_expires() -> void:
@@ -2143,13 +2123,10 @@ func _test_unusable_extra_turn_expires() -> void:
 	var opponent_hand: Array = [Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)]
 	var state := State.new(
 		board,
-		[Catalog.create_instance(&"KuiHua1", Rules.PLAYER_OWNER, &"last_meng")],
+		[Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"last_feitian")],
 		opponent_hand,
 		Rules.PLAYER_OWNER
 	)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
 	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "End turn still announces the unusable extra-card-play grant")

@@ -538,7 +538,10 @@ this self-reaction boundary.
 `ACTION_TRANSFORM_CARD` replaces an exact runtime card with a fresh catalog
 snapshot for its declared `card_id`, while preserving `instance_id`,
 `original_owner`, zone ownership, hand slot when applicable, and reveal
-audiences. It emits `card_transformed`. A following preserved-instance return
+audiences. Optional `preserve_powers = true` keeps the target's current four
+stored powers; otherwise the destination template supplies them. Ki and
+abilities always reset to the destination template. It emits
+`card_transformed`. A following preserved-instance return
 therefore moves the transformed dictionary rather than reconstructing it. If
 that destination hand is full, the exact discard instance uses normal external
 exile instead.
@@ -583,6 +586,22 @@ on that exact card until the current turn ends. Retained abilities are never
 removed. A later grant is immediately active; a later suppression may remove it
 in a new batch. Flipping the card clears every stored non-retained batch, so
 those abilities never return.
+
+`ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES` accepts an exact `card`
+reference in hand, board, discard, or removed zones. It deletes every current
+non-retained ability and every temporarily suppressed non-retained entry;
+`retained_on_flip = true` entries survive. Pending hand-play suppression uses
+the same operation before before-summon discovery. Every hand play consumes
+one queued layer, including heart methods and cards with no removable ability.
+
+`ACTION_GAIN_KI.amount` normally remains a positive integer. When the amount
+must copy live ki, it may instead use
+`{"type": VALUE_CARD_KI, "card": CARD_REF_ABILITY_SOURCE}`. The value is read
+when each nested action executes; zero produces `NO_EFFECT` for that gain and
+does not stop later actions. `CONDITION_SELECTED_CARD_REVEALED_TO_SELF` checks
+the selected exact card against the ability source's current owner.
+`CONDITION_KI_AT_LEAST` may declare boolean `inverted = true` to match values
+below its threshold.
 
 Ability-created summons use generic `ACTION_SUMMON_CARD`. Its `card` spec is
 either an exact reference such as `CARD_REF_SELECTED_CARD`, or a

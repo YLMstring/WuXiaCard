@@ -508,29 +508,26 @@ respectively, in row-major order. The source itself is eligible.
   cards, copies, fresh board returns, and preserved-instance discard returns.
   The addition/return event precedes one `card_revealed` event when the
   instance was not already public. Failed full-hand additions reveal nothing.
-- LaiHe3 reveals the current enemy hand. LaiHe4 also records a permanent
-  audience for later enemy draws, which survives the source flipping or
-  leaving play. Each successful draw emits `card_drawn` before
-  `card_revealed`. LaiHe1 has no ordinary in-duel ability.
-- LaiHe5 reveals only glyphs remembered from earlier duels against the current
-  enemy. A revealed enemy summon receives a non-retained modifier that makes
-  each defending edge count as 1 without changing its offensive or displayed
-  powers. The granted weakness survives the granting source, but is lost when
-  the affected card flips.
+- LaiHe3 reveals the current enemy hand after summon. LaiHe4 instead reveals
+  the exact five-card opposing opening hand at `DUEL_STARTED`; cards drawn
+  later remain concealed unless another effect reveals them. LaiHe1 has no
+  ordinary in-duel ability.
+- LaiHe5 (DaiZong) starts with three ki. Its activation may select any opposing
+  hand card and permanently removes all non-retained runtime abilities,
+  including heart methods; retained-on-flip entries survive. If the selected
+  exact instance was already revealed to DaiZong's current owner, the
+  activation requests one extra hand play after suppression.
 - LaiHe2/3/4/5 prevent their own pending flip once per protection window. The
   protection is removed after any enemy card actually flips or at the start of
   the source owner's turn. A prevented attempt does not consume it and emits no
   `CARD_AFTER_FLIPPED` event.
-- LaiHe1–4 declare `undo_last_player_decision` as a main-deck effect. If any of
+- LaiHe1–5 declare `undo_last_player_decision` as a main-deck effect. If any of
   them is among the player's five opening main-deck cards, the left replay
   button can restore the state immediately before the player's previous
   decision, including removing all intervening opponent replies. The current
   checkpoint is consumed on use; every later valid player decision creates a
   new one, with no per-match use limit. Undo is unavailable during resolution,
   opponent decisions, inspection, replay, and after duel completion.
-- Weakened presentation changes only the central artwork alpha to 70%; frame,
-  powers, ki, ownership color, and interaction remain fully opaque.
-
 ## 云雾十三式 / 一剑落九雁 / 天柱云气
 
 - “失去效果直到当前回合结束” removes every currently active non-retained
@@ -620,13 +617,12 @@ respectively, in row-major order. The source itself is eligible.
   Automatic limited selectors reject YinYang before counting their limit.
 - HanBin's targeted activation reduces all four powers by 4 before revealing
   the locked enemy-hand instance.
-- HanBin tier 4's transition from positive ki to zero emits the ki change and
-  resolves its self-flip before the activation's weaken/reveal actions. The
-  observer remains the source owner captured before paying the cost.
+- HanBin tier 4 does not flip during ki payment. At the end of its current
+  owner's turn, it flips only when it has zero ki at that time.
 - HanBin's self-after-flip grant is an isolated, non-retained ability entry. It
-  grants a separate owner-turn-start ability; it does not use
-  `retained_on_flip`. The granted rule weakens HanBin and the leftmost two legal
-  allied hand cards in one shared power-change batch. A later flip removes it
+  grants a separate owner-turn-end ability; it does not use
+  `retained_on_flip`. The granted rule weakens HanBin and every legal allied
+  hand card in one shared power-change batch. A later flip removes it
   permanently and never recreates it.
 - Every successful flip first changes ownership. Old non-retained entries other
   than isolated self-after-flip entries are removed next. `CARD_AFTER_FLIPPED`
@@ -646,17 +642,18 @@ respectively, in row-major order. The source itself is eligible.
 ## 独孤九剑
 
 - No Form handles its source with ordinary `ACTION_EXILE_SELF` and
-  `ACTION_DRAW_CARDS`, then uses the existing adjacent-card selector for exact
-  row-major targets. Every removal is followed immediately by the default draw
-  for that action subject's pre-removal current owner.
-- Each owner records the exact most recent successful hand play. Anticipate
-  reads a frozen pre-action copy, so it never selects itself. A target returns
-  to the owner who originally played that hand action even after a flip; full
-  recipient hands exile it and missing targets do not stop later actions.
-- Break All queues persistent per-owner layers. Heart methods neither trigger
-  nor consume them. Each later non-heart hand play consumes at most one layer
-  before its own before-summon ability discovery, permanently removing every
-  non-retained ability while preserving `retained_on_flip` entries.
+  `ACTION_DRAW_CARDS`, first reveals the current opposing hand and enables
+  future opposing-draw reveal, then uses the existing adjacent-card selector
+  for exact row-major targets. Every removal is followed immediately by the
+  default draw for that action subject's pre-removal current owner.
+- Anticipate exiles itself, draws, requests an extra hand play, and queues one
+  persistent layer for the opponent's next hand play. Every hand play consumes
+  one layer before before-summon discovery, including heart methods and cards
+  with no removable abilities. Only non-retained abilities are removed.
+- Break All exiles itself, draws, transforms every current enemy into
+  TaiZuChangQuan, then requests an extra play. Transformation preserves the
+  exact instance, current and original owners, cell, reveal state, and current
+  four powers, while resetting ki and abilities to the TaiZu template.
 
 ## 金刚伏魔圈 / 千手如来掌
 

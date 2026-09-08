@@ -73,7 +73,7 @@ func _run() -> void:
 	await _check_opponent_draw_visibility()
 	await _check_intercepted_draw_uses_transient_card_view()
 	await _check_manual_activate_move()
-	await _check_KuiHua1_extra_turn_presentation()
+	await _check_KuiHua1_before_summon_presentation()
 	await _check_ability_pulse_sequencing()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("DuelCanvas/PlayerHand"))
 
@@ -1300,16 +1300,29 @@ func _check_inspector_holds_completed_ai_move() -> void:
 	_check(not ai_duel.debug_is_search_running(), "Opponent search continues and finishes behind the inspector")
 	_check(
 		ai_duel.debug_is_inspection_open()
-		and ai_duel.debug_get_board_occupancy() == 1,
+		and ai_duel.debug_get_simulation_turn_count() == 1,
 		"Completed opponent result remains unapplied while inspection is open"
 	)
 
 	ai_duel.debug_close_inspection()
 	frames_waited = 0
-	while ai_duel.debug_get_board_occupancy() < 2 and frames_waited < 300:
+	while (
+		ai_duel.debug_get_simulation_turn_count() < 2
+		or ai_duel.debug_get_active_owner() != Rules.PLAYER_OWNER
+	) and frames_waited < 300:
 		await process_frame
 		frames_waited += 1
-	_check(ai_duel.debug_get_board_occupancy() >= 2, "Opponent result applies after inspection closes")
+	_check(
+		ai_duel.debug_get_simulation_turn_count() >= 2,
+		"Opponent result applies after inspection closes; occupancy=%d turn=%d owner=%d search=%s inspection=%s"
+		% [
+			ai_duel.debug_get_board_occupancy(),
+			ai_duel.debug_get_simulation_turn_count(),
+			ai_duel.debug_get_active_owner(),
+			ai_duel.debug_is_search_running(),
+			ai_duel.debug_is_inspection_open(),
+		]
+	)
 	_check(ai_duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "Opponent result returns control to the player")
 	var search_report: Dictionary = ai_duel.debug_get_last_search_report()
 	for field: String in [
@@ -1631,7 +1644,7 @@ func _check_manual_activate_move() -> void:
 	await process_frame
 
 
-func _check_KuiHua1_extra_turn_presentation() -> void:
+func _check_KuiHua1_before_summon_presentation() -> void:
 	var duel: Node = _instantiate_duel()
 	root.add_child(duel)
 	await process_frame
@@ -1650,25 +1663,23 @@ func _check_KuiHua1_extra_turn_presentation() -> void:
 	var player_opened: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 8, false)
 	var opponent_targeted: bool = await duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 5, false)
 	var ki_trace_before: Array[int] = duel.debug_get_ki_presentation_trace()
+	var kuihua_view: CardView = _cards_below(duel.get_node("DuelCanvas/PlayerHand"))[1] as CardView
+	var kuihua_instance_id := StringName(kuihua_view.card_data.get("instance_id", &""))
 	var meng_played: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 1, 4, false)
 	_check(player_opened and opponent_targeted and meng_played, "KuiHua1 presentation fixture uses three production actions")
 	_check(duel.debug_get_active_owner() == Rules.PLAYER_OWNER, "KuiHua1's extra card play keeps control with the same player")
 	_check(duel.debug_get_simulation_turn_count() == 3, "Extra-card-play grant does not add an action by itself")
-	var meng_view: CardView = (duel.get("board_cards") as Array)[4] as CardView
-	_check(meng_view != null and StringName(meng_view.card_data.get("card_id", &"")) == &"KuiHua1", "KuiHua1 remains mapped to its production board view")
-	var ki_badge := meng_view.get_node("Overlay/KiBadge") as PanelContainer
-	var ki_value := meng_view.get_node("Overlay/KiBadge/Value") as Control
 	_check(
-		int(meng_view.card_data.get("ki", -1)) == 0
-		and ki_badge.visible
-		and ki_value.visible
-		and String(ki_value.get("text")) == "化",
-		"KuiHua1's non-ki passive displays the passive marker on a light bead"
+		not duel.debug_has_board_card_view(4)
+		and not duel.debug_has_board_card_view(5)
+		and not duel.debug_has_board_card_view(8)
+		and duel.debug_get_removed_count(Rules.PLAYER_OWNER) == 1,
+		"KuiHua1 and both previous hand plays leave the board in presentation"
 	)
-	var meng_instance_id := StringName(meng_view.card_data.get("instance_id", &""))
+	_check(kuihua_view != null and StringName(kuihua_view.card_data.get("card_id", &"")) == &"KuiHua1", "KuiHua1 hand view is identified before its before-summon exile")
 	_check(
-		duel.debug_get_ability_pulse_trace().count(meng_instance_id) == 1,
-		"KuiHua1's end-turn trigger produces one generic card pulse"
+		duel.debug_get_ability_pulse_trace().count(kuihua_instance_id) == 1,
+		"KuiHua1's before-summon trigger produces one generic card pulse"
 	)
 	var ki_trace: Array[int] = duel.debug_get_ki_presentation_trace()
 	_check(ki_trace == ki_trace_before, "KuiHua1 presentation emits no ki changes")

@@ -473,11 +473,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - HanBinZhenQi3–4 now target an exact enemy hand instance, reduce all four
   powers by 4, and
   reveal it to the activating owner. An actively chosen YinYang card remains a
-  legal target but ignores the power loss. Tier 4 flips immediately when its
-  last ki is spent, then finishes resolving the locked target. After flipping,
-  HanBin gains a non-retained owner-turn-start decay that weakens itself and
-  the leftmost two legal allied hand cards in one presentation batch; automatic
-  selection skips YinYang.
+  legal target but ignores the power loss. After flipping,
+  HanBin gains a non-retained owner-turn-end decay that weakens itself and
+  every legal allied hand card in one presentation batch; automatic selection
+  skips YinYang. Tier 4 waits until its owner's turn end and flips only when
+  it has zero ki at that time.
 - Flip cleanup is staged globally: ownership changes first, ordinary old
   non-retained abilities are lost, isolated old self-`CARD_AFTER_FLIPPED`
   entries resolve, and those isolated old entries are then lost. Abilities
@@ -489,17 +489,22 @@ The creator has made several direct UI and localization edits. Preserve those ed
   add one power to the trigger card; YinYang ignores only that change. Multiple
   TianWai sources resolve row-major and revalidate after prior swaps.
 - DuGu9Jian1–3 now implement their complete before-summon rules. No Form
-  exiles itself, then its snapshotted orthogonal neighbors row-major, drawing
+  reveals the current opposing hand and all future opposing draws, then exiles
+  itself and its snapshotted orthogonal neighbors row-major, drawing
   immediately for each removed card's pre-removal current owner. Anticipate
-  returns each player's exact previous successful hand play as a fresh catalog
-  instance to its original player, then grants an extra hand play. Break All
-  queues persistent suppression layers without revealing the opponent hand; each
-  later non-heart hand play consumes one layer before its own before-summon
-  discovery and permanently loses only non-retained abilities.
+  exiles itself, draws, grants an extra hand play, and queues one persistent
+  suppression layer for the opponent's next hand play. That play always
+  consumes one layer, including heart methods and abilityless cards, and loses
+  every non-retained ability before before-summon discovery. Break All exiles
+  itself, draws, turns every current enemy into a same-instance TaiZuChangQuan
+  while preserving powers, owners, reveal state, and cell, then grants an
+  extra play.
 - KuiHua1–4 share the card-level `self_castration` effect gate. Enemy effects
   are always enabled; player effects are enabled from the profile only when
   KuiHua0 is unlocked, and new profiles currently unlock KuiHua0–4. KuiHua1
-  grants one extra hand play at owner-turn end. KuiHua2 returns when a real
+  has four `-1` powers and, before summon, exiles itself, draws, returns the
+  opponent's and then its owner's previous hand plays to their respective
+  players, and grants an extra hand play. KuiHua2 returns when a real
   attack starts against it, attacks against the defender's minimum side, and
   after a real attack makes enemy standard attacks target both sides; attacked
   old allies flip to the modifier source's current owner. KuiHua3 swaps with
@@ -519,14 +524,22 @@ The creator has made several direct UI and localization edits. Preserve those ed
   animation delay or leak.
 - LaiHeQinQuan1–4 now follow their current tier progression: tier 1 has no
   ordinary in-duel ability, tier 2 has flip protection, tier 3 also reveals the
-  current enemy hand, and tier 4 also reveals future enemy draws. Carrying any
-  of those four cards in the opening five-card main deck enables the left
+  current enemy hand, and tier 4 reveals only the five opposing cards present
+  at duel start. Carrying any LaiHe card, including DaiZong, in the opening
+  five-card main deck enables the left
   button to undo the last player decision together with all opponent replies;
-  replay actions and mastery candidates roll back with the state. LaiHe5 alone
-  retains remembered-glyph revelation and the revealed-summon weakness rule.
-- A card carrying `defending_power_override` keeps its stored/displayed powers,
-  but attackability treats its facing edge as the modifier value. CardView fades
-  only its central picture to 70% while that weakness is active.
+  replay actions and mastery candidates roll back with the state. DaiZong
+  starts with three ki and may spend one to choose any opposing hand card,
+  permanently remove its non-retained abilities, and grant an extra play when
+  that exact card was already revealed to DaiZong's owner.
+- FeiTian5 is a tier-five Jianghu lightness card with four 3 powers. Its
+  owner-turn-end rule requests one extra hand play and obeys the shared
+  once-per-owner-turn extra-play cap.
+- XiXinDaFa4/5 keep their current ki when their post-flip rule resolves. Every
+  other allied hand card receives that full amount first in physical hand
+  order, then every other allied board card receives it row-major, after which
+  the source performs its standard attack. Zero ki produces no gain events but
+  does not cancel the attack attempt.
 - JinZhenDuJie2–4 use a row-major board selector plus generic
   `ACTION_RETURN_CARD_TO_HAND` to return the first enemy that originally
   belonged to the source owner as a fresh catalog hand instance; a full hand

@@ -72,11 +72,17 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	const Dictionary condition = value;
 	const StringName type = condition.get("type", StringName());
 	if (
-		type == StringName("ki_at_least") && condition.size() == 2
+		type == StringName("ki_at_least")
+		&& (condition.size() == 2 || condition.size() == 3)
 		&& Variant(condition.get("amount", 0)).get_type() == Variant::INT
+		&& (
+			!condition.has("inverted")
+			|| Variant(condition.get("inverted", Variant())).get_type() == Variant::BOOL
+		)
 	) {
 		compiled.opcode = ConditionOpcode::KI_AT_LEAST;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(condition.get("amount", 0)));
+		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
 		return compiled;
 	}
 	if (
@@ -148,6 +154,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("source_has_adjacent_empty_cell")) compiled.opcode = ConditionOpcode::SOURCE_HAS_ADJACENT_EMPTY_CELL;
 	else if (type == StringName("source_has_empty_between_enemy")) compiled.opcode = ConditionOpcode::SOURCE_HAS_EMPTY_BETWEEN_ENEMY;
 	else if (type == StringName("discard_owner_is_self")) compiled.opcode = ConditionOpcode::DISCARD_OWNER_IS_SELF;
+	else if (type == StringName("selected_card_revealed_to_self")) compiled.opcode = ConditionOpcode::SELECTED_CARD_REVEALED_TO_SELF;
 	return compiled;
 }
 
@@ -429,15 +436,48 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.card_ref = CardRefOpcode::ATTACKER_CARD;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("value", 0)));
 	} else if (
-		(type == StringName("gain_ki") || type == StringName("spend_ki"))
+		type == StringName("gain_ki")
+		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count)
+	) {
+		compiled.opcode = ActionOpcode::GAIN_KI;
+		const Variant amount = action.get("amount", Variant());
+		if (amount.get_type() == Variant::INT && static_cast<int64_t>(amount) > 0) {
+			compiled.amount = static_cast<int32_t>(static_cast<int64_t>(amount));
+		} else if (amount.get_type() == Variant::DICTIONARY) {
+			const Dictionary spec = amount;
+			if (
+				spec.size() == 2
+				&& StringName(spec.get("type", StringName())) == StringName("card_ki")
+			) {
+				compiled.amount_is_card_ki = true;
+				compiled.amount_card_ref = compile_card_ref(spec.get("card", StringName()));
+				if (compiled.amount_card_ref == CardRefOpcode::UNSUPPORTED) {
+					compiled.declaration_valid = false;
+				}
+			} else {
+				compiled.declaration_valid = false;
+			}
+		} else {
+			compiled.declaration_valid = false;
+		}
+		compiled.card_ref_explicit = action.has("card");
+		if (compiled.card_ref_explicit) {
+			compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+			if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+		}
+	} else if (
+		type == StringName("spend_ki")
 		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count)
 		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
 		&& static_cast<int64_t>(action.get("amount", 0)) > 0
 	) {
-		compiled.opcode = type == StringName("gain_ki") ? ActionOpcode::GAIN_KI : ActionOpcode::SPEND_KI;
+		compiled.opcode = ActionOpcode::SPEND_KI;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
 		compiled.card_ref_explicit = action.has("card");
-		if (compiled.card_ref_explicit) compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		if (compiled.card_ref_explicit) {
+			compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+			if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+		}
 	} else if (type == StringName("flip_self") && action.size() == 2 + generic_field_count) {
 		compiled.opcode = ActionOpcode::FLIP_SELF;
 		compiled.new_owner = compile_relative_owner(action.get("new_owner", StringName()));
@@ -458,9 +498,17 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		} else {
 			compiled.declaration_valid = false;
 		}
-	} else if (type == StringName("transform_card") && action.size() == 3 + generic_field_count) {
+	} else if (
+		type == StringName("transform_card")
+		&& (action.size() == 3 + generic_field_count || action.size() == 4 + generic_field_count)
+		&& (
+			!action.has("preserve_powers")
+			|| Variant(action.get("preserve_powers", Variant())).get_type() == Variant::BOOL
+		)
+	) {
 		compiled.opcode = ActionOpcode::TRANSFORM_CARD;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		compiled.preserve_powers = static_cast<bool>(action.get("preserve_powers", false));
 		const Variant card_id_value = action.get("card_id", Variant());
 		if (
 			card_id_value.get_type() != Variant::STRING_NAME
@@ -712,6 +760,13 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		&& action.size() == 1 + generic_field_count
 	) {
 		compiled.opcode = ActionOpcode::TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES;
+	} else if (
+		type == StringName("permanently_remove_non_retained_abilities")
+		&& action.size() == 2 + generic_field_count
+	) {
+		compiled.opcode = ActionOpcode::PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES;
+		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+		if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
 	} else if (
 		type == StringName("enable_future_draw_reveal")
 		&& action.size() == 2 + generic_field_count

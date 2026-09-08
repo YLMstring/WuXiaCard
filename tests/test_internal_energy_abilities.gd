@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_distribute_ki_cycles_board_then_hand()
 	_test_initial_flip_grants_without_distribution()
 	_test_second_flip_distributes_then_attacks()
+	_test_zero_ki_second_flip_still_attacks()
 	_test_entry_flip_cancels_standard_attack()
 	_test_entry_double_flip_still_cancels_standard_attack()
 	_test_xixing_later_attack_targets_all_while_beiming_does_not()
@@ -371,33 +372,23 @@ func _test_second_flip_distributes_then_attacks() -> void:
 	)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(source, Rules.PLAYER_OWNER)
-	var player_board_auto: Dictionary = Catalog.create_instance(
-		&"SanQinFeng1",
-		Rules.PLAYER_OWNER,
-		&"second_board_auto"
-	)
-	var player_board_active: Dictionary = Catalog.create_instance(
-		&"YouFenLaiYi2",
-		Rules.PLAYER_OWNER,
-		&"second_board_active"
-	)
+	var player_board_passive: Dictionary = _plain(&"second_board_passive", [2, 2, 2, 2], Rules.PLAYER_OWNER)
+	var player_board_active: Dictionary = Catalog.create_instance(&"YouFenLaiYi2", Rules.PLAYER_OWNER, &"second_board_active")
 	player_board_active["ki"] = 0
-	var player_hand_auto: Dictionary = Catalog.create_instance(
-		&"SanQinFeng1",
-		Rules.PLAYER_OWNER,
-		&"second_hand_auto"
-	)
-	board[0] = _slot(player_board_auto, Rules.PLAYER_OWNER)
+	var player_hand_plain: Dictionary = _plain(&"second_hand_plain", [3, 3, 3, 3], Rules.PLAYER_OWNER)
+	var player_hand_sentinel: Dictionary = _plain(&"second_hand_sentinel", [-1, -1, -1, -1], Rules.PLAYER_OWNER)
+	board[0] = _slot(player_board_passive, Rules.PLAYER_OWNER)
 	board[2] = _slot(player_board_active, Rules.PLAYER_OWNER)
 	board[5] = _slot(
 		_plain(&"second_attack_target", [0, 0, 0, 0], Rules.OPPONENT_OWNER),
 		Rules.OPPONENT_OWNER
 	)
-	var state := State.new(board, [player_hand_auto])
+	var state := State.new(board, [player_hand_plain, player_hand_sentinel])
 	source = _runtime_card(state, &"second_flip_source")
-	player_board_auto = _runtime_card(state, &"second_board_auto")
+	player_board_passive = _runtime_card(state, &"second_board_passive")
 	player_board_active = _runtime_card(state, &"second_board_active")
-	player_hand_auto = _runtime_card(state, &"second_hand_auto")
+	player_hand_plain = _runtime_card(state, &"second_hand_plain")
+	player_hand_sentinel = _runtime_card(state, &"second_hand_sentinel")
 	Simulator.resolve_non_attack_flip(
 		state,
 		&"second_flip_source",
@@ -413,17 +404,44 @@ func _test_second_flip_distributes_then_attacks() -> void:
 	)
 	var types: Array[StringName] = _event_types(result.get("events", []))
 	_check(
-		int(source.get("ki", -1)) == 0
-		and int(player_board_auto.get("ki", -1)) == 2
-		and int(player_board_active.get("ki", -1)) == 2
-		and int(player_hand_auto.get("ki", -1)) == 1,
-		"Second flip distributes every source ki using the approved cycle"
+		int(source.get("ki", -1)) == 5
+		and int(player_board_passive.get("ki", -1)) == 5
+		and int(player_board_active.get("ki", -1)) == 5
+		and int(player_hand_plain.get("ki", -1)) == 5
+		and int(player_hand_sentinel.get("ki", -1)) == 5,
+		"Second flip broadcasts the source's full current ki without spending it"
+	)
+	_check(
+		_event_instance_ids(result.get("events", []), &"ki_changed")
+		== [
+			&"second_hand_plain",
+			&"second_hand_sentinel",
+			&"second_board_passive",
+			&"second_board_active",
+		],
+		"Broadcast order is hand left-to-right, then board row-major"
 	)
 	_check(
 		types.has(&"attack_started")
 		and types.rfind(&"ki_changed") < types.find(&"attack_started")
 		and int((state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
 		"Second flip completes distribution before its normal attack"
+	)
+
+
+func _test_zero_ki_second_flip_still_attacks() -> void:
+	var source: Dictionary = Catalog.create_instance(&"XiXinDaFa5", Rules.PLAYER_OWNER, &"zero_broadcast_source")
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(source, Rules.PLAYER_OWNER)
+	board[5] = _slot(_plain(&"zero_broadcast_target", [0, 0, 0, 0], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var state := State.new(board, [_plain(&"zero_broadcast_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER)])
+	Simulator.resolve_non_attack_flip(state, &"zero_broadcast_source", Rules.OPPONENT_OWNER, &"zero_initial")
+	var result: Dictionary = Simulator.resolve_non_attack_flip(state, &"zero_broadcast_source", Rules.PLAYER_OWNER, &"zero_return")
+	_check(
+		_event_types(result.get("events", [])).has(&"attack_started")
+		and _event_instance_ids(result.get("events", []), &"ki_changed").is_empty()
+		and int((state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Zero source ki grants nothing but does not prevent the post-flip attack"
 	)
 
 

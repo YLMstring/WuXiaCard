@@ -16,8 +16,8 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_consecutive_action_grants_are_capped()
-	_test_action_grant_blocks_kuihua_end_turn_grant()
-	_test_simultaneous_kuihua_requests_coalesce()
+	_test_action_grant_blocks_feitian_end_turn_grant()
+	_test_simultaneous_feitian_requests_coalesce()
 	if _failures == 0:
 		print("EXTRA_PLAY_TURN_CAP_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -76,11 +76,11 @@ func _test_consecutive_action_grants_are_capped() -> void:
 	)
 
 
-func _test_action_grant_blocks_kuihua_end_turn_grant() -> void:
+func _test_action_grant_blocks_feitian_end_turn_grant() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = {
 		"owner": Rules.PLAYER_OWNER,
-		"card": _card(&"KuiHua1", Rules.PLAYER_OWNER, &"cap_kuihua"),
+		"card": _card(&"FeiTian5", Rules.PLAYER_OWNER, &"cap_feitian"),
 	}
 	var state := State.new(
 		board,
@@ -93,9 +93,6 @@ func _test_action_grant_blocks_kuihua_end_turn_grant() -> void:
 		0,
 		[_card(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"cap_kuihua_draw")]
 	)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var first: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"cap_kuihua_break")
@@ -113,7 +110,7 @@ func _test_action_grant_blocks_kuihua_end_turn_grant() -> void:
 	var after_second: State = second.get("state") as State
 	_check(
 		_count_events(second.get("events", []), &"extra_card_play_granted") == 0,
-		"KuiHua1's later end-turn request cannot extend the same turn"
+		"FeiTian5's later end-turn request cannot extend the same turn"
 	)
 	_check(
 		after_second.active_player == Rules.OPPONENT_OWNER,
@@ -121,15 +118,15 @@ func _test_action_grant_blocks_kuihua_end_turn_grant() -> void:
 	)
 
 
-func _test_simultaneous_kuihua_requests_coalesce() -> void:
+func _test_simultaneous_feitian_requests_coalesce() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = {
 		"owner": Rules.PLAYER_OWNER,
-		"card": _card(&"KuiHua1", Rules.PLAYER_OWNER, &"cap_kuihua_left"),
+		"card": _card(&"FeiTian5", Rules.PLAYER_OWNER, &"cap_feitian_left"),
 	}
 	board[8] = {
 		"owner": Rules.PLAYER_OWNER,
-		"card": _card(&"KuiHua1", Rules.PLAYER_OWNER, &"cap_kuihua_right"),
+		"card": _card(&"FeiTian5", Rules.PLAYER_OWNER, &"cap_feitian_right"),
 	}
 	var state := State.new(
 		board,
@@ -140,9 +137,6 @@ func _test_simultaneous_kuihua_requests_coalesce() -> void:
 		[_card(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"cap_kuihua_reply")],
 		Rules.PLAYER_OWNER
 	)
-	state.enabled_effect_gates_by_owner[Rules.PLAYER_OWNER] = [
-		Catalog.EFFECT_GATE_SELF_CASTRATION,
-	]
 	var transition: Dictionary = Simulator.apply_action(
 		state,
 		Action.make_play(0, 4, &"cap_kuihua_play")

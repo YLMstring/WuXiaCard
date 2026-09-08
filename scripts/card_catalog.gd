@@ -87,6 +87,9 @@ const CONDITION_SELECTED_CARD_CAN_SPEND_KI: StringName = &"selected_card_can_spe
 const CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE: StringName = (
 	&"selected_card_can_transfer_resource"
 )
+const CONDITION_SELECTED_CARD_REVEALED_TO_SELF: StringName = (
+	&"selected_card_revealed_to_self"
+)
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
 const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
@@ -123,6 +126,9 @@ const ACTION_TRANSFORM_CARD: StringName = &"transform_card"
 const ACTION_EXILE_SELF: StringName = &"exile_self"
 const ACTION_RESUMMON_CARD_IN_PLACE: StringName = &"resummon_card_in_place"
 const ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES: StringName = &"temporarily_remove_non_retained_abilities"
+const ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES: StringName = (
+	&"permanently_remove_non_retained_abilities"
+)
 const ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY: StringName = &"move_self_to_first_adjacent_empty"
 const ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: StringName = &"move_self_to_first_empty_between_enemy"
 const ACTION_REVEAL_CARD: StringName = &"reveal_card"
@@ -151,6 +157,7 @@ const OWNER_CARD_ORIGINAL: StringName = &"card_original_owner"
 const OWNER_OPPONENT_OF_ABILITY_SOURCE: StringName = &"opponent_of_ability_source"
 const OWNER_OPPONENT_OF_CARD_CURRENT: StringName = &"opponent_of_card_current_owner"
 const VALUE_CARD_COUNT: StringName = &"card_count"
+const VALUE_CARD_KI: StringName = &"card_ki"
 const RESOURCE_KI: StringName = &"ki"
 const RESOURCE_POWERS: StringName = &"powers"
 const REVEAL_FILTER_ALL: StringName = &"all"
@@ -272,6 +279,7 @@ const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_OWNER_HAND_EMPTY,
 	CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 	CONDITION_ATTACK_FLIPPED_ANY_CARD,
+	CONDITION_SELECTED_CARD_REVEALED_TO_SELF,
 ]
 const KNOWN_CARD_ZONES: Array[StringName] = [
 	CARD_ZONE_HAND,
@@ -311,6 +319,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_EXILE_SELF,
 	ACTION_RESUMMON_CARD_IN_PLACE,
 	ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+	ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
 	ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 	ACTION_MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY,
 	ACTION_REVEAL_CARD,
@@ -335,7 +344,7 @@ const KNOWN_OWNER_REFERENCES: Array[StringName] = [
 	OWNER_OPPONENT_OF_ABILITY_SOURCE,
 	OWNER_OPPONENT_OF_CARD_CURRENT,
 ]
-const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT]
+const KNOWN_VALUE_TYPES: Array[StringName] = [VALUE_CARD_COUNT, VALUE_CARD_KI]
 const KNOWN_RESOURCES: Array[StringName] = [RESOURCE_KI, RESOURCE_POWERS]
 const KNOWN_RECIPIENTS: Array[StringName] = [RECIPIENT_SELF, RECIPIENT_OPPONENT]
 const KNOWN_REVEAL_FILTERS: Array[StringName] = [REVEAL_FILTER_ALL, REVEAL_FILTER_REMEMBERED]
@@ -605,7 +614,7 @@ const HANBIN_POWER_BATCH: StringName = &"hanbin_frozen_turn"
 
 const HANBIN_FROZEN_TURN: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_START_OWNER_TURN,
+		"event": TRIGGER_END_OWNER_TURN,
 		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 		"actions": [
 			{
@@ -622,7 +631,6 @@ const HANBIN_FROZEN_TURN: Dictionary = {
 						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
 					],
-					"limit": 2,
 				},
 				"actions": [{
 					"type": ACTION_CHANGE_POWERS,
@@ -666,12 +674,16 @@ const HANBIN_AFTER_FLIP_GRANT: Dictionary = {
 	}],
 }
 
-const HANBIN_LAST_KI_FLIP: Dictionary = {
+const HANBIN_ZERO_KI_END_TURN_FLIP: Dictionary = {
 	"triggers": [{
-		"event": CARD_KI_CHANGED,
+		"event": TRIGGER_END_OWNER_TURN,
 		"conditions": [
-			{"type": CONDITION_KI_CHANGED_CARD_IS_SELF},
-			{"type": CONDITION_KI_REACHED_ZERO},
+			{"type": CONDITION_TURN_OWNER_IS_SELF},
+			{
+				"type": CONDITION_KI_AT_LEAST,
+				"amount": 1,
+				"inverted": true,
+			},
 		],
 		"actions": [{
 			"type": ACTION_FLIP_SELF,
@@ -737,23 +749,28 @@ const XIXING_BEIMING_ZERO_DEFENSE: Dictionary = {
 	}],
 }
 
-const XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE: Dictionary = {
+const XIXING_BEIMING_AFTER_FLIP_BROADCAST_KI: Dictionary = {
 	"triggers": [{
 		"event": CARD_AFTER_FLIPPED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{
-				"type": ACTION_DISTRIBUTE_KI,
-				"from": CARD_REF_ABILITY_SOURCE,
-				"amount": 1,
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
 				"selector": {
-					"zones": [CARD_ZONE_BOARD, CARD_ZONE_HAND],
+					"zones": [CARD_ZONE_HAND, CARD_ZONE_BOARD],
 					"conditions": [
 						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
 						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
-						{"type": CONDITION_SELECTED_CARD_CAN_SPEND_KI},
 					],
 				},
+				"actions": [{
+					"type": ACTION_GAIN_KI,
+					"amount": {
+						"type": VALUE_CARD_KI,
+						"card": CARD_REF_ABILITY_SOURCE,
+					},
+					"card": CARD_REF_SELECTED_CARD,
+				}],
 			},
 			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 		],
@@ -775,7 +792,7 @@ const XIXING_BEIMING_AFTER_INITIAL_FLIP_GRANT: Dictionary = {
 			},
 			{
 				"type": ACTION_GRANT_ABILITY_TO_SELF,
-				"ability": XIXING_BEIMING_AFTER_FLIP_DISTRIBUTE,
+				"ability": XIXING_BEIMING_AFTER_FLIP_BROADCAST_KI,
 			},
 		],
 	}],
@@ -1678,15 +1695,40 @@ const LAIHE_REVEAL_CURRENT_HAND: Dictionary = {
 	}],
 }
 
-const LAIHE_REVEAL_FUTURE_DRAWS: Dictionary = {
+const LAIHE_DUEL_START_REVEAL: Dictionary = {
+	"active_zones": [CARD_ZONE_HAND],
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_SUMMONED,
-		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"event": TRIGGER_DUEL_STARTED,
 		"actions": [{
-			"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+			"type": ACTION_REVEAL_HAND_CARDS,
 			"recipient": RECIPIENT_OPPONENT,
+			"filter": REVEAL_FILTER_ALL,
 		}],
 	}],
+}
+
+const DAIZONG_HAND_SUPPRESSION_ACTIVATION: Dictionary = {
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ENEMY_HAND_CARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{
+				"type": ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
+				"card": CARD_REF_SELECTED_CARD,
+			},
+			{
+				"type": ACTION_IF,
+				"conditions": [{
+					"type": CONDITION_SELECTED_CARD_REVEALED_TO_SELF,
+				}],
+				"actions": [{
+					"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+					"amount": 1,
+				}],
+			},
+		],
+	},
 }
 
 const LAIHE_FLIP_PROTECTION: Dictionary = {
@@ -1892,6 +1934,10 @@ const DUGU_NO_FORM: Dictionary = {
 				"recipient": RECIPIENT_OPPONENT,
 				"filter": REVEAL_FILTER_ALL,
 			},
+			{
+				"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+				"recipient": RECIPIENT_OPPONENT,
+			},
 			{"type": ACTION_EXILE_SELF},
 			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{
@@ -1911,7 +1957,7 @@ const DUGU_NO_FORM: Dictionary = {
 	}],
 }
 
-const DUGU_ANTICIPATE: Dictionary = {
+const KUIHUA_HEAVEN_HUMAN: Dictionary = {
 	"triggers": [{
 		"event": TRIGGER_CARD_BEFORE_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
@@ -1955,7 +2001,7 @@ const DUGU_ANTICIPATE: Dictionary = {
 	}],
 }
 
-const DUGU_BREAK_ALL: Dictionary = {
+const DUGU_ANTICIPATE: Dictionary = {
 	"triggers": [{
 		"event": TRIGGER_CARD_BEFORE_SUMMONED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
@@ -1968,6 +2014,31 @@ const DUGU_BREAK_ALL: Dictionary = {
 				"recipient": RECIPIENT_OPPONENT,
 				"amount": 1,
 			},
+		],
+	}],
+}
+
+const DUGU_BREAK_ALL: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+				},
+				"actions": [{
+					"type": ACTION_TRANSFORM_CARD,
+					"card": CARD_REF_SELECTED_CARD,
+					"card_id": &"TaiZuChangQuan",
+					"preserve_powers": true,
+				}],
+			},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 		],
 	}],
 }
@@ -3930,8 +4001,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [4, 4, 6, 6],
 		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
 		"abilities": [
-			LAIHE_REVEAL_CURRENT_HAND,
-			LAIHE_REVEAL_FUTURE_DRAWS,
+			LAIHE_DUEL_START_REVEAL,
 			LAIHE_FLIP_PROTECTION,
 		],
 	},
@@ -3946,59 +4016,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "泰山派剑法中最高深的绝艺，要旨不在右手剑招，而在左手的算数。左手不住屈指计算，算的是敌人所处方位、武功门派、身形长短、兵刃大小，以及日光所照高低等等，计算极为繁复，一经算准，挺剑击出，无不中的。",
 		"powers": [2, 5, 4, 3],
 		"starting_ki": 3,
+		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
 		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_AFTER_SUMMONED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{
-							"type": ACTION_REVEAL_HAND_CARDS,
-							"recipient": RECIPIENT_OPPONENT,
-							"filter": REVEAL_FILTER_REMEMBERED,
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_CARD_SUMMONED,
-						"conditions": [
-							{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-							{"type": CONDITION_TRIGGER_CARD_REVEALED_TO_SELF},
-						],
-						"actions": [{
-							"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
-							"ability": {
-								"modifiers": [{
-									"type": MODIFIER_DEFENDING_POWER_OVERRIDE,
-									"value": 0,
-								}],
-							},
-						}],
-					},
-				],
-			},
-			{
-				"triggers": [
-					{
-						"event": CARD_BEFORE_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-						"actions": [{"type": ACTION_PREVENT_TRIGGER_FLIP}],
-					},
-					{
-						"event": CARD_AFTER_FLIPPED,
-						"conditions": [{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-					{
-						"event": TRIGGER_START_OWNER_TURN,
-						"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
-						"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
-					},
-				],
-			},
+			DAIZONG_HAND_SUPPRESSION_ACTIVATION,
+			LAIHE_FLIP_PROTECTION,
 		],
 	},
 	&"TaiShan18Pan1": {
@@ -4961,7 +4982,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [2, 1, 1, 2],
 		"starting_ki": 1,
 		"abilities": [
-			HANBIN_LAST_KI_FLIP,
+			HANBIN_ZERO_KI_END_TURN_FLIP,
 			HANBIN_ACTIVATION,
 			HANBIN_AFTER_FLIP_GRANT,
 		],
@@ -5180,21 +5201,16 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合结束时，额外出一张牌。",
 		"flavor": "飞天狐狸家传的轻功绝技，纵上前去可连出六招，退回原处时一晃即回，这一瞬之间倏忽来去，竟似并未移动过身子。",
 		"powers": [3, 3, 3, 3],
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_END_OWNER_TURN,
-						"conditions": [
-							{"type": CONDITION_TURN_OWNER_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
-						],
-					},
-				],
-			},
-		],
+		"abilities": [{
+			"triggers": [{
+				"event": TRIGGER_END_OWNER_TURN,
+				"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+				"actions": [{
+					"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+					"amount": 1,
+				}],
+			}],
+		}],
 	},
 	&"KuiHua1": {
 		"id": &"KuiHua1",
@@ -5207,21 +5223,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "东方不败从《葵花宝典》中领悟的人生妙谛，天人化生，万物滋长。",
 		"powers": [-1, -1, -1, -1],
 		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
-		"abilities": [
-			{
-				"triggers": [
-					{
-						"event": TRIGGER_END_OWNER_TURN,
-						"conditions": [
-							{"type": CONDITION_TURN_OWNER_IS_SELF},
-						],
-						"actions": [
-							{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
-						],
-					},
-				],
-			},
-		],
+		"abilities": [KUIHUA_HEAVEN_HUMAN],
 	},
 	&"KuiHua2": {
 		"id": &"KuiHua2",
@@ -5757,6 +5759,13 @@ static func _validate_condition(
 		var threshold: Variant = condition.get("amount", null)
 		if typeof(threshold) != TYPE_INT or int(threshold) < 0:
 			errors.append("Card %s %s requires a non-negative integer ki_at_least amount" % [card_id, context_name])
+		if condition.has("inverted"):
+			allowed_keys.append(&"inverted")
+			if typeof(condition.get("inverted")) != TYPE_BOOL:
+				errors.append(
+					"Card %s %s ki_at_least condition requires a boolean inverted"
+					% [card_id, context_name]
+				)
 	if condition_type == CONDITION_TRIGGER_CARD_WEAPON:
 		allowed_keys.append(&"weapon")
 		var weapon_value: Variant = condition.get("weapon", null)
@@ -5873,11 +5882,14 @@ static func _validate_action(
 	if is_cost and action_type != ACTION_SPEND_KI:
 		errors.append("Card %s activation uses unsupported cost action %s" % [card_id, action_type])
 	var allowed_keys: Array[StringName] = [&"type", &"on_invalid_context"]
-	if action_type in [ACTION_DRAW_CARDS, ACTION_GAIN_KI, ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY]:
+	if action_type in [ACTION_DRAW_CARDS, ACTION_SPEND_KI, ACTION_GRANT_EXTRA_CARD_PLAY]:
 		allowed_keys.append(&"amount")
 		var amount: Variant = action.get("amount", null)
 		if typeof(amount) != TYPE_INT or int(amount) <= 0:
 			errors.append("Card %s %s action %s requires a positive integer amount" % [card_id, context_name, action_type])
+	if action_type == ACTION_GAIN_KI:
+		allowed_keys.append(&"amount")
+		_validate_ki_gain_amount(card_id, context_name, action.get("amount", null), errors)
 	if action_type == ACTION_DRAW_CARDS and action.has("weapon"):
 		allowed_keys.append(&"weapon")
 		var weapon: Variant = action.get("weapon", null)
@@ -5996,7 +6008,11 @@ static func _validate_action(
 				"Card %s %s action %s requires an integer value"
 				% [card_id, context_name, action_type]
 			)
-	if action_type in [ACTION_EXILE_CARD, ACTION_DISCARD_CARD]:
+	if action_type in [
+		ACTION_EXILE_CARD,
+		ACTION_DISCARD_CARD,
+		ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
+	]:
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
@@ -6175,10 +6191,13 @@ static func _validate_action(
 	if action_type == ACTION_TRANSFORM_CARD:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"card_id")
+		allowed_keys.append(&"preserve_powers")
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append("Card %s %s transform action requires a known card reference" % [card_id, context_name])
 		if StringName(action.get("card_id", &"")) not in ALL_CARD_IDS:
 			errors.append("Card %s %s transform action requires a known card_id" % [card_id, context_name])
+		if action.has("preserve_powers") and typeof(action.get("preserve_powers")) != TYPE_BOOL:
+			errors.append("Card %s %s transform action requires Boolean preserve_powers" % [card_id, context_name])
 	if action_type == ACTION_SUMMON_CARD:
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"cell")
@@ -6305,6 +6324,44 @@ static func _validate_power_change_amount(
 		if StringName(key) not in [&"type", &"zone", &"owner"]:
 			errors.append(
 				"Card %s %s power amount has unsupported field %s"
+				% [card_id, context_name, key]
+			)
+
+
+static func _validate_ki_gain_amount(
+	card_id: StringName,
+	context_name: String,
+	value: Variant,
+	errors: Array[String]
+) -> void:
+	if typeof(value) == TYPE_INT:
+		if int(value) <= 0:
+			errors.append(
+				"Card %s %s action %s requires a positive integer amount"
+				% [card_id, context_name, ACTION_GAIN_KI]
+			)
+		return
+	if not value is Dictionary:
+		errors.append(
+			"Card %s %s action %s requires a positive integer or value specification"
+			% [card_id, context_name, ACTION_GAIN_KI]
+		)
+		return
+	var spec: Dictionary = value
+	if StringName(spec.get("type", &"")) != VALUE_CARD_KI:
+		errors.append(
+			"Card %s %s ki amount uses an unknown value type"
+			% [card_id, context_name]
+		)
+	if StringName(spec.get("card", &"")) not in KNOWN_CARD_REFERENCES:
+		errors.append(
+			"Card %s %s card-ki value requires a known card reference"
+			% [card_id, context_name]
+		)
+	for key: Variant in spec.keys():
+		if StringName(key) not in [&"type", &"card"]:
+			errors.append(
+				"Card %s %s ki amount has unsupported field %s"
 				% [card_id, context_name, key]
 			)
 

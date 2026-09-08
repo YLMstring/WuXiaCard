@@ -462,37 +462,84 @@ func _test_activate_ability_declarations() -> void:
 
 
 func _test_trigger_ability_schema() -> void:
-	var definition: Dictionary = Catalog.get_definition(&"KuiHua1")
+	var definition: Dictionary = Catalog.get_definition(&"FeiTian5")
 	var abilities: Array = definition.get("abilities", [])
-	_check(abilities.size() == 1, "KuiHua1 declares one ability")
+	_check(abilities.size() == 1, "FeiTian5 declares one ability")
 	var ability: Dictionary = abilities[0]
-	_check(not ability.has("id"), "KuiHua1 ability is identity-free")
-	_check(not ability.has("retained_on_flip"), "KuiHua1 uses default non-retention")
+	_check(not ability.has("id"), "FeiTian5 ability is identity-free")
+	_check(not ability.has("retained_on_flip"), "FeiTian5 uses default non-retention")
 	var triggers: Array = ability.get("triggers", [])
-	_check(triggers.size() == 1, "KuiHua1 declares one trigger rule")
+	_check(triggers.size() == 1, "FeiTian5 declares one trigger rule")
 	_check(
 		StringName((triggers[0] as Dictionary).get("event", &""))
 		== Catalog.TRIGGER_END_OWNER_TURN,
-		"KuiHua1 reacts at end of its owner's turn"
+		"FeiTian5 reacts at end of its owner's turn"
 	)
 	_check(
 		(triggers[0] as Dictionary).get("conditions", []) == [
 			{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF},
 		],
-		"KuiHua1 uses the shared typed turn-owner condition"
+		"FeiTian5 uses the shared typed turn-owner condition"
 	)
 	_check(
 		(triggers[0] as Dictionary).get("actions", []) == [{
 			"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY,
 			"amount": 1,
 		}],
-		"KuiHua1 grants one extra card play"
+		"FeiTian5 grants one extra card play"
 	)
-	var instance: Dictionary = Catalog.create_instance(&"KuiHua1", 1, &"trigger_meng")
-	_check(int(instance.get("ki", -1)) == 0, "KuiHua1 starts with zero ki")
+	var instance: Dictionary = Catalog.create_instance(&"FeiTian5", 1, &"trigger_feitian")
+	_check(int(instance.get("ki", -1)) == 0, "FeiTian5 starts with zero ki")
 	var runtime_ability: Dictionary = (instance.get("active_abilities", []) as Array)[0]
-	_check(runtime_ability.has("retained_on_flip") and not bool(runtime_ability["retained_on_flip"]), "KuiHua1 normalizes to non-retained")
-	_check(Catalog.validate_ability(ability, &"KuiHua1_fixture").is_empty(), "Approved trigger schema passes validation")
+	_check(runtime_ability.has("retained_on_flip") and not bool(runtime_ability["retained_on_flip"]), "FeiTian5 normalizes to non-retained")
+	_check(Catalog.validate_ability(ability, &"FeiTian5_fixture").is_empty(), "Approved trigger schema passes validation")
+
+	var kuihua_ability: Dictionary = Catalog.get_definition(&"KuiHua1").get("abilities", [])[0]
+	var kuihua_trigger: Dictionary = (kuihua_ability.get("triggers", []) as Array)[0]
+	_check(
+		StringName(kuihua_trigger.get("event", &"")) == Catalog.TRIGGER_CARD_BEFORE_SUMMONED,
+		"KuiHua1 now uses the reusable before-summon return sequence"
+	)
+	_check(
+		Catalog.validate_ability(kuihua_ability, &"KuiHua1_fixture").is_empty(),
+		"KuiHua1's complete replacement declaration passes validation"
+	)
+	_check(
+		Catalog.VALUE_CARD_KI in Catalog.KNOWN_VALUE_TYPES
+		and Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES in Catalog.KNOWN_ACTIONS
+		and Catalog.CONDITION_SELECTED_CARD_REVEALED_TO_SELF in Catalog.KNOWN_ACTION_CONDITIONS,
+		"New generic value, action, and action condition are registered"
+	)
+	var new_primitive_fixture: Dictionary = {
+		"activation": {
+			"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+			"target_rule": Catalog.TARGET_ENEMY_HAND_CARD,
+			"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+			"actions": [
+				{
+					"type": Catalog.ACTION_GAIN_KI,
+					"amount": {
+						"type": Catalog.VALUE_CARD_KI,
+						"card": Catalog.CARD_REF_ABILITY_SOURCE,
+					},
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				},
+				{
+					"type": Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
+					"card": Catalog.CARD_REF_SELECTED_CARD,
+				},
+				{
+					"type": Catalog.ACTION_IF,
+					"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_REVEALED_TO_SELF}],
+					"actions": [{"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1}],
+				},
+			],
+		},
+	}
+	_check(
+		Catalog.validate_ability(new_primitive_fixture, &"new_primitive_fixture").is_empty(),
+		"Approved new generic primitives pass validation"
+	)
 
 	var invalid_abilities: Array[Dictionary] = [
 		{},
@@ -505,11 +552,13 @@ func _test_trigger_ability_schema() -> void:
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1.5}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": -1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
+		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1, "inverted": 1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1, "extra": true}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON, "weapon": ""}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON, "weapon": "术数", "inverted": 1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 0}]}]},
+		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": {"type": Catalog.VALUE_CARD_KI, "card": &"unknown"}}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": &"unknown"}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1, "extra": true}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_FLIPPED, "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1, "on_invalid_context": &"unknown"}]}]},

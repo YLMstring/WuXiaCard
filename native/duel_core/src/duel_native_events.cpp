@@ -190,6 +190,7 @@ bool DuelNativeCompactKernel::conditions_match(
 				break;
 			case ConditionOpcode::KI_AT_LEAST:
 				matched = value.card_ki[group.source_card_index] >= condition.amount;
+				if (condition.inverted) matched = !matched;
 				break;
 			case ConditionOpcode::KI_CHANGED_CARD_IS_SELF:
 				matched = context.trigger_card_index == group.source_card_index && context.trigger_cell == group.source_cell;

@@ -109,6 +109,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
 		DISCARD_OWNER_IS_SELF,
+		SELECTED_CARD_REVEALED_TO_SELF,
 		UNSUPPORTED,
 	};
 
@@ -147,6 +148,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		GRANT_EXTRA_CARD_PLAY,
 		ADD_PENDING_NON_RETAINED_SUPPRESSION,
 		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
+		PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
 		ENABLE_FUTURE_DRAW_REVEAL,
 		SUMMON_CARD,
 		RESUMMON_CARD_IN_PLACE,
@@ -314,10 +316,13 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t amount = 0;
 		bool amount_is_hand_count = false;
 		RelativeOwnerOpcode amount_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		bool amount_is_card_ki = false;
+		CardRefOpcode amount_card_ref = CardRefOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode new_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		RelativeOwnerOpcode recipient_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		int32_t granted_ability_index = -1;
 		bool preserve_instance = false;
+		bool preserve_powers = false;
 		bool repeat_attack = false;
 		bool target_policy_specified = false;
 		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
@@ -1252,7 +1257,6 @@ private:
 		int32_t &logical_index
 	) const;
 	bool card_declarations_can_spend_ki(const NativeState &value, int32_t card_index) const;
-	bool card_is_heart_method(const NativeState &value, int32_t card_index) const;
 	bool action_declarations_can_spend_ki(const Variant &value) const;
 	ActionOutcome change_powers(
 		NativeState &value,
@@ -1426,6 +1430,13 @@ private:
 		int32_t card_index,
 		int32_t owner_id,
 		int32_t cell
+	) const;
+	ActionOutcome permanently_remove_non_retained_abilities(
+		NativeState &value,
+		int32_t card_index,
+		int32_t source_card_index,
+		int32_t source_cell,
+		Resolution &resolution
 	) const;
 	ActionOutcome temporarily_remove_non_retained_abilities(
 		NativeState &value,
