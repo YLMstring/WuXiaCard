@@ -5202,9 +5202,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "江湖",
 		"tier": 5,
 		"weapon": "心法",
-		"description": "需自宫。回合结束时，额外出一张牌。",
+		"description": "需自宫。进场前，将我移除，抽一张牌。将对手上一张从手牌中打出的牌从场上移回其手牌，将你上一张从手牌中打出的牌从场上移回你的手牌，然后额外出一张牌。",
 		"flavor": "东方不败从《葵花宝典》中领悟的人生妙谛，天人化生，万物滋长。",
-		"powers": [3, 3, 3, 3],
+		"powers": [-1, -1, -1, -1],
 		"effect_gate": EFFECT_GATE_SELF_CASTRATION,
 		"abilities": [
 			{
