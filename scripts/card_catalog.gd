@@ -3925,7 +3925,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "泰山派",
 		"tier": 4,
 		"weapon": "重剑",
-		"description": "进场后，揭示所有敌方手牌以及后续抽到的牌。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
+		"description": "对局开始时，揭示所有敌方手牌。我翻面前，阻止翻面，敌方翻面后或回合开始时，失去此效果。若你携带我进入对局，那么你行动时，可以按下左侧回放按钮进行悔棋。（无论我在哪里）",
 		"flavor": "泰山派剑法，弯腰出剑，形如仙鹤饮水。",
 		"powers": [4, 4, 6, 6],
 		"main_deck_effects": [MAIN_DECK_EFFECT_UNDO_LAST_PLAYER_DECISION],
