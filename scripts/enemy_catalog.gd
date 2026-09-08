@@ -76,7 +76,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"bailu_shanzhang3", "name": "笑傲江湖·令狐冲", "level": 14, "deck": [&"YouFenLaiYi4", &"DuGu9Jian1", &"DuGu9Jian2", &"YiJJ5", &"HenShanJianZhen4"]},
 	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"DuGu9Jian1", &"DuGu9Jian2", &"DuGu9Jian3", &"DuGu9Jian1", &"CangSongYingKe4"]},
 	{"id": &"wulin_sanren3", "name": "无名老僧", "level": 15, "sect_id": &"ShaoLinPai", "deck": [&"YiKongDaoDi4", &"SanRuDiYu2", &"JinGangBuHuai4", &"JinGangBuHuai4", &"JinGangBuHuai4"]},
-	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"]},
+	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua1"]},
 	{"id": &"wulin_sanren2", "name": "张三丰", "level": 15, "sect_id": &"WuDangPai", "deck": [&"TaiJiLuanHuan5", &"TaiJiYinYang5", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"DuGu9Jian1"]},
 ]
 
