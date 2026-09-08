@@ -609,6 +609,88 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	using HistoryTable = std::unordered_map<HistoryKey, int32_t, HistoryKeyHash>;
 
+	enum class TransitionTimingBucket : uint8_t {
+		OTHER,
+		STATE_COPY,
+		EVENT_DISCOVERY,
+		EVENT_DISPATCH,
+		ACTION_EFFECTS,
+		RESOLUTION_MERGE,
+		ATTACK_RESOLUTION,
+		SUMMON_RESOLUTION,
+		TURN_FINISH,
+		COUNT,
+	};
+
+	struct TransitionTimingContext {
+		using Clock = std::chrono::steady_clock;
+		std::array<int64_t, static_cast<size_t>(TransitionTimingBucket::COUNT)> elapsed_nsec = {};
+		std::array<int64_t, static_cast<size_t>(TransitionTimingBucket::COUNT)> entries = {};
+		std::array<TransitionTimingBucket, 1024> parent_buckets = {};
+		size_t parent_depth = 0;
+		TransitionTimingBucket current_bucket = TransitionTimingBucket::OTHER;
+		Clock::time_point segment_started;
+
+		void begin() {
+			parent_depth = 0;
+			current_bucket = TransitionTimingBucket::OTHER;
+			segment_started = Clock::now();
+		}
+
+		void enter(TransitionTimingBucket bucket) {
+			account_current_segment();
+			if (parent_depth < parent_buckets.size()) {
+				parent_buckets[parent_depth] = current_bucket;
+				parent_depth += 1;
+			}
+			current_bucket = bucket;
+			entries[static_cast<size_t>(bucket)] += 1;
+		}
+
+		void leave() {
+			account_current_segment();
+			if (parent_depth == 0) {
+				current_bucket = TransitionTimingBucket::OTHER;
+				return;
+			}
+			parent_depth -= 1;
+			current_bucket = parent_buckets[parent_depth];
+		}
+
+		void finish() {
+			account_current_segment();
+		}
+
+		int64_t total_nsec() const {
+			int64_t total = 0;
+			for (const int64_t elapsed : elapsed_nsec) total += elapsed;
+			return total;
+		}
+
+	private:
+		void account_current_segment() {
+			const Clock::time_point now = Clock::now();
+			elapsed_nsec[static_cast<size_t>(current_bucket)] +=
+				std::chrono::duration_cast<std::chrono::nanoseconds>(now - segment_started).count();
+			segment_started = now;
+		}
+	};
+
+	struct ScopedTransitionTiming {
+		TransitionTimingContext *context = nullptr;
+
+		ScopedTransitionTiming(
+			TransitionTimingContext *context_value,
+			TransitionTimingBucket bucket
+		) : context(context_value) {
+			if (context != nullptr) context->enter(bucket);
+		}
+
+		~ScopedTransitionTiming() {
+			if (context != nullptr) context->leave();
+		}
+	};
+
 	struct NativeSearchStats {
 		int64_t nodes = 0;
 		int64_t leaves = 0;
@@ -617,7 +699,11 @@ class DuelNativeCompactKernel : public RefCounted {
 		int64_t applied_transitions = 0;
 		int64_t time_legal_actions_usec = 0;
 		int64_t time_order_usec = 0;
-		int64_t time_apply_usec = 0;
+		int64_t time_apply_nsec = 0;
+		std::array<int64_t, static_cast<size_t>(TransitionTimingBucket::COUNT)>
+			time_apply_bucket_nsec = {};
+		std::array<int64_t, static_cast<size_t>(TransitionTimingBucket::COUNT)>
+			time_apply_bucket_entries = {};
 		int64_t time_evaluate_usec = 0;
 		int64_t time_key_usec = 0;
 		int64_t ordered_nodes = 0;
@@ -669,6 +755,18 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool supported = true;
 		StringName stop_reason;
 		String reason;
+
+		int64_t apply_usec() const {
+			return time_apply_nsec / 1000;
+		}
+
+		int64_t apply_bucket_usec(TransitionTimingBucket bucket) const {
+			return time_apply_bucket_nsec[static_cast<size_t>(bucket)] / 1000;
+		}
+
+		int64_t apply_bucket_entries(TransitionTimingBucket bucket) const {
+			return time_apply_bucket_entries[static_cast<size_t>(bucket)];
+		}
 	};
 
 	struct NativeSearchLimits {
@@ -710,6 +808,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	String last_error;
 	// Search keeps semantic event skeletons but omits UI-only nested payloads.
 	mutable bool include_presentation_payloads = true;
+	mutable TransitionTimingContext *active_transition_timing = nullptr;
+	bool diagnostic_disable_aura_queries = false;
 
 protected:
 	static void _bind_methods();
@@ -718,6 +818,7 @@ public:
 	bool load_compact_payload(const Dictionary &payload);
 	bool is_loaded() const;
 	String get_last_error() const;
+	void set_diagnostic_disable_aura_queries(bool disabled);
 	Dictionary inspect_layout() const;
 	Dictionary benchmark_core_clone(int64_t iterations) const;
 	Dictionary apply_play_transition(
@@ -832,6 +933,10 @@ public:
 	) const;
 
 private:
+	void write_apply_timing_diagnostics(
+		Dictionary &destination,
+		const NativeSearchStats &stats
+	) const;
 	int32_t find_card_by_instance_id(
 		const NativeState &value,
 		const StringName &instance_id
@@ -926,7 +1031,8 @@ private:
 		Resolution &resolution,
 		bool &supported,
 		String &reason,
-		bool materialize_presentation_payloads = true
+		bool materialize_presentation_payloads = true,
+		NativeSearchStats *search_stats = nullptr
 	) const;
 	bool transition_play(
 		const NativeState &source,

@@ -472,6 +472,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests,
 	std::vector<int32_t> &exile_stack
 ) const {
+	ScopedTransitionTiming timing(
+		active_transition_timing,
+		TransitionTimingBucket::TURN_FINISH
+	);
 	Resolution resolution;
 	if (
 		played_card_index >= 0

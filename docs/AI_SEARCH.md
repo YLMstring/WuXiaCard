@@ -149,6 +149,16 @@ ordering or same-turn principal-line restoration.
 High-frequency timing and ordering counters are gated by
 `collect_search_diagnostics`, which defaults to `false`. Enabling diagnostics
 is for node-limited probes only and must not be used for production timing.
+The apply timer accumulates nanoseconds internally and reports exclusive
+microsecond buckets for state copying, event discovery, event dispatch,
+compiled action effects, resolution merging, attack resolution, summon
+resolution, turn finishing, and uncategorized transition work. The reported
+bucket times add back to `time_apply_usec` apart from final integer rounding;
+the accompanying call counts distinguish an expensive operation from a merely
+frequent one. Nested work is charged only to its innermost bucket, so an attack
+that dispatches an event does not count the event time twice. These scopes are
+entered only when diagnostics are enabled; ordinary production search performs
+no clock reads.
 The same switch can count transposition opportunities without changing search
 results: an exact key combines the complete native-state checksum with remaining
 owner-turn boundaries; a stricter reusable hit requires that an earlier visit
@@ -249,6 +259,18 @@ powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1 -Configurat
 
 A `Debug + template_debug` library is valid for correctness debugging but is
 roughly half-speed here and must not be compared with Release benchmark data.
+
+The 2026-09-08 first schema-5 timing probe sampled three real Quick openings
+at 5,000 nodes each with production PV/history/8 MiB TT. Of 4,464,711 measured
+apply microseconds, exclusive attack resolution used `46.85%`, event discovery
+`37.42%`, turn finishing `6.77%`, uncategorized transition work `3.37%`, and
+isolated state copying only `3.11%`; every other bucket was below one percent.
+The 14,998 transitions performed 108,747 event discoveries, about 7.25 per
+transition. Because the diagnostic clock scopes intentionally add overhead,
+these figures rank hotspots but are not an ordinary nodes-per-second result.
+They make attack resolution and repeated event discovery the next profiling
+targets, while simple child-state buffer reuse has a low measured ceiling on
+this sample.
 
 The 2026-09-03 four-opening `self_turn` ordering evaluation used the same real
 Quick fixtures and ten-second budget. The optimized final candidate (cached

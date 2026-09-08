@@ -1093,6 +1093,23 @@ func _test_native_search_diagnostics_contract() -> void:
 		"time_legal_actions_usec",
 		"time_order_usec",
 		"time_apply_usec",
+		"time_apply_other_usec",
+		"time_apply_state_copy_usec",
+		"time_apply_event_discovery_usec",
+		"time_apply_event_dispatch_usec",
+		"time_apply_action_effects_usec",
+		"time_apply_resolution_merge_usec",
+		"time_apply_attack_resolution_usec",
+		"time_apply_summon_resolution_usec",
+		"time_apply_turn_finish_usec",
+		"apply_state_copy_count",
+		"apply_event_discovery_count",
+		"apply_event_dispatch_count",
+		"apply_action_effects_count",
+		"apply_resolution_merge_count",
+		"apply_attack_resolution_count",
+		"apply_summon_resolution_count",
+		"apply_turn_finish_count",
 		"time_evaluate_usec",
 		"time_key_usec",
 		"ordered_nodes",
@@ -1123,6 +1140,28 @@ func _test_native_search_diagnostics_contract() -> void:
 	]:
 		_check(int(reference.get(field, -1)) == 0, "Disabled diagnostics keep %s at zero" % field)
 		_check(int(diagnostic.get(field, -1)) >= 0, "Enabled diagnostics expose nonnegative %s" % field)
+	var apply_bucket_sum: int = 0
+	for field: String in [
+		"time_apply_other_usec",
+		"time_apply_state_copy_usec",
+		"time_apply_event_discovery_usec",
+		"time_apply_event_dispatch_usec",
+		"time_apply_action_effects_usec",
+		"time_apply_resolution_merge_usec",
+		"time_apply_attack_resolution_usec",
+		"time_apply_summon_resolution_usec",
+		"time_apply_turn_finish_usec",
+	]:
+		apply_bucket_sum += int(diagnostic.get(field, 0))
+	_check(
+		absi(apply_bucket_sum - int(diagnostic.get("time_apply_usec", 0))) <= 9,
+		"Exclusive apply timing buckets add back to the nanosecond-accumulated total"
+	)
+	_check(
+		int(diagnostic.get("apply_state_copy_count", -1))
+		== int(diagnostic.get("applied_transitions", -2)),
+		"Every measured transition records exactly one isolated state copy"
+	)
 	_check(int(diagnostic.get("ordered_nodes", 0)) > 0, "Enabled diagnostics count ordered nodes")
 	_check(int(diagnostic.get("visited_children", 0)) > 0, "Enabled diagnostics count visited children")
 	var transposition_probes: int = int(diagnostic.get("transposition_probes", -1))

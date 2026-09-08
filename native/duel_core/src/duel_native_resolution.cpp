@@ -8,6 +8,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 	const AttackRequest &request,
 	std::vector<int32_t> &exile_stack
 ) const {
+	ScopedTransitionTiming timing(
+		active_transition_timing,
+		TransitionTimingBucket::ATTACK_RESOLUTION
+	);
 	Resolution resolution;
 	const int32_t initial_attack_cell = find_board_card(
 		value,
@@ -303,6 +307,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 	const SummonRequest &request,
 	std::vector<int32_t> &exile_stack
 ) const {
+	ScopedTransitionTiming timing(
+		active_transition_timing,
+		TransitionTimingBucket::SUMMON_RESOLUTION
+	);
 	Resolution resolution;
 	const std::vector<int32_t> summon_attack_redirect_sources = (
 		request.attack_redirect_snapshot_taken

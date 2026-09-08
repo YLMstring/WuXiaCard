@@ -403,7 +403,18 @@ The creator has made several direct UI and localization edits. Preserve those ed
   with final priority `PV > transposition move > structural > history >
   canonical`. Strict history priority was rejected
   because it reduced real-opening depth-two completion. Timing/cutoff counters
-  remain behind the default-off `collect_search_diagnostics` switch. The
+  remain behind the default-off `collect_search_diagnostics` switch. The apply
+  path now uses nested exclusive nanosecond scopes for state copying, event
+  discovery/dispatch, compiled effects, resolution merging, attack, summon,
+  turn finishing, and uncategorized work. Opening-profile schema 5 serializes
+  both elapsed microseconds and call counts for those buckets; their times add
+  back to the total apply time without nested double counting. Diagnostics
+  remain deliberately unsuitable for ordinary throughput claims. The first
+  three-opening/15,000-node schema-5 probe attributed `46.85%` of apply time to
+  attack resolution, `37.42%` to event discovery, `6.77%` to turn finishing,
+  and only `3.11%` to state copying. This makes attack/event discovery the next
+  profiling target and lowers the expected value of simple child-state buffer
+  reuse. The
   2026-09-03 four-opening `self_turn` evaluation reached `11666.0` nodes/s
   versus the phase baseline's `10130.05` (`+15.2%`), retained 2/4 completed
   depth-two openings, and reduced the two incomplete linear estimates to

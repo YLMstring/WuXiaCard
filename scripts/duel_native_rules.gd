@@ -415,6 +415,11 @@ static func search_iterative(
 		return _search_integration_failure(
 			"Native compact payload load failed: %s" % String(kernel.call("get_last_error"))
 		)
+	var diagnostic_disable_aura_queries: bool = bool(
+		limits.get("diagnostic_disable_aura_queries", false)
+	)
+	if diagnostic_disable_aura_queries:
+		kernel.call("set_diagnostic_disable_aura_queries", true)
 
 	var budget_usec: int = 0
 	var deadline_usec: int = int(limits.get("deadline_usec", 0))
@@ -452,6 +457,7 @@ static func search_iterative(
 		bool(limits.get("include_danger_evaluation", false)),
 		bool(limits.get("include_tempo_evaluation", false))
 	) as Dictionary
+	native_result["diagnostic_aura_queries_disabled"] = diagnostic_disable_aura_queries
 	if not bool(native_result.get("supported", false)):
 		return _search_integration_failure(
 			"Native search does not support the reachable tree: %s"

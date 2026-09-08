@@ -367,6 +367,7 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 			}
 		}
 	}
+	if (diagnostic_disable_aura_queries) return groups;
 	for (size_t recipient_cell = 0; recipient_cell < value.board_card_indices.size(); ++recipient_cell) {
 		const int32_t recipient_card = value.board_card_indices[recipient_cell];
 		if (recipient_card < 0) continue;
@@ -462,16 +463,27 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 	const EventContext &context,
 	std::vector<int32_t> &exile_stack
 ) const {
+	ScopedTransitionTiming event_timing(
+		active_transition_timing,
+		TransitionTimingBucket::EVENT_DISPATCH
+	);
 	Resolution resolution;
 	bool discovery_supported = true;
 	String discovery_reason;
-	const std::vector<EventGroup> groups = discover_event(
-		value,
-		event_id,
-		context,
-		discovery_supported,
-		discovery_reason
-	);
+	std::vector<EventGroup> groups;
+	{
+		ScopedTransitionTiming discovery_timing(
+			active_transition_timing,
+			TransitionTimingBucket::EVENT_DISCOVERY
+		);
+		groups = discover_event(
+			value,
+			event_id,
+			context,
+			discovery_supported,
+			discovery_reason
+		);
+	}
 	if (!discovery_supported) {
 		resolution.supported = false;
 		resolution.reason = discovery_reason;

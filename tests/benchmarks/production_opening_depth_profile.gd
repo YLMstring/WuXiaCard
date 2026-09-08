@@ -38,6 +38,9 @@ func _run() -> void:
 	var collect_transposition_diagnostics: bool = bool(
 		options.get("collect_transposition_diagnostics", false)
 	)
+	var diagnostic_disable_aura_queries: bool = bool(
+		options.get("diagnostic_disable_aura_queries", false)
+	)
 	var openings: Array[Dictionary] = _build_unique_openings(opening_set)
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
@@ -97,10 +100,11 @@ func _run() -> void:
 		use_internal_pv_ordering,
 		use_history_ordering,
 		use_transposition_table,
-		transposition_table_mib
+		transposition_table_mib,
+		diagnostic_disable_aura_queries
 	)
 	var report: Dictionary = {
-		"schema_version": 4,
+		"schema_version": 5,
 		"created_unix_time": int(Time.get_unix_time_from_system()),
 		"fixture_version": EnemyManifest.VERSION,
 		"configuration": {
@@ -122,6 +126,7 @@ func _run() -> void:
 			"use_transposition_table": use_transposition_table,
 			"transposition_table_mib": transposition_table_mib,
 			"collect_transposition_diagnostics": collect_transposition_diagnostics,
+			"diagnostic_disable_aura_queries": diagnostic_disable_aura_queries,
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
@@ -444,6 +449,23 @@ func _record_depth_progress(progress: Dictionary) -> void:
 		"time_legal_actions_usec": int(progress.get("time_legal_actions_usec", 0)),
 		"time_order_usec": int(progress.get("time_order_usec", 0)),
 		"time_apply_usec": int(progress.get("time_apply_usec", 0)),
+		"time_apply_other_usec": int(progress.get("time_apply_other_usec", 0)),
+		"time_apply_state_copy_usec": int(progress.get("time_apply_state_copy_usec", 0)),
+		"time_apply_event_discovery_usec": int(progress.get("time_apply_event_discovery_usec", 0)),
+		"time_apply_event_dispatch_usec": int(progress.get("time_apply_event_dispatch_usec", 0)),
+		"time_apply_action_effects_usec": int(progress.get("time_apply_action_effects_usec", 0)),
+		"time_apply_resolution_merge_usec": int(progress.get("time_apply_resolution_merge_usec", 0)),
+		"time_apply_attack_resolution_usec": int(progress.get("time_apply_attack_resolution_usec", 0)),
+		"time_apply_summon_resolution_usec": int(progress.get("time_apply_summon_resolution_usec", 0)),
+		"time_apply_turn_finish_usec": int(progress.get("time_apply_turn_finish_usec", 0)),
+		"apply_state_copy_count": int(progress.get("apply_state_copy_count", 0)),
+		"apply_event_discovery_count": int(progress.get("apply_event_discovery_count", 0)),
+		"apply_event_dispatch_count": int(progress.get("apply_event_dispatch_count", 0)),
+		"apply_action_effects_count": int(progress.get("apply_action_effects_count", 0)),
+		"apply_resolution_merge_count": int(progress.get("apply_resolution_merge_count", 0)),
+		"apply_attack_resolution_count": int(progress.get("apply_attack_resolution_count", 0)),
+		"apply_summon_resolution_count": int(progress.get("apply_summon_resolution_count", 0)),
+		"apply_turn_finish_count": int(progress.get("apply_turn_finish_count", 0)),
 		"time_evaluate_usec": int(progress.get("time_evaluate_usec", 0)),
 		"time_key_usec": int(progress.get("time_key_usec", 0)),
 		"ordered_nodes": int(progress.get("ordered_nodes", 0)),
@@ -494,7 +516,8 @@ func _run_timing_probes(
 	use_internal_pv_ordering: bool,
 	use_history_ordering: bool,
 	use_transposition_table: bool,
-	transposition_table_mib: int
+	transposition_table_mib: int,
+	diagnostic_disable_aura_queries: bool
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
@@ -521,6 +544,7 @@ func _run_timing_probes(
 			"use_history_ordering": use_history_ordering,
 			"use_transposition_table": use_transposition_table,
 			"transposition_table_mib": transposition_table_mib,
+			"diagnostic_disable_aura_queries": diagnostic_disable_aura_queries,
 		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
 			state.duplicate_state(), state.active_player, timing_limits
@@ -533,14 +557,36 @@ func _run_timing_probes(
 			+ int(profile_result.get("time_key_usec", 0))
 			+ int(profile_result.get("time_evaluate_usec", 0))
 		)
+		var selected_action: Action = profile_result.get("action") as Action
 		result.append({
 			"game_id": String(opening.get("game_id", &"missing")),
+			"diagnostic_aura_queries_disabled": diagnostic_disable_aura_queries,
+			"completed_depth": int(profile_result.get("completed_depth", 0)),
+			"score": int(profile_result.get("score", 0)),
+			"action_key": selected_action.canonical_key() if selected_action != null else "",
 			"node_limit": TIMING_NODE_LIMIT,
 			"nodes": int(profile_result.get("nodes", 0)),
 			"elapsed_seconds": float(profile_result.get("elapsed_seconds", 0.0)),
 			"time_legal_actions_usec": int(profile_result.get("time_legal_actions_usec", 0)),
 			"time_order_usec": int(profile_result.get("time_order_usec", 0)),
 			"time_apply_usec": int(profile_result.get("time_apply_usec", 0)),
+			"time_apply_other_usec": int(profile_result.get("time_apply_other_usec", 0)),
+			"time_apply_state_copy_usec": int(profile_result.get("time_apply_state_copy_usec", 0)),
+			"time_apply_event_discovery_usec": int(profile_result.get("time_apply_event_discovery_usec", 0)),
+			"time_apply_event_dispatch_usec": int(profile_result.get("time_apply_event_dispatch_usec", 0)),
+			"time_apply_action_effects_usec": int(profile_result.get("time_apply_action_effects_usec", 0)),
+			"time_apply_resolution_merge_usec": int(profile_result.get("time_apply_resolution_merge_usec", 0)),
+			"time_apply_attack_resolution_usec": int(profile_result.get("time_apply_attack_resolution_usec", 0)),
+			"time_apply_summon_resolution_usec": int(profile_result.get("time_apply_summon_resolution_usec", 0)),
+			"time_apply_turn_finish_usec": int(profile_result.get("time_apply_turn_finish_usec", 0)),
+			"apply_state_copy_count": int(profile_result.get("apply_state_copy_count", 0)),
+			"apply_event_discovery_count": int(profile_result.get("apply_event_discovery_count", 0)),
+			"apply_event_dispatch_count": int(profile_result.get("apply_event_dispatch_count", 0)),
+			"apply_action_effects_count": int(profile_result.get("apply_action_effects_count", 0)),
+			"apply_resolution_merge_count": int(profile_result.get("apply_resolution_merge_count", 0)),
+			"apply_attack_resolution_count": int(profile_result.get("apply_attack_resolution_count", 0)),
+			"apply_summon_resolution_count": int(profile_result.get("apply_summon_resolution_count", 0)),
+			"apply_turn_finish_count": int(profile_result.get("apply_turn_finish_count", 0)),
 			"time_key_usec": int(profile_result.get("time_key_usec", 0)),
 			"time_evaluate_usec": int(profile_result.get("time_evaluate_usec", 0)),
 			"ordered_nodes": int(profile_result.get("ordered_nodes", 0)),
@@ -673,12 +719,47 @@ func _summarize(
 	var timing_probe_nodes: int = 0
 	var timing_probe_elapsed_seconds: float = 0.0
 	var timing_probe_key_usec: int = 0
+	var timing_probe_apply_usec: int = 0
+	var timing_probe_apply_breakdown_usec: Dictionary = {}
+	var timing_probe_apply_counts: Dictionary = {}
+	var apply_timing_usec_fields: Array[String] = [
+		"time_apply_other_usec",
+		"time_apply_state_copy_usec",
+		"time_apply_event_discovery_usec",
+		"time_apply_event_dispatch_usec",
+		"time_apply_action_effects_usec",
+		"time_apply_resolution_merge_usec",
+		"time_apply_attack_resolution_usec",
+		"time_apply_summon_resolution_usec",
+		"time_apply_turn_finish_usec",
+	]
+	var apply_timing_count_fields: Array[String] = [
+		"apply_state_copy_count",
+		"apply_event_discovery_count",
+		"apply_event_dispatch_count",
+		"apply_action_effects_count",
+		"apply_resolution_merge_count",
+		"apply_attack_resolution_count",
+		"apply_summon_resolution_count",
+		"apply_turn_finish_count",
+	]
 	for timing_sample: Dictionary in timing_samples:
 		timing_probe_nodes += int(timing_sample.get("nodes", 0))
 		timing_probe_elapsed_seconds += float(
 			timing_sample.get("elapsed_seconds", 0.0)
 		)
 		timing_probe_key_usec += int(timing_sample.get("time_key_usec", 0))
+		timing_probe_apply_usec += int(timing_sample.get("time_apply_usec", 0))
+		for field: String in apply_timing_usec_fields:
+			timing_probe_apply_breakdown_usec[field] = (
+				int(timing_probe_apply_breakdown_usec.get(field, 0))
+				+ int(timing_sample.get(field, 0))
+			)
+		for field: String in apply_timing_count_fields:
+			timing_probe_apply_counts[field] = (
+				int(timing_probe_apply_counts.get(field, 0))
+				+ int(timing_sample.get(field, 0))
+			)
 	return {
 		"depth_unit": String(depth_mode),
 		"depth_mode": String(depth_mode),
@@ -776,6 +857,9 @@ func _summarize(
 		"timing_probe_nodes": timing_probe_nodes,
 		"timing_probe_elapsed_seconds": timing_probe_elapsed_seconds,
 		"timing_probe_key_usec": timing_probe_key_usec,
+		"timing_probe_apply_usec": timing_probe_apply_usec,
+		"timing_probe_apply_breakdown_usec": timing_probe_apply_breakdown_usec,
+		"timing_probe_apply_counts": timing_probe_apply_counts,
 		"timing_probe_key_usec_per_node": (
 			float(timing_probe_key_usec) / float(timing_probe_nodes)
 			if timing_probe_nodes > 0
@@ -841,6 +925,7 @@ func _parse_options() -> Dictionary:
 		"use_transposition_table": false,
 		"transposition_table_mib": 8,
 		"collect_transposition_diagnostics": false,
+		"diagnostic_disable_aura_queries": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -878,4 +963,6 @@ func _parse_options() -> Dictionary:
 			)
 		elif argument == "--collect-transposition-diagnostics":
 			result["collect_transposition_diagnostics"] = true
+		elif argument == "--diagnostic-disable-aura-queries":
+			result["diagnostic_disable_aura_queries"] = true
 	return result

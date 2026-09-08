@@ -3,6 +3,64 @@
 namespace godot {
 using namespace duel_native_internal;
 
+void DuelNativeCompactKernel::write_apply_timing_diagnostics(
+	Dictionary &destination,
+	const NativeSearchStats &stats
+) const {
+	destination["time_apply_usec"] = stats.apply_usec();
+	destination["time_apply_other_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::OTHER
+	);
+	destination["time_apply_state_copy_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::STATE_COPY
+	);
+	destination["time_apply_event_discovery_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::EVENT_DISCOVERY
+	);
+	destination["time_apply_event_dispatch_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::EVENT_DISPATCH
+	);
+	destination["time_apply_action_effects_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::ACTION_EFFECTS
+	);
+	destination["time_apply_resolution_merge_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::RESOLUTION_MERGE
+	);
+	destination["time_apply_attack_resolution_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::ATTACK_RESOLUTION
+	);
+	destination["time_apply_summon_resolution_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::SUMMON_RESOLUTION
+	);
+	destination["time_apply_turn_finish_usec"] = stats.apply_bucket_usec(
+		TransitionTimingBucket::TURN_FINISH
+	);
+	destination["apply_state_copy_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::STATE_COPY
+	);
+	destination["apply_event_discovery_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::EVENT_DISCOVERY
+	);
+	destination["apply_event_dispatch_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::EVENT_DISPATCH
+	);
+	destination["apply_action_effects_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::ACTION_EFFECTS
+	);
+	destination["apply_resolution_merge_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::RESOLUTION_MERGE
+	);
+	destination["apply_attack_resolution_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::ATTACK_RESOLUTION
+	);
+	destination["apply_summon_resolution_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::SUMMON_RESOLUTION
+	);
+	destination["apply_turn_finish_count"] = stats.apply_bucket_entries(
+		TransitionTimingBucket::TURN_FINISH
+	);
+}
+
 Array DuelNativeCompactKernel::get_legal_actions_for_owner(int64_t owner_id_value) const {
 	Array actions;
 	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
@@ -1388,9 +1446,6 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		Resolution resolution;
 		bool transition_supported = false;
 		String transition_reason;
-		const auto apply_started = collect_diagnostics
-			? std::chrono::steady_clock::now()
-			: std::chrono::steady_clock::time_point();
 		if (!transition_action(
 			value,
 			action,
@@ -1398,18 +1453,14 @@ int32_t DuelNativeCompactKernel::search_minimax(
 			resolution,
 			transition_supported,
 			transition_reason,
-			false
+			false,
+			collect_diagnostics ? &stats : nullptr
 		)) {
 			stats.supported = false;
 			stats.reason = transition_reason.is_empty()
 				? String("Native search reached an invalid transition")
 				: transition_reason;
 			return 0;
-		}
-		if (collect_diagnostics) {
-			stats.time_apply_usec += std::chrono::duration_cast<std::chrono::microseconds>(
-				std::chrono::steady_clock::now() - apply_started
-			).count();
 		}
 		stats.applied_transitions += 1;
 		const int32_t completed_owner_turns = std::max(
@@ -1736,6 +1787,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["time_apply_usec"] = 0;
 	result["time_evaluate_usec"] = 0;
 	result["time_key_usec"] = 0;
+	const NativeSearchStats empty_timing_stats;
+	write_apply_timing_diagnostics(result, empty_timing_stats);
 	result["ordered_nodes"] = 0;
 	result["visited_children"] = 0;
 	result["cutoff_first_child"] = 0;
@@ -1974,9 +2027,6 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 			Resolution resolution;
 			bool transition_supported = false;
 			String transition_reason;
-			const auto root_apply_started = collect_search_diagnostics
-				? std::chrono::steady_clock::now()
-				: std::chrono::steady_clock::time_point();
 			if (!transition_action(
 				state,
 				action,
@@ -1984,18 +2034,14 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 				resolution,
 				transition_supported,
 				transition_reason,
-				false
+				false,
+				collect_search_diagnostics ? &stats : nullptr
 			)) {
 				stats.supported = false;
 				stats.reason = transition_reason.is_empty()
 					? String("Native search reached an invalid root transition")
 					: transition_reason;
 				break;
-			}
-			if (collect_search_diagnostics) {
-				stats.time_apply_usec += std::chrono::duration_cast<std::chrono::microseconds>(
-					std::chrono::steady_clock::now() - root_apply_started
-				).count();
 			}
 			stats.applied_transitions += 1;
 			const int32_t completed_owner_turns = std::max(
@@ -2065,7 +2111,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		snapshot["cutoffs"] = stats.cutoffs;
 		snapshot["time_legal_actions_usec"] = stats.time_legal_actions_usec;
 		snapshot["time_order_usec"] = stats.time_order_usec;
-		snapshot["time_apply_usec"] = stats.time_apply_usec;
+		write_apply_timing_diagnostics(snapshot, stats);
 		snapshot["time_evaluate_usec"] = stats.time_evaluate_usec;
 		snapshot["time_key_usec"] = stats.time_key_usec;
 		snapshot["ordered_nodes"] = stats.ordered_nodes;
@@ -2226,7 +2272,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	result["applied_transitions"] = stats.applied_transitions;
 	result["time_legal_actions_usec"] = stats.time_legal_actions_usec;
 	result["time_order_usec"] = stats.time_order_usec;
-	result["time_apply_usec"] = stats.time_apply_usec;
+	write_apply_timing_diagnostics(result, stats);
 	result["time_evaluate_usec"] = stats.time_evaluate_usec;
 	result["time_key_usec"] = stats.time_key_usec;
 	result["ordered_nodes"] = stats.ordered_nodes;

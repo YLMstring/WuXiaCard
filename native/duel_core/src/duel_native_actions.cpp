@@ -1389,6 +1389,10 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	Resolution &resolution,
 	bool defer_power_change_batch
 ) const {
+	ScopedTransitionTiming timing(
+		active_transition_timing,
+		TransitionTimingBucket::ACTION_EFFECTS
+	);
 	ActionExecutionState execution_state;
 	execution_state.current_source_cell = group.source_cell;
 	return execute_actions_with_state(

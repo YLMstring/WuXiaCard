@@ -245,6 +245,7 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 	ModifierOpcode opcode,
 	int32_t *out_value
 ) const {
+	if (diagnostic_disable_aura_queries) return false;
 	bool found = false;
 	auto selector_contains_zone = [](const CompiledSelector &selector, int32_t candidate_zone) {
 		const SelectorZoneOpcode expected = candidate_zone == 0
@@ -783,6 +784,10 @@ void DuelNativeCompactKernel::append_resolution(
 	Resolution &destination,
 	const Resolution &addition
 ) const {
+	ScopedTransitionTiming timing(
+		active_transition_timing,
+		TransitionTimingBucket::RESOLUTION_MERGE
+	);
 	if (!addition.supported) {
 		destination.supported = false;
 		if (destination.reason.is_empty()) destination.reason = addition.reason;

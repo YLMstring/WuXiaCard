@@ -10,6 +10,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 	);
 	ClassDB::bind_method(D_METHOD("is_loaded"), &DuelNativeCompactKernel::is_loaded);
 	ClassDB::bind_method(D_METHOD("get_last_error"), &DuelNativeCompactKernel::get_last_error);
+	ClassDB::bind_method(
+		D_METHOD("set_diagnostic_disable_aura_queries", "disabled"),
+		&DuelNativeCompactKernel::set_diagnostic_disable_aura_queries
+	);
 	ClassDB::bind_method(D_METHOD("inspect_layout"), &DuelNativeCompactKernel::inspect_layout);
 	ClassDB::bind_method(
 		D_METHOD("benchmark_core_clone", "iterations"),
@@ -436,6 +440,10 @@ String DuelNativeCompactKernel::get_last_error() const {
 	return last_error;
 }
 
+void DuelNativeCompactKernel::set_diagnostic_disable_aura_queries(bool disabled) {
+	diagnostic_disable_aura_queries = disabled;
+}
+
 Dictionary DuelNativeCompactKernel::inspect_layout() const {
 	Dictionary result;
 	result["loaded"] = loaded;
@@ -609,9 +617,15 @@ bool DuelNativeCompactKernel::transition_play(
 		reason = "Expected instance ID does not match the hand card";
 		return false;
 	}
-	next = source;
-	next.board_slot_extras = source.board_slot_extras.duplicate(true);
-	next.side_payload = source.side_payload.duplicate(true);
+	{
+		ScopedTransitionTiming timing(
+			active_transition_timing,
+			TransitionTimingBucket::STATE_COPY
+		);
+		next = source;
+		next.board_slot_extras = source.board_slot_extras.duplicate(true);
+		next.side_payload = source.side_payload.duplicate(true);
+	}
 	if (next.scalars[5] > 0) {
 		next.scalars[13] = 1;
 		next.scalars[5] -= 1;
@@ -1266,9 +1280,15 @@ bool DuelNativeCompactKernel::transition_activate(
 		selected_card_index = source.zones[selected_card_owner - 1][target_index];
 	}
 
-	next = source;
-	next.board_slot_extras = source.board_slot_extras.duplicate(true);
-	next.side_payload = source.side_payload.duplicate(true);
+	{
+		ScopedTransitionTiming timing(
+			active_transition_timing,
+			TransitionTimingBucket::STATE_COPY
+		);
+		next = source;
+		next.board_slot_extras = source.board_slot_extras.duplicate(true);
+		next.side_payload = source.side_payload.duplicate(true);
+	}
 	resolution = Resolution();
 	std::vector<int32_t> exile_stack;
 	Dictionary activated;
@@ -1397,9 +1417,16 @@ bool DuelNativeCompactKernel::transition_action(
 	Resolution &resolution,
 	bool &supported,
 	String &reason,
-	bool materialize_presentation_payloads
+	bool materialize_presentation_payloads,
+	NativeSearchStats *search_stats
 ) const {
 	const bool previous_include_presentation_payloads = include_presentation_payloads;
+	TransitionTimingContext timing_context;
+	TransitionTimingContext *previous_transition_timing = active_transition_timing;
+	if (search_stats != nullptr) {
+		timing_context.begin();
+		active_transition_timing = &timing_context;
+	}
 	include_presentation_payloads = materialize_presentation_payloads;
 	bool valid = false;
 	if (action.type == NativeActionType::PLAY) {
@@ -1408,6 +1435,15 @@ bool DuelNativeCompactKernel::transition_action(
 		valid = transition_activate(source, action, next, resolution, supported, reason);
 	}
 	include_presentation_payloads = previous_include_presentation_payloads;
+	if (search_stats != nullptr) {
+		timing_context.finish();
+		search_stats->time_apply_nsec += timing_context.total_nsec();
+		for (size_t bucket = 0; bucket < timing_context.elapsed_nsec.size(); ++bucket) {
+			search_stats->time_apply_bucket_nsec[bucket] += timing_context.elapsed_nsec[bucket];
+			search_stats->time_apply_bucket_entries[bucket] += timing_context.entries[bucket];
+		}
+	}
+	active_transition_timing = previous_transition_timing;
 	return valid;
 }
 
