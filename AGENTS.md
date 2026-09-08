@@ -43,6 +43,15 @@ Never implement a historical plan merely because it exists. Confirm that it stil
 - Activating any ability costs one ki. Ki is independent state and survives ownership flips.
 - Abilities are lost on flip unless the catalog ability explicitly sets `retained_on_flip = true`.
 - New abilities must emit pure-data events for presentation and must be covered by simulator tests before UI work.
+- Card and primitive design must account for AI hot-path cost. Cross-card effects,
+  hand/discard/removed-zone abilities, auras, modifiers, targeting rules, and
+  global event discovery must have a cheap impossibility guard or indexed
+  lookup; do not add an unconditional all-card or all-zone scan to a query that
+  runs once or many times per search transition.
+- Report any repeatable performance regression to the user immediately, before
+  continuing feature work or attempting to hide it inside later optimization.
+  Include the comparable baseline, current measurement, configuration, affected
+  hotspot, and whether actions/scores/search traversal still match.
 
 ## Player-Visible Invariants
 
@@ -65,7 +74,9 @@ For a new card or ability:
 4. Add transition events.
 5. Add controller presentation.
 6. Add integration coverage.
-7. Run all test suites and play the production path.
+7. If the change expands a rules hot path, run a same-fixture fixed-node Release
+   comparison and report any repeatable regression immediately.
+8. Run all test suites and play the production path.
 
 For a bug:
 

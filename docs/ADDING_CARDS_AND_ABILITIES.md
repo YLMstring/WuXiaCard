@@ -81,6 +81,36 @@ an affected card's composition must also be shown when their ordering matters.
 Non-card systems such as progression unlocks should instead document their exact
 ordered data flow and must not invent catalog primitives.
 
+## Performance Gate
+
+Card design is also search-engine design: the simulator can resolve a card's
+generic rules thousands of times during one AI decision. A global scan that is
+negligible in one visible play can dominate a fixed-depth search.
+
+When adding or extending a primitive, explicitly review whether it changes any
+of these hot paths:
+
+- event discovery across board, hand, discard, or removed zones;
+- modifier and derived-aura lookup;
+- attack-target and power-comparison queries;
+- legal-action enumeration;
+- runtime-state copying, hashing, or transposition keys.
+
+Cross-card, cross-zone, and aura systems must provide a cheap way to reject
+impossible queries before scanning runtime cards. Prefer compiled declaration
+capability summaries, event/modifier masks, or maintained state indexes. Do not
+make every modifier or event query search every zone merely because one card
+could theoretically use the new mechanism.
+
+If a catalog or primitive change expands one of these paths, compare it with the
+latest relevant passing baseline using the same C++ Release build, fixture,
+state digest, node/depth limit, and search options. Confirm actions, scores, and
+traversal counters when the comparison is intended to be semantically neutral.
+Any repeatable regression must be reported to the user immediately with the raw
+numbers and suspected cause, before additional feature work continues. Pure
+text, art, and ordinary card-data edits do not require a benchmark unless they
+activate a new generic hot path.
+
 ## Card Families and Progression Unlocks
 
 Cards form an unlock family when both `glyph` and `sect` match. Whenever a card

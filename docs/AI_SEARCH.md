@@ -159,6 +159,15 @@ frequent one. Nested work is charged only to its innermost bucket, so an attack
 that dispatches an event does not count the event time twice. These scopes are
 entered only when diagnostics are enabled; ordinary production search performs
 no clock reads.
+
+Performance regression reporting is a required development gate. A repeatable
+regression found in a same-configuration comparison must be reported to the
+user immediately, before more feature work, even when correctness tests pass.
+The report must identify the baseline and candidate artifacts, build type,
+fixtures and limits, magnitude, dominant timing bucket, and whether chosen
+actions, scores, depths, visited nodes, and transposition outcomes still match.
+Do not postpone disclosure until a later cleanup or optimization pass.
+
 The same switch can count transposition opportunities without changing search
 results: an exact key combines the complete native-state checksum with remaining
 owner-turn boundaries; a stricter reusable hit requires that an earlier visit
@@ -271,6 +280,18 @@ these figures rank hotspots but are not an ordinary nodes-per-second result.
 They make attack resolution and repeated event discovery the next profiling
 targets, while simple child-state buffer reuse has a low measured ceiling on
 this sample.
+
+A subsequent derived-aura ablation used the same three real Quick openings,
+5,000 nodes per opening, production PV/history/8 MiB TT, and the same Release
+binary. The normal path took `5.239s`; diagnostically disabling only derived
+aura modifier/event queries took `1.849s`, a `64.70%` reduction or `2.83x`
+speedup. Apply time fell `69.33%`, exclusive attack time `89.09%`, and event
+discovery `69.86%`, while turn finishing was essentially unchanged. All three
+pairs had the same action, score, completed depth, visited nodes, event/attack
+counts, and TT outcomes. This isolates unconditional aura scanning as the
+dominant regression. The disabling switch is diagnostic-only and cannot become
+production behavior; production must instead skip only event/modifier kinds
+that compiled catalog summaries prove no aura can grant.
 
 The 2026-09-03 four-opening `self_turn` ordering evaluation used the same real
 Quick fixtures and ten-second budget. The optimized final candidate (cached

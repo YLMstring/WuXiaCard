@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-07
+Updated: 2026-09-08
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -420,6 +420,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
   depth-two openings, and reduced the two incomplete linear estimates to
   `15.20s` and `10.60s`. Use `Release + template_debug` native builds for
   performance comparisons; `Debug + template_debug` is about half-speed.
+- A derived-aura ablation on three real Quick openings at 5,000 nodes each took
+  `5.239s` normally versus `1.849s` with only derived-aura queries
+  diagnostically disabled (`2.83x`; apply `-69.33%`, attack `-89.09%`, event
+  discovery `-69.86%`). Actions, scores, depths, traversal counts, and TT
+  outcomes matched. The temporary switch must not ship as gameplay behavior;
+  replace unconditional aura scans with compiled catalog capability summaries
+  that skip only impossible aura event/modifier kinds. Repository policy now
+  requires hot-path review during card design and immediate reporting of every
+  repeatable performance regression.
 - Native transposition opportunity diagnostics are available through
   `CollectTranspositionDiagnostics` on the opening profile. The 2026-09-04 four
   extra-play-cap openings produced 333,262 previously completed exact-key hits
