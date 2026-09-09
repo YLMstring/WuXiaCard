@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_entry_double_flip_still_cancels_standard_attack()
 	_test_xixing_later_attack_targets_all_while_beiming_does_not()
 	_test_standard_attack_stops_after_mid_chain_double_flip()
+	_test_yijin_four_strengthens_then_draws_without_return_effect()
 	_test_yijin_strengthens_then_draws_and_repeats_on_return()
 	_finish()
 
@@ -46,7 +47,7 @@ func _test_catalog_vocabulary_and_declarations() -> void:
 		Catalog.MODIFIER_SELF_ATTACKS_ALL in Catalog.KNOWN_MODIFIERS,
 		"Self-indiscriminate attack modifier is registered"
 	)
-	for card_id: StringName in [&"XiXinDaFa4", &"XiXinDaFa5", &"YiJJ5"]:
+	for card_id: StringName in [&"XiXinDaFa4", &"XiXinDaFa5", &"YiJJ4", &"YiJJ5"]:
 		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
 		_check(not abilities.is_empty(), "%s declares complete abilities" % card_id)
 		for ability_value: Variant in abilities:
@@ -62,6 +63,10 @@ func _test_catalog_vocabulary_and_declarations() -> void:
 	_check(
 		(Catalog.get_definition(&"XiXinDaFa5").get("abilities", []) as Array).size() == 2,
 		"BeiMing omits only XiXin's locked self-attack modifier"
+	)
+	_check(
+		(Catalog.get_definition(&"YiJJ4").get("abilities", []) as Array).size() == 1,
+		"YiJin four declares only its entrance ability"
 	)
 	_check(
 		(Catalog.get_definition(&"YiJJ5").get("abilities", []) as Array).size() == 2,
@@ -614,6 +619,77 @@ func _test_standard_attack_stops_after_mid_chain_double_flip() -> void:
 				_event_types(result.get("events", [])),
 			]
 		)
+	)
+
+
+func _test_yijin_four_strengthens_then_draws_without_return_effect() -> void:
+	var yijin: Dictionary = Catalog.create_instance(
+		&"YiJJ4",
+		Rules.PLAYER_OWNER,
+		&"yijin_four_source"
+	)
+	var sentinel: Dictionary = _plain(
+		&"yijin_four_sentinel",
+		[-1, -1, -1, -1],
+		Rules.PLAYER_OWNER
+	)
+	var ordinary: Dictionary = _plain(
+		&"yijin_four_ordinary",
+		[2, 2, 2, 2],
+		Rules.PLAYER_OWNER
+	)
+	var first_draw: Dictionary = _plain(
+		&"yijin_four_draw",
+		[4, 4, 4, 4],
+		Rules.PLAYER_OWNER
+	)
+	var reserve: Dictionary = _plain(
+		&"yijin_four_reserve",
+		[5, 5, 5, 5],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			Rules.empty_board(),
+			[yijin, sentinel, ordinary],
+			[],
+			Rules.PLAYER_OWNER,
+			0,
+			[first_draw, reserve]
+		),
+		Action.make_play(0, 4, &"yijin_four_source")
+	)
+	var state: State = transition.get("state") as State
+	sentinel = _runtime_card(state, &"yijin_four_sentinel")
+	ordinary = _runtime_card(state, &"yijin_four_ordinary")
+	first_draw = _runtime_card(state, &"yijin_four_draw")
+	_check(
+		sentinel.get("powers", []) == [-1, -1, -1, -1]
+		and int(sentinel.get("ki", -1)) == 1
+		and ordinary.get("powers", []) == [3, 3, 3, 3]
+		and int(ordinary.get("ki", -1)) == 1
+		and first_draw.get("powers", []) == [4, 4, 4, 4]
+		and int(first_draw.get("ki", -1)) == 0,
+		"YiJin four strengthens existing hand cards before drawing"
+	)
+	Simulator.resolve_non_attack_flip(
+		state,
+		&"yijin_four_source",
+		Rules.OPPONENT_OWNER,
+		&"yijin_four_away"
+	)
+	Simulator.resolve_non_attack_flip(
+		state,
+		&"yijin_four_source",
+		Rules.PLAYER_OWNER,
+		&"yijin_four_return"
+	)
+	_check(
+		ordinary.get("powers", []) == [3, 3, 3, 3]
+		and int(ordinary.get("ki", -1)) == 1
+		and state.get_hand(Rules.PLAYER_OWNER).size() == 3
+		and (state.decks.get(Rules.PLAYER_OWNER, []) as Array).size() == 1,
+		"YiJin four has no return-to-original-owner effect"
 	)
 
 

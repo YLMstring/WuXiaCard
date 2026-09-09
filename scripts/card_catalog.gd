@@ -1324,8 +1324,18 @@ const WUXIANG_LOCKED_ATTACK_AFTER_DISCARD_BATCH: Dictionary = {
 	"retained_on_flip": true,
 	"triggers": [{
 		"event": TRIGGER_DISCARD_BATCH_FINISHED,
-		"conditions": [{"type": CONDITION_DISCARD_OWNER_IS_SELF}],
-		"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+		"conditions": [
+			{"type": CONDITION_DISCARD_OWNER_IS_SELF},
+			{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+		],
+		"actions": [
+			{
+				"type": ACTION_SPEND_KI,
+				"amount": 1,
+				"on_invalid_context": STOP_RULE,
+			},
+			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+		],
 	}],
 }
 

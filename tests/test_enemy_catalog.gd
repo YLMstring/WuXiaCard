@@ -20,6 +20,16 @@ func _run() -> void:
 		"Dongfang Bubai and Zhang Sanfeng are normal enemies"
 	)
 	_check_benchmark_roster()
+	_check(
+		Catalog.get_definition(&"tingchao_zhuren2").get("deck", []) == [
+			&"YiKongDaoDi4",
+			&"YiJJ4",
+			&"SanRuDiYu1",
+			&"WuXiangJieZhi3",
+			&"LiJingRuLai4",
+		],
+		"Xuanci uses the approved tier-four YiJin and tier-three WuXiang deck"
+	)
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
 	var observed_decks: Dictionary = {}
 	var observed_enemy_ids: Dictionary = {}

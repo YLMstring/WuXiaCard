@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_ranmu_three_buffs_only_after_a_real_attack()
 	_test_wuxiang_activation_attacks_after_discard_before_draw()
 	_test_wuxiang_four_attacks_once_after_a_batch()
+	_test_wuxiang_four_skips_paid_attack_without_ki()
 	_test_multiple_wuxiang_sources_resolve_row_major()
 	_test_lijing_four_locks_and_discards_two_as_one_batch()
 	if _failures == 0:
@@ -230,6 +231,10 @@ func _test_wuxiang_activation_attacks_after_discard_before_draw() -> void:
 		and _event_index(events, &"attack_started") < _event_index(events, &"card_drawn"),
 		"WuXiang completes discard-batch reactions before its activation draw"
 	)
+	_check(
+		int(_board_card(transition.get("state") as State, &"wuxiang_activate").get("ki", -1)) == 1,
+		"WuXiang pays separately for its activation and post-discard attack"
+	)
 
 
 func _test_wuxiang_four_attacks_once_after_a_batch() -> void:
@@ -252,6 +257,48 @@ func _test_wuxiang_four_attacks_once_after_a_batch() -> void:
 		_last_event_index(events, &"card_discarded") < _event_index(events, &"attack_started"),
 		"WuXiang waits until every locked discard has completed"
 	)
+	_check(
+		int(_board_card(transition.get("state") as State, &"wuxiang_watcher").get("ki", -1)) == 2,
+		"WuXiang spends one ki for the single batch attack"
+	)
+
+
+func _test_wuxiang_four_skips_paid_attack_without_ki() -> void:
+	var wuxiang: Dictionary = Catalog.create_instance(
+		&"WuXiangJieZhi4",
+		Rules.PLAYER_OWNER,
+		&"wuxiang_empty_ki"
+	)
+	wuxiang["ki"] = 0
+	var yikong: Dictionary = Catalog.create_instance(
+		&"YiKongDaoDi4",
+		Rules.PLAYER_OWNER,
+		&"wuxiang_empty_ki_yikong"
+	)
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(wuxiang, Rules.PLAYER_OWNER)
+	board[8] = _slot(_plain(&"wuxiang_empty_ki_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[yikong, _plain(&"wuxiang_empty_ki_discard", Rules.PLAYER_OWNER)],
+			[],
+			Rules.PLAYER_OWNER
+		),
+		Action.make_play(0, 4, &"wuxiang_empty_ki_yikong")
+	)
+	_check(
+		_event_count(transition.get("events", []), &"card_discarded") == 1,
+		"Zero-ki fixture still completes its discard batch"
+	)
+	_check(
+		_event_count(transition.get("events", []), &"attack_started") == 0
+		and int(_board_card(
+			transition.get("state") as State,
+			&"wuxiang_empty_ki"
+		).get("ki", -1)) == 0,
+		"WuXiang cannot launch its paid post-discard attack without ki"
+	)
 
 
 func _test_multiple_wuxiang_sources_resolve_row_major() -> void:
@@ -271,6 +318,12 @@ func _test_multiple_wuxiang_sources_resolve_row_major() -> void:
 	for event: Dictionary in _events_of_type(transition.get("events", []), &"attack_started"):
 		attacking_sources.append(StringName(event.get("source_instance_id", &"")))
 	_check(attacking_sources == [&"wuxiang_first", &"wuxiang_second"], "Multiple WuXiang discard reactions resolve in board row-major order")
+	var next_state: State = transition.get("state") as State
+	_check(
+		int(_board_card(next_state, &"wuxiang_first").get("ki", -1)) == 2
+		and int(_board_card(next_state, &"wuxiang_second").get("ki", -1)) == 2,
+		"Each WuXiang source pays for its own row-major discard reaction"
+	)
 
 
 func _test_lijing_four_locks_and_discards_two_as_one_batch() -> void:
