@@ -824,7 +824,6 @@ class DuelNativeCompactKernel : public RefCounted {
 	// Search keeps semantic event skeletons but omits UI-only nested payloads.
 	mutable bool include_presentation_payloads = true;
 	mutable TransitionTimingContext *active_transition_timing = nullptr;
-	bool diagnostic_disable_aura_queries = false;
 
 protected:
 	static void _bind_methods();
@@ -833,7 +832,6 @@ public:
 	bool load_compact_payload(const Dictionary &payload);
 	bool is_loaded() const;
 	String get_last_error() const;
-	void set_diagnostic_disable_aura_queries(bool disabled);
 	Dictionary inspect_layout() const;
 	Dictionary benchmark_core_clone(int64_t iterations) const;
 	Dictionary apply_play_transition(

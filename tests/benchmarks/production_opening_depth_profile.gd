@@ -38,9 +38,6 @@ func _run() -> void:
 	var collect_transposition_diagnostics: bool = bool(
 		options.get("collect_transposition_diagnostics", false)
 	)
-	var diagnostic_disable_aura_queries: bool = bool(
-		options.get("diagnostic_disable_aura_queries", false)
-	)
 	var openings: Array[Dictionary] = _build_unique_openings(opening_set)
 	if max_openings > 0 and openings.size() > max_openings:
 		openings.resize(max_openings)
@@ -100,8 +97,7 @@ func _run() -> void:
 		use_internal_pv_ordering,
 		use_history_ordering,
 		use_transposition_table,
-		transposition_table_mib,
-		diagnostic_disable_aura_queries
+		transposition_table_mib
 	)
 	var report: Dictionary = {
 		"schema_version": 5,
@@ -126,7 +122,6 @@ func _run() -> void:
 			"use_transposition_table": use_transposition_table,
 			"transposition_table_mib": transposition_table_mib,
 			"collect_transposition_diagnostics": collect_transposition_diagnostics,
-			"diagnostic_disable_aura_queries": diagnostic_disable_aura_queries,
 		},
 		"summary": _summarize(samples, timing_samples, budget_seconds, depth_mode),
 		"openings": samples,
@@ -516,8 +511,7 @@ func _run_timing_probes(
 	use_internal_pv_ordering: bool,
 	use_history_ordering: bool,
 	use_transposition_table: bool,
-	transposition_table_mib: int,
-	diagnostic_disable_aura_queries: bool
+	transposition_table_mib: int
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if openings.is_empty():
@@ -544,7 +538,6 @@ func _run_timing_probes(
 			"use_history_ordering": use_history_ordering,
 			"use_transposition_table": use_transposition_table,
 			"transposition_table_mib": transposition_table_mib,
-			"diagnostic_disable_aura_queries": diagnostic_disable_aura_queries,
 		}
 		var profile_result: Dictionary = Search.find_best_action_iterative(
 			state.duplicate_state(), state.active_player, timing_limits
@@ -560,7 +553,6 @@ func _run_timing_probes(
 		var selected_action: Action = profile_result.get("action") as Action
 		result.append({
 			"game_id": String(opening.get("game_id", &"missing")),
-			"diagnostic_aura_queries_disabled": diagnostic_disable_aura_queries,
 			"completed_depth": int(profile_result.get("completed_depth", 0)),
 			"score": int(profile_result.get("score", 0)),
 			"action_key": selected_action.canonical_key() if selected_action != null else "",
@@ -925,7 +917,6 @@ func _parse_options() -> Dictionary:
 		"use_transposition_table": false,
 		"transposition_table_mib": 8,
 		"collect_transposition_diagnostics": false,
-		"diagnostic_disable_aura_queries": false,
 	}
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("--budget-seconds="):
@@ -963,6 +954,4 @@ func _parse_options() -> Dictionary:
 			)
 		elif argument == "--collect-transposition-diagnostics":
 			result["collect_transposition_diagnostics"] = true
-		elif argument == "--diagnostic-disable-aura-queries":
-			result["diagnostic_disable_aura_queries"] = true
 	return result

@@ -414,7 +414,6 @@ DuelNativeCompactKernel::get_legal_native_actions(
 		|| value.zones.size() < 2
 	) return actions;
 	auto apply_opponent_cell_restrictions = [&]() {
-		if (diagnostic_disable_aura_queries) return;
 		bool restricted_cells[9] = {false, false, false, false, false, false, false, false, false};
 		const int32_t restricting_owner = other_owner(owner_id);
 		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[restricting_owner - 1]) {

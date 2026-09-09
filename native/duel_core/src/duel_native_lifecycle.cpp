@@ -398,19 +398,21 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 	if (value.scalars[1] >= value.scalars[7]) {
 		return true;
 	}
-	const Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
-	Dictionary counts;
-	for (int64_t index = 0; index < repetition_hashes.size(); ++index) {
-		const String signature = repetition_hashes[index];
-		const int64_t count = static_cast<int64_t>(counts.get(signature, 0)) + 1;
-		if (count >= 5) {
-			return true;
-		}
-		counts[signature] = count;
-	}
 	if (std::find(value.board_card_indices.begin(), value.board_card_indices.end(), -1)
 		== value.board_card_indices.end()) {
 		return true;
+	}
+	const Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
+	if (repetition_hashes.size() >= 5) {
+		Dictionary counts;
+		for (int64_t index = 0; index < repetition_hashes.size(); ++index) {
+			const String signature = repetition_hashes[index];
+			const int64_t count = static_cast<int64_t>(counts.get(signature, 0)) + 1;
+			if (count >= 5) {
+				return true;
+			}
+			counts[signature] = count;
+		}
 	}
 	return !owner_has_legal_action(value, 1) && !owner_has_legal_action(value, 2);
 }
@@ -599,7 +601,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;
 	value.scalars[OPPONENT_SPECIAL_SUMMONS_SCALAR] = 0;
 	Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
-	repetition_hashes = repetition_hashes.duplicate(true);
+	repetition_hashes = repetition_hashes.duplicate(false);
 	repetition_hashes.append(board_repetition_signature(value));
 	value.side_payload["repetition_hashes"] = repetition_hashes;
 	return resolution;

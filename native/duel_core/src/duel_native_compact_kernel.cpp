@@ -10,10 +10,6 @@ void DuelNativeCompactKernel::_bind_methods() {
 	);
 	ClassDB::bind_method(D_METHOD("is_loaded"), &DuelNativeCompactKernel::is_loaded);
 	ClassDB::bind_method(D_METHOD("get_last_error"), &DuelNativeCompactKernel::get_last_error);
-	ClassDB::bind_method(
-		D_METHOD("set_diagnostic_disable_aura_queries", "disabled"),
-		&DuelNativeCompactKernel::set_diagnostic_disable_aura_queries
-	);
 	ClassDB::bind_method(D_METHOD("inspect_layout"), &DuelNativeCompactKernel::inspect_layout);
 	ClassDB::bind_method(
 		D_METHOD("benchmark_core_clone", "iterations"),
@@ -517,10 +513,6 @@ bool DuelNativeCompactKernel::is_loaded() const {
 
 String DuelNativeCompactKernel::get_last_error() const {
 	return last_error;
-}
-
-void DuelNativeCompactKernel::set_diagnostic_disable_aura_queries(bool disabled) {
-	diagnostic_disable_aura_queries = disabled;
 }
 
 Dictionary DuelNativeCompactKernel::inspect_layout() const {

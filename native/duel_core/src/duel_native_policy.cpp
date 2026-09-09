@@ -245,7 +245,6 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 	ModifierOpcode opcode,
 	int32_t *out_value
 ) const {
-	if (diagnostic_disable_aura_queries) return false;
 	bool found = false;
 	auto selector_contains_zone = [](const CompiledSelector &selector, int32_t candidate_zone) {
 		const SelectorZoneOpcode expected = candidate_zone == 0

@@ -289,9 +289,23 @@ speedup. Apply time fell `69.33%`, exclusive attack time `89.09%`, and event
 discovery `69.86%`, while turn finishing was essentially unchanged. All three
 pairs had the same action, score, completed depth, visited nodes, event/attack
 counts, and TT outcomes. This isolates unconditional aura scanning as the
-dominant regression. The disabling switch is diagnostic-only and cannot become
-production behavior; production must instead skip only event/modifier kinds
-that compiled catalog summaries prove no aura can grant.
+dominant regression. That temporary switch was removed after the ablation;
+production instead skips only event/modifier kinds that compiled catalog
+summaries prove no aura can grant.
+
+The five-repeat terminal scan was also measured with a temporary diagnostic
+ablation that skipped only counting existing board signatures inside the
+terminal query; turn boundaries still recorded signatures, and every other
+terminal rule remained enabled. On 2026-09-09, six interleaved
+Release runs over the same three real Quick openings at 5,000 nodes each gave a
+median total of `1.355s` with the scan and `1.199s` without it (`11.53%`
+faster). Median exclusive turn-finishing time fell from `288.60ms` to
+`235.27ms` (`18.48%`). All 18 paired timing probes matched in action, score,
+nodes, applied transitions, event discoveries, attack resolutions, and visited
+children. One of the six pairs still moved backward by `1.94%`, so the total
+figure includes ordinary machine noise; the stable turn-finishing reduction is
+the stronger evidence that the scan is worth optimizing without removing the
+rule. The temporary ablation switch was removed after measurement.
 
 The 2026-09-03 four-opening `self_turn` ordering evaluation used the same real
 Quick fixtures and ten-second budget. The optimized final candidate (cached

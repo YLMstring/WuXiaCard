@@ -430,8 +430,8 @@ The creator has made several direct UI and localization edits. Preserve those ed
   15,000-node probe on 2026-09-09 took `1.318s` normally versus `1.323s` with
   aura queries disabled. The `-0.4%` difference is measurement noise, while
   normal runtime is about `74.8%` faster than the retired implementation.
-  The diagnostic switch remains default-off and benchmark-only; it must never
-  change production gameplay. Repository policy requires hot-path review
+  The temporary diagnostic switch was removed after this measurement.
+  Repository policy requires hot-path review
   during card design and immediate reporting of every repeatable regression.
 - Native transposition opportunity diagnostics are available through
   `CollectTranspositionDiagnostics` on the opening profile. The 2026-09-04 four

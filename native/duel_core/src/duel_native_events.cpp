@@ -364,7 +364,6 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 			if (!supported) return groups;
 		}
 	}
-	if (diagnostic_disable_aura_queries) return groups;
 	for (int32_t aura_owner = 1; aura_owner <= 2; ++aura_owner) {
 		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[aura_owner - 1]) {
 			if (
