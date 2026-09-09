@@ -67,7 +67,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"wuying_ke", "name": "左冷禅", "level": 10, "sect_id": &"SongShanPai", "deck": [&"WanYueChaoZong4", &"DaSongYangZhang4", &"HanBinZhenQi4", &"TianWaiYuLong3", &"TuNaShu3"]},
 	{"id": &"wuying_ke2", "name": "空闻", "level": 10, "deck": [&"JinGangBuHuai4", &"BaoCanShouQue4", &"FuMoQuan4", &"LiJingRuLai4", &"RanMuDaoFa3"]},
 	{"id": &"tingchao_zhuren", "name": "俞莲舟", "level": 11, "deck": [&"TaiJiLuanHuan4", &"HuZhuaJueHuSHou4", &"HuZhuaJueHuSHou4", &"TiYunZong4", &"WuDangMianZhang3"]},
-	{"id": &"tingchao_zhuren2", "name": "玄慈", "level": 11, "deck": [&"YiKongDaoDi4", &"YiJJ5", &"SanRuDiYu1", &"WuXiangJieZhi4", &"LiJingRuLai4"]},
+	{"id": &"tingchao_zhuren2", "name": "玄慈", "level": 11, "deck": [&"YiKongDaoDi4", &"YiJJ4", &"SanRuDiYu1", &"WuXiangJieZhi3", &"LiJingRuLai4"]},
 	{"id": &"chisha_menzhu", "name": "复仇者·林平之", "level": 12, "deck": [&"YouFenLaiYi3", &"KuiHua4", &"KuiHua3", &"CangSongYingKe3", &"ZiXiaGong2"]},
 	{"id": &"chisha_menzhu2", "name": "冲虚", "level": 12, "deck": [&"TiYunZong4", &"RaoZhiRouJian4", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"ShenMen13Jian3"]},
 	{"id": &"chisha_menzhu3", "name": "方证", "level": 12, "deck": [&"YiJJ5", &"QianShouRuLai5", &"BaoCanShouQue4", &"NianhuaWeiXiao4", &"JinGangBuHuai4"]},
