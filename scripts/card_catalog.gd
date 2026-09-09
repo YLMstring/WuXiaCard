@@ -3260,10 +3260,10 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "少林派",
 		"tier": 4,
 		"weapon": "指法",
-		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，抽一张牌，然后额外出一张牌。锁定：你弃牌后，我发起攻击。",
+		"description": "锁定：我的攻击范围无限，攻击与我不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。锁定：我攻击时，改为只攻击场上首个我能攻击的敌方。锁定，指定：选择一张手牌并丢弃，抽一张牌，然后额外出一张牌。锁定：你弃牌后，我耗内力以发起攻击。",
 		"flavor": "少林寺七十二绝技之一，指力从衣袖中暗暗发出，全无形迹。",
 		"powers": [6, 6, 2, 2],
-		"starting_ki": 2,
+		"starting_ki": 3,
 		"abilities": [
 			LOCKED_FIRST_LEGAL_UNLIMITED_ATTACK,
 			WUXIANG_LOCKED_DISCARD_ACTIVATION,
