@@ -402,8 +402,8 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 		== value.board_card_indices.end()) {
 		return true;
 	}
-	const Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
-	if (repetition_hashes.size() >= 5) {
+	if (value.scalars[1] >= 5) {
+		const Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 		Dictionary counts;
 		for (int64_t index = 0; index < repetition_hashes.size(); ++index) {
 			const String signature = repetition_hashes[index];
