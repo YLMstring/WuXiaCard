@@ -3,6 +3,9 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块实现通用动作原语及其组合执行流程。
+// 卡牌效果必须编译为这些原语，不能在这里按具体卡牌编号分支。
+
 bool DuelNativeCompactKernel::draw_cards(
 	NativeState &value,
 	int32_t owner_id,
@@ -13,6 +16,8 @@ bool DuelNativeCompactKernel::draw_cards(
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 抽牌逐张执行：每张牌进入固定空手牌槽后立即发出 CARD_AFTER_DRAWN，
+	// 因而前一张牌的触发可以改变下一张实际抽到的牌。
 	if (owner_id != 1 && owner_id != 2) return true;
 	std::vector<int32_t> &hand = value.zones[owner_id - 1];
 	std::vector<int32_t> &deck = value.zones[owner_id + 1];
@@ -45,6 +50,7 @@ bool DuelNativeCompactKernel::draw_cards(
 			card_index = deck.front();
 			deck.erase(deck.begin());
 		} else {
+			// 牌库为空时不是“抽不到”，而是创建目录指定的太祖长拳新实例。
 			if (
 				empty_deck_draw_prototype_index < 0
 				|| empty_deck_draw_prototype_index
@@ -141,6 +147,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::discard_locked_c
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 批量弃牌先锁定实例，再逐张弃置并结算各自触发；这样前一张牌改变手牌
+	// 排列后，后续目标仍是原先选中的实例，而不是新的最左侧牌。
 	execution_state.last_discard_batch_size = 0;
 	struct DiscardRecord {
 		int32_t card_index = -1;
@@ -565,6 +573,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::temporarily_remo
 	int32_t source_cell,
 	Resolution &resolution
 ) const {
+	// 临时压制保留原 handle 和原位置，回合结束恢复时仍视为同一能力实例。
+	// retained_on_flip 能力不进入压制批次。
 	const int32_t card_index = action_context.action_subject_card_index;
 	if (
 		card_index < 0
@@ -636,6 +646,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::restore_temporary_a
 	NativeState &value,
 	int32_t completed_turn
 ) const {
+	// 恢复以完成的单方回合编号为界；卡牌可以换位或换阵营，但只要仍在可追踪
+	// 区域中，就按当前区域和当前所属方恢复并发出事件。
 	Resolution resolution;
 	auto restore_card = [&](
 		int32_t card_index,
@@ -931,6 +943,8 @@ std::vector<int32_t> DuelNativeCompactKernel::snapshot_selected_cards(
 	const ActionContext &context,
 	bool &supported
 ) const {
+	// 选择顺序是规则的一部分：棋盘固定按 0..8，手牌按物理 slot，而不是 vector
+	// 加入顺序。observed 保证跨多个区域声明时同一实例最多入选一次。
 	std::vector<int32_t> selected;
 	supported = selector.declaration_valid;
 	if (!supported) return selected;
@@ -1014,6 +1028,8 @@ void DuelNativeCompactKernel::assign_power_change_batch(
 	const ActionContext &context,
 	int32_t action_index
 ) const {
+	// 同一 action 直接产生的多张牌点数变化共用 batch_id，Controller 据此并行动画。
+	// 嵌套攻击/进场已有自己的事件时序，因此 protected range 不并入外层批次。
 	auto event_is_protected = [&](int64_t event_index) {
 		for (const auto &range : resolution.protected_power_batch_ranges) {
 			if (event_index >= range.first && event_index < range.second) return true;
@@ -1329,6 +1345,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::grant_ability_to
 	int32_t source_cell,
 	Resolution &resolution
 ) const {
+	// 动态赋予被动能力时直接追加；赋予新的主动能力时先移除该牌当前所有带
+	// activation 的能力，但保留纯被动能力，再把新能力追加到末尾。
 	if (
 		action.granted_ability_index < 0
 		|| action.granted_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
@@ -1419,6 +1437,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 	Resolution &resolution,
 	bool defer_power_change_batch
 ) const {
+	// actions 严格按目录数组顺序执行。NO_EFFECT 通常只跳过当前原语；只有声明了
+	// on_invalid_context=stop_rule 才终止余下规则，UNSUPPORTED 则使整个转换失败。
 	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
@@ -1488,6 +1508,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 候选实例在进入循环时快照，但每个实例真正结算前会重新确认区域和 selector
+	// 条件；失效目标被跳过，不会用后来出现的新牌补位。
 	bool selection_supported = true;
 	const std::vector<int32_t> selected = snapshot_selected_cards(
 		value,
@@ -2813,6 +2835,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 此入口只处理能力等特殊方式的进场。普通手牌出牌不经过特殊进场计数器；
+	// 达到每方每回合 20 次上限时，本次进场无效，但外层能力继续结算。
 	const int32_t ability_source_owner = action_context.ability_source_owner;
 	if (ability_source_owner != 1 && ability_source_owner != 2) return ActionOutcome::NO_EFFECT;
 	const int32_t summon_board_owner = action.summon_board_owner == RelativeOwnerOpcode::UNSUPPORTED
@@ -2965,6 +2989,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	}
 	value.scalars[summon_count_scalar] += 1;
 
+	// EXISTING_REFERENCE/TOP_DISCARD 沿用同一实例；FRESH_COPY 创建目录初始状态，
+	// PERFECT_COPY 复制当前运行时状态，但为新实例及其能力分配全新 handle。
 	int32_t summoned_card_index = referenced_card_index;
 	StringName instance_id;
 	StringName from_hand_instance_id;
@@ -3076,6 +3102,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resummon_card_in
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 重新进场先让原实例离开棋盘再回到指定位置；它不是简单移动，因此会完整
+	// 触发进场生命周期。
 	const int32_t source_card_index = action_context.action_subject_card_index;
 	const int32_t source_owner = action_context.action_subject_owner;
 	const int32_t source_cell = find_board_card(value, source_card_index, execution_state.current_source_cell);

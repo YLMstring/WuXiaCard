@@ -3,6 +3,9 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块负责触发的发现、条件匹配与顺序结算。
+// 发现阶段保存语义快照，结算阶段再确认能力条目仍然有效。
+
 bool DuelNativeCompactKernel::conditions_match(
 	const NativeState &value,
 	const EventGroup &group,
@@ -31,6 +34,8 @@ bool DuelNativeCompactKernel::conditions_match(
 					|| rule.event_id == StringName("card_after_summoned")
 				);
 				const bool entered_as_ally = context.trigger_previous_owner == group.source_owner;
+				// 进场阵营条件同时要求“最初如此”和“现在仍如此”。进场中被迎击翻面后，
+				// 不会再被另一侧的同类进场触发当作新阵营进场处理。
 				matched = (
 					trigger_cell == context.trigger_cell
 					&& trigger_cell >= 0
@@ -262,6 +267,8 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 	bool &supported,
 	String &reason
 ) const {
+	// 普通事件只扫描场上九格；唯有对局开始扫描双方手牌，弃牌后只检查那张弃牌，
+	// 进场前只检查正在进场的牌。CARD_AFTER_SUMMONED 属于普通事件，必须扫描全场。
 	std::vector<EventGroup> groups;
 	supported = true;
 	auto discover_card = [&](int32_t card_index, int32_t owner_id, int32_t source_cell, int32_t source_zone, int32_t logical_index, bool enforce_active_zone = true) -> bool {
@@ -365,6 +372,8 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 		}
 	}
 	for (int32_t aura_owner = 1; aura_owner <= 2; ++aura_owner) {
+		// 光环是牌手的运行时状态，不属于来源牌的能力列表。来源牌引用只用于显示
+		// 和 action 语义；来源牌翻面、移区或失去能力不会让已授予的牌手光环失效。
 		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[aura_owner - 1]) {
 			if (
 				entry.compiled_ability_index < 0
@@ -487,6 +496,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 	const EventContext &context,
 	std::vector<int32_t> &exile_stack
 ) const {
+	// 先一次性发现全部触发，再按发现顺序执行。前一条触发可以改变后续来源位置、
+	// 所属方或能力列表，但不会重新扫描并把新出现的能力插入本次事件。
 	ScopedTransitionTiming event_timing(
 		active_transition_timing,
 		TransitionTimingBucket::EVENT_DISPATCH
@@ -598,6 +609,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 				ability = &compiled_ability_pool[entry->compiled_ability_index];
 			}
 		} else {
+			// 普通卡牌触发只重新确认两件事：来源实例仍在发现时的同一区域，且原
+			// ability_handle 仍存在。场上换格合法；所属方以结算时为准；效果门控
+			// 不再复查。这样前序效果不会仅因换位或翻面而取消已发现触发。
 			int32_t current_zone = -1;
 			int32_t current_owner = 0;
 			if (!locate_card(

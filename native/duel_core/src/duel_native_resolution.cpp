@@ -3,11 +3,16 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块实现攻击、进场、翻面和移除等会改变棋盘的核心结算。
+// 规则先更新纯数据状态，再按实际先后顺序产出供界面播放的事件。
+
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_request(
 	NativeState &value,
 	const AttackRequest &request,
 	std::vector<int32_t> &exile_stack
 ) const {
+	// 每方每回合最多发起 20 次有效攻击。若最初没有任何能攻击的目标，则不计数，
+	// 也不触发 CARD_AFTER_ATTACK；指定攻击成功建立时同样占一次额度。
 	ScopedTransitionTiming timing(
 		active_transition_timing,
 		TransitionTimingBucket::ATTACK_RESOLUTION
@@ -86,6 +91,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		return false;
 	};
 	for (const int32_t locked_cell : target_cells) {
+		// target_cells 在攻击开始时锁定。每个目标前仍确认实例存在和范围合法，
+		// 但 skip_power_comparison=true，点数只在最初建立攻击时比较一次。
 		bool stop_after_current_target = false;
 		const int32_t attacker_cell = find_board_card(
 			value,
@@ -144,6 +151,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		);
 		if (!be_attacked.supported) return be_attacked;
 		stop_after_current_target = resolution_flipped_attacker(be_attacked);
+		// 攻击者在连锁效果中只要翻面过一次，即使随后翻回原阵营，也在当前目标
+		// 结算完后停止余下攻击，不能继续使用原攻击者身份。
 		append_resolution(resolution, be_attacked);
 		const int32_t current_attacker_cell = find_board_card(
 			value,
@@ -270,6 +279,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			|| flipped_previous_owner != request.attacker_owner
 		);
 		attack_flipped_any_card = true;
+		// 这里只记录攻击本身调用 flip_card 的结果；CARD_BE_ATTACKED 等连锁造成的
+		// 翻面不计入 attack_flipped_any_card/attack_flips。
 		EventContext::AttackFlipRecord flip_record;
 		flip_record.card_index = attacked_card_index;
 		flip_record.previous_owner = flipped_previous_owner;
@@ -307,6 +318,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 	const SummonRequest &request,
 	std::vector<int32_t> &exile_stack
 ) const {
+	// 固定顺序：CARD_BEFORE_SUMMONED → 展示落位 → 全场 CARD_SUMMONED → 若进场牌
+	// 仍在场则全场 CARD_AFTER_SUMMONED → 标准进场攻击。
 	ScopedTransitionTiming timing(
 		active_transition_timing,
 		TransitionTimingBucket::SUMMON_RESOLUTION
@@ -364,6 +377,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_summon_life
 		append_resolution(resolution, after_summoned);
 	}
 	const StringName summoned_instance_id = value.card_instance_ids[request.card_index];
+	// 进场过程中只要该实例曾经翻面，就取消标准攻击；即使后来又翻回最初阵营，
+	// 已经发生过的翻面事实也不会被抹掉。
 	for (int64_t event_index = 0; event_index < resolution.events.size(); ++event_index) {
 		if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
 		const Dictionary event = resolution.events[event_index];
@@ -562,6 +577,8 @@ bool DuelNativeCompactKernel::exile_card(
 	Resolution &resolution,
 	bool record_exile_index
 ) const {
+	// CARD_BEFORE_EXILED 可以移动或先移除目标。事件结算后必须仍是同牌、同一区域、
+	// 同一逻辑位置，原移除才继续；这避免把换位后的另一张牌误删。
 	if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_instance_ids.size())) return true;
 	if (std::find(exile_stack.begin(), exile_stack.end(), card_index) != exile_stack.end()) return true;
 	int32_t initial_zone = -1;
@@ -611,6 +628,7 @@ bool DuelNativeCompactKernel::exile_card(
 		}
 	}
 	int32_t original_owner = value.card_original_owners[card_index];
+	// 移除区按原始所有者归档，不按当前阵营归档；翻面不会改变 original_owner。
 	if (original_owner != 1 && original_owner != 2) original_owner = current_owner;
 	value.zones[original_owner + 5].push_back(card_index);
 
@@ -666,6 +684,8 @@ bool DuelNativeCompactKernel::flip_card(
 	Resolution &resolution,
 	bool record_capture_index
 ) const {
+	// 翻面顺序是规则：先改变所属方并发出翻面事件；再移除普通非保留能力；
+	// 结算 CARD_AFTER_FLIPPED；最后移除独立的“自身翻面后”非保留能力。
 	const int32_t current_target_cell = find_board_card(value, target_card_index, target_cell);
 	if (current_target_cell < 0 || value.board_owners[current_target_cell] == new_owner) return true;
 	std::vector<uint64_t> remove_before_after_flip;

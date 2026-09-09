@@ -3,6 +3,9 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块负责移动、动作收尾、回合边界、终局判断和状态物化。
+// 一次动作可以包含额外出牌，但只有真正关闭单方回合时才推进回合数。
+
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_movement_event(
 	NativeState &value,
 	const StringName &event_id,
@@ -39,6 +42,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::move_card_betwee
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
+	// 移动事件可以在真正换位前改变局面；因此 CARD_BEFORE_MOVED 后必须重新确认
+	// 原实例仍在原格且目标仍空，不能按旧格子信息强行覆盖。
 	if (
 		source_cell < 0
 		|| target_cell < 0
@@ -382,12 +387,15 @@ bool DuelNativeCompactKernel::owner_has_legal_action(
 	const NativeState &value,
 	int32_t owner_id
 ) const {
+	// 额外出牌期间若已无牌可出，该额外机会直接失效；不能改用主动能力代替。
 	if (owner_has_legal_play(value, owner_id)) return true;
 	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return false;
 	return board_has_enabled_activation_for_owner(value, owner_id);
 }
 
 bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
+	// 终局只在结算队列清空且当前额外出牌无法继续时判断。turn_count 表示正在
+	// 开始的单方回合，所以完成第 100 回合后变为 101，条件必须是 > max_turns。
 	const Array effect_queue = value.side_payload.get("effect_queue", Array());
 	if (!effect_queue.is_empty()) {
 		return false;
@@ -423,6 +431,8 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 	const std::vector<Resolution::ExtraPlayRequest> &requests,
 	Resolution &resolution
 ) const {
+	// 同一单方回合最多获得一次额外出牌。多个同时请求合并为一个机会，事件仍
+	// 记录全部来源，便于界面解释本次额外出牌由哪些效果共同产生。
 	if (value.scalars[13] != 0) return;
 	Array source_instance_ids;
 	for (const Resolution::ExtraPlayRequest &request : requests) {
@@ -474,6 +484,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	const std::vector<Resolution::ExtraPlayRequest> &extra_play_requests,
 	std::vector<int32_t> &exile_stack
 ) const {
+	// 动作收尾顺序：应用正文产生的额外出牌 → END_OWNER_TURN → 应用回合结束
+	// 产生的额外出牌 → BEFORE_DUEL_END → 关闭回合 → 判断终局 → 下一方 START。
 	ScopedTransitionTiming timing(
 		active_transition_timing,
 		TransitionTimingBucket::TURN_FINISH
@@ -542,6 +554,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	if (is_terminal(value)) return resolution;
 
 	int32_t previous_owner = moving_owner;
+	// 没有合法行动也不能跳过回合节点：仍发出 START/END，并让两端触发完整
+	// 结算。只有中间的玩家选择行动被省略，随后照常关闭该单方回合。
 	while (true) {
 		const int32_t turn_owner = other_owner(previous_owner);
 		value.scalars[0] = turn_owner;
@@ -591,6 +605,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn_boundary(
 	NativeState &value
 ) const {
+	// 这是 turn_count 唯一的递增点。先按即将完成的回合编号恢复临时能力并重置
+	// 所有“本回合”额度，再记录重复局面，最后进入下一个单方回合编号。
 	Resolution resolution = restore_temporary_abilities(value, value.scalars[1]);
 	value.scalars[3] = 0;
 	value.scalars[4] = 0;
@@ -607,6 +623,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 }
 
 String DuelNativeCompactKernel::board_repetition_signature(const NativeState &value) const {
+	// 五次重复只比较九个格子的目录 card_id 与当前所属方；点数、内力、能力和
+	// instance_id 都不参与，因此相同棋盘归属可以跨不同实例计为重复。
 	String result;
 	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
 		if (cell > 0) {
@@ -630,6 +648,8 @@ String DuelNativeCompactKernel::board_repetition_signature(const NativeState &va
 }
 
 Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value) const {
+	// 只在把结果交回 GDScript 时重新物化能力池和压制池；搜索子节点始终保留
+	// 编译索引与运行时 entry，避免每个节点复制嵌套声明。
 	Dictionary payload;
 	payload["format_version"] = 1;
 	payload["scalars"] = to_packed_int32_array(value.scalars);

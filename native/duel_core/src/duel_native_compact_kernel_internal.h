@@ -19,11 +19,15 @@
 
 namespace godot::duel_native_internal {
 
+// 只供各原生实现文件共享的轻量辅助函数；这里不保存规则状态，也不暴露给 Godot。
+// 这些转换位于 Godot/原生数据边界，热路径应停留在 std::vector 与紧凑标量中。
 inline constexpr int32_t HISTORY_SCORE_LIMIT = 1'000'000;
+// 特殊方式进场按双方分别计数；普通手牌出牌不占用这个额度。
 inline constexpr int32_t PLAYER_SPECIAL_SUMMONS_SCALAR = 14;
 inline constexpr int32_t OPPONENT_SPECIAL_SUMMONS_SCALAR = 15;
 inline constexpr int32_t MAX_SPECIAL_SUMMONS_PER_OWNER_TURN = 20;
 
+// 普通从手牌出牌不受此限制；它只阻止能力造成的特殊进场无限循环。
 inline int32_t special_summon_scalar_index(int32_t owner_id) {
 	return owner_id == 1
 		? PLAYER_SPECIAL_SUMMONS_SCALAR

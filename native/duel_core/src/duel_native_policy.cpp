@@ -3,6 +3,9 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块集中处理目标、范围、修正器和攻击合法性等只读策略。
+// 这些查询位于搜索热路径，必须优先使用快速排除和局部索引。
+
 int32_t DuelNativeCompactKernel::find_runtime_ability_index(
 	const NativeState &value,
 	int32_t card_index,
@@ -245,6 +248,8 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 	ModifierOpcode opcode,
 	int32_t *out_value
 ) const {
+	// 光环归牌手而不是来源牌所有。来源实例只用于 selector 的相对关系和展示；
+	// 来源牌翻面、移区或失去能力不会自动撤销已经授予牌手的光环。
 	bool found = false;
 	auto selector_contains_zone = [](const CompiledSelector &selector, int32_t candidate_zone) {
 		const SelectorZoneOpcode expected = candidate_zone == 0
@@ -398,6 +403,8 @@ std::vector<int32_t> DuelNativeCompactKernel::snapshot_summon_attack_redirect_so
 	int32_t summon_cell,
 	int32_t summoning_owner
 ) const {
+	// “相邻进场”在落位时记录来源实例。不能只记格子，否则来源换位后会误把
+	// 后来占据该格的另一张牌当作原修正器来源。
 	std::vector<int32_t> sources;
 	for (int32_t direction = 0; direction < 4; ++direction) {
 		const int32_t source_cell = neighbor_index(summon_cell, direction);
@@ -421,6 +428,8 @@ DuelNativeCompactKernel::AttackPolicy DuelNativeCompactKernel::get_summon_attack
 	int32_t summoning_owner,
 	const std::vector<int32_t> &source_card_indices
 ) const {
+	// 真正攻击前再次确认同一来源实例仍在场、仍相邻、仍为敌方且修正器有效；
+	// 两个时点都满足，进场攻击才会把友方目标当作攻击目标。
 	AttackPolicy policy;
 	for (const int32_t source_card_index : source_card_indices) {
 		const int32_t source_cell = find_board_card(value, source_card_index);
@@ -450,6 +459,8 @@ DuelNativeCompactKernel::AttackPolicy DuelNativeCompactKernel::get_standard_atta
 	int32_t attacker_owner,
 	const AttackPolicy &requested_policy
 ) const {
+	// 本函数只决定目标阵营策略，不负责改写指定攻击已经锁定的目标。指定目标
+	// 不会被自动换掉；全场修正器只影响该目标是否按对应阵营策略合法。
 	if (
 		attacker_cell >= 0
 		&& attacker_cell < static_cast<int32_t>(value.board_card_indices.size())
@@ -491,6 +502,8 @@ std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
 	int32_t source_cell,
 	const AttackPolicy &policy
 ) const {
+	// 候选顺序必须稳定，因为“首个合法目标”会锁定当前找到的第一张牌；该牌
+	// 随后在 CARD_BE_ATTACKED 中失效时，攻击结束而不会顺延到第二张。
 	std::vector<int32_t> targets;
 	if (
 		source_cell < 0
@@ -540,6 +553,8 @@ bool DuelNativeCompactKernel::can_attack_target(
 	const AttackPolicy &policy,
 	bool skip_power_comparison
 ) const {
+	// 点数比较只在攻击建立时进行一次。进入攻击链后只重新确认实例与范围，
+	// 不会因为中途点数变化而重新判定最初是否攻得动。
 	if (
 		source_cell < 0
 		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
@@ -738,6 +753,8 @@ bool DuelNativeCompactKernel::power_pair_wins(
 	int32_t defending_direction,
 	bool comparison_reversed
 ) const {
+	// 四边 -1 是“无点数”的特殊语义，不参与比较反转：它不能发起有效攻击，
+	// 但可被任意非负攻击点数命中。
 	if (is_special_negative(value, source_card_index)) return false;
 	const int32_t attacking_power = value.card_powers[source_card_index * 4 + attacking_direction];
 	if (is_special_negative(value, target_card_index)) return attacking_power >= 0;

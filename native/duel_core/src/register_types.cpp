@@ -9,6 +9,8 @@
 
 using namespace godot;
 
+// GDExtension 只注册一个纯数据内核类。Godot 场景通过该类提交紧凑状态并取得
+// 转换事件；规则逻辑不会注册成 Node，也不依赖场景生命周期。
 void initialize_duel_native_module(ModuleInitializationLevel level) {
 	if (level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;

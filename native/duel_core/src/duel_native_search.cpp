@@ -3,6 +3,9 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块实现合法动作生成、局面评估、动作排序和极小化极大搜索。
+// 搜索与玩家共用同一规则入口，且不得识别任何具体卡牌编号。
+
 void DuelNativeCompactKernel::write_apply_timing_diagnostics(
 	Dictionary &destination,
 	const NativeSearchStats &stats
@@ -407,6 +410,8 @@ DuelNativeCompactKernel::get_legal_native_actions(
 	const NativeState &value,
 	int32_t owner_id
 ) const {
+	// 合法行动按稳定的物理位置生成：手牌使用槽位索引，场上使用 0..8 格位。
+	// source_instance_id 只负责在真正执行时确认“仍是同一实例”，不能用视觉子节点顺序代替。
 	std::vector<NativeAction> actions;
 	if (
 		(owner_id != 1 && owner_id != 2)
@@ -568,6 +573,8 @@ int32_t DuelNativeCompactKernel::action_structural_score(
 	const NativeState &value,
 	const NativeAction &action
 ) const {
+	// 结构分只用于动作排序、帮助 alpha-beta 更早剪枝；它不参与叶节点战略评分。
+	// 因此这里可以偏爱主动能力、角落和表面可翻面，但不能改变最终 minimax 分数。
 	if (action.type == NativeActionType::ACTIVATE) return 100;
 	const int32_t owner_id = value.scalars[0];
 	const int32_t hand_zone = owner_id - 1;
@@ -603,6 +610,8 @@ DuelNativeCompactKernel::HistoryKey DuelNativeCompactKernel::history_key_for_act
 	const NativeState &value,
 	const NativeAction &action
 ) const {
+	// History 复用“同类动作容易造成剪枝”的经验。键只含通用状态特征，
+	// 刻意不含 card_id，保证搜索层不认识任何具体卡牌。
 	HistoryKey key;
 	key.type = action.type;
 	key.actor_owner = value.scalars[0];
@@ -695,6 +704,9 @@ DuelNativeCompactKernel::order_search_actions(
 	NativeSearchStats *stats,
 	bool collect_diagnostics
 ) const {
+	// 排序优先级依次为：上一轮 PV、置换表建议、结构分、History、规范顺序。
+	// 在同一完整搜索深度内，前四项不改变 minimax 评分；同分动作最终仍以
+	// action_canonical_less 稳定决胜。
 	for (NativeAction &action : actions) {
 		action.ordering_preferred = preferred != nullptr
 			&& actions_equal(action, *preferred);
@@ -740,6 +752,8 @@ bool DuelNativeCompactKernel::initialize_transposition_table(
 	TranspositionTable &table,
 	int64_t capacity_mib
 ) const {
+	// 置换表使用二路组相联结构，并把组数收敛为 2 的幂，便于用掩码定位。
+	// 容量申请失败时安全退化为无 TT 搜索，不改变规则或评估结果。
 	table = TranspositionTable();
 	if (capacity_mib <= 0) return false;
 	constexpr uint64_t bytes_per_mib = 1024ULL * 1024ULL;
@@ -784,6 +798,7 @@ DuelNativeCompactKernel::probe_transposition_table(
 	uint64_t state_checksum,
 	int32_t remaining_owner_turn_boundaries
 ) const {
+	// 同一规则状态在不同剩余回合边界下不是同一个搜索问题，二者共同构成 TT 键。
 	if (!table.enabled()) return nullptr;
 	const size_t set_index = static_cast<size_t>(search_position_key_from_checksum(
 		state_checksum,
@@ -853,6 +868,7 @@ void DuelNativeCompactKernel::store_transposition_entry(
 	NativeSearchStats *stats,
 	bool collect_diagnostics
 ) const {
+	// 两个槽都占用时，优先淘汰旧代、较浅、非 EXACT 的记录，保留更可复用的结果。
 	if (!table.enabled()) return;
 	TranspositionEntry candidate;
 	candidate.state_checksum = state_checksum;
@@ -916,6 +932,8 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 	int32_t root_owner,
 	const NativeSearchLimits *limits
 ) const {
+	// 战略层先以千倍权重保证场上牌差绝对优先，再用手牌、点数、内力、能力等
+	// 位置资源打破同牌差局面；终局分另占百万量级，任何非终局估值都不能越界。
 	static constexpr int32_t win_score = 1'000'000;
 	static constexpr int32_t deck_card_weight = 25;
 	static constexpr int32_t ki_weight = 4;
@@ -1037,6 +1055,8 @@ bool DuelNativeCompactKernel::search_should_stop(
 	NativeSearchStats &stats,
 	const NativeSearchLimits *limits
 ) const {
+	// 外部取消每 256 个节点轮询一次以压低热路径开销；时间上限始终生效。
+	// protect_node_limit 只暂时越过节点上限，保证配置要求的最低完整深度能够完成。
 	if (stats.aborted) return true;
 	if (limits == nullptr) return false;
 	if (
@@ -1098,6 +1118,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	NativeSearchStats &stats,
 	const NativeSearchLimits *limits
 ) const {
+	// 深度以“牌手回合边界”而非单次行动计数：同回合的额外出牌会增加 action_ply，
+	// 但只有 transition_action 真正推进 turn_count 时才消耗剩余边界。
 	if (search_should_stop(stats, limits)) return 0;
 	const int32_t original_alpha = alpha;
 	const int32_t original_beta = beta;
@@ -1218,6 +1240,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 
 	TranspositionEntry cached_transposition;
 	bool has_cached_transposition = false;
+	// EXACT 可直接返回；LOWER/UPPER 只收紧 alpha-beta 窗口。
+	// 缓存动作仍需在当前状态重新匹配合法行动，不能把旧槽位直接当成有效引用。
 	if (
 		limits != nullptr
 		&& limits->use_transposition_table
@@ -1312,6 +1336,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 
 	const bool terminal = is_terminal(value);
 	if (terminal || remaining_owner_turn_boundaries <= 0) {
+		// 未到终局而耗尽边界属于真正的搜索地平线；该标记决定迭代是否已解完整棵树。
 		classify_transposition_probe(true);
 		stats.leaves += 1;
 		if (remaining_owner_turn_boundaries <= 0 && !terminal) {
@@ -1424,6 +1449,8 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	}
 	classify_transposition_probe(false);
 	const bool maximizing = value.scalars[0] == root_owner;
+	// 结算后的当前行动方决定取最大还是最小，不能由递归层数奇偶推断；
+	// 空回合、额外出牌和连锁结算都会破坏“每层必定换边”的假设。
 	int32_t best_score = maximizing
 		? std::numeric_limits<int32_t>::min()
 		: std::numeric_limits<int32_t>::max();
@@ -1560,6 +1587,8 @@ int32_t DuelNativeCompactKernel::search_depth_boundaries(
 	int32_t depth,
 	SearchDepthMode mode
 ) const {
+	// self_turn：深度 1 截止根方本回合结束，之后每加一深度再看“对手回合+根方回合”。
+	// complete_round：每一深度固定包含双方各一个完整回合，保留给旧基准作 A/B 对照。
 	if (depth <= 0) return 0;
 	return mode == SearchDepthMode::SELF_TURN
 		? depth * 2 - 1
@@ -1956,6 +1985,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.transposition_seen_states = collect_search_diagnostics
 		? &transposition_seen_states
 		: nullptr;
+	// 迭代加深只在整层所有根动作都完成后发布新答案；超时或取消的半层结果会被丢弃，
+	// 因而实战始终拿到最后一个完整深度的动作。上一层 PV/History 仅服务下一层排序。
 	while (max_depth <= 0 || depth <= max_depth) {
 		iteration_depth = depth;
 		limits.transposition_generation = static_cast<uint32_t>(depth);
@@ -2191,6 +2222,8 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	limits.transposition_seen_states = nullptr;
 	Array principal_actions;
 	if (has_completed_action) {
+		// 返回给控制器的连续计划只覆盖当前同一回合；一旦换行动方或 turn_count 推进就停止。
+		// 这样额外出牌可复用已经算出的后续动作，普通下一回合仍会重新搜索。
 		NativeState current = state;
 		NativeAction current_action = completed_best_action;
 		int32_t remaining_boundaries = search_depth_boundaries(completed_depth, depth_mode);

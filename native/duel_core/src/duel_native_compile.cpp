@@ -3,7 +3,12 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本模块负责把卡牌目录声明编译为原生规则数据。
+// 声明只在载入时解析一次；对局和搜索热路径只使用紧凑操作码。
+
 bool DuelNativeCompactKernel::validate_shape() {
+	// 这些长度关系是紧凑状态的 ABI。后续代码为性能直接按 card_index 访问平行数组，
+	// 因此只在根状态载入时集中校验，不在每个搜索节点重复做边界扫描。
 	const size_t card_count = state.card_instance_ids.size();
 	if (state.scalars.size() != 16) {
 		last_error = "Compact scalar count must be 16";
@@ -62,8 +67,7 @@ bool DuelNativeCompactKernel::validate_shape() {
 	return true;
 }
 
-// Native declarations are compiled once at root load. Runtime cards only retain
-// small indices into these immutable structures.
+// 原生声明只在根状态载入时编译一次；运行时卡牌只保存指向不可变结构的小整数索引。
 DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_condition(
 	const Variant &value
 ) const {
@@ -299,6 +303,8 @@ DuelNativeCompactKernel::CompiledSelector DuelNativeCompactKernel::compile_selec
 DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 	const Variant &value
 ) {
+	// 严格检查字段形状可以让拼错的目录原语在载入时失败，而不是在某个深层搜索
+	// 分支静默变成无效果。组合动作仍递归编译为同一种 CompiledAction。
 	CompiledAction compiled;
 	if (value.get_type() != Variant::DICTIONARY) {
 		compiled.declaration_valid = false;
@@ -1048,6 +1054,8 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 	const Variant &value,
 	bool owner_aura
 ) {
+	// 普通卡牌持有 activation、trigger 和 modifier；光环只归牌手所有，来源牌
+	// 仅作为效果引用保存，因此 owner_aura 的允许字段刻意更窄。
 	CompiledAbility compiled;
 	if (value.get_type() != Variant::DICTIONARY) {
 		compiled.declaration_valid = false;
@@ -1131,6 +1139,8 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 		}
 	}
 	compiled.isolated_self_after_flip = (
+		// “自身翻面后”能力必须是独立能力条目：翻面时先移除其它非保留能力，
+		// 结算 CARD_AFTER_FLIPPED 后再移除这一条，不能与其它能力混写。
 		!compiled.has_activation
 		&& compiled.modifiers.empty()
 		&& compiled.triggers.size() == 1
@@ -1161,6 +1171,8 @@ int32_t DuelNativeCompactKernel::intern_compiled_ability(const Variant &value, b
 }
 
 void DuelNativeCompactKernel::compile_ability_sets() {
+	// 相同声明通过 intern_compiled_ability 共用一份编译结果；运行时获得或失去能力
+	// 只修改各实例的 entry 列表，不会复制或修改能力声明的嵌套内容。
 	compiled_ability_sets.clear();
 	compiled_ability_pool.clear();
 	ability_declaration_pool.clear();
@@ -1261,6 +1273,8 @@ bool DuelNativeCompactKernel::validate_play_support(
 	const NativeState &value,
 	String &reason
 ) const {
+	// 原生内核是唯一生产规则路径。这里拒绝的不是“回退到另一套规则”的信号，
+	// 而是输入快照损坏或目录含未支持声明，应由调用者明确报告。
 	if (!value.has_rule_metadata) {
 		reason = "Play transition requires immutable compact metadata pools";
 		return false;

@@ -3,6 +3,8 @@
 namespace godot {
 using namespace duel_native_internal;
 
+// 本文件负责 Godot API 边界和一次动作的顶层路由：载入紧凑状态、校验调用参数、
+// 复制根局面、调用纯原生规则，再把新状态与有序事件物化为 Dictionary。
 void DuelNativeCompactKernel::_bind_methods() {
 	ClassDB::bind_method(
 		D_METHOD("load_compact_payload", "payload"),
@@ -232,6 +234,8 @@ void DuelNativeCompactKernel::_bind_methods() {
 }
 
 bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
+	// 载入是 GDScript 与原生内核的信任边界：先复制并校验全部纯数据，随后一次性
+	// 编译能力池。任一步失败都保持 loaded=false，避免搜索落入半编译状态。
 	loaded = false;
 	last_error = String();
 	fresh_card_prototypes.clear();
@@ -653,6 +657,8 @@ bool DuelNativeCompactKernel::transition_play(
 	bool &supported,
 	String &reason
 ) const {
+	// 手牌下标只用于本次输入校验；真正身份由稳定 card_index/instance_id 追踪。
+	// 这样固定手牌槽出现空洞时，也不会把视觉顺序误当成运行时顺序。
 	supported = false;
 	reason = String();
 	if (!validate_play_support(source, reason)) return false;
@@ -689,6 +695,8 @@ bool DuelNativeCompactKernel::transition_play(
 		return false;
 	}
 	{
+		// 大数组由 C++ 值语义复制；仍含可变嵌套 Variant 的两个字段必须显式隔离，
+		// 否则搜索子节点会反向污染父局面。
 		ScopedTransitionTiming timing(
 			active_transition_timing,
 			TransitionTimingBucket::STATE_COPY
@@ -729,6 +737,8 @@ bool DuelNativeCompactKernel::transition_play(
 	append_resolution(resolution, suppression_resolution);
 
 	SummonRequest summon_request;
+	// 普通出牌先静态落位，再统一进入 summon 生命周期。重定向来源在进场时快照，
+	// 真正攻击前仍会确认来源实例仍在场、相邻、敌对且能力有效。
 	summon_request.summon_cell = static_cast<int32_t>(target_cell);
 	summon_request.card_index = played_card_index;
 	summon_request.owner_id = moving_owner;
@@ -1253,6 +1263,7 @@ bool DuelNativeCompactKernel::transition_activate(
 	bool &supported,
 	String &reason
 ) const {
+	// 主动能力是一次完整行动；额外出牌阶段只能继续出牌，不能夹入主动能力。
 	supported = false;
 	reason = String();
 	if (!validate_play_support(source, reason)) return false;
@@ -1287,6 +1298,8 @@ bool DuelNativeCompactKernel::transition_activate(
 	}
 
 	const CompiledAbility *ability = nullptr;
+	// activation_index 只枚举当前仍带主动能力的条目；ability_handle 则跨越 vector
+	// 换位保持身份，用于后续能力可能被前序效果删除的情况。
 	int32_t runtime_ability_index = -1;
 	uint64_t ability_handle = 0;
 	int32_t current_activation_index = 0;
@@ -1418,6 +1431,8 @@ bool DuelNativeCompactKernel::transition_activate(
 		exile_stack,
 		resolution
 	);
+	// 费用先完整结算，再结算正文。费用途中移除来源也不会回滚已经支付的内容；
+	// 后续 action 是否有效由各原语自己的上下文规则决定。
 	if (cost_outcome == ActionOutcome::UNSUPPORTED) {
 		supported = false;
 		reason = resolution.reason.is_empty()
@@ -1491,6 +1506,8 @@ bool DuelNativeCompactKernel::transition_action(
 	bool materialize_presentation_payloads,
 	NativeSearchStats *search_stats
 ) const {
+	// 玩家、测试模式、贪心回退和深度搜索全部从这里进入同一套规则。搜索可以省略
+	// UI 专用嵌套载荷，但不能省略会影响语义、状态键或后续触发的事件骨架。
 	const bool previous_include_presentation_payloads = include_presentation_payloads;
 	TransitionTimingContext timing_context;
 	TransitionTimingContext *previous_transition_timing = active_transition_timing;

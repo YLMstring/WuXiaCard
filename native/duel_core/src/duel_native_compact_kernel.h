@@ -18,9 +18,13 @@
 
 namespace godot {
 
+// 原生对局内核的唯一对外类型。它同时承载规则状态、目录原语的编译结果和
+// 搜索器，但所有字段都仍是纯数据；场景节点、动画和音频只消费返回的事件。
 class DuelNativeCompactKernel : public RefCounted {
 	GDCLASS(DuelNativeCompactKernel, RefCounted)
 
+	// 运行时能力用不可复用的 handle 标识。同一张牌的能力被删除后，后续能力
+	// 即使在 vector 中换位，已经发现的触发仍能按 handle 找回原能力。
 	struct RuntimeAbilityEntry {
 		int32_t compiled_ability_index = -1;
 		uint64_t handle = 0;
@@ -51,7 +55,14 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t active_ability_set_index = -1;
 	};
 
+	// 搜索树中的完整可变局面。高频字段采用连续数组；低频且尚不值得专门压缩的
+	// 内容留在 side_payload。card_index 是本局稳定索引，instance_id 才是对外身份。
 	struct NativeState {
+		// scalars 的 ABI 与 scripts/duel_compact_state.gd 一致：
+		// 0 当前行动方；1 从 1 开始的单方回合数；2 保留兼容槽位；3/4 双方本回合攻击数；
+		// 5 剩余额外出牌；6 回合结束触发是否已结算；7 最大回合数；8/9 待生效压制；
+		// 10 难度；11 进阶八是否已触发；12 状态版本；13 本回合是否已获得额外出牌；
+		// 14/15 双方本回合特殊进场次数。槽位顺序进入存档、状态键和原生 ABI，不可随意移动。
 		std::vector<int32_t> scalars;
 		std::vector<int32_t> board_card_indices;
 		std::vector<uint8_t> board_owners;
@@ -81,6 +92,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		uint64_t next_owner_aura_handle = 1;
 	};
 
+	// 目录中的字符串声明只在载入时解析一次；搜索热路径只分派紧凑 opcode，
+	// 因而这里必须保持卡牌无关，不能加入任何具体 card_id 判断。
 	enum class ConditionOpcode : uint8_t {
 		TRIGGER_CARD_IS_SELF,
 		TRIGGER_CARD_IS_ALLY,
@@ -308,6 +321,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool hand_right_to_left = false;
 	};
 
+	// CompiledAction 是目录 action declaration 的递归、纯数据表示。IF 与
+	// FOR_EACH_SELECTED_CARD 通过 child_actions 组合已有原语，而不是新增卡牌专用分支。
 	struct CompiledAction {
 		bool declaration_valid = true;
 		StringName declaration_type;
@@ -357,6 +372,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<CompiledAction> actions;
 	};
 
+	// 一次能力链共享的少量瞬时信息。它不写入存档，也不进入局面状态键。
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
 		int32_t current_source_cell = -1;
@@ -428,6 +444,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		Array buffered_placement_events;
 	};
 
+	// 事件上下文保存“发生事件时”的语义快照。来源牌可以在同一区域内换位后继续
+	// 结算，但区域变化会令普通牌能力失效；牌手光环不依赖来源牌当前状态。
 	struct EventContext {
 		int32_t ability_source_cell = -1;
 		int32_t ability_source_zone = -1;
@@ -477,6 +495,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName discard_batch_id;
 	};
 
+	// discover_event 只发现并锁定触发条目；真正结算时再用 handle 与来源区域确认
+	// 条目仍存在。不要用 vector 下标代替 handle，否则前序能力删除会错配后序触发。
 	struct EventGroup {
 		int32_t source_cell = -1;
 		int32_t source_zone = 0;
@@ -493,6 +513,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t owner_aura_nested_index = -1;
 	};
 
+	// ActionContext 把事件语义转换为各 action 共用的“能力来源、动作主体、已选目标”。
+	// selected_card 会在逐个选择器动作中更新，event_context 本身保持不变。
 	struct ActionContext {
 		int32_t ability_source_cell = -1;
 		int32_t ability_source_zone = -1;
@@ -518,6 +540,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		std::vector<EventContext::AttackFlipRecord> attack_flips;
 	};
 
+	// 规则层只产出纯数据结果。Controller 按 events 顺序播放动画；captures/exiles
+	// 用于兼容调用者，extra_play_requests 则统一延后到动作收尾阶段应用。
 	struct Resolution {
 		struct ExtraPlayRequest {
 			int32_t owner_id = 0;
@@ -553,6 +577,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t ordering_structural_score = 0;
 	};
 
+	// TT 的键由完整局面校验值和剩余单方回合边界组成；同一局面在不同搜索地平线
+	// 不能互相冒充。固定大小、组相联布局用于严格控制桌面与 Android 内存。
 	enum class TranspositionBound : uint8_t {
 		EXACT,
 		LOWER,
@@ -623,6 +649,8 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	using HistoryTable = std::unordered_map<HistoryKey, int32_t, HistoryKeyHash>;
 
+	// 计时器仅在显式诊断时挂入 transition；正常生产搜索 active_transition_timing
+	// 为 nullptr，因此这些分桶不会给每个结算步骤增加时钟读取。
 	enum class TransitionTimingBucket : uint8_t {
 		OTHER,
 		STATE_COPY,
@@ -812,6 +840,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		SELF_TURN,
 	};
 
+	// state 是最近一次从 GDScript 载入的根局面；其余池在载入时编译并被所有搜索
+	// 子局面共享。能力声明内容不可变，运行时只增删能力条目及其 handle。
 	NativeState state;
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
@@ -821,7 +851,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	int32_t empty_deck_draw_prototype_index = -1;
 	bool loaded = false;
 	String last_error;
-	// Search keeps semantic event skeletons but omits UI-only nested payloads.
+	// 搜索仍保留有规则意义的事件骨架，但省略只供 UI 使用的嵌套展示载荷。
 	mutable bool include_presentation_payloads = true;
 	mutable TransitionTimingContext *active_transition_timing = nullptr;
 
@@ -829,6 +859,8 @@ protected:
 	static void _bind_methods();
 
 public:
+	// Godot 可调用边界：载入/导出 Dictionary，只发生在搜索外层；递归搜索始终使用
+	// NativeState 与 NativeAction，避免在热路径反复构造 Variant 容器。
 	bool load_compact_payload(const Dictionary &payload);
 	bool is_loaded() const;
 	String get_last_error() const;
@@ -946,6 +978,7 @@ public:
 	) const;
 
 private:
+	// 以下方法构成纯原生规则与搜索实现，不应回调场景树，也不能读取具体卡牌目录 ID。
 	void write_apply_timing_diagnostics(
 		Dictionary &destination,
 		const NativeSearchStats &stats
