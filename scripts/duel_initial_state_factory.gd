@@ -62,7 +62,7 @@ static func build(config: Dictionary) -> StateData:
 		player_cards,
 		opponent_cards,
 		opening_owner,
-		0,
+		1,
 		player_side_deck,
 		opponent_side_deck,
 		run_difficulty

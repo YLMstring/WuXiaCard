@@ -8,7 +8,7 @@ Updated: 2026-08-14
 - Balance is prototype-level.
 - No general queued choice/interrupt/reaction engine exists. `effect_queue` and `pending_choice` are scaffolding only.
 - Fivefold board repetition now ends matches by score; `max_turns = 100`
-  remains the broad fallback for nonrepeating pathological action sequences.
+  remains the broad fallback for nonrepeating pathological turn sequences.
 - No result/progression screen, story/dialogue flow, deck builder, collection, save/load, tutorial, settings, accessibility menu, or formal localization system.
 - Testing mode is selected only at scene creation. Editor Play enables it
   automatically; changing mode while a scene is already running is unsupported.

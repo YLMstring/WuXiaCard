@@ -50,7 +50,6 @@ static func _state_payload(state: StateData) -> Dictionary:
 		"removed_cards": state.removed_cards,
 		"active_player": state.active_player,
 		"turn_count": state.turn_count,
-		"owner_turn_serial": state.owner_turn_serial,
 		"attacks_started_by_owner": state.attacks_started_by_owner,
 		"special_summons_by_owner": state.special_summons_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,

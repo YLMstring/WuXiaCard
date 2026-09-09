@@ -395,7 +395,7 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
 		return false;
 	}
-	if (value.scalars[1] >= value.scalars[7]) {
+	if (value.scalars[1] > value.scalars[7]) {
 		return true;
 	}
 	if (std::find(value.board_card_indices.begin(), value.board_card_indices.end(), -1)
@@ -496,7 +496,6 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		value.side_payload["last_hand_play_by_owner"] = last_hand_plays;
 	}
 
-	value.scalars[1] += 1;
 	value.scalars[12] += 1;
 	apply_extra_card_play_requests(
 		value,
@@ -592,8 +591,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn_boundary(
 	NativeState &value
 ) const {
-	Resolution resolution = restore_temporary_abilities(value, value.scalars[2]);
-	value.scalars[2] += 1;
+	Resolution resolution = restore_temporary_abilities(value, value.scalars[1]);
 	value.scalars[3] = 0;
 	value.scalars[4] = 0;
 	value.scalars[6] = 0;
@@ -604,6 +602,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	repetition_hashes = repetition_hashes.duplicate(false);
 	repetition_hashes.append(board_repetition_signature(value));
 	value.side_payload["repetition_hashes"] = repetition_hashes;
+	value.scalars[1] += 1;
 	return resolution;
 }
 

@@ -92,7 +92,7 @@ func _test_forced_terminal_score_and_canonical_tie() -> void:
 	if forced_action != null:
 		_check(forced_action.source_index == 0 and forced_action.target_index == 8, "Forced search fills the only empty cell")
 		_check(forced_action.source_instance_id == &"search_forced_winner", "Forced search preserves exact source identity")
-	_check(int(forced_result.get("score", 0)) == 1_000_099, "Terminal win score includes ownership margin and action count")
+	_check(int(forced_result.get("score", 0)) == 1_000_098, "Terminal win score includes ownership margin and turn count")
 
 	var tied := State.new(
 		Rules.empty_board(),
@@ -242,12 +242,12 @@ func _test_same_turn_continuation_plan() -> void:
 		var entry: Dictionary = plan[plan_index] as Dictionary
 		var action: Action = entry.get("action") as Action
 		_check(String(entry.get("state_key", "")) == StateKey.build_compact(current_state), "Plan entry is keyed to its exact pre-action state")
-		_check(int(entry.get("owner_turn_serial", -1)) == state.owner_turn_serial, "Plan entry remains in the root owner turn")
+		_check(int(entry.get("turn_count", -1)) == state.turn_count, "Plan entry remains in the root owner turn")
 		_check(action != null and Simulator.is_action_legal(current_state, action), "Plan entry carries a legal pure-data action")
 		if action == null or not Simulator.is_action_legal(current_state, action):
 			return
 		current_state = Simulator.apply_action(current_state, action).get("state") as State
-	_check(current_state.owner_turn_serial > state.owner_turn_serial, "Extra-play plan stops after the owner turn closes")
+	_check(current_state.turn_count > state.turn_count, "Extra-play plan stops after the owner turn closes")
 
 
 func _test_turn_plan_validation() -> void:

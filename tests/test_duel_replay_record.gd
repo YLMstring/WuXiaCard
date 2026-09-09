@@ -14,7 +14,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	var opening: StateData = _make_state(0)
+	var opening: StateData = _make_state(1)
 	var record: RefCounted = ReplayRecord.new()
 	_check(not record.is_ready(), "Fresh replay record is not ready")
 	_check(record.get_actions().is_empty(), "Fresh replay record has no actions")
@@ -24,13 +24,13 @@ func _run() -> void:
 	opening.get_hand(Rules.PLAYER_OWNER)[0]["ki"] = 7
 	var stored_opening: StateData = record.get_initial_state()
 	_check(stored_opening != null, "Replay begin stores an initial state")
-	_check(stored_opening.turn_count == 0, "Initial state is independent from its source")
+	_check(stored_opening.turn_count == 1, "Initial state is independent from its source")
 	_check(
 		int((stored_opening.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary)["ki"]) == 0,
 		"Nested opening card data is duplicated"
 	)
 	stored_opening.turn_count = 42
-	_check(record.get_initial_state().turn_count == 0, "Initial-state accessor returns a fresh duplicate")
+	_check(record.get_initial_state().turn_count == 1, "Initial-state accessor returns a fresh duplicate")
 
 	var action: ActionData = ActionData.make_play(0, 4, &"player_card")
 	record.record_action(action)

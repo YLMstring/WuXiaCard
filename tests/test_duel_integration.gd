@@ -101,8 +101,7 @@ func _run() -> void:
 	_check(player_turns <= 20, "Scripted match remains within the safety turn bound")
 	_check(duel.has_method("debug_get_simulation_turn_count"), "Production duel exposes simulator turn-count diagnostics")
 	if duel.has_method("debug_get_simulation_turn_count"):
-		var removed_cards: int = duel.debug_get_removed_count(Rules.PLAYER_OWNER) + duel.debug_get_removed_count(Rules.OPPONENT_OWNER)
-		_check(simulation_turns >= occupancy + removed_cards, "Action turns account for every card that entered the board")
+		_check(simulation_turns >= player_turns, "Turn count accounts for every completed player turn")
 	var expected_total_cards: int = _expected_total_card_count()
 	_check(
 		duel.debug_get_total_card_count() == expected_total_cards,
@@ -1300,20 +1299,20 @@ func _check_inspector_holds_completed_ai_move() -> void:
 	_check(not ai_duel.debug_is_search_running(), "Opponent search continues and finishes behind the inspector")
 	_check(
 		ai_duel.debug_is_inspection_open()
-		and ai_duel.debug_get_simulation_turn_count() == 1,
+		and ai_duel.debug_get_simulation_turn_count() == 2,
 		"Completed opponent result remains unapplied while inspection is open"
 	)
 
 	ai_duel.debug_close_inspection()
 	frames_waited = 0
 	while (
-		ai_duel.debug_get_simulation_turn_count() < 2
+		ai_duel.debug_get_simulation_turn_count() < 3
 		or ai_duel.debug_get_active_owner() != Rules.PLAYER_OWNER
 	) and frames_waited < 300:
 		await process_frame
 		frames_waited += 1
 	_check(
-		ai_duel.debug_get_simulation_turn_count() >= 2,
+		ai_duel.debug_get_simulation_turn_count() >= 3,
 		"Opponent result applies after inspection closes; occupancy=%d turn=%d owner=%d search=%s inspection=%s"
 		% [
 			ai_duel.debug_get_board_occupancy(),
@@ -1376,7 +1375,7 @@ func _check_opponent_turn_plan_consumption() -> void:
 	var planned_action: Action = opponent_actions[0]
 	plan_duel.debug_set_opponent_turn_plan([{
 		"state_key": StateKey.build_compact(opponent_state),
-		"owner_turn_serial": int(opponent_state.get("owner_turn_serial")),
+		"turn_count": int(opponent_state.get("turn_count")),
 		"owner_id": Rules.OPPONENT_OWNER,
 		"action": planned_action.duplicate_action(),
 	}])
@@ -1461,7 +1460,7 @@ func _check_dragged_card_commits_through_simulator() -> void:
 	drag_duel._on_card_drag_started(card, card.get_global_rect().get_center())
 	_check(card.get_parent() == drag_duel.get_node("DuelCanvas/DragLayer"), "Real drag path reparents the card before commit")
 	await drag_duel._commit_card(card, 0, 1)
-	_check(drag_duel.debug_get_simulation_turn_count() == 2, "Real dragged placement advances simulator state for both turns")
+	_check(drag_duel.debug_get_simulation_turn_count() == 3, "Real dragged placement completes both owner turns")
 	var opponent_board_card: Control = null
 	for board_card_value: Variant in drag_duel.get("board_cards"):
 		if board_card_value is Control and int((board_card_value as Control).get("owner_id")) == 2:
@@ -1577,7 +1576,7 @@ func _check_testing_mode_manual_turns() -> void:
 	test_duel._on_card_drag_started(player_card, player_card.get_global_rect().get_center())
 	_check(player_card.get_parent() == test_duel.get_node("DuelCanvas/DragLayer"), "Testing player drag uses the production drag layer")
 	await test_duel._commit_card(player_card, 0, 1)
-	_check(test_duel.debug_get_board_occupancy() == 1 and test_duel.debug_get_simulation_turn_count() == 1, "Testing mode suppresses the automatic AI reply")
+	_check(test_duel.debug_get_board_occupancy() == 1 and test_duel.debug_get_simulation_turn_count() == 2, "Testing mode suppresses the automatic AI reply")
 	opponent_cards = _cards_below(test_duel.get_node("DuelCanvas/OpponentHand"))
 	_check(_count_playable(_cards_below(test_duel.get_node("DuelCanvas/PlayerHand"))) == 0 and _count_playable(opponent_cards) == opponent_cards.size(), "Testing mode enables only the opponent hand on the opponent turn")
 	_check("Testing" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text and "Opponent" in (test_duel.get_node("DuelCanvas/TurnStatus") as Label).text, "Testing status identifies the opponent side")
@@ -1606,7 +1605,7 @@ func _check_testing_mode_manual_turns() -> void:
 	opponent_card.call("_try_begin_drag", opponent_card.get_global_rect().get_center(), -1)
 	_check(opponent_card.get_parent() == test_duel.get_node("DuelCanvas/DragLayer"), "Testing opponent card can begin a second valid drag")
 	await test_duel._commit_card(opponent_card, 1, 2)
-	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 2, "Manual opponent placement advances the production simulator path exactly once")
+	_check(test_duel.debug_get_board_occupancy() == 2 and test_duel.debug_get_simulation_turn_count() == 3, "Manual opponent placement completes the second owner turn")
 	_check(_count_playable(_cards_below(test_duel.get_node("DuelCanvas/PlayerHand"))) == _count_cards(test_duel.get_node("DuelCanvas/PlayerHand")) and _count_playable(_cards_below(test_duel.get_node("DuelCanvas/OpponentHand"))) == 0, "Testing control returns to the player hand after the opponent move")
 	_check(not test_duel.debug_is_search_running() and test_duel.debug_get_last_search_report().is_empty(), "Testing mode never starts an opponent search session")
 	test_duel.queue_free()

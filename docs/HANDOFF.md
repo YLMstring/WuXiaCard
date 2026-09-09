@@ -372,7 +372,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   smaller `+0.92%` throughput change (`592.05` to `597.47` nodes/s), unchanged
   `3/14` depth-two completion, and identical depth-one decisions; treat this as
   a low-complexity cleanup with modest measured benefit.
-- Search depth is measured in authoritative `owner_turn_serial` boundaries.
+- Search depth is measured by authoritative `turn_count` changes.
   Production-default `self_turn` consumes `2 × depth - 1`: depth one ends after
   the current owner turn, while depth two also completes the opponent turn and
   the root owner's next turn. Explicit legacy `complete_round` consumes
@@ -383,7 +383,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   round iteration is published. The completed principal line also carries the
   AI's remaining same-owner-turn actions. The controller retains them only
   from depth-two-or-deeper non-fallback results and still requires exact state
-  key, owner, serial, and legality; shallower or invalid plans make an extra
+  key, owner, turn count, and legality; shallower or invalid plans make an extra
   play search normally. Every AI hand play or activation has a two-second
   minimum decision window with search time included.
 - Node-limited Quick, Pilot, and Extended benchmarks set
@@ -628,7 +628,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
 - Nonterminal owners with no legal action still resolve start/end owner-turn
   triggers; only their action phase is skipped. Five occurrences of the same
   nine-cell catalog-ID/current-owner signature end the duel by score at the
-  end-to-start boundary. The action-count fallback is `max_turns = 100`.
+  end-to-start boundary. `turn_count` starts at one and increments once per
+  completed owner turn, including empty turns; the fallback ends after the
+  hundredth turn when `turn_count > max_turns` with `max_turns = 100`.
 - The search supports two native depth horizons without duplicating the search
   engine. Production defaults to `self_turn` and consumes `2 × depth - 1`
   owner-turn boundaries; explicit legacy `complete_round` consumes `2 × depth`.

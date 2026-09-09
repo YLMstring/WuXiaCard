@@ -87,6 +87,6 @@ static func _entry_matches_state(
 		return false
 	if int(entry.get("owner_id", 0)) != expected_owner:
 		return false
-	if int(entry.get("owner_turn_serial", -1)) != state.owner_turn_serial:
+	if int(entry.get("turn_count", -1)) != state.turn_count:
 		return false
 	return String(entry.get("state_key", "")) == StateKey.build_compact(state)

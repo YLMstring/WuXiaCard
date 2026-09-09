@@ -12,8 +12,7 @@ var decks: Dictionary = {}
 var discard_piles: Dictionary = {}
 var removed_cards: Dictionary = {}
 var active_player: int = Rules.PLAYER_OWNER
-var turn_count: int = 0
-var owner_turn_serial: int = 0
+var turn_count: int = 1
 var attacks_started_by_owner: Dictionary = {}
 var special_summons_by_owner: Dictionary = {}
 var extra_card_plays_remaining: int = 0
@@ -41,7 +40,7 @@ func _init(
 	player_hand: Array = [],
 	opponent_hand: Array = [],
 	new_active_player: int = Rules.PLAYER_OWNER,
-	new_turn_count: int = 0,
+	new_turn_count: int = 1,
 	player_deck: Array = [],
 	opponent_deck: Array = [],
 	new_run_difficulty: int = 0,
@@ -216,7 +215,6 @@ func duplicate_state() -> DuelState:
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
 	copied.next_owner_aura_handle = next_owner_aura_handle
-	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining
@@ -252,7 +250,6 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
 	copied.next_owner_aura_handle = next_owner_aura_handle
-	copied.owner_turn_serial = owner_turn_serial
 	copied.attacks_started_by_owner = attacks_started_by_owner.duplicate(true)
 	copied.special_summons_by_owner = special_summons_by_owner.duplicate(true)
 	copied.extra_card_plays_remaining = extra_card_plays_remaining

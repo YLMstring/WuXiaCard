@@ -116,7 +116,7 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 		Rules.OPPONENT_OWNER: [],
 	}
 	state.next_owner_aura_handle = 8
-	state.owner_turn_serial = 12
+	state.turn_count = 12
 	state.attacks_started_by_owner = {
 		Rules.PLAYER_OWNER: 4,
 		Rules.OPPONENT_OWNER: 5,

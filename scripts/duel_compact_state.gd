@@ -38,7 +38,7 @@ const FLAG_HAND_SLOT: int = 1 << 7
 
 const SCALAR_ACTIVE_PLAYER: int = 0
 const SCALAR_TURN_COUNT: int = 1
-const SCALAR_OWNER_TURN_SERIAL: int = 2
+const SCALAR_RESERVED_OWNER_TURN_SERIAL: int = 2
 const SCALAR_PLAYER_ATTACKS: int = 3
 const SCALAR_OPPONENT_ATTACKS: int = 4
 const SCALAR_EXTRA_CARD_PLAYS: int = 5
@@ -157,7 +157,6 @@ func restore() -> StateData:
 
 	restored.active_player = scalars[SCALAR_ACTIVE_PLAYER]
 	restored.turn_count = scalars[SCALAR_TURN_COUNT]
-	restored.owner_turn_serial = scalars[SCALAR_OWNER_TURN_SERIAL]
 	restored.attacks_started_by_owner = {
 		Rules.PLAYER_OWNER: scalars[SCALAR_PLAYER_ATTACKS],
 		Rules.OPPONENT_OWNER: scalars[SCALAR_OPPONENT_ATTACKS],
@@ -439,7 +438,6 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"removed_cards": state.removed_cards,
 		"active_player": state.active_player,
 		"turn_count": state.turn_count,
-		"owner_turn_serial": state.owner_turn_serial,
 		"attacks_started_by_owner": state.attacks_started_by_owner,
 		"special_summons_by_owner": state.special_summons_by_owner,
 		"extra_card_plays_remaining": state.extra_card_plays_remaining,
@@ -467,7 +465,7 @@ func _capture_state(state: StateData) -> bool:
 	scalars = PackedInt32Array([
 		state.active_player,
 		state.turn_count,
-		state.owner_turn_serial,
+		0,
 		int(state.attacks_started_by_owner.get(Rules.PLAYER_OWNER, 0)),
 		int(state.attacks_started_by_owner.get(Rules.OPPONENT_OWNER, 0)),
 		state.extra_card_plays_remaining,

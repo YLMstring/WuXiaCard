@@ -202,7 +202,7 @@ not alter authoritative actions, transitions, search keys, or AI information.
 
 - `duel_search.gd` — production routing and result-schema normalization for the
   native iterative search. Production-default `self_turn` depth `d` spans
-  `2 × d - 1` authoritative `owner_turn_serial` boundaries; explicit legacy
+  `2 × d - 1` authoritative `turn_count` boundaries; explicit legacy
   `complete_round` spans `2 × d`. Action count is not depth.
 - `duel_search_session.gd` — worker thread, mutex-protected progress, cancellation,
   failure conversion, join, and deep-copy transport of pure-data turn plans.
@@ -502,8 +502,9 @@ All terminal conditions are checked at the same owner-turn boundary: after the
 current owner's end-turn rules and turn-scoped restoration, but before changing
 `active_player` or resolving the next owner's start-turn rules. Reaching
 `max_turns` does not interrupt already granted extra card plays, including an
-extra play granted by the current owner's end-turn rules. Each still counts as
-an action, so `turn_count` may exceed `max_turns` before that owner turn closes.
+extra play granted by the current owner's end-turn rules. `turn_count` starts at
+one, stays unchanged throughout those plays, increments once when the turn
+finally closes, and ends the duel when it becomes greater than `max_turns`.
 
 Action execution preserves an immutable ability-source identity and a current
 action subject. Root actions use the source as subject. A

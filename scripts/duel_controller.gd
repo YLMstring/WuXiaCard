@@ -1991,9 +1991,9 @@ func _take_planned_opponent_action() -> ActionData:
 		int(_last_search_report.get("continuation_actions_reused", 0)) + 1
 	)
 	print(
-		"AI_SEARCH_CONTINUATION serial=%d state=%s action=%s"
+		"AI_SEARCH_CONTINUATION turn=%d state=%s action=%s"
 		% [
-			duel_state.owner_turn_serial,
+			duel_state.turn_count,
 			StateKey.build_compact(duel_state),
 			action.canonical_key(),
 		]

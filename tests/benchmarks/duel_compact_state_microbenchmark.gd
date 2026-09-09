@@ -129,7 +129,7 @@ func _measure_state_copy(states: Array[State]) -> Dictionary:
 	for pass_index: int in range(COPY_PASSES):
 		for state: State in states:
 			var copied: State = state.duplicate_state()
-			sink = sink ^ copied.owner_turn_serial ^ copied.board.size() ^ pass_index
+			sink = sink ^ copied.turn_count ^ copied.board.size() ^ pass_index
 	return {
 		"calls": states.size() * COPY_PASSES,
 		"seconds": float(Time.get_ticks_usec() - started_usec) / 1_000_000.0,
@@ -145,7 +145,7 @@ func _measure_compact_copy(snapshots: Array[CompactState]) -> Dictionary:
 			var copied: CompactState = snapshot.duplicate_compact() as CompactState
 			sink = (
 				sink
-				^ copied.scalars[CompactState.SCALAR_OWNER_TURN_SERIAL]
+				^ copied.scalars[CompactState.SCALAR_RESERVED_OWNER_TURN_SERIAL]
 				^ copied.board_card_indices.size()
 				^ pass_index
 			)

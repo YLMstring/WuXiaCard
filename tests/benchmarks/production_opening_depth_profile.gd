@@ -341,7 +341,7 @@ func _profile_extra_play_decision(
 	if (
 		extra_state == null
 		or extra_state.active_player != state.active_player
-		or extra_state.owner_turn_serial != state.owner_turn_serial
+		or extra_state.turn_count != state.turn_count
 	):
 		sample["reason"] = "first_action_did_not_grant_extra_play"
 		return sample

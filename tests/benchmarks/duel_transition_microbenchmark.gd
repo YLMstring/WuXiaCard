@@ -149,7 +149,7 @@ func _measure_duplicates(pairs: Array[Dictionary]) -> Dictionary:
 		for pair: Dictionary in pairs:
 			var state: State = pair.get("state") as State
 			var copied: State = state.duplicate_state() as State
-			sink = sink ^ copied.board.size() ^ copied.owner_turn_serial ^ pass_index
+			sink = sink ^ copied.board.size() ^ copied.turn_count ^ pass_index
 	var seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
 	return {
 		"seconds": seconds,
@@ -167,7 +167,7 @@ func _measure_reference_duplicates(pairs: Array[Dictionary]) -> Dictionary:
 		for pair: Dictionary in pairs:
 			var state: State = pair.get("state") as State
 			var copied: State = state.duplicate_state_deep_reference() as State
-			sink = sink ^ copied.board.size() ^ copied.owner_turn_serial ^ pass_index
+			sink = sink ^ copied.board.size() ^ copied.turn_count ^ pass_index
 	var seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
 	return {
 		"seconds": seconds,
@@ -190,7 +190,7 @@ func _measure_apply(pairs: Array[Dictionary]) -> Dictionary:
 				push_error("Measured transition became invalid: %s" % action.canonical_key())
 				continue
 			var next_state: State = transition.get("state") as State
-			sink = sink ^ next_state.board.size() ^ next_state.owner_turn_serial ^ pass_index
+			sink = sink ^ next_state.board.size() ^ next_state.turn_count ^ pass_index
 	var seconds: float = float(Time.get_ticks_usec() - started_usec) / 1_000_000.0
 	return {
 		"seconds": seconds,

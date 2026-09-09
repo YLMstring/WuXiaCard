@@ -814,8 +814,8 @@ func _test_empty_owner_turn_resolves_start_and_end_boundaries() -> void:
 		"An empty owner turn emits both accepted boundary trigger event groups"
 	)
 	_check(
-		next_state.turn_count == 1 and next_state.owner_turn_serial == 2,
-		"An empty owner turn advances the owner-turn serial without counting an action"
+		next_state.turn_count == 3,
+		"The completed action turn and following empty turn each advance the turn count"
 	)
 	_check(
 		next_state.active_player == Rules.PLAYER_OWNER
@@ -867,7 +867,7 @@ func _test_empty_owner_turn_stops_when_start_creates_an_action() -> void:
 		],
 		[],
 		Rules.PLAYER_OWNER,
-		0,
+		1,
 		[],
 		[Catalog.create_instance(
 			&"TuNaShu1",
@@ -896,7 +896,7 @@ func _test_empty_owner_turn_stops_when_start_creates_an_action() -> void:
 		"A newly actionable owner does not resolve its end-turn rule early"
 	)
 	_check(
-		next_state.turn_count == 1 and next_state.owner_turn_serial == 1,
+		next_state.turn_count == 2,
 		"Starting an actionable owner turn does not complete another boundary"
 	)
 
@@ -958,6 +958,7 @@ func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
 		changed_owner_signature,
 		repeated_signature,
 	]
+	fourfold_state.turn_count = fourfold_state.repetition_hashes.size() + 1
 	var fourfold_transition: Dictionary = Simulator.apply_action(
 		fourfold_state,
 		Action.make_play(0, 0, &"repeat_instance_one")
@@ -986,6 +987,7 @@ func _test_fivefold_board_repetition_ends_at_turn_boundary() -> void:
 		changed_owner_signature,
 		repeated_signature,
 	]
+	fivefold_state.turn_count = fivefold_state.repetition_hashes.size() + 1
 	var fivefold_transition: Dictionary = Simulator.apply_action(
 		fivefold_state,
 		Action.make_play(0, 0, &"repeat_instance_five")
@@ -1081,8 +1083,8 @@ func _test_full_board_ends_before_next_turn_starts() -> void:
 		"A full board prevents the next owner's start-turn triggers"
 	)
 	_check(
-		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1,
-		"The completed ninth move advances the counter without starting another turn"
+		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 2,
+		"The completed ninth move advances the turn count without starting another turn"
 	)
 	_check(Simulator.is_terminal(next_state), "A board with all nine cells occupied is terminal")
 
@@ -1182,7 +1184,7 @@ func _test_turn_cap_ends_before_next_turn_starts() -> void:
 		&"turn_cap_start_target"
 	)
 	var state := State.new(board, [played], [opponent_hand_card], Rules.PLAYER_OWNER)
-	state.max_turns = 1
+	state.turn_count = state.max_turns
 
 	var transition: Dictionary = Simulator.apply_action(
 		state,
@@ -1200,8 +1202,10 @@ func _test_turn_cap_ends_before_next_turn_starts() -> void:
 		"Turn-cap closure skips the next owner's start-turn effects"
 	)
 	_check(
-		next_state.active_player == Rules.PLAYER_OWNER and Simulator.is_terminal(next_state),
-		"Turn cap becomes terminal before active ownership changes"
+		next_state.active_player == Rules.PLAYER_OWNER
+		and next_state.turn_count == 101
+		and Simulator.is_terminal(next_state),
+		"The hundredth owner turn completes before active ownership changes"
 	)
 
 
@@ -1846,7 +1850,7 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 	var side_deck: Array = [
 		_make_runtime_card("Would Draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"would_draw"),
 	]
-	var state := State.new(board, [], [summoned], Rules.OPPONENT_OWNER, 0, [], side_deck)
+	var state := State.new(board, [], [summoned], Rules.OPPONENT_OWNER, 1, [], side_deck)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 5, &"draw_attacker"))
 	var next_state: State = transition["state"] as State
 	var events: Array = transition.get("events", [])
@@ -1865,7 +1869,7 @@ func _test_summon_reaction_interrupts_on_play_and_standard_attack() -> void:
 	_check((next_state.decks[Rules.OPPONENT_OWNER] as Array).size() == 1, "Interrupted draw leaves the side deck untouched")
 	_check(int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Reaction flips the summoned card")
 	_check(int((next_state.board[2] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER, "Interrupted summoned card does not perform its normal attack")
-	_check(next_state.turn_count == 1, "Interrupted summon still finishes its turn")
+	_check(next_state.turn_count == 2, "Interrupted summon still finishes its turn")
 
 
 func _test_summon_reaction_conditions_and_ability_loss() -> void:
@@ -2166,7 +2170,7 @@ func _test_FeiTian5_extra_turn_cannot_chain() -> void:
 		and second_state.extra_card_plays_remaining == 0,
 		"Extra card play does not repeat the end-turn grant"
 	)
-	_check(second_state.turn_count == 2, "The original play and extra play each increment action count once")
+	_check(second_state.turn_count == 3, "The extra-play turn and following empty opponent turn each complete one boundary")
 
 
 func _test_flipped_FeiTian5_loses_ability_but_keeps_ki() -> void:
@@ -2690,8 +2694,8 @@ func _test_move_application_and_capture_parity() -> void:
 	_check(next_state.get_hand(Rules.PLAYER_OWNER).is_empty(), "Placed card leaves the simulated hand")
 	_check(int((next_state.board[5] as Dictionary)["owner"]) == Rules.PLAYER_OWNER, "Captured ownership updates in the simulated board")
 	_check(
-		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1,
-		"A terminal move advances the action count without starting the next owner's turn"
+		next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 2,
+		"A terminal move advances the turn count without starting the next owner's turn"
 	)
 
 

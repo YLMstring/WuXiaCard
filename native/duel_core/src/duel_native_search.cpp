@@ -1455,7 +1455,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 		}
 		stats.applied_transitions += 1;
 		const int32_t completed_owner_turns = std::max(
-			next.scalars[2] - value.scalars[2],
+			next.scalars[1] - value.scalars[1],
 			0
 		);
 		const int32_t score = search_minimax(
@@ -1661,7 +1661,7 @@ Dictionary DuelNativeCompactKernel::search_fixed_depth(
 			break;
 		}
 		stats.applied_transitions += 1;
-		const int32_t completed_owner_turns = std::max(next.scalars[2] - state.scalars[2], 0);
+		const int32_t completed_owner_turns = std::max(next.scalars[1] - state.scalars[1], 0);
 		const int32_t score = search_minimax(
 			next,
 			owner_turn_boundaries - completed_owner_turns,
@@ -2036,7 +2036,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 			}
 			stats.applied_transitions += 1;
 			const int32_t completed_owner_turns = std::max(
-				next.scalars[2] - state.scalars[2],
+				next.scalars[1] - state.scalars[1],
 				0
 			);
 			int32_t score = search_minimax(
@@ -2194,7 +2194,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 		NativeState current = state;
 		NativeAction current_action = completed_best_action;
 		int32_t remaining_boundaries = search_depth_boundaries(completed_depth, depth_mode);
-		const int32_t root_owner_turn_serial = state.scalars[2];
+		const int32_t root_turn_count = state.scalars[1];
 		for (int32_t plan_index = 0; plan_index < 20; ++plan_index) {
 			principal_actions.append(materialize_action(current_action));
 			NativeState next;
@@ -2210,12 +2210,12 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 				transition_reason,
 				false
 			)) break;
-			remaining_boundaries -= std::max(next.scalars[2] - current.scalars[2], 0);
+			remaining_boundaries -= std::max(next.scalars[1] - current.scalars[1], 0);
 			current = std::move(next);
 			if (
 				is_terminal(current)
 				|| current.scalars[0] != root_owner
-				|| current.scalars[2] != root_owner_turn_serial
+				|| current.scalars[1] != root_turn_count
 			) break;
 			const uint64_t position_key = search_position_key(
 				current,

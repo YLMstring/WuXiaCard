@@ -102,12 +102,12 @@ func _test_seeded_layout_and_ownership() -> void:
 		player_hand,
 		opponent_hand,
 		Rules.PLAYER_OWNER,
-		0,
+		1,
 		player_deck,
 		[]
 	)
 	_check(state.active_player == Rules.PLAYER_OWNER, "Opening layout does not change the first actor")
-	_check(state.turn_count == 0, "Opening layout does not consume an action")
+	_check(state.turn_count == 1, "Opening layout starts at the first owner turn")
 	var runtime_player_hand: Array = state.get_hand(Rules.PLAYER_OWNER)
 	var runtime_opponent_hand: Array = state.get_hand(Rules.OPPONENT_OWNER)
 	_check(
@@ -272,7 +272,7 @@ func _test_initial_state_factory_complete_opening() -> void:
 		"player_remembered_enemy_glyphs": ["known-enemy"],
 	})
 	_check(_occupied_cells(state.board).size() == 2, "Factory creates two static difficulty-zero Bagua for the later owner")
-	_check(state.turn_count == 0 and state.effect_queue.is_empty(), "Factory opening consumes no actions or presentation events")
+	_check(state.turn_count == 1 and state.effect_queue.is_empty(), "Factory opening starts at turn one without presentation events")
 	_check(
 		_card_id_set(state.decks[Rules.PLAYER_OWNER] as Array)
 		== _string_name_set(DeckRules.build_side_deck_card_ids(player_ids)),

@@ -62,7 +62,7 @@ static func build_state(fixture: Dictionary) -> StateData:
 		_build_zone(hands.get(Rules.PLAYER_OWNER, []) as Array, Rules.PLAYER_OWNER),
 		_build_zone(hands.get(Rules.OPPONENT_OWNER, []) as Array, Rules.OPPONENT_OWNER),
 		int(fixture.get("active_owner", Rules.PLAYER_OWNER)),
-		int(turn_data.get("turn_count", 0)),
+		int(turn_data.get("turn_count", 1)),
 		_build_zone(decks.get(Rules.PLAYER_OWNER, []) as Array, Rules.PLAYER_OWNER),
 		_build_zone(decks.get(Rules.OPPONENT_OWNER, []) as Array, Rules.OPPONENT_OWNER),
 		int(fixture.get("difficulty", 0)),
@@ -78,7 +78,6 @@ static func build_state(fixture: Dictionary) -> StateData:
 		Rules.PLAYER_OWNER: _build_zone(removed.get(Rules.PLAYER_OWNER, []) as Array, Rules.PLAYER_OWNER),
 		Rules.OPPONENT_OWNER: _build_zone(removed.get(Rules.OPPONENT_OWNER, []) as Array, Rules.OPPONENT_OWNER),
 	}
-	state.owner_turn_serial = int(turn_data.get("owner_turn_serial", 0))
 	state.attacks_started_by_owner = (turn_data.get("attacks_started_by_owner", {
 		Rules.PLAYER_OWNER: 0,
 		Rules.OPPONENT_OWNER: 0,
@@ -191,7 +190,7 @@ static func _base_fixture(
 	opponent_hand: Array,
 	player_deck: Array,
 	opponent_deck: Array,
-	turn_count: int = 0,
+	turn_count: int = 1,
 	max_turns: int = 100,
 	repetition_history: Array = []
 ) -> Dictionary:
@@ -213,7 +212,6 @@ static func _base_fixture(
 		"removed": {Rules.PLAYER_OWNER: [], Rules.OPPONENT_OWNER: []},
 		"turn_data": {
 			"turn_count": turn_count,
-			"owner_turn_serial": turn_count,
 			"attacks_started_by_owner": {Rules.PLAYER_OWNER: 0, Rules.OPPONENT_OWNER: 0},
 			"extra_card_plays_remaining": 0,
 			"end_turn_triggers_resolved": false,

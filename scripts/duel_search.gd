@@ -162,19 +162,19 @@ static func _build_native_turn_plan(state: StateData, planned_actions: Array) ->
 		return plan
 	var current_state: StateData = state.duplicate_state()
 	var root_owner: int = current_state.active_player
-	var root_serial: int = current_state.owner_turn_serial
+	var root_turn_count: int = current_state.turn_count
 	for value: Variant in planned_actions:
 		var action: ActionData = value as ActionData
 		if (
 			action == null
 			or current_state.active_player != root_owner
-			or current_state.owner_turn_serial != root_serial
+			or current_state.turn_count != root_turn_count
 			or not Simulator.is_action_legal(current_state, action)
 		):
 			break
 		plan.append({
 			"state_key": StateKey.build_compact(current_state),
-			"owner_turn_serial": root_serial,
+			"turn_count": root_turn_count,
 			"owner_id": root_owner,
 			"action": action.duplicate_action(),
 		})

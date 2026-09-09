@@ -579,7 +579,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::temporarily_remo
 	) return ActionOutcome::NO_EFFECT;
 
 	RuntimeSuppressionBatch batch;
-	batch.expires_after_turn = value.scalars[2];
+	batch.expires_after_turn = value.scalars[1];
 	std::vector<RuntimeAbilityEntry> retained_entries;
 	const std::vector<RuntimeAbilityEntry> active_entries = value.card_runtime_abilities[card_index];
 	retained_entries.reserve(active_entries.size());

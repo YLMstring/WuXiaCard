@@ -59,8 +59,9 @@ artifacts cannot silently mix evaluators.
 
 ## Depth and publication
 
-Search depth is measured in authoritative `owner_turn_serial` boundaries, not
-action plies. Two selectable modes share the same native search implementation:
+Search depth is measured by changes to authoritative `turn_count`, not action
+plies. `turn_count` starts at one and increments only when a real owner turn
+fully closes. Two selectable modes share the same native search implementation:
 
 - `self_turn` is the production default. Public depth `d` consumes
   `2 × d - 1` boundaries: depth one finishes the current owner's remaining
@@ -89,13 +90,13 @@ early when the position is solved.
 ## Same-turn continuation
 
 The completed principal line may include additional actions by the same owner
-within the current `owner_turn_serial`. `DuelTurnPlan` makes that continuation
+while `turn_count` remains unchanged. `DuelTurnPlan` makes that continuation
 eligible only when the producing result completed at least depth two without
 fallback, and then reuses it only while all of these still match:
 
 - exact compact state key;
 - owner ID;
-- owner-turn serial;
+- turn count;
 - current legality of the next action.
 
 Any mismatch clears the remainder and starts a normal fresh search.
