@@ -116,15 +116,27 @@ func _test_embrace_moon_aura_and_snapshot() -> void:
 	var aura_defender: Dictionary = _plain(&"aura_defender", [9, 9, 9, 9], Rules.PLAYER_OWNER)
 	aura_defender["effect_gate"] = Catalog.EFFECT_GATE_SELF_CASTRATION
 	board[1] = _slot(aura_defender, Rules.PLAYER_OWNER)
-	var embrace: Dictionary = Catalog.create_instance(&"HuJiaDao2", Rules.PLAYER_OWNER, &"embrace_last")
-	embrace["powers"] = [1, 1, 1, 1]
+	var first_embrace: Dictionary = Catalog.create_instance(
+		&"HuJiaDao2",
+		Rules.PLAYER_OWNER,
+		&"embrace_last"
+	)
+	first_embrace["powers"] = [1, 1, 1, 1]
+	var second_embrace: Dictionary = Catalog.create_instance(
+		&"HuJiaDao2",
+		Rules.PLAYER_OWNER,
+		&"embrace_second"
+	)
 	var state := State.new(
 		board,
-		[embrace],
+		[first_embrace, second_embrace],
 		[],
 		Rules.OPPONENT_OWNER,
 		0,
-		[_plain(&"aura_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER)],
+		[
+			_plain(&"aura_draw_first", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+			_plain(&"aura_draw_second", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		],
 		[]
 	)
 	state = _resolve_duel_started(state)
@@ -132,11 +144,19 @@ func _test_embrace_moon_aura_and_snapshot() -> void:
 	_check(_count_events(result.get("events", []), &"attack_started") == 1, "Aura defense zero applies even when the recipient's own effects are gated")
 	_check(_removed_has(state, Rules.PLAYER_OWNER, &"embrace_last"), "The final HuJiaDao2 loses one on all sides and is exiled")
 	_check(_removed_has(state, Rules.PLAYER_OWNER, &"aura_defender"), "The already-discovered virtual reaction still exiles the defender")
-	_check(not _find_hand_card(state, &"aura_draw").is_empty(), "The virtual reaction draws before exiling its recipient")
+	_check(
+		not _find_hand_card(state, &"aura_draw_first").is_empty()
+		and not _find_hand_card(state, &"aura_draw_second").is_empty(),
+		"Each owner aura draws once before a virtual reaction exiles the recipient"
+	)
+	_check(
+		_find_hand_card(state, &"embrace_second").get("powers", []) == [3, 3, 3, 3],
+		"Every HuJiaDao2 aura independently reduces its exact source"
+	)
 	_check(
 		_event_index(result.get("events", []), &"powers_changed", &"embrace_last")
-		< _event_index(result.get("events", []), &"card_drawn", &"aura_draw"),
-		"Hand-source point loss resolves before the aura-derived board reaction"
+		< _event_index(result.get("events", []), &"card_drawn", &"aura_draw_first"),
+		"Source point loss resolves before its owner-aura draw"
 	)
 
 

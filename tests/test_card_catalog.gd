@@ -483,10 +483,25 @@ func _test_trigger_ability_schema() -> void:
 	)
 	_check(
 		(triggers[0] as Dictionary).get("actions", []) == [{
-			"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY,
-			"amount": 1,
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [Catalog.CARD_ZONE_HAND, Catalog.CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+					{
+						"type": Catalog.CONDITION_SELECTED_CARD_WEAPON_IS,
+						"weapon": "刀法",
+					},
+				],
+				"limit": 1,
+			},
+			"actions": [{
+				"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY,
+				"amount": 1,
+				"card": Catalog.CARD_REF_ABILITY_SOURCE,
+			}],
 		}],
-		"FeiTian5 grants one extra card play"
+		"FeiTian5 grants one extra card play only when an allied blade exists"
 	)
 	var instance: Dictionary = Catalog.create_instance(&"FeiTian5", 1, &"trigger_feitian")
 	_check(int(instance.get("ki", -1)) == 0, "FeiTian5 starts with zero ki")

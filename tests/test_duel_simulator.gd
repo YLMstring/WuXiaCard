@@ -61,6 +61,8 @@ func _run() -> void:
 	_test_summon_reactions_use_board_order_and_stop_after_flip()
 	_test_summon_reaction_exile_and_successful_flip_trigger()
 	_test_FeiTian5_end_turn_extra_play()
+	_test_FeiTian5_requires_allied_blade()
+	_test_FeiTian5_accepts_allied_board_blade()
 	_test_FeiTian5_extra_turn_cannot_chain()
 	_test_flipped_FeiTian5_loses_ability_but_keeps_ki()
 	_test_unusable_extra_turn_expires()
@@ -474,6 +476,14 @@ func _test_zixia_gong_start_turn_on_extra_turn() -> void:
 	)
 	var board: Array = Rules.empty_board()
 	board[0] = {"card": zixia, "owner": Rules.PLAYER_OWNER}
+	board[2] = {
+		"card": Catalog.create_instance(
+			&"RanMuDaoFa2",
+			Rules.PLAYER_OWNER,
+			&"zixia_extra_blade"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
 	board[8] = {"card": meng, "owner": Rules.PLAYER_OWNER}
 	var state := State.new(
 		board,
@@ -1259,9 +1269,8 @@ func _test_turn_cap_waits_for_end_turn_extra_play() -> void:
 				Rules.PLAYER_OWNER,
 				&"turn_cap_feitian"
 			),
-			_make_runtime_card(
-				"Granted Followup",
-				[1, 1, 1, 1],
+			Catalog.create_instance(
+				&"RanMuDaoFa2",
 				Rules.PLAYER_OWNER,
 				&"turn_cap_granted_followup"
 			),
@@ -2008,7 +2017,7 @@ func _test_summon_reaction_exile_and_successful_flip_trigger() -> void:
 func _test_FeiTian5_end_turn_extra_play() -> void:
 	var hand: Array = [
 		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"momentum_feitian"),
-		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		Catalog.create_instance(&"RanMuDaoFa2", Rules.PLAYER_OWNER, &"momentum_blade"),
 	]
 	var state := State.new(Rules.empty_board(), hand, [], Rules.PLAYER_OWNER)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4))
@@ -2026,6 +2035,67 @@ func _test_FeiTian5_end_turn_extra_play() -> void:
 	_check(next_state.active_player == Rules.PLAYER_OWNER and next_state.turn_count == 1, "Extra card play retains the acting owner after one action")
 	_check(next_state.extra_card_plays_remaining == 1, "FeiTian5 grants exactly one pending card play")
 	_check(_count_events(events, &"ki_changed") == 0, "FeiTian5 uses no ki")
+
+
+func _test_FeiTian5_requires_allied_blade() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[
+			Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"no_blade_feitian"),
+			Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		],
+		[Catalog.create_instance(&"RanMuDaoFa2", Rules.OPPONENT_OWNER, &"enemy_blade")],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		state,
+		Action.make_play(0, 4, &"no_blade_feitian")
+	)
+	var next_state: State = transition["state"] as State
+	_check(
+		_count_events(transition.get("events", []), &"extra_card_play_granted") == 0,
+		"FeiTian5 does not grant an extra play without an allied blade"
+	)
+	_check(
+		next_state.active_player == Rules.OPPONENT_OWNER,
+		"An enemy blade does not satisfy FeiTian5's allied-blade requirement"
+	)
+
+
+func _test_FeiTian5_accepts_allied_board_blade() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = {
+		"card": Catalog.create_instance(
+			&"FeiTian5",
+			Rules.PLAYER_OWNER,
+			&"board_blade_feitian"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[8] = {
+		"card": Catalog.create_instance(
+			&"RanMuDaoFa2",
+			Rules.PLAYER_OWNER,
+			&"allied_board_blade"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var state := State.new(
+		board,
+		[Rules.make_card("Board blade followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
+	var next_state: State = transition["state"] as State
+	_check(
+		_count_events(transition.get("events", []), &"extra_card_play_granted") == 1,
+		"An allied board blade satisfies FeiTian5's requirement"
+	)
+	_check(
+		next_state.active_player == Rules.PLAYER_OWNER,
+		"The board-blade match keeps FeiTian5's owner active for the extra play"
+	)
 
 
 func _test_KuiHua1_multiple_flips_gain_in_order() -> void:
@@ -2083,7 +2153,7 @@ func _test_FeiTian5_extra_turn_cannot_chain() -> void:
 	var hand: Array = [
 		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"chain_first"),
 		Catalog.create_instance(&"FeiTian5", Rules.PLAYER_OWNER, &"chain_second"),
-		Rules.make_card("Followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		Catalog.create_instance(&"RanMuDaoFa2", Rules.PLAYER_OWNER, &"chain_blade"),
 	]
 	var state := State.new(Rules.empty_board(), hand, [], Rules.PLAYER_OWNER)
 	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
@@ -2119,6 +2189,14 @@ func _test_unusable_extra_turn_expires() -> void:
 	board[1] = {
 		"card": Rules.make_card("Target", "标", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER),
 		"owner": Rules.OPPONENT_OWNER,
+	}
+	board[8] = {
+		"card": Catalog.create_instance(
+			&"RanMuDaoFa2",
+			Rules.PLAYER_OWNER,
+			&"unusable_board_blade"
+		),
+		"owner": Rules.PLAYER_OWNER,
 	}
 	var opponent_hand: Array = [Rules.make_card("Reply", "应", [1, 1, 1, 1], [], Rules.OPPONENT_OWNER)]
 	var state := State.new(

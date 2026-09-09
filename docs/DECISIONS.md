@@ -711,10 +711,12 @@ respectively, in row-major order. The source itself is eligible.
   at duel start, then grants its current owner an aura. While that aura exists,
   an opponent may play into the center only when no legal activation or
   non-center hand play exists.
-- `HuJiaDao2` grants its owner an aura. Friendly board cards defend as zero and
-  receive a virtual attacked reaction that draws once and exiles that exact
-  recipient. Board abilities resolve first, then owner-aura triggers in owner
-  and acquisition order, then virtual reactions in recipient cell order.
+- `HuJiaDao2` grants its owner an aura. When a friendly board card is attacked,
+  each such owner aura reveals and reduces its exact source, then draws once.
+  Friendly board cards defend as zero and receive a virtual attacked reaction
+  that exiles that exact recipient. Board abilities resolve first, then
+  owner-aura triggers in owner and acquisition order, then virtual reactions in
+  recipient cell order.
 - `HuJiaDao3` reacts only after an attack performed at least one successful
   attack comparison. It reveals and gains one; if the attack itself flipped no
   card, it sets every attacker direction that won a comparison to zero. Ability

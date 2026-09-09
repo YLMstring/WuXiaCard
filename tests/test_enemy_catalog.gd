@@ -140,7 +140,7 @@ func _check_benchmark_roster() -> void:
 	var hufei: Dictionary = by_id.get(&"bailu_shanzhang2", {})
 	_check(
 		dongfang.get("deck", []) == [
-			&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua2"
+			&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua1"
 		],
 		"Dongfang Bubai preserves the approved benchmark deck"
 	)

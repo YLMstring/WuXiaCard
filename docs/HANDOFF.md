@@ -556,8 +556,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   starts with three ki and may spend one to choose any opposing hand card,
   permanently remove its non-retained abilities, and grant an extra play when
   that exact card was already revealed to DaiZong's owner.
-- FeiTian5 is a tier-five Jianghu lightness card with four 3 powers. Its
-  owner-turn-end rule requests one extra hand play and obeys the shared
+- FeiTian5 is a tier-five Jianghu lightness card with four 3 powers. At its
+  owner's turn end it requests one extra hand play only when an allied blade
+  exists in that owner's hand or on the board. It obeys the shared
   once-per-owner-turn extra-play cap.
 - XiXinDaFa4/5 keep their current ki when their post-flip rule resolves. Every
   other allied hand card receives that full amount first in physical hand

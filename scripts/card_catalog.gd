@@ -551,7 +551,6 @@ const HUJIA_EMBRACE_MOON_GRANTED: Dictionary = {
 		"event": CARD_BE_ATTACKED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
-			{"type": ACTION_DRAW_CARDS, "amount": 1},
 			{"type": ACTION_EXILE_SELF},
 		],
 	}],
@@ -573,6 +572,7 @@ const HUJIA_EMBRACE_MOON_AURA: Dictionary = {
 					"amount": -1,
 					"card": CARD_REF_ABILITY_SOURCE,
 				},
+				{"type": ACTION_DRAW_CARDS, "amount": 1},
 			],
 		},
 		HUJIA_OWNER_AURA_EXPIRE,
@@ -5239,8 +5239,23 @@ const _CARD_DEFINITIONS: Dictionary = {
 				"event": TRIGGER_END_OWNER_TURN,
 				"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 				"actions": [{
-					"type": ACTION_GRANT_EXTRA_CARD_PLAY,
-					"amount": 1,
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_HAND, CARD_ZONE_BOARD],
+						"conditions": [
+							{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+							{
+								"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+								"weapon": "刀法",
+							},
+						],
+						"limit": 1,
+					},
+					"actions": [{
+						"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+						"amount": 1,
+						"card": CARD_REF_ABILITY_SOURCE,
+					}],
 				}],
 			}],
 		}],

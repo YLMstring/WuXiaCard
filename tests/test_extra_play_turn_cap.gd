@@ -82,6 +82,10 @@ func _test_action_grant_blocks_feitian_end_turn_grant() -> void:
 		"owner": Rules.PLAYER_OWNER,
 		"card": _card(&"FeiTian5", Rules.PLAYER_OWNER, &"cap_feitian"),
 	}
+	board[8] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": _card(&"RanMuDaoFa2", Rules.PLAYER_OWNER, &"cap_feitian_blade"),
+	}
 	var state := State.new(
 		board,
 		[
@@ -127,6 +131,10 @@ func _test_simultaneous_feitian_requests_coalesce() -> void:
 	board[8] = {
 		"owner": Rules.PLAYER_OWNER,
 		"card": _card(&"FeiTian5", Rules.PLAYER_OWNER, &"cap_feitian_right"),
+	}
+	board[2] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": _card(&"RanMuDaoFa2", Rules.PLAYER_OWNER, &"cap_feitian_shared_blade"),
 	}
 	var state := State.new(
 		board,
