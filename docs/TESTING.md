@@ -236,6 +236,15 @@ Before comparing native performance on Windows, rebuild the library as
 powershell -ExecutionPolicy Bypass -File tools/build_duel_native.ps1 -Configuration Release -GodotCppTarget template_debug
 ```
 
+For every performance-sensitive change, preserve the exact pre-change source
+revision and its matching Release native build before editing. Measure that
+retained baseline and the candidate on the same machine with identical fixture,
+search configuration, node/depth limit, diagnostics, and audio settings. Prefer
+interleaved old/new runs and compare paired results; a historical report alone
+is not a sufficient A/B baseline because machine load can shift substantially.
+Do not clean up the retained worktree or binary until the result, traversal
+agreement, and configuration have been recorded and reviewed.
+
 `Debug + template_debug` remains useful for correctness debugging but is not a
 performance baseline; on the current workload it is roughly half-speed.
 

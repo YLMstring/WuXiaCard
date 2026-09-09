@@ -52,6 +52,11 @@ Never implement a historical plan merely because it exists. Confirm that it stil
   continuing feature work or attempting to hide it inside later optimization.
   Include the comparable baseline, current measurement, configuration, affected
   hotspot, and whether actions/scores/search traversal still match.
+- Before performance-sensitive changes, retain the exact pre-change source and
+  its matching Release native build for same-machine A/B measurement. Run the
+  old and new versions with identical fixtures and configuration, preferably in
+  an interleaved order. Do not delete the retained baseline until the comparison
+  result has been recorded and reviewed.
 
 ## Player-Visible Invariants
 
