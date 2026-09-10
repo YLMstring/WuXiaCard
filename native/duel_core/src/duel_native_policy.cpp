@@ -374,6 +374,163 @@ Array DuelNativeCompactKernel::get_board_defending_power_override_flags() const 
 	return flags;
 }
 
+bool DuelNativeCompactKernel::ability_has_summon_interception(
+	const CompiledAbility &ability
+) const {
+	// 危险区域按通用声明结构识别迎击，不把具体卡牌 ID 带进规则或界面层。
+	static const StringName summoned_event("card_summoned");
+	static const StringName after_summoned_event("card_after_summoned");
+	for (const CompiledTriggerRule &rule : ability.triggers) {
+		if (rule.event_id != summoned_event && rule.event_id != after_summoned_event) continue;
+		bool requires_enemy = false;
+		bool requires_range = false;
+		for (const CompiledCondition &condition : rule.conditions) {
+			if (condition.inverted) continue;
+			if (condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_ENEMY) requires_enemy = true;
+			else if (condition.opcode == ConditionOpcode::TRIGGER_CARD_IN_RANGE) requires_range = true;
+		}
+		bool attacks_trigger_card = false;
+		for (const CompiledAction &action : rule.actions) {
+			if (action.opcode == ActionOpcode::ATTACK_TRIGGER_CARD) {
+				attacks_trigger_card = true;
+				break;
+			}
+		}
+		if (requires_enemy && requires_range && attacks_trigger_card) return true;
+	}
+	return false;
+}
+
+bool DuelNativeCompactKernel::empty_cell_in_card_attack_range(
+	const NativeState &value,
+	int32_t source_cell,
+	int32_t target_cell
+) const {
+	// 这里只回答空格是否位于当前几何攻击范围内。点数、禁攻门控与后续连锁
+	// 故意不参与判断：红光是保守的视觉警告，不承诺迎击最终一定成功。
+	if (
+		source_cell < 0
+		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| target_cell < 0
+		|| target_cell >= static_cast<int32_t>(value.board_card_indices.size())
+		|| source_cell == target_cell
+		|| value.board_card_indices[source_cell] < 0
+		|| value.board_card_indices[target_cell] >= 0
+	) return false;
+	const int32_t source_card_index = value.board_card_indices[source_cell];
+	const int32_t source_owner = value.board_owners[source_cell];
+	const int32_t row_delta = target_cell / 3 - source_cell / 3;
+	const int32_t column_delta = target_cell % 3 - source_cell % 3;
+	const bool same_axis = row_delta == 0 || column_delta == 0;
+	const bool unlimited_range = card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::UNLIMITED_ATTACK_RANGE
+	);
+	if (!same_axis && !unlimited_range) return false;
+	if (
+		!same_axis
+		&& !card_has_modifier(
+			value,
+			source_card_index,
+			source_owner,
+			ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS
+		)
+	) return false;
+	if (unlimited_range) return true;
+
+	const int32_t distance = std::max(std::abs(row_delta), std::abs(column_delta));
+	if (distance <= 1) return true;
+	if (distance > 2 || !card_has_modifier(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO
+	)) return false;
+
+	int32_t direction = -1;
+	if (row_delta < 0) direction = 0;
+	else if (column_delta > 0) direction = 1;
+	else if (row_delta > 0) direction = 2;
+	else if (column_delta < 0) direction = 3;
+	const int32_t intervening_cell = neighbor_index(source_cell, direction);
+	const int32_t intervening_card_index = value.board_card_indices[intervening_cell];
+	if (intervening_card_index < 0) return true;
+	const bool intervening_is_ally = value.board_owners[intervening_cell] == source_owner;
+	const int32_t required_flag = intervening_is_ally ? 1 : 2;
+	return card_modifier_has_flag(
+		value,
+		source_card_index,
+		source_owner,
+		ModifierOpcode::ORTHOGONAL_ATTACK_RANGE_TWO,
+		required_flag
+	);
+}
+
+Array DuelNativeCompactKernel::get_hand_play_danger_flags(int64_t owner_id_value) const {
+	Array flags;
+	if (!loaded || (owner_id_value != 1 && owner_id_value != 2)) return flags;
+	const int32_t board_size = static_cast<int32_t>(std::min(
+		state.board_card_indices.size(),
+		state.board_owners.size()
+	));
+	flags.resize(board_size);
+	for (int32_t cell = 0; cell < board_size; ++cell) flags[cell] = false;
+	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
+	const int32_t enemy_owner = owner_id == 1 ? 2 : 1;
+
+	// 该查询只由手牌拖拽入口调用，不参与合法行动生成、状态键或 AI 搜索。
+	for (int32_t source_cell = 0; source_cell < board_size; ++source_cell) {
+		const int32_t source_card_index = state.board_card_indices[source_cell];
+		if (
+			source_card_index < 0
+			|| source_card_index >= static_cast<int32_t>(state.card_runtime_abilities.size())
+			|| state.board_owners[source_cell] != enemy_owner
+		) continue;
+		bool has_interception = false;
+		bool has_taiji_redirection = false;
+		for (
+			int32_t ability_index = 0;
+			ability_index < static_cast<int32_t>(state.card_runtime_abilities[source_card_index].size());
+			++ability_index
+		) {
+			const CompiledAbility *ability = runtime_ability(
+				state,
+				source_card_index,
+				ability_index
+			);
+			if (ability == nullptr || !ability_active_in_zone(*ability, 0)) continue;
+			if (ability_has_summon_interception(*ability)) has_interception = true;
+			for (const CompiledModifier &modifier : ability->modifiers) {
+				if (modifier.opcode == ModifierOpcode::ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES) {
+					has_taiji_redirection = true;
+					break;
+				}
+			}
+		}
+
+		if (has_interception) {
+			for (int32_t target_cell = 0; target_cell < board_size; ++target_cell) {
+				if (empty_cell_in_card_attack_range(state, source_cell, target_cell)) {
+					flags[target_cell] = true;
+				}
+			}
+		}
+		if (has_taiji_redirection) {
+			for (int32_t direction = 0; direction < 4; ++direction) {
+				const int32_t target_cell = neighbor_index(source_cell, direction);
+				if (
+					target_cell >= 0
+					&& target_cell < board_size
+					&& state.board_card_indices[target_cell] < 0
+				) flags[target_cell] = true;
+			}
+		}
+	}
+	return flags;
+}
+
 bool DuelNativeCompactKernel::card_modifier_has_flag(
 	const NativeState &value,
 	int32_t card_index,

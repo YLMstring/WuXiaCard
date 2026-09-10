@@ -22,6 +22,10 @@ static func get_board_defending_power_override_flags(state: StateData) -> Array[
 	return NativeRules.get_board_defending_power_override_flags(state)
 
 
+static func get_hand_play_danger_flags(state: StateData, owner_id: int) -> Array[bool]:
+	return NativeRules.get_hand_play_danger_flags(state, owner_id)
+
+
 static func has_legal_action_for_owner(state: StateData, owner_id: int) -> bool:
 	return NativeRules.count_legal_actions_for_owner(state, owner_id) > 0
 

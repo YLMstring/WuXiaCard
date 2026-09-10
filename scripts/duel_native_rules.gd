@@ -104,6 +104,16 @@ static func get_board_defending_power_override_flags(state: StateData) -> Array[
 	return flags
 
 
+static func get_hand_play_danger_flags(state: StateData, owner_id: int) -> Array[bool]:
+	var flags: Array[bool] = []
+	var kernel: Object = _load_query_kernel(state, "hand-play danger visual query")
+	if kernel == null:
+		return flags
+	for value: Variant in kernel.call("get_hand_play_danger_flags", owner_id) as Array:
+		flags.append(bool(value))
+	return flags
+
+
 static func count_legal_actions_for_owner(state: StateData, owner_id: int) -> int:
 	var kernel: Object = _load_query_kernel(state, "legal-action count")
 	return 0 if kernel == null else int(kernel.call("count_legal_actions_for_owner", owner_id))

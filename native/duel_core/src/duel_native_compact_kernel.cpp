@@ -36,6 +36,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::get_board_defending_power_override_flags
 	);
 	ClassDB::bind_method(
+		D_METHOD("get_hand_play_danger_flags", "owner_id"),
+		&DuelNativeCompactKernel::get_hand_play_danger_flags
+	);
+	ClassDB::bind_method(
 		D_METHOD("count_legal_actions_for_owner", "owner_id"),
 		&DuelNativeCompactKernel::count_legal_actions_for_owner
 	);

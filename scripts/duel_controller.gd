@@ -99,6 +99,7 @@ var _hovered_hand_target_owner: int = 0
 var _drag_source_zone: StringName = &""
 var _drag_source_index: int = -1
 var _drag_valid_targets: Array[int] = []
+var _drag_danger_targets: Array[int] = []
 var _drag_action_candidates: Array[ActionData] = []
 var _targeting_trace: Line2D = null
 var _targeting_trace_end_global: Vector2 = Vector2.ZERO
@@ -676,10 +677,18 @@ func _on_card_drag_started(card: CardView, pointer_position: Vector2) -> void:
 	_drag_source_index = _get_board_cell_for_card(card)
 	_drag_source_zone = ActionData.SOURCE_BOARD if _drag_source_index >= 0 else ActionData.SOURCE_HAND
 	_drag_valid_targets = _get_drag_targets(card)
+	_drag_danger_targets.clear()
 	if _drag_source_zone == ActionData.SOURCE_BOARD:
 		card.set_drag_follows_pointer(false)
 		_begin_targeting_trace(card, pointer_position)
 	else:
+		var danger_flags: Array[bool] = Simulator.get_hand_play_danger_flags(
+			duel_state,
+			card.owner_id
+		)
+		for target_cell: int in _drag_valid_targets:
+			if target_cell < danger_flags.size() and danger_flags[target_cell]:
+				_drag_danger_targets.append(target_cell)
 		card.set_drag_follows_pointer(true)
 		card.reparent(drag_layer, true)
 	_highlight_legal_cells()
@@ -702,7 +711,10 @@ func _on_card_drag_moved(_card: CardView, pointer_position: Vector2) -> void:
 	_hovered_hand_target_owner = target_hand_owner
 	_highlight_legal_cells()
 	if target_cell in _drag_valid_targets:
-		_set_cell_style(target_cell, "hover")
+		_set_cell_style(
+			target_cell,
+			"danger_hover" if target_cell in _drag_danger_targets else "hover"
+		)
 	elif _has_drag_hand_candidate(target_hand_owner, target_hand_index):
 		_set_hand_target_style(target_hand_owner, target_hand_index, "hover")
 
@@ -2584,6 +2596,7 @@ func _clear_drag_context() -> void:
 	_hovered_hand_target = -1
 	_hovered_hand_target_owner = 0
 	_drag_valid_targets.clear()
+	_drag_danger_targets.clear()
 	_drag_action_candidates.clear()
 
 
@@ -2658,7 +2671,10 @@ func _has_legal_activate_from(source_cell: int) -> bool:
 func _highlight_legal_cells() -> void:
 	for cell_index: int in range(board_cells.size()):
 		if cell_index in _drag_valid_targets:
-			_set_cell_style(cell_index, "legal")
+			_set_cell_style(
+				cell_index,
+				"danger" if cell_index in _drag_danger_targets else "legal"
+			)
 		else:
 			_set_cell_style(cell_index, "normal")
 	_highlight_legal_hand_targets()
@@ -2730,9 +2746,17 @@ func _set_cell_style(cell_index: int, mode: String) -> void:
 		style.bg_color = Color(0.18, 0.72, 0.68, 0.28)
 		style.border_color = Color("45b9ad")
 		style.set_border_width_all(3)
+	elif mode == "danger":
+		style.bg_color = Color(0.72, 0.18, 0.22, 0.28)
+		style.border_color = Color("b9454d")
+		style.set_border_width_all(3)
 	elif mode == "hover":
 		style.bg_color = Color(0.25, 0.86, 0.78, 0.52)
 		style.border_color = Color("75e0d2")
+		style.set_border_width_all(4)
+	elif mode == "danger_hover":
+		style.bg_color = Color(0.86, 0.25, 0.29, 0.52)
+		style.border_color = Color("e0757b")
 		style.set_border_width_all(4)
 	board_cells[cell_index].add_theme_stylebox_override("panel", style)
 

@@ -22,6 +22,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_live_catalog_compiles_natively()
+	_test_hand_play_danger_flags()
 	_test_native_rejects_unsupported_rule_at_load()
 	_test_native_fresh_prototype_roots_are_isolated()
 	_test_every_catalog_card_hand_play_runs_in_production()
@@ -80,6 +81,74 @@ func _test_live_catalog_compiles_natively() -> void:
 		int(layout.get("invalid_compiled_ability_set_count", -1)) == 0,
 		"Every live catalog ability set compiles natively"
 	)
+
+
+func _test_hand_play_danger_flags() -> void:
+	var after_board: Array = Rules.empty_board()
+	var after_source: Dictionary = Catalog.create_instance(
+		&"CangSongYingKe2",
+		Rules.OPPONENT_OWNER,
+		&"danger_after_source"
+	)
+	after_source["powers"] = [0, 0, 0, 0]
+	after_board[4] = {"owner": Rules.OPPONENT_OWNER, "card": after_source}
+	var flags: Array[bool] = Simulator.get_hand_play_danger_flags(
+		State.new(after_board),
+		Rules.PLAYER_OWNER
+	)
+	_check(flags.size() == 9, "Hand-play danger query returns one flag per board cell")
+	_check(
+		flags[1] and flags[3] and flags[5] and flags[7],
+		"After-summoned interception marks its geometric adjacent range despite zero powers"
+	)
+	_check(not flags[0] and not flags[2] and not flags[6] and not flags[8], "Adjacent interception does not mark diagonal cells")
+
+	var fumo_board: Array = Rules.empty_board()
+	var fumo_source: Dictionary = Catalog.create_instance(
+		&"FuMoQuan4",
+		Rules.OPPONENT_OWNER,
+		&"danger_summoned_source"
+	)
+	(fumo_source["active_abilities"] as Array).append(
+		Catalog.normalize_ability(Catalog.FUMO_SUMMON_REACTION)
+	)
+	fumo_board[0] = {"owner": Rules.OPPONENT_OWNER, "card": fumo_source}
+	flags = Simulator.get_hand_play_danger_flags(State.new(fumo_board), Rules.PLAYER_OWNER)
+	_check(flags[1] and flags[2], "Summoned-window interception includes current range-two modifiers")
+
+	fumo_board[1] = {
+		"owner": Rules.OPPONENT_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"danger_ally_blocker"),
+	}
+	flags = Simulator.get_hand_play_danger_flags(State.new(fumo_board), Rules.PLAYER_OWNER)
+	_check(not flags[2], "A current allied blocker prevents a disallowed range-two danger mark")
+	fumo_board[1] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"danger_enemy_bridge"),
+	}
+	flags = Simulator.get_hand_play_danger_flags(State.new(fumo_board), Rules.PLAYER_OWNER)
+	_check(flags[2], "FuMoQuan4 range-two danger can cross its currently permitted enemy")
+
+	var taiji_board: Array = Rules.empty_board()
+	var taiji_source: Dictionary = Catalog.create_instance(
+		&"TaiJiSanHuan4",
+		Rules.OPPONENT_OWNER,
+		&"danger_taiji_source"
+	)
+	taiji_board[4] = {"owner": Rules.OPPONENT_OWNER, "card": taiji_source}
+	flags = Simulator.get_hand_play_danger_flags(State.new(taiji_board), Rules.PLAYER_OWNER)
+	_check(flags[1] and flags[3] and flags[5] and flags[7], "Taiji redirection marks current orthogonal neighbors")
+	(taiji_source["active_abilities"] as Array).clear()
+	flags = Simulator.get_hand_play_danger_flags(State.new(taiji_board), Rules.PLAYER_OWNER)
+	_check(not flags.has(true), "A source that lost its danger-bearing ability marks no cells")
+
+	var friendly_board: Array = Rules.empty_board()
+	friendly_board[4] = {
+		"owner": Rules.PLAYER_OWNER,
+		"card": Catalog.create_instance(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"danger_friendly_source"),
+	}
+	flags = Simulator.get_hand_play_danger_flags(State.new(friendly_board), Rules.PLAYER_OWNER)
+	_check(not flags.has(true), "Friendly interception sources never mark hand-play danger")
 
 
 func _test_native_rejects_unsupported_rule_at_load() -> void:

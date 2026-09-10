@@ -897,6 +897,7 @@ public:
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
 	Array get_board_defending_power_override_flags() const;
+	Array get_hand_play_danger_flags(int64_t owner_id) const;
 	int64_t count_legal_actions_for_owner(int64_t owner_id) const;
 	bool is_action_legal_for_owner(const Dictionary &action, int64_t owner_id) const;
 	bool is_terminal_state() const;
@@ -1192,6 +1193,12 @@ private:
 		int32_t owner_id,
 		ModifierOpcode opcode,
 		int32_t *out_value = nullptr
+	) const;
+	bool ability_has_summon_interception(const CompiledAbility &ability) const;
+	bool empty_cell_in_card_attack_range(
+		const NativeState &value,
+		int32_t source_cell,
+		int32_t target_cell
 	) const;
 	bool ability_active_in_zone(const CompiledAbility &ability, int32_t zone) const;
 	bool card_receives_aura_modifier(

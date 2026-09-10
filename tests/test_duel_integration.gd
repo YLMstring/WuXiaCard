@@ -52,6 +52,7 @@ func _run() -> void:
 	_check_card_edge_labels(duel)
 	await _check_card_picture_layout()
 	await _check_hand_drag_targets_follow_simulator_legality()
+	await _check_hand_play_danger_highlights()
 	await _check_owner_aura_board_transparency()
 	_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
 	_check_hand_slots(duel.get_node("DuelCanvas/OpponentHand"))
@@ -751,6 +752,75 @@ func _check_owner_aura_board_transparency() -> void:
 
 	duel.queue_free()
 	await process_frame
+
+
+func _check_hand_play_danger_highlights() -> void:
+	var duel: Node = _instantiate_duel()
+	duel.set("testing_mode", true)
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+
+	var board: Array = Rules.empty_board()
+	board[1] = {
+		"card": Catalog.create_instance(&"TaiJiSanHuan4", Rules.OPPONENT_OWNER, &"danger_taiji"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"danger_drag_card")],
+		[Catalog.create_instance(&"HuJiaDao1", Rules.OPPONENT_OWNER, &"danger_center_lock")],
+		Rules.PLAYER_OWNER
+	)
+	var started: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_DUEL_STARTED,
+		{}
+	)
+	_check(bool(started.get("valid", false)), "Danger-highlight fixture grants the center restriction")
+	state = started.get("state", state) as State
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+
+	var hand_card: Control = _first_card(duel.get_node("DuelCanvas/PlayerHand"))
+	duel._on_card_drag_started(hand_card, hand_card.get_global_rect().get_center())
+	var board_cells: Array = duel.get("board_cells") as Array
+	_check(
+		_cell_border_color(board_cells[0] as PanelContainer).is_equal_approx(Color("b9454d")),
+		"A legal cell adjacent to an enemy Taiji source uses the danger-red border"
+	)
+	_check(
+		_cell_border_color(board_cells[6] as PanelContainer).is_equal_approx(Color("45b9ad")),
+		"A safe legal cell retains the existing blue border"
+	)
+	_check(
+		_cell_border_color(board_cells[4] as PanelContainer).is_equal_approx(Color("c7bda8")),
+		"A dangerous but illegal center cell remains visually normal"
+	)
+
+	duel._on_card_drag_moved(
+		hand_card,
+		(board_cells[0] as Control).get_global_rect().get_center()
+	)
+	_check(
+		_cell_border_color(board_cells[0] as PanelContainer).is_equal_approx(Color("e0757b")),
+		"Hovering a dangerous legal cell uses the brighter red hover border"
+	)
+	duel._on_card_drag_ended(hand_card, Vector2(-100.0, -100.0))
+	await process_frame
+	_check(
+		_cell_border_color(board_cells[0] as PanelContainer).is_equal_approx(Color("c7bda8")),
+		"Ending the drag clears the danger highlight"
+	)
+
+	duel.queue_free()
+	await process_frame
+
+
+func _cell_border_color(cell: PanelContainer) -> Color:
+	var style := cell.get_theme_stylebox("panel") as StyleBoxFlat
+	return style.border_color if style != null else Color.TRANSPARENT
 
 
 func _check_hand_slots(container: Node) -> void:

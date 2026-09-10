@@ -77,6 +77,15 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   by an owner aura or another placement rule do not glow; a conditionally
   forbidden cell may glow when the simulator reports that its fallback condition
   has become legal.
+- During that same hand drag, a legal cell also covered by an enemy's current
+  summon interception or adjacent Taiji redirection is shown with the red danger
+  style instead of the normal blue legal style. The native visual query recognizes
+  runtime trigger/modifier structure rather than card IDs. It follows current
+  geometric range and intervening-card rules, but intentionally ignores whether
+  powers or later gates would make the reaction succeed. Illegal cells never glow,
+  friendly sources never create danger, and board-activation dragging never uses
+  this overlay. Hover keeps the danger cell red, and every drag end/cancel clears
+  the overlay.
 
 ## Battle Animation Ordering
 
