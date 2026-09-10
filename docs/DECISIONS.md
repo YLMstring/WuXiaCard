@@ -398,9 +398,14 @@ respectively, in row-major order. The source itself is eligible.
 - At difficulty 4, a later enemy's Bagua powers are set to `[2, 2, 2, 2]`; at
   difficulty 7 they are set to `[4, 4, 4, 4]`. These are absolute replacements
   for the catalog's all-`-1` powers, not additions, and have no animation.
-- At difficulty 5, the player may choose to act first only when the five-card
-  main deck's total tier is strictly lower than the opponent's. Lower
-  difficulties retain the not-higher rule.
+- At every difficulty, the player may choose to act first when the five-card
+  main deck's total tier is not higher than the opponent's.
+- Before difficulty 5, ordinary defeat rewards may use any locked tier from 1
+  through the current character tier. At difficulty 5 and above, their ceiling
+  becomes `max(1, current tier - 1)`, so tier 1 remains available as the floor.
+  Catalog-declared guaranteed defeat rewards are merged from a separate pool
+  and are not restricted by this ordinary ceiling. Victory rewards do not use
+  this difficulty rule.
 - By default, unrevealed hand cards expose only their four printed/current
   powers while keeping identity, art, text, ki, abilities, tooltip, and
   inspection concealed. All-four-`-1` cards continue to show no powers.
@@ -685,6 +690,21 @@ respectively, in row-major order. The source itself is eligible.
   perfect runtime copy of the discarded snapshot. No hand means no prevention;
   failed ki payment stops only the copy, while a full hand after discard chains
   still spends the ki and makes the add action no-effect.
+
+## 梯云纵四
+
+- Its draw reaction is discovered at `CARD_BEFORE_EXILED`. It matches when the
+  pending exile was caused by an effect whose source-owner snapshot equals
+  TiYunZong4's current owner. Direct exile, self-exile, and
+  power-reduction-to-zero exile all use the same attribution; the removed
+  card's zone, owner, and original owner are irrelevant.
+- The effect source owner is frozen when the causing action starts. Later
+  source movement, ownership changes, or departure do not change attribution.
+  Missing/system sources and enemy sources do not match. A draw already
+  resolved before another before-exile reaction cancels the pending exile is
+  not rolled back.
+- The snapshot exists only in transient event context. It is not stored in
+  `DuelState`, save data, replay state, search keys, or the transposition table.
 
 ## 玉碎昆冈
 

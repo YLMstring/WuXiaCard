@@ -1087,6 +1087,10 @@ func create_reward_offer_and_save(
 			"reward_ids": existing,
 		}
 	var player_tier: int = get_character_tier(profile)
+	var defeat_reward_max_tier: int = Difficulty.get_max_defeat_reward_tier(
+		get_run_difficulty(profile),
+		player_tier
+	)
 	var unlocked: Array[StringName] = get_unlocked_ids(profile)
 	var eligible: Array[StringName] = []
 	for card_id: StringName in Catalog.get_all_card_ids():
@@ -1102,11 +1106,7 @@ func create_reward_offer_and_save(
 			) as Array
 			qualifies = qualifies or player_tier in extra_victory_tiers
 		if outcome == REWARD_DEFEAT:
-			qualifies = (
-				card_tier == 1
-				if player_tier <= 1
-				else card_tier >= 1 and card_tier < player_tier
-			)
+			qualifies = card_tier >= 1 and card_tier <= defeat_reward_max_tier
 		if qualifies:
 			eligible.append(card_id)
 	var guaranteed_ids: Array[StringName] = []

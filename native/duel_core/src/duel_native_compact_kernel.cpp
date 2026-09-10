@@ -914,6 +914,10 @@ DuelNativeCompactKernel::EventContext DuelNativeCompactKernel::event_context_fro
 		"trigger_previous_owner_id",
 		result.trigger_owner
 	));
+	result.exile_effect_source_owner = static_cast<int32_t>(context.get(
+		"exile_effect_source_owner_id",
+		0
+	));
 	result.trigger_zone = zone_kind(StringName(context.get("trigger_zone", StringName())));
 	result.trigger_logical_index = static_cast<int32_t>(context.get("trigger_logical_index", -1));
 	if (result.trigger_card_index >= 0) {

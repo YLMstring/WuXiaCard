@@ -570,6 +570,7 @@ bool DuelNativeCompactKernel::exile_card(
 	int32_t card_index,
 	int32_t source_cell,
 	int32_t ability_source_card_index,
+	int32_t ability_source_owner,
 	bool self_removal,
 	const StringName &exile_reason,
 	const EventContext &parent_context,
@@ -597,6 +598,7 @@ bool DuelNativeCompactKernel::exile_card(
 		before_context.trigger_logical_index = initial_index;
 		before_context.trigger_was_on_board = initial_zone == 0;
 		before_context.exile_reason = exile_reason;
+		before_context.exile_effect_source_owner = ability_source_owner;
 		Resolution before = resolve_event(value, StringName("card_before_exiled"), before_context, exile_stack);
 		exile_stack.pop_back();
 		if (!before.supported) {
@@ -654,6 +656,7 @@ bool DuelNativeCompactKernel::exile_card(
 	after_context.trigger_logical_index = logical_index;
 	after_context.trigger_was_on_board = zone == 0;
 	after_context.exile_reason = exile_reason;
+	after_context.exile_effect_source_owner = ability_source_owner;
 	Resolution after = resolve_event(value, StringName("card_after_exiled"), after_context, exile_stack);
 	if (!after.supported) {
 		resolution.reason = after.reason;

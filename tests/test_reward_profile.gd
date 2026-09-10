@@ -137,7 +137,7 @@ func _run() -> void:
 	_check(not loss_ids.is_empty(), "Tier-three defeat has lower-tier rewards")
 	for card_id: StringName in loss_ids:
 		var tier: int = int(Cards.get_definition(card_id)["tier"])
-		_check(tier >= 1 and tier < 3, "Defeat reward comes from any lower tier")
+		_check(tier >= 1 and tier <= 3, "Pre-advance-five defeat reward may include the current tier")
 
 	var schema_five: Dictionary = profile.duplicate(true)
 	schema_five["schema_version"] = 5
@@ -200,10 +200,85 @@ func _run() -> void:
 			"%s keeps its real tier-one identity" % special_id
 		)
 
+	_test_difficulty_five_defeat_reward_ceiling(store)
 	_test_kuihua_zero_defeat_guarantee(store)
 
 	_cleanup()
 	_finish()
+
+
+func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
+	var base: Dictionary = store.create_testing_profile(store.create_default_profile())
+	base["run_active"] = true
+	base["selected_sect_id"] = "HuaShanPai"
+	base["level"] = 5
+	base["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(5)[0])
+	base["max_unlocked_difficulty"] = 5
+	base["last_selected_difficulty"] = 5
+	base["pending_reward_card_ids"] = []
+	base["shown_guaranteed_reward_card_ids"] = []
+	var locked_by_tier: Dictionary = {}
+	for tier: int in range(1, 4):
+		var card_id: StringName = _first_library_card_for_tier(base, tier)
+		_check(card_id != &"", "Defeat reward fixture finds a tier-%d card" % tier)
+		locked_by_tier[tier] = card_id
+		_lock_library_card(base, card_id)
+
+	var difficulty_four: Dictionary = base.duplicate(true)
+	difficulty_four["run_difficulty"] = 4
+	var difficulty_four_offer: Dictionary = store.create_reward_offer_and_save(
+		difficulty_four,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(540)
+	)
+	var difficulty_four_ids: Array[StringName] = store.get_pending_reward_ids(
+		difficulty_four_offer.get("profile", {})
+	)
+	_check(
+		bool(difficulty_four_offer.get("offered", false))
+		and locked_by_tier[3] in difficulty_four_ids,
+		"Before difficulty five, defeat rewards include the current tier"
+	)
+
+	var difficulty_five: Dictionary = base.duplicate(true)
+	difficulty_five["run_difficulty"] = 5
+	var difficulty_five_offer: Dictionary = store.create_reward_offer_and_save(
+		difficulty_five,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(550)
+	)
+	var difficulty_five_ids: Array[StringName] = store.get_pending_reward_ids(
+		difficulty_five_offer.get("profile", {})
+	)
+	_check(
+		bool(difficulty_five_offer.get("offered", false))
+		and locked_by_tier[1] in difficulty_five_ids
+		and locked_by_tier[2] in difficulty_five_ids
+		and locked_by_tier[3] not in difficulty_five_ids,
+		"Difficulty five excludes the current tier while retaining all lower tiers"
+	)
+
+	var tier_one: Dictionary = store.create_testing_profile(store.create_default_profile())
+	tier_one["run_active"] = true
+	tier_one["selected_sect_id"] = "HuaShanPai"
+	tier_one["level"] = 1
+	tier_one["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(1)[0])
+	tier_one["max_unlocked_difficulty"] = 5
+	tier_one["last_selected_difficulty"] = 5
+	tier_one["run_difficulty"] = 5
+	tier_one["pending_reward_card_ids"] = []
+	tier_one["shown_guaranteed_reward_card_ids"] = []
+	var tier_one_id: StringName = _first_library_card_for_tier(tier_one, 1)
+	_lock_library_card(tier_one, tier_one_id)
+	var tier_one_offer: Dictionary = store.create_reward_offer_and_save(
+		tier_one,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(551)
+	)
+	_check(
+		store.get_pending_reward_ids(tier_one_offer.get("profile", {})) == [tier_one_id],
+		"Difficulty five keeps tier one as the defeat reward floor"
+	)
 
 
 func _test_kuihua_zero_defeat_guarantee(store: RefCounted) -> void:
@@ -212,6 +287,9 @@ func _test_kuihua_zero_defeat_guarantee(store: RefCounted) -> void:
 	qualifying["selected_sect_id"] = "HuaShanPai"
 	qualifying["level"] = 11
 	qualifying["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(11)[0])
+	qualifying["max_unlocked_difficulty"] = 5
+	qualifying["last_selected_difficulty"] = 5
+	qualifying["run_difficulty"] = 5
 	qualifying["pending_reward_card_ids"] = []
 	qualifying["shown_guaranteed_reward_card_ids"] = []
 	for locked_id: StringName in [
@@ -354,6 +432,14 @@ func _lock_library_card(profile: Dictionary, card_id: StringName) -> void:
 	if library_index >= 0:
 		library.remove_at(library_index)
 		library.append("")
+
+
+func _first_library_card_for_tier(profile: Dictionary, tier: int) -> StringName:
+	for value: Variant in profile.get("library_slots", []):
+		var card_id := StringName(String(value))
+		if card_id != &"" and int(Cards.get_definition(card_id).get("tier", 0)) == tier:
+			return card_id
+	return &""
 
 
 func _replace_main_deck_card(

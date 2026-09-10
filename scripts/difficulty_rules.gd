@@ -10,7 +10,7 @@ const EFFECT_TEXTS: Array[String] = [
 	"可挑战武林神话",
 	"后行动时，友方只占据一个八卦方位",
 	"先行动时，敌方占据的八卦方位点数变为二",
-	"卡组总品阶低于对手时方可选择先攻",
+	"战败后获得的卡牌品阶降低",
 	"后行动时，友方不占据八卦方位",
 	"先行动时，敌方占据的八卦方位点数变为四",
 	"无法看到未揭示的卡牌的点数",
@@ -53,8 +53,11 @@ static func get_later_enemy_bagua_power(difficulty: int) -> int:
 	return -1
 
 
-static func player_must_be_strictly_lower_to_go_first(difficulty: int) -> bool:
-	return normalize(difficulty) >= 5
+static func get_max_defeat_reward_tier(difficulty: int, character_tier: int) -> int:
+	var normalized_tier: int = maxi(1, character_tier)
+	if normalize(difficulty) >= 5:
+		return maxi(1, normalized_tier - 1)
+	return normalized_tier
 
 
 static func hides_unrevealed_card_powers(difficulty: int) -> bool:

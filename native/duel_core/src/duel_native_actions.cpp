@@ -1163,6 +1163,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 			target_card_index,
 			source_cell,
 			group.source_card_index,
+			action_context.ability_source_owner,
 			target_card_index == group.source_card_index,
 			StringName("power_reached_zero"),
 			event_context,
@@ -1704,7 +1705,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			);
 		}
 		case ActionOpcode::EXILE_SELF:
-			return exile_card(value, action_context.action_subject_card_index, action_source_cell, action_context.action_subject_card_index, true, StringName("ability_exile_self"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
+			return exile_card(value, action_context.action_subject_card_index, action_source_cell, action_context.action_subject_card_index, action_context.ability_source_owner, true, StringName("ability_exile_self"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		case ActionOpcode::EXILE_CARD: {
@@ -1715,7 +1716,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
 			else return ActionOutcome::UNSUPPORTED;
 			if (target < 0) return ActionOutcome::NO_EFFECT;
-			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
+			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, action_context.ability_source_owner, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		}
@@ -1856,6 +1857,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					target,
 					action_source_cell,
 					group.source_card_index,
+					action_context.ability_source_owner,
 					target == group.source_card_index,
 					StringName("power_reached_zero"),
 					event_context,
@@ -3306,6 +3308,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 			target_card_index,
 			source_current_cell,
 			action_context.ability_source_card_index,
+			action_context.ability_source_owner,
 			target_card_index == action_context.ability_source_card_index,
 			StringName("return_to_full_hand"),
 			event_context,

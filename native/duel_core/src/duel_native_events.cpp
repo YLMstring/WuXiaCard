@@ -74,8 +74,11 @@ bool DuelNativeCompactKernel::conditions_match(
 				}
 				break;
 			}
-			case ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND:
-				matched = !(context.trigger_zone == 1 && context.trigger_owner == group.source_owner);
+			case ConditionOpcode::EXILE_EFFECT_SOURCE_IS_ALLY:
+				matched = (
+					context.exile_effect_source_owner != 0
+					&& context.exile_effect_source_owner == group.source_owner
+				);
 				break;
 			case ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF:
 				if (

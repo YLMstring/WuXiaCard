@@ -27,7 +27,7 @@ func _test_normalization_and_text() -> void:
 		"可挑战武林神话",
 		"后行动时，友方只占据一个八卦方位",
 		"先行动时，敌方占据的八卦方位点数变为二",
-		"卡组总品阶低于对手时方可选择先攻",
+		"战败后获得的卡牌品阶降低",
 		"后行动时，友方不占据八卦方位",
 		"先行动时，敌方占据的八卦方位点数变为四",
 		"无法看到未揭示的卡牌的点数",
@@ -74,8 +74,9 @@ func _test_cumulative_bagua_rules() -> void:
 
 
 func _test_remaining_thresholds() -> void:
-	_check(not Difficulty.player_must_be_strictly_lower_to_go_first(4), "Difficulty four permits equal tiers")
-	_check(Difficulty.player_must_be_strictly_lower_to_go_first(5), "Difficulty five requires lower tiers")
+	_check(Difficulty.get_max_defeat_reward_tier(4, 3) == 3, "Difficulty four keeps current-tier defeat rewards")
+	_check(Difficulty.get_max_defeat_reward_tier(5, 3) == 2, "Difficulty five lowers the defeat reward ceiling")
+	_check(Difficulty.get_max_defeat_reward_tier(9, 1) == 1, "Tier one remains the defeat reward floor")
 	_check(not Difficulty.hides_unrevealed_card_powers(7), "Difficulty seven shows unrevealed powers")
 	_check(Difficulty.hides_unrevealed_card_powers(8), "Difficulty eight hides unrevealed powers")
 	_check(is_equal_approx(Difficulty.enemy_search_time_multiplier(8), 1.0), "Difficulty eight keeps normal search time")

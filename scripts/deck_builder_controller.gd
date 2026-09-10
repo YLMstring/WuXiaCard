@@ -15,7 +15,6 @@ const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
 const DEFAULT_STATUS: String = "长按拖动中央卡牌，点击两侧进入战斗"
 const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
-const GO_FIRST_STRICTLY_LOWER_NOTICE: String = "卡组总品阶低于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
@@ -402,13 +401,7 @@ func _refresh_start_controls() -> void:
 		return
 	var player_total: int = _get_tier_total(_get_player_main_deck_ids())
 	var enemy_total: int = _get_tier_total(_effective_enemy_card_ids)
-	_go_first_allowed = (
-		player_total < enemy_total
-		if Difficulty.player_must_be_strictly_lower_to_go_first(
-			_profile_store.get_run_difficulty(profile)
-		)
-		else player_total <= enemy_total
-	)
+	_go_first_allowed = player_total <= enemy_total
 	if _go_first_ink_material != null:
 		_go_first_ink_material.set_shader_parameter(
 			"ink_color",
@@ -422,10 +415,6 @@ func _refresh_start_controls() -> void:
 
 
 func _get_go_first_blocked_notice() -> String:
-	if Difficulty.player_must_be_strictly_lower_to_go_first(
-		_profile_store.get_run_difficulty(profile)
-	):
-		return GO_FIRST_STRICTLY_LOWER_NOTICE
 	return GO_FIRST_NOT_HIGHER_NOTICE
 
 

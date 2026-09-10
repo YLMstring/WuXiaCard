@@ -351,24 +351,28 @@ func _run() -> void:
 		false,
 		5
 	)
-	_check(bool(difficulty_five_begin.get("ok", false)), "Difficulty-five strict-tier fixture begins")
+	_check(bool(difficulty_five_begin.get("ok", false)), "Difficulty-five go-first fixture begins")
 	var difficulty_five_builder: Variant = BUILDER_SCENE.instantiate()
 	difficulty_five_builder.profile_path = _save_path
 	difficulty_five_builder.upcoming_enemy_card_ids = fixture_store.get_main_deck_ids(
 		difficulty_five_begin.get("profile", {})
 	)
+	difficulty_five_builder.duel_requested.connect(
+		func(owner_id: int) -> void: _duel_requests.append(owner_id)
+	)
 	root.add_child(difficulty_five_builder)
 	await process_frame
 	_check(
-		not difficulty_five_builder.debug_can_go_first(),
-		"Difficulty five blocks equal total tiers from going first"
+		difficulty_five_builder.debug_can_go_first(),
+		"Difficulty five permits equal total tiers to go first"
 	)
-	var strict_go_first := difficulty_five_builder.get_node("DuelCanvas/GoFirstButton") as Button
-	strict_go_first.pressed.emit()
+	var difficulty_five_request_count: int = _duel_requests.size()
+	var difficulty_five_go_first := difficulty_five_builder.get_node("DuelCanvas/GoFirstButton") as Button
+	difficulty_five_go_first.pressed.emit()
 	_check(
-		difficulty_five_builder.debug_get_status()
-		== "卡组总品阶低于对手时方可选择先攻",
-		"Difficulty-five blocked press shows the strict lower-tier notice"
+		_duel_requests.size() == difficulty_five_request_count + 1
+		and _duel_requests.back() == DuelRules.PLAYER_OWNER,
+		"Difficulty-five equal-tier choice requests a player opening turn"
 	)
 	difficulty_five_builder.queue_free()
 	await process_frame

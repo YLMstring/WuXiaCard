@@ -100,7 +100,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_IS_ENEMY,
 		TRIGGER_CARD_IN_RANGE,
 		TRIGGER_CARD_ADJACENT_TO_SOURCE,
-		TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
+		EXILE_EFFECT_SOURCE_IS_ALLY,
 		TRIGGER_CARD_REVEALED_TO_SELF,
 		TRIGGER_CARD_WAS_ENEMY,
 		TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF,
@@ -492,6 +492,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName attack_reason;
 		StringName flip_reason;
 		StringName exile_reason;
+		int32_t exile_effect_source_owner = 0;
 		StringName discard_batch_id;
 	};
 
@@ -1504,6 +1505,7 @@ private:
 		int32_t card_index,
 		int32_t source_cell,
 		int32_t ability_source_card_index,
+		int32_t ability_source_owner,
 		bool self_removal,
 		const StringName &exile_reason,
 		const EventContext &parent_context,

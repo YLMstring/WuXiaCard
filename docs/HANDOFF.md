@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-09
+Updated: 2026-09-10
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -154,6 +154,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   before-flip rule discards the physical-leftmost hand card to prevent flipping,
   then spends one ki to add a new-ID perfect runtime copy of that discarded
   snapshot.
+- `TiYunZong4` listens at `CARD_BEFORE_EXILED` and draws when the pending exile
+  was caused by an effect whose snapshotted source owner is allied to
+  TiYunZong4's current owner. This includes direct exile, self-exile, and
+  power-reduction-to-zero exile, regardless of the removed card's zone or
+  owner. The source-owner snapshot is transient event context only; it does not
+  enter duel state, saves, replay state, search keys, or the transposition table.
 - `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
   selection. Their point gains occur only after the required discard count.
   Locked prevented-flip reactions exile only the exact target attacked by that
@@ -247,8 +253,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   difficulty data. Legacy saves unlock and select difficulty 2, and preserved
   active runs migrate as difficulty 2. `DifficultyRules` is the central table
   for all cumulative effects and exact current-tier prompt text.
-- Difficulty 5 changes the go-first gate from total tier `<=` to `<` the
-  opponent. Below difficulty 8, unrevealed cards show their four powers while
+- Difficulty 5 lowers ordinary defeat-reward eligibility from tiers
+  `1..current tier` to `1..max(1, current tier - 1)`; tier 1 therefore remains
+  the floor. Catalog-declared guaranteed defeat rewards remain a separate pool
+  and ignore this ordinary ceiling. All difficulties use the base go-first
+  rule: the player's total deck tier must be `<=` the opponent's. Below
+  difficulty 8, unrevealed cards show their four powers while
   identity, art, text, ki, abilities, tooltip, and inspection remain concealed;
   all-four-`-1` cards still show none. Difficulty 8 conceals those powers in
   battle, deck building, and rewards. Difficulty 9 doubles the base five-second

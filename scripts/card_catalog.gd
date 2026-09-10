@@ -88,7 +88,7 @@ const CONDITION_SELECTED_CARD_REVEALED_TO_SELF: StringName = (
 )
 const CONDITION_ATTACK_IS_NOT_REPEAT: StringName = &"attack_is_not_repeat"
 const CONDITION_ACTIVATION_OWNER_IS_ALLY: StringName = &"activation_owner_is_ally"
-const CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND: StringName = &"trigger_card_outside_source_owner_hand"
+const CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY: StringName = &"exile_effect_source_is_ally"
 const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
 const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
@@ -249,7 +249,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
 	CONDITION_ACTIVATION_OWNER_IS_ALLY,
-	CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND,
+	CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY,
 	CONDITION_DISCARD_OWNER_IS_SELF,
 	CONDITION_ABILITY_SOURCE_IN_ZONE,
 ]
@@ -1440,10 +1440,10 @@ const TIYUNZONG_LOCKED_FLIP_MOVE: Dictionary = {
 	}],
 }
 
-const TIYUNZONG_DRAW_OUTSIDE_HAND_EXILE: Dictionary = {
+const TIYUNZONG_DRAW_ON_ALLY_EFFECT_EXILE: Dictionary = {
 	"triggers": [{
 		"event": CARD_BEFORE_EXILED,
-		"conditions": [{"type": CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND}],
+		"conditions": [{"type": CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY}],
 		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
 	}],
 }
@@ -3494,7 +3494,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
 		"abilities": [
-			TIYUNZONG_DRAW_OUTSIDE_HAND_EXILE,
+			TIYUNZONG_DRAW_ON_ALLY_EFFECT_EXILE,
 			TIYUNZONG_LOCKED_FLIP_MOVE,
 			TIYUNZONG_RESUMMON_ACTIVATION,
 		],

@@ -18,7 +18,7 @@ func _run() -> void:
 	_test_vocabulary_and_catalog_declarations()
 	_test_activation_resummons_fresh_instances_in_order()
 	_test_flip_move_replaces_only_when_move_succeeds()
-	_test_tier_four_draws_only_outside_current_owner_hand()
+	_test_tier_four_draws_for_allied_effect_exiles()
 	_finish()
 
 
@@ -26,8 +26,8 @@ func _test_vocabulary_and_catalog_declarations() -> void:
 	_check(Catalog.ACTION_DEPART_CARD_FOR_RESUMMON in Catalog.KNOWN_ACTIONS, "Generic resummon departure is registered")
 	_check(Catalog.CARD_REF_LAST_SUMMONED_CARD in Catalog.KNOWN_CARD_REFERENCES, "Last summoned card is a known reference")
 	_check(
-		Catalog.CONDITION_TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND in Catalog.KNOWN_TRIGGER_CONDITIONS,
-		"Outside-current-owner-hand exile condition is registered"
+		Catalog.CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY in Catalog.KNOWN_TRIGGER_CONDITIONS,
+		"Allied-effect exile-source condition is registered"
 	)
 	_check(Catalog.validate_catalog().is_empty(), "All TiYunZong declarations validate")
 	for card_id: StringName in [&"TiYunZong2", &"TiYunZong3", &"TiYunZong4"]:
@@ -120,44 +120,193 @@ func _test_flip_move_replaces_only_when_move_succeeds() -> void:
 	)
 
 
-func _test_tier_four_draws_only_outside_current_owner_hand() -> void:
-	var own_hand_board: Array = Rules.empty_board()
-	own_hand_board[8] = _slot(Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"own_hand_tiyun"), Rules.PLAYER_OWNER)
-	own_hand_board[7] = _slot(Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.OPPONENT_OWNER, &"enemy_huzhua"), Rules.OPPONENT_OWNER)
-	var own_hand_transition: Dictionary = Simulator.apply_action(
+func _test_tier_four_draws_for_allied_effect_exiles() -> void:
+	var allied_board: Array = Rules.empty_board()
+	allied_board[8] = _slot(
+		Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"allied_tiyun"),
+		Rules.PLAYER_OWNER
+	)
+	allied_board[7] = _slot(
+		_plain(
+			&"allied_exile_source",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			[_one_shot_draw_exile_ability()]
+		),
+		Rules.PLAYER_OWNER
+	)
+	var allied_transition: Dictionary = Simulator.apply_action(
 		State.new(
-			own_hand_board,
-			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"own_draw_source")],
+			allied_board,
+			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"allied_draw_source")],
 			[],
 			Rules.PLAYER_OWNER,
 			0,
-			[_plain(&"own_intercepted_draw", [1, 1, 1, 1], Rules.PLAYER_OWNER)],
+			[
+				_plain(&"allied_exiled_draw", [1, 1, 1, 1], Rules.PLAYER_OWNER),
+				_plain(&"tiyun_followup_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+			],
 			[]
 		),
-		Action.make_play(0, 4, &"own_draw_source")
+		Action.make_play(0, 4, &"allied_draw_source")
 	)
-	_check(_count_events(own_hand_transition.get("events", []), &"card_drawn") == 1, "Removing a card from TiYun owner's hand does not trigger another draw")
+	_check(
+		_count_events(allied_transition.get("events", []), &"card_drawn") == 2,
+		"An allied effect exiling a card from TiYun's own hand triggers another draw"
+	)
+	_check(
+		_find_hand_instance(
+			(allied_transition.get("state") as State).get_hand(Rules.PLAYER_OWNER),
+			&"tiyun_followup_draw"
+		) >= 0,
+		"TiYun draws for an allied effect regardless of the exiled card's zone"
+	)
 
-	var enemy_hand_board: Array = Rules.empty_board()
-	enemy_hand_board[8] = _slot(Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"enemy_hand_tiyun"), Rules.PLAYER_OWNER)
-	enemy_hand_board[7] = _slot(Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.PLAYER_OWNER, &"ally_huzhua"), Rules.PLAYER_OWNER)
-	var enemy_hand_transition: Dictionary = Simulator.apply_action(
+	var self_exile_board: Array = Rules.empty_board()
+	self_exile_board[8] = _slot(
+		Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"self_exile_tiyun"),
+		Rules.PLAYER_OWNER
+	)
+	self_exile_board[7] = _slot(
+		_plain(
+			&"allied_self_exile_source",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			[_one_shot_draw_self_exile_ability()]
+		),
+		Rules.PLAYER_OWNER
+	)
+	var self_exile_transition: Dictionary = Simulator.apply_action(
 		State.new(
-			enemy_hand_board,
+			self_exile_board,
+			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"self_exile_draw_source")],
 			[],
-			[Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_draw_source")],
+			Rules.PLAYER_OWNER,
+			0,
+			[
+				_plain(&"self_exile_first_draw", [1, 1, 1, 1], Rules.PLAYER_OWNER),
+				_plain(&"self_exile_followup_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+			],
+			[]
+		),
+		Action.make_play(0, 4, &"self_exile_draw_source")
+	)
+	_check(
+		_count_events(self_exile_transition.get("events", []), &"card_drawn") == 2,
+		"An allied effect exiling its own source triggers TiYun"
+	)
+
+	var zero_exile_board: Array = Rules.empty_board()
+	zero_exile_board[8] = _slot(
+		Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"zero_exile_tiyun"),
+		Rules.PLAYER_OWNER
+	)
+	zero_exile_board[7] = _slot(
+		_plain(
+			&"allied_zero_exile_source",
+			[1, 1, 1, 1],
+			Rules.PLAYER_OWNER,
+			[_one_shot_draw_zero_power_ability()]
+		),
+		Rules.PLAYER_OWNER
+	)
+	var zero_exile_transition: Dictionary = Simulator.apply_action(
+		State.new(
+			zero_exile_board,
+			[Catalog.create_instance(&"TuNaShu1", Rules.PLAYER_OWNER, &"zero_exile_draw_source")],
+			[],
+			Rules.PLAYER_OWNER,
+			0,
+			[
+				_plain(&"zero_exile_first_draw", [1, 1, 1, 1], Rules.PLAYER_OWNER),
+				_plain(&"zero_exile_followup_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+			],
+			[]
+		),
+		Action.make_play(0, 4, &"zero_exile_draw_source")
+	)
+	_check(
+		_count_events(zero_exile_transition.get("events", []), &"card_drawn") == 2,
+		"An allied power reduction exiling a zero-power card triggers TiYun"
+	)
+
+	var enemy_board: Array = Rules.empty_board()
+	enemy_board[8] = _slot(
+		Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"enemy_tiyun"),
+		Rules.PLAYER_OWNER
+	)
+	enemy_board[7] = _slot(
+		_plain(
+			&"enemy_exile_source",
+			[1, 1, 1, 1],
+			Rules.OPPONENT_OWNER,
+			[_one_shot_draw_exile_ability()]
+		),
+		Rules.OPPONENT_OWNER
+	)
+	var enemy_transition: Dictionary = Simulator.apply_action(
+		State.new(
+			enemy_board,
+			[],
+			[Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_play_source")],
 			Rules.OPPONENT_OWNER,
 			0,
-			[_plain(&"tiyun_reward_draw", [2, 2, 2, 2], Rules.PLAYER_OWNER)],
-			[_plain(&"enemy_intercepted_draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER)]
+			[_plain(&"untouched_player_deck", [2, 2, 2, 2], Rules.PLAYER_OWNER)],
+			[_plain(&"enemy_exiled_draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER)]
 		),
-		Action.make_play(0, 4, &"enemy_draw_source")
+		Action.make_play(0, 4, &"enemy_play_source")
 	)
-	_check(_count_events(enemy_hand_transition.get("events", []), &"card_drawn") == 2, "Removing an enemy hand card triggers TiYun's draw")
 	_check(
-		_find_hand_instance((enemy_hand_transition.get("state") as State).get_hand(Rules.PLAYER_OWNER), &"tiyun_reward_draw") >= 0,
-		"Outside-hand removal draws for TiYun's current owner"
+		_count_events(enemy_transition.get("events", []), &"card_drawn") == 1,
+		"An enemy effect does not trigger TiYun outside TiYun's own hand"
 	)
+	_check(
+		((enemy_transition.get("state") as State).decks[Rules.PLAYER_OWNER] as Array).size() == 1,
+		"Enemy-effect exile leaves TiYun owner's deck untouched"
+	)
+
+
+func _one_shot_draw_exile_ability() -> Dictionary:
+	return {
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DRAWN,
+			"actions": [
+				{"type": Catalog.ACTION_REMOVE_THIS_ABILITY},
+				{
+					"type": Catalog.ACTION_EXILE_CARD,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+				},
+			],
+		}],
+	}
+
+
+func _one_shot_draw_self_exile_ability() -> Dictionary:
+	return {
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DRAWN,
+			"actions": [
+				{"type": Catalog.ACTION_REMOVE_THIS_ABILITY},
+				{"type": Catalog.ACTION_EXILE_SELF},
+			],
+		}],
+	}
+
+
+func _one_shot_draw_zero_power_ability() -> Dictionary:
+	return {
+		"triggers": [{
+			"event": Catalog.CARD_AFTER_DRAWN,
+			"actions": [
+				{"type": Catalog.ACTION_REMOVE_THIS_ABILITY},
+				{
+					"type": Catalog.ACTION_CHANGE_POWERS,
+					"amount": -1,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+				},
+			],
+		}],
+	}
 
 
 func _plain(instance_id: StringName, powers: Array[int], owner_id: int, abilities: Array = []) -> Dictionary:
