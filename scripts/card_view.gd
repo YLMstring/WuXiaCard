@@ -51,6 +51,7 @@ var face_down: bool = false
 var ki_badge_enabled: bool = true
 var power_numbers_enabled: bool = true
 var concealed_power_numbers_enabled: bool = true
+var effective_defending_power_override: bool = false
 
 var _dragging: bool = false
 var _drag_follows_pointer: bool = true
@@ -141,10 +142,15 @@ func _refresh_picture() -> void:
 	if face_down:
 		card_picture.visible = false
 		return
-	card_picture.self_modulate = Color(1.0, 1.0, 1.0, 0.30) if Abilities.has_modifier(
-		card_data,
-		Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE
-	) else Color.WHITE
+	var show_defending_power_override: bool = (
+		effective_defending_power_override
+		or Abilities.has_modifier(card_data, Catalog.MODIFIER_DEFENDING_POWER_OVERRIDE)
+	)
+	card_picture.self_modulate = (
+		Color(1.0, 1.0, 1.0, 0.30)
+		if show_defending_power_override
+		else Color.WHITE
+	)
 	var picture_path: String = String(card_data.get("picture", ""))
 	if picture_path.is_empty() or not ResourceLoader.exists(picture_path):
 		card_picture.texture = null
@@ -153,6 +159,14 @@ func _refresh_picture() -> void:
 	if card_picture.texture == null or card_picture.texture.resource_path != picture_path:
 		card_picture.texture = load(picture_path) as Texture2D
 	card_picture.visible = card_picture.texture != null
+
+
+func set_effective_defending_power_override(value: bool) -> void:
+	if effective_defending_power_override == value:
+		return
+	effective_defending_power_override = value
+	if is_node_ready():
+		_refresh_picture()
 
 
 func set_playable(value: bool) -> void:

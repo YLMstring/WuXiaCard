@@ -349,6 +349,31 @@ bool DuelNativeCompactKernel::card_has_modifier(
 	return found;
 }
 
+Array DuelNativeCompactKernel::get_board_defending_power_override_flags() const {
+	Array flags;
+	if (!loaded) return flags;
+	const int32_t board_size = static_cast<int32_t>(std::min(
+		state.board_card_indices.size(),
+		state.board_owners.size()
+	));
+	flags.resize(board_size);
+	for (int32_t cell = 0; cell < board_size; ++cell) {
+		const int32_t card_index = state.board_card_indices[cell];
+		const int32_t owner_id = static_cast<int32_t>(state.board_owners[cell]);
+		flags[cell] = (
+			card_index >= 0
+			&& (owner_id == 1 || owner_id == 2)
+			&& card_has_modifier(
+				state,
+				card_index,
+				owner_id,
+				ModifierOpcode::DEFENDING_POWER_OVERRIDE
+			)
+		);
+	}
+	return flags;
+}
+
 bool DuelNativeCompactKernel::card_modifier_has_flag(
 	const NativeState &value,
 	int32_t card_index,

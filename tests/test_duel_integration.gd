@@ -6,6 +6,7 @@ const CARD_SCRIPT: Script = preload("res://scripts/card_view.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
+const State = preload("res://scripts/duel_state.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
@@ -50,6 +51,8 @@ func _run() -> void:
 	await _check_duel_header(duel)
 	_check_card_edge_labels(duel)
 	await _check_card_picture_layout()
+	await _check_hand_drag_targets_follow_simulator_legality()
+	await _check_owner_aura_board_transparency()
 	_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
 	_check_hand_slots(duel.get_node("DuelCanvas/OpponentHand"))
 	_check_catalog_hands(duel)
@@ -631,6 +634,122 @@ func _check_card_picture_layout() -> void:
 	var blank_picture: TextureRect = blank_fixture.get_node("Overlay/CardPicture") as TextureRect
 	_check(not blank_picture.visible and blank_picture.texture == null, "Picture-less test fixtures remain valid blank-faced cards")
 	blank_fixture.queue_free()
+	await process_frame
+
+
+func _check_hand_drag_targets_follow_simulator_legality() -> void:
+	var duel: Node = _instantiate_duel()
+	duel.set("testing_mode", true)
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"drag_legality_card")],
+		[Catalog.create_instance(&"HuJiaDao1", Rules.OPPONENT_OWNER, &"drag_restriction_source")],
+		Rules.PLAYER_OWNER
+	)
+	var started: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_DUEL_STARTED,
+		{}
+	)
+	_check(bool(started.get("valid", false)), "Drag-legality fixture grants the opening owner aura")
+	state = started.get("state", state) as State
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+	var hand_card: Control = _first_card(duel.get_node("DuelCanvas/PlayerHand"))
+	var targets: Array = duel.call("_get_drag_targets", hand_card)
+	_check(0 in targets, "A simulator-legal hand-play cell remains highlighted")
+	_check(4 not in targets, "A cell forbidden by an owner aura is not highlighted while dragging")
+
+	var center_only_board: Array = Rules.empty_board()
+	for cell_index: int in range(center_only_board.size()):
+		if cell_index == 4:
+			continue
+		center_only_board[cell_index] = {
+			"card": Catalog.create_instance(
+				&"TaiZuChangQuan",
+				Rules.OPPONENT_OWNER,
+				StringName("drag_filler_%d" % cell_index)
+			),
+			"owner": Rules.OPPONENT_OWNER,
+		}
+	state = State.new(
+		center_only_board,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"drag_center_only_card")],
+		[Catalog.create_instance(&"HuJiaDao1", Rules.OPPONENT_OWNER, &"drag_center_only_source")],
+		Rules.PLAYER_OWNER
+	)
+	started = Simulator._resolve_trigger_event(state, Catalog.TRIGGER_DUEL_STARTED, {})
+	state = started.get("state", state) as State
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+	hand_card = _first_card(duel.get_node("DuelCanvas/PlayerHand"))
+	targets = duel.call("_get_drag_targets", hand_card)
+	_check(targets == [4], "A conditionally restricted cell still highlights when no alternative exists")
+
+	duel.queue_free()
+	await process_frame
+
+
+func _check_owner_aura_board_transparency() -> void:
+	var duel: Node = _instantiate_duel()
+	duel.set("testing_mode", true)
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+
+	var board: Array = Rules.empty_board()
+	board[0] = {
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"aura_visual_ally"),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[1] = {
+		"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"aura_visual_enemy"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"HuJiaDao2", Rules.PLAYER_OWNER, &"aura_visual_source")],
+		[],
+		Rules.PLAYER_OWNER
+	)
+	var started: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_DUEL_STARTED,
+		{}
+	)
+	_check(bool(started.get("valid", false)), "Aura-visual fixture grants the opening owner aura")
+	state = started.get("state", state) as State
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+	var board_cards: Array = duel.get("board_cards") as Array
+	var ally_picture := (board_cards[0] as Control).get_node("Overlay/CardPicture") as TextureRect
+	var enemy_picture := (board_cards[1] as Control).get_node("Overlay/CardPicture") as TextureRect
+	_check(is_equal_approx(ally_picture.self_modulate.a, 0.30), "Embrace Moon makes allied board-card art translucent")
+	_check(is_equal_approx(enemy_picture.self_modulate.a, 1.0), "Embrace Moon does not dim enemy board-card art")
+
+	var source: Dictionary = state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary
+	state.get_hand(Rules.PLAYER_OWNER).erase(source)
+	(state.discard_piles[Rules.PLAYER_OWNER] as Array).append(source)
+	var ended: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(bool(ended.get("valid", false)), "Aura-visual fixture resolves owner-aura expiry")
+	state = ended.get("state", state) as State
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+	board_cards = duel.get("board_cards") as Array
+	ally_picture = (board_cards[0] as Control).get_node("Overlay/CardPicture") as TextureRect
+	_check(is_equal_approx(ally_picture.self_modulate.a, 1.0), "Allied board-card art returns to normal after the aura expires")
+
+	duel.queue_free()
 	await process_frame
 
 

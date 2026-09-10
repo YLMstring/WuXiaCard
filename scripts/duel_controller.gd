@@ -1196,6 +1196,22 @@ func _reconcile_board_card_views() -> void:
 			int(logical_slot.get("owner", card_view.owner_id))
 		)
 		board_cards[cell_index] = card_view
+	_sync_board_defending_power_visuals()
+
+
+func _sync_board_defending_power_visuals() -> void:
+	var flags: Array[bool] = (
+		Simulator.get_board_defending_power_override_flags(duel_state)
+		if duel_state != null
+		else []
+	)
+	for cell_index: int in range(board_cards.size()):
+		var card_view := board_cards[cell_index] as CardView
+		if card_view == null or not is_instance_valid(card_view):
+			continue
+		card_view.set_effective_defending_power_override(
+			cell_index < flags.size() and flags[cell_index]
+		)
 
 
 func _present_transition_events(
@@ -2495,9 +2511,21 @@ func _get_drag_targets(card: CardView) -> Array[int]:
 		return targets
 	var source_cell: int = _get_board_cell_for_card(card)
 	if source_cell < 0:
-		for cell_index: int in range(board.size()):
-			if DuelRules.can_place(board, cell_index):
-				targets.append(cell_index)
+		var instance_id: StringName = _get_card_instance_id(card)
+		var hand_index: int = _get_logical_hand_index(card.owner_id, instance_id)
+		if hand_index < 0:
+			return targets
+		for action: ActionData in Simulator.get_legal_actions_for_owner(
+			duel_state,
+			card.owner_id
+		):
+			if (
+				action.action_type == ActionData.TYPE_PLAY
+				and action.source_index == hand_index
+				and action.source_instance_id == instance_id
+				and action.target_index not in targets
+			):
+				targets.append(action.target_index)
 		return targets
 	for action: ActionData in Simulator.get_legal_actions(duel_state):
 		if (
@@ -3168,6 +3196,7 @@ func _rebuild_views_from_state(source_state: StateData) -> void:
 		card.set_face_down(false)
 		card.z_index = 1
 		board_cards[cell_index] = card
+	_sync_board_defending_power_visuals()
 	_clear_drag_context()
 	_clear_cell_highlights()
 	turn_state = (

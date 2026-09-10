@@ -896,6 +896,7 @@ public:
 		const StringName &reason = StringName("non_attack_flip")
 	) const;
 	Array get_legal_actions_for_owner(int64_t owner_id) const;
+	Array get_board_defending_power_override_flags() const;
 	int64_t count_legal_actions_for_owner(int64_t owner_id) const;
 	bool is_action_legal_for_owner(const Dictionary &action, int64_t owner_id) const;
 	bool is_terminal_state() const;

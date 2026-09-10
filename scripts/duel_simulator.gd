@@ -18,6 +18,10 @@ static func get_legal_actions_for_owner(state: StateData, owner_id: int) -> Arra
 	return NativeRules.get_legal_actions_for_owner(state, owner_id)
 
 
+static func get_board_defending_power_override_flags(state: StateData) -> Array[bool]:
+	return NativeRules.get_board_defending_power_override_flags(state)
+
+
 static func has_legal_action_for_owner(state: StateData, owner_id: int) -> bool:
 	return NativeRules.count_legal_actions_for_owner(state, owner_id) > 0
 

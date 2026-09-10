@@ -25,6 +25,13 @@ The user has tuned several offsets/colors directly. Treat current scenes and scr
 - drag/tap gesture disambiguation;
 - flip, draw, exile, invalid, and ability-loss effects.
 
+The center art alone uses 30% opacity whenever the card's effective defending
+power is overridden, whether that modifier belongs directly to the card or is
+received from an owner-held aura such as `HuJiaDao2`. The controller obtains the
+effective per-cell flags through the simulator's native, aura-aware modifier
+query; it does not reconstruct aura selectors in presentation code. Borders,
+power labels, ki, and interaction remain fully opaque.
+
 Face-down cards normally retain their card back while showing the four power
 labels. Identity, art, text, ki, tooltip, and inspection stay concealed. The
 all-four-`-1` sentinel never shows powers, and difficulty 8 or above suppresses
@@ -65,6 +72,11 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
 - Inspector open: no duel action commits.
 - AI may think in background, but its move waits to apply.
 - Mouse must mirror touch.
+- While a hand card is being dragged, board glow is derived from that exact
+  runtime instance's current simulator-legal play actions. Empty cells forbidden
+  by an owner aura or another placement rule do not glow; a conditionally
+  forbidden cell may glow when the simulator reports that its fallback condition
+  has become legal.
 
 ## Battle Animation Ordering
 
