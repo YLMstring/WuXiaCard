@@ -13,7 +13,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
-const DEFAULT_STATUS: String = "长按藏经阁卡牌，然后拖至主牌组"
+const DEFAULT_STATUS: String = "长按拖动中央卡牌，点击两侧进入战斗"
 const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
 const GO_FIRST_STRICTLY_LOWER_NOTICE: String = "卡组总品阶低于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
