@@ -34,6 +34,7 @@ var _profile_store: RefCounted
 var _inspection_open: bool = false
 var _scroll_before_inspection: float = 0.0
 var _drag_source_index: int = -1
+var _drag_source_library_index: int = -1
 var _drag_proxy: CardView = null
 var _drag_proxy_offset: Vector2 = Vector2.ZERO
 var _effective_enemy_card_ids: Array[StringName] = []
@@ -43,6 +44,8 @@ var _go_second_ink_material: ShaderMaterial = null
 var _choice_feedback_tweens: Dictionary = {}
 var _blocked_feedback_tween: Tween = null
 var _library_display_owner_ids: Array[int] = []
+var _library_source_indices: Array[int] = []
+var _library_filter_sect: StringName = &""
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -74,6 +77,7 @@ func _ready() -> void:
 	SelectionShell.style_bottom_status(status_label, card_inspector)
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
+	library_grid.set_ki_badges_enabled(true)
 	_refresh_library_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
 	library_grid.drag_started.connect(_on_library_drag_started)
@@ -135,27 +139,78 @@ func debug_get_library_display_owner_ids() -> Array[int]:
 	return _library_display_owner_ids.duplicate()
 
 
-func _refresh_library_display_owners() -> void:
+func debug_get_library_source_indices() -> Array[int]:
+	return _library_source_indices.duplicate()
+
+
+func debug_get_library_filter_sect() -> StringName:
+	return _library_filter_sect
+
+
+func _get_mastered_card_set() -> Dictionary:
 	var mastered_set: Dictionary = {}
 	for card_id: StringName in _profile_store.get_mastered_card_ids(profile):
 		mastered_set[card_id] = true
-	_library_display_owner_ids.resize(DeckLibraryGrid.TOTAL_SLOTS)
-	_library_display_owner_ids.fill(DuelRules.PLAYER_OWNER)
-	var library_values: Array = profile.get("library_slots", [])
-	for logical_index: int in range(mini(library_values.size(), DeckLibraryGrid.TOTAL_SLOTS)):
-		var card_id := StringName(String(library_values[logical_index]))
-		if card_id == &"":
-			continue
-		_library_display_owner_ids[logical_index] = (
-			DuelRules.PLAYER_OWNER
-			if mastered_set.has(card_id)
-			else DuelRules.OPPONENT_OWNER
-		)
+	return mastered_set
 
 
 func _refresh_library_grid() -> void:
-	_refresh_library_display_owners()
-	library_grid.set_library_slots(profile["library_slots"], _library_display_owner_ids)
+	var mastered_set: Dictionary = _get_mastered_card_set()
+	var library_values: Array = profile.get("library_slots", [])
+	var display_values: Array = []
+	_library_display_owner_ids.clear()
+	_library_source_indices.clear()
+	if _library_filter_sect == &"":
+		display_values = library_values.duplicate()
+		for source_index: int in range(DeckLibraryGrid.TOTAL_SLOTS):
+			_library_source_indices.append(source_index)
+			var card_id := StringName(String(
+				library_values[source_index] if source_index < library_values.size() else ""
+			))
+			_library_display_owner_ids.append(_get_library_card_display_owner(
+				card_id,
+				mastered_set
+			))
+	else:
+		for source_index: int in range(mini(
+			library_values.size(),
+			DeckLibraryGrid.TOTAL_SLOTS
+		)):
+			var card_id := StringName(String(library_values[source_index]))
+			if card_id == &"":
+				continue
+			if StringName(String(
+				Catalog.get_definition(card_id).get("sect", "")
+			)) != _library_filter_sect:
+				continue
+			display_values.append(library_values[source_index])
+			_library_source_indices.append(source_index)
+			_library_display_owner_ids.append(_get_library_card_display_owner(
+				card_id,
+				mastered_set
+			))
+	if _library_filter_sect != &"" and _library_source_indices.is_empty():
+		_library_filter_sect = &""
+		_refresh_library_grid()
+		library_grid.set_scroll_offset(0.0)
+		return
+	var displayed_count: int = _library_source_indices.size()
+	display_values.resize(DeckLibraryGrid.TOTAL_SLOTS)
+	_library_source_indices.resize(DeckLibraryGrid.TOTAL_SLOTS)
+	_library_display_owner_ids.resize(DeckLibraryGrid.TOTAL_SLOTS)
+	for display_index: int in range(DeckLibraryGrid.TOTAL_SLOTS):
+		if display_values[display_index] == null:
+			display_values[display_index] = ""
+	for display_index: int in range(displayed_count, DeckLibraryGrid.TOTAL_SLOTS):
+		_library_source_indices[display_index] = -1
+		_library_display_owner_ids[display_index] = DuelRules.PLAYER_OWNER
+	library_grid.set_library_slots(display_values, _library_display_owner_ids)
+
+
+func _get_library_card_display_owner(card_id: StringName, mastered_set: Dictionary) -> int:
+	if card_id != &"" and not mastered_set.has(card_id):
+		return DuelRules.OPPONENT_OWNER
+	return DuelRules.PLAYER_OWNER
 
 
 func _create_hands() -> void:
@@ -249,11 +304,16 @@ func _on_inspection_closed() -> void:
 func _on_library_drag_started(logical_index: int, data: Dictionary, pointer_position: Vector2) -> void:
 	if _inspection_open or _drag_proxy != null:
 		return
+	if logical_index < 0 or logical_index >= _library_source_indices.size():
+		return
+	var source_library_index: int = _library_source_indices[logical_index]
+	if source_library_index < 0:
+		return
 	_drag_source_index = logical_index
+	_drag_source_library_index = source_library_index
 	_drag_proxy = CARD_SCENE.instantiate() as CardView
 	drag_layer.add_child(_drag_proxy)
 	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_proxy.set_ki_badge_enabled(false)
 	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
 	var source_size: Vector2 = _drag_proxy.size
@@ -272,9 +332,17 @@ func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> vo
 	if _drag_proxy == null or logical_index != _drag_source_index:
 		_clear_drag_proxy()
 		return
+	if opponent_hand.get_global_rect().has_point(pointer_position):
+		_toggle_library_sect_filter(_drag_source_library_index)
+		_clear_drag_proxy()
+		return
 	var deck_index: int = _get_player_slot_at(pointer_position)
 	if deck_index >= 0:
-		var result: Dictionary = _profile_store.exchange_and_save(profile, logical_index, deck_index)
+		var result: Dictionary = _profile_store.exchange_and_save(
+			profile,
+			_drag_source_library_index,
+			deck_index
+		)
 		if bool(result.get("ok", false)):
 			profile = result["profile"]
 			for player_slot_index: int in range(Store.MAIN_DECK_CAPACITY):
@@ -285,6 +353,24 @@ func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> vo
 		else:
 			status_label.text = "保存失败"
 	_clear_drag_proxy()
+
+
+func _toggle_library_sect_filter(source_library_index: int) -> void:
+	if _library_filter_sect != &"":
+		_library_filter_sect = &""
+	else:
+		var library_values: Array = profile.get("library_slots", [])
+		if source_library_index < 0 or source_library_index >= library_values.size():
+			return
+		var card_id := StringName(String(library_values[source_library_index]))
+		if card_id == &"" or not Catalog.has_card(card_id):
+			return
+		_library_filter_sect = StringName(String(
+			Catalog.get_definition(card_id).get("sect", "")
+		))
+	_refresh_library_grid()
+	library_grid.set_scroll_offset(0.0)
+	status_label.text = DEFAULT_STATUS
 
 
 func _position_drag_proxy(pointer_position: Vector2) -> void:
@@ -307,6 +393,7 @@ func _clear_drag_proxy() -> void:
 		_drag_proxy.queue_free()
 	_drag_proxy = null
 	_drag_source_index = -1
+	_drag_source_library_index = -1
 
 
 func _on_back_pressed() -> void:

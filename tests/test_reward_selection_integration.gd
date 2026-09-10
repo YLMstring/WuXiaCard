@@ -89,6 +89,13 @@ func _run() -> void:
 	_check(first_slot != null and not first_slot.is_placeholder(), "First reward is revealed")
 	_check(second_slot != null and not second_slot.is_placeholder(), "Second reward is revealed")
 	_check(third_slot != null and third_slot.is_placeholder(), "Third position is a card back")
+	var first_reward_card := first_slot.get_node("CardHost/CardView") as CardView
+	var first_reward_ki_badge := first_reward_card.get_node("Overlay/KiBadge") as Control
+	_check(first_reward_ki_badge.visible, "Revealed reward cards show their normal ki beads")
+	_check(
+		first_reward_ki_badge.size.x < first_reward_card.size.x * 0.3,
+		"Reward ki beads scale with the reward card"
+	)
 	var reward_scroll := grid.find_child("Scroll", true, false) as ScrollContainer
 	var scroll_center_x: float = reward_scroll.size.x * 0.5
 	var first_center_x: float = first_slot.position.x + first_slot.size.x * 0.5
@@ -139,6 +146,10 @@ func _run() -> void:
 	_check(
 		drag_proxy.owner_id == grid.get_display_owner_id(0),
 		"Reward drag preview preserves the source card's mastery color"
+	)
+	_check(
+		(drag_proxy.get_node("Overlay/KiBadge") as Control).visible,
+		"Reward drag preview shows its normal ki bead"
 	)
 	reward.call("_on_library_drag_ended", 0, Vector2(-100.0, -100.0))
 	_check(

@@ -76,6 +76,7 @@ func _ready() -> void:
 	go_second_button.visible = false
 	go_second_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	library_grid.set_hold_duration(hold_duration)
+	library_grid.set_ki_badges_enabled(true)
 	_roll_reward_display_owners()
 	_refresh_reward_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
@@ -240,7 +241,6 @@ func _on_library_drag_started(
 	_drag_proxy = CARD_SCENE.instantiate() as CardView
 	drag_layer.add_child(_drag_proxy)
 	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_proxy.set_ki_badge_enabled(false)
 	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
 	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
 	var source_size: Vector2 = _drag_proxy.size

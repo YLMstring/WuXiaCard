@@ -222,6 +222,12 @@ The creator has made several direct UI and localization edits. Preserve those ed
   hold and drag. When its glyph already exists in another main slot, the
   profile performs the approved three-way rotation without leaving a gap. A
   short tap inspects; immediate movement scrolls.
+- Dropping a held library card on the opponent-hand row applies a temporary
+  same-sect filter. Results form a compact prefix while retaining real library
+  order and a controller-owned display-to-source index map. Repeating that drop
+  cancels the filter; player-deck drops still exchange through the mapped real
+  index. Filtering never saves or mutates the profile and resets when the scene
+  is recreated.
 - Primary unlocks insert at the library top. Still-locked lower-tier cards with
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected

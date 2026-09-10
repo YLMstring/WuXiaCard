@@ -105,7 +105,12 @@ func _run() -> void:
 	var ki_library_slot: Variant = grid.debug_get_bound_slot(3)
 	var library_ki_badge := ki_library_slot.get_node("CardHost/CardView/Overlay/KiBadge") as Control
 	_check(int(ki_library_slot.card_data.get("ki", 0)) > 0, "Library bead fixture uses a card with ki")
-	_check(not library_ki_badge.visible, "Library cards hide ki beads")
+	_check(library_ki_badge.visible, "Library cards show their normal ki beads")
+	var library_card_view := ki_library_slot.get_node("CardHost/CardView") as CardView
+	_check(
+		library_ki_badge.size.x < library_card_view.size.x * 0.3,
+		"Library ki beads scale with the compact library card"
+	)
 	var go_second_material := (
 		go_second.get_node("Characters/Hou") as TextureRect
 	).material as ShaderMaterial
@@ -261,6 +266,10 @@ func _run() -> void:
 		drag_proxy.owner_id == grid.get_display_owner_id(1),
 		"Library drag preview preserves the source card's mastery color"
 	)
+	_check(
+		(drag_proxy.get_node("Overlay/KiBadge") as Control).visible,
+		"Library drag preview shows its normal ki bead"
+	)
 	builder.call("_on_library_drag_ended", 1, target_point)
 	var dragged_profile: Dictionary = builder.debug_get_profile()
 	_check(String(dragged_profile["main_deck"][1]) == String(drag_source_id), "Production drag hit-test exchanges into target hand slot")
@@ -270,6 +279,110 @@ func _run() -> void:
 	builder.call("_on_library_drag_started", 2, invalid_data, Vector2.ZERO)
 	builder.call("_on_library_drag_ended", 2, Vector2(-100.0, -100.0))
 	_check(builder.debug_get_profile() == before_invalid, "Invalid production drop leaves profile unchanged")
+
+	var filter_sect: String = _first_library_sect_with_count(before_invalid, 2)
+	_check(not filter_sect.is_empty(), "Sect-filter fixture finds at least two library cards from one sect")
+	var filtered_source_indices: Array[int] = _library_indices_for_sect(before_invalid, filter_sect)
+	var filter_source_index: int = filtered_source_indices[0]
+	var filter_source_id := StringName(String(before_invalid["library_slots"][filter_source_index]))
+	var filter_source_data: Dictionary = Catalog.create_instance(
+		filter_source_id,
+		DuelRules.PLAYER_OWNER,
+		&"filter_source"
+	)
+	var opponent_target_point: Vector2 = opponent_hand.get_global_rect().get_center()
+	grid.set_scroll_offset(grid.debug_get_row_height() * 5.0)
+	builder.call(
+		"_on_library_drag_started",
+		filter_source_index,
+		filter_source_data,
+		opponent_target_point
+	)
+	builder.call("_on_library_drag_ended", filter_source_index, opponent_target_point)
+	_check(
+		String(builder.debug_get_library_filter_sect()) == filter_sect,
+		"Dropping a library card on the opponent hand establishes its sect filter"
+	)
+	_check(
+		builder.debug_get_profile() == before_invalid,
+		"Establishing a sect filter does not mutate or save the deck profile"
+	)
+	_check(
+		is_equal_approx(grid.get_scroll_offset(), 0.0),
+		"Establishing a sect filter scrolls the library to the top"
+	)
+	var filtered_mapping: Array[int] = builder.debug_get_library_source_indices()
+	_check(
+		filtered_mapping.slice(0, filtered_source_indices.size()) == filtered_source_indices,
+		"Filtered compact slots preserve their real library indices in source order"
+	)
+	for display_index: int in range(filtered_source_indices.size()):
+		_check(
+			String(grid.library_slots[display_index])
+			== String(before_invalid["library_slots"][filtered_source_indices[display_index]]),
+			"Filtered slot %d displays its mapped same-sect card" % display_index
+		)
+	_check(
+		String(grid.library_slots[filtered_source_indices.size()]).is_empty(),
+		"Cards outside the active sect are hidden after the compact filtered prefix"
+	)
+	var filtered_display_index: int = filtered_source_indices.size() - 1
+	var filtered_real_index: int = filtered_source_indices[filtered_display_index]
+	var filtered_exchange_id := StringName(String(
+		before_invalid["library_slots"][filtered_real_index]
+	))
+	var filtered_exchange_data: Dictionary = Catalog.create_instance(
+		filtered_exchange_id,
+		DuelRules.PLAYER_OWNER,
+		&"filtered_exchange"
+	)
+	var filtered_deck_index: int = 0
+	var expected_filtered_exchange: Dictionary = fixture_store.exchange_and_save(
+		before_invalid,
+		filtered_real_index,
+		filtered_deck_index
+	)
+	var filtered_target_point: Vector2 = (
+		player_hand.get_child(filtered_deck_index) as Control
+	).get_global_rect().get_center()
+	builder.call(
+		"_on_library_drag_started",
+		filtered_display_index,
+		filtered_exchange_data,
+		filtered_target_point
+	)
+	builder.call(
+		"_on_library_drag_ended",
+		filtered_display_index,
+		filtered_target_point
+	)
+	var after_filtered_exchange: Dictionary = builder.debug_get_profile()
+	_check(
+		bool(expected_filtered_exchange.get("ok", false))
+		and after_filtered_exchange == expected_filtered_exchange.get("profile", {}),
+		"Filtered drag exchanges through the mapped real library index"
+	)
+	_check(
+		String(builder.debug_get_library_filter_sect()) == filter_sect,
+		"A filtered exchange retains and refreshes the active sect filter"
+	)
+	var cancel_data: Dictionary = Catalog.create_instance(
+		StringName(String(grid.library_slots[0])),
+		DuelRules.PLAYER_OWNER,
+		&"filter_cancel"
+	)
+	grid.set_scroll_offset(grid.debug_get_row_height())
+	builder.call("_on_library_drag_started", 0, cancel_data, opponent_target_point)
+	builder.call("_on_library_drag_ended", 0, opponent_target_point)
+	_check(
+		String(builder.debug_get_library_filter_sect()).is_empty(),
+		"Dropping any filtered card on the opponent hand cancels instead of changing the filter"
+	)
+	_check(
+		is_equal_approx(grid.get_scroll_offset(), 0.0)
+		and grid.library_slots == after_filtered_exchange["library_slots"],
+		"Cancelling restores the full real library order at the top"
+	)
 
 	grid.set_scroll_offset(grid.debug_get_row_height() * 10.0)
 	var saved_offset: float = grid.get_scroll_offset()
@@ -438,6 +551,32 @@ func _find_card_at_tier(card_ids: Array, tier: int) -> int:
 		if int(Catalog.get_definition(card_id).get("tier", 0)) == tier:
 			return index
 	return -1
+
+
+func _first_library_sect_with_count(profile_data: Dictionary, minimum_count: int) -> String:
+	var counts: Dictionary = {}
+	for value: Variant in profile_data.get("library_slots", []):
+		var card_id := StringName(String(value))
+		if card_id == &"":
+			continue
+		var sect: String = String(Catalog.get_definition(card_id).get("sect", ""))
+		counts[sect] = int(counts.get(sect, 0)) + 1
+		if int(counts[sect]) >= minimum_count:
+			return sect
+	return ""
+
+
+func _library_indices_for_sect(profile_data: Dictionary, sect: String) -> Array[int]:
+	var result: Array[int] = []
+	var library_slots: Array = profile_data.get("library_slots", [])
+	for index: int in range(library_slots.size()):
+		var card_id := StringName(String(library_slots[index]))
+		if (
+			card_id != &""
+			and String(Catalog.get_definition(card_id).get("sect", "")) == sect
+		):
+			result.append(index)
+	return result
 
 
 func _sum_tiers(card_ids: Array) -> int:

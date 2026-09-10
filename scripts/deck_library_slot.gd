@@ -112,6 +112,10 @@ func set_hold_duration(value: float) -> void:
 	hold_duration = maxf(0.0, value)
 
 
+func set_ki_badge_enabled(value: bool) -> void:
+	card_view.set_ki_badge_enabled(value)
+
+
 func cancel_gesture() -> void:
 	hold_timer.stop()
 	_pointer_active = false

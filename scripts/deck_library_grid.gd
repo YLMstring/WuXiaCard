@@ -41,6 +41,7 @@ var library_slots: Array = []
 var library_display_owner_ids: Array[int] = []
 var library_drag_enabled: Array[bool] = []
 var display_power_numbers_enabled: bool = true
+var ki_badges_enabled: bool = false
 var interaction_enabled: bool = true
 var _slot_pool: Array = []
 var _row_height: float = 1.0
@@ -174,6 +175,12 @@ func set_hold_duration(value: float) -> void:
 	hold_duration = maxf(0.0, value)
 	for slot: Variant in _slot_pool:
 		slot.set_hold_duration(hold_duration)
+
+
+func set_ki_badges_enabled(value: bool) -> void:
+	ki_badges_enabled = value
+	for slot: Variant in _slot_pool:
+		slot.set_ki_badge_enabled(value)
 
 
 func debug_get_pool_size() -> int:
@@ -386,6 +393,7 @@ func _bind_slot(slot: Variant, logical_index: int) -> void:
 		library_drag_enabled[logical_index] if logical_index < library_drag_enabled.size() else false,
 		display_power_numbers_enabled
 	)
+	slot.set_ki_badge_enabled(ki_badges_enabled)
 	slot.set_interaction_enabled(interaction_enabled)
 
 

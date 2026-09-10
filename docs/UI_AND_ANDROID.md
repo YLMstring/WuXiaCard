@@ -86,6 +86,13 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   friendly sources never create danger, and board-activation dragging never uses
   this overlay. Hover keeps the danger cell red, and every drag end/cancel clears
   the overlay.
+- In deck building, a held library card dropped on the opponent-hand row
+  creates a scene-local sect filter. Matching real library entries retain their
+  source order but are projected into a compact visible prefix; dragging any
+  filtered card to the same row cancels the filter. Player-deck drops translate
+  the visible index back to the real library index before using the existing
+  exchange transaction. Filter changes never save or reorder profile data and
+  always return the scroll to the top.
 
 ## Battle Animation Ordering
 
