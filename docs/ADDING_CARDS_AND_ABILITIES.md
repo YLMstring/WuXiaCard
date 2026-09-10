@@ -187,6 +187,24 @@ declare `CONDITION_ABILITY_SOURCE_IN_ZONE` when an aura explicitly needs to
 inspect its source, and use `ACTION_REMOVE_THIS_ABILITY` to remove that exact
 aura handle.
 
+When choosing trigger-card conditions, separate saved event identity from live
+board geometry:
+
+- `CONDITION_TRIGGER_CARD_IS_ALLY/ENEMY` uses the event-time owner outside
+  summon events, so a later move, flip, or exile does not rewrite the event.
+- During `CARD_BEFORE_SUMMONED`, `CARD_SUMMONED`, and `CARD_AFTER_SUMMONED`,
+  that condition instead requires the exact instance to remain on board and to
+  have the requested affiliation both at entry and at execution; its cell may
+  change.
+- `CONDITION_TRIGGER_CARD_IN_RANGE` and
+  `CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE` use the exact instances' current
+  cells when the queued trigger executes.
+- `CONDITION_TRIGGER_CARD_REVEALED_TO_SELF` and
+  `CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF` read card metadata without a
+  board-presence requirement.
+- `CONDITION_MOVING_CARD_IS_SELF` deliberately keeps its existing movement
+  snapshot semantics.
+
 Starting encounter hands are in `scripts/duel_decks.gd`. Each owner's side deck
 is derived from that owner's main deck through `scripts/deck_rules.gd`. A
 non-`江湖` main card contributes every catalog card of the same sect whose tier

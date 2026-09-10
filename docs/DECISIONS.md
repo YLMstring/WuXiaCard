@@ -732,6 +732,13 @@ respectively, in row-major order. The source itself is eligible.
   zone and retain the exact ability handle/trigger entry. They follow movement
   within that zone, accept ownership changes, rerun conditions using current
   position/current owner, and do not recheck the effect gate.
+- Non-summon ally/enemy trigger-card conditions use the event-time owner and do
+  not require the trigger card to remain on board. Summon ally/enemy conditions
+  require the exact instance to remain on board and match both its entry and
+  current affiliation, but allow it to change cells. Trigger-card range and
+  adjacency use current exact-instance cells; reveal and original-owner checks
+  do not require board presence. Moving-card-self retains its movement snapshot
+  semantics.
 
 ## 场景背景音乐
 

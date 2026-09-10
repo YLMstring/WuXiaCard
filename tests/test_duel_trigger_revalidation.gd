@@ -19,6 +19,8 @@ func _run() -> void:
 	_test_source_owner_change_uses_current_owner()
 	_test_source_zone_change_cancels_later_trigger()
 	_test_ordinary_events_do_not_scan_hands()
+	_test_summon_trigger_geometry_revalidates_at_current_cells()
+	_test_offboard_trigger_metadata_conditions_still_match()
 	if _failures == 0:
 		print("DUEL_TRIGGER_REVALIDATION_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -190,6 +192,151 @@ func _test_ordinary_events_do_not_scan_hands() -> void:
 	var state := State.new(Rules.empty_board(), [source], [], Rules.PLAYER_OWNER, 0, [drawn], [])
 	NativeRules.resolve_event(state, Catalog.TRIGGER_CARD_AFTER_ATTACK, {})
 	_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "Ordinary events do not discover abilities in hand")
+
+
+func _test_summon_trigger_geometry_revalidates_at_current_cells() -> void:
+	_test_moved_summon_condition(
+		&"adjacent_current_valid",
+		Catalog.CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
+		Rules.PLAYER_OWNER,
+		true
+	)
+	_test_moved_summon_condition(
+		&"adjacent_current_invalid",
+		Catalog.CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
+		Rules.PLAYER_OWNER,
+		false
+	)
+	_test_moved_summon_condition(
+		&"range_current_valid",
+		Catalog.CONDITION_TRIGGER_CARD_IN_RANGE,
+		Rules.OPPONENT_OWNER,
+		true
+	)
+	_test_moved_summon_condition(
+		&"range_current_invalid",
+		Catalog.CONDITION_TRIGGER_CARD_IN_RANGE,
+		Rules.OPPONENT_OWNER,
+		false
+	)
+
+
+func _test_moved_summon_condition(
+	case_id: StringName,
+	geometry_condition: StringName,
+	watcher_owner: int,
+	expects_draw: bool
+) -> void:
+	var swap_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"actions": [{"type": Catalog.ACTION_SWAP_SELF_WITH_TRIGGER_CARD}],
+		}],
+	}
+	var relation_condition: StringName = (
+		Catalog.CONDITION_TRIGGER_CARD_IS_ALLY
+		if watcher_owner == Rules.PLAYER_OWNER
+		else Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY
+	)
+	var watcher_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"conditions": [
+				{"type": relation_condition},
+				{"type": geometry_condition},
+			],
+			"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+		}],
+	}
+	var first_mover: Dictionary = _card(StringName("%s_mover_one" % case_id), [swap_ability], Rules.PLAYER_OWNER)
+	var second_mover: Dictionary = _card(StringName("%s_mover_two" % case_id), [swap_ability], Rules.PLAYER_OWNER)
+	var trigger: Dictionary = _card(StringName("%s_trigger" % case_id), [], Rules.PLAYER_OWNER)
+	var watcher: Dictionary = _card(StringName("%s_watcher" % case_id), [watcher_ability], watcher_owner)
+	watcher["powers"] = [9, 9, 9, 9]
+	var drawn: Dictionary = _card(StringName("%s_drawn" % case_id), [], watcher_owner)
+	var board: Array = Rules.empty_board()
+	board[1] = {"owner": Rules.PLAYER_OWNER, "card": first_mover}
+	if expects_draw:
+		board[2] = {"owner": Rules.PLAYER_OWNER, "card": second_mover}
+	board[4] = {"owner": Rules.PLAYER_OWNER, "card": trigger}
+	board[5] = {"owner": watcher_owner, "card": watcher}
+	var player_deck: Array = [drawn] if watcher_owner == Rules.PLAYER_OWNER else []
+	var opponent_deck: Array = [drawn] if watcher_owner == Rules.OPPONENT_OWNER else []
+	var state := State.new(
+		board,
+		[],
+		[],
+		Rules.PLAYER_OWNER,
+		1,
+		player_deck,
+		opponent_deck
+	)
+	NativeRules.resolve_event(state, Catalog.TRIGGER_CARD_SUMMONED, {
+		"trigger_cell": 4,
+		"trigger_instance_id": StringName("%s_trigger" % case_id),
+		"trigger_owner_id": Rules.PLAYER_OWNER,
+		"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+	})
+	var expected_trigger_cell: int = 2 if expects_draw else 1
+	_check(
+		StringName(((state.board[expected_trigger_cell] as Dictionary).get("card", {}) as Dictionary).get("instance_id", &""))
+		== StringName("%s_trigger" % case_id),
+		"%s moves the exact summoned instance away from its original cell" % case_id
+	)
+	_check(
+		(state.get_hand(watcher_owner).size() == 1) == expects_draw,
+		"%s revalidates relation and geometry at the trigger card's current cell" % case_id
+	)
+
+
+func _test_offboard_trigger_metadata_conditions_still_match() -> void:
+	var metadata_ability: Dictionary = {
+		"retained_on_flip": false,
+		"triggers": [
+			{
+				"event": Catalog.CARD_AFTER_EXILED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_REVEALED_TO_SELF}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+			{
+				"event": Catalog.CARD_AFTER_EXILED,
+				"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_ORIGINAL_OWNER_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}],
+			},
+		],
+	}
+	var source: Dictionary = _card(&"offboard_metadata_source", [metadata_ability], Rules.PLAYER_OWNER)
+	var trigger: Dictionary = _card(&"offboard_metadata_trigger", [], Rules.PLAYER_OWNER)
+	trigger["revealed_to_owner_ids"] = [Rules.PLAYER_OWNER]
+	var board: Array = Rules.empty_board()
+	board[0] = {"owner": Rules.PLAYER_OWNER, "card": source}
+	var state := State.new(
+		board,
+		[],
+		[],
+		Rules.PLAYER_OWNER,
+		1,
+		[
+			_card(&"offboard_metadata_draw_one", [], Rules.PLAYER_OWNER),
+			_card(&"offboard_metadata_draw_two", [], Rules.PLAYER_OWNER),
+		],
+		[]
+	)
+	(state.removed_cards[Rules.PLAYER_OWNER] as Array).append(trigger)
+	NativeRules.resolve_event(state, Catalog.CARD_AFTER_EXILED, {
+		"trigger_cell": 4,
+		"trigger_instance_id": &"offboard_metadata_trigger",
+		"trigger_owner_id": Rules.PLAYER_OWNER,
+		"trigger_previous_owner_id": Rules.PLAYER_OWNER,
+		"trigger_zone": &"board",
+		"trigger_was_on_board": true,
+	})
+	_check(
+		state.get_hand(Rules.PLAYER_OWNER).size() == 2,
+		"Reveal and original-owner conditions use card metadata after the trigger card leaves the board"
+	)
 
 
 func _draw_without_condition(

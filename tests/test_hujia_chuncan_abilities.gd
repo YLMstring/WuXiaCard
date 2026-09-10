@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_duel_start_reveal()
 	_test_hidden_blade_center_restriction()
 	_test_embrace_moon_aura_and_snapshot()
+	_test_embrace_moon_tracks_attacked_ally_after_self_exile()
 	_test_closed_door_attack_context()
 	_test_owner_aura_expires_at_any_turn_end()
 	_test_chuncan_cannot_attack_until_flipped()
@@ -157,6 +158,49 @@ func _test_embrace_moon_aura_and_snapshot() -> void:
 		_event_index(result.get("events", []), &"powers_changed", &"embrace_last")
 		< _event_index(result.get("events", []), &"card_drawn", &"aura_draw_first"),
 		"Source point loss resolves before its owner-aura draw"
+	)
+
+
+func _test_embrace_moon_tracks_attacked_ally_after_self_exile() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(
+		_plain(&"self_exile_attacker", [9, 9, 9, 9], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	board[1] = _slot(
+		Catalog.create_instance(&"LeiZHenJian2", Rules.PLAYER_OWNER, &"self_exile_defender"),
+		Rules.PLAYER_OWNER
+	)
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"HuJiaDao2", Rules.PLAYER_OWNER, &"self_exile_embrace")],
+		[],
+		Rules.OPPONENT_OWNER,
+		1,
+		[
+			_plain(&"self_exile_draw_one", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+			_plain(&"self_exile_draw_two", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		],
+		[]
+	)
+	state = _resolve_duel_started(state)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		4,
+		&"self_exile_attacker",
+		&"self_exile_aura_test"
+	)
+	_check(
+		_removed_has(state, Rules.PLAYER_OWNER, &"self_exile_defender"),
+		"LeiZhenJian2 exiles itself before the later owner-aura reaction"
+	)
+	_check(
+		state.get_hand(Rules.PLAYER_OWNER).size() == 3,
+		"Embrace Moon still draws after the attacked ally has left the board"
+	)
+	_check(
+		_count_events(result.get("events", []), &"card_drawn") == 2,
+		"LeiZhenJian2 and Embrace Moon each draw once"
 	)
 
 

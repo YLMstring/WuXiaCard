@@ -22,38 +22,38 @@ bool DuelNativeCompactKernel::conditions_match(
 				break;
 			case ConditionOpcode::TRIGGER_CARD_IS_ALLY:
 			case ConditionOpcode::TRIGGER_CARD_IS_ENEMY: {
-				const int32_t trigger_cell = find_board_card(
-					value,
-					context.trigger_card_index,
-					context.trigger_cell
-				);
 				const bool expects_ally = condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_ALLY;
 				const bool is_summon_event = (
 					rule.event_id == StringName("card_before_summoned")
 					|| rule.event_id == StringName("card_summoned")
 					|| rule.event_id == StringName("card_after_summoned")
 				);
+				if (!is_summon_event) {
+					// 普通事件的敌我关系是事件快照；触发牌随后移区、换格或离场，
+					// 都不改变已经发生的“某方卡牌触发了此事件”。
+					matched = (
+						(context.trigger_owner == 1 || context.trigger_owner == 2)
+						&& ((context.trigger_owner == group.source_owner) == expects_ally)
+					);
+					break;
+				}
+				const int32_t trigger_cell = find_board_card(value, context.trigger_card_index, -1);
 				const bool entered_as_ally = context.trigger_previous_owner == group.source_owner;
-				// 进场阵营条件同时要求“最初如此”和“现在仍如此”。进场中被迎击翻面后，
-				// 不会再被另一侧的同类进场触发当作新阵营进场处理。
+				// 进场阵营条件同时要求“最初如此”和“现在仍如此”。精确实例可以在
+				// 进场连锁中换格，但离场或翻成另一方都会使该条件失效。
 				matched = (
-					trigger_cell == context.trigger_cell
-					&& trigger_cell >= 0
+					trigger_cell >= 0
+					&& (context.trigger_previous_owner == 1 || context.trigger_previous_owner == 2)
+					&& entered_as_ally == expects_ally
 					&& ((value.board_owners[trigger_cell] == group.source_owner) == expects_ally)
-					&& (!is_summon_event || entered_as_ally == expects_ally)
 				);
 				break;
 			}
 			case ConditionOpcode::TRIGGER_CARD_IN_RANGE: {
-				const int32_t trigger_cell = find_board_card(
-					value,
-					context.trigger_card_index,
-					context.trigger_cell
-				);
+				const int32_t trigger_cell = find_board_card(value, context.trigger_card_index, -1);
 				AttackPolicy policy;
 				matched = (
-					trigger_cell == context.trigger_cell
-					&& trigger_cell >= 0
+					trigger_cell >= 0
 					&& is_target_in_attack_range(
 						value,
 						group.source_cell,
@@ -64,14 +64,16 @@ bool DuelNativeCompactKernel::conditions_match(
 				);
 				break;
 			}
-			case ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE:
-				for (int32_t direction = 0; direction < 4; ++direction) {
-					if (neighbor_index(group.source_cell, direction) == context.trigger_cell) {
+			case ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE: {
+				const int32_t trigger_cell = find_board_card(value, context.trigger_card_index, -1);
+				for (int32_t direction = 0; trigger_cell >= 0 && direction < 4; ++direction) {
+					if (neighbor_index(group.source_cell, direction) == trigger_cell) {
 						matched = true;
 						break;
 					}
 				}
 				break;
+			}
 			case ConditionOpcode::TRIGGER_CARD_OUTSIDE_SOURCE_OWNER_HAND:
 				matched = !(context.trigger_zone == 1 && context.trigger_owner == group.source_owner);
 				break;
@@ -79,8 +81,6 @@ bool DuelNativeCompactKernel::conditions_match(
 				if (
 					context.trigger_card_index >= 0
 					&& context.trigger_card_index < static_cast<int32_t>(value.card_reveal_codes.size())
-					&& find_board_card(value, context.trigger_card_index, context.trigger_cell)
-						== context.trigger_cell
 				) {
 					matched = reveal_code_contains(
 						value.card_reveal_codes[context.trigger_card_index],
@@ -101,7 +101,6 @@ bool DuelNativeCompactKernel::conditions_match(
 				matched = (
 					context.trigger_card_index >= 0
 					&& context.trigger_card_index < static_cast<int32_t>(value.card_original_owners.size())
-					&& find_board_card(value, context.trigger_card_index, context.trigger_cell) >= 0
 					&& value.card_original_owners[context.trigger_card_index] == group.source_owner
 				);
 				break;

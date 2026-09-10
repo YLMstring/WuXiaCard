@@ -688,6 +688,7 @@ bool DuelNativeCompactKernel::flip_card(
 	// 结算 CARD_AFTER_FLIPPED；最后移除独立的“自身翻面后”非保留能力。
 	const int32_t current_target_cell = find_board_card(value, target_card_index, target_cell);
 	if (current_target_cell < 0 || value.board_owners[current_target_cell] == new_owner) return true;
+	const int32_t previous_owner = value.board_owners[current_target_cell];
 	std::vector<uint64_t> remove_before_after_flip;
 	std::vector<uint64_t> remove_after_after_flip;
 	for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[target_card_index].size(); ++ability_index) {
@@ -718,8 +719,8 @@ bool DuelNativeCompactKernel::flip_card(
 	EventContext after_context = context;
 	after_context.trigger_cell = current_target_cell;
 	after_context.trigger_card_index = target_card_index;
-	after_context.trigger_previous_owner = context.trigger_owner;
-	after_context.trigger_owner = context.trigger_owner;
+	after_context.trigger_previous_owner = previous_owner;
+	after_context.trigger_owner = new_owner;
 	after_context.trigger_zone = 0;
 	after_context.trigger_logical_index = current_target_cell;
 	Resolution after = resolve_event(value, StringName("card_after_flipped"), after_context, exile_stack);

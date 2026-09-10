@@ -143,6 +143,16 @@ revalidates its aura handle and declaration; the saved source card's current
 zone, owner, gate, and runtime abilities are not generic vetoes. Explicit
 conditions and actions may still inspect that exact source reference.
 
+Trigger-card conditions distinguish event snapshots from live geometry.
+`TRIGGER_CARD_IS_ALLY/ENEMY` uses the saved event-time `trigger_owner` for
+non-summon events, even after the trigger card moves or leaves play. During the
+three summon events, the exact trigger instance must remain on the board and
+must match the source on both its summon-time and current affiliation; changing
+cells is allowed. `TRIGGER_CARD_IN_RANGE` and
+`TRIGGER_CARD_ADJACENT_TO_SOURCE` locate both exact instances at execution and
+compare their current cells. Reveal-state and original-owner conditions read
+the exact card metadata without requiring it to remain on the board.
+
 For a normal hand play, the simulator places the exact instance logically,
 freezes both owners' previous successful hand-play records, consumes at most
 one applicable pending non-heart suppression layer,
