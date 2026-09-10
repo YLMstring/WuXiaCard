@@ -453,6 +453,10 @@ func debug_get_search_budget_seconds() -> float:
 	return _effective_opponent_search_budget_seconds()
 
 
+func debug_get_effective_search_limits() -> Dictionary:
+	return _effective_opponent_search_limits()
+
+
 func debug_get_last_search_report() -> Dictionary:
 	return _last_search_report.duplicate(true)
 
@@ -1916,7 +1920,7 @@ func _perform_opponent_turn() -> void:
 		DuelRules.OPPONENT_OWNER,
 		_effective_opponent_search_budget_seconds(),
 		greedy_fallback,
-		_opponent_search_test_limits
+		_effective_opponent_search_limits()
 	)
 	if started:
 		while is_inside_tree() and not session.is_complete():
@@ -1999,6 +2003,22 @@ func _effective_opponent_search_budget_seconds() -> float:
 	return opponent_search_budget_seconds * Difficulty.enemy_search_time_multiplier(
 		run_difficulty
 	)
+
+
+func _effective_opponent_search_limits() -> Dictionary:
+	var limits: Dictionary = _opponent_search_test_limits.duplicate(true)
+	var difficulty_max_depth: int = Difficulty.get_enemy_search_max_depth(
+		run_difficulty
+	)
+	if difficulty_max_depth <= 0:
+		return limits
+	var requested_max_depth: int = int(limits.get("max_depth", 0))
+	limits["max_depth"] = (
+		mini(requested_max_depth, difficulty_max_depth)
+		if requested_max_depth > 0
+		else difficulty_max_depth
+	)
+	return limits
 
 
 func _take_planned_opponent_action() -> ActionData:

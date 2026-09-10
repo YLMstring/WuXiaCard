@@ -330,7 +330,7 @@ func _run() -> void:
 	_check(
 		_selected_difficulty(selector) == 1
 		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶一"
-		and selector.debug_get_status() == "进阶一：可挑战一派宗师",
+		and selector.debug_get_status() == "进阶一：可挑战一派宗师，敌方思考加深",
 		"Reopening the selector restores difficulty one and its Chinese text"
 	)
 	_check(
@@ -367,7 +367,7 @@ func _run() -> void:
 	_check(
 		_selected_difficulty(selector) == 2
 		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶二"
-		and selector.debug_get_status() == "进阶二：可挑战武林神话",
+		and selector.debug_get_status() == "进阶二：可挑战武林神话，敌方思考加深",
 		"The left arrow wraps from zero to the highest unlocked difficulty"
 	)
 	if left_difficulty_button != null:
@@ -395,7 +395,7 @@ func _run() -> void:
 	selector.card_inspector.close()
 	await process_frame
 	_check(
-		selector.debug_get_status() == "进阶二：可挑战武林神话",
+		selector.debug_get_status() == "进阶二：可挑战武林神话，敌方思考加深",
 		"Closing inspection restores the selected difficulty status"
 	)
 

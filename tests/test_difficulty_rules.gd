@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_progression_thresholds()
 	_test_cumulative_bagua_rules()
 	_test_remaining_thresholds()
+	_test_enemy_search_depth_limits()
 	_finish()
 
 
@@ -23,8 +24,8 @@ func _test_normalization_and_text() -> void:
 	_check(Difficulty.normalize(10) == 9, "Difficulty clamps above nine")
 	var expected_texts: Array[String] = [
 		"",
-		"可挑战一派宗师",
-		"可挑战武林神话",
+		"可挑战一派宗师，敌方思考加深",
+		"可挑战武林神话，敌方思考加深",
 		"后行动时，友方只占据一个八卦方位",
 		"先行动时，敌方占据的八卦方位点数变为二",
 		"战败后获得的卡牌品阶降低",
@@ -81,6 +82,16 @@ func _test_remaining_thresholds() -> void:
 	_check(Difficulty.hides_unrevealed_card_powers(8), "Difficulty eight hides unrevealed powers")
 	_check(is_equal_approx(Difficulty.enemy_search_time_multiplier(8), 1.0), "Difficulty eight keeps normal search time")
 	_check(is_equal_approx(Difficulty.enemy_search_time_multiplier(9), 2.0), "Difficulty nine doubles search time")
+
+
+func _test_enemy_search_depth_limits() -> void:
+	_check(Difficulty.get_enemy_search_max_depth(0) == 2, "Difficulty zero caps enemy search at depth two")
+	_check(Difficulty.get_enemy_search_max_depth(1) == 3, "Difficulty one caps enemy search at depth three")
+	for difficulty: int in range(2, 10):
+		_check(
+			Difficulty.get_enemy_search_max_depth(difficulty) == 0,
+			"Difficulty %d leaves enemy search depth unlimited" % difficulty
+		)
 
 
 func _check(condition: bool, message: String) -> void:

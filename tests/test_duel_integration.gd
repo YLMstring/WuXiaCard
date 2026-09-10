@@ -1061,6 +1061,35 @@ func _check_difficulty_opening_effects() -> void:
 
 
 func _check_search_budget_by_difficulty() -> void:
+	var difficulty_zero_duel: Node = _instantiate_duel()
+	difficulty_zero_duel.set("run_difficulty", 0)
+	_check(
+		int(difficulty_zero_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 2,
+		"Difficulty zero limits production enemy search to depth two"
+	)
+	difficulty_zero_duel.queue_free()
+
+	var difficulty_one_duel: Node = _instantiate_duel()
+	difficulty_one_duel.set("run_difficulty", 1)
+	_check(
+		int(difficulty_one_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 3,
+		"Difficulty one limits production enemy search to depth three"
+	)
+	difficulty_one_duel.debug_set_search_limits(5.0, {"max_depth": 1})
+	_check(
+		int(difficulty_one_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 1,
+		"An explicitly stricter test depth remains authoritative"
+	)
+	difficulty_one_duel.queue_free()
+
+	var difficulty_two_duel: Node = _instantiate_duel()
+	difficulty_two_duel.set("run_difficulty", 2)
+	_check(
+		not difficulty_two_duel.debug_get_effective_search_limits().has("max_depth"),
+		"Difficulty two and above keep the existing time-only production search"
+	)
+	difficulty_two_duel.queue_free()
+
 	var difficulty_nine_duel: Node = _instantiate_duel()
 	difficulty_nine_duel.set("run_difficulty", 9)
 	root.add_child(difficulty_nine_duel)
@@ -1440,6 +1469,7 @@ func _submit_card_tap(card: Control) -> void:
 
 func _check_live_search_depth_status() -> void:
 	var ai_duel: Node = _instantiate_duel()
+	ai_duel.set("run_difficulty", 2)
 	root.add_child(ai_duel)
 	await process_frame
 	await process_frame
@@ -1467,6 +1497,7 @@ func _check_live_search_depth_status() -> void:
 
 func _check_inspector_holds_completed_ai_move() -> void:
 	var ai_duel: Node = _instantiate_duel()
+	ai_duel.set("run_difficulty", 2)
 	root.add_child(ai_duel)
 	await process_frame
 	await process_frame

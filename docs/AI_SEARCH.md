@@ -77,8 +77,10 @@ the gameplay rule permits at most one successful grant per owner turn.
 
 Iterative deepening publishes only the deepest fully completed iteration. An
 incomplete deeper attempt is diagnostic data and never replaces the last
-complete action. Production uses a hard five-second base deadline; difficulty 9
-doubles it to ten seconds. Node-limited
+complete action. The controller caps production at public depth two on
+difficulty 0 and public depth three on difficulty 1. Difficulty 2 and above do
+not add a maximum depth. Production also uses a hard five-second base deadline;
+difficulty 9 doubles it to ten seconds. Node-limited
 Quick and Extended diagnostics use `min_completed_depth = 1`: a nominal node
 limit may be exceeded until depth one completes, while deadlines and explicit
 cancellation remain hard.

@@ -66,3 +66,12 @@ static func hides_unrevealed_card_powers(difficulty: int) -> bool:
 
 static func enemy_search_time_multiplier(difficulty: int) -> float:
 	return 2.0 if normalize(difficulty) >= 9 else 1.0
+
+
+static func get_enemy_search_max_depth(difficulty: int) -> int:
+	var normalized: int = normalize(difficulty)
+	if normalized <= 0:
+		return 2
+	if normalized == 1:
+		return 3
+	return 0
