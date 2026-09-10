@@ -26,6 +26,8 @@ func _init() -> void:
 func _run() -> void:
 	_test_presentation_priority_table()
 	_test_own_summon_trigger_classification()
+	_test_passive_marker_priority()
+	_test_excluded_trigger_classification()
 	_test_mixed_runtime_abilities()
 	await _test_card_view_rendering()
 	await _test_card_view_sizing()
@@ -286,6 +288,260 @@ func _test_own_summon_trigger_classification() -> void:
 	)
 
 
+func _test_passive_marker_priority() -> void:
+	var attack_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_IF,
+			"conditions": [{"type": Catalog.CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}]
+	)
+	var return_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_RETURN_CARD_TO_HAND,
+			"card": Catalog.CARD_REF_ABILITY_SOURCE,
+			"recipient": Catalog.OWNER_ABILITY_SOURCE,
+		}]
+	)
+	var attack_with_card_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_STANDARD_ATTACK_WITH_CARD,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}]
+	)
+	var selected_cards_attack: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [Catalog.CARD_ZONE_BOARD],
+				"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			},
+			"actions": [{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}]
+	)
+	var increase_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": Catalog.CARD_REF_ABILITY_SOURCE,
+		}]
+	)
+	var dynamic_increase_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": {
+				"type": Catalog.VALUE_CARD_COUNT,
+				"zone": Catalog.CARD_ZONE_HAND,
+				"owner": Catalog.OWNER_ABILITY_SOURCE,
+			},
+			"card": Catalog.CARD_REF_ABILITY_SOURCE,
+		}]
+	)
+	var decrease_action: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_END_OWNER_TURN,
+		[],
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": -1,
+			"card": Catalog.CARD_REF_ABILITY_SOURCE,
+		}]
+	)
+	var other_exile_action: Dictionary = _trigger_action_ability(
+		Catalog.CARD_BEFORE_EXILED,
+		[],
+		[{
+			"type": Catalog.ACTION_EXILE_CARD,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}]
+	)
+	var taiji_fist: Dictionary = {
+		"modifiers": [{"type": Catalog.MODIFIER_POWER_COMPARISON_REVERSED}],
+	}
+	var taiji_sword: Dictionary = {
+		"modifiers": [{
+			"type": Catalog.MODIFIER_ADJACENT_ENEMY_SUMMON_ATTACKS_ALLIES,
+		}],
+	}
+	var special_range: Dictionary = {
+		"modifiers": [{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE}],
+	}
+	_expect_marker(
+		_card(0, [Catalog.HENGSHAN_COUNTERATTACK]),
+		BEAD_LIGHT,
+		"护",
+		"Hengshan common counterattack uses the highest-priority guard marker"
+	)
+	_expect_marker(
+		_card(0, [taiji_fist]),
+		BEAD_LIGHT,
+		"圈",
+		"Taiji fist common modifier creates a circle bead"
+	)
+	_expect_marker(
+		_card(0, [taiji_sword]),
+		BEAD_LIGHT,
+		"圈",
+		"Taiji sword common modifier creates a circle bead"
+	)
+	_expect_marker(_card(0, [attack_action]), BEAD_LIGHT, "攻", "Nested attack uses attack marker")
+	_expect_marker(
+		_card(0, [attack_with_card_action]),
+		BEAD_LIGHT,
+		"连",
+		"Standard attack with an explicit card uses chain marker"
+	)
+	_expect_marker(
+		_card(0, [selected_cards_attack]),
+		BEAD_LIGHT,
+		"连",
+		"Standard self attack inside selected-card iteration uses chain marker"
+	)
+	_expect_marker(
+		_card(0, [attack_action, attack_with_card_action]),
+		BEAD_LIGHT,
+		"连",
+		"Chain marker takes priority over ordinary attack marker"
+	)
+	_expect_marker(_card(0, [return_action]), BEAD_LIGHT, "回", "Return action uses return marker")
+	_expect_marker(
+		_card(0, [other_exile_action]),
+		BEAD_LIGHT,
+		"破",
+		"Exiling a card other than the ability source uses break marker"
+	)
+	_expect_marker(_card(0, [increase_action]), BEAD_LIGHT, "阳", "Power gain uses yang marker")
+	_expect_marker(
+		_card(0, [dynamic_increase_action]),
+		BEAD_LIGHT,
+		"阳",
+		"Non-negative dynamic power gain uses yang marker"
+	)
+	_expect_marker(_card(0, [decrease_action]), BEAD_LIGHT, "阴", "Power loss uses yin marker")
+	_expect_marker(
+		_card(0, [special_range]),
+		BEAD_LIGHT,
+		"奇",
+		"Special attack range creates a special bead"
+	)
+	_expect_marker(
+		_card(0, [Catalog.TEMPORARY_FLIP_PROTECTION]),
+		BEAD_GOLD,
+		"守",
+		"Flip prevention uses defend marker"
+	)
+	_expect_marker(
+		_card(0, [_self_exile_ability()]),
+		BEAD_GRAY,
+		"虚",
+		"Semantic source exile uses void marker"
+	)
+	_expect_marker(
+		_card(0, [_trigger_ability(Catalog.TRIGGER_END_OWNER_TURN)]),
+		BEAD_LIGHT,
+		"化",
+		"Otherwise qualifying passive trigger keeps generic marker"
+	)
+	_expect_marker(
+		_card(0, [
+			_self_exile_ability(),
+			Catalog.TEMPORARY_FLIP_PROTECTION,
+			special_range,
+			decrease_action,
+			increase_action,
+			return_action,
+			attack_action,
+			attack_with_card_action,
+			taiji_fist,
+			Catalog.HENGSHAN_COUNTERATTACK,
+		]),
+		BEAD_GOLD,
+		"护",
+		"Marker priority is independent from gold bead color priority"
+	)
+	_expect_marker(
+		_card(0, [decrease_action, increase_action]),
+		BEAD_LIGHT,
+		"阳",
+		"Power gain marker takes priority over power loss marker"
+	)
+	_expect_marker(
+		_card(0, [increase_action, other_exile_action, return_action]),
+		BEAD_LIGHT,
+		"回",
+		"Return takes priority over break, which takes priority over power gain"
+	)
+	var source_and_other_exile: Dictionary = _trigger_action_ability(
+		Catalog.CARD_BE_ATTACKED,
+		[{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+		[
+			{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_ABILITY_SOURCE,
+			},
+			{
+				"type": Catalog.ACTION_EXILE_CARD,
+				"card": Catalog.CARD_REF_ATTACKER_CARD,
+			},
+		]
+	)
+	_expect_marker(
+		_card(0, [source_and_other_exile]),
+		BEAD_GRAY,
+		"破",
+		"Other-card exile marker takes priority over source-exile marker without changing gray color"
+	)
+
+
+func _test_excluded_trigger_classification() -> void:
+	_expect(
+		_card(0, [_trigger_ability(Catalog.TRIGGER_DUEL_STARTED)]),
+		BEAD_NONE,
+		false,
+		0,
+		"Duel-start trigger alone is excluded"
+	)
+	_expect(
+		_card(0, [_trigger_ability(Catalog.CARD_AFTER_DISCARDED)]),
+		BEAD_NONE,
+		false,
+		0,
+		"After-discard trigger alone is excluded"
+	)
+	var excluded_attack: Dictionary = _trigger_action_ability(
+		Catalog.TRIGGER_DUEL_STARTED,
+		[],
+		[{"type": Catalog.ACTION_ATTACK_TRIGGER_CARD}]
+	)
+	_expect(
+		_card(0, [excluded_attack]),
+		BEAD_NONE,
+		false,
+		0,
+		"Actions inside an excluded trigger do not create a bead by themselves"
+	)
+	_expect_marker(
+		_card(0, [
+			excluded_attack,
+			_trigger_ability(Catalog.TRIGGER_END_OWNER_TURN),
+		]),
+		BEAD_LIGHT,
+		"攻",
+		"Excluded-trigger actions still choose the marker when another ability creates the bead"
+	)
+
+
 func _test_mixed_runtime_abilities() -> void:
 	var self_condition: Array = [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}]
 	var mixed_trigger_ability: Dictionary = {
@@ -379,9 +635,9 @@ func _test_card_view_rendering() -> void:
 	_check(
 		badge.visible
 		and value.visible
-		and str(value.get("text")) == "化"
+		and str(value.get("text")) == "虚"
 		and _style_background(badge).is_equal_approx(GRAY_BEAD_BACKGROUND),
-		"Self-exile renders an unnumbered light-gray bead"
+		"Self-exile renders the void marker on a light-gray bead"
 	)
 
 	card_view.call("sync_runtime_data", _card(0, [_activate_ability()]), 1)
@@ -402,8 +658,8 @@ func _test_card_view_rendering() -> void:
 		1
 	)
 	_check(
-		badge.visible and value.visible and str(value.get("text")) == "化",
-		"Protected passive card shows the current passive marker on its gold bead"
+		badge.visible and value.visible and str(value.get("text")) == "守",
+		"Protected passive card shows the defend marker on its gold bead"
 	)
 	await card_view.call("play_ki_gain_pulse", 0.01)
 	_check(
@@ -536,7 +792,9 @@ func _test_exact_value_centering() -> void:
 			Vector2(96.0, 128.0),
 			Vector2(130.0, 173.0),
 		]
-		var values: Array[String] = ["0", "1", "10", "99", "化"]
+		var values: Array[String] = [
+			"0", "1", "10", "99", "护", "圈", "连", "攻", "回", "破", "阳", "阴", "奇", "守", "虚", "化",
+		]
 		for card_size: Vector2 in sizes:
 			card_view.size = card_size
 			await process_frame
@@ -640,6 +898,21 @@ func _expect(
 		StringName(presentation.get("kind", &"")) == expected_kind
 		and bool(presentation.get("show_number", false)) == expected_show_number
 		and int(presentation.get("value", -1)) == expected_value,
+		message
+	)
+
+
+func _expect_marker(
+	card: Dictionary,
+	expected_kind: StringName,
+	expected_marker: String,
+	message: String
+) -> void:
+	var presentation: Dictionary = Abilities.get_ki_bead_presentation(card)
+	_check(
+		StringName(presentation.get("kind", &"")) == expected_kind
+		and not bool(presentation.get("show_number", true))
+		and str(presentation.get("marker", "")) == expected_marker,
 		message
 	)
 

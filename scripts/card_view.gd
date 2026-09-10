@@ -38,7 +38,6 @@ const KI_BEAD_MARGIN_RATIO: float = 0.025
 const KI_BEAD_MIN_MARGIN: float = 2.0
 const KI_BEAD_FONT_RATIO: float = 0.54
 const KI_BEAD_MIN_FONT_SIZE: int = 8
-const KI_BEAD_PASSIVE_MARKER: String = "化"
 const KI_BEAD_PASSIVE_MARKER_FONT_SCALE: float = 0.8
 const KI_BEAD_RIM_RATIO: float = 0.077
 const KI_BEAD_MIN_RIM_SIZE: int = 1
@@ -642,7 +641,7 @@ func _apply_ki_bead_presentation(presentation: Dictionary) -> void:
 	var value_text: String = (
 		str(int(presentation.get("value", 0)))
 		if show_number
-		else KI_BEAD_PASSIVE_MARKER
+		else str(presentation.get("marker", Abilities.KI_BEAD_MARKER_DEFAULT))
 	)
 	ki_value.set_value_text(value_text)
 	_update_ki_value_font_size(value_text)
@@ -662,7 +661,7 @@ func _update_ki_value_font_size(value_text: String) -> void:
 	)
 	var value_scale: float = (
 		KI_BEAD_PASSIVE_MARKER_FONT_SCALE
-		if value_text == KI_BEAD_PASSIVE_MARKER
+		if not value_text.is_valid_int()
 		else 1.0
 	)
 	ki_value.set_value_font_size(maxi(1, roundi(float(numeric_font_size) * value_scale)))
