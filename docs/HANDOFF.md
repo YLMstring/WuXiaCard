@@ -214,6 +214,13 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - The player's five-card main deck is loaded from
   `user://wuxia_deck_profile.json`; malformed data is repaired or replaced by a
   valid default.
+- Schema 12 stores five fixed `run_sect_pool_ids` for every active run. New
+  runs shuffle five catalog sects other than the selected sect; preservable old
+  active saves derive them deterministically. Opening random cards and ordinary
+  post-duel rewards exclude catalog sects outside both the selected sect and
+  this pool, while non-catalog sect cards and guaranteed rewards remain
+  eligible. Closing a run clears the pool. The reward screen shows its saved
+  glyphs in pool order in the lower status line.
 - The collection library has 1,000 logical entries arranged in four-card rows
   and only 20 live slot views. Library cards retain the standard 3:4 ratio and
   their name color reflects catalog tier.

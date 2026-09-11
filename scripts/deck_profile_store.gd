@@ -7,16 +7,18 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 
-const SCHEMA_VERSION: int = 11
+const SCHEMA_VERSION: int = 12
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
 const DIFFICULTY_SCHEMA_VERSION: int = 10
 const DIFFICULTY_BEST_SCORE_SCHEMA_VERSION: int = 11
+const SECT_POOL_SCHEMA_VERSION: int = 12
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
 const MAX_DIFFICULTY: int = 9
+const RUN_SECT_POOL_SIZE: int = 5
 const LEGACY_UNLOCKED_DIFFICULTY: int = 2
 const DEFAULT_VICTORIES_REQUIRED: int = 15
 const ENDING_SCORE_POOL: int = 15000
@@ -86,6 +88,7 @@ func create_default_profile() -> Dictionary:
 		"max_unlocked_difficulty": 0,
 		"last_selected_difficulty": 0,
 		"run_difficulty": 0,
+		"run_sect_pool_ids": [],
 		"level": 0,
 		"current_enemy_id": "",
 		"remembered_enemy_glyphs": [],
@@ -173,6 +176,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var max_difficulty_value: Variant = profile.get("max_unlocked_difficulty", null)
 	var last_difficulty_value: Variant = profile.get("last_selected_difficulty", null)
 	var run_difficulty_value: Variant = profile.get("run_difficulty", null)
+	var run_sect_pool_value: Variant = profile.get("run_sect_pool_ids", null)
 	var level_value: Variant = profile.get("level", null)
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
 	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
@@ -191,6 +195,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or typeof(max_difficulty_value) != TYPE_INT
 		or typeof(last_difficulty_value) != TYPE_INT
 		or typeof(run_difficulty_value) != TYPE_INT
+		or typeof(run_sect_pool_value) != TYPE_ARRAY
 		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(enemy_value) != TYPE_STRING
 		or typeof(remembered_glyphs_value) != TYPE_ARRAY
@@ -251,6 +256,21 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	if run_active:
 		if selected_sect_id == &"" or not unlocked_sect_set.has(selected_sect_id):
 			return false
+		var run_sect_pool: Array = run_sect_pool_value as Array
+		if run_sect_pool.size() != RUN_SECT_POOL_SIZE:
+			return false
+		var observed_run_sects: Dictionary = {}
+		for value: Variant in run_sect_pool:
+			if typeof(value) != TYPE_STRING:
+				return false
+			var run_sect_id := StringName(String(value))
+			if (
+				run_sect_id not in sect_catalog_ids
+				or run_sect_id == selected_sect_id
+				or observed_run_sects.has(run_sect_id)
+			):
+				return false
+			observed_run_sects[run_sect_id] = true
 		if level < 1 or level > MAX_CHARACTER_LEVEL or not Enemies.has_enemy(current_enemy_id):
 			return false
 		if int(Enemies.get_definition(current_enemy_id).get("level", -1)) != level:
@@ -264,6 +284,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or not (shown_guaranteed_rewards_value as Array).is_empty()
 		or effective_duel_count != 0
 		or not (defeated_enemies_value as Array).is_empty()
+		or not (run_sect_pool_value as Array).is_empty()
 	):
 		return false
 	var defeated_enemy_count: int = 0
@@ -405,6 +426,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var max_unlocked_difficulty: int = 0
 	var last_selected_difficulty: int = 0
 	var run_difficulty: int = 0
+	var run_sect_pool_ids: Array[StringName] = []
 	var level: int = 0
 	var current_enemy_id: StringName = &""
 	var remembered_enemy_glyphs: Array[String] = []
@@ -498,6 +520,14 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 			if run_active
 			else 0
 		)
+	if run_active:
+		run_sect_pool_ids = _repair_run_sect_pool_ids(
+			profile.get("run_sect_pool_ids", [])
+			if schema_version >= SECT_POOL_SCHEMA_VERSION
+			else [],
+			selected_sect_id,
+			profile
+		)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	if schema_version >= MASTERY_SCHEMA_VERSION:
 		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
@@ -584,6 +614,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"max_unlocked_difficulty": max_unlocked_difficulty,
 		"last_selected_difficulty": last_selected_difficulty,
 		"run_difficulty": run_difficulty,
+		"run_sect_pool_ids": _string_array(run_sect_pool_ids),
 		"level": level,
 		"current_enemy_id": String(current_enemy_id),
 		"remembered_enemy_glyphs": remembered_enemy_glyphs,
@@ -685,10 +716,19 @@ func begin_run_and_save(
 	):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var sect_tier_one_ids: Array[StringName] = _get_card_ids_for_sect_tier(sect_id, 1)
+	var picker: RandomNumberGenerator = rng
+	if picker == null:
+		picker = RandomNumberGenerator.new()
+		picker.randomize()
+	var run_sect_pool_ids: Array[StringName] = _pick_run_sect_pool_ids(sect_id, picker)
+	if run_sect_pool_ids.size() != RUN_SECT_POOL_SIZE:
+		return {"ok": false, "profile": unchanged, "added_ids": []}
+	var sect_filter: Dictionary = _build_run_sect_filter(sect_id, run_sect_pool_ids)
 	var random_tier_one_ids: Array[StringName] = _pick_starting_tier_one_ids(
 		profile,
 		sect_tier_one_ids,
-		rng,
+		picker,
+		sect_filter,
 		allow_owned_starting_cards
 	)
 	if random_tier_one_ids.size() != MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
@@ -719,6 +759,7 @@ func begin_run_and_save(
 	candidate["run_active"] = true
 	candidate["selected_sect_id"] = String(sect_id)
 	candidate["run_difficulty"] = difficulty
+	candidate["run_sect_pool_ids"] = _string_array(run_sect_pool_ids)
 	candidate["level"] = 1
 	candidate["current_enemy_id"] = String(enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
@@ -856,6 +897,15 @@ func get_run_difficulty(profile: Dictionary) -> int:
 	if not is_profile_valid(profile):
 		return 0
 	return int(profile["run_difficulty"])
+
+
+func get_run_sect_pool_ids(profile: Dictionary) -> Array[StringName]:
+	var result: Array[StringName] = []
+	if not is_profile_valid(profile):
+		return result
+	for value: Variant in profile["run_sect_pool_ids"]:
+		result.append(StringName(String(value)))
+	return result
 
 
 func set_last_selected_difficulty_and_save(
@@ -1093,8 +1143,12 @@ func create_reward_offer_and_save(
 	)
 	var unlocked: Array[StringName] = get_unlocked_ids(profile)
 	var eligible: Array[StringName] = []
+	var sect_filter: Dictionary = _build_run_sect_filter(
+		get_selected_sect_id(profile),
+		get_run_sect_pool_ids(profile)
+	)
 	for card_id: StringName in Catalog.get_all_card_ids():
-		if card_id in unlocked:
+		if card_id in unlocked or not _card_passes_run_sect_filter(card_id, sect_filter):
 			continue
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		var card_tier: int = int(definition.get("tier", 0))
@@ -1263,10 +1317,124 @@ func _default_unlocked_ids() -> Array[StringName]:
 	return DEFAULT_MAIN_DECK_IDS.duplicate()
 
 
+func _pick_run_sect_pool_ids(
+	selected_sect_id: StringName,
+	rng: RandomNumberGenerator
+) -> Array[StringName]:
+	var candidates: Array[StringName] = []
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		if sect_id != selected_sect_id:
+			candidates.append(sect_id)
+	_shuffle_string_names(candidates, rng)
+	var result: Array[StringName] = []
+	for sect_id: StringName in candidates:
+		if result.size() >= RUN_SECT_POOL_SIZE:
+			break
+		result.append(sect_id)
+	return result
+
+
+func _repair_run_sect_pool_ids(
+	raw_value: Variant,
+	selected_sect_id: StringName,
+	profile: Dictionary
+) -> Array[StringName]:
+	var catalog_ids: Array[StringName] = Sects.get_all_sect_ids()
+	var result: Array[StringName] = []
+	if typeof(raw_value) == TYPE_ARRAY:
+		for value: Variant in raw_value as Array:
+			if typeof(value) != TYPE_STRING:
+				continue
+			var sect_id := StringName(String(value))
+			if (
+				sect_id in catalog_ids
+				and sect_id != selected_sect_id
+				and sect_id not in result
+				and result.size() < RUN_SECT_POOL_SIZE
+			):
+				result.append(sect_id)
+	if result.size() >= RUN_SECT_POOL_SIZE:
+		return result
+	var remaining: Array[StringName] = []
+	for sect_id: StringName in catalog_ids:
+		if sect_id != selected_sect_id and sect_id not in result:
+			remaining.append(sect_id)
+	var picker := RandomNumberGenerator.new()
+	picker.seed = _stable_run_sect_pool_seed(profile, selected_sect_id)
+	_shuffle_string_names(remaining, picker)
+	for sect_id: StringName in remaining:
+		if result.size() >= RUN_SECT_POOL_SIZE:
+			break
+		result.append(sect_id)
+	return result
+
+
+static func _stable_run_sect_pool_seed(
+	profile: Dictionary,
+	selected_sect_id: StringName
+) -> int:
+	var material: String = String(selected_sect_id)
+	for key: StringName in [
+		&"level",
+		&"current_enemy_id",
+		&"run_difficulty",
+		&"effective_duel_count",
+		&"unlocked_card_ids",
+		&"main_deck",
+		&"defeated_enemy_ids",
+	]:
+		material += "\u001f%s=" % str(key)
+		var raw_value: Variant = profile.get(str(key), null)
+		if typeof(raw_value) == TYPE_ARRAY:
+			for value: Variant in raw_value as Array:
+				material += "%s\u001e" % str(value)
+		else:
+			material += str(raw_value)
+	var hash_value: int = 2166136261
+	for index: int in range(material.length()):
+		hash_value = (
+			((hash_value ^ material.unicode_at(index)) * 16777619)
+			& 0x7fffffff
+		)
+	return hash_value if hash_value != 0 else 1
+
+
+static func _build_run_sect_filter(
+	selected_sect_id: StringName,
+	run_sect_pool_ids: Array[StringName]
+) -> Dictionary:
+	var catalog_glyphs: Dictionary = {}
+	var allowed_glyphs: Dictionary = {}
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		var glyph: String = String(Sects.get_definition(sect_id).get("glyph", ""))
+		if glyph.is_empty():
+			continue
+		catalog_glyphs[glyph] = true
+		if sect_id == selected_sect_id or sect_id in run_sect_pool_ids:
+			allowed_glyphs[glyph] = true
+	return {
+		"catalog_glyphs": catalog_glyphs,
+		"allowed_glyphs": allowed_glyphs,
+	}
+
+
+static func _card_passes_run_sect_filter(
+	card_id: StringName,
+	sect_filter: Dictionary
+) -> bool:
+	var card_sect: String = String(Catalog.get_definition(card_id).get("sect", ""))
+	var catalog_glyphs: Dictionary = sect_filter.get("catalog_glyphs", {}) as Dictionary
+	if not catalog_glyphs.has(card_sect):
+		return true
+	var allowed_glyphs: Dictionary = sect_filter.get("allowed_glyphs", {}) as Dictionary
+	return allowed_glyphs.has(card_sect)
+
+
 func _pick_starting_tier_one_ids(
 	profile: Dictionary,
 	sect_tier_one_ids: Array[StringName],
 	rng: RandomNumberGenerator,
+	sect_filter: Dictionary,
 	allow_owned: bool
 ) -> Array[StringName]:
 	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
@@ -1278,17 +1446,14 @@ func _pick_starting_tier_one_ids(
 			int(definition.get("tier", 0)) == 1
 			and card_id not in DEFAULT_MAIN_DECK_IDS
 			and card_id not in sect_tier_one_ids
+			and _card_passes_run_sect_filter(card_id, sect_filter)
 		):
 			if card_id in already_unlocked:
 				owned_fallbacks.append(card_id)
 			else:
 				candidates.append(card_id)
-	var picker: RandomNumberGenerator = rng
-	if picker == null:
-		picker = RandomNumberGenerator.new()
-		picker.randomize()
-	_shuffle_string_names(candidates, picker)
-	_shuffle_string_names(owned_fallbacks, picker)
+	_shuffle_string_names(candidates, rng)
+	_shuffle_string_names(owned_fallbacks, rng)
 	if allow_owned:
 		candidates.append_array(owned_fallbacks)
 	var result: Array[StringName] = []

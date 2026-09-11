@@ -10,10 +10,11 @@ const Decks = preload("res://scripts/duel_decks.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const DEFAULT_STATUS: String = "长按选择一张卡牌，然后拖至主牌组"
+const FALLBACK_STATUS: String = "门派池：暂无"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -88,7 +89,7 @@ func _ready() -> void:
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	opponent_name.text = upcoming_enemy_name
-	status_label.text = DEFAULT_STATUS
+	status_label.text = _get_default_status()
 	_layout_scene.call_deferred()
 
 
@@ -227,7 +228,17 @@ func _on_inspection_closed() -> void:
 	_inspection_open = false
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
-	status_label.text = DEFAULT_STATUS
+	status_label.text = _get_default_status()
+
+
+func _get_default_status() -> String:
+	var glyphs := PackedStringArray()
+	for sect_id: StringName in _profile_store.get_run_sect_pool_ids(profile):
+		if Sects.has_sect(sect_id):
+			glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
+	if glyphs.is_empty():
+		return FALLBACK_STATUS
+	return "门派池：%s" % "，".join(glyphs)
 
 
 func _on_library_drag_started(

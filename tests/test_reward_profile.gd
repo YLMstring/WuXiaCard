@@ -3,6 +3,15 @@ extends SceneTree
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
+
+const HUASHAN_RUN_POOL_IDS: Array[StringName] = [
+	&"ShaoLinPai",
+	&"WuDangPai",
+	&"TaiShanPai",
+	&"HengShanPai",
+	&"SongShanPai",
+]
 
 const SAVE_PATH: String = "user://reward_profile_test.json"
 
@@ -18,7 +27,7 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
-	_check(int(profile["schema_version"]) == 11, "Reward state advances the profile schema")
+	_check(int(profile["schema_version"]) == 12, "Reward state advances the profile schema")
 	_check(store.get_pending_reward_ids(profile).is_empty(), "Default profile has no pending reward")
 	_check(store.save_profile(profile), "Reward fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
@@ -158,6 +167,7 @@ func _run() -> void:
 	)
 	tier_five_profile["run_active"] = true
 	tier_five_profile["selected_sect_id"] = "HuaShanPai"
+	_set_huashan_run_pool(tier_five_profile)
 	tier_five_profile["level"] = 11
 	tier_five_profile["current_enemy_id"] = String(
 		Enemies.get_enemy_ids_for_level(11)[0]
@@ -202,6 +212,7 @@ func _run() -> void:
 
 	_test_difficulty_five_defeat_reward_ceiling(store)
 	_test_kuihua_zero_defeat_guarantee(store)
+	_test_run_sect_pool_reward_filter(store)
 
 	_cleanup()
 	_finish()
@@ -211,6 +222,7 @@ func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
 	var base: Dictionary = store.create_testing_profile(store.create_default_profile())
 	base["run_active"] = true
 	base["selected_sect_id"] = "HuaShanPai"
+	_set_huashan_run_pool(base)
 	base["level"] = 5
 	base["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(5)[0])
 	base["max_unlocked_difficulty"] = 5
@@ -261,6 +273,7 @@ func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
 	var tier_one: Dictionary = store.create_testing_profile(store.create_default_profile())
 	tier_one["run_active"] = true
 	tier_one["selected_sect_id"] = "HuaShanPai"
+	_set_huashan_run_pool(tier_one)
 	tier_one["level"] = 1
 	tier_one["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(1)[0])
 	tier_one["max_unlocked_difficulty"] = 5
@@ -285,6 +298,7 @@ func _test_kuihua_zero_defeat_guarantee(store: RefCounted) -> void:
 	var qualifying: Dictionary = store.create_testing_profile(store.create_default_profile())
 	qualifying["run_active"] = true
 	qualifying["selected_sect_id"] = "HuaShanPai"
+	_set_huashan_run_pool(qualifying)
 	qualifying["level"] = 11
 	qualifying["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(11)[0])
 	qualifying["max_unlocked_difficulty"] = 5
@@ -423,6 +437,70 @@ func _test_kuihua_zero_defeat_guarantee(store: RefCounted) -> void:
 		&"KuiHua0" in store.get_pending_reward_ids(restarted_offer.get("profile", {})),
 		"A later run can guarantee KuiHua0 again after the reset"
 	)
+
+
+func _test_run_sect_pool_reward_filter(store: RefCounted) -> void:
+	var profile: Dictionary = store.create_testing_profile(store.create_default_profile())
+	profile["run_active"] = true
+	profile["selected_sect_id"] = "HuaShanPai"
+	_set_huashan_run_pool(profile)
+	profile["run_sect_pool_ids"] = [
+		"ShaoLinPai",
+		"WuDangPai",
+		"TaiShanPai",
+		"HengShanPai",
+		"tingchao_gu",
+	]
+	profile["level"] = 1
+	profile["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(1)[0])
+	var catalog_glyphs: Dictionary = {}
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		catalog_glyphs[String(Sects.get_definition(sect_id).get("glyph", ""))] = true
+	var allowed_id: StringName = &""
+	var excluded_id: StringName = &""
+	var outside_catalog_id: StringName = &""
+	for value: Variant in profile["library_slots"]:
+		var card_id := StringName(String(value))
+		if card_id == &"":
+			break
+		var definition: Dictionary = Cards.get_definition(card_id)
+		if int(definition.get("tier", 0)) != 1:
+			continue
+		var card_sect: String = String(definition.get("sect", ""))
+		if card_sect == "少林派" and allowed_id == &"":
+			allowed_id = card_id
+		elif card_sect == "嵩山派" and excluded_id == &"":
+			excluded_id = card_id
+		elif not catalog_glyphs.has(card_sect) and outside_catalog_id == &"":
+			outside_catalog_id = card_id
+	_check(
+		allowed_id != &"" and excluded_id != &"" and outside_catalog_id != &"",
+		"Reward filtering fixture finds pool, excluded, and outside-catalog tier-one cards"
+	)
+	for card_id: StringName in [allowed_id, excluded_id, outside_catalog_id]:
+		_lock_library_card(profile, card_id)
+	_check(store.is_profile_valid(profile), "Run sect-pool reward fixture is valid")
+	var offer: Dictionary = store.create_reward_offer_and_save(
+		profile,
+		Store.REWARD_VICTORY,
+		_seeded_rng(1205)
+	)
+	var reward_ids: Array[StringName] = store.get_pending_reward_ids(
+		offer.get("profile", {})
+	)
+	_check(
+		bool(offer.get("offered", false))
+		and allowed_id in reward_ids
+		and outside_catalog_id in reward_ids
+		and excluded_id not in reward_ids,
+		"Random rewards keep pool and outside-catalog cards while excluding other catalog sects"
+	)
+
+
+func _set_huashan_run_pool(profile: Dictionary) -> void:
+	profile["run_sect_pool_ids"] = []
+	for sect_id: StringName in HUASHAN_RUN_POOL_IDS:
+		profile["run_sect_pool_ids"].append(String(sect_id))
 
 
 func _lock_library_card(profile: Dictionary, card_id: StringName) -> void:

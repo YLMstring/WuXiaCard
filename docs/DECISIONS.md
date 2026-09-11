@@ -345,6 +345,13 @@ respectively, in row-major order. The source itself is eligible.
 - The player's main deck is persisted in a versioned profile and is read by new duel scenes.
 - The collection library has 1,000 logical positions. Unlocked cards occupy a compact prefix; all remaining positions are empty slots.
 - A persistent card ID exists in exactly one place: the five-card main deck or the occupied library prefix.
+- Every active run stores five distinct catalog sect IDs other than the selected
+  sect. Opening random cards and ordinary post-duel rewards may use catalog
+  cards only from the selected sect or those five sects. Cards whose `sect` is
+  absent from the sect catalog remain eligible, and catalog-declared guaranteed
+  rewards bypass this random-pool restriction. The pool persists for the run,
+  is displayed in saved order on the reward screen, and is cleared when the run
+  closes.
 - The initial unlocked pool is every catalog card not listed in
   `DeckProfileStore.DEFAULT_LOCKED_IDS`. The default main deck takes five of
   those cards and every remaining unlocked card begins in the library.

@@ -45,7 +45,7 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 11, "Default profile uses schema version 11")
+	_check(int(profile["schema_version"]) == 12, "Default profile uses schema version 12")
 	_check(
 		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
 		"Default profile has no shown guaranteed rewards"
@@ -63,6 +63,10 @@ func _run() -> void:
 	_check(
 		int(profile.get("run_difficulty", -1)) == 0,
 		"New profiles have no active run difficulty"
+	)
+	_check(
+		store.get_run_sect_pool_ids(profile).is_empty(),
+		"New inactive profiles have no run sect pool"
 	)
 	_check(
 		store.get_best_score(profile, &"HuaShanPai", 0) == 0
@@ -378,7 +382,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 11, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 12, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
@@ -574,6 +578,55 @@ func _run() -> void:
 	_check(store.get_character_level(active_profile) == 1, "Beginning a run advances to level one")
 	_check(store.get_character_tier(active_profile) == 1, "Level one remains tier one")
 	_check(store.get_run_difficulty(active_profile) == 0, "Existing run-start callers default to difficulty zero")
+	var run_sect_pool: Array[StringName] = store.get_run_sect_pool_ids(active_profile)
+	_check(
+		run_sect_pool.size() == Store.RUN_SECT_POOL_SIZE
+		and _all_unique(run_sect_pool)
+		and &"HuaShanPai" not in run_sect_pool,
+		"Beginning a run stores five unique catalog sects outside the selected sect"
+	)
+	for run_sect_id: StringName in run_sect_pool:
+		_check(Sects.has_sect(run_sect_id), "%s in the run pool belongs to the sect catalog" % run_sect_id)
+	var repeated_start_rng := RandomNumberGenerator.new()
+	repeated_start_rng.seed = 3108
+	var repeated_begin: Dictionary = store.begin_run_and_save(
+		run_start_source,
+		&"HuaShanPai",
+		[&"CangSongYingKe1"],
+		&"qingfeng_xuedi",
+		repeated_start_rng
+	)
+	_check(
+		store.get_run_sect_pool_ids(repeated_begin.get("profile", {})) == run_sect_pool
+		and store.get_main_deck_ids(repeated_begin.get("profile", {}))
+		== store.get_main_deck_ids(active_profile),
+		"A fixed run-start seed reproduces both the sect pool and starting deck"
+	)
+	var schema_eleven_active: Dictionary = active_profile.duplicate(true)
+	schema_eleven_active["schema_version"] = 11
+	schema_eleven_active.erase("run_sect_pool_ids")
+	var migrated_schema_eleven: Dictionary = store.repair_profile(schema_eleven_active)
+	var repeated_schema_eleven: Dictionary = store.repair_profile(schema_eleven_active)
+	_check(
+		store.is_profile_valid(migrated_schema_eleven)
+		and store.get_run_sect_pool_ids(migrated_schema_eleven).size()
+		== Store.RUN_SECT_POOL_SIZE
+		and store.get_run_sect_pool_ids(migrated_schema_eleven)
+		== store.get_run_sect_pool_ids(repeated_schema_eleven),
+		"A schema-eleven active run receives one deterministic persistent sect pool"
+	)
+	var invalid_pool_profile: Dictionary = active_profile.duplicate(true)
+	invalid_pool_profile["run_sect_pool_ids"] = [
+		"ShaoLinPai",
+		"ShaoLinPai",
+		"WuDangPai",
+		"TaiShanPai",
+		"HengShanPai",
+	]
+	_check(
+		not store.is_profile_valid(invalid_pool_profile),
+		"Active profiles reject duplicate run-pool sects"
+	)
 	var schema_nine_active: Dictionary = active_profile.duplicate(true)
 	schema_nine_active["schema_version"] = 9
 	schema_nine_active.erase("max_unlocked_difficulty")
@@ -632,10 +685,21 @@ func _run() -> void:
 	)
 	var random_start_ids: Array[StringName] = starting_deck.slice(2)
 	_check(random_start_ids.size() == 3, "Run start adds exactly three random cards")
+	var run_pool_glyphs: Dictionary = {}
+	for run_sect_id: StringName in run_sect_pool:
+		run_pool_glyphs[String(Sects.get_definition(run_sect_id).get("glyph", ""))] = true
+	var catalog_glyphs: Dictionary = {}
+	for catalog_sect_id: StringName in Sects.get_all_sect_ids():
+		catalog_glyphs[String(Sects.get_definition(catalog_sect_id).get("glyph", ""))] = true
 	for random_id: StringName in random_start_ids:
 		var definition: Dictionary = Cards.get_definition(random_id)
 		_check(int(definition.get("tier", 0)) == 1, "%s is a tier-one random unlock" % random_id)
 		_check(String(definition.get("sect", "")) != "华山", "%s is outside the selected sect" % random_id)
+		var card_sect: String = String(definition.get("sect", ""))
+		_check(
+			not catalog_glyphs.has(card_sect) or run_pool_glyphs.has(card_sect),
+			"%s is either outside the sect catalog or belongs to the run pool" % random_id
+		)
 	var unlocked_after_start: Array[StringName] = store.get_unlocked_ids(active_profile)
 	for card_id: StringName in Cards.get_all_card_ids():
 		var definition: Dictionary = Cards.get_definition(card_id)
@@ -787,6 +851,10 @@ func _run() -> void:
 	_check(reset_profile["mastered_card_ids"] == retained_mastery, "Run reset preserves mastery")
 	_check(store.get_character_level(reset_profile) == 0, "Run reset clears character level")
 	_check(store.get_current_enemy_id(reset_profile) == &"", "Run reset clears the enemy")
+	_check(
+		store.get_run_sect_pool_ids(reset_profile).is_empty(),
+		"Run reset clears the current run sect pool"
+	)
 	var declared_sect_profile: Dictionary = reset_profile.duplicate(true)
 	Store._unlock_declared_sect(declared_sect_profile, {"sect_id": &"TaiShanPai"})
 	_check(
@@ -1070,6 +1138,15 @@ func _strings(values: Array) -> Array:
 	for value: Variant in values:
 		result.append(String(value))
 	return result
+
+
+func _all_unique(values: Array[StringName]) -> bool:
+	var observed: Dictionary = {}
+	for value: StringName in values:
+		if observed.has(value):
+			return false
+		observed[value] = true
+	return true
 
 
 func _library_has_no_gaps(slots: Array) -> bool:

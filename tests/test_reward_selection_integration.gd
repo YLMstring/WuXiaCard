@@ -3,6 +3,7 @@ extends SceneTree
 const REWARD_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 const SAVE_PATH: String = "user://reward_selection_test.json"
 
@@ -74,6 +75,11 @@ func _run() -> void:
 	var grid := reward.get_node("DuelCanvas/DeckLibraryGrid") as DeckLibraryGrid
 	_check(grid.column_count == 3 and grid.total_slots == 3, "Reward scroll uses three positions")
 	_check(reward.debug_get_reward_ids() == reward_ids, "Reward scene renders the saved offer")
+	var expected_pool_status: String = _run_pool_status(store, profile)
+	_check(
+		String(reward.get_node("DuelCanvas/Status").text) == expected_pool_status,
+		"Reward scene displays the saved run sect pool in its lower hint"
+	)
 	var first_slot: Variant = grid.debug_get_bound_slot(0)
 	var second_slot: Variant = grid.debug_get_bound_slot(1)
 	var third_slot: Variant = grid.debug_get_bound_slot(2)
@@ -137,7 +143,11 @@ func _run() -> void:
 	reward.call("_on_library_inspection_requested", 0, first_slot.card_data)
 	_check(reward.debug_is_inspecting(), "Revealed reward opens normal inspection")
 	(reward.get_node("DuelCanvas/CardInspector") as Control).call("close")
-	_check(not reward.debug_is_inspecting(), "Closing inspection restores reward choices")
+	_check(
+		not reward.debug_is_inspecting()
+		and String(reward.get_node("DuelCanvas/Status").text) == expected_pool_status,
+		"Closing inspection restores the run sect-pool hint"
+	)
 
 	var deck_before: Array[StringName] = store.get_main_deck_ids(profile)
 	var source_point: Vector2 = first_slot.get_global_rect().get_center()
@@ -181,6 +191,13 @@ func _string_names(values: Array) -> Array[StringName]:
 	for value: Variant in values:
 		result.append(StringName(String(value)))
 	return result
+
+
+func _run_pool_status(store: RefCounted, profile: Dictionary) -> String:
+	var glyphs := PackedStringArray()
+	for sect_id: StringName in store.get_run_sect_pool_ids(profile):
+		glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
+	return "门派池：%s" % "，".join(glyphs)
 
 
 func _on_reward_claimed(card_id: StringName) -> void:

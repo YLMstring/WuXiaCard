@@ -305,7 +305,11 @@ and selected; preserved active runs also use difficulty 2. Schema-7 saves
 migrate with empty mastery without closing an active run. Schema 11 changes
 each sect's best score into a sparse dictionary keyed by difficulty `0..9`.
 Earlier scalar sect scores migrate into difficulties 0, 1, and 2; the first two
-are capped at 500 while difficulty 2 retains the old value.
+are capped at 500 while difficulty 2 retains the old value. Schema 12 adds the
+five ordered active-run `run_sect_pool_ids`. A preserved older active run derives
+one deterministic pool from stable save contents; inactive profiles keep it
+empty. The profile store uses that pool only while constructing opening random
+cards and ordinary reward candidates, so it never enters duel or search state.
 `record_completed_duel_and_save()` is the sole
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,
