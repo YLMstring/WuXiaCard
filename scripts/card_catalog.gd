@@ -4996,7 +4996,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "嵩山派",
 		"tier": 3,
 		"weapon": "掌法",
-		"description": "进场时，将我移除，抽一张掌法牌，所有友方掌法获得以下效果：【我可以攻击直线上相隔一个空位的敌方】，然后发起攻击。",
+		"description": "进场时，将我移除，抽一张掌法牌，所有友方掌法获得以下效果：【我可以攻击直线上相隔一个空位，或相隔一个友方的敌方】，然后发起攻击。",
 		"flavor": "孝感乐厚的成名功夫，双掌掌力不同，一阴一阳，阳掌先出，阴力却先行着体。",
 		"powers": [-1, -1, -1, -1],
 		"abilities": [YINYANG_ZHANGLI_THREE],

@@ -379,6 +379,12 @@ respectively, in row-major order. The source itself is eligible.
 
 - Every active run stores one difficulty from 0 through 9. New profiles unlock
   and select only difficulty 0.
+- In normal mode, an inactive profile whose only unlocked sect is `HuaShanPai`
+  and whose maximum unlocked difficulty is 0 skips sect selection when the
+  player presses `踏入江湖`. The normal new-run transaction immediately starts
+  Huashan difficulty 0 and enters deck building. Testing mode always preserves
+  sect selection; unlocking either another sect or difficulty 1 restores it in
+  normal mode as well.
 - The profile stores global `max_unlocked_difficulty`, persistent
   `last_selected_difficulty`, and active-run `run_difficulty` separately.
 - Sect selection saves every arrow change immediately and restores it across

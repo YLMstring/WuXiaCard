@@ -173,8 +173,29 @@ func _on_journey_requested() -> void:
 		_show_reward_selection()
 	elif store.is_run_active(profile):
 		_show_deck_builder()
+	elif _should_auto_start_default_run(store, profile):
+		var result: Dictionary = store.begin_run_and_save(
+			profile,
+			&"HuaShanPai",
+			[],
+			&"",
+			null,
+			false,
+			0
+		)
+		if bool(result.get("ok", false)):
+			_show_deck_builder()
+		else:
+			_finish_reset_on_current_menu("保存失败，请重试")
 	else:
 		_show_sect_selection()
+
+
+func _should_auto_start_default_run(store: RefCounted, profile: Dictionary) -> bool:
+	if testing_mode or store.get_max_unlocked_difficulty(profile) != 0:
+		return false
+	var unlocked_sect_ids: Array[StringName] = store.get_unlocked_sect_ids(profile)
+	return unlocked_sect_ids.size() == 1 and unlocked_sect_ids[0] == &"HuaShanPai"
 
 
 func _on_run_reset_confirmed() -> void:

@@ -378,7 +378,10 @@ score fixed inside the clear upper painting while the prose label advances at
 a constant speed behind a clipping Control. The roll stops when its last line
 is fully visible; release input is consumed until then. Its single return
 signal restores the normal main menu, where the now-inactive run routes the
-next journey to sect selection.
+next journey through the new-run gate. Normal mode skips sect selection only
+while Huashan difficulty 0 is the player's sole choice and creates that run via
+the same profile transaction; testing mode and profiles with any additional
+sect or difficulty continue to enter sect selection.
 
 `MainFlowController` also maps screens to music contexts. Menu and sect
 selection submit the same context; deck building and ordinary rewards submit

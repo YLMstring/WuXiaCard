@@ -280,6 +280,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
   left copy is flipped, both wrap through the unlocked range, and each change
   saves immediately. They remain hidden when only difficulty 0 is unlocked.
+- In normal mode, `踏入江湖` skips sect selection only when an inactive profile
+  has exactly Huashan and difficulty 0 available. It creates a normal Huashan
+  difficulty-0 run and enters deck building. Testing mode always keeps sect
+  selection, as does unlocking any other sect or difficulty 1.
 - The main menu recognizes one hidden, in-memory sequence: start with
   `闭关重修`, alternate with `封剑归隐`, and press each five times. Completion
   atomically unlocks every sect and difficulty 9 without changing cards or the

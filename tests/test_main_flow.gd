@@ -14,6 +14,10 @@ const Settings = preload("res://scripts/game_settings.gd")
 var _checks: int = 0
 var _failures: int = 0
 var _save_path: String = "user://main_flow_test.json"
+var _auto_start_path: String = "user://main_flow_auto_start_test.json"
+var _other_sect_path: String = "user://main_flow_other_sect_test.json"
+var _difficulty_path: String = "user://main_flow_difficulty_test.json"
+var _testing_route_path: String = "user://main_flow_testing_route_test.json"
 
 
 func _init() -> void:
@@ -24,6 +28,85 @@ func _run() -> void:
 	_cleanup()
 	_check(Settings.should_enable_testing_mode(true), "Editor runtime enables testing mode")
 	_check(not Settings.should_enable_testing_mode(false), "Export runtime keeps normal mode")
+
+	var auto_flow: Variant = MAIN_SCENE.instantiate()
+	auto_flow.deck_profile_path = _auto_start_path
+	auto_flow.testing_mode = false
+	root.add_child(auto_flow)
+	await process_frame
+	var auto_menu := auto_flow.debug_get_current_screen() as MenuController
+	(auto_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	_check(
+		auto_flow.debug_get_current_screen() is DeckBuilderController,
+		"Normal mode skips sect selection when only Huashan difficulty zero is available"
+	)
+	var auto_store := Store.new(_auto_start_path)
+	var auto_profile: Dictionary = auto_store.load_profile()
+	_check(auto_store.is_run_active(auto_profile), "Automatic default start persists an active run")
+	_check(
+		auto_store.get_selected_sect_id(auto_profile) == &"HuaShanPai"
+		and auto_store.get_run_difficulty(auto_profile) == 0,
+		"Automatic default start uses Huashan difficulty zero"
+	)
+	auto_flow.queue_free()
+	await process_frame
+
+	var other_sect_store := Store.new(_other_sect_path)
+	var other_sect_profile: Dictionary = other_sect_store.create_default_profile()
+	(other_sect_profile["unlocked_sect_ids"] as Array).append("TaiShanPai")
+	_check(other_sect_store.save_profile(other_sect_profile), "Other-sect route fixture saves")
+	var other_sect_flow: Variant = MAIN_SCENE.instantiate()
+	other_sect_flow.deck_profile_path = _other_sect_path
+	other_sect_flow.testing_mode = false
+	root.add_child(other_sect_flow)
+	await process_frame
+	var other_sect_menu := other_sect_flow.debug_get_current_screen() as MenuController
+	(other_sect_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	_check(
+		other_sect_flow.debug_get_current_screen() is SelectorController,
+		"Unlocking another sect preserves sect selection"
+	)
+	other_sect_flow.queue_free()
+	await process_frame
+
+	var difficulty_store := Store.new(_difficulty_path)
+	var difficulty_profile: Dictionary = difficulty_store.create_default_profile()
+	difficulty_profile["max_unlocked_difficulty"] = 1
+	_check(difficulty_store.save_profile(difficulty_profile), "Difficulty route fixture saves")
+	var difficulty_flow: Variant = MAIN_SCENE.instantiate()
+	difficulty_flow.deck_profile_path = _difficulty_path
+	difficulty_flow.testing_mode = false
+	root.add_child(difficulty_flow)
+	await process_frame
+	var difficulty_menu := difficulty_flow.debug_get_current_screen() as MenuController
+	(difficulty_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	_check(
+		difficulty_flow.debug_get_current_screen() is SelectorController,
+		"Unlocking difficulty one preserves sect selection"
+	)
+	difficulty_flow.queue_free()
+	await process_frame
+
+	var testing_route_flow: Variant = MAIN_SCENE.instantiate()
+	testing_route_flow.deck_profile_path = _testing_route_path
+	testing_route_flow.testing_mode = true
+	root.add_child(testing_route_flow)
+	await process_frame
+	var testing_route_menu := (
+		testing_route_flow.debug_get_current_screen() as MenuController
+	)
+	(testing_route_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	_check(
+		testing_route_flow.debug_get_current_screen() is SelectorController,
+		"Testing mode preserves sect selection for the default profile"
+	)
+	testing_route_flow.queue_free()
+	await process_frame
+
 	var flow: Variant = MAIN_SCENE.instantiate()
 	_check(
 		bool(flow.testing_mode) == Settings.default_testing_mode(),
@@ -297,9 +380,17 @@ func _run() -> void:
 
 	var failing_flow: Variant = MAIN_SCENE.instantiate()
 	failing_flow.deck_profile_path = "user://missing_parent/main_flow_test.json"
+	failing_flow.testing_mode = false
 	root.add_child(failing_flow)
 	await process_frame
 	var failing_menu := failing_flow.debug_get_current_screen() as MenuController
+	(failing_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	_check(
+		failing_flow.debug_get_current_screen() == failing_menu
+		and (failing_menu.get_node("MenuLayer/Notice") as Label).text == "保存失败，请重试",
+		"A failed automatic start remains on the menu and reports the save failure"
+	)
 	var failing_progress_reset_button := (
 		failing_menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
 	)
@@ -332,8 +423,20 @@ func _run() -> void:
 
 
 func _cleanup() -> void:
+	for base_path: String in [
+		_save_path,
+		_auto_start_path,
+		_other_sect_path,
+		_difficulty_path,
+		_testing_route_path,
+		_testing_route_path + ".testing",
+	]:
+		_cleanup_path(base_path)
+
+
+func _cleanup_path(base_path: String) -> void:
 	for suffix: String in ["", ".tmp", ".bak"]:
-		var path: String = _save_path + suffix
+		var path: String = base_path + suffix
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
