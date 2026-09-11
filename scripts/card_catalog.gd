@@ -25,6 +25,7 @@ const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
+const TRIGGER_POWER_INCREASE_BATCH_FINISHED: StringName = &"power_increase_batch_finished"
 const TRIGGER_DUEL_STARTED: StringName = &"duel_started"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
 const CARD_BEFORE_EXILED: StringName = &"card_before_exiled"
@@ -93,6 +94,9 @@ const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
 const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
 const CONDITION_ABILITY_SOURCE_IN_ZONE: StringName = &"ability_source_in_zone"
+const CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY: StringName = (
+	&"power_increase_batch_includes_ally"
+)
 const ACTION_DRAW_CARDS: StringName = &"draw_cards"
 const ACTION_EXILE_CARD: StringName = &"exile_card"
 const ACTION_DISCARD_CARD: StringName = &"discard_card"
@@ -205,6 +209,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_BEFORE_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
 	TRIGGER_CARD_AFTER_ATTACK,
+	TRIGGER_POWER_INCREASE_BATCH_FINISHED,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_EXILED,
 	CARD_AFTER_EXILED,
@@ -252,6 +257,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY,
 	CONDITION_DISCARD_OWNER_IS_SELF,
 	CONDITION_ABILITY_SOURCE_IN_ZONE,
+	CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY,
 ]
 const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_IS_ALLY,
@@ -1871,10 +1877,17 @@ const TAIJI_SWORD_REDIRECT_ONCE: Dictionary = {
 	}],
 }
 
-const YINYANG_RANGE_THREE: Dictionary = {
+const YINYANG_RANGE_TWO: Dictionary = {
 	"modifiers": [{
 		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
 		"allow_intervening_ally": false,
+	}],
+}
+
+const YINYANG_RANGE_THREE: Dictionary = {
+	"modifiers": [{
+		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
+		"allow_intervening_ally": true,
 	}],
 }
 
@@ -1882,6 +1895,48 @@ const YINYANG_RANGE_FOUR: Dictionary = {
 	"modifiers": [{
 		"type": MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO,
 		"allow_intervening_ally": true,
+	}],
+	"triggers": [{
+		"event": TRIGGER_POWER_INCREASE_BATCH_FINISHED,
+		"conditions": [{
+			"type": CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY,
+		}],
+		"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+	}],
+}
+
+const YINYANG_ALLIED_BOARD_PALMS: Dictionary = {
+	"zones": [CARD_ZONE_BOARD],
+	"conditions": [
+		{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+		{
+			"type": CONDITION_SELECTED_CARD_WEAPON_IS,
+			"weapon": "掌法",
+		},
+	],
+}
+
+const YINYANG_ZHANGLI_TWO: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1, "weapon": "掌法"},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
+				"actions": [{
+					"type": ACTION_GRANT_ABILITY_TO_SELF,
+					"ability": YINYANG_RANGE_TWO,
+				}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
+				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+			},
+		],
 	}],
 }
 
@@ -1891,19 +1946,10 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1, "weapon": "掌法"},
+			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
-				"selector": {
-					"zones": [CARD_ZONE_BOARD],
-					"conditions": [
-						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
-						{
-							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
-							"weapon": "掌法",
-						},
-					],
-				},
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
 				"actions": [{
 					"type": ACTION_GRANT_ABILITY_TO_SELF,
 					"ability": YINYANG_RANGE_THREE,
@@ -1911,16 +1957,7 @@ const YINYANG_ZHANGLI_THREE: Dictionary = {
 			},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
-				"selector": {
-					"zones": [CARD_ZONE_BOARD],
-					"conditions": [
-						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
-						{
-							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
-							"weapon": "掌法",
-						},
-					],
-				},
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
 				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 			},
 		],
@@ -1933,19 +1970,10 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{"type": ACTION_DRAW_CARDS, "amount": 1, "weapon": "掌法"},
+			{"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "掌法"},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
-				"selector": {
-					"zones": [CARD_ZONE_BOARD],
-					"conditions": [
-						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
-						{
-							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
-							"weapon": "掌法",
-						},
-					],
-				},
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
 				"actions": [{
 					"type": ACTION_GRANT_ABILITY_TO_SELF,
 					"ability": YINYANG_RANGE_FOUR,
@@ -1953,16 +1981,7 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 			},
 			{
 				"type": ACTION_FOR_EACH_SELECTED_CARD,
-				"selector": {
-					"zones": [CARD_ZONE_BOARD],
-					"conditions": [
-						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
-						{
-							"type": CONDITION_SELECTED_CARD_WEAPON_IS,
-							"weapon": "掌法",
-						},
-					],
-				},
+				"selector": YINYANG_ALLIED_BOARD_PALMS,
 				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 			},
 		],
@@ -5000,7 +5019,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，将我移除，抽一张掌法牌，所有友方掌法获得以下效果：【我可以攻击直线上相隔一个空位的敌方】，然后发起攻击。",
 		"flavor": "孝感乐厚的成名功夫，双掌掌力不同，一阴一阳，阳掌先出，阴力却先行着体。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [YINYANG_ZHANGLI_THREE],
+		"abilities": [YINYANG_ZHANGLI_TWO],
 	},
 	&"YinYangZhang3": {
 		"id": &"YinYangZhang3",

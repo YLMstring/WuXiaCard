@@ -114,6 +114,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ATTACK_FLIPPED_ALLY_IN_RANGE,
 		ATTACK_FLIPPED_ANY_CARD,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
+		POWER_INCREASE_BATCH_INCLUDES_ALLY,
 		TRIGGER_CARD_WEAPON,
 		DRAWN_CARD_IS_ENEMY,
 		TURN_OWNER_IS_SELF,
@@ -494,6 +495,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName exile_reason;
 		int32_t exile_effect_source_owner = 0;
 		StringName discard_batch_id;
+		uint8_t power_increase_owner_mask = 0;
 	};
 
 	// discover_event 只发现并锁定触发条目；真正结算时再用 handle 与来源区域确认
@@ -1387,7 +1389,7 @@ private:
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;
-	void assign_power_change_batch(
+	uint8_t assign_power_change_batch(
 		const NativeState &value,
 		Resolution &resolution,
 		int64_t first_event_index,
@@ -1395,6 +1397,13 @@ private:
 		const CompiledAction &action,
 		const ActionContext &context,
 		int32_t action_index
+	) const;
+	bool has_event_listener(const NativeState &value, const StringName &event_id) const;
+	bool resolve_power_increase_batch(
+		NativeState &value,
+		uint8_t owner_mask,
+		std::vector<int32_t> &exile_stack,
+		Resolution &resolution
 	) const;
 	ActionOutcome change_ki(
 		NativeState &value,

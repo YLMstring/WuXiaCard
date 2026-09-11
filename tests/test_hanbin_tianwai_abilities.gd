@@ -496,19 +496,24 @@ func _test_tianwai_preserves_moved_summons_self_trigger() -> void:
 		"A summoned card's discovered self trigger follows the same instance after TianWai swaps it"
 	)
 	_check(
-		next_state.get_hand(Rules.PLAYER_OWNER).size() == 1
+		next_state.get_hand(Rules.PLAYER_OWNER).size() == 2
 		and StringName(
 			(next_state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get(
 				"instance_id", &""
 			)
 		) == &"moved_yinyang_draw_one"
-		and (next_state.decks.get(Rules.PLAYER_OWNER, []) as Array).size() == 1
+		and StringName(
+			(next_state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get(
+				"instance_id", &""
+			)
+		) == &"moved_yinyang_draw_two"
+		and (next_state.decks.get(Rules.PLAYER_OWNER, []) as Array).is_empty()
 		and _count_source_events(
 			transition.get("events", []),
 			&"ability_triggered",
 			&"moved_yinyang"
 		) == 1,
-		"Moved YinYang still resolves its single filtered draw summon ability"
+		"Moved YinYang still resolves its two filtered draws summon ability"
 	)
 
 

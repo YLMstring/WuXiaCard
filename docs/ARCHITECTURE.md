@@ -485,6 +485,18 @@ pre-change pause, then updates and animates every visible target together before
 resuming the original flat event order. Face-down cards synchronize silently and
 create no empty wait.
 
+After a logical batch that contains at least one successful positive
+`powers_changed`, the native action executor may dispatch
+`power_increase_batch_finished`. Its transient context stores only a two-bit
+mask of owners whose cards actually gained powers. The condition
+`power_increase_batch_includes_ally` compares that mask with each listener's
+current owner. Selected-card wrappers form one batch; contiguous sibling
+actions with the same nonempty `power_change_batch_group` also form one batch.
+Nested attack/summon batches remain protected and dispatch independently. A
+cheap compact-ability listener scan prevents full event discovery when no
+runtime ability can observe this event. Neither the event context nor its mask
+enters saved state, replay state, search keys, or transposition keys.
+
 `card_summoned` presents an ability-created board instance. The simulator then
 resolves the same global summoned/after-summoned phases and standard attack used
 by ordinary play. `card_returned_to_hand` atomically replaces a board instance

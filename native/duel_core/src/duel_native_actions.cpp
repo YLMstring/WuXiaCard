@@ -1019,7 +1019,7 @@ std::vector<int32_t> DuelNativeCompactKernel::snapshot_selected_cards(
 	return selected;
 }
 
-void DuelNativeCompactKernel::assign_power_change_batch(
+uint8_t DuelNativeCompactKernel::assign_power_change_batch(
 	const NativeState &value,
 	Resolution &resolution,
 	int64_t first_event_index,
@@ -1036,40 +1036,112 @@ void DuelNativeCompactKernel::assign_power_change_batch(
 		}
 		return false;
 	};
+	uint8_t increased_owner_mask = 0;
+	std::vector<int64_t> exile_event_indices;
+	StringName batch_id;
 	bool has_power_change = false;
-	for (int64_t index = first_event_index; index < resolution.events.size(); ++index) {
-		if (event_is_protected(index)) continue;
-		const Variant event_value = resolution.events[index];
-		if (event_value.get_type() == Variant::DICTIONARY) {
-			const Dictionary event = event_value;
-			if (StringName(event.get("type", StringName())) == StringName("powers_changed")) {
-			has_power_change = true;
-			break;
-			}
-		}
-	}
-	if (!has_power_change) return;
-	const String suffix = (
-		action.power_change_batch_group.is_empty()
-		? String::num_int64(action_index)
-		: String(action.power_change_batch_group)
-	);
-	const StringName batch_id = StringName(
-		String(value.card_instance_ids[group.source_card_index]) + "|"
-		+ String(context.event_id.is_empty() ? StringName("direct") : context.event_id) + "|"
-		+ String::num_int64(context.discovery_ability_index) + "|"
-		+ String::num_int64(context.trigger_index) + "|" + suffix
-	);
 	for (int64_t index = first_event_index; index < resolution.events.size(); ++index) {
 		if (event_is_protected(index)) continue;
 		const Variant event_value = resolution.events[index];
 		if (event_value.get_type() != Variant::DICTIONARY) continue;
 		Dictionary event = event_value;
 		const StringName type = event.get("type", StringName());
-		if (type == StringName("powers_changed") || type == StringName("card_exiled")) {
+		if (type == StringName("powers_changed")) {
+			if (!has_power_change) {
+				const String suffix = (
+					action.power_change_batch_group.is_empty()
+					? String::num_int64(action_index)
+					: String(action.power_change_batch_group)
+				);
+				batch_id = StringName(
+					String(value.card_instance_ids[group.source_card_index]) + "|"
+					+ String(context.event_id.is_empty() ? StringName("direct") : context.event_id) + "|"
+					+ String::num_int64(context.discovery_ability_index) + "|"
+					+ String::num_int64(context.trigger_index) + "|" + suffix
+				);
+			}
+			has_power_change = true;
 			event["power_change_batch_id"] = batch_id;
+			const int32_t amount = static_cast<int32_t>(event.get("amount", 0));
+			const int32_t owner = static_cast<int32_t>(event.get("owner_id", 0));
+			if (amount > 0 && owner >= 1 && owner <= 2) {
+				increased_owner_mask |= static_cast<uint8_t>(1u << (owner - 1));
+			}
+		} else if (type == StringName("card_exiled")) {
+			exile_event_indices.push_back(index);
 		}
 	}
+	if (!has_power_change) return increased_owner_mask;
+	for (const int64_t index : exile_event_indices) {
+		Dictionary event = resolution.events[index];
+		event["power_change_batch_id"] = batch_id;
+	}
+	return increased_owner_mask;
+}
+
+bool DuelNativeCompactKernel::has_event_listener(
+	const NativeState &value,
+	const StringName &event_id
+) const {
+	// 点数变化处于搜索热路径。先只扫紧凑能力索引寻找同名事件；绝大多数局面
+	// 没有监听者时，不进入完整的事件发现与条件重验证。
+	auto ability_listens = [&](const CompiledAbility &ability) {
+		for (const CompiledTriggerRule &rule : ability.triggers) {
+			if (rule.event_id == event_id) return true;
+		}
+		return false;
+	};
+	for (const int32_t card_index : value.board_card_indices) {
+		if (card_index < 0) continue;
+		for (size_t ability_index = 0; ability_index < value.card_runtime_abilities[card_index].size(); ++ability_index) {
+			const CompiledAbility *ability = runtime_ability(
+				value,
+				card_index,
+				static_cast<int32_t>(ability_index)
+			);
+			if (ability != nullptr && ability_listens(*ability)) return true;
+		}
+	}
+	for (int32_t owner = 0; owner < 2; ++owner) {
+		for (const RuntimeOwnerAuraEntry &entry : value.owner_auras[owner]) {
+			if (
+				entry.compiled_ability_index < 0
+				|| entry.compiled_ability_index >= static_cast<int32_t>(compiled_ability_pool.size())
+			) continue;
+			const CompiledAbility &provider = compiled_ability_pool[entry.compiled_ability_index];
+			if (ability_listens(provider)) return true;
+			for (const CompiledAura &aura : provider.auras) {
+				if (
+					aura.ability_pool_index >= 0
+					&& aura.ability_pool_index < static_cast<int32_t>(compiled_ability_pool.size())
+					&& ability_listens(compiled_ability_pool[aura.ability_pool_index])
+				) return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool DuelNativeCompactKernel::resolve_power_increase_batch(
+	NativeState &value,
+	uint8_t owner_mask,
+	std::vector<int32_t> &exile_stack,
+	Resolution &resolution
+) const {
+	if (
+		owner_mask == 0
+		|| !has_event_listener(value, StringName("power_increase_batch_finished"))
+	) return true;
+	EventContext batch_context;
+	batch_context.power_increase_owner_mask = owner_mask;
+	Resolution batch_finished = resolve_event(
+		value,
+		StringName("power_increase_batch_finished"),
+		batch_context,
+		exile_stack
+	);
+	append_resolution(resolution, batch_finished);
+	return batch_finished.supported;
 }
 
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
@@ -1441,8 +1513,24 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 	// actions 严格按目录数组顺序执行。NO_EFFECT 通常只跳过当前原语；只有声明了
 	// on_invalid_context=stop_rule 才终止余下规则，UNSUPPORTED 则使整个转换失败。
 	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
+	uint8_t pending_power_increase_owner_mask = 0;
+	StringName pending_power_change_group;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
+		if (
+			!defer_power_change_batch
+			&& !pending_power_change_group.is_empty()
+			&& action.power_change_batch_group != pending_power_change_group
+		) {
+			if (!resolve_power_increase_batch(
+				value,
+				pending_power_increase_owner_mask,
+				exile_stack,
+				resolution
+			)) return ActionOutcome::UNSUPPORTED;
+			pending_power_increase_owner_mask = 0;
+			pending_power_change_group = StringName();
+		}
 		const int64_t first_event_index = resolution.events.size();
 		ActionOutcome outcome = execute_action(
 			value,
@@ -1472,7 +1560,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			});
 		}
 		if (!defer_power_change_batch) {
-			assign_power_change_batch(
+			const uint8_t increased_owner_mask = assign_power_change_batch(
 				value,
 				resolution,
 				first_event_index,
@@ -1481,6 +1569,17 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 				action_context,
 				static_cast<int32_t>(action_index)
 			);
+			if (action.power_change_batch_group.is_empty()) {
+				if (!resolve_power_increase_batch(
+					value,
+					increased_owner_mask,
+					exile_stack,
+					resolution
+				)) return ActionOutcome::UNSUPPORTED;
+			} else {
+				pending_power_change_group = action.power_change_batch_group;
+				pending_power_increase_owner_mask |= increased_owner_mask;
+			}
 		}
 		if (outcome == ActionOutcome::UNSUPPORTED) {
 			if (resolution.reason.is_empty()) {
@@ -1490,12 +1589,41 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			}
 			return outcome;
 		}
-		if (outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
+		if (outcome == ActionOutcome::INVALID_CONTEXT) {
+			if (
+				!defer_power_change_batch
+				&& !resolve_power_increase_batch(
+					value,
+					pending_power_increase_owner_mask,
+					exile_stack,
+					resolution
+				)
+			) return ActionOutcome::UNSUPPORTED;
+			return outcome;
+		}
 		if (outcome == ActionOutcome::NO_EFFECT && action.stop_rule_on_invalid_context) {
+			if (
+				!defer_power_change_batch
+				&& !resolve_power_increase_batch(
+					value,
+					pending_power_increase_owner_mask,
+					exile_stack,
+					resolution
+				)
+			) return ActionOutcome::UNSUPPORTED;
 			return ActionOutcome::INVALID_CONTEXT;
 		}
 		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
 	}
+	if (
+		!defer_power_change_batch
+		&& !resolve_power_increase_batch(
+			value,
+			pending_power_increase_owner_mask,
+			exile_stack,
+			resolution
+		)
+	) return ActionOutcome::UNSUPPORTED;
 	return aggregate;
 }
 

@@ -700,10 +700,21 @@ current owner. The fresh instance completes normal summoned, after-summoned,
 and standard-attack phases. A missing or already removed instance returns
 `NO_EFFECT`.
 
-Power-change batches are transition presentation metadata. One top-level action
-shares a batch across every nested selected card; different top-level actions
-and trigger sources stay ordered as separate batches. Do not store a batch ID
-in `DuelState`, catalog definitions, or a replay record.
+Power-change batches are transition presentation metadata and a logical rule
+boundary. One top-level selected-card action shares a batch across every nested
+target. Contiguous sibling actions with the same nonempty
+`power_change_batch_group` also share one batch; otherwise top-level actions
+and trigger sources remain separate. Do not store a batch ID in `DuelState`,
+catalog definitions, or a replay record.
+
+`TRIGGER_POWER_INCREASE_BATCH_FINISHED` is dispatched once after a logical
+batch if at least one mutable card actually received a positive
+`powers_changed` event. Use
+`CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY` to react only when the source's
+current side was represented in that batch. Decreases, no-effect changes, and
+four-`-1` cards do not qualify. The trigger is discovered after all events in
+the batch, so its actions occur before the next separate action but never
+interleave with the batch's point animations.
 
 ## Revelation, Prevention, and Passive Modifiers
 

@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-10
+Updated: 2026-09-11
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -508,14 +508,17 @@ The creator has made several direct UI and localization edits. Preserve those ed
   and decay at owner-turn start. Tiers 2–4 also strengthen adjacent allied
   summons by `+1/+1/+2`. DaSongYangZhang1–4 strengthen adjacent allied summons
   by `+1/+1/+1/+2`; tiers 2–4 weaken adjacent enemy summons by `-1/-2/-2`.
-- YinYangZhang3–4 now hide their four `-1` powers, can be attacked by any
+- YinYangZhang2–4 hide their four `-1` powers, can be attacked by any
   nonnegative facing power, and cannot be selected by power-changing effects.
-  During summoning they exile themselves and draw the first palm card from the
-  side deck without disturbing skipped non-palms. They then grant every allied
-  board palm a distance-two orthogonal attack and, only after all grants finish,
-  make those board palms attack once each in row-major order. Tier 3 passes
-  only one empty cell; tier 4 also passes one allied card. Hand palms receive
-  no grant. All grants are exact-instance, idempotent, and non-retained on flip.
+  During summoning they exile themselves; tier 2 draws one palm from the side
+  deck, while tiers 3–4 draw two, without disturbing skipped non-palms. They
+  then grant every allied board palm a distance-two orthogonal attack and,
+  only after all grants finish, make those board palms attack once each in
+  row-major order. Tier 2 passes only one empty cell; tiers 3–4 also pass one
+  allied card. Tier 4's grant additionally attacks once after a completed
+  logical batch actually increases any friendly card's powers. Hand palms
+  receive no grant. All grants are exact-instance, idempotent, and non-retained
+  on flip.
 - TaiJiSanHuan4/5 and TaiJiDaKui5 redirect an adjacent enemy's summon standard
   attack only while adjacency is preserved. After any enemy really attacks one
   of its own allies, every qualifying Taiji source removes its shared redirect

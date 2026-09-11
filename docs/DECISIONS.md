@@ -609,21 +609,30 @@ respectively, in row-major order. The source itself is eligible.
   defeats the corresponding `-1`, and signed power-change actions cannot
   affect or select that card. Limited selectors filter it before counting the
   limit.
-- YinYang resolves its own exile, then draws the first palm card from the side
-  deck. Skipped non-palms remain in their original relative order. Hand
-  capacity can prevent the draw; a filtered empty/no-match draw does not create
-  the ordinary TaiZu fallback. Hand palms receive no granted effect.
-- Tier 3 palms may attack an orthogonal enemy two cells away only through one
-  empty cell. Tier 4 also permits one intervening current ally; an enemy always
-  blocks. Ordinary adjacent attacks remain unchanged.
+- YinYang resolves its own exile, then draws matching palms from the side deck:
+  tier 2 draws one and tiers 3–4 draw two. Skipped non-palms remain in their
+  original relative order. Hand capacity can prevent later draws; a filtered
+  empty/no-match draw does not create the ordinary TaiZu fallback. Hand palms
+  receive no granted effect.
+- Tier 2 palms may attack an orthogonal enemy two cells away only through one
+  empty cell. Tiers 3–4 also permit one intervening current ally; an enemy
+  always blocks. Ordinary adjacent attacks remain unchanged.
 - YinYang first grants the tier's range ability to every allied board palm in
   row-major order. After every grant completes, it takes a second row-major
   allied-board-palm snapshot and makes those exact cards perform one normal
   standard attack each. Later attackers revalidate after each complete attack
   chain. This is not a repeat attack and does not grant an after-attack rule.
-- Exact duplicate range grants are idempotent. Tier 4 range is the effective
-  superset if both tiers were granted. All YinYang grants are non-retained and
-  disappear on flip.
+- Tier 4 grants a separate reaction: after one logical power-increase batch has
+  fully finished, each granted palm whose current side had at least one card
+  actually gain powers performs one standard attack. A selected-card wrapper
+  is one batch, and contiguous sibling actions sharing the same nonempty
+  `power_change_batch_group` are one batch. Different groups remain separate.
+  Decreases, failed changes, and four-`-1` immunity never qualify. This event
+  resolves after all power/removal events in its batch, before the next
+  non-batch action.
+- Exact duplicate range grants are idempotent. Higher-tier range remains the
+  effective superset if several tiers were granted. All YinYang grants are
+  non-retained and disappear on flip.
 
 ## 寒冰真气 / 天外玉龙 / 翻面清理
 

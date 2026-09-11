@@ -164,6 +164,13 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE:
 				matched = context.trigger_card_index >= 0 && can_change_powers(value, context.trigger_card_index);
 				break;
+			case ConditionOpcode::POWER_INCREASE_BATCH_INCLUDES_ALLY:
+				matched = (
+					group.source_owner >= 1
+					&& group.source_owner <= 2
+					&& (context.power_increase_owner_mask & (1u << (group.source_owner - 1))) != 0
+				);
+				break;
 			case ConditionOpcode::TRIGGER_CARD_WEAPON:
 				if (
 					context.trigger_card_index >= 0

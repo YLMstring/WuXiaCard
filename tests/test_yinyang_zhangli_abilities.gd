@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_empty_draw_and_no_palm_edges()
 	_test_filtered_draw_respects_hand_capacity()
 	_test_range_grant_deduplication_and_flip_loss()
+	_test_power_increase_batch_reactions()
 	_finish()
 
 
@@ -42,6 +43,12 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 		"Distance-two attack modifiers are registered"
 	)
 	_check(
+		Catalog.TRIGGER_POWER_INCREASE_BATCH_FINISHED in Catalog.KNOWN_TRIGGER_EVENTS
+		and Catalog.CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY
+		in Catalog.KNOWN_TRIGGER_CONDITIONS,
+		"Power-increase batch reactions use registered generic vocabulary"
+	)
+	_check(
 		Rules.has_special_negative_powers({"powers": [-1, -1, -1, -1]}),
 		"Four negative-one sides use special power rules"
 	)
@@ -50,22 +57,24 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 		and not Rules.has_special_negative_powers({"powers": [0, 0, 0, 0]}),
 		"Partial negative-one and ordinary zero powers do not use the sentinel rule"
 	)
-	for card_id: StringName in [&"YinYangZhang3", &"YinYangZhang4"]:
+	var expected_declarations: Dictionary = {
+		&"YinYangZhang2": [1, Catalog.YINYANG_RANGE_TWO],
+		&"YinYangZhang3": [2, Catalog.YINYANG_RANGE_THREE],
+		&"YinYangZhang4": [2, Catalog.YINYANG_RANGE_FOUR],
+	}
+	for card_id: StringName in expected_declarations:
 		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
 		var actions: Array = (((abilities[0] as Dictionary).get("triggers", []) as Array)[0] as Dictionary).get("actions", [])
-		var expected_range: Dictionary = (
-			Catalog.YINYANG_RANGE_THREE
-			if card_id == &"YinYangZhang3"
-			else Catalog.YINYANG_RANGE_FOUR
-		)
+		var expected: Array = expected_declarations[card_id]
+		var expected_range: Dictionary = expected[1]
 		_check(not abilities.is_empty(), "%s declares its complete ability" % card_id)
 		_check(
 			actions[1] == {
 				"type": Catalog.ACTION_DRAW_CARDS,
-				"amount": 1,
+				"amount": expected[0],
 				"weapon": "掌法",
 			},
-			"%s draws one palm card with the generic filtered draw action" % card_id
+			"%s uses the generic filtered draw action with its tier amount" % card_id
 		)
 		_check(
 			actions.size() == 4
@@ -191,17 +200,17 @@ func _test_distance_two_attack_rules() -> void:
 		"Any nonnegative ordinary edge can attack a negative-one defender"
 	)
 
-	var tier_three: Dictionary = _plain(&"tier_three_palm", [5, 5, 5, 5], Rules.PLAYER_OWNER)
-	tier_three["active_abilities"] = [_range_ability(false)]
+	var tier_two: Dictionary = _plain(&"tier_two_palm", [5, 5, 5, 5], Rules.PLAYER_OWNER)
+	tier_two["active_abilities"] = [_range_ability(false)]
 	var board: Array = Rules.empty_board()
-	board[6] = _slot(tier_three, Rules.PLAYER_OWNER)
+	board[6] = _slot(tier_two, Rules.PLAYER_OWNER)
 	board[0] = _slot(_plain(&"far_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
-	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-three range attacks through one empty cell")
+	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-two range attacks through one empty cell")
 	board[3] = _slot(_plain(&"middle_ally", [1, 1, 1, 1], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
-	_check(not BoardQueries.can_attack_target(board, 6, 0), "Tier-three range cannot attack through an ally")
-	var tier_four: Dictionary = (board[6] as Dictionary).get("card", {})
-	tier_four["active_abilities"] = [_range_ability(true)]
-	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-four range attacks through one ally")
+	_check(not BoardQueries.can_attack_target(board, 6, 0), "Tier-two range cannot attack through an ally")
+	var tier_three: Dictionary = (board[6] as Dictionary).get("card", {})
+	tier_three["active_abilities"] = [_range_ability(true)]
+	_check(BoardQueries.can_attack_target(board, 6, 0), "Tier-three and tier-four range attacks through one ally")
 	(board[3] as Dictionary)["owner"] = Rules.OPPONENT_OWNER
 	_check(not BoardQueries.can_attack_target(board, 6, 0), "Distance-two attacks never pass through an enemy")
 	_check(not BoardQueries.can_attack_target(board, 6, 2), "Distance-two attacks remain orthogonal and do not wrap")
@@ -281,6 +290,7 @@ func _test_entry_draw_grant_and_attack_order() -> void:
 	var runtime_sword: Dictionary = _board_card(next_state, &"board_sword")
 	var runtime_hand_palm: Dictionary = _find_hand_card(next_state, &"hand_palm")
 	var runtime_drawn: Dictionary = _find_hand_card(next_state, &"drawn_palm")
+	var runtime_remaining: Dictionary = _find_hand_card(next_state, &"remaining_palm")
 	_check(
 		bool(transition.get("valid", false))
 		and next_state.board[1] == null
@@ -292,7 +302,8 @@ func _test_entry_draw_grant_and_attack_order() -> void:
 		and (runtime_second.get("active_abilities", []) as Array).size() == 1
 		and (runtime_sword.get("active_abilities", []) as Array).is_empty()
 		and (runtime_hand_palm.get("active_abilities", []) as Array).is_empty()
-		and (runtime_drawn.get("active_abilities", []) as Array).is_empty(),
+		and (runtime_drawn.get("active_abilities", []) as Array).is_empty()
+		and (runtime_remaining.get("active_abilities", []) as Array).is_empty(),
 		"Only allied board palms receive the range ability"
 	)
 	var events: Array = transition.get("events", [])
@@ -309,14 +320,15 @@ func _test_entry_draw_grant_and_attack_order() -> void:
 		and first_grant_index < second_grant_index
 		and second_grant_index < first_attack_index
 		and first_attack_index < second_attack_index,
-		"Entry events present exile, one filtered draw, every grant, then row-major attacks"
+		"Entry events present exile, filtered draws, every grant, then row-major attacks"
 	)
 	var remaining_deck: Array = next_state.decks.get(Rules.PLAYER_OWNER, [])
 	_check(
-		remaining_deck.size() == 2
+		remaining_deck.size() == 1
 		and StringName((remaining_deck[0] as Dictionary).get("instance_id", &"")) == &"skipped_sword"
-		and StringName((remaining_deck[1] as Dictionary).get("instance_id", &"")) == &"remaining_palm",
-		"The single filtered draw leaves skipped and later cards in order"
+		and not runtime_drawn.is_empty()
+		and not runtime_remaining.is_empty(),
+		"Tier three draws two matching palms while leaving the skipped sword in place"
 	)
 	_check(
 		_count_events(events, &"attack_started") == 2
@@ -427,6 +439,198 @@ func _test_range_grant_deduplication_and_flip_loss() -> void:
 		and _count_events(flip_events, &"ability_lost") == 2,
 		"All granted YinYang range effects are non-retained and are lost on flip"
 	)
+
+
+func _test_power_increase_batch_reactions() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(_plain(&"batch_ally_a", [2, 2, 2, 2], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	board[1] = _slot(_plain(&"batch_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	board[2] = _slot(_plain(&"batch_ally_b", [2, 2, 2, 2], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	var listener: Dictionary = _plain(&"batch_listener", [9, 9, 9, 9], Rules.PLAYER_OWNER)
+	listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	board[4] = _slot(listener, Rules.PLAYER_OWNER)
+	board[8] = _slot(_plain(&"batch_source", [2, 2, 2, 2], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	var state := State.new(board)
+	var batch_action: Dictionary = {
+		"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {
+			"zones": [Catalog.CARD_ZONE_BOARD],
+			"conditions": [
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+				{"type": Catalog.CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+			],
+			"limit": 2,
+		},
+		"actions": [{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": Catalog.CARD_REF_SELECTED_CARD,
+		}],
+	}
+	var result: Dictionary = Executor.execute_actions(
+		state,
+		8,
+		&"batch_source",
+		Rules.PLAYER_OWNER,
+		[batch_action],
+		{}
+	)
+	var events: Array = result.get("events", [])
+	_check(
+		_count_events(events, &"powers_changed") == 2
+		and _count_source_events(events, &"ability_triggered", &"batch_listener") == 1
+		and _count_source_events(events, &"attack_started", &"batch_listener") == 1,
+		"One multi-card power increase batch makes each tier-four listener attack only once"
+	)
+	_check(
+		_last_event_index(events, &"powers_changed")
+		< _event_index(events, &"ability_triggered", &"", &"batch_listener"),
+		"The batch reaction begins only after every power-change event"
+	)
+
+	var grouped_state := _make_batch_group_state()
+	var grouped: Dictionary = Executor.execute_actions(
+		grouped_state,
+		8,
+		&"group_source",
+		Rules.PLAYER_OWNER,
+		[
+			_power_change_trigger_action(&"shared"),
+			_power_change_trigger_action(&"shared"),
+		],
+		{"trigger_instance_id": &"group_target"}
+	)
+	_check(
+		_count_source_events(grouped.get("events", []), &"ability_triggered", &"group_listener") == 1,
+		"Contiguous sibling changes with one batch group dispatch one reaction event"
+	)
+	var separate_state := _make_batch_group_state()
+	var separate: Dictionary = Executor.execute_actions(
+		separate_state,
+		8,
+		&"group_source",
+		Rules.PLAYER_OWNER,
+		[
+			_power_change_trigger_action(&"first"),
+			_power_change_trigger_action(&"second"),
+		],
+		{"trigger_instance_id": &"group_target"}
+	)
+	_check(
+		_count_source_events(separate.get("events", []), &"ability_triggered", &"group_listener") == 2,
+		"Two distinct power-increase batches dispatch two reactions"
+	)
+	var multi_board: Array = Rules.empty_board()
+	for cell_and_id: Array in [[0, &"multi_listener_a"], [2, &"multi_listener_b"]]:
+		var multi_listener: Dictionary = _plain(
+			cell_and_id[1], [5, 5, 5, 5], Rules.PLAYER_OWNER
+		)
+		multi_listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+		multi_board[cell_and_id[0]] = _slot(multi_listener, Rules.PLAYER_OWNER)
+	multi_board[6] = _slot(
+		_plain(&"multi_target", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		Rules.PLAYER_OWNER
+	)
+	multi_board[8] = _slot(
+		_plain(&"multi_source", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		Rules.PLAYER_OWNER
+	)
+	var multi_result: Dictionary = Executor.execute_actions(
+		State.new(multi_board),
+		8,
+		&"multi_source",
+		Rules.PLAYER_OWNER,
+		[_power_change_trigger_action(&"multi")],
+		{"trigger_instance_id": &"multi_target"}
+	)
+	_check(
+		_count_source_events(multi_result.get("events", []), &"ability_triggered", &"multi_listener_a") == 1
+		and _count_source_events(multi_result.get("events", []), &"ability_triggered", &"multi_listener_b") == 1,
+		"Every allied tier-four listener reacts once to the same batch"
+	)
+
+	var enemy_board: Array = Rules.empty_board()
+	var enemy_listener: Dictionary = _plain(
+		&"enemy_batch_listener", [5, 5, 5, 5], Rules.PLAYER_OWNER
+	)
+	enemy_listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	enemy_board[0] = _slot(enemy_listener, Rules.PLAYER_OWNER)
+	enemy_board[6] = _slot(
+		_plain(&"enemy_batch_target", [2, 2, 2, 2], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	enemy_board[8] = _slot(
+		_plain(&"enemy_batch_source", [2, 2, 2, 2], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	var enemy_result: Dictionary = Executor.execute_actions(
+		State.new(enemy_board),
+		8,
+		&"enemy_batch_source",
+		Rules.OPPONENT_OWNER,
+		[_power_change_trigger_action(&"enemy")],
+		{"trigger_instance_id": &"enemy_batch_target"}
+	)
+	_check(
+		_count_source_events(enemy_result.get("events", []), &"ability_triggered", &"enemy_batch_listener") == 0,
+		"A batch that increases only enemy cards does not trigger the listener"
+	)
+
+	var ignored_state := _make_batch_group_state()
+	var decreased: Dictionary = Executor.execute_actions(
+		ignored_state,
+		8,
+		&"group_source",
+		Rules.PLAYER_OWNER,
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": -1,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}],
+		{"trigger_instance_id": &"group_target"}
+	)
+	_check(
+		_count_source_events(decreased.get("events", []), &"ability_triggered", &"group_listener") == 0,
+		"Power decreases do not dispatch the increase-batch reaction"
+	)
+	var sentinel: Dictionary = _board_card(ignored_state, &"group_target")
+	sentinel["powers"] = [-1, -1, -1, -1]
+	var no_effect: Dictionary = Executor.execute_actions(
+		ignored_state,
+		8,
+		&"group_source",
+		Rules.PLAYER_OWNER,
+		[{
+			"type": Catalog.ACTION_CHANGE_POWERS,
+			"amount": 1,
+			"card": Catalog.CARD_REF_TRIGGER_CARD,
+		}],
+		{"trigger_instance_id": &"group_target"}
+	)
+	_check(
+		_count_events(no_effect.get("events", []), &"powers_changed") == 0
+		and _count_source_events(no_effect.get("events", []), &"ability_triggered", &"group_listener") == 0,
+		"A failed positive change dispatches no batch reaction"
+	)
+
+
+func _make_batch_group_state() -> State:
+	var board: Array = Rules.empty_board()
+	var listener: Dictionary = _plain(&"group_listener", [5, 5, 5, 5], Rules.PLAYER_OWNER)
+	listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	board[4] = _slot(listener, Rules.PLAYER_OWNER)
+	board[6] = _slot(_plain(&"group_target", [2, 2, 2, 2], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	board[8] = _slot(_plain(&"group_source", [2, 2, 2, 2], Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	return State.new(board)
+
+
+func _power_change_trigger_action(group_name: StringName) -> Dictionary:
+	return {
+		"type": Catalog.ACTION_CHANGE_POWERS,
+		"amount": 1,
+		"card": Catalog.CARD_REF_TRIGGER_CARD,
+		"power_change_batch_group": group_name,
+	}
 
 
 func _range_ability(allow_intervening_ally: bool) -> Dictionary:
@@ -543,6 +747,34 @@ func _count_events(events: Array, event_type: StringName) -> int:
 		):
 			count += 1
 	return count
+
+
+func _count_source_events(
+	events: Array,
+	event_type: StringName,
+	source_instance_id: StringName
+) -> int:
+	var count: int = 0
+	for event_value: Variant in events:
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+			and StringName((event_value as Dictionary).get("source_instance_id", &""))
+			== source_instance_id
+		):
+			count += 1
+	return count
+
+
+func _last_event_index(events: Array, event_type: StringName) -> int:
+	for event_index: int in range(events.size() - 1, -1, -1):
+		var event_value: Variant = events[event_index]
+		if (
+			event_value is Dictionary
+			and StringName((event_value as Dictionary).get("type", &"")) == event_type
+		):
+			return event_index
+	return -1
 
 
 func _finish() -> void:
