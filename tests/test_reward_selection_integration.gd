@@ -197,7 +197,7 @@ func _run_pool_status(store: RefCounted, profile: Dictionary) -> String:
 	var glyphs := PackedStringArray()
 	for sect_id: StringName in store.get_run_sect_pool_ids(profile):
 		glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
-	return "门派池：%s" % "，".join(glyphs)
+	return "随机门派池：%s" % "，".join(glyphs)
 
 
 func _on_reward_claimed(card_id: StringName) -> void:

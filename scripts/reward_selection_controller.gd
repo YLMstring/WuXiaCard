@@ -14,7 +14,7 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const FALLBACK_STATUS: String = "门派池：暂无"
+const FALLBACK_STATUS: String = "随机门派池：暂无"
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -238,7 +238,7 @@ func _get_default_status() -> String:
 			glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
 	if glyphs.is_empty():
 		return FALLBACK_STATUS
-	return "门派池：%s" % "，".join(glyphs)
+	return "随机门派池：%s" % "，".join(glyphs)
 
 
 func _on_library_drag_started(
