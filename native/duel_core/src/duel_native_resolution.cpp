@@ -106,7 +106,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		const int32_t attacked_card_index = value.board_card_indices[locked_cell];
 		if (attacked_card_index < 0) continue;
 		const int32_t attacked_cell = locked_cell;
-		if (!can_attack_target(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
+		if (!is_target_in_attack_range(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
 		const int32_t attacked_owner = value.board_owners[attacked_cell];
 		const StringName attacked_instance_id = value.card_instance_ids[attacked_card_index];
 		used_attacker_power_directions |= winning_attack_direction_mask(
@@ -172,7 +172,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			if (stop_after_current_target) break;
 			continue;
 		}
-		if (!can_attack_target(
+		if (!is_target_in_attack_range(
 			value,
 			current_attacker_cell,
 			current_attacked_cell,

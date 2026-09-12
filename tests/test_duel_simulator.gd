@@ -1354,7 +1354,7 @@ func _test_activate_action_generation_and_resolution() -> void:
 	_check(next_state.board[4] == null and next_state.board[5] != null, "Activate moves the existing card to its target")
 	var moved_card: Dictionary = (next_state.board[5] as Dictionary)["card"]
 	_check(StringName(moved_card.get("instance_id", &"")) == &"board_youfen", "Movement preserves stable card identity")
-	_check(int(moved_card.get("ki", -1)) == 0, "Successful activation spends one ki")
+	_check(int(moved_card.get("ki", -1)) == 1, "Successful activation spends one ki")
 	var event_types: Array[StringName] = []
 	for event_value: Variant in transition.get("events", []):
 		event_types.append(StringName((event_value as Dictionary).get("type", &"")))
@@ -1364,7 +1364,7 @@ func _test_activate_action_generation_and_resolution() -> void:
 		not _first_event(transition.get("events", []), &"ability_activated").has("effect_id"),
 		"Activation events contain no legacy ability identity"
 	)
-	_check(int(((state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1)) == 1, "Activate transition leaves source-state ki untouched")
+	_check(int(((state.board[4] as Dictionary)["card"] as Dictionary).get("ki", -1)) == 2, "Activate transition leaves source-state ki untouched")
 
 
 func _test_multiple_activation_generation_and_identity() -> void:

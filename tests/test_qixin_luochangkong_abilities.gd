@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_attack_permission_and_minimum_defense()
 	_test_summon_attack_gate()
 	_test_reaction_respects_declaration_gate()
+	_test_declared_reaction_survives_ally_flip_in_be_attacked_chain()
 	_test_retained_modifiers_follow_owner()
 	_test_temporary_flip_protection()
 	_test_state_copy_isolated()
@@ -224,6 +225,48 @@ func _test_reaction_respects_declaration_gate() -> void:
 		int((allied_state.board[5] as Dictionary).get("owner", 0))
 		== Rules.PLAYER_OWNER,
 		"The permitted reaction flips the summoned enemy"
+	)
+
+
+func _test_declared_reaction_survives_ally_flip_in_be_attacked_chain() -> void:
+	var board: Array = Rules.empty_board()
+	board[1] = {
+		"card": Catalog.create_instance(
+			&"ZiXiaGong1",
+			Rules.PLAYER_OWNER,
+			&"reaction_ally_zixia"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	board[4] = {
+		"card": Catalog.create_instance(
+			&"QiXinLuoChangKong3",
+			Rules.PLAYER_OWNER,
+			&"reaction_qixin_nested"
+		),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var result: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[],
+			[Catalog.create_instance(
+				&"WanHuaJian2",
+				Rules.OPPONENT_OWNER,
+				&"nested_wanhua"
+			)],
+			Rules.OPPONENT_OWNER
+		),
+		Action.make_play(0, 5, &"nested_wanhua")
+	)
+	var state: State = result.get("state") as State
+	_check(
+		int((state.board[1] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER,
+		"WanHua's generated copy flips ZiXia during QiXin's attack chain"
+	)
+	_check(
+		int((state.board[5] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"QiXin still flips the original WanHua after its declaration ally is flipped"
 	)
 
 

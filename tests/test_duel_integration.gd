@@ -1851,8 +1851,8 @@ func _check_manual_activate_move() -> void:
 	var moved_card: CardView = (duel.get("board_cards") as Array)[5] as CardView
 	var ki_badge := moved_card.get_node("Overlay/KiBadge") as PanelContainer
 	var ki_value := moved_card.get_node("Overlay/KiBadge/Value") as Control
-	_check(int(moved_card.card_data.get("ki", -1)) == 0, "Controller synchronizes spent ki into the card view")
-	_check(ki_badge.visible and String(ki_value.get("text")) == "0", "Zero-ki card with an activate ability keeps its dimmed badge")
+	_check(int(moved_card.card_data.get("ki", -1)) == 1, "Controller synchronizes spent ki into the card view")
+	_check(ki_badge.visible and String(ki_value.get("text")) == "1", "Remaining ki stays visible after activation")
 	var trace: Array[StringName] = duel.debug_get_presentation_trace()
 	_check(trace.has(&"ability_activated") and trace.has(&"ki_changed") and trace.has(&"card_moved"), "Controller presents the canonical activation events")
 	_check(

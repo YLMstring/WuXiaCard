@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const InitialStateFactory = preload("res://scripts/duel_initial_state_factory.gd")
 const NativeRules = preload("res://scripts/duel_native_rules.gd")
@@ -25,6 +26,7 @@ func _run() -> void:
 	_test_closed_door_attack_context()
 	_test_owner_aura_expires_at_any_turn_end()
 	_test_chuncan_cannot_attack_until_flipped()
+	_test_cannot_attack_gained_after_declaration_does_not_cancel_attack()
 	_finish()
 
 
@@ -261,6 +263,55 @@ func _test_chuncan_cannot_attack_until_flipped() -> void:
 	_check(int((state.board[1] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER, "Blocked summon attack does not flip its target")
 	Simulator.resolve_non_attack_flip(state, &"chuncan", Rules.OPPONENT_OWNER)
 	_check(((state.board[4] as Dictionary).get("card", {}) as Dictionary).get("active_abilities", []).is_empty(), "ChunCan loses the non-retained restriction when flipped")
+
+
+func _test_cannot_attack_gained_after_declaration_does_not_cancel_attack() -> void:
+	var gain_cannot_attack: Dictionary = {
+		"triggers": [{
+			"event": Catalog.CARD_BE_ATTACKED,
+			"conditions": [{"type": Catalog.CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF,
+				"ability": Catalog.CHUNCAN_CANNOT_ATTACK,
+			}],
+		}],
+	}
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(
+		_plain(
+			&"declared_attacker",
+			[5, 5, 5, 5],
+			Rules.PLAYER_OWNER,
+			[gain_cannot_attack]
+		),
+		Rules.PLAYER_OWNER
+	)
+	board[1] = _slot(
+		_plain(&"declared_target", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	var state := State.new(board)
+	var result: Dictionary = Simulator._resolve_standard_attacks(
+		state,
+		4,
+		&"declared_attacker",
+		&"cannot_attack_revalidation"
+	)
+	_check(
+		Abilities.has_modifier(
+			(state.board[4] as Dictionary).get("card", {}),
+			Catalog.MODIFIER_CANNOT_ATTACK
+		),
+		"The attacker gains ChunCan's cannot-attack modifier inside CARD_BE_ATTACKED"
+	)
+	_check(
+		int((state.board[1] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+		"Cannot-attack gained after declaration does not cancel the current attack"
+	)
+	_check(
+		_count_events(result.get("events", []), &"card_flipped") == 1,
+		"The already-declared attack still emits its flip"
+	)
 
 
 func _test_owner_aura_expires_at_any_turn_end() -> void:
