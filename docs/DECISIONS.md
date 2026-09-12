@@ -33,20 +33,17 @@ These decisions were explicitly established during development and should not be
 ## Completed-Duel Replay
 
 - After victory or defeat, pressing the replay button while no replay is
-  running starts playback. During a live duel or between replay actions, the
-  same button opens the ordinary inspector for owner 2's latest successful
-  hand play, using the fixed catalog description stored by card ID. It is
-  inert before that owner has played a hand card and while an action is being
-  presented.
+  running starts playback. While full-match playback is running, the replay
+  button is inert; revealed cards may still be inspected directly between
+  actions.
 - The first recorded turn starts immediately; later turns begin after a
   configurable delay that is 2 seconds in production.
 - Replay reuses the authoritative simulator and normal VFX path. It is an
   in-memory presentation and never changes progression, rewards, mastery, or
   remembered enemy cards.
 - Normal mode keeps the opponent hand concealed during replay. Revealed cards
-  and the latest opponent hand play may be inspected between actions;
-  inspection pauses the remaining delay. This presentation-only inspection
-  does not alter revelation or enemy memory.
+  may be inspected between actions; inspection pauses the remaining delay.
+  This presentation-only inspection does not alter revelation or enemy memory.
 - Real card play and activation are disabled during replay. The return icon
   remains active, cancels playback, and reports the original duel outcome.
 - Playback stops on the recorded final board and may be started repeatedly.
@@ -542,10 +539,17 @@ respectively, in row-major order. The source itself is eligible.
 - LaiHe1–5 declare `undo_last_player_decision` as a main-deck effect. If any of
   them is among the player's five opening main-deck cards, the left replay
   button can restore the state immediately before the player's previous
-  decision, including removing all intervening opponent replies. The current
-  checkpoint is consumed on use; every later valid player decision creates a
-  new one, with no per-match use limit. Undo is unavailable during resolution,
+  owner-turn's first decision, including removing its extra hand play and all
+  intervening opponent replies. The current checkpoint is consumed on use;
+  the first valid decision of a later player owner-turn creates a new one,
+  with no per-match use limit. Undo is unavailable during resolution,
   opponent decisions, inspection, replay, and after duel completion.
+- During a live player decision, the replay button first attempts LaiHe undo.
+  If undo is unavailable or fails, it restores the checkpoint before the
+  opponent's previous owner-turn and replays that turn's recorded activation
+  or hand play plus any extra hand play. The recorded actions are reused rather
+  than searching again, each waits two seconds under the status `回放中...`,
+  and replayed observations do not emit enemy-memory side effects.
 ## 云雾十三式 / 一剑落九雁 / 天柱云气
 
 - “失去效果直到当前回合结束” removes every currently active non-retained

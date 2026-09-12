@@ -478,15 +478,16 @@ The creator has made several direct UI and localization edits. Preserve those ed
   Summer Engine editor Play enables it automatically through the `editor`
   runtime feature; exported Windows and Android builds remain in normal mode.
 - After victory or defeat, the black replay icon left of the board reconstructs
-  the exact opening state and replays all successful actions. During a live
-  duel or between replay actions, it instead opens the ordinary catalog-based
-  inspector for owner 2's latest successful hand play, reusing
-  `last_hand_play_by_owner`; missing history or an action currently being
-  presented leaves it inert. The first replay action is immediate and later
-  actions wait two seconds; inspection pauses that wait. Exit cancels the
-  replay and returns using the original result. Replay and inspection do not
-  run AI or alter revelation, mastery, enemy memory, profiles, rewards, or
-  progression.
+  the exact opening state and replays all successful actions. Full-match
+  playback keeps the button inert; direct inspection of revealed cards between
+  actions still pauses the delay. During a live player decision, the same
+  button first attempts LaiHe undo back to that player owner-turn's first
+  decision. If unavailable or unsuccessful, it restores the opponent's
+  previous owner-turn checkpoint and replays the exact recorded activation or
+  play sequence, including an extra hand play, without another AI search.
+  Every live opponent-replay action waits two seconds under `回放中...`.
+  Replayed actions replace their old log segment and do not repeat enemy-memory
+  observations. Exit cancels full replay and returns using the original result.
 - ZiXiaGong1–4 use the generic `for_each_selected_card` action. The selector
   supports ordered hand/board snapshots, reusable selected-card conditions,
   optional limits, and source-versus-subject execution context.

@@ -273,6 +273,17 @@ the immutable recorded final snapshot instead of leaving a partial replay.
 Future simulator randomness must be recorded or made deterministic before it
 can be reproduced by this action-log format.
 
+Live turn rollback is likewise presentation orchestration in
+`duel_controller.gd`, not a simulator rule. The controller stores one player
+checkpoint and one opponent checkpoint at the first successful decision of the
+respective owner-turn. Extra hand plays append to the same turn and never
+replace either checkpoint. LaiHe undo restores the player checkpoint. Its
+fallback restores the opponent checkpoint, validates the recorded opponent
+actions against a duplicate state, truncates the match replay log, and submits
+the same actions again through the ordinary simulator/presentation path after
+two-second waits. The native kernel is not asked to search again and requires
+no special rollback branch.
+
 ## Deck-Building Data Flow
 
 ```text

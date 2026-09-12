@@ -138,6 +138,12 @@ var _undo_last_player_decision_enabled: bool = false
 var _undo_checkpoint_state: StateData = null
 var _undo_checkpoint_replay_action_count: int = 0
 var _undo_checkpoint_mastery_candidate_ids: Array[StringName] = []
+var _undo_checkpoint_turn_count: int = 0
+var _opponent_replay_checkpoint_state: StateData = null
+var _opponent_replay_checkpoint_action_count: int = 0
+var _opponent_replay_checkpoint_turn_count: int = 0
+var _opponent_replay_actions: Array[ActionData] = []
+var _is_replaying_opponent_turn: bool = false
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -346,6 +352,18 @@ func debug_can_undo_last_player_decision() -> bool:
 
 func debug_undo_last_player_decision() -> bool:
 	return _undo_last_player_decision()
+
+
+func debug_can_replay_last_opponent_turn() -> bool:
+	return _can_replay_last_opponent_turn()
+
+
+func debug_is_replaying_opponent_turn() -> bool:
+	return _is_replaying_opponent_turn
+
+
+func debug_replay_last_opponent_turn() -> bool:
+	return await _replay_last_opponent_turn()
 
 
 func debug_get_replay_initial_decks() -> Dictionary:
@@ -751,6 +769,7 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 		_inspection_open
 		or turn_state == TurnState.RESOLVING
 		or (_is_replaying and _is_replay_presenting_action)
+		or _is_replaying_opponent_turn
 	):
 		return
 	_inspection_open = true
@@ -817,7 +836,12 @@ func _commit_action(
 	var capture_undo_checkpoint: bool = (
 		_undo_last_player_decision_enabled
 		and not _is_replaying
+		and not _is_replaying_opponent_turn
 		and owner_id == DuelRules.PLAYER_OWNER
+		and (
+			_undo_checkpoint_state == null
+			or _undo_checkpoint_turn_count != duel_state.turn_count
+		)
 	)
 	var undo_state_before_action: StateData = (
 		duel_state.duplicate_state() as StateData
@@ -828,6 +852,21 @@ func _commit_action(
 	var undo_mastery_candidates: Array[StringName] = []
 	if capture_undo_checkpoint:
 		undo_mastery_candidates.assign(_mastery_candidate_ids)
+	var capture_opponent_replay_checkpoint: bool = (
+		not _is_replaying
+		and not _is_replaying_opponent_turn
+		and owner_id == DuelRules.OPPONENT_OWNER
+		and (
+			_opponent_replay_checkpoint_state == null
+			or _opponent_replay_checkpoint_turn_count != duel_state.turn_count
+		)
+	)
+	var opponent_state_before_action: StateData = (
+		duel_state.duplicate_state() as StateData
+		if capture_opponent_replay_checkpoint
+		else null
+	)
+	var opponent_replay_action_count: int = _replay_record.get_action_count()
 	var presentation_started_msec: int = Time.get_ticks_msec()
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
@@ -836,11 +875,28 @@ func _commit_action(
 		_undo_checkpoint_state = undo_state_before_action
 		_undo_checkpoint_replay_action_count = undo_replay_action_count
 		_undo_checkpoint_mastery_candidate_ids = undo_mastery_candidates
+		_undo_checkpoint_turn_count = undo_state_before_action.turn_count
+	if capture_opponent_replay_checkpoint:
+		_opponent_replay_checkpoint_state = opponent_state_before_action
+		_opponent_replay_checkpoint_action_count = opponent_replay_action_count
+		_opponent_replay_checkpoint_turn_count = opponent_state_before_action.turn_count
+		_opponent_replay_actions.clear()
+	if (
+		owner_id == DuelRules.OPPONENT_OWNER
+		and not _is_replaying
+		and not _is_replaying_opponent_turn
+	):
+		_opponent_replay_actions.append(action.duplicate_action() as ActionData)
 	if not _is_replaying:
 		_replay_record.record_action(action)
 	if not _is_replaying and owner_id == DuelRules.PLAYER_OWNER and action.action_type == ActionData.TYPE_PLAY:
 		_record_mastery_candidate(StringName(card.card_data.get("card_id", &"")))
-	if not _is_replaying and owner_id == DuelRules.OPPONENT_OWNER and action.action_type == ActionData.TYPE_PLAY:
+	if (
+		not _is_replaying
+		and not _is_replaying_opponent_turn
+		and owner_id == DuelRules.OPPONENT_OWNER
+		and action.action_type == ActionData.TYPE_PLAY
+	):
 		opponent_card_played.emit(String(card.card_data.get("glyph", "")))
 	duel_state = transition["state"] as StateData
 	board = duel_state.board
@@ -2121,6 +2177,7 @@ func _sync_hand_playability() -> void:
 		card.set_playable(
 			not _inspection_open
 			and not _is_replaying
+			and not _is_replaying_opponent_turn
 			and turn_state == TurnState.PLAYER
 			and duel_state != null
 			and duel_state.active_player == DuelRules.PLAYER_OWNER
@@ -2129,6 +2186,7 @@ func _sync_hand_playability() -> void:
 		card.set_playable(
 			not _inspection_open
 			and not _is_replaying
+			and not _is_replaying_opponent_turn
 			and testing_mode
 			and turn_state == TurnState.OPPONENT
 			and duel_state != null
@@ -2140,6 +2198,7 @@ func _sync_hand_playability() -> void:
 			continue
 		var can_control_owner: bool = (
 			not _is_replaying
+			and not _is_replaying_opponent_turn
 			and (
 			(board_card.owner_id == DuelRules.PLAYER_OWNER and turn_state == TurnState.PLAYER)
 			or (board_card.owner_id == DuelRules.OPPONENT_OWNER and testing_mode and turn_state == TurnState.OPPONENT)
@@ -2153,7 +2212,13 @@ func _sync_hand_playability() -> void:
 
 
 func _can_manually_drag(card: CardView) -> bool:
-	if _inspection_open or _is_replaying or duel_state == null or duel_state.active_player != card.owner_id:
+	if (
+		_inspection_open
+		or _is_replaying
+		or _is_replaying_opponent_turn
+		or duel_state == null
+		or duel_state.active_player != card.owner_id
+	):
 		return false
 	if card.owner_id == DuelRules.PLAYER_OWNER:
 		return turn_state == TurnState.PLAYER
@@ -2790,6 +2855,9 @@ func _update_turn_status() -> void:
 	if _inspection_open:
 		turn_status.text = "查看卡牌详情 · 轻触返回"
 		return
+	if _is_replaying_opponent_turn:
+		turn_status.text = "回放中..."
+		return
 	match turn_state:
 		TurnState.PLAYER:
 			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "你的回合 · 拖动卡牌"
@@ -3030,22 +3098,30 @@ func _on_replay_pressed() -> void:
 		if _replay_record.is_ready():
 			_start_replay()
 		return
-	if _can_undo_last_player_decision():
-		_undo_last_player_decision()
+	if not _is_live_player_decision_state():
 		return
-	_inspect_last_opponent_hand_play()
+	if _can_undo_last_player_decision() and _undo_last_player_decision():
+		return
+	_replay_last_opponent_turn()
+
+
+func _is_live_player_decision_state() -> bool:
+	return (
+		duel_state != null
+		and not _inspection_open
+		and not _is_replaying
+		and not _is_replaying_opponent_turn
+		and turn_state == TurnState.PLAYER
+		and duel_state.active_player == DuelRules.PLAYER_OWNER
+		and not Simulator.is_terminal(duel_state)
+	)
 
 
 func _can_undo_last_player_decision() -> bool:
 	return (
 		_undo_last_player_decision_enabled
 		and _undo_checkpoint_state != null
-		and duel_state != null
-		and not _inspection_open
-		and not _is_replaying
-		and turn_state == TurnState.PLAYER
-		and duel_state.active_player == DuelRules.PLAYER_OWNER
-		and not Simulator.is_terminal(duel_state)
+		and _is_live_player_decision_state()
 	)
 
 
@@ -3060,6 +3136,8 @@ func _undo_last_player_decision() -> bool:
 	_undo_checkpoint_state = null
 	_undo_checkpoint_replay_action_count = 0
 	_undo_checkpoint_mastery_candidate_ids.clear()
+	_undo_checkpoint_turn_count = 0
+	_clear_opponent_replay_checkpoint()
 	_cancel_opponent_search()
 	_replay_generation += 1
 	_replay_record.truncate_actions(restored_replay_action_count)
@@ -3069,19 +3147,111 @@ func _undo_last_player_decision() -> bool:
 	return true
 
 
-func _inspect_last_opponent_hand_play() -> void:
-	if duel_state == null:
-		return
-	var record_value: Variant = duel_state.last_hand_play_by_owner.get(
-		DuelRules.OPPONENT_OWNER,
-		{}
+func _can_replay_last_opponent_turn() -> bool:
+	return (
+		_is_live_player_decision_state()
+		and _opponent_replay_checkpoint_state != null
+		and not _opponent_replay_actions.is_empty()
+		and _opponent_replay_sequence_matches_current_state()
 	)
-	if not record_value is Dictionary:
-		return
-	var card_id := StringName((record_value as Dictionary).get("card_id", &""))
-	if card_id == &"" or not Catalog.has_card(card_id):
-		return
-	_on_card_inspection_requested(Catalog.get_definition(card_id))
+
+
+func _opponent_replay_sequence_matches_current_state() -> bool:
+	if _opponent_replay_checkpoint_state == null or duel_state == null:
+		return false
+	var replayed_state: StateData = (
+		_opponent_replay_checkpoint_state.duplicate_state() as StateData
+	)
+	for recorded_action: ActionData in _opponent_replay_actions:
+		if (
+			replayed_state.active_player != DuelRules.OPPONENT_OWNER
+			or not Simulator.is_action_legal(replayed_state, recorded_action)
+		):
+			return false
+		var transition: Dictionary = Simulator.apply_action(replayed_state, recorded_action)
+		if not bool(transition.get("valid", false)):
+			return false
+		replayed_state = transition.get("state", null) as StateData
+		if replayed_state == null:
+			return false
+	return StateKey.build(replayed_state) == StateKey.build(duel_state)
+
+
+func _replay_last_opponent_turn() -> bool:
+	if not _can_replay_last_opponent_turn():
+		return false
+	var original_state: StateData = duel_state.duplicate_state() as StateData
+	var original_replay_actions: Array[ActionData] = _replay_record.get_actions()
+	var restored_state: StateData = (
+		_opponent_replay_checkpoint_state.duplicate_state() as StateData
+	)
+	var restored_action_count: int = _opponent_replay_checkpoint_action_count
+	var recorded_actions: Array[ActionData] = []
+	for recorded_action: ActionData in _opponent_replay_actions:
+		recorded_actions.append(recorded_action.duplicate_action() as ActionData)
+	_is_replaying_opponent_turn = true
+	_cancel_opponent_search()
+	_replay_record.truncate_actions(restored_action_count)
+	_rebuild_views_from_state(restored_state)
+	_sync_hand_playability()
+	_update_turn_status()
+	for recorded_action: ActionData in recorded_actions:
+		if not await _wait_live_opponent_replay_delay():
+			_is_replaying_opponent_turn = false
+			return false
+		var source_card: CardView = _get_card_view_by_instance(
+			recorded_action.source_instance_id
+		)
+		if source_card == null or not Simulator.is_action_legal(duel_state, recorded_action):
+			_restore_failed_opponent_turn_replay(
+				original_state,
+				original_replay_actions,
+				restored_action_count
+			)
+			return false
+		await _commit_action(
+			source_card,
+			recorded_action,
+			DuelRules.OPPONENT_OWNER,
+			false
+		)
+	_is_replaying_opponent_turn = false
+	_sync_hand_playability()
+	_update_turn_status()
+	if StateKey.build(duel_state) == StateKey.build(original_state):
+		return true
+	_restore_failed_opponent_turn_replay(
+		original_state,
+		original_replay_actions,
+		restored_action_count
+	)
+	return false
+
+
+func _wait_live_opponent_replay_delay() -> bool:
+	_update_turn_status()
+	if replay_turn_delay > 0.0:
+		await get_tree().create_timer(replay_turn_delay).timeout
+	return is_inside_tree() and _is_replaying_opponent_turn
+
+
+func _clear_opponent_replay_checkpoint() -> void:
+	_opponent_replay_checkpoint_state = null
+	_opponent_replay_checkpoint_action_count = 0
+	_opponent_replay_checkpoint_turn_count = 0
+	_opponent_replay_actions.clear()
+
+
+func _restore_failed_opponent_turn_replay(
+	original_state: StateData,
+	original_actions: Array[ActionData],
+	checkpoint_action_count: int
+) -> void:
+	_is_replaying_opponent_turn = false
+	_replay_record.truncate_actions(checkpoint_action_count)
+	for action_index: int in range(checkpoint_action_count, original_actions.size()):
+		_replay_record.record_action(original_actions[action_index])
+	_rebuild_views_from_state(original_state)
 
 
 func _on_replay_button_down() -> void:
@@ -3282,6 +3452,7 @@ func _on_exit_pressed() -> void:
 	_replay_generation += 1
 	_is_replaying = false
 	_is_replay_presenting_action = false
+	_is_replaying_opponent_turn = false
 	_replay_delay_remaining = 0.0
 	_cancel_opponent_search()
 	var outcome: StringName = (
