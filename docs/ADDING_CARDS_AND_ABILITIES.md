@@ -710,11 +710,16 @@ catalog definitions, or a replay record.
 `TRIGGER_POWER_INCREASE_BATCH_FINISHED` is dispatched once after a logical
 batch if at least one mutable card actually received a positive
 `powers_changed` event. Use
-`CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY` to react only when the source's
-current side was represented in that batch. Decreases, no-effect changes, and
-four-`-1` cards do not qualify. The trigger is discovered after all events in
-the batch, so its actions occur before the next separate action but never
+`CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY` with one required `zone` from
+`board`, `hand`, `discard`, or `removed` to react only when the source's current
+side was represented in that region of the batch. Decreases, no-effect changes,
+and four-`-1` cards do not qualify. The trigger is discovered after all events
+in the batch, so its actions occur before the next separate action but never
 interleave with the batch's point animations.
+
+In card rules text, unqualified `友方` and `敌方` mean cards on the board.
+Effects that include a hand, discard pile, or removed zone must name that zone
+in the description and declare it explicitly in their selector or condition.
 
 ## Revelation, Prevention, and Passive Modifiers
 

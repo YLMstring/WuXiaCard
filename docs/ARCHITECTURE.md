@@ -498,11 +498,12 @@ create no empty wait.
 
 After a logical batch that contains at least one successful positive
 `powers_changed`, the native action executor may dispatch
-`power_increase_batch_finished`. Its transient context stores only a two-bit
-mask of owners whose cards actually gained powers. The condition
-`power_increase_batch_includes_ally` compares that mask with each listener's
-current owner. Selected-card wrappers form one batch; contiguous sibling
-actions with the same nonempty `power_change_batch_group` also form one batch.
+`power_increase_batch_finished`. Its transient context stores one compact
+eight-bit mask covering owner 1/2 independently in `board`, `hand`, `discard`,
+and `removed`. The condition `power_increase_batch_includes_ally` requires a
+zone and compares that region of the mask with each listener's current owner.
+Selected-card wrappers form one batch; contiguous sibling actions with the same
+nonempty `power_change_batch_group` also form one batch.
 Nested attack/summon batches remain protected and dispatch independently. A
 cheap compact-ability listener scan prevents full event discovery when no
 runtime ability can observe this event. Neither the event context nor its mask

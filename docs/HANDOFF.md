@@ -160,6 +160,10 @@ The creator has made several direct UI and localization edits. Preserve those ed
   power-reduction-to-zero exile, regardless of the removed card's zone or
   owner. The source-owner snapshot is transient event context only; it does not
   enter duel state, saves, replay state, search keys, or the transposition table.
+- `power_increase_batch_includes_ally` requires an explicit card zone and uses
+  a transient zone-by-owner bitmask. `YinYangZhang4` declares `board`, so allied
+  hand-card increases do not trigger its attack. In catalog prose, unqualified
+  `友方` / `敌方` means board cards; other regions must be named explicitly.
 - `BaoCanShouQue2`–`4` and `LiJingRuLai3`–`4` use physical-leftmost discard
   selection. Their point gains occur only after the required discard count.
   Locked prevented-flip reactions exile only the exact target attacked by that

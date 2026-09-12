@@ -1005,8 +1005,8 @@ DuelNativeCompactKernel::EventContext DuelNativeCompactKernel::event_context_fro
 	result.flip_reason = StringName(context.get("flip_reason", StringName()));
 	result.exile_reason = StringName(context.get("exile_reason", StringName()));
 	result.discard_batch_id = StringName(context.get("discard_batch_id", StringName()));
-	result.power_increase_owner_mask = static_cast<uint8_t>(
-		static_cast<int64_t>(context.get("power_increase_owner_mask", 0)) & 0x03
+	result.power_increase_owner_zone_mask = static_cast<uint8_t>(
+		static_cast<int64_t>(context.get("power_increase_owner_zone_mask", 0)) & 0xff
 	);
 
 	const Array winning_owners = context.get("winning_owner_ids", Array());

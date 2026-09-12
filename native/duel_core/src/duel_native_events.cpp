@@ -168,7 +168,10 @@ bool DuelNativeCompactKernel::conditions_match(
 				matched = (
 					group.source_owner >= 1
 					&& group.source_owner <= 2
-					&& (context.power_increase_owner_mask & (1u << (group.source_owner - 1))) != 0
+					&& (
+						context.power_increase_owner_zone_mask
+						& (1u << (condition.amount + group.source_owner - 1))
+					) != 0
 				);
 				break;
 			case ConditionOpcode::TRIGGER_CARD_WEAPON:

@@ -146,6 +146,19 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
 		return compiled;
 	}
+	if (
+		type == StringName("power_increase_batch_includes_ally")
+		&& condition.size() == 2
+	) {
+		const StringName zone = condition.get("zone", StringName());
+		if (zone == StringName("board")) compiled.amount = 0;
+		else if (zone == StringName("hand")) compiled.amount = 2;
+		else if (zone == StringName("discard")) compiled.amount = 4;
+		else if (zone == StringName("removed")) compiled.amount = 6;
+		else return compiled;
+		compiled.opcode = ConditionOpcode::POWER_INCREASE_BATCH_INCLUDES_ALLY;
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
 	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
 	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
@@ -165,7 +178,6 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("attack_flipped_enemy")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ENEMY;
 	else if (type == StringName("attack_flipped_ally_in_range")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE;
 	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
-	else if (type == StringName("power_increase_batch_includes_ally")) compiled.opcode = ConditionOpcode::POWER_INCREASE_BATCH_INCLUDES_ALLY;
 	else if (type == StringName("drawn_card_is_enemy")) compiled.opcode = ConditionOpcode::DRAWN_CARD_IS_ENEMY;
 	else if (type == StringName("turn_owner_is_self")) compiled.opcode = ConditionOpcode::TURN_OWNER_IS_SELF;
 	else if (type == StringName("owner_did_not_win")) compiled.opcode = ConditionOpcode::OWNER_DID_NOT_WIN;

@@ -1036,7 +1036,7 @@ uint8_t DuelNativeCompactKernel::assign_power_change_batch(
 		}
 		return false;
 	};
-	uint8_t increased_owner_mask = 0;
+	uint8_t increased_owner_zone_mask = 0;
 	std::vector<int64_t> exile_event_indices;
 	StringName batch_id;
 	bool has_power_change = false;
@@ -1065,18 +1065,28 @@ uint8_t DuelNativeCompactKernel::assign_power_change_batch(
 			const int32_t amount = static_cast<int32_t>(event.get("amount", 0));
 			const int32_t owner = static_cast<int32_t>(event.get("owner_id", 0));
 			if (amount > 0 && owner >= 1 && owner <= 2) {
-				increased_owner_mask |= static_cast<uint8_t>(1u << (owner - 1));
+				const StringName zone = event.get("zone", StringName());
+				int32_t zone_bit_offset = -1;
+				if (zone == StringName("board")) zone_bit_offset = 0;
+				else if (zone == StringName("hand")) zone_bit_offset = 2;
+				else if (zone == StringName("discard")) zone_bit_offset = 4;
+				else if (zone == StringName("removed")) zone_bit_offset = 6;
+				if (zone_bit_offset >= 0) {
+					increased_owner_zone_mask |= static_cast<uint8_t>(
+						1u << (zone_bit_offset + owner - 1)
+					);
+				}
 			}
 		} else if (type == StringName("card_exiled")) {
 			exile_event_indices.push_back(index);
 		}
 	}
-	if (!has_power_change) return increased_owner_mask;
+	if (!has_power_change) return increased_owner_zone_mask;
 	for (const int64_t index : exile_event_indices) {
 		Dictionary event = resolution.events[index];
 		event["power_change_batch_id"] = batch_id;
 	}
-	return increased_owner_mask;
+	return increased_owner_zone_mask;
 }
 
 bool DuelNativeCompactKernel::has_event_listener(
@@ -1124,16 +1134,16 @@ bool DuelNativeCompactKernel::has_event_listener(
 
 bool DuelNativeCompactKernel::resolve_power_increase_batch(
 	NativeState &value,
-	uint8_t owner_mask,
+	uint8_t owner_zone_mask,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
 	if (
-		owner_mask == 0
+		owner_zone_mask == 0
 		|| !has_event_listener(value, StringName("power_increase_batch_finished"))
 	) return true;
 	EventContext batch_context;
-	batch_context.power_increase_owner_mask = owner_mask;
+	batch_context.power_increase_owner_zone_mask = owner_zone_mask;
 	Resolution batch_finished = resolve_event(
 		value,
 		StringName("power_increase_batch_finished"),
@@ -1513,7 +1523,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 	// actions 严格按目录数组顺序执行。NO_EFFECT 通常只跳过当前原语；只有声明了
 	// on_invalid_context=stop_rule 才终止余下规则，UNSUPPORTED 则使整个转换失败。
 	ActionOutcome aggregate = ActionOutcome::NO_EFFECT;
-	uint8_t pending_power_increase_owner_mask = 0;
+	uint8_t pending_power_increase_owner_zone_mask = 0;
 	StringName pending_power_change_group;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
@@ -1524,11 +1534,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 		) {
 			if (!resolve_power_increase_batch(
 				value,
-				pending_power_increase_owner_mask,
+				pending_power_increase_owner_zone_mask,
 				exile_stack,
 				resolution
 			)) return ActionOutcome::UNSUPPORTED;
-			pending_power_increase_owner_mask = 0;
+			pending_power_increase_owner_zone_mask = 0;
 			pending_power_change_group = StringName();
 		}
 		const int64_t first_event_index = resolution.events.size();
@@ -1560,7 +1570,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			});
 		}
 		if (!defer_power_change_batch) {
-			const uint8_t increased_owner_mask = assign_power_change_batch(
+			const uint8_t increased_owner_zone_mask = assign_power_change_batch(
 				value,
 				resolution,
 				first_event_index,
@@ -1572,13 +1582,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			if (action.power_change_batch_group.is_empty()) {
 				if (!resolve_power_increase_batch(
 					value,
-					increased_owner_mask,
+					increased_owner_zone_mask,
 					exile_stack,
 					resolution
 				)) return ActionOutcome::UNSUPPORTED;
 			} else {
 				pending_power_change_group = action.power_change_batch_group;
-				pending_power_increase_owner_mask |= increased_owner_mask;
+				pending_power_increase_owner_zone_mask |= increased_owner_zone_mask;
 			}
 		}
 		if (outcome == ActionOutcome::UNSUPPORTED) {
@@ -1594,7 +1604,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 				!defer_power_change_batch
 				&& !resolve_power_increase_batch(
 					value,
-					pending_power_increase_owner_mask,
+					pending_power_increase_owner_zone_mask,
 					exile_stack,
 					resolution
 				)
@@ -1606,7 +1616,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 				!defer_power_change_batch
 				&& !resolve_power_increase_batch(
 					value,
-					pending_power_increase_owner_mask,
+					pending_power_increase_owner_zone_mask,
 					exile_stack,
 					resolution
 				)
@@ -1619,7 +1629,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 		!defer_power_change_batch
 		&& !resolve_power_increase_batch(
 			value,
-			pending_power_increase_owner_mask,
+			pending_power_increase_owner_zone_mask,
 			exile_stack,
 			resolution
 		)

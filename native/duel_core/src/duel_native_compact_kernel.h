@@ -495,7 +495,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName exile_reason;
 		int32_t exile_effect_source_owner = 0;
 		StringName discard_batch_id;
-		uint8_t power_increase_owner_mask = 0;
+		// 每两个 bit 对应一个区域内双方的成功加点：场上、手牌、弃牌区、移除区。
+		uint8_t power_increase_owner_zone_mask = 0;
 	};
 
 	// discover_event 只发现并锁定触发条目；真正结算时再用 handle 与来源区域确认
@@ -1401,7 +1402,7 @@ private:
 	bool has_event_listener(const NativeState &value, const StringName &event_id) const;
 	bool resolve_power_increase_batch(
 		NativeState &value,
-		uint8_t owner_mask,
+		uint8_t owner_zone_mask,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution
 	) const;

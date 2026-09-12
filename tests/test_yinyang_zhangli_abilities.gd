@@ -48,6 +48,26 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 		in Catalog.KNOWN_TRIGGER_CONDITIONS,
 		"Power-increase batch reactions use registered generic vocabulary"
 	)
+	var missing_batch_zone: Dictionary = Catalog.YINYANG_RANGE_FOUR.duplicate(true)
+	var missing_zone_condition: Dictionary = (
+		(((missing_batch_zone.get("triggers", []) as Array)[0] as Dictionary)
+		.get("conditions", []) as Array)[0] as Dictionary
+	)
+	missing_zone_condition.erase("zone")
+	_check(
+		not Catalog.validate_ability(missing_batch_zone).is_empty(),
+		"Power-increase batch ally conditions require an explicit zone"
+	)
+	var unknown_batch_zone: Dictionary = Catalog.YINYANG_RANGE_FOUR.duplicate(true)
+	var unknown_zone_condition: Dictionary = (
+		(((unknown_batch_zone.get("triggers", []) as Array)[0] as Dictionary)
+		.get("conditions", []) as Array)[0] as Dictionary
+	)
+	unknown_zone_condition["zone"] = &"deck"
+	_check(
+		not Catalog.validate_ability(unknown_batch_zone).is_empty(),
+		"Power-increase batch ally conditions reject unknown zones"
+	)
 	_check(
 		Rules.has_special_negative_powers({"powers": [-1, -1, -1, -1]}),
 		"Four negative-one sides use special power rules"
@@ -90,6 +110,18 @@ func _test_catalog_and_special_power_vocabulary() -> void:
 			"%s grants board palms their range before a separate board-palm attack pass"
 			% card_id
 		)
+		if card_id == &"YinYangZhang4":
+			var granted_triggers: Array = expected_range.get("triggers", [])
+			var batch_conditions: Array = (
+				(granted_triggers[0] as Dictionary).get("conditions", [])
+			)
+			_check(
+				batch_conditions == [{
+					"type": Catalog.CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY,
+					"zone": Catalog.CARD_ZONE_BOARD,
+				}],
+				"YinYangZhang4 reacts only to allied board-card power increases"
+			)
 
 
 func _test_special_power_presentation() -> void:
@@ -486,6 +518,87 @@ func _test_power_increase_batch_reactions() -> void:
 		_last_event_index(events, &"powers_changed")
 		< _event_index(events, &"ability_triggered", &"", &"batch_listener"),
 		"The batch reaction begins only after every power-change event"
+	)
+
+	var hand_only_board: Array = Rules.empty_board()
+	var hand_only_listener: Dictionary = _plain(
+		&"hand_only_listener", [5, 5, 5, 5], Rules.PLAYER_OWNER
+	)
+	hand_only_listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	hand_only_board[0] = _slot(hand_only_listener, Rules.PLAYER_OWNER)
+	hand_only_board[8] = _slot(
+		_plain(&"hand_only_source", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		Rules.PLAYER_OWNER
+	)
+	var hand_only_state := State.new(
+		hand_only_board,
+		[_plain(&"hand_only_target", [2, 2, 2, 2], Rules.PLAYER_OWNER)]
+	)
+	var hand_only_result: Dictionary = Executor.execute_actions(
+		hand_only_state,
+		8,
+		&"hand_only_source",
+		Rules.PLAYER_OWNER,
+		[_power_change_trigger_action(&"hand_only")],
+		{"trigger_instance_id": &"hand_only_target"}
+	)
+	_check(
+		_count_events(hand_only_result.get("events", []), &"powers_changed") == 1
+		and _count_source_events(
+			hand_only_result.get("events", []), &"ability_triggered", &"hand_only_listener"
+		) == 0,
+		"An allied hand-card increase does not trigger YinYangZhang4"
+	)
+
+	var mixed_board: Array = Rules.empty_board()
+	var mixed_listener: Dictionary = _plain(
+		&"mixed_listener", [5, 5, 5, 5], Rules.PLAYER_OWNER, "剑法"
+	)
+	mixed_listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	mixed_board[0] = _slot(mixed_listener, Rules.PLAYER_OWNER)
+	mixed_board[6] = _slot(
+		_plain(&"mixed_board_target", [2, 2, 2, 2], Rules.PLAYER_OWNER),
+		Rules.PLAYER_OWNER
+	)
+	mixed_board[8] = _slot(
+		_plain(&"mixed_source", [2, 2, 2, 2], Rules.PLAYER_OWNER, "剑法"),
+		Rules.PLAYER_OWNER
+	)
+	var mixed_state := State.new(
+		mixed_board,
+		[_plain(&"mixed_hand_target", [2, 2, 2, 2], Rules.PLAYER_OWNER)]
+	)
+	var mixed_result: Dictionary = Executor.execute_actions(
+		mixed_state,
+		8,
+		&"mixed_source",
+		Rules.PLAYER_OWNER,
+		[{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [Catalog.CARD_ZONE_HAND, Catalog.CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY},
+					{
+						"type": Catalog.CONDITION_SELECTED_CARD_WEAPON_IS,
+						"weapon": "掌法",
+					},
+				],
+			},
+			"actions": [{
+				"type": Catalog.ACTION_CHANGE_POWERS,
+				"amount": 1,
+				"card": Catalog.CARD_REF_SELECTED_CARD,
+			}],
+		}],
+		{}
+	)
+	_check(
+		_count_events(mixed_result.get("events", []), &"powers_changed") == 2
+		and _count_source_events(
+			mixed_result.get("events", []), &"ability_triggered", &"mixed_listener"
+		) == 1,
+		"A mixed hand-and-board increase batch triggers once because it includes a board ally"
 	)
 
 	var grouped_state := _make_batch_group_state()

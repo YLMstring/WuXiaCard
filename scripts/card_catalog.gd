@@ -1900,6 +1900,7 @@ const YINYANG_RANGE_FOUR: Dictionary = {
 		"event": TRIGGER_POWER_INCREASE_BATCH_FINISHED,
 		"conditions": [{
 			"type": CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY,
+			"zone": CARD_ZONE_BOARD,
 		}],
 		"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 	}],
@@ -5908,6 +5909,13 @@ static func _validate_condition(
 		if typeof(condition.get("inverted")) != TYPE_BOOL:
 			errors.append(
 				"Card %s %s attack-flipped condition requires a boolean inverted"
+				% [card_id, context_name]
+			)
+	if condition_type == CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY:
+		allowed_keys.append(&"zone")
+		if StringName(condition.get("zone", &"")) not in KNOWN_CARD_ZONES:
+			errors.append(
+				"Card %s %s power-increase batch condition requires a known zone"
 				% [card_id, context_name]
 			)
 	if condition_type == CONDITION_ABILITY_SOURCE_IN_ZONE:
