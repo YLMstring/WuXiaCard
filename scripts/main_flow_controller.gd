@@ -7,6 +7,7 @@ const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn"
 const REWARD_SELECTION_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const DUEL_SCENE: PackedScene = preload("res://scenes/duel.tscn")
 const ENDING_SCENE: PackedScene = preload("res://scenes/ending.tscn")
+const TUTORIAL_SCENE_PATH: String = "res://scenes/tutorial.tscn"
 const Music = preload("res://scripts/music_director.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
@@ -75,6 +76,18 @@ func _show_sect_selection() -> void:
 	selector.deck_builder_requested.connect(_on_deck_builder_requested)
 	selector.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(selector)
+	_music_director.request_context(Music.CONTEXT_MENU)
+
+
+func _show_tutorial() -> void:
+	var tutorial_scene := ResourceLoader.load(TUTORIAL_SCENE_PATH) as PackedScene
+	if tutorial_scene == null:
+		push_error("Tutorial scene could not be loaded")
+		_show_main_menu("教程资源加载失败，请重试")
+		return
+	var tutorial := tutorial_scene.instantiate() as Control
+	tutorial.connect(&"completion_requested", _on_tutorial_completion_requested)
+	_replace_screen(tutorial)
 	_music_director.request_context(Music.CONTEXT_MENU)
 
 
@@ -172,7 +185,7 @@ func _on_journey_requested() -> void:
 	if not store.get_pending_reward_ids(profile).is_empty():
 		_show_reward_selection()
 	elif store.is_run_active(profile):
-		_show_deck_builder()
+		_continue_active_run()
 	elif _should_auto_start_default_run(store, profile):
 		var result: Dictionary = store.begin_run_and_save(
 			profile,
@@ -184,7 +197,7 @@ func _on_journey_requested() -> void:
 			0
 		)
 		if bool(result.get("ok", false)):
-			_show_deck_builder()
+			_continue_active_run()
 		else:
 			_finish_reset_on_current_menu("保存失败，请重试")
 	else:
@@ -253,6 +266,28 @@ func _restore_testing_unlocks(store: RefCounted, result: Dictionary) -> Dictiona
 
 
 func _on_deck_builder_requested() -> void:
+	_continue_active_run()
+
+
+func _continue_active_run() -> void:
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	if store.is_tutorial_pending(profile):
+		_show_tutorial()
+	else:
+		_show_deck_builder()
+
+
+func _on_tutorial_completion_requested() -> void:
+	var tutorial: Control = _current_screen
+	if tutorial == null or not tutorial.has_method("show_save_error"):
+		return
+	var store := Store.new(deck_profile_path)
+	var profile: Dictionary = store.load_profile()
+	var result: Dictionary = store.complete_tutorial_and_save(profile)
+	if not bool(result.get("ok", false)):
+		tutorial.call("show_save_error")
+		return
 	_show_deck_builder()
 
 

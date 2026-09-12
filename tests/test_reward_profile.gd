@@ -27,7 +27,7 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
-	_check(int(profile["schema_version"]) == 12, "Reward state advances the profile schema")
+	_check(int(profile["schema_version"]) == 13, "Reward state advances the profile schema")
 	_check(store.get_pending_reward_ids(profile).is_empty(), "Default profile has no pending reward")
 	_check(store.save_profile(profile), "Reward fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(

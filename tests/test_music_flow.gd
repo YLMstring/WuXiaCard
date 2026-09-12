@@ -7,6 +7,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 
 const NORMAL_SAVE_PATH: String = "user://music_flow_test.json"
 const TESTING_SAVE_PATH: String = "user://music_flow_testing_test.json"
+const TUTORIAL_SAVE_PATH: String = "user://music_flow_tutorial_test.json"
 
 var _checks: int = 0
 var _failures: int = 0
@@ -19,13 +20,59 @@ func _init() -> void:
 func _run() -> void:
 	_cleanup_path(NORMAL_SAVE_PATH)
 	_cleanup_path(TESTING_SAVE_PATH)
+	_cleanup_path(TUTORIAL_SAVE_PATH)
+	await _test_tutorial_music_flow()
 	await _test_normal_music_flow()
 	await _test_testing_unlock_does_not_trigger_bixie()
 	_cleanup_path(NORMAL_SAVE_PATH)
 	_cleanup_path(TESTING_SAVE_PATH)
+	_cleanup_path(TUTORIAL_SAVE_PATH)
 	await create_timer(0.1).timeout
 	await process_frame
 	_finish()
+
+
+func _test_tutorial_music_flow() -> void:
+	var flow: Variant = MAIN_SCENE.instantiate()
+	flow.deck_profile_path = TUTORIAL_SAVE_PATH
+	flow.testing_mode = false
+	root.add_child(flow)
+	await process_frame
+	await process_frame
+	var director: Variant = flow.debug_get_music_director()
+	director.debug_set_fade_durations(0.0, 0.0)
+	var menu_path: String = director.debug_get_current_track_path()
+	var menu_start_count: int = director.debug_get_started_tracks().size()
+	flow.call("_on_journey_requested")
+	await process_frame
+	var tutorial: Variant = flow.debug_get_current_screen()
+	_check(_is_tutorial_screen(tutorial), "Huashan difficulty-zero start reaches the tutorial")
+	_check(
+		director.debug_get_current_context() == Music.CONTEXT_MENU,
+		"Tutorial remains in the menu music context"
+	)
+	_check(director.debug_get_current_track_path() == menu_path, "Tutorial continues the current menu track")
+	_check(
+		director.debug_get_started_tracks().size() == menu_start_count,
+		"Entering the tutorial does not restart menu music"
+	)
+	director.debug_simulate_track_finished()
+	_check(
+		director.debug_get_current_context() == Music.CONTEXT_MENU
+		and director.debug_get_current_track_path() in Music.MENU_TRACK_PATHS,
+		"A track ending during the tutorial selects another menu-pool track"
+	)
+	var advance_button := tutorial.get_node("AdvanceButton") as Button
+	for press_index: int in range(tutorial.debug_get_page_count()):
+		advance_button.pressed.emit()
+	await process_frame
+	_check(flow.debug_get_current_screen() is DeckBuilderController, "Tutorial completion enters deck building")
+	_check(
+		director.debug_get_current_context() == Music.CONTEXT_STORY,
+		"Tutorial completion switches to story music only after deck entry"
+	)
+	flow.queue_free()
+	await process_frame
 
 
 func _test_normal_music_flow() -> void:
@@ -172,6 +219,10 @@ func _first_locked_card_except(
 		if card_id != excluded_id and card_id not in unlocked_ids:
 			return card_id
 	return &""
+
+
+func _is_tutorial_screen(screen: Variant) -> bool:
+	return screen is Control and screen.has_method("debug_get_current_page_index")
 
 
 func _cleanup_path(path: String) -> void:

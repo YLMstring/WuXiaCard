@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-11
+Updated: 2026-09-12
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -15,8 +15,8 @@ successful action log. Playback reuses the simulator/VFX path with a two-second
 turn cadence, preserves opponent concealment, and permits inspection between
 actions without producing progression side effects.
 
-The main flow routes the main menu, sect selection, deck builder, duel, reward
-selection, and a completed-run ending. The deck-building scene persists a
+The main flow routes the main menu, sect selection, a ten-page beginner
+tutorial, deck builder, duel, reward selection, and a completed-run ending. The deck-building scene persists a
 five-card main deck and exposes a virtualized 1,000-slot collection library.
 
 Not yet present: story/dialogue, final content balance, multiplayer, or a
@@ -282,8 +282,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   saves immediately. They remain hidden when only difficulty 0 is unlocked.
 - In normal mode, `踏入江湖` skips sect selection only when an inactive profile
   has exactly Huashan and difficulty 0 available. It creates a normal Huashan
-  difficulty-0 run and enters deck building. Testing mode always keeps sect
+  difficulty-0 run and enters the required beginner tutorial. Testing mode always keeps sect
   selection, as does unlocking any other sect or difficulty 1.
+- Every newly created Huashan difficulty-0 run stores `tutorial_pending = true`.
+  The ten fixed `1080×2400` tutorial pages advance one per click/tap; the tenth
+  page requires one final tap. Completion clears the flag atomically before
+  deck building opens. Exiting early leaves the flag set, and the next journey
+  entry restarts from page one. Other sects and difficulties skip the tutorial;
+  pre-schema-13 active runs migrate with the flag off.
 - The main menu recognizes one hidden, in-memory sequence: start with
   `闭关重修`, alternate with `封剑归隐`, and press each five times. Completion
   atomically unlocks every sect and difficulty 9 without changing cards or the
@@ -298,7 +304,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   a clipped clear-sky viewport. Early taps do nothing; after the last line is
   fully visible, the first tap returns to the normal menu.
 - `MainFlowController` owns one persistent presentation-only `MusicDirector`.
-  Menu/sect share a continuing `menu1`–`menu3` pool; deck building and normal
+  Menu/sect/tutorial share a continuing `menu1`–`menu3` pool; deck building and normal
   rewards share a continuing fixed, per-track weighted `village`/`story` pool;
   battles use `battle1`–`battle6`. A reward containing `KuiHua0` uses
   `terror`, claiming it consumes a one-entry `lose` override for the next deck

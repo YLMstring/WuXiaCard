@@ -26,6 +26,13 @@ func _run() -> void:
 		&"qingfeng_xuedi"
 	)
 	_check(bool(begin.get("ok", false)), "Final-flow fixture begins an active run")
+	var tutorial_complete: Dictionary = store.complete_tutorial_and_save(
+		begin.get("profile", {})
+	)
+	_check(
+		bool(tutorial_complete.get("ok", false)),
+		"Final-flow fixture completes its required beginner tutorial"
+	)
 
 	var flow: Variant = MAIN_SCENE.instantiate()
 	flow.deck_profile_path = _save_path

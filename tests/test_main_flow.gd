@@ -38,18 +38,49 @@ func _run() -> void:
 	(auto_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
 	await process_frame
 	_check(
-		auto_flow.debug_get_current_screen() is DeckBuilderController,
-		"Normal mode skips sect selection when only Huashan difficulty zero is available"
+		_is_tutorial_screen(auto_flow.debug_get_current_screen()),
+		"Automatic Huashan difficulty-zero start enters the tutorial"
 	)
 	var auto_store := Store.new(_auto_start_path)
 	var auto_profile: Dictionary = auto_store.load_profile()
 	_check(auto_store.is_run_active(auto_profile), "Automatic default start persists an active run")
+	_check(auto_store.is_tutorial_pending(auto_profile), "Automatic default start persists the tutorial gate")
 	_check(
 		auto_store.get_selected_sect_id(auto_profile) == &"HuaShanPai"
 		and auto_store.get_run_difficulty(auto_profile) == 0,
 		"Automatic default start uses Huashan difficulty zero"
 	)
+	var interrupted_tutorial: Variant = auto_flow.debug_get_current_screen()
+	(interrupted_tutorial.get_node("AdvanceButton") as Button).pressed.emit()
+	_check(
+		interrupted_tutorial.debug_get_current_page_index() == 1,
+		"Tutorial can be interrupted after advancing"
+	)
 	auto_flow.queue_free()
+	await process_frame
+	var resumed_auto_flow: Variant = MAIN_SCENE.instantiate()
+	resumed_auto_flow.deck_profile_path = _auto_start_path
+	resumed_auto_flow.testing_mode = false
+	root.add_child(resumed_auto_flow)
+	await process_frame
+	var resumed_menu := resumed_auto_flow.debug_get_current_screen() as MenuController
+	(resumed_menu.get_node("MenuLayer/Actions/JourneyButton") as Button).pressed.emit()
+	await process_frame
+	var resumed_tutorial: Variant = resumed_auto_flow.debug_get_current_screen()
+	_check(
+		resumed_tutorial != null
+		and resumed_tutorial.debug_get_current_page_index() == 0,
+		"An interrupted tutorial resumes from page one"
+	)
+	_complete_tutorial(resumed_tutorial)
+	await process_frame
+	_check(
+		resumed_auto_flow.debug_get_current_screen() is DeckBuilderController,
+		"Completing the automatic tutorial enters deck building"
+	)
+	auto_profile = auto_store.load_profile()
+	_check(not auto_store.is_tutorial_pending(auto_profile), "Completing the tutorial persists its gate")
+	resumed_auto_flow.queue_free()
 	await process_frame
 
 	var other_sect_store := Store.new(_other_sect_path)
@@ -67,6 +98,14 @@ func _run() -> void:
 	_check(
 		other_sect_flow.debug_get_current_screen() is SelectorController,
 		"Unlocking another sect preserves sect selection"
+	)
+	var other_selector := other_sect_flow.debug_get_current_screen() as SelectorController
+	_check(other_selector.debug_select_sect(&"TaiShanPai"), "Selector accepts another unlocked sect")
+	_check(other_selector.debug_confirm_selected_sect(), "Another sect can start at difficulty zero")
+	await process_frame
+	_check(
+		other_sect_flow.debug_get_current_screen() is DeckBuilderController,
+		"A non-Huashan difficulty-zero run skips the tutorial"
 	)
 	other_sect_flow.queue_free()
 	await process_frame
@@ -86,6 +125,16 @@ func _run() -> void:
 	_check(
 		difficulty_flow.debug_get_current_screen() is SelectorController,
 		"Unlocking difficulty one preserves sect selection"
+	)
+	var difficulty_selector := difficulty_flow.debug_get_current_screen() as SelectorController
+	(difficulty_selector.get_node("DuelCanvas/DifficultyRightButton") as TextureButton).pressed.emit()
+	_check(difficulty_selector.debug_get_selected_difficulty() == 1, "Selector chooses difficulty one")
+	_check(difficulty_selector.debug_select_sect(&"HuaShanPai"), "Selector accepts Huashan at difficulty one")
+	_check(difficulty_selector.debug_confirm_selected_sect(), "Huashan can start at difficulty one")
+	await process_frame
+	_check(
+		difficulty_flow.debug_get_current_screen() is DeckBuilderController,
+		"A Huashan difficulty-one run skips the tutorial"
 	)
 	difficulty_flow.queue_free()
 	await process_frame
@@ -169,8 +218,12 @@ func _run() -> void:
 	_check(selector.debug_select_sect(&"HuaShanPai"), "Selector accepts the default sect")
 	_check(selector.debug_confirm_selected_sect(), "Confirming a sect starts the run")
 	await process_frame
+	var tutorial: Variant = flow.debug_get_current_screen()
+	_check(_is_tutorial_screen(tutorial), "Huashan difficulty-zero sect confirmation enters the tutorial")
+	_complete_tutorial(tutorial)
+	await process_frame
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
-	_check(builder != null, "Sect confirmation enters deck building")
+	_check(builder != null, "Completing the sect-selection tutorial enters deck building")
 	var active_profile: Dictionary = Store.new(runtime_save_path).load_profile()
 	_check(bool(active_profile["run_active"]), "Sect confirmation persists active-run state")
 	_check(
@@ -420,6 +473,16 @@ func _run() -> void:
 
 	_cleanup()
 	_finish()
+
+
+func _is_tutorial_screen(screen: Variant) -> bool:
+	return screen is Control and screen.has_method("debug_get_current_page_index")
+
+
+func _complete_tutorial(tutorial: Variant) -> void:
+	var advance_button := tutorial.get_node("AdvanceButton") as Button
+	for press_index: int in range(tutorial.debug_get_page_count()):
+		advance_button.pressed.emit()
 
 
 func _cleanup() -> void:

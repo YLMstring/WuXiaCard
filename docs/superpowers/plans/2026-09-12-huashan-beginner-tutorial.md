@@ -22,7 +22,8 @@
 ## 2. 建立独立教程场景
 
 - 新建 `scripts/tutorial_controller.gd`：
-  - 预载 `res://pics/tutorial/tutorial_01.png` 至 `tutorial_10.png`；
+  - 进入教程时一次性加载 `res://pics/tutorial/tutorial_01.png` 至
+    `tutorial_10.png`，退出教程后不再持有这些高分辨率纹理；
   - 维护从零开始的当前页索引，进入场景即显示第一页；
   - 每次有效点击只前进一页；第十页后的点击只发出一次
     `completion_requested`；

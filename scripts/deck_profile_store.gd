@@ -7,13 +7,14 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 
-const SCHEMA_VERSION: int = 12
+const SCHEMA_VERSION: int = 13
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
 const DIFFICULTY_SCHEMA_VERSION: int = 10
 const DIFFICULTY_BEST_SCORE_SCHEMA_VERSION: int = 11
 const SECT_POOL_SCHEMA_VERSION: int = 12
+const TUTORIAL_STATE_SCHEMA_VERSION: int = 13
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
@@ -89,6 +90,7 @@ func create_default_profile() -> Dictionary:
 		"last_selected_difficulty": 0,
 		"run_difficulty": 0,
 		"run_sect_pool_ids": [],
+		"tutorial_pending": false,
 		"level": 0,
 		"current_enemy_id": "",
 		"remembered_enemy_glyphs": [],
@@ -177,6 +179,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var last_difficulty_value: Variant = profile.get("last_selected_difficulty", null)
 	var run_difficulty_value: Variant = profile.get("run_difficulty", null)
 	var run_sect_pool_value: Variant = profile.get("run_sect_pool_ids", null)
+	var tutorial_pending_value: Variant = profile.get("tutorial_pending", null)
 	var level_value: Variant = profile.get("level", null)
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
 	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
@@ -196,6 +199,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or typeof(last_difficulty_value) != TYPE_INT
 		or typeof(run_difficulty_value) != TYPE_INT
 		or typeof(run_sect_pool_value) != TYPE_ARRAY
+		or typeof(tutorial_pending_value) != TYPE_BOOL
 		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(enemy_value) != TYPE_STRING
 		or typeof(remembered_glyphs_value) != TYPE_ARRAY
@@ -212,6 +216,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var max_unlocked_difficulty: int = int(max_difficulty_value)
 	var last_selected_difficulty: int = int(last_difficulty_value)
 	var run_difficulty: int = int(run_difficulty_value)
+	var tutorial_pending: bool = bool(tutorial_pending_value)
 	if (
 		max_unlocked_difficulty < 0
 		or max_unlocked_difficulty > MAX_DIFFICULTY
@@ -220,6 +225,14 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or run_difficulty < 0
 		or run_difficulty > max_unlocked_difficulty
 		or (not run_active and run_difficulty != 0)
+		or (
+			tutorial_pending
+			and (
+				not run_active
+				or selected_sect_id != &"HuaShanPai"
+				or run_difficulty != 0
+			)
+		)
 	):
 		return false
 	var level: int = int(level_value)
@@ -427,6 +440,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var last_selected_difficulty: int = 0
 	var run_difficulty: int = 0
 	var run_sect_pool_ids: Array[StringName] = []
+	var tutorial_pending: bool = false
 	var level: int = 0
 	var current_enemy_id: StringName = &""
 	var remembered_enemy_glyphs: Array[String] = []
@@ -528,6 +542,14 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 			selected_sect_id,
 			profile
 		)
+		if schema_version >= TUTORIAL_STATE_SCHEMA_VERSION:
+			var raw_tutorial_pending: Variant = profile.get("tutorial_pending", false)
+			tutorial_pending = (
+				typeof(raw_tutorial_pending) == TYPE_BOOL
+				and bool(raw_tutorial_pending)
+				and selected_sect_id == &"HuaShanPai"
+				and run_difficulty == 0
+			)
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	if schema_version >= MASTERY_SCHEMA_VERSION:
 		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
@@ -615,6 +637,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"last_selected_difficulty": last_selected_difficulty,
 		"run_difficulty": run_difficulty,
 		"run_sect_pool_ids": _string_array(run_sect_pool_ids),
+		"tutorial_pending": tutorial_pending,
 		"level": level,
 		"current_enemy_id": String(current_enemy_id),
 		"remembered_enemy_glyphs": remembered_enemy_glyphs,
@@ -760,6 +783,7 @@ func begin_run_and_save(
 	candidate["selected_sect_id"] = String(sect_id)
 	candidate["run_difficulty"] = difficulty
 	candidate["run_sect_pool_ids"] = _string_array(run_sect_pool_ids)
+	candidate["tutorial_pending"] = sect_id == &"HuaShanPai" and difficulty == 0
 	candidate["level"] = 1
 	candidate["current_enemy_id"] = String(enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
@@ -906,6 +930,21 @@ func get_run_sect_pool_ids(profile: Dictionary) -> Array[StringName]:
 	for value: Variant in profile["run_sect_pool_ids"]:
 		result.append(StringName(String(value)))
 	return result
+
+
+func is_tutorial_pending(profile: Dictionary) -> bool:
+	return is_profile_valid(profile) and bool(profile["tutorial_pending"])
+
+
+func complete_tutorial_and_save(profile: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_tutorial_pending(profile):
+		return {"ok": false, "profile": unchanged}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["tutorial_pending"] = false
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged}
+	return {"ok": true, "profile": candidate}
 
 
 func set_last_selected_difficulty_and_save(

@@ -94,6 +94,22 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   exchange transaction. Filter changes never save or reorder profile data and
   always return the scroll to the top.
 
+## Beginner Tutorial
+
+- A newly created Huashan difficulty-0 run opens
+  `res://scenes/tutorial.tscn` before deck building. The scene displays
+  `res://pics/tutorial/tutorial_01.png` through `tutorial_10.png` in fixed
+  order.
+- Artwork uses centered aspect-cover scaling. A `20:9` display shows the full
+  `1080×2400` image; the reference `16:9` viewport crops equally from its top
+  and bottom while retaining the authored central safe area.
+- One mouse click or single-finger tap advances one page. There is no skip or
+  back action. The final tap requests an atomic save; a failure leaves the last
+  page visible and unlocks one retry.
+- The scene belongs to the continuing menu music context, not the deck-builder
+  story context. It loads all ten textures on entry for smooth paging and
+  releases its references when replaced by the deck builder.
+
 ## Battle Animation Ordering
 
 Simulator transition events form one presentation timeline. The duel controller

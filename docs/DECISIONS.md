@@ -787,7 +787,8 @@ respectively, in row-major order. The source itself is eligible.
 - Background music is owned by one persistent presentation node under
   `MainFlowController`; replacing a screen must not destroy or recreate the
   player. Directly running a child scene may remain silent.
-- Main menu and sect selection share one continuing `menu1`–`menu3` pool.
+- Main menu, sect selection, and the Huashan beginner tutorial share one
+  continuing `menu1`–`menu3` pool.
   Deck building and ordinary rewards share one continuing, explicitly declared
   pool containing seven `village` tracks at weight two and four `story` tracks
   at weight one. New files never enter the pool implicitly. Immediate random
@@ -804,3 +805,18 @@ respectively, in row-major order. The source itself is eligible.
   Context requests are generation-gated so rapid navigation leaves only the
   latest request active. Natural track completion reselects from the current
   context.
+
+## 华山进阶零新手教程
+
+- Every newly created Huashan difficulty-0 run must show the ten-page tutorial,
+  including runs created through the automatic default shortcut. Other sects
+  and difficulties do not show it.
+- Tutorial completion is a run-local persisted gate. Exiting before the final
+  tap restarts the tutorial at page one on the next journey entry; page position
+  itself is intentionally not saved.
+- The final tap must atomically save completion before entering deck building.
+  A save failure remains on page ten and permits retry rather than bypassing the
+  tutorial.
+- Tutorial textures are loaded together only while the tutorial scene is alive,
+  so page changes do not stall and the high-resolution pages are not retained
+  through later duels.

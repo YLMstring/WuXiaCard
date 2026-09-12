@@ -45,7 +45,8 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 12, "Default profile uses schema version 12")
+	_check(int(profile["schema_version"]) == 13, "Default profile uses schema version 13")
+	_check(not store.is_tutorial_pending(profile), "Default profile has no pending tutorial")
 	_check(
 		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
 		"Default profile has no shown guaranteed rewards"
@@ -382,7 +383,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 12, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 13, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
@@ -473,6 +474,12 @@ func _run() -> void:
 		not store.is_profile_valid(malformed_difficulty),
 		"Difficulty fields reject fractional, negative, and inactive-run values"
 	)
+	var malformed_tutorial: Dictionary = repaired.duplicate(true)
+	malformed_tutorial["tutorial_pending"] = true
+	_check(
+		not store.is_profile_valid(malformed_tutorial),
+		"An inactive profile cannot retain a pending tutorial"
+	)
 	var repaired_difficulty: Dictionary = store.repair_profile(malformed_difficulty)
 	_check(
 		store.is_profile_valid(repaired_difficulty)
@@ -549,6 +556,10 @@ func _run() -> void:
 		and store.get_run_difficulty(difficulty_begin.get("profile", {})) == 2,
 		"Beginning an unlocked difficulty records it on the active run"
 	)
+	_check(
+		not store.is_tutorial_pending(difficulty_begin.get("profile", {})),
+		"Huashan runs above difficulty zero do not request the beginner tutorial"
+	)
 	var locked_difficulty_begin: Dictionary = store.begin_run_and_save(
 		selected_difficulty_profile,
 		&"HuaShanPai",
@@ -578,6 +589,32 @@ func _run() -> void:
 	_check(store.get_character_level(active_profile) == 1, "Beginning a run advances to level one")
 	_check(store.get_character_tier(active_profile) == 1, "Level one remains tier one")
 	_check(store.get_run_difficulty(active_profile) == 0, "Existing run-start callers default to difficulty zero")
+	_check(
+		store.is_tutorial_pending(active_profile),
+		"Huashan difficulty-zero runs request the beginner tutorial"
+	)
+	var legacy_active_profile: Dictionary = active_profile.duplicate(true)
+	legacy_active_profile["schema_version"] = 12
+	legacy_active_profile.erase("tutorial_pending")
+	var migrated_active_profile: Dictionary = store.repair_profile(legacy_active_profile)
+	_check(
+		store.is_profile_valid(migrated_active_profile)
+		and not store.is_tutorial_pending(migrated_active_profile),
+		"Existing active runs migrate without unexpectedly requesting the tutorial"
+	)
+	var completed_tutorial: Dictionary = store.complete_tutorial_and_save(active_profile)
+	_check(
+		bool(completed_tutorial.get("ok", false))
+		and not store.is_tutorial_pending(completed_tutorial.get("profile", {})),
+		"Completing the tutorial clears and saves its pending state"
+	)
+	_check(
+		not bool(store.complete_tutorial_and_save(
+			completed_tutorial.get("profile", {})
+		).get("ok", true)),
+		"An already completed tutorial cannot be completed twice"
+	)
+	_check(store.save_profile(active_profile), "Tutorial fixture restores its pending active run")
 	var run_sect_pool: Array[StringName] = store.get_run_sect_pool_ids(active_profile)
 	_check(
 		run_sect_pool.size() == Store.RUN_SECT_POOL_SIZE
@@ -855,6 +892,7 @@ func _run() -> void:
 		store.get_run_sect_pool_ids(reset_profile).is_empty(),
 		"Run reset clears the current run sect pool"
 	)
+	_check(not store.is_tutorial_pending(reset_profile), "Run reset clears tutorial state")
 	var declared_sect_profile: Dictionary = reset_profile.duplicate(true)
 	Store._unlock_declared_sect(declared_sect_profile, {"sect_id": &"TaiShanPai"})
 	_check(
@@ -1038,6 +1076,16 @@ func _run() -> void:
 	)
 	_check(not bool(failed_begin.get("ok", true)), "Run-start save failure is reported")
 	_check(failed_begin.get("profile", {}) == saved_before_failure, "Run-start save failure rolls back")
+	var failed_tutorial_completion: Dictionary = (
+		failing_store.complete_tutorial_and_save(active_profile)
+	)
+	_check(
+		not bool(failed_tutorial_completion.get("ok", true))
+		and failing_store.is_tutorial_pending(
+			failed_tutorial_completion.get("profile", {})
+		),
+		"Tutorial completion save failure preserves the pending state"
+	)
 	var failed_advance: Dictionary = failing_store.advance_after_victory_and_save(
 		active_profile,
 		&"tieshan_menren"
