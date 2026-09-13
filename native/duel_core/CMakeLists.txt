@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.17)
 
 project(
     wuxia-duel-native
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Experimental native compact-state kernel for Wuxia Card"
     LANGUAGES CXX
 )
