@@ -4722,28 +4722,6 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "衡山派",
 		"tier": 2,
 		"weapon": "轻剑",
-		"description": "敌方在相邻进场时，我向首个相邻空格移动。",
-		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
-		"powers": [1, 1, 6, 1],
-		"abilities": [{
-			"triggers": [{
-				"event": TRIGGER_CARD_SUMMONED,
-				"conditions": [
-					{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
-					{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
-					{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
-				],
-				"actions": [{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}],
-			}],
-		}],
-	},
-	&"TianZhuYunQi3": {
-		"id": &"TianZhuYunQi3",
-		"glyph": "天柱云气",
-		"picture": "res://pics/LKT010_561.png",
-		"sect": "衡山派",
-		"tier": 3,
-		"weapon": "轻剑",
 		"description": "敌方在相邻进场时，我向首个相邻空格移动，抽一张牌。",
 		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
 		"powers": [1, 1, 6, 1],
@@ -4762,12 +4740,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 			}],
 		}],
 	},
-	&"TianZhuYunQi4": {
-		"id": &"TianZhuYunQi4",
+	&"TianZhuYunQi3": {
+		"id": &"TianZhuYunQi3",
 		"glyph": "天柱云气",
 		"picture": "res://pics/LKT010_561.png",
 		"sect": "衡山派",
-		"tier": 4,
+		"tier": 3,
 		"weapon": "轻剑",
 		"description": "敌方在相邻进场时，我向首个相邻空格移动，抽一张牌。我移动前，所有相邻敌方失去效果，直到当前回合结束。",
 		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
@@ -4784,6 +4762,50 @@ const _CARD_DEFINITIONS: Dictionary = {
 					"actions": [
 						{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_DRAW_CARDS, "amount": 1},
+					],
+				}],
+			},
+			{
+				"triggers": [{
+					"event": CARD_BEFORE_MOVED,
+					"conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+					"actions": [{
+						"type": ACTION_FOR_EACH_SELECTED_CARD,
+						"selector": {
+							"zones": [CARD_ZONE_BOARD],
+							"conditions": [
+								{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+								{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+							],
+						},
+						"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+					}],
+				}],
+			},
+		],
+	},
+	&"TianZhuYunQi4": {
+		"id": &"TianZhuYunQi4",
+		"glyph": "天柱云气",
+		"picture": "res://pics/LKT010_561.png",
+		"sect": "衡山派",
+		"tier": 4,
+		"weapon": "轻剑",
+		"description": "敌方在相邻进场时，我向首个相邻空格移动，抽两张牌。我移动前，所有相邻敌方失去效果，直到当前回合结束。",
+		"flavor": "天柱剑法的精要所在，主要是从云雾中变化出来，极尽诡奇之能事，动向无定，不可捉摸。",
+		"powers": [2, 2, 7, 2],
+		"abilities": [
+			{
+				"triggers": [{
+					"event": TRIGGER_CARD_SUMMONED,
+					"conditions": [
+						{"type": CONDITION_TRIGGER_CARD_IS_ENEMY},
+						{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+						{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+					],
+					"actions": [
+						{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
+						{"type": ACTION_DRAW_CARDS, "amount": 2},
 					],
 				}],
 			},
