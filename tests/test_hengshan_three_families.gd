@@ -22,7 +22,7 @@ func _run() -> void:
 	_test_yijian_two_swaps_with_its_only_direct_flip()
 	_test_yijian_three_attacks_after_the_swap()
 	_test_yijian_three_stops_when_the_flip_is_no_longer_adjacent()
-	_test_tianzhu_three_moves_then_draws()
+	_test_tianzhu_levels_move_then_draw_expected_amount()
 	_test_tianzhu_four_suppresses_before_external_movement()
 	if _failures == 0:
 		print("HENGSHAN_THREE_FAMILIES_TESTS_PASSED checks=%d" % _checks)
@@ -70,7 +70,7 @@ func _test_card_declarations() -> void:
 		&"YiJianLuo9Yan2": 1,
 		&"YiJianLuo9Yan3": 1,
 		&"TianZhuYunQi2": 1,
-		&"TianZhuYunQi3": 1,
+		&"TianZhuYunQi3": 2,
 		&"TianZhuYunQi4": 2,
 	}
 	for card_id: StringName in expected_counts:
@@ -192,22 +192,40 @@ func _test_yijian_three_stops_when_the_flip_is_no_longer_adjacent() -> void:
 	)
 
 
-func _test_tianzhu_three_moves_then_draws() -> void:
-	var board: Array = Rules.empty_board()
-	board[4] = _slot(Catalog.create_instance(
-		&"TianZhuYunQi3", Rules.PLAYER_OWNER, &"tianzhu_three"
-	), Rules.PLAYER_OWNER)
-	var enemy_play: Dictionary = _plain(&"enemy_play", [1, 1, 1, 1])
-	var drawn: Dictionary = _plain(&"drawn_card")
-	var state := State.new(board, [], [enemy_play], Rules.OPPONENT_OWNER)
-	state.decks[Rules.PLAYER_OWNER] = [drawn]
-	var transition: Dictionary = Simulator.apply_action(
-		state,
-		Action.make_play(0, 1, &"enemy_play")
-	)
-	var next_state: State = transition.get("state") as State
-	_check(_instance_at(next_state, 3) == &"tianzhu_three", "TianZhu uses the lowest row-major adjacent empty cell")
-	_check(next_state.get_hand(Rules.PLAYER_OWNER).size() == 1, "Tier three draws only after moving")
+func _test_tianzhu_levels_move_then_draw_expected_amount() -> void:
+	var expected_draws: Dictionary = {
+		&"TianZhuYunQi2": 1,
+		&"TianZhuYunQi3": 1,
+		&"TianZhuYunQi4": 2,
+	}
+	for card_id: StringName in expected_draws:
+		var expected_draw_count: int = int(expected_draws[card_id])
+		var instance_id := StringName("%s_draw_test" % card_id)
+		var board: Array = Rules.empty_board()
+		board[4] = _slot(
+			Catalog.create_instance(card_id, Rules.PLAYER_OWNER, instance_id),
+			Rules.PLAYER_OWNER
+		)
+		var enemy_instance := StringName("%s_enemy_play" % card_id)
+		var enemy_play: Dictionary = _plain(enemy_instance, [1, 1, 1, 1])
+		var deck: Array = []
+		for draw_index: int in range(expected_draw_count):
+			deck.append(_plain(StringName("%s_draw_%d" % [card_id, draw_index])))
+		var state := State.new(board, [], [enemy_play], Rules.OPPONENT_OWNER)
+		state.decks[Rules.PLAYER_OWNER] = deck
+		var transition: Dictionary = Simulator.apply_action(
+			state,
+			Action.make_play(0, 1, enemy_instance)
+		)
+		var next_state: State = transition.get("state") as State
+		_check(
+			_instance_at(next_state, 3) == instance_id,
+			"%s uses the lowest row-major adjacent empty cell" % card_id
+		)
+		_check(
+			next_state.get_hand(Rules.PLAYER_OWNER).size() == expected_draw_count,
+			"%s draws %d card(s) only after moving" % [card_id, expected_draw_count]
+		)
 
 
 func _test_tianzhu_four_suppresses_before_external_movement() -> void:
