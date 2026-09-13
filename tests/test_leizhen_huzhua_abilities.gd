@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_flipped_leizhen_loses_exile_draw()
 	_test_huzhua_three_reacts_only_to_other_real_ally_attack()
 	_test_huzhua_four_intercepts_each_drawn_card()
+	_test_huzhua_four_exile_counts_as_allied_effect_for_tiyunzong()
 	_test_hand_leizhen_does_not_trigger_when_intercepted()
 	_test_yizidianjian_uses_all_target_policy_until_flipped()
 	_finish()
@@ -204,6 +205,39 @@ func _test_huzhua_four_intercepts_each_drawn_card() -> void:
 	)
 	for draw_event: Dictionary in _events_of_type(transition.get("events", []), &"card_drawn"):
 		_check(not (draw_event.get("card", {}) as Dictionary).is_empty(), "Draw events preserve card data for transient presentation")
+
+
+func _test_huzhua_four_exile_counts_as_allied_effect_for_tiyunzong() -> void:
+	var board: Array = Rules.empty_board()
+	board[7] = _slot(
+		Catalog.create_instance(&"TiYunZong4", Rules.PLAYER_OWNER, &"tiyun_draw_watcher"),
+		Rules.PLAYER_OWNER
+	)
+	board[8] = _slot(
+		Catalog.create_instance(&"HuZhuaJueHuSHou4", Rules.PLAYER_OWNER, &"allied_draw_hunter"),
+		Rules.PLAYER_OWNER
+	)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[],
+			[Catalog.create_instance(&"TuNaShu1", Rules.OPPONENT_OWNER, &"enemy_draw_source")],
+			Rules.OPPONENT_OWNER,
+			0,
+			[_plain(&"tiyun_reward", [1, 1, 1, 1], Rules.PLAYER_OWNER)],
+			[_plain(&"intercepted_enemy_draw", [1, 1, 1, 1], Rules.OPPONENT_OWNER)]
+		),
+		Action.make_play(0, 0, &"enemy_draw_source")
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		_find_hand_instance(next_state.get_hand(Rules.OPPONENT_OWNER), &"intercepted_enemy_draw") < 0,
+		"HuZhua still removes the enemy card it intercepted"
+	)
+	_check(
+		_find_hand_instance(next_state.get_hand(Rules.PLAYER_OWNER), &"tiyun_reward") >= 0,
+		"HuZhua's exile is attributed to HuZhua's owner so allied TiYunZong draws"
+	)
 
 
 func _test_hand_leizhen_does_not_trigger_when_intercepted() -> void:

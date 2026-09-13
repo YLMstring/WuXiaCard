@@ -68,7 +68,9 @@ These decisions were explicitly established during development and should not be
 - Ki bead styling follows the current runtime abilities: recursive flip
   prevention is gold, semantic self-exile is light gray, and gold wins over
   gray and the ordinary light/dark states. A catalog card may declare
-  `suppress_ki_bead = true`; `BaGuaFangWei` does so and never shows a bead.
+  `suppress_ki_bead = true` for a deliberate presentation exception.
+  `BaGuaFangWei` has no such exception and normally shows a light-gray `虚`
+  bead through the generic self-exile rule.
 
 ## Ownership and Ability Retention
 
@@ -724,11 +726,13 @@ respectively, in row-major order. The source itself is eligible.
   TiYunZong4's current owner. Direct exile, self-exile, and
   power-reduction-to-zero exile all use the same attribution; the removed
   card's zone, owner, and original owner are irrelevant.
-- The effect source owner is frozen when the causing action starts. Later
-  source movement, ownership changes, or departure do not change attribution.
-  Missing/system sources and enemy sources do not match. A draw already
-  resolved before another before-exile reaction cancels the pending exile is
-  not rolled back.
+- The effect source owner is the owner of the trigger or activation whose
+  current action actually causes the exile; an enclosing event's inherited
+  ability-source reference does not replace it. It is frozen when that action
+  starts. Later source movement, ownership changes, or departure do not change
+  attribution. Missing/system sources and enemy sources do not match. A draw
+  already resolved before another before-exile reaction cancels the pending
+  exile is not rolled back.
 - The snapshot exists only in transient event context. It is not stored in
   `DuelState`, save data, replay state, search keys, or the transposition table.
 

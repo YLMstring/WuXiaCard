@@ -1240,12 +1240,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 	event["logical_index"] = logical_index;
 	resolution.events.append(event);
 	if (amount < 0 && all_zero) {
+		// 移除效果归属当前触发/主动能力；ability_source 仅用于追踪牌引用，可能继承自外层事件。
 		if (!exile_card(
 			value,
 			target_card_index,
 			source_cell,
 			group.source_card_index,
-			action_context.ability_source_owner,
+			group.source_owner,
 			target_card_index == group.source_card_index,
 			StringName("power_reached_zero"),
 			event_context,
@@ -1842,8 +1843,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				resolution
 			);
 		}
+		// 直接移除同样按当前事件组归属，避免嵌套触发把外层来源方带进来。
 		case ActionOpcode::EXILE_SELF:
-			return exile_card(value, action_context.action_subject_card_index, action_source_cell, action_context.action_subject_card_index, action_context.ability_source_owner, true, StringName("ability_exile_self"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
+			return exile_card(value, action_context.action_subject_card_index, action_source_cell, action_context.action_subject_card_index, group.source_owner, true, StringName("ability_exile_self"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		case ActionOpcode::EXILE_CARD: {
@@ -1854,7 +1856,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
 			else return ActionOutcome::UNSUPPORTED;
 			if (target < 0) return ActionOutcome::NO_EFFECT;
-			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, action_context.ability_source_owner, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
+			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, group.source_owner, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
 				? ActionOutcome::APPLIED
 				: ActionOutcome::UNSUPPORTED;
 		}
@@ -1995,7 +1997,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					target,
 					action_source_cell,
 					group.source_card_index,
-					action_context.ability_source_owner,
+					group.source_owner,
 					target == group.source_card_index,
 					StringName("power_reached_zero"),
 					event_context,
@@ -3441,12 +3443,13 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::return_card_to_h
 	std::vector<int32_t> &recipient_hand = value.zones[recipient_owner - 1];
 	if (recipient_hand.size() >= 5) {
 		const int64_t previous_event_count = resolution.events.size();
+		// 手牌已满导致的替代移除仍是当前能力造成的效果。
 		if (!exile_card(
 			value,
 			target_card_index,
 			source_current_cell,
 			action_context.ability_source_card_index,
-			action_context.ability_source_owner,
+			group.source_owner,
 			target_card_index == action_context.ability_source_card_index,
 			StringName("return_to_full_hand"),
 			event_context,

@@ -4472,7 +4472,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [7, 7, 3, 3],
+		"powers": [7, 7, 2, 2],
 		"abilities": [],
 	},
 	&"JinZhenDuJie2": {
@@ -4484,7 +4484,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [7, 7, 3, 3],
+		"powers": [7, 7, 2, 2],
 		"abilities": [JINZHEN_RETURN],
 	},
 	&"JinZhenDuJie3": {
@@ -4496,7 +4496,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [7, 7, 3, 3],
+		"powers": [7, 7, 2, 2],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"JinZhenDuJie4": {
@@ -4508,7 +4508,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
-		"powers": [8, 8, 4, 4],
+		"powers": [8, 8, 3, 3],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
 	},
 	&"WanHuaJian1": {
@@ -5007,7 +5007,6 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：翻面前，将我移除。",
 		"flavor": "对局开始时，后行动的一方以逸待劳，所占据的八卦方位。",
 		"powers": [-1, -1, -1, -1],
-		"suppress_ki_bead": true,
 		"abilities": [BAGUA_EXILE_BEFORE_FLIP],
 	},
 	&"YinYangZhang2": {

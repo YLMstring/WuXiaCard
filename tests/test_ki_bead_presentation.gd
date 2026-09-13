@@ -214,7 +214,13 @@ func _test_presentation_priority_table() -> void:
 		"Exiling a selected action subject does not classify the ability source as gray"
 	)
 	var bagua: Dictionary = Catalog.create_instance(
-		&"BaGuaFangWei", 1, &"bead_hidden_bagua"
+		&"BaGuaFangWei", 1, &"bead_bagua"
+	)
+	_expect_marker(
+		bagua,
+		BEAD_GRAY,
+		"虚",
+		"Bagua uses the generic self-exile bead presentation"
 	)
 	bagua["ki"] = 3
 	(bagua.get("active_abilities", []) as Array).append(
@@ -222,10 +228,10 @@ func _test_presentation_priority_table() -> void:
 	)
 	_expect(
 		bagua,
-		BEAD_NONE,
-		false,
+		BEAD_GOLD,
+		true,
 		3,
-		"Bagua suppresses its bead even after gaining ki and flip prevention"
+		"Bagua follows the generic gold-over-gray priority after gaining flip prevention"
 	)
 	_expect(
 		_card(0, [{"modifiers": [{"type": Catalog.MODIFIER_ATTACK_REQUIRES_OTHER_ALLY}]}]),

@@ -158,8 +158,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   was caused by an effect whose snapshotted source owner is allied to
   TiYunZong4's current owner. This includes direct exile, self-exile, and
   power-reduction-to-zero exile, regardless of the removed card's zone or
-  owner. The source-owner snapshot is transient event context only; it does not
-  enter duel state, saves, replay state, search keys, or the transposition table.
+  owner. Attribution uses the owner of the trigger or activation whose current
+  action actually caused the exile, rather than an enclosing event's inherited
+  ability-source reference. The source-owner snapshot is transient event context
+  only; it does not enter duel state, saves, replay state, search keys, or the
+  transposition table.
 - `power_increase_batch_includes_ally` requires an explicit card zone and uses
   a transient zone-by-owner bitmask. `YinYangZhang4` declares `board`, so allied
   hand-card increases do not trigger its attack. In catalog prose, unqualified
@@ -200,8 +203,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
   finishes its full entrance and attack chain before the next pile read. Their
   range-two modifiers are locked; their end-turn self-exile is not.
 - Runtime ki beads are gold for any flip-prevention ability and light gray for
-  semantic self-exile, in that priority order. `BaGuaFangWei` suppresses its
-  bead absolutely. Discard presentation reuses the existing fade-out.
+  semantic self-exile, in that priority order. `BaGuaFangWei` follows these
+  generic rules and normally displays a light-gray `虚` bead. Discard
+  presentation reuses the existing fade-out.
 - Only cards with an activation count as ki-using for bead display.
 - A card may declare multiple catalog activations in priority order. A dynamically
   received activation replaces all current activations while preserving passive
