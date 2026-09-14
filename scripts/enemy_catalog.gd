@@ -44,7 +44,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
-	{"id": &"dukou_daoshi", "name": "关爱师弟·令狐冲", "level": 0, "deck": [&"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"CangSongYingKe1"]},
+	{"id": &"dukou_daoshi", "name": "爱护师弟·令狐冲", "level": 0, "deck": [&"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"CangSongYingKe1"]},
 	{"id": &"dukou_xiaoke", "name": "江湖武师", "level": 1, "deck": [&"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"]},
 	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"TaiZuChangQuan", &"TaiZuChangQuan", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2"]},
