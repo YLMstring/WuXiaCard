@@ -20,9 +20,9 @@ func _run() -> void:
 	_check((profile["defeated_enemy_ids"] as Array).is_empty(), "New profiles begin with no defeated enemies")
 	_check((profile["best_scores_by_sect"] as Dictionary).is_empty(), "New profiles begin with no ending achievements")
 	_check((profile["mastered_card_ids"] as Array).is_empty(), "New profiles begin with no card mastery")
-	profile["max_unlocked_difficulty"] = 2
-	profile["last_selected_difficulty"] = 2
-	_check(store.is_profile_valid(profile), "Difficulty-two ending fixture is valid")
+	profile["max_unlocked_difficulty"] = 3
+	profile["last_selected_difficulty"] = 3
+	_check(store.is_profile_valid(profile), "Difficulty-three ending fixture is valid")
 
 	var begin: Dictionary = store.begin_run_and_save(
 		profile,
@@ -31,11 +31,11 @@ func _run() -> void:
 		&"qingfeng_xuedi",
 		null,
 		false,
-		2
+		3
 	)
 	_check(bool(begin.get("ok", false)), "Ending fixture begins a run")
 	var active: Dictionary = begin.get("profile", {})
-	_check(store.get_run_difficulty(active) == 2, "Ending fixture begins at difficulty two")
+	_check(store.get_run_difficulty(active) == 3, "Ending fixture begins at difficulty three")
 	var active_deck_ids: Array[StringName] = store.get_main_deck_ids(active)
 	active["mastered_card_ids"] = [String(active_deck_ids[0])]
 	_check(store.is_profile_valid(active), "Mastery fixture remains a valid active profile")
@@ -53,7 +53,7 @@ func _run() -> void:
 	_check((after_defeat["defeated_enemy_ids"] as Array).is_empty(), "Defeat records no defeated enemy")
 	_check(int(after_defeat["level"]) == 1, "Defeat preserves the player level")
 	_check(String(after_defeat["current_enemy_id"]) == "qingfeng_xuedi", "Defeat preserves the rematch enemy")
-	_check(store.get_run_difficulty(after_defeat) == 2, "Defeat preserves the active run difficulty")
+	_check(store.get_run_difficulty(after_defeat) == 3, "Defeat preserves the active run difficulty")
 	_check(
 		store.get_mastered_card_ids(after_defeat) == [active_deck_ids[0]],
 		"Defeat ignores mastery candidates"
@@ -74,7 +74,7 @@ func _run() -> void:
 	_check((advanced["defeated_enemy_ids"] as Array) == ["qingfeng_xuedi"], "Victory appends the defeated enemy")
 	_check(int(advanced["level"]) == 2, "Non-final victory advances one level")
 	_check(String(advanced["current_enemy_id"]) == "tieshan_menren", "Non-final victory selects the requested next enemy")
-	_check(store.get_run_difficulty(advanced) == 2, "A non-final victory preserves run difficulty")
+	_check(store.get_run_difficulty(advanced) == 3, "A non-final victory preserves run difficulty")
 	_check(
 		store.get_mastered_card_ids(advanced)
 		== [active_deck_ids[0], active_deck_ids[1], active_deck_ids[2]],
@@ -100,6 +100,10 @@ func _run() -> void:
 	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi", "hanyue_nvxia"], "Ending summary preserves defeated enemies chronologically")
 	_check(int(summary.get("score", -1)) == 5000, "Ending score floors 15000 divided by effective duels")
 	_check(not bool(summary.get("flawless", true)), "A run containing a loss is not flawless")
+	_check(
+		int(summary.get("unlocked_difficulty", -1)) == 4,
+		"A first completion records the newly unlocked difficulty in the ending summary"
+	)
 	var completed_profile: Dictionary = final_win.get("profile", {})
 	_check(not bool(completed_profile["run_active"]), "Completion closes the active run")
 	_check((completed_profile["main_deck"] as Array) == _strings(Store.DEFAULT_MAIN_DECK_IDS), "Completion restores the default deck")
@@ -123,18 +127,19 @@ func _run() -> void:
 	_check(
 		store.get_best_score(completed_profile, &"HuaShanPai", 0) == 500
 		and store.get_best_score(completed_profile, &"HuaShanPai", 1) == 500
-		and store.get_best_score(completed_profile, &"HuaShanPai", 2) == 5000
-		and store.get_best_score(completed_profile, &"HuaShanPai", 3) == 0,
-		"Difficulty-two completion records its score downward with low-difficulty caps"
+		and store.get_best_score(completed_profile, &"HuaShanPai", 2) == 500
+		and store.get_best_score(completed_profile, &"HuaShanPai", 3) == 5000
+		and store.get_best_score(completed_profile, &"HuaShanPai", 4) == 0,
+		"Difficulty-three completion records its score downward with three low-difficulty caps"
 	)
 	_check(int(completed_profile["effective_duel_count"]) == 0, "Closed run clears its duel counter")
 	_check((completed_profile["defeated_enemy_ids"] as Array).is_empty(), "Closed run clears its defeated-enemy history")
 	_check(
-		store.get_max_unlocked_difficulty(completed_profile) == 3,
-		"Completing difficulty two unlocks difficulty three"
+		store.get_max_unlocked_difficulty(completed_profile) == 4,
+		"Completing difficulty three unlocks difficulty four"
 	)
 	_check(
-		store.get_last_selected_difficulty(completed_profile) == 2,
+		store.get_last_selected_difficulty(completed_profile) == 3,
 		"Completion preserves the last selected difficulty"
 	)
 	_check(store.get_run_difficulty(completed_profile) == 0, "Completion clears active run difficulty")
@@ -146,7 +151,7 @@ func _run() -> void:
 		&"qingfeng_xuedi",
 		null,
 		false,
-		2
+		3
 	)
 	var flawless_finish: Dictionary = store.record_completed_duel_and_save(
 		flawless_begin.get("profile", {}),
@@ -156,12 +161,17 @@ func _run() -> void:
 	var flawless_summary: Dictionary = flawless_finish.get("ending_summary", {})
 	_check(bool(flawless_summary.get("flawless", false)), "A victory-only run is flawless")
 	_check(int(flawless_summary.get("score", -1)) == 15000, "One effective duel earns 15000 points")
+	_check(
+		not flawless_summary.has("unlocked_difficulty"),
+		"Repeating a lower unlocked difficulty adds no unlock notice to the ending summary"
+	)
 	var best_profile: Dictionary = flawless_finish.get("profile", {})
 	_check(
 		store.get_best_score(best_profile, &"HuaShanPai", 0) == 500
 		and store.get_best_score(best_profile, &"HuaShanPai", 1) == 500
-		and store.get_best_score(best_profile, &"HuaShanPai", 2) == 15000,
-		"A higher difficulty-two score replaces only its uncapped best and keeps low caps"
+		and store.get_best_score(best_profile, &"HuaShanPai", 2) == 500
+		and store.get_best_score(best_profile, &"HuaShanPai", 3) == 15000,
+		"A higher difficulty-three score replaces only its uncapped best and keeps low caps"
 	)
 
 	var lower_begin: Dictionary = store.begin_run_and_save(
@@ -185,7 +195,7 @@ func _run() -> void:
 	_check(
 		int((lower_finish.get("ending_summary", {}) as Dictionary).get("score", -1)) == 500
 		and store.get_best_score(lower_finish.get("profile", {}), &"HuaShanPai", 0) == 500
-		and store.get_best_score(lower_finish.get("profile", {}), &"HuaShanPai", 2) == 15000,
+		and store.get_best_score(lower_finish.get("profile", {}), &"HuaShanPai", 3) == 15000,
 		"Difficulty-zero score caps at 500 and never replaces a higher difficulty best"
 	)
 
@@ -214,19 +224,48 @@ func _run() -> void:
 		and store.get_best_score(
 			difficulty_one_finish.get("profile", {}),
 			&"HuaShanPai",
-			2
+			3
 		) == 15000,
 		"Difficulty-one final score caps at 500 without changing higher difficulty scores"
 	)
+	var difficulty_two_begin: Dictionary = store.begin_run_and_save(
+		difficulty_one_finish.get("profile", {}),
+		&"HuaShanPai",
+		[],
+		&"qingfeng_xuedi",
+		null,
+		false,
+		2
+	)
+	var difficulty_two_finish: Dictionary = store.record_completed_duel_and_save(
+		difficulty_two_begin.get("profile", {}),
+		Store.REWARD_VICTORY,
+		1
+	)
+	_check(
+		int((difficulty_two_finish.get("ending_summary", {}) as Dictionary).get("score", -1))
+		== 500
+		and store.get_best_score(
+			difficulty_two_finish.get("profile", {}),
+			&"HuaShanPai",
+			2
+		) == 500
+		and store.get_best_score(
+			difficulty_two_finish.get("profile", {}),
+			&"HuaShanPai",
+			3
+		) == 15000,
+		"Difficulty-two final score also caps at 500 without changing higher scores"
+	)
 	var isolation_source: Dictionary = (
-		difficulty_one_finish.get("profile", {}) as Dictionary
+		difficulty_two_finish.get("profile", {}) as Dictionary
 	).duplicate(true)
 	(isolation_source["unlocked_sect_ids"] as Array).append("TaiShanPai")
 	var isolation_scores: Dictionary = isolation_source["best_scores_by_sect"] as Dictionary
 	var isolation_huashan_scores: Dictionary = (
 		isolation_scores["HuaShanPai"] as Dictionary
 	).duplicate(true)
-	isolation_huashan_scores["2"] = 12000
+	isolation_huashan_scores["3"] = 12000
 	isolation_scores["HuaShanPai"] = isolation_huashan_scores
 	isolation_source["best_scores_by_sect"] = isolation_scores
 	_check(store.is_profile_valid(isolation_source), "Per-sect score isolation fixture is valid")
@@ -237,7 +276,7 @@ func _run() -> void:
 		&"qingfeng_xuedi",
 		null,
 		false,
-		2
+		3
 	)
 	var isolation_finish: Dictionary = store.record_completed_duel_and_save(
 		isolation_begin.get("profile", {}),
@@ -245,12 +284,12 @@ func _run() -> void:
 		1
 	)
 	_check(
-		store.get_best_score(isolation_finish.get("profile", {}), &"TaiShanPai", 2)
+		store.get_best_score(isolation_finish.get("profile", {}), &"TaiShanPai", 3)
 		== 15000
 		and store.get_best_score(
 			isolation_finish.get("profile", {}),
 			&"HuaShanPai",
-			2
+			3
 		) == 12000,
 		"Completing one sect updates only that sect's per-difficulty scores"
 	)
@@ -264,7 +303,7 @@ func _run() -> void:
 	var run_reset: Dictionary = store.reset_run_and_save(reset_begin.get("profile", {}))
 	_check(
 		store.get_best_score(run_reset.get("profile", {}), &"HuaShanPai", 0) == 500
-		and store.get_best_score(run_reset.get("profile", {}), &"HuaShanPai", 2) == 15000,
+		and store.get_best_score(run_reset.get("profile", {}), &"HuaShanPai", 3) == 15000,
 		"Run reset preserves all per-difficulty ending achievements"
 	)
 	_check(
@@ -273,8 +312,8 @@ func _run() -> void:
 		"Run reset preserves card mastery"
 	)
 	_check(
-		store.get_max_unlocked_difficulty(run_reset.get("profile", {})) == 3
-		and store.get_last_selected_difficulty(run_reset.get("profile", {})) == 2
+		store.get_max_unlocked_difficulty(run_reset.get("profile", {})) == 4
+		and store.get_last_selected_difficulty(run_reset.get("profile", {})) == 3
 		and store.get_run_difficulty(run_reset.get("profile", {})) == 0,
 		"Run reset preserves global difficulty progress and selection but clears run difficulty"
 	)
@@ -312,24 +351,32 @@ func _run() -> void:
 		bool(capped_finish.get("completed", false))
 		and store.get_max_unlocked_difficulty(capped_finish.get("profile", {}))
 		== Store.MAX_DIFFICULTY,
-		"Completing difficulty nine remains capped at difficulty nine"
+		"Completing difficulty ten remains capped at difficulty ten"
 	)
 	_check(
 		int((capped_finish.get("ending_summary", {}) as Dictionary).get("score", -1)) == 15000
 		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 0) == 500
 		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 1) == 500
-		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 2) == 15000
-		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 9) == 15000,
-		"Difficulty-nine completion keeps its full score and propagates through every lower difficulty"
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 2) == 500
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 3) == 15000
+		and store.get_best_score(capped_finish.get("profile", {}), &"HuaShanPai", 10) == 15000,
+		"Difficulty-ten completion keeps its full score and propagates through every lower difficulty"
+	)
+	_check(
+		not (capped_finish.get("ending_summary", {}) as Dictionary).has(
+			"unlocked_difficulty"
+		),
+		"Completing difficulty ten adds no unlock notice"
 	)
 
 	for threshold_fixture: Dictionary in [
-		{"difficulty": 0, "prior_wins": 12, "level": 13},
-		{"difficulty": 1, "prior_wins": 13, "level": 14},
-		{"difficulty": 2, "prior_wins": 14, "level": 15},
+		{"difficulty": 0, "prior_wins": 11, "level": 12},
+		{"difficulty": 1, "prior_wins": 12, "level": 13},
+		{"difficulty": 2, "prior_wins": 13, "level": 14},
+		{"difficulty": 3, "prior_wins": 14, "level": 15},
 	]:
 		var threshold_base: Dictionary = store.create_default_profile()
-		threshold_base["max_unlocked_difficulty"] = 2
+		threshold_base["max_unlocked_difficulty"] = 3
 		threshold_base["last_selected_difficulty"] = int(
 			threshold_fixture["difficulty"]
 		)
@@ -383,10 +430,10 @@ func _run() -> void:
 	_check(migrated["unlocked_card_ids"] == legacy_active["unlocked_card_ids"], "Legacy migration preserves unlocks")
 	_check((migrated["best_scores_by_sect"] as Dictionary).is_empty(), "Legacy migration starts with empty achievements")
 	_check(
-		store.get_max_unlocked_difficulty(migrated) == 2
-		and store.get_last_selected_difficulty(migrated) == 2
+		store.get_max_unlocked_difficulty(migrated) == 3
+		and store.get_last_selected_difficulty(migrated) == 3
 		and store.get_run_difficulty(migrated) == 0,
-		"An unreconstructable legacy run unlocks and selects two but remains inactive"
+		"An unreconstructable legacy run shifts its unlock and remains inactive"
 	)
 
 	var invalid_outcome: Dictionary = store.record_completed_duel_and_save(active, &"abandoned", 2)

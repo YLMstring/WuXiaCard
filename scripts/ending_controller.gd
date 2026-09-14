@@ -12,6 +12,19 @@ const STORY_TOP_RATIO: float = 0.24
 const STORY_BOTTOM_RATIO: float = 0.455
 const STORY_WIDTH_RATIO: float = 0.3
 const MIN_TITLE_SCORE_GAP_RATIO: float = 0.009
+const DIFFICULTY_NUMERALS: Array[String] = [
+	"零",
+	"一",
+	"二",
+	"三",
+	"四",
+	"五",
+	"六",
+	"七",
+	"八",
+	"九",
+	"十",
+]
 
 @onready var main_menu: MainMenuController = $MainMenu
 @onready var score_label: Label = $EndingLayer/Score
@@ -133,13 +146,17 @@ static func build_story(summary: Dictionary) -> String:
 		if bool(summary.get("flawless", false))
 		else "一路走来，你有过锋芒毕露，也曾折剑再战；"
 	)
-	return (
+	var story: String = (
 		"你立于华山之巅，长风掠过衣袂，回首踏入江湖以来的诸般往事。"
 		+ "本是%s，却另有奇遇，以九宫论剑图谱所载的诸般功夫，先后战胜%s。" % [sect_name, defeated_text]
 		+ journey_text
 		+ "而今群雄皆已成为身后旧影，九宫论剑之名亦随你的剑锋传遍四海。"
 		+ "自此江湖再论高下，无人能够绕过你的名字。"
 	)
+	var unlocked_difficulty: int = int(summary.get("unlocked_difficulty", -1))
+	if unlocked_difficulty > 0 and unlocked_difficulty < DIFFICULTY_NUMERALS.size():
+		story += "（已解锁进阶%s！）" % DIFFICULTY_NUMERALS[unlocked_difficulty]
+	return story
 
 
 func _apply_summary() -> void:

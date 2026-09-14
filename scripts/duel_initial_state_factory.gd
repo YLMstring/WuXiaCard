@@ -32,7 +32,7 @@ static func build(config: Dictionary) -> StateData:
 		"main",
 		instance_namespace
 	)
-	var run_difficulty: int = clampi(int(config.get("run_difficulty", 0)), 0, 9)
+	var run_difficulty: int = clampi(int(config.get("run_difficulty", 0)), 0, 10)
 
 	var player_side_deck: Array = create_card_instances(
 		DeckRules.build_side_deck_card_ids(player_ids),

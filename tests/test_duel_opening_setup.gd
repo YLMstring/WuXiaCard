@@ -165,10 +165,10 @@ func _test_difficulty_bagua_layouts() -> void:
 		var single_board: Array = OpeningSetup.build_opening_board(
 			Rules.OPPONENT_OWNER,
 			_seeded_rng(seed_value),
-			3
+			4
 		)
 		var occupied: Array[int] = _occupied_cells(single_board)
-		_check(occupied.size() == 1, "Difficulty three gives a later player one Bagua")
+		_check(occupied.size() == 1, "Difficulty four gives a later player one Bagua")
 		if occupied.size() == 1:
 			observed_single_cells[occupied[0]] = true
 		if observed_single_cells.size() == 9:
@@ -177,15 +177,15 @@ func _test_difficulty_bagua_layouts() -> void:
 	var no_bagua_board: Array = OpeningSetup.build_opening_board(
 		Rules.OPPONENT_OWNER,
 		_seeded_rng(8192),
-		6
+		7
 	)
-	_check(_occupied_cells(no_bagua_board).is_empty(), "Difficulty six gives a later player no Bagua")
+	_check(_occupied_cells(no_bagua_board).is_empty(), "Difficulty seven gives a later player no Bagua")
 
 	for fixture: Dictionary in [
-		{"difficulty": 3, "power": -1},
-		{"difficulty": 4, "power": 2},
-		{"difficulty": 6, "power": 2},
-		{"difficulty": 7, "power": 4},
+		{"difficulty": 4, "power": -1},
+		{"difficulty": 5, "power": 2},
+		{"difficulty": 7, "power": 2},
+		{"difficulty": 8, "power": 4},
 	]:
 		var enemy_bagua_board: Array = OpeningSetup.build_opening_board(
 			Rules.PLAYER_OWNER,

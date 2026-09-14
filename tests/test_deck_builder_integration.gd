@@ -489,36 +489,36 @@ func _run() -> void:
 	)
 	difficulty_five_builder.queue_free()
 	await process_frame
-	var difficulty_eight_reset: Dictionary = fixture_store.reset_run_and_save(
+	var difficulty_nine_reset: Dictionary = fixture_store.reset_run_and_save(
 		difficulty_five_begin.get("profile", {})
 	)
-	var difficulty_eight_base: Dictionary = difficulty_eight_reset.get("profile", {})
-	difficulty_eight_base["max_unlocked_difficulty"] = 8
-	difficulty_eight_base["last_selected_difficulty"] = 8
-	var difficulty_eight_begin: Dictionary = fixture_store.begin_run_and_save(
-		difficulty_eight_base,
+	var difficulty_nine_base: Dictionary = difficulty_nine_reset.get("profile", {})
+	difficulty_nine_base["max_unlocked_difficulty"] = 9
+	difficulty_nine_base["last_selected_difficulty"] = 9
+	var difficulty_nine_begin: Dictionary = fixture_store.begin_run_and_save(
+		difficulty_nine_base,
 		&"HuaShanPai",
 		[],
 		&"qingfeng_xuedi",
 		null,
 		false,
-		8
+		9
 	)
-	_check(bool(difficulty_eight_begin.get("ok", false)), "Difficulty-eight concealment fixture begins")
-	var difficulty_eight_builder: Variant = BUILDER_SCENE.instantiate()
-	difficulty_eight_builder.profile_path = _save_path
-	difficulty_eight_builder.testing_mode = false
-	difficulty_eight_builder.upcoming_enemy_card_ids = enemy_fixture_ids
-	root.add_child(difficulty_eight_builder)
+	_check(bool(difficulty_nine_begin.get("ok", false)), "Difficulty-nine concealment fixture begins")
+	var difficulty_nine_builder: Variant = BUILDER_SCENE.instantiate()
+	difficulty_nine_builder.profile_path = _save_path
+	difficulty_nine_builder.testing_mode = false
+	difficulty_nine_builder.upcoming_enemy_card_ids = enemy_fixture_ids
+	root.add_child(difficulty_nine_builder)
 	await process_frame
-	var difficulty_eight_hand: HBoxContainer = difficulty_eight_builder.get_node(
+	var difficulty_nine_hand: HBoxContainer = difficulty_nine_builder.get_node(
 		"DuelCanvas/OpponentHand"
 	) as HBoxContainer
-	var difficulty_eight_powers_hidden: bool = true
-	for slot: Node in difficulty_eight_hand.get_children():
+	var difficulty_nine_powers_hidden: bool = true
+	for slot: Node in difficulty_nine_hand.get_children():
 		var card := slot.get_child(0) as CardView
-		difficulty_eight_powers_hidden = (
-			difficulty_eight_powers_hidden
+		difficulty_nine_powers_hidden = (
+			difficulty_nine_powers_hidden
 			and card.is_face_down()
 			and not (card.get_node("Overlay/TopPower") as Label).visible
 			and not (card.get_node("Overlay/RightPower") as Label).visible
@@ -526,10 +526,10 @@ func _run() -> void:
 			and not (card.get_node("Overlay/LeftPower") as Label).visible
 		)
 	_check(
-		difficulty_eight_powers_hidden,
-		"Difficulty eight hides unrevealed enemy powers while deck building"
+		difficulty_nine_powers_hidden,
+		"Difficulty nine hides unrevealed enemy powers while deck building"
 	)
-	difficulty_eight_builder.queue_free()
+	difficulty_nine_builder.queue_free()
 	await process_frame
 	_cleanup()
 	_finish()

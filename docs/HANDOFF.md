@@ -100,9 +100,9 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - After the first owner is chosen, `DuelOpeningSetup` normally selects one of
   the 12 orthogonally adjacent unordered cell pairs with exact `1/12`
   probability and places two fresh `BaGuaFangWei` instances for the later
-  owner. Difficulty 3 reduces a later player's Bagua to one uniformly random
-  cell; difficulty 6 removes it. A later enemy still receives the pair, with
-  powers set to 2 from difficulty 4 and 4 from difficulty 7. They are static
+  owner. Difficulty 4 reduces a later player's Bagua to one uniformly random
+  cell; difficulty 7 removes it. A later enemy still receives the pair, with
+  powers set to 2 from difficulty 5 and 4 from difficulty 8. They are static
   initial state: no summon events, standard attacks, action count, opening
   animation, or power-change animation. Replay snapshots the result instead of
   rerolling.
@@ -248,13 +248,15 @@ The creator has made several direct UI and localization edits. Preserve those ed
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
   sect before reward selection. Tier 5 remains the cap through level 15.
 - Completed wins and losses increment schema-7 run history atomically. A run
-  completes at 13 victories on difficulty 0, 14 on difficulty 1, and 15 on
-  difficulties 2–9. Schema
-  11 stores a sparse difficulty `0..9` score dictionary for each sect; earlier
-  scalar sect scores migrate into difficulties 0, 1, and 2, with difficulties
-  0 and 1 capped at 500. A final victory at the configurable threshold (15 by
-  default) skips rewards, computes `floor(15000 / effective_duel_count)`, caps
-  the actual ending score at 500 on difficulties 0 and 1, and raises the
+  completes at 12 victories on difficulty 0, 13 on difficulty 1, 14 on
+  difficulty 2, and 15 on difficulties 3–10. Schema
+  11 introduced a sparse per-difficulty score dictionary for each sect; schema
+  14 extends its current key range to `0..10`. Earlier scalar sect scores end
+  up in difficulties 0 through 3 after both migrations: difficulties 0–2 are
+  capped at 500 and difficulty 3 retains the old value. A final victory at the
+  configured difficulty threshold skips rewards, computes
+  `floor(15000 / effective_duel_count)`, caps
+  the actual ending score at 500 on difficulties 0, 1, and 2, and raises the
   selected sect's record for the current difficulty and every lower one. It
   then closes the run and resets card unlocks, the main deck, the library, and
   run-only reward history to their fresh-profile values. Sect unlocks
@@ -269,20 +271,24 @@ The creator has made several direct UI and localization edits. Preserve those ed
   reward offer once per run; closing and restarting a run clears that history.
 - Schema 10 adds global maximum difficulty, persistent last-selected
   difficulty, and active-run difficulty. New profiles start at difficulty 0;
-  completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and
+  completing difficulty `n` unlocks `min(n + 1, 10)`. Completion and
   `闭关重修` clear only active-run difficulty, while `封剑归隐` resets all
   difficulty data. Legacy saves unlock and select difficulty 2, and preserved
-  active runs migrate as difficulty 2. `DifficultyRules` is the central table
+  active runs initially migrate as difficulty 2. Schema 14 inserts a new
+  difficulty 1: existing difficulty 0 fields stay 0, existing nonzero fields
+  shift forward by one, old difficulty-0 scores populate new difficulties 0
+  and 1, and old difficulty-1 through 9 scores move to 2 through 10 before
+  normal downward score propagation. `DifficultyRules` is the central table
   for all cumulative effects and exact current-tier prompt text.
-- Difficulty 5 lowers ordinary defeat-reward eligibility from tiers
+- Difficulty 6 lowers ordinary defeat-reward eligibility from tiers
   `1..current tier` to `1..max(1, current tier - 1)`; tier 1 therefore remains
   the floor. Catalog-declared guaranteed defeat rewards remain a separate pool
   and ignore this ordinary ceiling. All difficulties use the base go-first
   rule: the player's total deck tier must be `<=` the opponent's. Below
-  difficulty 8, unrevealed cards show their four powers while
+  difficulty 9, unrevealed cards show their four powers while
   identity, art, text, ki, abilities, tooltip, and inspection remain concealed;
-  all-four-`-1` cards still show none. Difficulty 8 conceals those powers in
-  battle, deck building, and rewards. Difficulty 9 doubles the base five-second
+  all-four-`-1` cards still show none. Difficulty 9 conceals those powers in
+  battle, deck building, and rewards. Difficulty 10 doubles the base five-second
   enemy search deadline to ten seconds. The former difficulty-8 one-card draw
   and difficulty-9 opening-hand power increase are retired.
 - Sect selection uses `inkpics/arrow.png` on both sides of the parchment. The
@@ -300,7 +306,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   pre-schema-13 active runs migrate with the flag off.
 - The main menu recognizes one hidden, in-memory sequence: start with
   `闭关重修`, alternate with `封剑归隐`, and press each five times. Completion
-  atomically unlocks every sect and difficulty 9 without changing cards or the
+  atomically unlocks every sect and difficulty 10 without changing cards or the
   active run. Wrong order/navigation clears the sequence; a real full reset
   still removes these unlocks.
 - Revealed library and reward cards are blue when mastered and red otherwise.
@@ -326,7 +332,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   returns fill the leftmost empty slot. Only discard closes its gap: every card
   physically to its right shifts left one slot in one simultaneous presentation
   batch. Normal play and hand exile/removal leave all other slots unchanged.
-- Normal draws retain identity concealment; below difficulty 8 their powers are
+- Normal draws retain identity concealment; below difficulty 9 their powers are
   visible through the card back. Every other successful
   effect-driven hand addition is permanently public to the recipient's
   opponent, including created cards, copies, fresh board returns, and the same
@@ -343,9 +349,11 @@ The creator has made several direct UI and localization edits. Preserve those ed
   PVS, tactics, evaluation-cache, and
   alternate-evaluator profiles were removed with the old search backend.
   Search stays card-agnostic and canonical root ordering resolves equal scores.
-- Each enemy decision has a five-second base deadline; difficulty 9 doubles it
-  to ten seconds. The existing two-second minimum visible decision time is
-  unchanged and counts actual search time toward that minimum.
+- Each enemy decision has a five-second base deadline; difficulty 10 doubles it
+  to ten seconds. Difficulty 0 caps completed public depth at 1, difficulty 1
+  at 2, difficulty 2 at 3, and difficulty 3+ adds no depth cap. The existing
+  two-second minimum visible decision time is unchanged and counts actual
+  search time toward that minimum.
 - Native search transitions retain rule-semantic event skeletons but omit
   complete runtime-card snapshots and capture/exile summaries that are used
   only by presentation. Live gameplay transitions still materialize the full

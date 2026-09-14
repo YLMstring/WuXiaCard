@@ -39,6 +39,7 @@ func _run() -> void:
 		"effective_duel_count": 3,
 		"defeated_enemy_ids": LONG_ENEMY_IDS,
 		"flawless": false,
+		"unlocked_difficulty": 10,
 	})
 	root.add_child(ending)
 	await process_frame
@@ -72,6 +73,10 @@ func _run() -> void:
 		"Defeated enemies remain chronological"
 	)
 	_check(story.text.contains("也曾折剑再战"), "A run with losses uses the comeback prose")
+	_check(
+		story.text.ends_with("（已解锁进阶十！）"),
+		"Ending prose appends the newly unlocked difficulty in Chinese"
+	)
 	_check(story.language == "zh", "Ending prose opts into Chinese line breaking")
 	_check(story.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART, "Ending prose uses smart wrapping")
 	_check(ending.debug_get_story_max_offset() > 0.0, "Long ending prose produces measured overflow")
@@ -101,6 +106,7 @@ func _run() -> void:
 	})
 	_check(story.text.contains("未尝一败"), "A flawless run uses the undefeated prose")
 	_check(not story.text.contains("折剑再战"), "Flawless prose never mentions a comeback")
+	_check(not story.text.contains("已解锁进阶"), "Ending prose omits an absent unlock notice")
 
 	ending.debug_set_story_text("短章已尽。")
 	_check(ending.debug_get_story_max_offset() > 0.0, "Short prose still travels fully into view")

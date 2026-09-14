@@ -45,7 +45,7 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 13, "Default profile uses schema version 13")
+	_check(int(profile["schema_version"]) == 14, "Default profile uses schema version 14")
 	_check(not store.is_tutorial_pending(profile), "Default profile has no pending tutorial")
 	_check(
 		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
@@ -71,7 +71,7 @@ func _run() -> void:
 	)
 	_check(
 		store.get_best_score(profile, &"HuaShanPai", 0) == 0
-		and store.get_best_score(profile, &"HuaShanPai", 9) == 0,
+		and store.get_best_score(profile, &"HuaShanPai", 10) == 0,
 		"Missing per-difficulty best scores read as zero"
 	)
 	_check(store.get_character_level(profile) == 0, "New profiles begin at character level zero")
@@ -383,7 +383,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 13, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 14, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"
@@ -397,10 +397,10 @@ func _run() -> void:
 	_check(not bool(migrated["run_active"]), "Legacy migration starts with no active run")
 	_check(String(migrated["selected_sect_id"]).is_empty(), "Legacy migration clears the selected sect")
 	_check(
-		int(migrated.get("max_unlocked_difficulty", -1)) == 2
-		and int(migrated.get("last_selected_difficulty", -1)) == 2
+		int(migrated.get("max_unlocked_difficulty", -1)) == 3
+		and int(migrated.get("last_selected_difficulty", -1)) == 3
 		and int(migrated.get("run_difficulty", -1)) == 0,
-		"Legacy inactive profiles unlock and select difficulty two without an active difficulty"
+		"Legacy inactive profiles shift their unlocked difficulty while remaining inactive"
 	)
 
 	var schema_eight: Dictionary = profile.duplicate(true)
@@ -428,12 +428,39 @@ func _run() -> void:
 	_check(
 		store.get_best_score(migrated_schema_ten, &"HuaShanPai", 0) == 500
 		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 1) == 500
-		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 2) == 4321
-		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 3) == 0
+		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 2) == 500
+		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 3) == 4321
+		and store.get_best_score(migrated_schema_ten, &"HuaShanPai", 4) == 0
 		and store.get_best_score(migrated_schema_ten, &"TaiShanPai", 0) == 321
 		and store.get_best_score(migrated_schema_ten, &"TaiShanPai", 1) == 321
-		and store.get_best_score(migrated_schema_ten, &"TaiShanPai", 2) == 321,
-		"Schema-ten scalar scores migrate to difficulties zero, one, and two with low caps"
+		and store.get_best_score(migrated_schema_ten, &"TaiShanPai", 2) == 321
+		and store.get_best_score(migrated_schema_ten, &"TaiShanPai", 3) == 321,
+		"Schema-ten scalar scores migrate through the inserted difficulty with low caps"
+	)
+	var schema_thirteen: Dictionary = store.create_default_profile()
+	schema_thirteen["schema_version"] = 13
+	schema_thirteen["max_unlocked_difficulty"] = 5
+	schema_thirteen["last_selected_difficulty"] = 4
+	schema_thirteen["best_scores_by_sect"] = {
+		"HuaShanPai": {"0": 321},
+		"TaiShanPai": {"0": 200, "1": 500, "2": 4321},
+	}
+	var migrated_schema_thirteen: Dictionary = store.repair_profile(schema_thirteen)
+	_check(
+		store.is_profile_valid(migrated_schema_thirteen)
+		and store.get_max_unlocked_difficulty(migrated_schema_thirteen) == 6
+		and store.get_last_selected_difficulty(migrated_schema_thirteen) == 5,
+		"Schema-thirteen nonzero difficulty progress shifts forward once"
+	)
+	_check(
+		store.get_best_score(migrated_schema_thirteen, &"HuaShanPai", 0) == 321
+		and store.get_best_score(migrated_schema_thirteen, &"HuaShanPai", 1) == 321
+		and store.get_best_score(migrated_schema_thirteen, &"HuaShanPai", 2) == 0
+		and store.get_best_score(migrated_schema_thirteen, &"TaiShanPai", 0) == 500
+		and store.get_best_score(migrated_schema_thirteen, &"TaiShanPai", 1) == 500
+		and store.get_best_score(migrated_schema_thirteen, &"TaiShanPai", 2) == 500
+		and store.get_best_score(migrated_schema_thirteen, &"TaiShanPai", 3) == 4321,
+		"Schema-thirteen scores copy old zero, shift higher scores, and restore lower records"
 	)
 
 	var schema_two: Dictionary = profile.duplicate(true)
@@ -483,7 +510,7 @@ func _run() -> void:
 	var repaired_difficulty: Dictionary = store.repair_profile(malformed_difficulty)
 	_check(
 		store.is_profile_valid(repaired_difficulty)
-		and int(repaired_difficulty.get("max_unlocked_difficulty", -1)) == 9
+		and int(repaired_difficulty.get("max_unlocked_difficulty", -1)) == 10
 		and int(repaired_difficulty.get("last_selected_difficulty", -1)) == 0
 		and int(repaired_difficulty.get("run_difficulty", -1)) == 0,
 		"Difficulty repair clamps the global range and clears inactive run difficulty"
@@ -494,7 +521,8 @@ func _run() -> void:
 			"0": 900,
 			"1": 501,
 			"2": 1200,
-			"10": 50,
+			"3": 1200,
+			"11": 50,
 			"bad": 80,
 		},
 		"missing_sect": {"2": 700},
@@ -509,10 +537,11 @@ func _run() -> void:
 		store.is_profile_valid(repaired_scores)
 		and store.get_best_score(repaired_scores, &"HuaShanPai", 0) == 500
 		and store.get_best_score(repaired_scores, &"HuaShanPai", 1) == 500
-		and store.get_best_score(repaired_scores, &"HuaShanPai", 2) == 1200
-		and store.get_best_score(repaired_scores, &"HuaShanPai", 9) == 0
+		and store.get_best_score(repaired_scores, &"HuaShanPai", 2) == 500
+		and store.get_best_score(repaired_scores, &"HuaShanPai", 3) == 1200
+		and store.get_best_score(repaired_scores, &"HuaShanPai", 10) == 0
 		and store.get_best_score(repaired_scores, &"TaiShanPai", 2) == 0
-		and store.get_best_score(repaired_scores, &"HuaShanPai", 10) == 0,
+		and store.get_best_score(repaired_scores, &"HuaShanPai", 11) == 0,
 		"Score repair caps low difficulties and skips invalid sects, keys, and values"
 	)
 
@@ -599,8 +628,27 @@ func _run() -> void:
 	var migrated_active_profile: Dictionary = store.repair_profile(legacy_active_profile)
 	_check(
 		store.is_profile_valid(migrated_active_profile)
+		and store.get_max_unlocked_difficulty(migrated_active_profile) == 0
+		and store.get_last_selected_difficulty(migrated_active_profile) == 0
+		and store.get_run_difficulty(migrated_active_profile) == 0
 		and not store.is_tutorial_pending(migrated_active_profile),
-		"Existing active runs migrate without unexpectedly requesting the tutorial"
+		"Existing difficulty-zero active runs stay at zero without unexpectedly requesting the tutorial"
+	)
+	var schema_thirteen_active: Dictionary = active_profile.duplicate(true)
+	schema_thirteen_active["schema_version"] = 13
+	schema_thirteen_active["max_unlocked_difficulty"] = 9
+	schema_thirteen_active["last_selected_difficulty"] = 5
+	schema_thirteen_active["run_difficulty"] = 5
+	var migrated_schema_thirteen_active: Dictionary = store.repair_profile(
+		schema_thirteen_active
+	)
+	_check(
+		store.is_profile_valid(migrated_schema_thirteen_active)
+		and store.get_max_unlocked_difficulty(migrated_schema_thirteen_active) == 10
+		and store.get_last_selected_difficulty(migrated_schema_thirteen_active) == 6
+		and store.get_run_difficulty(migrated_schema_thirteen_active) == 6
+		and not store.is_tutorial_pending(migrated_schema_thirteen_active),
+		"Schema-thirteen active nonzero difficulties shift forward once"
 	)
 	var completed_tutorial: Dictionary = store.complete_tutorial_and_save(active_profile)
 	_check(
@@ -672,10 +720,10 @@ func _run() -> void:
 	var migrated_schema_nine_active: Dictionary = store.repair_profile(schema_nine_active)
 	_check(
 		store.is_profile_valid(migrated_schema_nine_active)
-		and store.get_max_unlocked_difficulty(migrated_schema_nine_active) == 2
-		and store.get_last_selected_difficulty(migrated_schema_nine_active) == 2
-		and store.get_run_difficulty(migrated_schema_nine_active) == 2,
-		"A schema-nine active run migrates as difficulty two"
+		and store.get_max_unlocked_difficulty(migrated_schema_nine_active) == 3
+		and store.get_last_selected_difficulty(migrated_schema_nine_active) == 3
+		and store.get_run_difficulty(migrated_schema_nine_active) == 3,
+		"A schema-nine active run migrates through old difficulty two to new three"
 	)
 	var first_enemy_id: StringName = store.get_current_enemy_id(active_profile)
 	_check(
@@ -809,8 +857,9 @@ func _run() -> void:
 		and int(migrated_schema_seven["effective_duel_count"]) == 1
 		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 0) == 500
 		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 1) == 500
-		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 2) == 1234
-		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 3) == 0,
+		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 2) == 500
+		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 3) == 1234
+		and store.get_best_score(migrated_schema_seven, &"HuaShanPai", 4) == 0,
 		"Schema-seven migration preserves active-run history and pending reward"
 	)
 	_check(
@@ -856,7 +905,7 @@ func _run() -> void:
 	)
 	_check(
 		store.get_max_unlocked_difficulty(progression_unlock_profile) == Store.MAX_DIFFICULTY,
-		"Full progression unlock stores difficulty nine"
+		"Full progression unlock stores difficulty ten"
 	)
 	_check(
 		progression_unlock_profile == expected_progression_profile,

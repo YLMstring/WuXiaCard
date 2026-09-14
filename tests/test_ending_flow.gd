@@ -61,6 +61,16 @@ func _run() -> void:
 	_check(ending != null, "Final victory routes directly to the ending scene")
 	var summary: Dictionary = ending.get_summary()
 	_check(int(summary.get("score", -1)) == 500, "Difficulty-zero final victory displays the capped score")
+	_check(
+		int(summary.get("unlocked_difficulty", -1)) == 1,
+		"Difficulty-zero completion reports the newly unlocked difficulty one"
+	)
+	_check(
+		String((ending.get_node("EndingLayer/StoryClip/Story") as Label).text).ends_with(
+			"（已解锁进阶一！）"
+		),
+		"The production ending flow appends its unlock notice"
+	)
 	_check((summary.get("defeated_enemy_ids", []) as Array) == ["qingfeng_xuedi"], "Ending receives the defeated enemy history")
 	var completed_profile: Dictionary = store.load_profile()
 	_check(

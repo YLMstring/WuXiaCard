@@ -136,7 +136,7 @@ func _test_state_semantics() -> void:
 		"Removed cards affect compact identity"
 	)
 	copied = state.duplicate_state() as State
-	copied.run_difficulty = 9
+	copied.run_difficulty = 10
 	_check(
 		StateKey.build_compact(state) != StateKey.build_compact(copied),
 		"Run difficulty affects compact identity"

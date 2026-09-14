@@ -256,7 +256,7 @@ func _run() -> void:
 	scores["HuaShanPai"] = {
 		"0": 500,
 		"1": 111,
-		"2": 4321,
+		"2": 432,
 	}
 	saved_profile["best_scores_by_sect"] = scores
 	saved_profile["max_unlocked_difficulty"] = 2
@@ -330,7 +330,7 @@ func _run() -> void:
 	_check(
 		_selected_difficulty(selector) == 1
 		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶一"
-		and selector.debug_get_status() == "进阶一：可挑战一派宗师，敌方思考加深",
+		and selector.debug_get_status() == "进阶一：可挑战前辈名宿，敌方思考加深",
 		"Reopening the selector restores difficulty one and its Chinese text"
 	)
 	_check(
@@ -367,7 +367,7 @@ func _run() -> void:
 	_check(
 		_selected_difficulty(selector) == 2
 		and (canvas.get_node("TopBar/OpponentName") as Label).text == "江湖门派·进阶二"
-		and selector.debug_get_status() == "进阶二：可挑战武林神话，敌方思考加深",
+		and selector.debug_get_status() == "进阶二：可挑战一派宗师，敌方思考加深",
 		"The left arrow wraps from zero to the highest unlocked difficulty"
 	)
 	if left_difficulty_button != null:
@@ -377,7 +377,7 @@ func _run() -> void:
 	first_slot.debug_end_pointer(first_slot.get_global_rect().get_center())
 	_check(
 		String(selector.card_inspector.get_card_snapshot().get("sect", ""))
-		== "进阶二：4321",
+		== "进阶二：432",
 		"Sect inspection displays the selected difficulty's per-sect best score"
 	)
 	_check(
@@ -395,7 +395,7 @@ func _run() -> void:
 	selector.card_inspector.close()
 	await process_frame
 	_check(
-		selector.debug_get_status() == "进阶二：可挑战武林神话，敌方思考加深",
+		selector.debug_get_status() == "进阶二：可挑战一派宗师，敌方思考加深",
 		"Closing inspection restores the selected difficulty status"
 	)
 
@@ -420,6 +420,50 @@ func _run() -> void:
 	_check(
 		store.get_run_difficulty(difficulty_run) == 2,
 		"Confirming a sect records the selected difficulty on the active run"
+	)
+	selector.queue_free()
+	await process_frame
+	var difficulty_ten_reset: Dictionary = store.reset_run_and_save(difficulty_run)
+	var difficulty_ten_profile: Dictionary = (
+		difficulty_ten_reset.get("profile", {}) as Dictionary
+	).duplicate(true)
+	difficulty_ten_profile["max_unlocked_difficulty"] = 10
+	difficulty_ten_profile["last_selected_difficulty"] = 10
+	var difficulty_ten_scores: Dictionary = (
+		difficulty_ten_profile["best_scores_by_sect"] as Dictionary
+	)
+	var difficulty_ten_huashan_scores: Dictionary = (
+		difficulty_ten_scores.get("HuaShanPai", {}) as Dictionary
+	).duplicate(true)
+	difficulty_ten_huashan_scores["10"] = 9999
+	difficulty_ten_scores["HuaShanPai"] = difficulty_ten_huashan_scores
+	difficulty_ten_profile["best_scores_by_sect"] = difficulty_ten_scores
+	_check(store.save_profile(difficulty_ten_profile), "Difficulty-ten selector fixture saves")
+	selector = SECT_SCENE.instantiate() as SelectorController
+	selector.profile_path = _save_path
+	root.add_child(selector)
+	selector.size = Vector2(540.0, 960.0)
+	await process_frame
+	await process_frame
+	_check(
+		_selected_difficulty(selector) == 10
+		and (selector.get_node("DuelCanvas/TopBar/OpponentName") as Label).text
+		== "江湖门派·进阶十"
+		and selector.debug_get_status() == "进阶十：敌方思考时间加倍",
+		"The selector displays difficulty ten with its Chinese numeral and effect"
+	)
+	_check(
+		selector.debug_select_sect(&"HuaShanPai", true)
+		and String(selector.card_inspector.get_card_snapshot().get("sect", ""))
+		== "进阶十：9999",
+		"Difficulty-ten sect inspection displays its own best score"
+	)
+	selector.card_inspector.close()
+	await process_frame
+	(selector.get_node("DuelCanvas/DifficultyRightButton") as TextureButton).pressed.emit()
+	_check(
+		_selected_difficulty(selector) == 0,
+		"The right difficulty arrow wraps from ten to zero"
 	)
 	selector.queue_free()
 	await process_frame

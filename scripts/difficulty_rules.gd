@@ -2,10 +2,11 @@ class_name DifficultyRules
 extends RefCounted
 
 const MIN_DIFFICULTY: int = 0
-const MAX_DIFFICULTY: int = 9
+const MAX_DIFFICULTY: int = 10
 
 const EFFECT_TEXTS: Array[String] = [
 	"",
+	"可挑战前辈名宿，敌方思考加深",
 	"可挑战一派宗师，敌方思考加深",
 	"可挑战武林神话，敌方思考加深",
 	"后行动时，友方只占据一个八卦方位",
@@ -29,49 +30,53 @@ static func get_effect_text(difficulty: int) -> String:
 static func get_victories_required(difficulty: int) -> int:
 	var normalized: int = normalize(difficulty)
 	if normalized <= 0:
-		return 13
+		return 12
 	if normalized == 1:
+		return 13
+	if normalized == 2:
 		return 14
 	return 15
 
 
 static func get_later_player_bagua_count(difficulty: int) -> int:
 	var normalized: int = normalize(difficulty)
-	if normalized >= 6:
+	if normalized >= 7:
 		return 0
-	if normalized >= 3:
+	if normalized >= 4:
 		return 1
 	return 2
 
 
 static func get_later_enemy_bagua_power(difficulty: int) -> int:
 	var normalized: int = normalize(difficulty)
-	if normalized >= 7:
+	if normalized >= 8:
 		return 4
-	if normalized >= 4:
+	if normalized >= 5:
 		return 2
 	return -1
 
 
 static func get_max_defeat_reward_tier(difficulty: int, character_tier: int) -> int:
 	var normalized_tier: int = maxi(1, character_tier)
-	if normalize(difficulty) >= 5:
+	if normalize(difficulty) >= 6:
 		return maxi(1, normalized_tier - 1)
 	return normalized_tier
 
 
 static func hides_unrevealed_card_powers(difficulty: int) -> bool:
-	return normalize(difficulty) >= 8
+	return normalize(difficulty) >= 9
 
 
 static func enemy_search_time_multiplier(difficulty: int) -> float:
-	return 2.0 if normalize(difficulty) >= 9 else 1.0
+	return 2.0 if normalize(difficulty) >= 10 else 1.0
 
 
 static func get_enemy_search_max_depth(difficulty: int) -> int:
 	var normalized: int = normalize(difficulty)
 	if normalized <= 0:
-		return 2
+		return 1
 	if normalized == 1:
+		return 2
+	if normalized == 2:
 		return 3
 	return 0

@@ -7,7 +7,7 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 
-const SCHEMA_VERSION: int = 13
+const SCHEMA_VERSION: int = 14
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
@@ -15,10 +15,11 @@ const DIFFICULTY_SCHEMA_VERSION: int = 10
 const DIFFICULTY_BEST_SCORE_SCHEMA_VERSION: int = 11
 const SECT_POOL_SCHEMA_VERSION: int = 12
 const TUTORIAL_STATE_SCHEMA_VERSION: int = 13
+const DIFFICULTY_INSERTION_SCHEMA_VERSION: int = 14
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
-const MAX_DIFFICULTY: int = 9
+const MAX_DIFFICULTY: int = 10
 const RUN_SECT_POOL_SIZE: int = 5
 const LEGACY_UNLOCKED_DIFFICULTY: int = 2
 const DEFAULT_VICTORIES_REQUIRED: int = 15
@@ -336,7 +337,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 				or float(score_value) != float(int(score_value))
 				or int(score_value) < 0
 				or (
-					difficulty <= 1
+					difficulty <= 2
 					and int(score_value) > LOW_DIFFICULTY_SCORE_CAP
 				)
 			):
@@ -531,6 +532,18 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				0,
 				max_unlocked_difficulty
 			)
+			if run_active
+			else 0
+		)
+	if schema_version < DIFFICULTY_INSERTION_SCHEMA_VERSION:
+		max_unlocked_difficulty = _migrate_legacy_difficulty_index(
+			max_unlocked_difficulty
+		)
+		last_selected_difficulty = _migrate_legacy_difficulty_index(
+			last_selected_difficulty
+		)
+		run_difficulty = (
+			_migrate_legacy_difficulty_index(run_difficulty)
 			if run_active
 			else 0
 		)
@@ -1119,8 +1132,12 @@ func record_completed_duel_and_save(
 		(candidate["defeated_enemy_ids"] as Array).size()
 		>= effective_victories_required
 	):
+		var previous_max_difficulty: int = get_max_unlocked_difficulty(candidate)
 		_unlock_next_difficulty(candidate)
 		var summary: Dictionary = _build_ending_summary(candidate)
+		var unlocked_difficulty: int = get_max_unlocked_difficulty(candidate)
+		if unlocked_difficulty > previous_max_difficulty:
+			summary["unlocked_difficulty"] = unlocked_difficulty
 		_record_best_score(candidate, summary)
 		var completed_candidate: Dictionary = _build_run_reset_profile(candidate)
 		if completed_candidate.is_empty():
@@ -1808,9 +1825,14 @@ func _record_best_score(profile: Dictionary, summary: Dictionary) -> void:
 
 static func _score_for_difficulty(score: int, difficulty: int) -> int:
 	var nonnegative_score: int = maxi(0, score)
-	if difficulty <= 1:
+	if difficulty <= 2:
 		return mini(nonnegative_score, LOW_DIFFICULTY_SCORE_CAP)
 	return nonnegative_score
+
+
+static func _migrate_legacy_difficulty_index(difficulty: int) -> int:
+	var normalized_old: int = clampi(difficulty, 0, MAX_DIFFICULTY - 1)
+	return 0 if normalized_old == 0 else normalized_old + 1
 
 
 static func _is_valid_difficulty_score_key(value: String) -> bool:
@@ -1836,6 +1858,7 @@ func _repair_best_scores_by_sect(
 		var sect_id := StringName(String(raw_sect_id))
 		if typeof(raw_sect_id) != TYPE_STRING or not Sects.has_sect(sect_id):
 			continue
+		var source_scores: Dictionary = {}
 		if schema_version < DIFFICULTY_BEST_SCORE_SCHEMA_VERSION:
 			var legacy_score_value: Variant = raw_best_scores[raw_sect_id]
 			if (
@@ -1845,38 +1868,101 @@ func _repair_best_scores_by_sect(
 			):
 				continue
 			var legacy_score: int = int(legacy_score_value)
-			repaired[String(sect_id)] = {
-				"0": _score_for_difficulty(legacy_score, 0),
-				"1": _score_for_difficulty(legacy_score, 1),
+			source_scores = {
+				"0": mini(legacy_score, LOW_DIFFICULTY_SCORE_CAP),
+				"1": mini(legacy_score, LOW_DIFFICULTY_SCORE_CAP),
 				"2": legacy_score,
 			}
-			continue
-		var raw_difficulty_scores_value: Variant = raw_best_scores[raw_sect_id]
-		if typeof(raw_difficulty_scores_value) != TYPE_DICTIONARY:
-			continue
-		var repaired_difficulty_scores: Dictionary = {}
-		var raw_difficulty_scores: Dictionary = raw_difficulty_scores_value as Dictionary
-		for raw_difficulty: Variant in raw_difficulty_scores.keys():
-			if typeof(raw_difficulty) != TYPE_STRING:
+		else:
+			var raw_difficulty_scores_value: Variant = raw_best_scores[raw_sect_id]
+			if typeof(raw_difficulty_scores_value) != TYPE_DICTIONARY:
 				continue
-			var difficulty_text: String = String(raw_difficulty)
-			if not _is_valid_difficulty_score_key(difficulty_text):
-				continue
-			var raw_score_value: Variant = raw_difficulty_scores[raw_difficulty]
-			if (
-				typeof(raw_score_value) not in [TYPE_INT, TYPE_FLOAT]
-				or float(raw_score_value) != float(int(raw_score_value))
-				or int(raw_score_value) < 0
-			):
-				continue
-			var difficulty: int = int(difficulty_text)
-			repaired_difficulty_scores[difficulty_text] = _score_for_difficulty(
-				int(raw_score_value),
-				difficulty
+			var raw_difficulty_scores: Dictionary = raw_difficulty_scores_value as Dictionary
+			var source_max_difficulty: int = (
+				MAX_DIFFICULTY - 1
+				if schema_version < DIFFICULTY_INSERTION_SCHEMA_VERSION
+				else MAX_DIFFICULTY
 			)
+			var low_cap_max: int = (
+				1
+				if schema_version < DIFFICULTY_INSERTION_SCHEMA_VERSION
+				else 2
+			)
+			for raw_difficulty: Variant in raw_difficulty_scores.keys():
+				if typeof(raw_difficulty) != TYPE_STRING:
+					continue
+				var difficulty_text: String = String(raw_difficulty)
+				if not _is_valid_difficulty_score_key_with_max(
+					difficulty_text,
+					source_max_difficulty
+				):
+					continue
+				var raw_score_value: Variant = raw_difficulty_scores[raw_difficulty]
+				if (
+					typeof(raw_score_value) not in [TYPE_INT, TYPE_FLOAT]
+					or float(raw_score_value) != float(int(raw_score_value))
+					or int(raw_score_value) < 0
+				):
+					continue
+				var difficulty: int = int(difficulty_text)
+				source_scores[difficulty_text] = (
+					mini(int(raw_score_value), LOW_DIFFICULTY_SCORE_CAP)
+					if difficulty <= low_cap_max
+					else int(raw_score_value)
+				)
+		var repaired_difficulty_scores: Dictionary = (
+			_migrate_legacy_difficulty_scores(source_scores)
+			if schema_version < DIFFICULTY_INSERTION_SCHEMA_VERSION
+			else source_scores
+		)
 		if not repaired_difficulty_scores.is_empty():
 			repaired[String(sect_id)] = repaired_difficulty_scores
 	return repaired
+
+
+static func _is_valid_difficulty_score_key_with_max(
+	value: String,
+	maximum: int
+) -> bool:
+	if not value.is_valid_int():
+		return false
+	var difficulty: int = int(value)
+	return difficulty >= 0 and difficulty <= maximum and value == str(difficulty)
+
+
+static func _migrate_legacy_difficulty_scores(source_scores: Dictionary) -> Dictionary:
+	var migrated: Dictionary = {}
+	for raw_difficulty: Variant in source_scores.keys():
+		var old_difficulty: int = int(String(raw_difficulty))
+		var score: int = int(source_scores[raw_difficulty])
+		if old_difficulty == 0:
+			_write_max_migrated_score(migrated, 0, score)
+			_write_max_migrated_score(migrated, 1, score)
+		else:
+			_write_max_migrated_score(migrated, old_difficulty + 1, score)
+	var propagated_score: int = -1
+	for difficulty: int in range(MAX_DIFFICULTY, -1, -1):
+		var difficulty_key: String = str(difficulty)
+		if migrated.has(difficulty_key):
+			propagated_score = maxi(propagated_score, int(migrated[difficulty_key]))
+		if propagated_score >= 0:
+			_write_max_migrated_score(migrated, difficulty, propagated_score)
+	return migrated
+
+
+static func _write_max_migrated_score(
+	destination: Dictionary,
+	difficulty: int,
+	score: int
+) -> void:
+	var normalized_difficulty: int = clampi(difficulty, 0, MAX_DIFFICULTY)
+	var difficulty_key: String = str(normalized_difficulty)
+	var capped_score: int = _score_for_difficulty(score, normalized_difficulty)
+	if (
+		not destination.has(difficulty_key)
+		or capped_score > int(destination[difficulty_key])
+	):
+		destination[difficulty_key] = capped_score
 
 
 func _apply_mastery_candidates(profile: Dictionary, candidate_ids: Array) -> void:

@@ -27,7 +27,7 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
-	_check(int(profile["schema_version"]) == 13, "Reward state advances the profile schema")
+	_check(int(profile["schema_version"]) == 14, "Reward state advances the profile schema")
 	_check(store.get_pending_reward_ids(profile).is_empty(), "Default profile has no pending reward")
 	_check(store.save_profile(profile), "Reward fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
@@ -210,7 +210,7 @@ func _run() -> void:
 			"%s keeps its real tier-one identity" % special_id
 		)
 
-	_test_difficulty_five_defeat_reward_ceiling(store)
+	_test_difficulty_six_defeat_reward_ceiling(store)
 	_test_kuihua_zero_defeat_guarantee(store)
 	_test_run_sect_pool_reward_filter(store)
 
@@ -218,15 +218,15 @@ func _run() -> void:
 	_finish()
 
 
-func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
+func _test_difficulty_six_defeat_reward_ceiling(store: RefCounted) -> void:
 	var base: Dictionary = store.create_testing_profile(store.create_default_profile())
 	base["run_active"] = true
 	base["selected_sect_id"] = "HuaShanPai"
 	_set_huashan_run_pool(base)
 	base["level"] = 5
 	base["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(5)[0])
-	base["max_unlocked_difficulty"] = 5
-	base["last_selected_difficulty"] = 5
+	base["max_unlocked_difficulty"] = 6
+	base["last_selected_difficulty"] = 6
 	base["pending_reward_card_ids"] = []
 	base["shown_guaranteed_reward_card_ids"] = []
 	var locked_by_tier: Dictionary = {}
@@ -236,38 +236,38 @@ func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
 		locked_by_tier[tier] = card_id
 		_lock_library_card(base, card_id)
 
-	var difficulty_four: Dictionary = base.duplicate(true)
-	difficulty_four["run_difficulty"] = 4
-	var difficulty_four_offer: Dictionary = store.create_reward_offer_and_save(
-		difficulty_four,
-		Store.REWARD_DEFEAT,
-		_seeded_rng(540)
-	)
-	var difficulty_four_ids: Array[StringName] = store.get_pending_reward_ids(
-		difficulty_four_offer.get("profile", {})
-	)
-	_check(
-		bool(difficulty_four_offer.get("offered", false))
-		and locked_by_tier[3] in difficulty_four_ids,
-		"Before difficulty five, defeat rewards include the current tier"
-	)
-
 	var difficulty_five: Dictionary = base.duplicate(true)
 	difficulty_five["run_difficulty"] = 5
 	var difficulty_five_offer: Dictionary = store.create_reward_offer_and_save(
 		difficulty_five,
 		Store.REWARD_DEFEAT,
-		_seeded_rng(550)
+		_seeded_rng(540)
 	)
 	var difficulty_five_ids: Array[StringName] = store.get_pending_reward_ids(
 		difficulty_five_offer.get("profile", {})
 	)
 	_check(
 		bool(difficulty_five_offer.get("offered", false))
-		and locked_by_tier[1] in difficulty_five_ids
-		and locked_by_tier[2] in difficulty_five_ids
-		and locked_by_tier[3] not in difficulty_five_ids,
-		"Difficulty five excludes the current tier while retaining all lower tiers"
+		and locked_by_tier[3] in difficulty_five_ids,
+		"Before difficulty six, defeat rewards include the current tier"
+	)
+
+	var difficulty_six: Dictionary = base.duplicate(true)
+	difficulty_six["run_difficulty"] = 6
+	var difficulty_six_offer: Dictionary = store.create_reward_offer_and_save(
+		difficulty_six,
+		Store.REWARD_DEFEAT,
+		_seeded_rng(550)
+	)
+	var difficulty_six_ids: Array[StringName] = store.get_pending_reward_ids(
+		difficulty_six_offer.get("profile", {})
+	)
+	_check(
+		bool(difficulty_six_offer.get("offered", false))
+		and locked_by_tier[1] in difficulty_six_ids
+		and locked_by_tier[2] in difficulty_six_ids
+		and locked_by_tier[3] not in difficulty_six_ids,
+		"Difficulty six excludes the current tier while retaining all lower tiers"
 	)
 
 	var tier_one: Dictionary = store.create_testing_profile(store.create_default_profile())
@@ -276,9 +276,9 @@ func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
 	_set_huashan_run_pool(tier_one)
 	tier_one["level"] = 1
 	tier_one["current_enemy_id"] = String(Enemies.get_enemy_ids_for_level(1)[0])
-	tier_one["max_unlocked_difficulty"] = 5
-	tier_one["last_selected_difficulty"] = 5
-	tier_one["run_difficulty"] = 5
+	tier_one["max_unlocked_difficulty"] = 6
+	tier_one["last_selected_difficulty"] = 6
+	tier_one["run_difficulty"] = 6
 	tier_one["pending_reward_card_ids"] = []
 	tier_one["shown_guaranteed_reward_card_ids"] = []
 	var tier_one_id: StringName = _first_library_card_for_tier(tier_one, 1)
@@ -290,7 +290,7 @@ func _test_difficulty_five_defeat_reward_ceiling(store: RefCounted) -> void:
 	)
 	_check(
 		store.get_pending_reward_ids(tier_one_offer.get("profile", {})) == [tier_one_id],
-		"Difficulty five keeps tier one as the defeat reward floor"
+		"Difficulty six keeps tier one as the defeat reward floor"
 	)
 
 

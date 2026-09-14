@@ -129,7 +129,7 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 	state.extra_card_play_granted_this_turn = true
 	state.end_turn_triggers_resolved = true
 	state.max_turns = 77
-	state.run_difficulty = 9
+	state.run_difficulty = 10
 	state.difficulty_eight_draw_consumed = true
 	state.state_version = 42
 

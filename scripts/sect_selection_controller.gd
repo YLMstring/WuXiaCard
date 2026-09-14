@@ -26,6 +26,7 @@ const DIFFICULTY_NUMERALS: Array[String] = [
 	"七",
 	"八",
 	"九",
+	"十",
 ]
 const DIFFICULTY_BUTTON_SIZE: Vector2 = Vector2(21.0, 34.0)
 const DIFFICULTY_BUTTON_CENTER_GAP: float = 21.0

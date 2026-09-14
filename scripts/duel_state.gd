@@ -91,7 +91,7 @@ func _init(
 	}
 	active_player = new_active_player
 	turn_count = new_turn_count
-	run_difficulty = clampi(new_run_difficulty, 0, 9)
+	run_difficulty = clampi(new_run_difficulty, 0, 10)
 	difficulty_eight_draw_consumed = new_difficulty_eight_draw_consumed
 
 

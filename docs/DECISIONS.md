@@ -376,7 +376,7 @@ respectively, in row-major order. The source itself is eligible.
 
 ## Difficulty Progression
 
-- Every active run stores one difficulty from 0 through 9. New profiles unlock
+- Every active run stores one difficulty from 0 through 10. New profiles unlock
   and select only difficulty 0.
 - In normal mode, an inactive profile whose only unlocked sect is `HuaShanPai`
   and whose maximum unlocked difficulty is 0 skips sect selection when the
@@ -391,29 +391,34 @@ respectively, in row-major order. The source itself is eligible.
   range and remain hidden while only difficulty 0 is available.
 - On one main-menu instance, the exact ten-press sequence `闭关重修, 封剑归隐`
   repeated five times emits a hidden progression-unlock request. It atomically
-  unlocks every catalog sect and difficulty 9 while preserving all other
+  unlocks every catalog sect and difficulty 10 while preserving all other
   profile fields. Wrong order or navigation clears the sequence; it never
   unlocks cards, and a later confirmed `封剑归隐` still clears the result.
-- Completing difficulty `n` unlocks `min(n + 1, 9)`. Completion and `闭关重修`
+- Completing difficulty `n` unlocks `min(n + 1, 10)`. Completion and `闭关重修`
   clear only the active run difficulty while preserving the global maximum and
   last selection. `封剑归隐` clears every difficulty field.
-- Schema-9 and other preservable legacy saves migrate with difficulties 0, 1,
-  and 2 unlocked, difficulty 2 selected, and any preserved active run assigned
-  difficulty 2. Older active runs already closed by history migration remain
+- Schema-9 and other preservable legacy saves first migrate with old
+  difficulties 0, 1, and 2 unlocked, old difficulty 2 selected, and any
+  preserved active run assigned old difficulty 2. Schema 14 then inserts a new
+  difficulty 1: old difficulty 0 stays 0 and every old nonzero difficulty moves
+  forward by one. Old difficulty-0 scores populate new difficulties 0 and 1;
+  old difficulty-1 through 9 scores move to 2 through 10 before normal downward
+  propagation. Older active runs already closed by history migration remain
   inactive.
 - Difficulty effects are cumulative, while sect selection displays only the
-  exact current tier's text. Difficulty 0/1/2 require 13/14/15 victories.
-  Difficulties 1 and 2 describe the sect-master and martial-myth encounters.
-- At difficulty 3, a later player starts with one Bagua in one uniformly random
-  board cell. At difficulty 6, a later player starts with none. A later enemy
+  exact current tier's text. Difficulties 0/1/2 require 12/13/14 victories;
+  difficulties 3–10 require 15. Difficulties 1, 2, and 3 describe the
+  senior-expert, sect-master, and martial-myth encounters.
+- At difficulty 4, a later player starts with one Bagua in one uniformly random
+  board cell. At difficulty 7, a later player starts with none. A later enemy
   continues to receive two adjacent Bagua.
-- At difficulty 4, a later enemy's Bagua powers are set to `[2, 2, 2, 2]`; at
-  difficulty 7 they are set to `[4, 4, 4, 4]`. These are absolute replacements
+- At difficulty 5, a later enemy's Bagua powers are set to `[2, 2, 2, 2]`; at
+  difficulty 8 they are set to `[4, 4, 4, 4]`. These are absolute replacements
   for the catalog's all-`-1` powers, not additions, and have no animation.
 - At every difficulty, the player may choose to act first when the five-card
   main deck's total tier is not higher than the opponent's.
-- Before difficulty 5, ordinary defeat rewards may use any locked tier from 1
-  through the current character tier. At difficulty 5 and above, their ceiling
+- Before difficulty 6, ordinary defeat rewards may use any locked tier from 1
+  through the current character tier. At difficulty 6 and above, their ceiling
   becomes `max(1, current tier - 1)`, so tier 1 remains available as the floor.
   Catalog-declared guaranteed defeat rewards are merged from a separate pool
   and are not restricted by this ordinary ceiling. Victory rewards do not use
@@ -421,24 +426,26 @@ respectively, in row-major order. The source itself is eligible.
 - By default, unrevealed hand cards expose only their four printed/current
   powers while keeping identity, art, text, ki, abilities, tooltip, and
   inspection concealed. All-four-`-1` cards continue to show no powers.
-- At difficulty 8, unrevealed card powers are concealed in battle, deck
+- At difficulty 9, unrevealed card powers are concealed in battle, deck
   building, and reward selection, restoring the earlier fully opaque card-back
   presentation. This is presentation-only; AI information does not change.
-- The base opponent search deadline is five seconds. At difficulty 9 it is
-  multiplied by two to ten seconds. Difficulty changes no evaluator terms and
-  does not intentionally weaken move selection.
+- The base opponent search deadline is five seconds. At difficulty 10 it is
+  multiplied by two to ten seconds. Difficulty changes no evaluator terms;
+  difficulties 0, 1, and 2 instead cap completed public search depth at 1, 2,
+  and 3 respectively, while difficulty 3+ has no depth cap.
 
 ## Run Completion and Score
 
 - A run ends after a configurable number of victories. Production difficulty
-  0 ends after 13 wins, difficulty 1 after 14, and difficulties 2–9 after 15.
+  0 ends after 12 wins, difficulty 1 after 13, difficulty 2 after 14, and
+  difficulties 3–10 after 15.
 - Only completed wins and completed losses are effective duels. Abandoning a
   duel changes neither score inputs nor defeated-enemy history.
 - Every victory appends the exact current enemy ID in chronological order.
-- Raw final score is `floor(15000 / effective_duel_count)`. Difficulty 0 and 1
-  cap the actual ending score at 500; difficulty 2 through 9 keep the raw
-  value. A flawless run therefore scores 500 at difficulties 0 and 1 and 1000
-  at difficulty 2 or above; losses lower the result.
+- Raw final score is `floor(15000 / effective_duel_count)`. Difficulties 0, 1,
+  and 2 cap the actual ending score at 500; difficulties 3 through 10 keep the
+  raw value. A flawless run therefore scores 500 at difficulties 0–2 and 1000
+  at difficulty 3 or above; losses lower the result.
 - Final victory bypasses reward selection. The ending receives immutable sect,
   score, duel-count, defeated-enemy, and flawless data.
 - Completion uses the same card/run reset as `闭关重修`: it restores the two
@@ -447,7 +454,9 @@ respectively, in row-major order. The source itself is eligible.
   defeated enemy), card mastery, and the highest score achieved for each sect
   at each difficulty. A completed score raises the current difficulty and all
   lower difficulty records for that sect, never higher ones. Target difficulty
-  0 and 1 records remain capped at 500.
+  0, 1, and 2 records remain capped at 500. When a completion genuinely raises
+  the global maximum difficulty, the ending story appends the unlocked tier;
+  replaying an already-unlocked tier and completing difficulty 10 append none.
 - `闭关重修` also preserves best scores, unlocked sects, and card mastery.
   `封剑归隐` clears them with all other progress.
 - The ending is the main-menu presentation without its three actions. It lists
@@ -464,7 +473,7 @@ respectively, in row-major order. The source itself is eligible.
 - It reuses the duel's fixed 9:16 presentation, decorative backdrop, top header, five-slot opponent hand, five-slot player hand, CardView, and CardInspector.
 - The opponent hand represents the upcoming enemy. It stays face-down in normal
   mode and is revealed in script-controlled testing mode. Face-down cards show
-  powers normally; difficulty 8 and above conceal those powers too.
+  powers normally; difficulty 9 and above conceal those powers too.
 - The center parchment is titled `藏经阁` and displays four standard 3:4 library cards per row with exactly three visible rows.
 - Its exterior uses the exact same parchment geometry and shared style code as the card inspector.
 - The vertical scrollbar is hidden. Players navigate by swiping up/down; desktop mouse swipes are handled locally without enabling project-wide mouse-to-touch emulation.
@@ -487,7 +496,7 @@ respectively, in row-major order. The source itself is eligible.
 
 - A single tap on a revealed card opens an inspector occupying exactly the board rectangle.
 - A face-down card cannot open it or leak identity metadata. Its four powers are
-  visible below difficulty 8 unless they are the all-four-`-1` sentinel.
+  visible below difficulty 9 unless they are the all-four-`-1` sentinel.
 - The inspector hides the board and score while keeping hands, top bar, and status visible.
 - It is modal: gameplay input is blocked.
 - It cannot open while an action is resolving.
@@ -498,8 +507,10 @@ respectively, in row-major order. The source itself is eligible.
 ## AI
 
 - Target behavior is near-perfect play within a fixed time budget.
-- Current base opponent budget is 5 seconds; difficulty 9 doubles it to 10 seconds.
-- Difficulty changes only the time budget, not the evaluator or intentional move weakening.
+- Current base opponent budget is 5 seconds; difficulty 10 doubles it to 10 seconds.
+- Difficulty 0 caps completed public depth at 1, difficulty 1 at 2, difficulty
+  2 at 3, and difficulty 3+ adds no depth cap. Difficulty changes neither the
+  evaluator nor intentional move quality within the permitted search.
 - Use the best result from the deepest fully completed iteration.
 - Ignore an incomplete deeper iteration.
 - Production rules and deep search are strict-native. The former independent

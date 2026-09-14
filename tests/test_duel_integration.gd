@@ -60,7 +60,7 @@ func _run() -> void:
 	_check_side_deck_setup(duel)
 	await _check_duplicate_enemy_instances()
 	_check_normal_opponent_concealment(duel)
-	await _check_difficulty_eight_power_concealment()
+	await _check_difficulty_nine_power_concealment()
 	await _check_card_inspector_modal()
 	await _check_live_search_depth_status()
 	await _check_inspector_holds_completed_ai_move()
@@ -972,10 +972,10 @@ func _check_opening_bagua_layout() -> void:
 
 func _check_difficulty_opening_effects() -> void:
 	for fixture: Dictionary in [
-		{"difficulty": 3, "starting_owner": Rules.OPPONENT_OWNER, "count": 1, "power": -1},
-		{"difficulty": 6, "starting_owner": Rules.OPPONENT_OWNER, "count": 0, "power": -1},
-		{"difficulty": 4, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 2},
-		{"difficulty": 7, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 4},
+		{"difficulty": 4, "starting_owner": Rules.OPPONENT_OWNER, "count": 1, "power": -1},
+		{"difficulty": 7, "starting_owner": Rules.OPPONENT_OWNER, "count": 0, "power": -1},
+		{"difficulty": 5, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 2},
+		{"difficulty": 8, "starting_owner": Rules.PLAYER_OWNER, "count": 2, "power": 4},
 	]:
 		var difficulty_duel: Node = DUEL_SCENE.instantiate()
 		difficulty_duel.set("deck_profile_path", TEST_PROFILE_PATH)
@@ -1021,7 +1021,7 @@ func _check_difficulty_opening_effects() -> void:
 	buff_duel.set("testing_mode", true)
 	buff_duel.set("opening_layout_seed", -1)
 	buff_duel.set("difficulty_effect_seed", 7)
-	buff_duel.set("run_difficulty", 9)
+	buff_duel.set("run_difficulty", 10)
 	buff_duel.set("opponent_card_ids", [
 		&"BaGuaFangWei",
 		&"TaiZuChangQuan",
@@ -1039,14 +1039,14 @@ func _check_difficulty_opening_effects() -> void:
 		var card_id := StringName(card.get("card_id", &""))
 		var catalog_powers: Array = Catalog.get_definition(card_id).get("powers", [])
 		if card_id == &"BaGuaFangWei":
-			_check(card.get("powers", []) == [-1, -1, -1, -1], "Difficulty nine keeps special-negative enemy cards unchanged")
+			_check(card.get("powers", []) == [-1, -1, -1, -1], "Difficulty ten keeps special-negative enemy cards unchanged")
 			continue
 		var expected_buffed: Array = []
 		for power_value: Variant in catalog_powers:
 			expected_buffed.append(int(power_value) + 1)
 		if card.get("powers", []) == expected_buffed:
 			changed_count += 1
-	_check(changed_count == 0, "Difficulty nine no longer buffs an enemy opening hand card")
+	_check(changed_count == 0, "Difficulty ten no longer buffs an enemy opening hand card")
 	_check(buff_duel.debug_get_presentation_trace().is_empty(), "Retired opening hand buff emits no presentation")
 	var buff_replay_record: Variant = buff_duel.get("_replay_record")
 	var buff_replay_initial_state: Variant = buff_replay_record.get_initial_state()
@@ -1054,7 +1054,7 @@ func _check_difficulty_opening_effects() -> void:
 		buff_replay_initial_state != null
 		and buff_replay_initial_state.get_hand(Rules.OPPONENT_OWNER)
 		== buff_state.get_hand(Rules.OPPONENT_OWNER),
-		"Replay snapshots the unmodified difficulty-nine enemy opening hand"
+		"Replay snapshots the unmodified difficulty-ten enemy opening hand"
 	)
 	buff_duel.queue_free()
 	await process_frame
@@ -1064,16 +1064,16 @@ func _check_search_budget_by_difficulty() -> void:
 	var difficulty_zero_duel: Node = _instantiate_duel()
 	difficulty_zero_duel.set("run_difficulty", 0)
 	_check(
-		int(difficulty_zero_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 2,
-		"Difficulty zero limits production enemy search to depth two"
+		int(difficulty_zero_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 1,
+		"Difficulty zero limits production enemy search to depth one"
 	)
 	difficulty_zero_duel.queue_free()
 
 	var difficulty_one_duel: Node = _instantiate_duel()
 	difficulty_one_duel.set("run_difficulty", 1)
 	_check(
-		int(difficulty_one_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 3,
-		"Difficulty one limits production enemy search to depth three"
+		int(difficulty_one_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 2,
+		"Difficulty one limits production enemy search to depth two"
 	)
 	difficulty_one_duel.debug_set_search_limits(5.0, {"max_depth": 1})
 	_check(
@@ -1085,24 +1085,32 @@ func _check_search_budget_by_difficulty() -> void:
 	var difficulty_two_duel: Node = _instantiate_duel()
 	difficulty_two_duel.set("run_difficulty", 2)
 	_check(
-		not difficulty_two_duel.debug_get_effective_search_limits().has("max_depth"),
-		"Difficulty two and above keep the existing time-only production search"
+		int(difficulty_two_duel.debug_get_effective_search_limits().get("max_depth", 0)) == 3,
+		"Difficulty two limits production enemy search to depth three"
 	)
 	difficulty_two_duel.queue_free()
 
-	var difficulty_nine_duel: Node = _instantiate_duel()
-	difficulty_nine_duel.set("run_difficulty", 9)
-	root.add_child(difficulty_nine_duel)
+	var difficulty_three_duel: Node = _instantiate_duel()
+	difficulty_three_duel.set("run_difficulty", 3)
+	_check(
+		not difficulty_three_duel.debug_get_effective_search_limits().has("max_depth"),
+		"Difficulty three and above keep the existing time-only production search"
+	)
+	difficulty_three_duel.queue_free()
+
+	var difficulty_ten_duel: Node = _instantiate_duel()
+	difficulty_ten_duel.set("run_difficulty", 10)
+	root.add_child(difficulty_ten_duel)
 	await process_frame
 	await process_frame
 	_check(
 		is_equal_approx(
-			float(difficulty_nine_duel.debug_get_search_budget_seconds()),
+			float(difficulty_ten_duel.debug_get_search_budget_seconds()),
 			10.0
 		),
-		"Difficulty nine doubles the five-second enemy search limit"
+		"Difficulty ten doubles the five-second enemy search limit"
 	)
-	difficulty_nine_duel.queue_free()
+	difficulty_ten_duel.queue_free()
 	await process_frame
 
 
@@ -1347,9 +1355,9 @@ func _check_normal_opponent_concealment(duel: Node) -> void:
 		_check(bool(first_card.call("is_face_down")) and not revealed_picture.visible and (first_card.get_node("Overlay/ArtPlaceholder") as Label).text == "◆" and first_card.tooltip_text.is_empty(), "Repeated conceal calls remain idempotent and restore the card back")
 
 
-func _check_difficulty_eight_power_concealment() -> void:
+func _check_difficulty_nine_power_concealment() -> void:
 	var difficulty_duel: Node = _instantiate_duel()
-	difficulty_duel.set("run_difficulty", 8)
+	difficulty_duel.set("run_difficulty", 9)
 	root.add_child(difficulty_duel)
 	await process_frame
 	await process_frame
@@ -1366,7 +1374,7 @@ func _check_difficulty_eight_power_concealment() -> void:
 			and not (card.get_node("Overlay/BottomPower") as Label).visible
 			and not (card.get_node("Overlay/LeftPower") as Label).visible
 		)
-	_check(all_powers_hidden, "Difficulty eight hides every unrevealed opponent power")
+	_check(all_powers_hidden, "Difficulty nine hides every unrevealed opponent power")
 	difficulty_duel.queue_free()
 	await process_frame
 
@@ -1469,7 +1477,7 @@ func _submit_card_tap(card: Control) -> void:
 
 func _check_live_search_depth_status() -> void:
 	var ai_duel: Node = _instantiate_duel()
-	ai_duel.set("run_difficulty", 2)
+	ai_duel.set("run_difficulty", 3)
 	root.add_child(ai_duel)
 	await process_frame
 	await process_frame
@@ -1497,7 +1505,7 @@ func _check_live_search_depth_status() -> void:
 
 func _check_inspector_holds_completed_ai_move() -> void:
 	var ai_duel: Node = _instantiate_duel()
-	ai_duel.set("run_difficulty", 2)
+	ai_duel.set("run_difficulty", 3)
 	root.add_child(ai_duel)
 	await process_frame
 	await process_frame

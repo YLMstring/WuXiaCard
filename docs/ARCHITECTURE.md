@@ -55,7 +55,7 @@ Neither state nor action data may contain Nodes, Controls, audio players, tweens
 ### Rules
 
 - `difficulty_rules.gd` — the single pure-data table for difficulty prompt text,
-  completion thresholds, first-player deck restriction, opening Bagua setup,
+  completion thresholds, opening Bagua setup, defeat-reward tier ceiling,
   unrevealed-power concealment, and enemy search-time multiplier.
 - `duel_opening_setup.gd` — pure initial-board construction. It owns the stable
   12-pair orthogonal adjacency space, seeded uniform selection, and
@@ -103,13 +103,13 @@ suppression.
 
 Before constructing `DuelState`, the controller chooses the first owner and
 passes it, the active difficulty, and a dedicated layout RNG to
-`DuelOpeningSetup`. Before difficulty 3, the returned board contains two
+`DuelOpeningSetup`. Before difficulty 4, the returned board contains two
 later-owner Bagua cards. A later player instead receives one uniformly random
-Bagua at difficulties 3–5 and none at difficulties 6–9. A later opponent still
+Bagua at difficulties 4–6 and none at difficulties 7–10. A later opponent still
 receives two adjacent Bagua; their four powers are set directly to 2 at
-difficulties 4–6 and to 4 at difficulties 7–9. The setup is static: board views
+difficulties 5–7 and to 4 at difficulties 8–10. The setup is static: board views
 reconcile without summon transitions, and replay snapshots it before the first
-action. Difficulty 9 instead doubles the enemy's search deadline; it does not
+action. Difficulty 10 instead doubles the enemy's search deadline; it does not
 modify opening-hand powers.
 
 After the complete initial state is assembled, `DuelInitialStateFactory`
@@ -205,7 +205,7 @@ An action with stale or missing context returns `NO_EFFECT` and later actions co
 
 The retired difficulty-eight draw latch remains serialized in compact and replay
 state so older payloads stay shape-compatible, but current rules never consume
-it or create a draw. Difficulty 8 is now presentation-only concealment; it does
+it or create a draw. Difficulty 9 is now presentation-only concealment; it does
 not alter authoritative actions, transitions, search keys, or AI information.
 
 ### Search
@@ -314,9 +314,13 @@ schema 10 separates global maximum difficulty, persistent last selection, and
 active-run difficulty. Pre-schema-10 saves migrate with difficulty 2 unlocked
 and selected; preserved active runs also use difficulty 2. Schema-7 saves
 migrate with empty mastery without closing an active run. Schema 11 changes
-each sect's best score into a sparse dictionary keyed by difficulty `0..9`.
-Earlier scalar sect scores migrate into difficulties 0, 1, and 2; the first two
-are capped at 500 while difficulty 2 retains the old value. Schema 12 adds the
+each sect's best score into a sparse dictionary keyed by difficulty. Schema 14
+extends the range to `0..10` by inserting a new difficulty 1: old difficulty 0
+fields remain 0, old nonzero fields shift by one, old difficulty-0 scores copy
+to new difficulties 0 and 1, and old difficulty-1 through 9 scores move to 2
+through 10 before downward propagation. Earlier scalar sect scores therefore
+finish in difficulties 0 through 3: difficulties 0–2 are capped at 500 while
+difficulty 3 retains the old value. Schema 12 adds the
 five ordered active-run `run_sect_pool_ids`. A preserved older active run derives
 one deterministic pool from stable save contents; inactive profiles keep it
 empty. The profile store uses that pool only while constructing opening random
@@ -325,8 +329,9 @@ cards and ordinary reward candidates, so it never enters duel or search state.
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,
 updates the current sect's best for the completed difficulty and every lower
-difficulty, unlocks the next difficulty, closes the run, and restores the
-default deck in one atomic save. Difficulties 0 and 1 cap both the ending score
+difficulty, records a newly raised maximum in the ending summary, unlocks the
+next difficulty, closes the run, and restores the default deck in one atomic
+save. Difficulties 0, 1, and 2 cap both the ending score
 and their stored best at 500. Abandon never enters this
 transaction. Legacy active saves lack
 reconstructable history, so migration closes their run and restores the
@@ -480,7 +485,7 @@ side-deck card was removed.
 returns from the board and preserved-instance returns from discard. A newly
 public non-draw addition emits `card_revealed` immediately after its addition
 or return event. A normally drawn opponent card remains identity-concealed, but
-its powers are visible below difficulty 8. Difficulty 8 and above suppress those
+its powers are visible below difficulty 9. Difficulty 9 and above suppress those
 labels too; the AI still receives the same complete state.
 
 `ability_lost` is identity-free. It identifies the affected card instance but not a named ability. New rules follow the same pattern: mutate only simulation data, emit enough stable identifiers for the controller, and keep event ordering deterministic.

@@ -22,8 +22,8 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
-	profile["max_unlocked_difficulty"] = 3
-	profile["last_selected_difficulty"] = 3
+	profile["max_unlocked_difficulty"] = 10
+	profile["last_selected_difficulty"] = 10
 	_check(store.save_profile(profile), "Reward-scene fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
 		profile,
@@ -32,13 +32,13 @@ func _run() -> void:
 		&"qingfeng_xuedi",
 		null,
 		false,
-		3
+		10
 	)
 	profile = begin_result.get("profile", profile)
 	var run_sect_pool_ids: Array[StringName] = store.get_run_sect_pool_ids(profile)
 	_check(run_sect_pool_ids.size() == 5, "Reward-scene fixture has five run sects")
 	profile["best_scores_by_sect"] = {
-		String(run_sect_pool_ids[0]): {"0": 123, "3": 321},
+		String(run_sect_pool_ids[0]): {"0": 123, "10": 321},
 	}
 	for next_level: int in range(2, 12):
 		var advance_result: Dictionary = store.advance_after_victory_and_save(
@@ -166,7 +166,7 @@ func _run() -> void:
 	var sect_snapshot: Dictionary = reward.card_inspector.get_card_snapshot()
 	_check(
 		StringName(String(sect_snapshot.get("id", ""))) == run_sect_pool_ids[0]
-		and String(sect_snapshot.get("sect", "")) == "进阶三：321",
+		and String(sect_snapshot.get("sect", "")) == "进阶十：321",
 		"Sect inspection displays the current-difficulty best score"
 	)
 	reward.card_inspector.close()

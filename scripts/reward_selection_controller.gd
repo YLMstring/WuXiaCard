@@ -25,6 +25,7 @@ const DIFFICULTY_NUMERALS: Array[String] = [
 	"七",
 	"八",
 	"九",
+	"十",
 ]
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH

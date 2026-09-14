@@ -85,7 +85,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var opponent_card_ids: Array[StringName] = []
 @export var opponent_self_castration_enabled: bool = true
 @export var remembered_enemy_glyphs: Array[String] = []
-@export_range(0, 9) var run_difficulty: int = 0
+@export_range(0, 10) var run_difficulty: int = 0
 
 var turn_state: TurnState = TurnState.PLAYER
 var testing_mode: bool = Settings.default_testing_mode()
