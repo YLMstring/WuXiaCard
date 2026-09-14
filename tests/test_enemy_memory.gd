@@ -31,8 +31,8 @@ func _run() -> void:
 	_check(bool(begin_result.get("ok", false)), "Enemy-memory run starts")
 	var profile: Dictionary = begin_result.get("profile", {})
 	var enemy: Dictionary = Enemies.get_definition(ENEMY_ID)
-	var first_card_id := StringName(String((enemy["deck"] as Array)[0]))
-	var shared_glyph: String = String(Cards.get_definition(first_card_id)["glyph"])
+	var shared_glyph: String = _find_shared_glyph(enemy["deck"] as Array)
+	_check(not shared_glyph.is_empty(), "Fixture contains a shared card glyph")
 	var remember_result: Dictionary = store.remember_enemy_glyph_and_save(profile, shared_glyph)
 	_check(bool(remember_result.get("ok", false)), "Shared glyph is remembered")
 	profile = remember_result.get("profile", profile)
@@ -136,6 +136,17 @@ func _hand_glyphs(hand: Array) -> Array[String]:
 		if not glyph.is_empty() and glyph not in result:
 			result.append(glyph)
 	return result
+
+
+func _find_shared_glyph(card_ids: Array) -> String:
+	var first_card_id_by_glyph: Dictionary = {}
+	for card_id_value: Variant in card_ids:
+		var card_id := StringName(String(card_id_value))
+		var glyph: String = String(Cards.get_definition(card_id).get("glyph", ""))
+		if glyph in first_card_id_by_glyph:
+			return glyph
+		first_card_id_by_glyph[glyph] = card_id
+	return ""
 
 
 func _cleanup() -> void:
