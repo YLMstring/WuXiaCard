@@ -56,6 +56,7 @@ $testScripts = @(
     "test_sect_catalog.gd",
     "test_enemy_catalog.gd",
     "test_deck_profile_store.gd",
+	"test_beginner_opening_sequence.gd",
     "test_ending_profile.gd",
     "test_deck_library_grid.gd",
     "test_deck_builder_integration.gd",

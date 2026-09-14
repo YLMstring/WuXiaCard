@@ -56,8 +56,19 @@ func _run() -> void:
 			for value: Variant in deck:
 				_check(StringName(String(value)) in card_ids, "%s uses a known card" % enemy_id)
 	_check(
-		observed_enemy_ids.size() == Catalog.get_all_enemy_ids().size(),
-		"Level candidate lookup covers every configured enemy"
+		observed_enemy_ids.size() == Catalog.get_all_enemy_ids().size() - 1,
+		"Level candidate lookup covers every ordinary configured enemy"
+	)
+	var beginner_enemy: Dictionary = Catalog.get_definition(&"dukou_daoshi")
+	_check(
+		int(beginner_enemy.get("level", -1)) == 0
+		and bool(beginner_enemy.get("special_only", false)),
+		"Beginner Linghu Chong is an explicit level-zero special enemy"
+	)
+	_check(
+		&"dukou_daoshi" not in observed_enemy_ids
+		and Catalog.get_enemy_ids_for_level(0).is_empty(),
+		"Special enemies never enter ordinary level candidate lookup"
 	)
 
 	var seeded_a := RandomNumberGenerator.new()
@@ -118,6 +129,25 @@ func _run() -> void:
 	_check(
 		not Catalog.validate_definition(invalid_switch).is_empty(),
 		"Enemy self-castration declarations must be Boolean"
+	)
+	var invalid_special: Dictionary = duplicate_fixture.duplicate(true)
+	invalid_special["special_only"] = 1
+	_check(
+		not Catalog.validate_definition(invalid_special).is_empty(),
+		"Enemy special-only declarations must be Boolean"
+	)
+	var valid_level_zero_special: Dictionary = duplicate_fixture.duplicate(true)
+	valid_level_zero_special["level"] = 0
+	valid_level_zero_special["special_only"] = true
+	_check(
+		Catalog.validate_definition(valid_level_zero_special).is_empty(),
+		"Explicit special enemies may use level zero"
+	)
+	var invalid_level_zero_ordinary: Dictionary = valid_level_zero_special.duplicate(true)
+	invalid_level_zero_ordinary["special_only"] = false
+	_check(
+		not Catalog.validate_definition(invalid_level_zero_ordinary).is_empty(),
+		"Ordinary enemies may not use level zero"
 	)
 	var valid_sect: Dictionary = duplicate_fixture.duplicate(true)
 	valid_sect["sect_id"] = &"TaiShanPai"

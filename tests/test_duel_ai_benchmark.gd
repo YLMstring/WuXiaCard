@@ -310,16 +310,18 @@ func _check_enemy_state_factory() -> void:
 		== _card_ids_for_enemy(deck_swap_state, games[2], enemy_b, false),
 		"Enemy B keeps its deterministic side-deck order when owners swap"
 	)
-	_check(
-		Rules.EFFECT_GATE_SELF_CASTRATION
-		not in repeated_state.get_enabled_effect_gates(Rules.PLAYER_OWNER),
-		"Young Escort Lin Pingzhi disables self-castration in benchmark states"
-	)
-	_check(
-		Rules.EFFECT_GATE_SELF_CASTRATION
-		in repeated_state.get_enabled_effect_gates(Rules.OPPONENT_OWNER),
-		"Ordinary enemy benchmark decks enable self-castration"
-	)
+	var opening_enemies: Dictionary = games[0].get("enemy_by_owner", {}) as Dictionary
+	for owner: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var owner_enemy_id := StringName(opening_enemies.get(owner, &""))
+		var has_self_castration: bool = (
+			Rules.EFFECT_GATE_SELF_CASTRATION
+			in repeated_state.get_enabled_effect_gates(owner)
+		)
+		_check(
+			has_self_castration == (owner_enemy_id != &"qingfeng_xuedi"),
+			"Benchmark owner %d applies %s's self-castration declaration"
+			% [owner, owner_enemy_id]
+		)
 	_check(
 		repeated_state.remembered_glyphs_by_owner[Rules.PLAYER_OWNER]
 		== EnemyStateFactory.opening_glyphs(repeated_state, Rules.OPPONENT_OWNER)

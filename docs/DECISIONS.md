@@ -439,8 +439,10 @@ respectively, in row-major order. The source itself is eligible.
 - A run ends after a configurable number of victories. Production difficulty
   0 ends after 12 wins, difficulty 1 after 13, difficulty 2 after 14, and
   difficulties 3–10 after 15.
-- Only completed wins and completed losses are effective duels. Abandoning a
-  duel changes neither score inputs nor defeated-enemy history.
+- Only completed wins and completed losses in the formal run are effective
+  duels. Abandoning a duel changes neither score inputs nor defeated-enemy
+  history. The two Huashan difficulty-0 beginner opening duels are an explicit
+  exception: no result from them is effective history.
 - Every victory appends the exact current enemy ID in chronological order.
 - Raw final score is `floor(15000 / effective_duel_count)`. Difficulties 0, 1,
   and 2 cap the actual ending score at 500; difficulties 3 through 10 keep the
@@ -848,3 +850,23 @@ respectively, in row-major order. The source itself is eligible.
 - Tutorial textures are loaded together only while the tutorial scene is alive,
   so page changes do not stall and the high-resolution pages are not retained
   through later duels.
+
+## 华山进阶零新手序章对战
+
+- Every new Huashan difficulty-0 run starts against 爱护师弟·令狐冲, then
+  江湖武师, before the formal first enemy 少镖头·林平之. Other sects and
+  difficulties retain ordinary enemy selection.
+- A defeat in either opening duel grants the ordinary randomized tier-one
+  reward and keeps the same opponent. A victory grants the same reward and
+  advances to the next fixed opponent without leveling.
+- Opening-duel wins and losses do not increment `effective_duel_count`; opening
+  wins do not enter `defeated_enemy_ids`, the ending prose, or the formal
+  12-victory completion threshold. Eligible card mastery still commits on an
+  opening victory.
+- Defeating Lin Pingzhi is the first formal victory: it records one effective
+  duel and one defeated enemy, then advances the player to level 2.
+- The opening stage is persisted independently of the ten-page tutorial gate.
+  Old saves never infer it. Run reset, completion, and retirement clear it.
+- 爱护师弟·令狐冲 is a level-zero `special_only` catalog enemy. Such enemies
+  remain available by exact ID but never enter ordinary level pools or random
+  enemy selection.

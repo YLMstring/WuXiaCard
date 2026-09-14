@@ -45,7 +45,11 @@ func _run() -> void:
 	var store: RefCounted = Store.new(_save_path)
 	var profile: Dictionary = store.load_profile()
 	_check(store.is_profile_valid(profile), "Default profile is valid")
-	_check(int(profile["schema_version"]) == 14, "Default profile uses schema version 14")
+	_check(int(profile["schema_version"]) == 15, "Default profile uses schema version 15")
+	_check(
+		store.get_beginner_opening_stage(profile) == Store.BEGINNER_OPENING_NONE,
+		"Default profiles have no beginner opening stage"
+	)
 	_check(not store.is_tutorial_pending(profile), "Default profile has no pending tutorial")
 	_check(
 		(profile["shown_guaranteed_reward_card_ids"] as Array).is_empty(),
@@ -383,7 +387,7 @@ func _run() -> void:
 	schema_one.erase("selected_sect_id")
 	var migrated: Dictionary = store.repair_profile(schema_one)
 	_check(store.is_profile_valid(migrated), "A schema-1 profile migrates to a valid current profile")
-	_check(int(migrated["schema_version"]) == 14, "Migration advances the schema version")
+	_check(int(migrated["schema_version"]) == 15, "Migration advances the schema version")
 	_check(
 		store.get_unlocked_sect_ids(migrated) == [&"HuaShanPai"],
 		"Migration adds only the default sect"

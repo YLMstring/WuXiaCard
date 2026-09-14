@@ -23,6 +23,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_deck_profile_store.gd` — default profile, validation/repair, schema
   migration through per-difficulty score schema 11, difficulty persistence,
   atomic saves, exchanges, unlock ordering, and save-failure rollback.
+- `test_beginner_opening_sequence.gd` — schema-15 opening-stage persistence,
+  fixed Linghu/Wushi progression, tier-one rewards, score/history isolation,
+  formal Lin Pingzhi handoff, old-save migration, and other-mode isolation.
 - `test_ending_profile.gd` — effective-duel history, atomic completion,
   difficulty-specific score caps and downward propagation, per-sect isolation,
   difficulty unlock/reset behavior, and legacy migration.

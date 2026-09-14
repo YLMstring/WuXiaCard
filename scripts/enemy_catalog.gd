@@ -44,7 +44,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
-	{"id": &"dukou_daoshi", "name": "爱护师弟·令狐冲", "level": 0, "deck": [&"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"CangSongYingKe1"]},
+	{"id": &"dukou_daoshi", "name": "爱护师弟·令狐冲", "level": 0, "special_only": true, "deck": [&"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"ZiXiaGong1", &"CangSongYingKe1"]},
 	{"id": &"dukou_xiaoke", "name": "江湖武师", "level": 1, "deck": [&"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"]},
 	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"TaiZuChangQuan", &"TaiZuChangQuan", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2"]},
@@ -109,7 +109,10 @@ static func get_enemy_ids_for_level(level: int) -> Array[StringName]:
 	var result: Array[StringName] = []
 	for enemy_id: StringName in ALL_ENEMY_IDS:
 		var definition: Dictionary = _enemy_definitions.get(enemy_id, {})
-		if int(definition.get("level", -1)) == level:
+		if (
+			int(definition.get("level", -1)) == level
+			and not bool(definition.get("special_only", false))
+		):
 			result.append(enemy_id)
 	return result
 
@@ -193,9 +196,13 @@ static func _validate_definition(
 		errors.append("Enemy definition ID does not match key: %s" % enemy_id)
 	if String(definition.get("name", "")).strip_edges().is_empty():
 		errors.append("Enemy %s requires a non-empty name" % enemy_id)
-	var level: int = int(definition.get("level", 0))
-	if level < 1 or level > 15:
-		errors.append("Enemy %s requires a level from 1 to 15" % enemy_id)
+	var special_only_value: Variant = definition.get("special_only", false)
+	if definition.has("special_only") and typeof(special_only_value) != TYPE_BOOL:
+		errors.append("Enemy %s requires a Boolean special_only" % enemy_id)
+	var special_only: bool = special_only_value if typeof(special_only_value) == TYPE_BOOL else false
+	var level: int = int(definition.get("level", -1))
+	if level < 0 or level > 15 or (level == 0 and not special_only):
+		errors.append("Enemy %s requires level 1 to 15 unless it is a level-zero special" % enemy_id)
 	if (
 		definition.has("self_castration_enabled")
 		and typeof(definition.get("self_castration_enabled")) != TYPE_BOOL

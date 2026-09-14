@@ -345,6 +345,19 @@ transaction. Legacy active saves lack
 reconstructable history, so migration closes their run and restores the
 default deck while preserving card/sect unlocks.
 
+Schema 15 adds `beginner_opening_stage` for the Huashan difficulty-0 opening.
+Stages one and two bind the active profile to the exact level-zero Linghu and
+level-one Jianghu Wushi enemies while the player remains level 1. The profile
+store resolves these duels before the ordinary history transaction: defeat
+keeps the stage, victory advances its fixed enemy, and neither result changes
+effective-duel history or formal defeated-enemy history. Victory still commits
+eligible card mastery. Stage two victory clears the stage and selects Lin
+Pingzhi at level 1; his duel and every later duel use the ordinary transaction.
+Old profiles always migrate to stage zero instead of inferring a stage from an
+enemy ID. `EnemyCatalog` marks Linghu `special_only`; ordinary level lookup and
+random selection filter such definitions, while direct ID lookup remains
+available to the profile store and benchmark tools.
+
 At duel construction, the controller snapshots the player's five exact
 main-deck IDs. Every successful player hand play whose ID is in that snapshot
 becomes a mastery candidate, including a drawn or freshly created identical

@@ -80,6 +80,11 @@ func _run() -> void:
 	)
 	auto_profile = auto_store.load_profile()
 	_check(not auto_store.is_tutorial_pending(auto_profile), "Completing the tutorial persists its gate")
+	_check(
+		auto_store.get_beginner_opening_stage(auto_profile) == Store.BEGINNER_OPENING_LINGHU
+		and auto_store.get_current_enemy_id(auto_profile) == Store.BEGINNER_LINGHU_ENEMY_ID,
+		"Automatic Huashan difficulty-zero start preserves the Linghu beginner duel"
+	)
 	resumed_auto_flow.queue_free()
 	await process_frame
 
@@ -232,7 +237,15 @@ func _run() -> void:
 	)
 	var store := Store.new(runtime_save_path)
 	_check(store.get_character_level(active_profile) == 1, "Sect confirmation starts level one")
+	_check(
+		store.get_beginner_opening_stage(active_profile) == Store.BEGINNER_OPENING_LINGHU,
+		"Huashan difficulty zero begins in the Linghu opening stage"
+	)
 	var level_one_enemy_id: StringName = store.get_current_enemy_id(active_profile)
+	_check(
+		level_one_enemy_id == Store.BEGINNER_LINGHU_ENEMY_ID,
+		"Huashan difficulty zero fixes the first enemy to Linghu Chong"
+	)
 	var level_one_enemy: Dictionary = Enemies.get_definition(level_one_enemy_id)
 	_check(builder.upcoming_enemy_name == String(level_one_enemy["name"]), "Deck builder shows the saved level-one enemy")
 	_check(
@@ -323,19 +336,68 @@ func _run() -> void:
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Testing-mode victory skips an empty reward pool")
-	var victorious_profile: Dictionary = store.load_profile()
+	var first_opening_win_profile: Dictionary = store.load_profile()
 	_check(
-		store.is_card_mastered(victorious_profile, mastery_fixture_id),
+		store.is_card_mastered(first_opening_win_profile, mastery_fixture_id),
 		"Winning persists the played main-deck card as globally mastered"
 	)
-	_check(store.get_character_level(victorious_profile) == 2, "Completed victory advances one level")
+	_check(
+		store.get_character_level(first_opening_win_profile) == 1
+		and store.get_beginner_opening_stage(first_opening_win_profile)
+		== Store.BEGINNER_OPENING_WUSHI
+		and store.get_current_enemy_id(first_opening_win_profile)
+		== Store.BEGINNER_WUSHI_ENEMY_ID,
+		"First beginner victory advances to Jianghu Wushi without leveling"
+	)
+	_check(
+		store.get_effective_duel_count(first_opening_win_profile) == 0
+		and store.get_defeated_enemy_ids(first_opening_win_profile).is_empty(),
+		"First beginner victory stays outside formal run history"
+	)
+
+	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	await process_frame
+	duel = flow.debug_get_current_screen() as DuelController
+	duel.return_requested.emit(&"victory")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Second testing-mode beginner victory skips the empty reward pool")
+	var formal_level_one_profile: Dictionary = store.load_profile()
+	_check(
+		store.get_character_level(formal_level_one_profile) == 1
+		and store.get_beginner_opening_stage(formal_level_one_profile)
+		== Store.BEGINNER_OPENING_NONE
+		and store.get_current_enemy_id(formal_level_one_profile)
+		== Store.BEGINNER_FORMAL_ENEMY_ID,
+		"Second beginner victory enters the formal Lin Pingzhi duel without leveling"
+	)
+	_check(
+		store.get_effective_duel_count(formal_level_one_profile) == 0
+		and store.get_defeated_enemy_ids(formal_level_one_profile).is_empty(),
+		"Second beginner victory stays outside formal run history"
+	)
+
+	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	await process_frame
+	duel = flow.debug_get_current_screen() as DuelController
+	duel.return_requested.emit(&"victory")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Formal testing-mode victory skips the empty reward pool")
+	var victorious_profile: Dictionary = store.load_profile()
+	_check(store.get_character_level(victorious_profile) == 2, "Lin Pingzhi victory advances to level two")
+	_check(
+		store.get_effective_duel_count(victorious_profile) == 1
+		and store.get_defeated_enemy_ids(victorious_profile) == [&"qingfeng_xuedi"],
+		"Lin Pingzhi becomes the first formal scored victory"
+	)
 	_check(
 		&"CangSongYingKe2" in store.get_unlocked_ids(victorious_profile),
 		"Crossing into tier two preserves the selected sect's owned tier-two card"
 	)
 	_check(
 		victorious_profile["library_slots"] == library_before_victory,
-		"A tier crossing with no newly eligible cards preserves library order"
+		"The formal tier crossing with no newly eligible cards preserves library order"
 	)
 	var level_two_enemy_id: StringName = store.get_current_enemy_id(victorious_profile)
 	var level_two_enemy: Dictionary = Enemies.get_definition(level_two_enemy_id)

@@ -7,7 +7,7 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 
-const SCHEMA_VERSION: int = 14
+const SCHEMA_VERSION: int = 15
 const COMPLETED_RUN_HISTORY_SCHEMA_VERSION: int = 7
 const MASTERY_SCHEMA_VERSION: int = 8
 const GUARANTEED_REWARD_HISTORY_SCHEMA_VERSION: int = 9
@@ -16,6 +16,7 @@ const DIFFICULTY_BEST_SCORE_SCHEMA_VERSION: int = 11
 const SECT_POOL_SCHEMA_VERSION: int = 12
 const TUTORIAL_STATE_SCHEMA_VERSION: int = 13
 const DIFFICULTY_INSERTION_SCHEMA_VERSION: int = 14
+const BEGINNER_OPENING_SCHEMA_VERSION: int = 15
 const MAIN_DECK_CAPACITY: int = 5
 const LIBRARY_CAPACITY: int = 1000
 const MAX_CHARACTER_LEVEL: int = 15
@@ -28,6 +29,12 @@ const LOW_DIFFICULTY_SCORE_CAP: int = 500
 const DEFAULT_SAVE_PATH: String = "user://wuxia_deck_profile.json"
 const REWARD_VICTORY: StringName = &"victory"
 const REWARD_DEFEAT: StringName = &"defeat"
+const BEGINNER_OPENING_NONE: int = 0
+const BEGINNER_OPENING_LINGHU: int = 1
+const BEGINNER_OPENING_WUSHI: int = 2
+const BEGINNER_LINGHU_ENEMY_ID: StringName = &"dukou_daoshi"
+const BEGINNER_WUSHI_ENEMY_ID: StringName = &"dukou_xiaoke"
+const BEGINNER_FORMAL_ENEMY_ID: StringName = &"qingfeng_xuedi"
 const DEFAULT_UNLOCKED_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
 ]
@@ -92,6 +99,7 @@ func create_default_profile() -> Dictionary:
 		"run_difficulty": 0,
 		"run_sect_pool_ids": [],
 		"tutorial_pending": false,
+		"beginner_opening_stage": BEGINNER_OPENING_NONE,
 		"level": 0,
 		"current_enemy_id": "",
 		"remembered_enemy_glyphs": [],
@@ -181,6 +189,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var run_difficulty_value: Variant = profile.get("run_difficulty", null)
 	var run_sect_pool_value: Variant = profile.get("run_sect_pool_ids", null)
 	var tutorial_pending_value: Variant = profile.get("tutorial_pending", null)
+	var beginner_opening_value: Variant = profile.get("beginner_opening_stage", null)
 	var level_value: Variant = profile.get("level", null)
 	var enemy_value: Variant = profile.get("current_enemy_id", null)
 	var remembered_glyphs_value: Variant = profile.get("remembered_enemy_glyphs", null)
@@ -201,6 +210,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or typeof(run_difficulty_value) != TYPE_INT
 		or typeof(run_sect_pool_value) != TYPE_ARRAY
 		or typeof(tutorial_pending_value) != TYPE_BOOL
+		or typeof(beginner_opening_value) != TYPE_INT
 		or typeof(level_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(enemy_value) != TYPE_STRING
 		or typeof(remembered_glyphs_value) != TYPE_ARRAY
@@ -218,6 +228,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var last_selected_difficulty: int = int(last_difficulty_value)
 	var run_difficulty: int = int(run_difficulty_value)
 	var tutorial_pending: bool = bool(tutorial_pending_value)
+	var beginner_opening_stage: int = int(beginner_opening_value)
 	if (
 		max_unlocked_difficulty < 0
 		or max_unlocked_difficulty > MAX_DIFFICULTY
@@ -234,6 +245,8 @@ func is_profile_valid(profile: Dictionary) -> bool:
 				or run_difficulty != 0
 			)
 		)
+		or beginner_opening_stage < BEGINNER_OPENING_NONE
+		or beginner_opening_stage > BEGINNER_OPENING_WUSHI
 	):
 		return false
 	var level: int = int(level_value)
@@ -287,8 +300,19 @@ func is_profile_valid(profile: Dictionary) -> bool:
 			observed_run_sects[run_sect_id] = true
 		if level < 1 or level > MAX_CHARACTER_LEVEL or not Enemies.has_enemy(current_enemy_id):
 			return false
-		if int(Enemies.get_definition(current_enemy_id).get("level", -1)) != level:
-			return false
+		if beginner_opening_stage == BEGINNER_OPENING_NONE:
+			if int(Enemies.get_definition(current_enemy_id).get("level", -1)) != level:
+				return false
+		else:
+			if (
+				selected_sect_id != &"HuaShanPai"
+				or run_difficulty != 0
+				or level != 1
+				or current_enemy_id != _beginner_enemy_for_stage(beginner_opening_stage)
+				or effective_duel_count != 0
+				or not (defeated_enemies_value as Array).is_empty()
+			):
+				return false
 	elif (
 		selected_sect_id != &""
 		or level != 0
@@ -299,6 +323,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 		or effective_duel_count != 0
 		or not (defeated_enemies_value as Array).is_empty()
 		or not (run_sect_pool_value as Array).is_empty()
+		or beginner_opening_stage != BEGINNER_OPENING_NONE
 	):
 		return false
 	var defeated_enemy_count: int = 0
@@ -442,6 +467,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 	var run_difficulty: int = 0
 	var run_sect_pool_ids: Array[StringName] = []
 	var tutorial_pending: bool = false
+	var beginner_opening_stage: int = BEGINNER_OPENING_NONE
 	var level: int = 0
 	var current_enemy_id: StringName = &""
 	var remembered_enemy_glyphs: Array[String] = []
@@ -465,13 +491,33 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 			if candidate_sect in unlocked_sects:
 				run_active = true
 				selected_sect_id = candidate_sect
+				var raw_beginner_stage: Variant = profile.get(
+					"beginner_opening_stage",
+					BEGINNER_OPENING_NONE
+				)
+				if (
+					schema_version >= BEGINNER_OPENING_SCHEMA_VERSION
+					and typeof(raw_beginner_stage) in [TYPE_INT, TYPE_FLOAT]
+					and float(raw_beginner_stage) == float(int(raw_beginner_stage))
+					and int(raw_beginner_stage) in [
+						BEGINNER_OPENING_LINGHU,
+						BEGINNER_OPENING_WUSHI,
+					]
+				):
+					beginner_opening_stage = int(raw_beginner_stage)
 				var candidate_level: int = clampi(
 					int(profile.get("level", 1)),
 					1,
 					MAX_CHARACTER_LEVEL
 				)
 				var candidate_enemy := StringName(String(profile.get("current_enemy_id", "")))
-				if (
+				var preserves_beginner_opening: bool = (
+					beginner_opening_stage != BEGINNER_OPENING_NONE
+					and candidate_sect == &"HuaShanPai"
+					and candidate_level == 1
+					and candidate_enemy == _beginner_enemy_for_stage(beginner_opening_stage)
+				)
+				if preserves_beginner_opening or (
 					Enemies.has_enemy(candidate_enemy)
 					and int(Enemies.get_definition(candidate_enemy).get("level", -1))
 					== candidate_level
@@ -479,6 +525,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 					level = candidate_level
 					current_enemy_id = candidate_enemy
 				else:
+					beginner_opening_stage = BEGINNER_OPENING_NONE
 					level = 1
 					current_enemy_id = Enemies.get_enemy_ids_for_level(1)[0]
 				var valid_glyphs: Dictionary = _enemy_glyph_set(current_enemy_id)
@@ -563,6 +610,18 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 				and selected_sect_id == &"HuaShanPai"
 				and run_difficulty == 0
 			)
+		if (
+			beginner_opening_stage != BEGINNER_OPENING_NONE
+			and (
+				run_difficulty != 0
+				or effective_duel_count != 0
+				or not defeated_enemy_ids.is_empty()
+			)
+		):
+			beginner_opening_stage = BEGINNER_OPENING_NONE
+			level = 1
+			current_enemy_id = Enemies.get_enemy_ids_for_level(1)[0]
+			remembered_enemy_glyphs.clear()
 	var catalog_ids: Array[StringName] = Catalog.get_all_card_ids()
 	if schema_version >= MASTERY_SCHEMA_VERSION:
 		var raw_mastery: Variant = profile.get("mastered_card_ids", [])
@@ -651,6 +710,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 		"run_difficulty": run_difficulty,
 		"run_sect_pool_ids": _string_array(run_sect_pool_ids),
 		"tutorial_pending": tutorial_pending,
+		"beginner_opening_stage": beginner_opening_stage,
 		"level": level,
 		"current_enemy_id": String(current_enemy_id),
 		"remembered_enemy_glyphs": remembered_enemy_glyphs,
@@ -775,7 +835,13 @@ func begin_run_and_save(
 	if not bool(expansion.get("ok", false)):
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var candidate: Dictionary = profile.duplicate(true)
-	var enemy_id: StringName = _choose_enemy_id(1, enemy_id_override)
+	var beginner_opening_stage: int = BEGINNER_OPENING_NONE
+	var enemy_id: StringName = &""
+	if sect_id == &"HuaShanPai" and difficulty == 0 and enemy_id_override == &"":
+		beginner_opening_stage = BEGINNER_OPENING_LINGHU
+		enemy_id = BEGINNER_LINGHU_ENEMY_ID
+	else:
+		enemy_id = _choose_enemy_id(1, enemy_id_override)
 	if enemy_id == &"":
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	_apply_unlock_expansion(candidate, expansion)
@@ -797,6 +863,7 @@ func begin_run_and_save(
 	candidate["run_difficulty"] = difficulty
 	candidate["run_sect_pool_ids"] = _string_array(run_sect_pool_ids)
 	candidate["tutorial_pending"] = sect_id == &"HuaShanPai" and difficulty == 0
+	candidate["beginner_opening_stage"] = beginner_opening_stage
 	candidate["level"] = 1
 	candidate["current_enemy_id"] = String(enemy_id)
 	candidate["remembered_enemy_glyphs"] = []
@@ -947,6 +1014,12 @@ func get_run_sect_pool_ids(profile: Dictionary) -> Array[StringName]:
 
 func is_tutorial_pending(profile: Dictionary) -> bool:
 	return is_profile_valid(profile) and bool(profile["tutorial_pending"])
+
+
+func get_beginner_opening_stage(profile: Dictionary) -> int:
+	if not is_profile_valid(profile):
+		return BEGINNER_OPENING_NONE
+	return int(profile["beginner_opening_stage"])
 
 
 func complete_tutorial_and_save(profile: Dictionary) -> Dictionary:
@@ -1106,6 +1179,31 @@ func record_completed_duel_and_save(
 	):
 		return failed
 
+	var beginner_opening_stage: int = get_beginner_opening_stage(profile)
+	if beginner_opening_stage != BEGINNER_OPENING_NONE:
+		var beginner_candidate: Dictionary = profile.duplicate(true)
+		if outcome == REWARD_VICTORY:
+			_apply_mastery_candidates(beginner_candidate, mastery_candidate_ids)
+			var beginner_advancement: Dictionary = _build_beginner_opening_advancement(
+				beginner_candidate
+			)
+			if not bool(beginner_advancement.get("ok", false)):
+				return failed
+			beginner_candidate = beginner_advancement.get(
+				"profile",
+				beginner_candidate
+			)
+		if not is_profile_valid(beginner_candidate) or not save_profile(beginner_candidate):
+			return failed
+		return {
+			"ok": true,
+			"completed": false,
+			"advanced": outcome == REWARD_VICTORY,
+			"profile": beginner_candidate,
+			"ending_summary": {},
+			"added_ids": [],
+		}
+
 	var candidate: Dictionary = profile.duplicate(true)
 	candidate["effective_duel_count"] = int(candidate["effective_duel_count"]) + 1
 	if outcome == REWARD_DEFEAT:
@@ -1192,7 +1290,7 @@ func create_reward_offer_and_save(
 			"profile": unchanged,
 			"reward_ids": existing,
 		}
-	var player_tier: int = get_character_tier(profile)
+	var player_tier: int = _reward_tier_for_profile(profile)
 	var defeat_reward_max_tier: int = Difficulty.get_max_defeat_reward_tier(
 		get_run_difficulty(profile),
 		player_tier
@@ -1367,6 +1465,22 @@ static func tier_for_level(level: int) -> int:
 	if level >= 2:
 		return 2
 	return 1
+
+
+func _reward_tier_for_profile(profile: Dictionary) -> int:
+	if get_beginner_opening_stage(profile) != BEGINNER_OPENING_NONE:
+		return 1
+	return get_character_tier(profile)
+
+
+static func _beginner_enemy_for_stage(stage: int) -> StringName:
+	match stage:
+		BEGINNER_OPENING_LINGHU:
+			return BEGINNER_LINGHU_ENEMY_ID
+		BEGINNER_OPENING_WUSHI:
+			return BEGINNER_WUSHI_ENEMY_ID
+		_:
+			return &""
 
 
 func _default_unlocked_ids() -> Array[StringName]:
@@ -1704,6 +1818,8 @@ func _build_victory_advancement(
 	profile: Dictionary,
 	enemy_id_override: StringName
 ) -> Dictionary:
+	if get_beginner_opening_stage(profile) != BEGINNER_OPENING_NONE:
+		return _build_beginner_opening_advancement(profile)
 	var unchanged: Dictionary = profile.duplicate(true)
 	_unlock_enemy_sect(unchanged, get_current_enemy_id(unchanged))
 	var current_level: int = get_character_level(profile)
@@ -1750,6 +1866,37 @@ func _build_victory_advancement(
 		"advanced": true,
 		"profile": candidate,
 		"added_ids": expansion.get("added_ids", []),
+	}
+
+
+func _build_beginner_opening_advancement(profile: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	var stage: int = get_beginner_opening_stage(profile)
+	var next_stage: int = BEGINNER_OPENING_NONE
+	var next_enemy_id: StringName = &""
+	match stage:
+		BEGINNER_OPENING_LINGHU:
+			next_stage = BEGINNER_OPENING_WUSHI
+			next_enemy_id = BEGINNER_WUSHI_ENEMY_ID
+		BEGINNER_OPENING_WUSHI:
+			next_stage = BEGINNER_OPENING_NONE
+			next_enemy_id = BEGINNER_FORMAL_ENEMY_ID
+		_:
+			return {
+				"ok": false,
+				"advanced": false,
+				"profile": unchanged,
+				"added_ids": [],
+			}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["beginner_opening_stage"] = next_stage
+	candidate["current_enemy_id"] = String(next_enemy_id)
+	candidate["remembered_enemy_glyphs"] = []
+	return {
+		"ok": true,
+		"advanced": true,
+		"profile": candidate,
+		"added_ids": [],
 	}
 
 

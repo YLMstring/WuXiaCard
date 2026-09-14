@@ -252,7 +252,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected
   sect before reward selection. Tier 5 remains the cap through level 15.
-- Completed wins and losses increment schema-7 run history atomically. A run
+- Formal completed wins and losses increment schema-7 run history atomically. A run
   completes at 12 victories on difficulty 0, 13 on difficulty 1, 14 on
   difficulty 2, and 15 on difficulties 3–10. Schema
   11 introduced a sparse per-difficulty score dictionary for each sect; schema
@@ -267,6 +267,17 @@ The creator has made several direct UI and localization edits. Preserve those ed
   run-only reward history to their fresh-profile values. Sect unlocks
   (including the final enemy's declared sect), mastery, and all per-difficulty
   best scores are retained.
+- Schema 15 adds the persisted `beginner_opening_stage`. Every newly created
+  Huashan difficulty-0 run begins with two score-neutral fixed duels:
+  `dukou_daoshi` (爱护师弟·令狐冲), then `dukou_xiaoke` (江湖武师).
+  Defeat grants the ordinary tier-one reward and keeps the same opponent;
+  victory grants the same reward and advances without leveling. Neither
+  outcome increments `effective_duel_count`, and the two victories do not enter
+  `defeated_enemy_ids` or the 12-win completion threshold. The stage clears at
+  `qingfeng_xuedi` (少镖头·林平之); defeating him is the first formal victory
+  and advances the player to level 2. Old saves migrate with stage zero.
+  `dukou_daoshi` is a catalog-declared level-zero `special_only` enemy and is
+  excluded from ordinary level lookup and random selection.
 - Schema 8 stores global mastery by exact card ID. A successful player hand
   play qualifies when that exact ID was in the main deck at duel start; a win
   commits the candidates, while defeat or abandon commits none. `闭关重修`
