@@ -52,6 +52,13 @@ count difference at `100` strategic points per card. Terminal ownership still
 uses the exact card-count difference. Hand count, hand and board
 powers/ki/abilities, and legal-action count remain. Search stays card-agnostic.
 
+A card whose four runtime powers are exactly `[-1, -1, -1, -1]` contributes
+`24` power points to non-terminal static evaluation, the same as `[6, 6, 6,
+6]`. This is only an evaluation proxy: stored powers, attack rules, structural
+ordering, state keys, and terminal scoring continue to use the real `-1`
+sentinel semantics. Any other mixture, such as `[-1, 6, 6, 6]`, keeps its real
+sum. The proxy is the sole production path and has no runtime switch.
+
 The native entry retains three default-off switches only so the removed terms
 can be reconstructed in controlled ablations. They are not production profile
 options. The result schema records whether each switch was enabled so benchmark
@@ -226,7 +233,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extend
 ```
 
 - Quick: 7 matchups / 28 games, nominal 1,500 nodes per decision.
-- Extended: all 28 matchups / 112 games, nominal 1,500 nodes, one progress
+- Extended: all 29 matchups / 116 games, nominal 1,500 nodes, one progress
   record written immediately after every game.
 - Production: 4 matchups / 16 games using the benchmark's explicit historical
   ten-second budget.
@@ -248,6 +255,18 @@ evaluator, while nodes per decision rose `7.05%` and time per decision rose
 `7.32%`. Per-node throughput was effectively unchanged (`-0.25%`). Production
 therefore retains flat non-terminal board ownership value, and the temporary
 runtime/benchmark switch was removed.
+
+The adopted 2026-09-13 all-minus-one evaluation experiment compared the
+four-six proxy with the former real sum of `-4`. The current fixed-depth-two
+Extended schedule finished `58-58` across 116 games, with every game terminal
+and no fallback, invalid transition, or incomplete search. A separate
+five-second, unlimited-depth/node high-tier round robin among 令狐冲、风清扬、
+东方不败、无名老僧 finished `18-14` for the proxy; it scored `9/16` both as
+first and second owner. Only 风清扬 mirror (`2-0`) and 东方不败 vs 无名老僧
+(`3-1`) produced a net matchup edge. The same-machine Release throughput check
+showed about `+0.9%`, within measurement noise rather than a performance
+regression. Production therefore keeps the proxy and removes the temporary
+legacy evaluator and benchmark variant.
 
 Profile the 14 unique real Quick openings separately with:
 

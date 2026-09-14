@@ -967,9 +967,15 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 		}
 		int32_t result = value.card_ki[card_index] * ki_weight;
 		const size_t power_offset = static_cast<size_t>(card_index) * 4;
+		int32_t power_sum = 0;
+		bool all_minus_one = true;
 		for (size_t direction = 0; direction < 4; ++direction) {
-			result += value.card_powers[power_offset + direction];
+			const int32_t power = value.card_powers[power_offset + direction];
+			power_sum += power;
+			all_minus_one = all_minus_one && power == -1;
 		}
+		// 四边 -1 是特殊规则标记，不是负资源；只在静态评估中以四边 6 代理。
+		result += all_minus_one ? 24 : power_sum;
 		result += static_cast<int32_t>(
 			value.card_runtime_abilities[card_index].size()
 		) * ability_weight;

@@ -31,6 +31,7 @@ func _run() -> void:
 	_test_native_depth_modes_match_fixed_and_iterative_search()
 	_test_native_search_solves_forced_terminal_choice()
 	_test_native_evaluation_feature_subtraction()
+	_test_all_minus_one_evaluation_proxy()
 	_test_native_search_node_budget_keeps_only_complete_depths()
 	_test_production_search_routes_to_native_whole_tree()
 	_test_native_search_honors_cancellation()
@@ -527,6 +528,53 @@ func _test_native_evaluation_feature_subtraction() -> void:
 	_check(not bool(production.get("deck_evaluation_enabled", true)), "Production search excludes deck evaluation")
 	_check(not bool(production.get("danger_evaluation_enabled", true)), "Production search excludes danger evaluation")
 	_check(not bool(production.get("tempo_evaluation_enabled", true)), "Production search excludes tempo evaluation")
+
+
+func _test_all_minus_one_evaluation_proxy() -> void:
+	var all_minus_one_score: int = _evaluation_score_for_root_hand_powers(
+		[-1, -1, -1, -1]
+	)
+	var all_six_score: int = _evaluation_score_for_root_hand_powers([6, 6, 6, 6])
+	var partial_minus_one_score: int = _evaluation_score_for_root_hand_powers(
+		[-1, 6, 6, 6]
+	)
+	_check(
+		all_minus_one_score == all_six_score,
+		"All-four-minus-one cards use the four-six static evaluation proxy"
+	)
+	_check(
+		partial_minus_one_score == all_six_score - 7,
+		"Partial minus-one powers keep their real static evaluation sum"
+	)
+
+
+func _evaluation_score_for_root_hand_powers(powers: Array) -> int:
+	var root_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"all_minus_one_root"
+	)
+	var opposing_card: Dictionary = Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"all_minus_one_opponent"
+	)
+	root_card["powers"] = powers.duplicate()
+	opposing_card["powers"] = [6, 6, 6, 6]
+	var state := State.new(
+		Rules.empty_board(),
+		[opposing_card],
+		[root_card],
+		Rules.OPPONENT_OWNER
+	)
+	var kernel: Object = _evaluation_kernel(state, "All-minus-one evaluation fixture")
+	if kernel == null:
+		return 0
+	var result: Dictionary = kernel.call(
+		"inspect_evaluation",
+		Rules.OPPONENT_OWNER,
+		false,
+		false,
+		false
+	) as Dictionary
+	_check(bool(result.get("valid", false)), "All-minus-one evaluation fixture is valid")
+	return int(result.get("score", 0))
 
 
 func _evaluation_kernel(state: State, label: String) -> Object:

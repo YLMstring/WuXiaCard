@@ -377,6 +377,14 @@ The creator has made several direct UI and localization edits. Preserve those ed
   fallback, invalid, or incomplete game; it also used `3.13%` fewer nodes and
   `2.12%` less search time. Treat this as no observed regression and only weak
   positive strength evidence, not a proven gain.
+- A card whose four runtime powers are all `-1` contributes `24` power points
+  to non-terminal static evaluation, matching four sixes. This does not alter
+  its stored powers, special rule semantics, ordering, state key, or terminal
+  score; partial negative combinations use their real sum. The fixed-depth-two
+  116-game catalog comparison finished `58-58`, while a separate five-second
+  32-game high-tier round robin finished `18-14` for the proxy with balanced
+  `9/16` first- and second-owner results. The proxy is now the sole production
+  behavior; its temporary legacy switch and benchmark variant were removed.
 - A later 2026-09-04 fixed-depth-two 112-game experiment discounted unstable
   board cards to `50` strategic points. It scored `46.5/112` (`41.5%`,
   `46-1-65`) against flat `100` values and increased nodes per decision by
@@ -433,7 +441,7 @@ The creator has made several direct UI and localization edits. Preserve those ed
   deadlines remain hard. Search and benchmark reports expose guard use and
   node overruns. Production keeps its hard ten-second deadline without this
   benchmark-only guard.
-- Extended runs all 112 real enemy-catalog crossover games at the fixed soft
+- Extended runs all 116 real enemy-catalog crossover games at the fixed soft
   1,500-node tier. Every completed game is immediately printed and appended to
   a timestamped `.progress.jsonl` checkpoint; the PowerShell wrapper streams
   those lines live. The final JSON shares the same artifact stem and references

@@ -196,8 +196,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
 ```
 
-`Quick` uses 7 enemy matchups/28 games and `Extended` uses all 28
-matchups/112 games. Both use a nominal 1,500 nodes per decision and protect
+`Quick` uses 7 enemy matchups/28 games and `Extended` uses all 29
+matchups/116 games. Both use a nominal 1,500 nodes per decision and protect
 complete-round depth one with `min_completed_depth = 1`; nodes are not reset
 after depth one, so reports must inspect guard-use and overrun diagnostics.
 `Production` uses 4 matchups/16 games with the real 10-second decision budget,
@@ -207,10 +207,16 @@ historical `enhanced`/`baseline` fields are assignment labels, not distinct
 algorithms. Pilot is optional and is not required before Extended.
 
 `EvaluationSubtraction` is a focused exception to that label rule. It runs the
-112-game Extended schedule at fixed `self_turn` depth two with no node/time
+116-game Extended schedule at fixed `self_turn` depth two with no node/time
 limit, keeps production PV/history/8 MiB TT, assigns the reduced production
 evaluator to `enhanced`, and restores deck/danger/tempo terms for `baseline`.
 Do not add it to the daily full suite.
+
+The former `AllMinusOneProxy` experiment and its legacy-evaluator runtime
+switch were removed after adoption. Permanent coverage belongs in
+`test_native_production_rules.gd`: four powers of `-1` must equal four powers
+of `6` in static evaluation, while partial negative combinations keep their
+real sum.
 
 Extended emits one `AI_BENCHMARK_GAME` line per completed game. It also appends
 one independently parseable record to a sibling `.progress.jsonl` checkpoint;
