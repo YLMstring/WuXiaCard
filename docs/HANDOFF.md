@@ -61,10 +61,10 @@ release-ready Android package.
   The current declarations and revalidation rules are in
   `docs/superpowers/specs/2026-09-08-owner-aura-redesign.md`.
 - Revealed-card inspectors format only the catalog `description` for reading:
-  outer complete sentences become spaced paragraphs, recognized rule prefixes
-  are emphasized, and granted effects inside `【】` are indented. The formatter
-  is pure presentation with a lossless fallback; snapshots retain the original
-  catalog text, and `flavor` remains an ordinary unformatted label.
+  outer complete sentences become ordinary Label paragraphs separated by about
+  half a line. Brackets and quotes remain intact and are neither split nor
+  indented. The formatter is pure presentation with a lossless fallback;
+  snapshots retain the original catalog text, and `flavor` remains unchanged.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing

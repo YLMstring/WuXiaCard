@@ -6,6 +6,7 @@ signal inspection_closed
 @export var close_drag_threshold: float = 12.0
 
 const PLACEHOLDER: String = "—"
+const DESCRIPTION_COLOR: Color = Color(0.2, 0.15, 0.1, 1)
 const ParchmentChromeData = preload("res://scripts/parchment_chrome.gd")
 const EffectTextFormatter = preload("res://scripts/card_effect_text_formatter.gd")
 
@@ -15,6 +16,7 @@ var _pointer_id: int = -2
 var _press_position: Vector2 = Vector2.ZERO
 var _gesture_moved: bool = false
 var _card_snapshot: Dictionary = {}
+var _description_font_size: int = 15
 
 @onready var parchment: Control = $Parchment
 @onready var shadow: Panel = $Parchment/Shadow
@@ -31,7 +33,7 @@ var _card_snapshot: Dictionary = {}
 @onready var tier_value: Label = $Parchment/Body/Margin/Scroll/Content/Tags/TierTag/Value
 @onready var weapon_tag: PanelContainer = $Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag
 @onready var weapon_value: Label = $Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag/Value
-@onready var description: RichTextLabel = $Parchment/Body/Margin/Scroll/Content/Description
+@onready var description: VBoxContainer = $Parchment/Body/Margin/Scroll/Content/Description
 @onready var flavor: Label = $Parchment/Body/Margin/Scroll/Content/Flavor
 
 
@@ -50,11 +52,10 @@ func present(card_data: Dictionary, board_rect: Rect2) -> void:
 	tier_value.text = _display_tier(_card_snapshot.get("tier", null))
 	weapon_value.text = _display_string(_card_snapshot.get("weapon", ""))
 	var description_text: String = _display_string(_card_snapshot.get("description", ""))
-	description.text = (
-		description_text
-		if description_text == PLACEHOLDER
-		else EffectTextFormatter.format_bbcode(description_text)
-	)
+	var description_paragraphs: Array[String] = [description_text]
+	if description_text != PLACEHOLDER:
+		description_paragraphs = EffectTextFormatter.split_paragraphs(description_text)
+	_set_description_paragraphs(description_paragraphs)
 	flavor.text = _display_string(_card_snapshot.get("flavor", ""))
 	set_board_rect(board_rect)
 	scroll.scroll_vertical = 0
@@ -68,10 +69,39 @@ func set_board_rect(board_rect: Rect2) -> void:
 	parchment.size = board_rect.size
 	var short_side: float = maxf(1.0, minf(board_rect.size.x, board_rect.size.y))
 	title.add_theme_font_size_override("font_size", clampi(int(short_side * 0.085), 22, 32))
-	var description_font_size: int = clampi(int(short_side * 0.046), 14, 18)
-	description.add_theme_font_size_override("normal_font_size", description_font_size)
-	description.add_theme_font_size_override("bold_font_size", description_font_size)
+	_description_font_size = clampi(int(short_side * 0.046), 14, 18)
+	for paragraph: Label in _description_labels():
+		paragraph.add_theme_font_size_override("font_size", _description_font_size)
 	flavor.add_theme_font_size_override("font_size", clampi(int(short_side * 0.040), 12, 16))
+
+
+func _set_description_paragraphs(paragraph_texts: Array[String]) -> void:
+	var labels: Array[Label] = _description_labels()
+	while labels.size() < paragraph_texts.size():
+		var paragraph := Label.new()
+		paragraph.name = "Paragraph%d" % labels.size()
+		paragraph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		paragraph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		paragraph.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		paragraph.language = "zh"
+		paragraph.add_theme_color_override("font_color", DESCRIPTION_COLOR)
+		paragraph.add_theme_font_size_override("font_size", _description_font_size)
+		description.add_child(paragraph)
+		labels.append(paragraph)
+	while labels.size() > paragraph_texts.size():
+		var paragraph: Label = labels.pop_back()
+		description.remove_child(paragraph)
+		paragraph.queue_free()
+	for index: int in range(paragraph_texts.size()):
+		labels[index].text = paragraph_texts[index]
+
+
+func _description_labels() -> Array[Label]:
+	var labels: Array[Label] = []
+	for child: Node in description.get_children():
+		if child is Label:
+			labels.append(child as Label)
+	return labels
 
 
 func close() -> void:

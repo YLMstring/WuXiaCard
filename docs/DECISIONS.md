@@ -504,13 +504,14 @@ respectively, in row-major order. The source itself is eligible.
 - Tap closes; swipe scrolls and does not close.
 - Metadata order is sect, tier, weapon; name uses `glyph`; empty content displays a placeholder.
 - Only the effect `description` receives structural reading aids. Each outer
-  complete sentence is a spaced paragraph, recognized leading rule phrases are
-  emphasized, and the contents of granted-effect brackets `【】` receive a
-  visual indentation. No catalog wording, declaration, or rule is rewritten.
-- The effect body has automatic height and relies on the inspector's existing
-  outer scroll container; it does not add a nested scrollbar. Malformed markup
-  falls back to escaped plain text without losing visible characters. Background
-  `flavor` text keeps its existing label, color, and layout.
+  complete sentence is a separate ordinary Label with about half a line between
+  adjacent paragraphs. Full stops inside `【】`, parentheses, or quotes do not
+  split, and bracketed effects are not indented. No catalog wording,
+  declaration, font weight, font size, color, or rule is rewritten.
+- The effect body relies on the inspector's existing outer scroll container; it
+  does not add a nested scrollbar. Malformed nesting falls back to one complete
+  plain-text paragraph. Background `flavor` text keeps its existing label,
+  color, and layout.
 
 ## AI
 

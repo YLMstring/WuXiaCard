@@ -47,9 +47,10 @@ func _run() -> void:
 	var sect_value: Label = tags.get_node("SectTag/Value") as Label
 	var tier_value: Label = tags.get_node("TierTag/Value") as Label
 	var weapon_value: Label = tags.get_node("WeaponTag/Value") as Label
-	var description: RichTextLabel = content.get_node("Description") as RichTextLabel
+	var description: VBoxContainer = content.get_node("Description") as VBoxContainer
 	var flavor: Label = content.get_node("Flavor") as Label
 	var scroll: ScrollContainer = inspector.get_node("Parchment/Body/Margin/Scroll") as ScrollContainer
+	var description_labels: Array[Label] = _description_labels(description)
 
 	_check(
 		bool(ProjectSettings.get_setting("internationalization/locale/include_text_server_data", false)),
@@ -66,12 +67,21 @@ func _run() -> void:
 		and tags.get_node("TierTag").get_index() < tags.get_node("WeaponTag").get_index(),
 		"Metadata tags remain ordered sect, tier, weapon"
 	)
-	_check(_parsed_effect_text(description.text) == "对手招式进场时，若我可以，对其发起攻击。", "Description is displayed as complete rules text")
 	_check(
-		description.bbcode_enabled
-		and description.fit_content
-		and not description.scroll_active,
-		"Description uses auto-height rich text without a nested scrollbar"
+		description_labels.size() == 1
+		and description_labels[0].text == "对手招式进场时，若我可以，对其发起攻击。",
+		"Description is displayed as complete plain-label rules text"
+	)
+	_check(
+		description.get_theme_constant("separation") == 7,
+		"Description paragraphs retain the approved half-line spacing"
+	)
+	_check(
+		description_labels[0].get_theme_color("font_color").is_equal_approx(
+			Color(0.2, 0.15, 0.1, 1)
+		)
+		and description_labels[0].get_theme_font_size("font_size") == 14,
+		"Description paragraphs restore the original Label color and responsive size"
 	)
 	_check(
 		String(inspector.call("get_card_snapshot").get("description", ""))
@@ -79,9 +89,30 @@ func _run() -> void:
 		"Inspector snapshots retain the unformatted catalog description"
 	)
 	_check(flavor.text == "华山剑法的绝招。", "Flavor text is displayed separately")
-	_check(description.language == "zh" and flavor.language == "zh", "Wrapped inspector text explicitly uses Chinese line-breaking rules")
+	_check(description_labels[0].language == "zh" and flavor.language == "zh", "Wrapped inspector text explicitly uses Chinese line-breaking rules")
 	_check(scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED, "Inspector never scrolls horizontally")
 	_check(scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_SHOW_NEVER, "Inspector scrollbar stays hidden while long text remains scrollable")
+
+	inspector.call("present", {
+		"description": "进场后，抽一张牌。锁定：回合结束时，将我移除。",
+	}, board_rect)
+	await process_frame
+	description_labels = _description_labels(description)
+	_check(
+		description_labels.size() == 2
+		and description_labels[0].text == "进场后，抽一张牌。"
+		and description_labels[1].text == "锁定：回合结束时，将我移除。",
+		"Inspector renders top-level sentences as separate ordinary labels"
+	)
+	var nested_description: String = "进场后，获得以下效果：【回合开始时，抽一张牌。翻面前，将我移除。】然后发起攻击。"
+	inspector.call("present", {"description": nested_description}, board_rect)
+	await process_frame
+	description_labels = _description_labels(description)
+	_check(
+		description_labels.size() == 1
+		and description_labels[0].text == nested_description,
+		"Repeated inspection removes stale paragraphs and keeps bracket contents unbroken"
+	)
 
 	inspector.call("present", {
 		"glyph": "",
@@ -92,12 +123,14 @@ func _run() -> void:
 		"flavor": "",
 	}, board_rect)
 	await process_frame
+	description_labels = _description_labels(description)
 	_check(
 		title.text == "—"
 		and sect_value.text == "—"
 		and tier_value.text == "—"
 		and weapon_value.text == "—"
-		and description.get_parsed_text() == "—"
+		and description_labels.size() == 1
+		and description_labels[0].text == "—"
 		and flavor.text == "—",
 		"Every missing displayed value uses the placeholder"
 	)
@@ -119,64 +152,72 @@ func _run() -> void:
 
 func _check_effect_formatter() -> void:
 	var single: String = "进场后，抽一张牌。"
-	var single_bbcode: String = EffectFormatter.format_bbcode(single)
-	_check(_parsed_effect_text(single_bbcode) == single, "Single effect preserves every visible character")
-	_check(single_bbcode.count("[p]") == 1, "Single effect produces one outer paragraph")
+	var single_paragraphs: Array[String] = EffectFormatter.split_paragraphs(single)
+	_check(single_paragraphs == [single], "Single effect produces one complete paragraph")
 
 	var multiple: String = "进场后，抽一张牌。锁定：回合结束时，将我移除。"
-	var multiple_bbcode: String = EffectFormatter.format_bbcode(multiple)
-	_check(_parsed_effect_text(multiple_bbcode) == multiple, "Multiple effects preserve their original text")
-	_check(multiple_bbcode.count("[p]") == 2, "Top-level full stops split independent effect paragraphs")
-	_check(multiple_bbcode.contains("[b]锁定：[/b]"), "A locked prefix receives emphasis")
+	var multiple_paragraphs: Array[String] = EffectFormatter.split_paragraphs(multiple)
+	_check(
+		multiple_paragraphs == ["进场后，抽一张牌。", "锁定：回合结束时，将我移除。"],
+		"Top-level full stops split independent plain-text paragraphs"
+	)
 
 	var combined_prefix: String = "锁定，指定：移动至一个相邻空格，然后发起攻击。"
-	var combined_bbcode: String = EffectFormatter.format_bbcode(combined_prefix)
-	_check(_parsed_effect_text(combined_bbcode) == combined_prefix, "Combined-prefix formatting preserves its source text")
-	_check(combined_bbcode.contains("[b]锁定，指定：[/b]"), "The complete locked-targeted prefix is emphasized together")
+	_check(
+		EffectFormatter.split_paragraphs(combined_prefix) == [combined_prefix],
+		"Rule prefixes remain ordinary unmodified text"
+	)
 
 	var nested: String = "进场后，获得以下效果：【回合开始时，抽一张牌。翻面前，将我移除。】然后发起攻击。"
-	var nested_bbcode: String = EffectFormatter.format_bbcode(nested)
-	_check(_parsed_effect_text(nested_bbcode) == nested, "Nested granted effects preserve their original text")
-	_check(nested_bbcode.count("[p]") == 1, "Nested full stops do not split the containing outer effect")
-	_check(nested_bbcode.contains("[indent]"), "Granted-effect brackets receive one visual indentation level")
-	_check(nested_bbcode.contains("[b]回合开始时，[/b]"), "Nested effect timing receives the same prefix emphasis")
+	_check(
+		EffectFormatter.split_paragraphs(nested) == [nested],
+		"Granted-effect brackets remain one unindented paragraph"
+	)
 
 	var parenthetical: String = "回合开始时，失去此效果。（无论我在哪里）攻击后，抽一张牌。"
-	var parenthetical_bbcode: String = EffectFormatter.format_bbcode(parenthetical)
-	_check(_parsed_effect_text(parenthetical_bbcode) == parenthetical, "Trailing parenthetical notes preserve their original text")
-	_check(parenthetical_bbcode.count("[p]") == 2, "A trailing parenthetical note stays attached to its preceding paragraph")
+	_check(
+		EffectFormatter.split_paragraphs(parenthetical)
+		== ["回合开始时，失去此效果。", "（无论我在哪里）攻击后，抽一张牌。"],
+		"A top-level full stop before a parenthetical starts the next paragraph"
+	)
 
 	var quoted: String = "进场后，获得“抽一张牌。然后攻击。”。回合结束时，将我移除。"
-	var quoted_bbcode: String = EffectFormatter.format_bbcode(quoted)
-	_check(_parsed_effect_text(quoted_bbcode) == quoted, "Quoted effects preserve every original character")
-	_check(quoted_bbcode.count("[p]") == 2, "Full stops inside quotes do not create outer paragraphs")
+	_check(
+		EffectFormatter.split_paragraphs(quoted)
+		== ["进场后，获得“抽一张牌。然后攻击。”。", "回合结束时，将我移除。"],
+		"Full stops inside quotes do not create paragraphs"
+	)
 
 	var manual_break: String = "进场后，抽一张牌。\n回合结束时，将我移除。"
-	var manual_bbcode: String = EffectFormatter.format_bbcode(manual_break)
-	_check(_parsed_effect_text(manual_bbcode) == manual_break, "Manual line breaks remain visible and unchanged")
-	_check(manual_bbcode.count("[p]") == 2, "Manual line breaks define explicit effect paragraphs")
+	_check(
+		EffectFormatter.split_paragraphs(manual_break)
+		== ["进场后，抽一张牌。", "回合结束时，将我移除。"],
+		"Manual line breaks define paragraphs without empty duplicates"
+	)
 
 	var literal_brackets: String = "进场后，[测试]抽一张牌。"
-	var bracket_bbcode: String = EffectFormatter.format_bbcode(literal_brackets)
-	_check(_parsed_effect_text(bracket_bbcode) == literal_brackets, "Literal square brackets cannot inject rich-text markup")
+	_check(
+		EffectFormatter.split_paragraphs(literal_brackets) == [literal_brackets],
+		"Literal square brackets remain unchanged plain text"
+	)
 
 	for malformed: String in [
 		"进场后，获得以下效果：【抽一张牌。",
 		"进场后，获得以下效果：】抽一张牌。",
 		"进场后，获得“抽一张牌。",
 	]:
-		var malformed_bbcode: String = EffectFormatter.format_bbcode(malformed)
-		_check(_parsed_effect_text(malformed_bbcode) == malformed, "Malformed nesting falls back without losing text")
-		_check(not malformed_bbcode.contains("[indent]"), "Malformed nesting does not receive partial structural formatting")
+		_check(
+			EffectFormatter.split_paragraphs(malformed) == [malformed],
+			"Malformed nesting falls back to one complete original paragraph"
+		)
 
 
-func _parsed_effect_text(bbcode: String) -> String:
-	var rich_text := RichTextLabel.new()
-	rich_text.bbcode_enabled = true
-	rich_text.text = bbcode
-	var parsed: String = rich_text.get_parsed_text().replace("\r", "").replace("\t", "")
-	rich_text.free()
-	return parsed
+func _description_labels(container: VBoxContainer) -> Array[Label]:
+	var labels: Array[Label] = []
+	for child: Node in container.get_children():
+		if child is Label:
+			labels.append(child as Label)
+	return labels
 
 
 func _submit_mouse_gesture(inspector: Control, start: Vector2, finish: Vector2) -> void:

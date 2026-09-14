@@ -251,13 +251,14 @@ thread-safe callback. Scene objects never cross the thread boundary.
 - `parchment_chrome.gd` — shared inspector/library scroll body, shadow, border, and rod styling.
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for
-  revealed cards. Its effect body is a single auto-height `RichTextLabel` fed
-  by `card_effect_text_formatter.gd`: the formatter derives paragraphs,
-  rule-prefix emphasis, and `【】` indentation from a raw `description`, verifies
-  that rich-text parsing preserves the source, and falls back to escaped plain
-  text if the structure is malformed. Inspector snapshots and catalog data stay
-  raw; `flavor` is not formatted. This is presentation-only and never enters
-  simulator state, state keys, replay data, or AI search.
+  revealed cards. Its effect body is a vertical list of ordinary Labels fed by
+  `card_effect_text_formatter.gd`: the formatter splits only at top-level full
+  stops or explicit line breaks, leaves bracketed and quoted sentences intact,
+  and falls back to one complete plain-text paragraph if nesting is malformed.
+  The container provides the approved half-line spacing; labels retain the
+  original font size, weight, color, and Chinese wrapping. Inspector snapshots
+  and catalog data stay raw; `flavor` is not formatted. This is presentation-only
+  and never enters simulator state, state keys, replay data, or AI search.
 - `ending_controller.gd` / `ending.tscn` — immutable completed-run summary,
   fixed score plus measured, clipped upward prose roll, and gated tap-to-menu
   presentation built on an instance of the production main menu.

@@ -292,12 +292,13 @@ Run inspector/integration and full suite. Manually test at 540×960 and Android-
 
 For effect-text layout changes, run `test_card_catalog.gd`,
 `test_card_inspector.gd`, and `test_duel_integration.gd`. The catalog sweep must
-prove that every nonempty `description` retains all visible source characters;
-the inspector test covers paragraph, nested-bracket, literal-bracket, malformed
-input, placeholder, raw-snapshot, and auto-height behavior. Visually inspect a
-short effect, a long multi-paragraph effect, and a nested `【】` effect at
-540×960, including outer-scroll access to any overflow. Confirm `flavor` is
-unchanged.
+prove that every nonempty `description` retains all non-layout source
+characters; the inspector test covers top-level paragraph splitting, unsplit
+brackets and quotes, literal brackets, malformed input, placeholder,
+raw-snapshot, ordinary Label styling, half-line container spacing, and repeated
+inspection cleanup. Visually inspect a short effect, a long multi-paragraph
+effect, and a nested `【】` effect at 540×960, including outer-scroll access to
+any overflow. Confirm font size/weight/color and `flavor` match the original.
 
 For deck-builder UI changes, also run the profile, library-grid, and
 deck-builder integration suites. Manually verify tap-to-inspect,
