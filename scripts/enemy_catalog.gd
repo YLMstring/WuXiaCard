@@ -43,7 +43,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 ]
 
 const _ENEMY_ROWS: Array[Dictionary] = [
-	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"KuiHua4", &"KuiHua3", &"KuiHua3", &"KuiHua2"]},
+	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"TaiZuChangQuan", &"TaiZuChangQuan", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"dukou_xiaoke", "name": "江湖武师", "level": 1, "deck": [&"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"]},
 	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2"]},
 	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 2, "deck": [&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2"]},
