@@ -3,9 +3,9 @@ extends SceneTree
 const REWARD_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
-const Sects = preload("res://scripts/sect_catalog.gd")
 
 const SAVE_PATH: String = "user://reward_selection_test.json"
+const DEFAULT_STATUS: String = "选择一张奖励牌，长按拖动至下方"
 
 var _checks: int = 0
 var _failures: int = 0
@@ -22,14 +22,24 @@ func _run() -> void:
 	_cleanup()
 	var store := Store.new(SAVE_PATH)
 	var profile: Dictionary = store.create_default_profile()
+	profile["max_unlocked_difficulty"] = 3
+	profile["last_selected_difficulty"] = 3
 	_check(store.save_profile(profile), "Reward-scene fixture saves")
 	var begin_result: Dictionary = store.begin_run_and_save(
 		profile,
 		&"HuaShanPai",
 		[],
-		&"qingfeng_xuedi"
+		&"qingfeng_xuedi",
+		null,
+		false,
+		3
 	)
 	profile = begin_result.get("profile", profile)
+	var run_sect_pool_ids: Array[StringName] = store.get_run_sect_pool_ids(profile)
+	_check(run_sect_pool_ids.size() == 5, "Reward-scene fixture has five run sects")
+	profile["best_scores_by_sect"] = {
+		String(run_sect_pool_ids[0]): {"0": 123, "3": 321},
+	}
 	for next_level: int in range(2, 12):
 		var advance_result: Dictionary = store.advance_after_victory_and_save(
 			profile,
@@ -75,10 +85,15 @@ func _run() -> void:
 	var grid := reward.get_node("DuelCanvas/DeckLibraryGrid") as DeckLibraryGrid
 	_check(grid.column_count == 3 and grid.total_slots == 3, "Reward scroll uses three positions")
 	_check(reward.debug_get_reward_ids() == reward_ids, "Reward scene renders the saved offer")
-	var expected_pool_status: String = _run_pool_status(store, profile)
 	_check(
-		String(reward.get_node("DuelCanvas/Status").text) == expected_pool_status,
-		"Reward scene displays the saved run sect pool in its lower hint"
+		String(reward.get_node("DuelCanvas/Status").text) == DEFAULT_STATUS,
+		"Reward scene displays the fixed reward-selection instruction"
+	)
+	_check(
+		String(reward.get_node("DuelCanvas/TopBar/EnemySeal/Value").text) == "友"
+		and String(reward.get_node("DuelCanvas/TopBar/OpponentName").text)
+		== "随机门派池",
+		"Reward header labels the friendly random sect pool"
 	)
 	var first_slot: Variant = grid.debug_get_bound_slot(0)
 	var second_slot: Variant = grid.debug_get_bound_slot(1)
@@ -129,24 +144,50 @@ func _run() -> void:
 		third_slot.get_node("CardHost/CardView").is_face_down(),
 		"Unused reward position displays a face-down card"
 	)
-	var enemy_hand := reward.get_node("DuelCanvas/OpponentHand") as HBoxContainer
-	var enemy_cards_stay_red: bool = true
-	for enemy_slot: Node in enemy_hand.get_children():
-		var enemy_card := enemy_slot.get_child(0) as CardView
-		enemy_cards_stay_red = (
-			enemy_cards_stay_red
-			and not enemy_card.is_face_down()
-			and enemy_card.owner_id == DuelRules.OPPONENT_OWNER
+	var sect_pool_hand := reward.get_node("DuelCanvas/OpponentHand") as HBoxContainer
+	var sect_pool_cards_are_correct: bool = true
+	for pool_index: int in range(5):
+		var sect_card := sect_pool_hand.get_child(pool_index).get_child(0) as CardView
+		sect_pool_cards_are_correct = (
+			sect_pool_cards_are_correct
+			and StringName(String(sect_card.card_data.get("id", "")))
+			== run_sect_pool_ids[pool_index]
+			and not sect_card.is_face_down()
+			and sect_card.owner_id == DuelRules.OPPONENT_OWNER
+			and not sect_card.playable
 		)
-	_check(enemy_cards_stay_red, "Testing-mode revealed enemy hand stays red")
+	_check(
+		sect_pool_cards_are_correct,
+		"Upper hand shows the five saved sect cards in order as non-playable red faces"
+	)
+	var first_sect_card := sect_pool_hand.get_child(0).get_child(0) as CardView
+	first_sect_card.inspection_requested.emit(first_sect_card.card_data)
+	_check(reward.debug_is_inspecting(), "An upper sect card opens normal inspection")
+	var sect_snapshot: Dictionary = reward.card_inspector.get_card_snapshot()
+	_check(
+		StringName(String(sect_snapshot.get("id", ""))) == run_sect_pool_ids[0]
+		and String(sect_snapshot.get("sect", "")) == "进阶三：321",
+		"Sect inspection displays the current-difficulty best score"
+	)
+	reward.card_inspector.close()
+	await process_frame
+	reward.profile["run_difficulty"] = 0
+	first_sect_card.inspection_requested.emit(first_sect_card.card_data)
+	var base_sect_snapshot: Dictionary = reward.card_inspector.get_card_snapshot()
+	_check(
+		String(base_sect_snapshot.get("sect", "")) == "最高分：123",
+		"Sect inspection uses the base-difficulty best-score label"
+	)
+	reward.card_inspector.close()
+	await process_frame
 
 	reward.call("_on_library_inspection_requested", 0, first_slot.card_data)
 	_check(reward.debug_is_inspecting(), "Revealed reward opens normal inspection")
 	(reward.get_node("DuelCanvas/CardInspector") as Control).call("close")
 	_check(
 		not reward.debug_is_inspecting()
-		and String(reward.get_node("DuelCanvas/Status").text) == expected_pool_status,
-		"Closing inspection restores the run sect-pool hint"
+		and String(reward.get_node("DuelCanvas/Status").text) == DEFAULT_STATUS,
+		"Closing inspection restores the reward-selection instruction"
 	)
 
 	var deck_before: Array[StringName] = store.get_main_deck_ids(profile)
@@ -191,13 +232,6 @@ func _string_names(values: Array) -> Array[StringName]:
 	for value: Variant in values:
 		result.append(StringName(String(value)))
 	return result
-
-
-func _run_pool_status(store: RefCounted, profile: Dictionary) -> String:
-	var glyphs := PackedStringArray()
-	for sect_id: StringName in store.get_run_sect_pool_ids(profile):
-		glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
-	return "随机门派池：%s" % "，".join(glyphs)
 
 
 func _on_reward_claimed(card_id: StringName) -> void:

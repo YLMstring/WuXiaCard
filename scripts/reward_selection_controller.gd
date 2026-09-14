@@ -6,7 +6,6 @@ signal reward_claimed(card_id: StringName)
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
-const Decks = preload("res://scripts/duel_decks.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
@@ -14,7 +13,19 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const FALLBACK_STATUS: String = "随机门派池：暂无"
+const DEFAULT_STATUS: String = "选择一张奖励牌，长按拖动至下方"
+const DIFFICULTY_NUMERALS: Array[String] = [
+	"零",
+	"一",
+	"二",
+	"三",
+	"四",
+	"五",
+	"六",
+	"七",
+	"八",
+	"九",
+]
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -88,7 +99,8 @@ func _ready() -> void:
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
-	opponent_name.text = upcoming_enemy_name
+	enemy_seal_label.text = "友"
+	opponent_name.text = "随机门派池"
 	status_label.text = _get_default_status()
 	_layout_scene.call_deferred()
 
@@ -112,24 +124,19 @@ func debug_claim_reward(reward_index: int) -> bool:
 func _create_hands() -> void:
 	SelectionShell.create_hand_slots(opponent_hand)
 	SelectionShell.create_hand_slots(player_hand)
-	var enemy_ids: Array[StringName] = upcoming_enemy_card_ids.duplicate()
-	if enemy_ids.size() != 5:
-		enemy_ids = Decks.get_opponent_card_ids()
+	var sect_pool_ids: Array[StringName] = _profile_store.get_run_sect_pool_ids(profile)
 	for card_index: int in range(5):
-		var enemy_data: Dictionary = Catalog.create_instance(
-			enemy_ids[card_index],
-			DuelRules.OPPONENT_OWNER,
-			StringName("reward_enemy_%d" % card_index)
-		)
-		var enemy_card: CardView = _spawn_card_in_slot(
-			opponent_hand.get_child(card_index) as PanelContainer,
-			enemy_data,
+		var sect_slot := opponent_hand.get_child(card_index) as PanelContainer
+		if card_index >= sect_pool_ids.size() or not Sects.has_sect(sect_pool_ids[card_index]):
+			_spawn_card_back_in_slot(sect_slot, DuelRules.OPPONENT_OWNER)
+			continue
+		var sect_data: Dictionary = Sects.get_definition(sect_pool_ids[card_index])
+		var sect_card: CardView = _spawn_card_in_slot(
+			sect_slot,
+			sect_data,
 			DuelRules.OPPONENT_OWNER
 		)
-		var glyph: String = String(enemy_data.get("glyph", ""))
-		enemy_card.set_face_down(
-			not testing_mode and glyph not in remembered_enemy_glyphs
-		)
+		sect_card.set_face_down(false)
 	var main_deck: Array[StringName] = _profile_store.get_main_deck_ids(profile)
 	for card_index: int in range(5):
 		var player_data: Dictionary = Catalog.create_instance(
@@ -160,6 +167,15 @@ func _spawn_card_in_slot(
 	)
 	card.inspection_requested.connect(_on_card_inspection_requested)
 	return card
+
+
+func _spawn_card_back_in_slot(slot: PanelContainer, owner_id: int) -> void:
+	var card := CARD_SCENE.instantiate() as CardView
+	slot.add_child(card)
+	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card.configure({}, owner_id, false)
+	card.set_face_down(true)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func _refresh_reward_grid() -> void:
@@ -215,11 +231,30 @@ func _on_library_inspection_requested(
 func _on_card_inspection_requested(data: Dictionary) -> void:
 	if _inspection_open or data.is_empty() or bool(data.get("_display_placeholder", false)):
 		return
+	var inspected_data: Dictionary = data
+	var inspected_id := StringName(String(data.get("id", "")))
+	if Sects.has_sect(inspected_id):
+		inspected_data = _build_sect_inspector_data(data)
 	_inspection_open = true
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
 	status_label.text = "查看卡牌详情 · 轻触返回"
-	card_inspector.present(data, _get_library_rect())
+	card_inspector.present(inspected_data, _get_library_rect())
+
+
+func _build_sect_inspector_data(data: Dictionary) -> Dictionary:
+	var result: Dictionary = data.duplicate(true)
+	var sect_id := StringName(String(result.get("id", "")))
+	var difficulty: int = _profile_store.get_run_difficulty(profile)
+	var best_score: int = _profile_store.get_best_score(profile, sect_id, difficulty)
+	if difficulty <= 0:
+		result["sect"] = "最高分：%d" % best_score
+	else:
+		result["sect"] = "进阶%s：%d" % [
+			DIFFICULTY_NUMERALS[difficulty],
+			best_score,
+		]
+	return result
 
 
 func _on_inspection_closed() -> void:
@@ -232,13 +267,7 @@ func _on_inspection_closed() -> void:
 
 
 func _get_default_status() -> String:
-	var glyphs := PackedStringArray()
-	for sect_id: StringName in _profile_store.get_run_sect_pool_ids(profile):
-		if Sects.has_sect(sect_id):
-			glyphs.append(String(Sects.get_definition(sect_id).get("glyph", "")))
-	if glyphs.is_empty():
-		return FALLBACK_STATUS
-	return "随机门派池：%s" % "，".join(glyphs)
+	return DEFAULT_STATUS
 
 
 func _on_library_drag_started(
