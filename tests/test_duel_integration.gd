@@ -1442,7 +1442,7 @@ func _check_card_inspector_modal() -> void:
 	var content: VBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content") as VBoxContainer
 	_check(
 		(content.get_node("Title") as Label).text == "—"
-		and (content.get_node("Description") as Label).text == "—"
+		and (content.get_node("Description") as RichTextLabel).get_parsed_text() == "—"
 		and (content.get_node("Flavor") as Label).text == "—",
 		"Production inspector keeps placeholders for incomplete card information"
 	)

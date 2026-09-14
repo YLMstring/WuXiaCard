@@ -250,7 +250,14 @@ thread-safe callback. Scene objects never cross the thread boundary.
 - `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.
 - `parchment_chrome.gd` — shared inspector/library scroll body, shadow, border, and rod styling.
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
-- `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for revealed cards.
+- `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for
+  revealed cards. Its effect body is a single auto-height `RichTextLabel` fed
+  by `card_effect_text_formatter.gd`: the formatter derives paragraphs,
+  rule-prefix emphasis, and `【】` indentation from a raw `description`, verifies
+  that rich-text parsing preserves the source, and falls back to escaped plain
+  text if the structure is malformed. Inspector snapshots and catalog data stay
+  raw; `flavor` is not formatted. This is presentation-only and never enters
+  simulator state, state keys, replay data, or AI search.
 - `ending_controller.gd` / `ending.tscn` — immutable completed-run summary,
   fixed score plus measured, clipped upward prose roll, and gated tap-to-menu
   presentation built on an instance of the production main menu.

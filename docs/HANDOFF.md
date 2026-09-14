@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-12
+Updated: 2026-09-14
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -60,6 +60,11 @@ release-ready Android package.
   reference. `ChunCanZhang2`–`3` continue to use ordinary board modifiers.
   The current declarations and revalidation rules are in
   `docs/superpowers/specs/2026-09-08-owner-aura-redesign.md`.
+- Revealed-card inspectors format only the catalog `description` for reading:
+  outer complete sentences become spaced paragraphs, recognized rule prefixes
+  are emphasized, and granted effects inside `【】` are indented. The formatter
+  is pure presentation with a lossless fallback; snapshots retain the original
+  catalog text, and `flavor` remains an ordinary unformatted label.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing

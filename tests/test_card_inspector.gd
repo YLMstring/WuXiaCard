@@ -2,6 +2,7 @@ extends SceneTree
 
 const INSPECTOR_SCENE_PATH: String = "res://scenes/card_inspector.tscn"
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
+const EffectFormatter = preload("res://scripts/card_effect_text_formatter.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -14,6 +15,7 @@ func _init() -> void:
 
 
 func _run() -> void:
+	_check_effect_formatter()
 	if not ResourceLoader.exists(INSPECTOR_SCENE_PATH):
 		_check(false, "Reusable card inspector scene exists")
 		_finish()
@@ -45,7 +47,7 @@ func _run() -> void:
 	var sect_value: Label = tags.get_node("SectTag/Value") as Label
 	var tier_value: Label = tags.get_node("TierTag/Value") as Label
 	var weapon_value: Label = tags.get_node("WeaponTag/Value") as Label
-	var description: Label = content.get_node("Description") as Label
+	var description: RichTextLabel = content.get_node("Description") as RichTextLabel
 	var flavor: Label = content.get_node("Flavor") as Label
 	var scroll: ScrollContainer = inspector.get_node("Parchment/Body/Margin/Scroll") as ScrollContainer
 
@@ -64,7 +66,18 @@ func _run() -> void:
 		and tags.get_node("TierTag").get_index() < tags.get_node("WeaponTag").get_index(),
 		"Metadata tags remain ordered sect, tier, weapon"
 	)
-	_check(description.text == "对手招式进场时，若我可以，对其发起攻击。", "Description is displayed as rules text")
+	_check(_parsed_effect_text(description.text) == "对手招式进场时，若我可以，对其发起攻击。", "Description is displayed as complete rules text")
+	_check(
+		description.bbcode_enabled
+		and description.fit_content
+		and not description.scroll_active,
+		"Description uses auto-height rich text without a nested scrollbar"
+	)
+	_check(
+		String(inspector.call("get_card_snapshot").get("description", ""))
+		== "对手招式进场时，若我可以，对其发起攻击。",
+		"Inspector snapshots retain the unformatted catalog description"
+	)
 	_check(flavor.text == "华山剑法的绝招。", "Flavor text is displayed separately")
 	_check(description.language == "zh" and flavor.language == "zh", "Wrapped inspector text explicitly uses Chinese line-breaking rules")
 	_check(scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED, "Inspector never scrolls horizontally")
@@ -84,7 +97,7 @@ func _run() -> void:
 		and sect_value.text == "—"
 		and tier_value.text == "—"
 		and weapon_value.text == "—"
-		and description.text == "—"
+		and description.get_parsed_text() == "—"
 		and flavor.text == "—",
 		"Every missing displayed value uses the placeholder"
 	)
@@ -102,6 +115,68 @@ func _run() -> void:
 	await process_frame
 	await _check_card_view_gestures()
 	_finish()
+
+
+func _check_effect_formatter() -> void:
+	var single: String = "进场后，抽一张牌。"
+	var single_bbcode: String = EffectFormatter.format_bbcode(single)
+	_check(_parsed_effect_text(single_bbcode) == single, "Single effect preserves every visible character")
+	_check(single_bbcode.count("[p]") == 1, "Single effect produces one outer paragraph")
+
+	var multiple: String = "进场后，抽一张牌。锁定：回合结束时，将我移除。"
+	var multiple_bbcode: String = EffectFormatter.format_bbcode(multiple)
+	_check(_parsed_effect_text(multiple_bbcode) == multiple, "Multiple effects preserve their original text")
+	_check(multiple_bbcode.count("[p]") == 2, "Top-level full stops split independent effect paragraphs")
+	_check(multiple_bbcode.contains("[b]锁定：[/b]"), "A locked prefix receives emphasis")
+
+	var combined_prefix: String = "锁定，指定：移动至一个相邻空格，然后发起攻击。"
+	var combined_bbcode: String = EffectFormatter.format_bbcode(combined_prefix)
+	_check(_parsed_effect_text(combined_bbcode) == combined_prefix, "Combined-prefix formatting preserves its source text")
+	_check(combined_bbcode.contains("[b]锁定，指定：[/b]"), "The complete locked-targeted prefix is emphasized together")
+
+	var nested: String = "进场后，获得以下效果：【回合开始时，抽一张牌。翻面前，将我移除。】然后发起攻击。"
+	var nested_bbcode: String = EffectFormatter.format_bbcode(nested)
+	_check(_parsed_effect_text(nested_bbcode) == nested, "Nested granted effects preserve their original text")
+	_check(nested_bbcode.count("[p]") == 1, "Nested full stops do not split the containing outer effect")
+	_check(nested_bbcode.contains("[indent]"), "Granted-effect brackets receive one visual indentation level")
+	_check(nested_bbcode.contains("[b]回合开始时，[/b]"), "Nested effect timing receives the same prefix emphasis")
+
+	var parenthetical: String = "回合开始时，失去此效果。（无论我在哪里）攻击后，抽一张牌。"
+	var parenthetical_bbcode: String = EffectFormatter.format_bbcode(parenthetical)
+	_check(_parsed_effect_text(parenthetical_bbcode) == parenthetical, "Trailing parenthetical notes preserve their original text")
+	_check(parenthetical_bbcode.count("[p]") == 2, "A trailing parenthetical note stays attached to its preceding paragraph")
+
+	var quoted: String = "进场后，获得“抽一张牌。然后攻击。”。回合结束时，将我移除。"
+	var quoted_bbcode: String = EffectFormatter.format_bbcode(quoted)
+	_check(_parsed_effect_text(quoted_bbcode) == quoted, "Quoted effects preserve every original character")
+	_check(quoted_bbcode.count("[p]") == 2, "Full stops inside quotes do not create outer paragraphs")
+
+	var manual_break: String = "进场后，抽一张牌。\n回合结束时，将我移除。"
+	var manual_bbcode: String = EffectFormatter.format_bbcode(manual_break)
+	_check(_parsed_effect_text(manual_bbcode) == manual_break, "Manual line breaks remain visible and unchanged")
+	_check(manual_bbcode.count("[p]") == 2, "Manual line breaks define explicit effect paragraphs")
+
+	var literal_brackets: String = "进场后，[测试]抽一张牌。"
+	var bracket_bbcode: String = EffectFormatter.format_bbcode(literal_brackets)
+	_check(_parsed_effect_text(bracket_bbcode) == literal_brackets, "Literal square brackets cannot inject rich-text markup")
+
+	for malformed: String in [
+		"进场后，获得以下效果：【抽一张牌。",
+		"进场后，获得以下效果：】抽一张牌。",
+		"进场后，获得“抽一张牌。",
+	]:
+		var malformed_bbcode: String = EffectFormatter.format_bbcode(malformed)
+		_check(_parsed_effect_text(malformed_bbcode) == malformed, "Malformed nesting falls back without losing text")
+		_check(not malformed_bbcode.contains("[indent]"), "Malformed nesting does not receive partial structural formatting")
+
+
+func _parsed_effect_text(bbcode: String) -> String:
+	var rich_text := RichTextLabel.new()
+	rich_text.bbcode_enabled = true
+	rich_text.text = bbcode
+	var parsed: String = rich_text.get_parsed_text().replace("\r", "").replace("\t", "")
+	rich_text.free()
+	return parsed
 
 
 func _submit_mouse_gesture(inspector: Control, start: Vector2, finish: Vector2) -> void:

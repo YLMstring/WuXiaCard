@@ -290,6 +290,15 @@ powershell -ExecutionPolicy Bypass -File tools/run_transition_microbenchmark.ps1
 
 Run inspector/integration and full suite. Manually test at 540×960 and Android-like aspect ratios with mouse and touch. Automated headless checks do not prove visual correctness.
 
+For effect-text layout changes, run `test_card_catalog.gd`,
+`test_card_inspector.gd`, and `test_duel_integration.gd`. The catalog sweep must
+prove that every nonempty `description` retains all visible source characters;
+the inspector test covers paragraph, nested-bracket, literal-bracket, malformed
+input, placeholder, raw-snapshot, and auto-height behavior. Visually inspect a
+short effect, a long multi-paragraph effect, and a nested `【】` effect at
+540×960, including outer-scroll access to any overflow. Confirm `flavor` is
+unchanged.
+
 For deck-builder UI changes, also run the profile, library-grid, and
 deck-builder integration suites. Manually verify tap-to-inspect,
 hold-then-drag exchange, swipe scrolling, invalid drops, and normal/testing

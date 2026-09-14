@@ -143,13 +143,18 @@ theme_override_colors/font_color = Color(0.55, 0.37, 0.2, 1)
 theme_override_font_sizes/font_size = 15
 text = "特效"
 
-[node name="Description" type="Label" parent="Parchment/Body/Margin/Scroll/Content"]
+[node name="Description" type="RichTextLabel" parent="Parchment/Body/Margin/Scroll/Content"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.2, 0.15, 0.1, 1)
-theme_override_font_sizes/font_size = 15
+theme_override_colors/default_color = Color(0.2, 0.15, 0.1, 1)
+theme_override_constants/paragraph_separation = 7
+theme_override_font_sizes/normal_font_size = 15
+theme_override_font_sizes/bold_font_size = 15
+bbcode_enabled = true
 text = "对手招式进场时，若我可以，对其发起攻击。"
+fit_content = true
+scroll_active = false
 autowrap_mode = 3
 language = "zh"
 

@@ -3,6 +3,7 @@ extends SceneTree
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const Abilities = preload("res://scripts/duel_abilities.gd")
+const EffectFormatter = preload("res://scripts/card_effect_text_formatter.gd")
 
 const NEW_SECT_CARD_IDS: Array[StringName] = [
 	&"TaiShan18Pan1",
@@ -36,6 +37,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_catalog_validation()
 	_test_catalog_definitions()
+	_test_effect_text_formatting()
 	_test_definition_schema_validation()
 	_test_definition_copy_isolation()
 	_test_new_sect_card_definitions()
@@ -52,6 +54,40 @@ func _run() -> void:
 	else:
 		push_error("CARD_CATALOG_TESTS_FAILED failures=%d checks=%d" % [_failures, _checks])
 	quit(_failures)
+
+
+func _test_effect_text_formatting() -> void:
+	var rich_text := RichTextLabel.new()
+	rich_text.bbcode_enabled = true
+	var formatted_multi_paragraph_count: int = 0
+	var formatted_nested_count: int = 0
+	for card_id: StringName in Catalog.get_all_card_ids():
+		var description: String = String(
+			Catalog.get_definition(card_id).get("description", "")
+		)
+		if description.is_empty():
+			continue
+		var bbcode: String = EffectFormatter.format_bbcode(description)
+		rich_text.text = bbcode
+		var parsed: String = rich_text.get_parsed_text().replace("\r", "").replace("\t", "")
+		_check(
+			parsed == EffectFormatter.normalize_plain_text(description),
+			"Formatted effect text preserves every visible character for %s" % card_id
+		)
+		_check(not bbcode.is_empty(), "Formatted effect text remains nonempty for %s" % card_id)
+		if bbcode.count("[p]") > 1:
+			formatted_multi_paragraph_count += 1
+		if bbcode.contains("[indent]"):
+			formatted_nested_count += 1
+	rich_text.free()
+	_check(
+		formatted_multi_paragraph_count > 0,
+		"Catalog formatting produces real multi-paragraph descriptions"
+	)
+	_check(
+		formatted_nested_count > 0,
+		"Catalog formatting produces real nested granted-effect indentation"
+	)
 
 
 func _test_catalog_validation() -> void:

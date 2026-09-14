@@ -7,6 +7,7 @@ signal inspection_closed
 
 const PLACEHOLDER: String = "—"
 const ParchmentChromeData = preload("res://scripts/parchment_chrome.gd")
+const EffectTextFormatter = preload("res://scripts/card_effect_text_formatter.gd")
 
 var _open: bool = false
 var _pointer_active: bool = false
@@ -30,7 +31,7 @@ var _card_snapshot: Dictionary = {}
 @onready var tier_value: Label = $Parchment/Body/Margin/Scroll/Content/Tags/TierTag/Value
 @onready var weapon_tag: PanelContainer = $Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag
 @onready var weapon_value: Label = $Parchment/Body/Margin/Scroll/Content/Tags/WeaponTag/Value
-@onready var description: Label = $Parchment/Body/Margin/Scroll/Content/Description
+@onready var description: RichTextLabel = $Parchment/Body/Margin/Scroll/Content/Description
 @onready var flavor: Label = $Parchment/Body/Margin/Scroll/Content/Flavor
 
 
@@ -48,7 +49,12 @@ func present(card_data: Dictionary, board_rect: Rect2) -> void:
 	sect_value.text = _display_string(_card_snapshot.get("sect", ""))
 	tier_value.text = _display_tier(_card_snapshot.get("tier", null))
 	weapon_value.text = _display_string(_card_snapshot.get("weapon", ""))
-	description.text = _display_string(_card_snapshot.get("description", ""))
+	var description_text: String = _display_string(_card_snapshot.get("description", ""))
+	description.text = (
+		description_text
+		if description_text == PLACEHOLDER
+		else EffectTextFormatter.format_bbcode(description_text)
+	)
 	flavor.text = _display_string(_card_snapshot.get("flavor", ""))
 	set_board_rect(board_rect)
 	scroll.scroll_vertical = 0
@@ -62,7 +68,9 @@ func set_board_rect(board_rect: Rect2) -> void:
 	parchment.size = board_rect.size
 	var short_side: float = maxf(1.0, minf(board_rect.size.x, board_rect.size.y))
 	title.add_theme_font_size_override("font_size", clampi(int(short_side * 0.085), 22, 32))
-	description.add_theme_font_size_override("font_size", clampi(int(short_side * 0.046), 14, 18))
+	var description_font_size: int = clampi(int(short_side * 0.046), 14, 18)
+	description.add_theme_font_size_override("normal_font_size", description_font_size)
+	description.add_theme_font_size_override("bold_font_size", description_font_size)
 	flavor.add_theme_font_size_override("font_size", clampi(int(short_side * 0.040), 12, 16))
 
 

@@ -503,6 +503,14 @@ respectively, in row-major order. The source itself is eligible.
 - AI search may continue while the inspector is open, but a completed AI result must wait to apply until it closes.
 - Tap closes; swipe scrolls and does not close.
 - Metadata order is sect, tier, weapon; name uses `glyph`; empty content displays a placeholder.
+- Only the effect `description` receives structural reading aids. Each outer
+  complete sentence is a spaced paragraph, recognized leading rule phrases are
+  emphasized, and the contents of granted-effect brackets `【】` receive a
+  visual indentation. No catalog wording, declaration, or rule is rewritten.
+- The effect body has automatic height and relies on the inspector's existing
+  outer scroll container; it does not add a nested scrollbar. Malformed markup
+  falls back to escaped plain text without losing visible characters. Background
+  `flavor` text keeps its existing label, color, and layout.
 
 ## AI
 
