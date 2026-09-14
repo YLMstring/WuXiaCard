@@ -316,7 +316,7 @@ powershell -ExecutionPolicy Bypass -File tools/build_windows_release.ps1
 才会从仓库根目录的 `Godot_v4.7.2-stable_export_templates.tpz` 中只解出
 Windows x86-64 模板。随后脚本会编译 Debug/Release 两套原生 ABI，
 导出到 `build/windows/`，并生成可分发压缩包
-`build/九宫论剑-windows-x86_64-1.0.0.zip`。由于玩法规则使用原生扩展，
+`build/九宫论剑-windows-x86_64-1.0.1.zip`。由于玩法规则使用原生扩展，
 分发时必须让 EXE 与同目录的 `duel_native.windows.template_release.x86_64.dll`
 保持在一起；直接发送上述 ZIP 即可。
 
