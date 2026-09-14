@@ -147,7 +147,7 @@ text = "特效"
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_constants/separation = 7
+theme_override_constants/separation = 12
 
 [node name="Paragraph" type="Label" parent="Parchment/Body/Margin/Scroll/Content/Description"]
 layout_mode = 2
