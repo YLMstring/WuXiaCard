@@ -340,6 +340,20 @@ and loss prose, all enemy names, portrait safe-area wrapping, fixed score,
 clipped constant-speed rolling, early-tap rejection, final reward bypass,
 post-roll tap-to-menu, and a fresh sect-selection journey afterward.
 
+For balance-telemetry changes, run `test_balance_telemetry_store.gd`,
+`test_balance_telemetry_flow.gd`, and `test_balance_telemetry_uploader.gd`, then
+the full suite. The CloudBase request validator/exporter has a separate pure
+Node test in `cloudbase/balance_telemetry/functions/report_api`:
+
+```powershell
+npm test
+```
+
+These tests never contact Tencent Cloud. A real end-to-end check requires a
+normal Windows or Android export, a configured HTTPS endpoint, a completed run,
+and verification that the acknowledged local report disappears only after one
+document appears in `run_reports`.
+
 ### Android
 
 Export, install, and test on a physical device. Desktop wrapping/layout is not proof of Android behavior.

@@ -651,3 +651,21 @@ per-root transposition table.
 Windows Debug loading and behavior are verified. Android ARM64 and release
 packaging remain distribution gates; benchmark those targets rather than
 assuming desktop probe speed transfers directly.
+
+## Balance Telemetry Boundary
+
+`BalanceTelemetryStore` owns anonymous telemetry persistence independently of
+the progression save. It retains a stable random installation ID, at most one
+newly-created active run, and sealed reports awaiting acknowledgement. Each
+duel snapshot is captured from `DuelController`'s initialized replay state so
+the reported main decks preserve their exact five physical slot positions.
+Only `MainFlowController` may commit a completed duel after progression has
+successfully saved, or seal a report after the completed-run save succeeds.
+
+`BalanceTelemetryUploader` is transport-only. It serially POSTs complete run
+documents, treats a duplicate report ID as acknowledged, and leaves retryable
+failures on disk. Capture and upload eligibility are centralized in
+`GameSettings`: testing mode is always excluded, and real HTTP is restricted
+to normal Windows/Android exports with a configured HTTPS endpoint. The remote
+CloudBase function validates a strict whitelist and stores one completed run as
+one `run_reports` document; no gameplay rule or AI path depends on telemetry.

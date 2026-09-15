@@ -870,3 +870,22 @@ respectively, in row-major order. The source itself is eligible.
 - 爱护师弟·令狐冲 is a level-zero `special_only` catalog enemy. Such enemies
   remain available by exact ID but never enter ordinary level pools or random
   enemy selection.
+
+## 通关平衡数据
+
+- Only a genuinely completed run is eligible for upload. Its report includes
+  every completed duel, including tutorial-prelude fights and retries, but not
+  abandoned or incomplete duels.
+- A duel records only enemy ID, player level, initiative, outcome, progress
+  eligibility, timestamps, and both ordered five-card opening main decks. It
+  never records side decks, draw order, actions, replays, account data, or
+  device identifiers.
+- The anonymous installation ID survives completed runs, closed-door resets,
+  and retirement. Active telemetry begins only with a newly created run after
+  the feature exists; an old in-progress save is never partially reported.
+- Reports are queued locally and removed only after server acknowledgement.
+  The server uses the report ID as an idempotency key, so retries cannot create
+  duplicate run documents.
+- The current `telemetry_enabled` gate exists so store-release consent can be
+  added without changing capture or transport semantics. Until a production
+  HTTPS endpoint is configured, no network request is made.

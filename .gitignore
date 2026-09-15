@@ -21,5 +21,10 @@ WuxiaCard/
 /native/duel_core/build/
 /native/duel_core/bin/
 __pycache__/
+node_modules/
+.env
+/cloudbase/balance_telemetry/cloudbaserc.json
+/balance-reports-*.csv
+/balance-reports-*.json
 Godot_v4.7.2-stable_export_templates.tpz
 asan.64396

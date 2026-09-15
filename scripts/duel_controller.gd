@@ -371,6 +371,40 @@ func debug_get_replay_initial_decks() -> Dictionary:
 	return initial_state.decks.duplicate(true) if initial_state != null else {}
 
 
+func get_opening_main_deck_card_ids() -> Dictionary:
+	var initial_state: StateData = _replay_record.get_initial_state()
+	if initial_state == null:
+		return {}
+	return {
+		DuelRules.PLAYER_OWNER: _hand_card_ids_by_slot(
+			initial_state.get_hand(DuelRules.PLAYER_OWNER)
+		),
+		DuelRules.OPPONENT_OWNER: _hand_card_ids_by_slot(
+			initial_state.get_hand(DuelRules.OPPONENT_OWNER)
+		),
+	}
+
+
+func _hand_card_ids_by_slot(hand: Array) -> Array[StringName]:
+	var result: Array[StringName] = []
+	result.resize(StateData.HAND_SLOT_COUNT)
+	result.fill(&"")
+	for card_value: Variant in hand:
+		if not card_value is Dictionary:
+			continue
+		var card := card_value as Dictionary
+		var slot_index: int = int(card.get(StateData.HAND_SLOT_INDEX_KEY, -1))
+		if slot_index < 0 or slot_index >= result.size():
+			continue
+		result[slot_index] = StringName(String(card.get("card_id", "")))
+	return result
+
+
+func get_opening_owner_id() -> int:
+	var initial_state: StateData = _replay_record.get_initial_state()
+	return initial_state.active_player if initial_state != null else DuelRules.PLAYER_OWNER
+
+
 func debug_is_replay_waiting() -> bool:
 	return _is_replaying and not _is_replay_presenting_action and _replay_delay_remaining > 0.0
 

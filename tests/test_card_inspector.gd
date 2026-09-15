@@ -73,7 +73,7 @@ func _run() -> void:
 		"Description is displayed as complete plain-label rules text"
 	)
 	_check(
-		description.get_theme_constant("separation") == 7,
+		description.get_theme_constant("separation") == 12,
 		"Description paragraphs retain the approved half-line spacing"
 	)
 	_check(

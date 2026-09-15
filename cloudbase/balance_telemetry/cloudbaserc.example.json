@@ -1,0 +1,12 @@
+{
+  "envId": "replace-with-your-cloudbase-environment-id",
+  "functionRoot": "./functions",
+  "functions": [
+    {
+      "name": "report_api",
+      "timeout": 10,
+      "runtime": "Nodejs18.15",
+      "handler": "index.main"
+    }
+  ]
+}

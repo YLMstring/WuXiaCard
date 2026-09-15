@@ -19,6 +19,10 @@ boot_splash/image="res://icon_android_adaptive_foreground_432.png"
 config/icon="res://icon_128.png"
 boot_splash/minimum_display_time=1200
 
+[balance_telemetry]
+
+endpoint=""
+
 [display]
 
 window/size/viewport_width=540

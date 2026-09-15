@@ -12,11 +12,18 @@ const Music = preload("res://scripts/music_director.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
+const DuelRules = preload("res://scripts/duel_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const BalanceStore = preload("res://scripts/balance_telemetry_store.gd")
+const BalanceUploader = preload("res://scripts/balance_telemetry_uploader.gd")
 
 @export var deck_profile_path: String = Store.DEFAULT_SAVE_PATH
+@export var balance_telemetry_path: String = BalanceStore.DEFAULT_SAVE_PATH
+@export var telemetry_enabled: bool = true
+@export var balance_telemetry_endpoint: String = ""
+@export var telemetry_force_local_capture_for_tests: bool = false
 @export var upcoming_enemy_name: String = ""
 @export var upcoming_enemy_card_ids: Array[StringName] = []
 @export_range(1, Store.MAX_CHARACTER_LEVEL) var victories_required: int = (
@@ -28,6 +35,9 @@ var _current_screen: Control = null
 var _normal_deck_profile_path: String = ""
 var _music_director: Node = null
 var _play_lose_on_next_deck_builder: bool = false
+var _balance_telemetry_store: RefCounted = null
+var _balance_telemetry_uploader: Node = null
+var _pending_telemetry_duel_token: String = ""
 
 
 func _ready() -> void:
@@ -35,6 +45,7 @@ func _ready() -> void:
 	add_child(_music_director)
 	if testing_mode:
 		_prepare_testing_profile()
+	_prepare_balance_telemetry()
 	_show_main_menu()
 
 
@@ -63,6 +74,7 @@ func _show_main_menu(notice: String = "") -> void:
 	menu.progression_unlock_requested.connect(_on_progression_unlock_requested)
 	_replace_screen(menu)
 	_music_director.request_context(Music.CONTEXT_MENU)
+	_try_upload_pending_balance_telemetry()
 	if not notice.is_empty():
 		menu.show_notice(notice)
 
@@ -151,6 +163,7 @@ func _show_duel(starting_owner_id: int) -> void:
 	duel.opponent_card_played.connect(_on_opponent_card_played)
 	duel.return_requested.connect(_on_duel_return_requested)
 	_replace_screen(duel)
+	_begin_balance_telemetry_duel(store, profile, duel)
 	_music_director.request_context(Music.CONTEXT_BATTLE)
 
 
@@ -197,6 +210,7 @@ func _on_journey_requested() -> void:
 			0
 		)
 		if bool(result.get("ok", false)):
+			_begin_balance_telemetry_run(result.get("profile", {}) as Dictionary)
 			_continue_active_run()
 		else:
 			_finish_reset_on_current_menu("保存失败，请重试")
@@ -215,6 +229,8 @@ func _on_run_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_run_and_save(profile)
+	if bool(result.get("ok", false)):
+		_clear_active_balance_telemetry_run()
 	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
@@ -227,6 +243,8 @@ func _on_progress_reset_confirmed() -> void:
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
 	var result: Dictionary = store.reset_all_progress_and_save(profile)
+	if bool(result.get("ok", false)):
+		_clear_active_balance_telemetry_run()
 	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
@@ -266,6 +284,8 @@ func _restore_testing_unlocks(store: RefCounted, result: Dictionary) -> Dictiona
 
 
 func _on_deck_builder_requested() -> void:
+	var store := Store.new(deck_profile_path)
+	_begin_balance_telemetry_run(store.load_profile())
 	_continue_active_run()
 
 
@@ -293,6 +313,7 @@ func _on_tutorial_completion_requested() -> void:
 
 func _on_duel_return_requested(outcome: StringName) -> void:
 	if outcome == DuelController.OUTCOME_ABANDONED:
+		_abandon_pending_balance_telemetry_duel()
 		_show_deck_builder()
 		return
 	var mastery_candidate_ids: Array[StringName] = []
@@ -322,11 +343,18 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		push_warning("Completed duel could not be saved")
 		_show_deck_builder()
 		return
+	var telemetry_duel_saved: bool = _complete_pending_balance_telemetry_duel(
+		reward_outcome
+	)
 	if bool(duel_result.get("completed", false)):
 		var ending_summary: Dictionary = (
 			duel_result.get("ending_summary", {}) as Dictionary
 		).duplicate(true)
 		ending_summary["kuihua0_unlocked_this_run"] = kuihua0_unlocked_this_run
+		if telemetry_duel_saved:
+			_seal_completed_balance_telemetry_run(
+				int(ending_summary.get("score", 0))
+			)
 		_show_ending(ending_summary)
 		return
 	profile = duel_result.get("profile", profile)
@@ -403,3 +431,129 @@ func _prepare_testing_profile() -> void:
 	var testing_profile: Dictionary = testing_store.create_testing_profile(source)
 	if testing_profile.is_empty() or not testing_store.save_profile(testing_profile):
 		push_warning("Testing profile could not be prepared")
+
+
+func _prepare_balance_telemetry() -> void:
+	var capture_enabled: bool = Settings.should_capture_balance_telemetry(
+		testing_mode,
+		OS.has_feature("editor"),
+		OS.has_feature("headless"),
+		telemetry_force_local_capture_for_tests
+	)
+	if not telemetry_enabled or not capture_enabled:
+		return
+	_balance_telemetry_store = BalanceStore.new(balance_telemetry_path)
+	_balance_telemetry_store.load_state()
+	var endpoint: String = balance_telemetry_endpoint.strip_edges()
+	if endpoint.is_empty():
+		endpoint = String(ProjectSettings.get_setting(
+			"balance_telemetry/endpoint",
+			""
+		)).strip_edges()
+	_balance_telemetry_uploader = BalanceUploader.new()
+	add_child(_balance_telemetry_uploader)
+	_balance_telemetry_uploader.configure(
+		_balance_telemetry_store,
+		endpoint,
+		Settings.should_upload_balance_telemetry(
+			capture_enabled,
+			telemetry_enabled,
+			endpoint,
+			OS.get_name()
+		)
+	)
+
+
+func _begin_balance_telemetry_run(profile: Dictionary) -> void:
+	if _balance_telemetry_store == null:
+		return
+	var store := Store.new(deck_profile_path)
+	if not store.is_run_active(profile):
+		return
+	var result: Dictionary = _balance_telemetry_store.start_run(
+		store.get_run_difficulty(profile),
+		store.get_selected_sect_id(profile),
+		String(ProjectSettings.get_setting("application/config/version", "")),
+		OS.get_name()
+	)
+	if not bool(result.get("ok", false)):
+		push_warning("Balance telemetry run could not be started")
+
+
+func _begin_balance_telemetry_duel(
+	store: RefCounted,
+	profile: Dictionary,
+	duel: DuelController
+) -> void:
+	_pending_telemetry_duel_token = ""
+	if _balance_telemetry_store == null or not _balance_telemetry_store.has_active_run():
+		return
+	var enemy_id: StringName = store.get_current_enemy_id(profile)
+	if enemy_id == &"":
+		return
+	var opening_cards: Dictionary = duel.get_opening_main_deck_card_ids()
+	var result: Dictionary = _balance_telemetry_store.begin_duel(
+		enemy_id,
+		store.get_character_level(profile),
+		duel.get_opening_owner_id(),
+		opening_cards.get(DuelRules.PLAYER_OWNER, []),
+		opening_cards.get(DuelRules.OPPONENT_OWNER, []),
+		store.get_beginner_opening_stage(profile) == Store.BEGINNER_OPENING_NONE
+	)
+	if not bool(result.get("ok", false)):
+		push_warning("Balance telemetry duel could not be started")
+		return
+	_pending_telemetry_duel_token = String(result.get("duel_token", ""))
+
+
+func _abandon_pending_balance_telemetry_duel() -> void:
+	if _balance_telemetry_store == null or _pending_telemetry_duel_token.is_empty():
+		return
+	if not _balance_telemetry_store.abandon_pending_duel(
+		_pending_telemetry_duel_token
+	):
+		push_warning("Abandoned balance telemetry duel could not be cleared")
+	_pending_telemetry_duel_token = ""
+
+
+func _complete_pending_balance_telemetry_duel(outcome: StringName) -> bool:
+	if _balance_telemetry_store == null or _pending_telemetry_duel_token.is_empty():
+		return false
+	var result: Dictionary = _balance_telemetry_store.complete_pending_duel(
+		_pending_telemetry_duel_token,
+		outcome
+	)
+	_pending_telemetry_duel_token = ""
+	if bool(result.get("ok", false)):
+		return true
+	push_warning("Completed balance telemetry duel could not be saved")
+	return false
+
+
+func _seal_completed_balance_telemetry_run(final_score: int) -> void:
+	if _balance_telemetry_store == null:
+		return
+	var result: Dictionary = _balance_telemetry_store.seal_completed_run(final_score)
+	if not bool(result.get("ok", false)):
+		push_warning("Completed balance telemetry run could not be queued")
+		return
+	_try_upload_pending_balance_telemetry()
+
+
+func _try_upload_pending_balance_telemetry() -> void:
+	if _balance_telemetry_uploader != null:
+		_balance_telemetry_uploader.try_upload_pending.call_deferred()
+
+
+func _clear_active_balance_telemetry_run() -> void:
+	_pending_telemetry_duel_token = ""
+	if _balance_telemetry_store == null:
+		return
+	if not _balance_telemetry_store.clear_active_run():
+		push_warning("Active balance telemetry run could not be cleared")
+
+
+func debug_get_balance_telemetry_state() -> Dictionary:
+	if _balance_telemetry_store == null:
+		return {}
+	return _balance_telemetry_store.load_state().duplicate(true)

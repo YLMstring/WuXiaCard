@@ -157,7 +157,7 @@ Never commit keystore passwords or private signing material. The existing debug 
 - selects ARM64 only;
 - leaves min/target SDK on automatic values;
 - uses placeholder package ID `com.example.$genname`;
-- declares no Android permissions;
+- declares Android Internet permission for completed-run balance telemetry;
 - falls back to the Godot debug keystore for local release builds when no
   explicit release keystore is supplied.
 

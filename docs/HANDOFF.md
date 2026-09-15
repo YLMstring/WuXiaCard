@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-14
+Updated: 2026-09-15
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -69,6 +69,13 @@ release-ready Android package.
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
   mode, while Windows and Android exports default to normal mode.
+- Gated balance telemetry is implemented locally but its production endpoint
+  is intentionally blank until the CloudBase service is deployed. Newly
+  created normal exported runs record only the two ordered five-card opening
+  decks and duel outcome metadata, persist completed reports offline, and retry
+  from the main menu. Editor/testing/headless/benchmark paths cannot upload.
+  See `docs/superpowers/specs/2026-09-15-balance-telemetry-design.md` and
+  `cloudbase/balance_telemetry/README.md`.
 - Android preset: `export_presets.cfg`
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`
