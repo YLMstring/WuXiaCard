@@ -46,6 +46,7 @@ func _run() -> void:
 
 	_check_layout(duel)
 	_check_duel_canvas_structure(duel)
+	_check_player_suppression_turn_warning(duel)
 	await _check_attack_vfx_overlay(duel)
 	await _check_fixed_duel_canvas_geometry(duel)
 	await _check_duel_header(duel)
@@ -157,6 +158,23 @@ func _check_layout(duel: Node) -> void:
 	_check(
 		turn_status.z_index > card_inspector.z_index,
 		"Battle bottom status renders above the inspector dimming backdrop"
+	)
+
+
+func _check_player_suppression_turn_warning(duel: Node) -> void:
+	var state: Variant = duel.get("duel_state")
+	var turn_status: Label = duel.get_node("DuelCanvas/TurnStatus") as Label
+	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
+	duel.call("_update_turn_status")
+	_check(
+		turn_status.text == "本次打出的手牌将永久失去效果",
+		"Pending enemy anticipation warns the player before their next hand play"
+	)
+	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 0
+	duel.call("_update_turn_status")
+	_check(
+		turn_status.text == "你的回合 · 拖动卡牌",
+		"Player turn status returns after anticipation suppression is cleared"
 	)
 
 

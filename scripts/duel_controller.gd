@@ -2894,7 +2894,20 @@ func _update_turn_status() -> void:
 		return
 	match turn_state:
 		TurnState.PLAYER:
-			turn_status.text = "Testing · Player side · play or activate" if testing_mode else "你的回合 · 拖动卡牌"
+			if testing_mode:
+				turn_status.text = "Testing · Player side · play or activate"
+			elif (
+				duel_state != null
+				and int(
+					duel_state.pending_non_retained_suppression_by_owner.get(
+						DuelRules.PLAYER_OWNER,
+						0
+					)
+				) > 0
+			):
+				turn_status.text = "本次打出的手牌将永久失去效果"
+			else:
+				turn_status.text = "你的回合 · 拖动卡牌"
 		TurnState.RESOLVING:
 			turn_status.text = "结算中…"
 		TurnState.OPPONENT:

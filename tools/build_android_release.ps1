@@ -17,7 +17,7 @@ if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
 }
 $resolvedProject = [System.IO.Path]::GetFullPath($ProjectRoot)
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.1.apk"
+    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.2.apk"
 }
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
 
@@ -231,15 +231,34 @@ $exportArguments = @(
 )
 $exportProcess = Start-Process -FilePath $resolvedEngine -ArgumentList $exportArguments `
     -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog `
-    -Wait -PassThru
-if ($exportProcess.ExitCode -ne 0) {
+    -PassThru
+# Start-Process -Wait follows the whole descendant process tree on Windows.
+# Summer may leave an unrelated helper alive after the headless export itself
+# has exited, so wait only for the engine process before continuing to verify
+# and sign the completed APK.
+$exportProcess.WaitForExit()
+$exportExitCode = $exportProcess.ExitCode
+$exportStdout = if (Test-Path -LiteralPath $stdoutLog -PathType Leaf) {
+    Get-Content -LiteralPath $stdoutLog -Raw
+} else {
+    ""
+}
+$completedBeforeSummerTeardownWatchdog =
+    $exportExitCode -ne 0 -and
+    (Test-Path -LiteralPath $resolvedOutput -PathType Leaf) -and
+    $exportStdout.Contains("Successfully completed Android gradle build.") -and
+    $exportStdout.Contains("Shutdown watchdog armed: forcing exit 101")
+if ($exportExitCode -ne 0 -and -not $completedBeforeSummerTeardownWatchdog) {
     if (Test-Path -LiteralPath $stdoutLog -PathType Leaf) {
         Get-Content -LiteralPath $stdoutLog -Tail 120
     }
     if (Test-Path -LiteralPath $stderrLog -PathType Leaf) {
         Get-Content -LiteralPath $stderrLog -Tail 120
     }
-    exit $exportProcess.ExitCode
+    exit $exportExitCode
+}
+if ($completedBeforeSummerTeardownWatchdog) {
+    Write-Warning "Summer exited with teardown watchdog code 101 after Gradle completed; continuing artifact verification."
 }
 Write-Host "SUMMER_ANDROID_EXPORT_PASSED"
 if (-not (Test-Path -LiteralPath $resolvedOutput -PathType Leaf)) {
