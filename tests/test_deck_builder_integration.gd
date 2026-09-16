@@ -271,9 +271,17 @@ func _run() -> void:
 	builder.call("_on_library_hold_recognized", 0, full_source_data)
 	_check(
 		builder.debug_get_profile() == full_profile
+		and builder.debug_is_inspecting()
+		and builder.debug_is_replacement_target_mode()
+		and StringName(String(card_inspector.get_card_snapshot().get("card_id", "")))
+		== full_source_id
+		and player_hand.visible
+		and not bottom_action.visible
 		and builder.debug_get_status() == "轻触卡组中的牌可进行替换",
-		"Holding a collection card against a full deck does not mutate the profile"
+		"Holding a collection card against a full deck opens the same replacement details"
 	)
+	card_inspector.close()
+	await process_frame
 
 	var removed_deck_index: int = 1
 	var removed_card_id: String = String(full_profile["main_deck"][removed_deck_index])

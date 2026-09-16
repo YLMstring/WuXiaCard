@@ -432,7 +432,7 @@ func _restore_player_hand_child_index() -> void:
 	duel_canvas.move_child(player_hand, _player_hand_default_child_index)
 
 
-func _on_library_hold_recognized(logical_index: int, _data: Dictionary) -> void:
+func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
 	if _inspection_open or logical_index < 0 or logical_index >= _library_source_indices.size():
 		return
 	var source_library_index: int = _library_source_indices[logical_index]
@@ -445,11 +445,10 @@ func _on_library_hold_recognized(logical_index: int, _data: Dictionary) -> void:
 	if bool(result.get("ok", false)):
 		_apply_saved_profile(result.get("profile", profile))
 		return
-	status_label.text = (
-		REPLACE_NOTICE
-		if result.get("reason", &"") == &"full"
-		else "保存失败"
-	)
+	if result.get("reason", &"") == &"full":
+		_open_card_inspector(data, source_library_index, -1)
+		return
+	status_label.text = "保存失败"
 
 
 func _on_player_card_hold_recognized(_data: Dictionary, deck_index: int) -> void:
