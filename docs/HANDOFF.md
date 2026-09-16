@@ -15,7 +15,7 @@ successful action log. Playback reuses the simulator/VFX path with a two-second
 turn cadence, preserves opponent concealment, and permits inspection between
 actions without producing progression side effects.
 
-The main flow routes the main menu, sect selection, a ten-page beginner
+The main flow routes the main menu, sect selection, a seven-page beginner
 tutorial, deck builder, duel, reward selection, and a completed-run ending. The deck-building scene persists a
 five-card main deck and exposes a virtualized 1,000-slot collection library.
 

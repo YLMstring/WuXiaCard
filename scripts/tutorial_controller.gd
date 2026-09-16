@@ -11,9 +11,6 @@ const TUTORIAL_TEXTURE_PATHS: Array[String] = [
 	"res://pics/tutorial/tutorial_05.png",
 	"res://pics/tutorial/tutorial_06.png",
 	"res://pics/tutorial/tutorial_07.png",
-	"res://pics/tutorial/tutorial_08.png",
-	"res://pics/tutorial/tutorial_09.png",
-	"res://pics/tutorial/tutorial_10.png",
 ]
 
 @onready var page_texture: TextureRect = $PageTexture

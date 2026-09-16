@@ -17,7 +17,7 @@ func _run() -> void:
 	var page_texture := tutorial.get_node("PageTexture") as TextureRect
 	var advance_button := tutorial.get_node("AdvanceButton") as Button
 	var notice_label := tutorial.get_node("Notice") as Label
-	_check(tutorial.debug_get_page_count() == 10, "Tutorial contains ten ordered pages")
+	_check(tutorial.debug_get_page_count() == 7, "Tutorial contains seven ordered pages")
 	_check(tutorial.debug_get_current_page_index() == 0, "Tutorial opens on its first page")
 	_check(
 		tutorial.debug_get_current_texture().resource_path.ends_with("tutorial_01.png"),
@@ -41,7 +41,7 @@ func _run() -> void:
 
 	var completion_count: Array[int] = [0]
 	tutorial.completion_requested.connect(func() -> void: completion_count[0] += 1)
-	for expected_page: int in range(1, 10):
+	for expected_page: int in range(1, 7):
 		advance_button.pressed.emit()
 		_check(
 			tutorial.debug_get_current_page_index() == expected_page,
@@ -57,13 +57,13 @@ func _run() -> void:
 			tutorial.debug_get_current_texture().get_size() == Vector2(1080, 2400),
 			"Page %d keeps the authored 20:9 dimensions" % (expected_page + 1)
 		)
-	_check(completion_count[0] == 0, "Reaching page ten does not finish it automatically")
+	_check(completion_count[0] == 0, "Reaching page seven does not finish it automatically")
 	advance_button.pressed.emit()
 	_check(
 		completion_count[0] == 1
 		and tutorial.debug_is_completion_request_pending()
 		and advance_button.disabled,
-		"Pressing page ten emits one locked completion request"
+		"Pressing page seven emits one locked completion request"
 	)
 	advance_button.pressed.emit()
 	_check(completion_count[0] == 1, "Repeated input cannot duplicate a pending completion request")
