@@ -127,6 +127,17 @@ func _run() -> void:
 		store.get_unlocked_ids(profile).size() == Cards.get_all_card_ids().size(),
 		"Testing profile expansion unlocks every card"
 	)
+	var all_sects_profile: Dictionary = normal_profile.duplicate(true)
+	all_sects_profile["unlocked_sect_ids"] = []
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		all_sects_profile["unlocked_sect_ids"].append(String(sect_id))
+	var testing_sect_profile: Dictionary = store.create_testing_profile(all_sects_profile)
+	var expected_testing_sects: Array[StringName] = Sects.get_all_sect_ids()
+	expected_testing_sects.erase(&"WuDangPai")
+	_check(
+		store.get_unlocked_sect_ids(testing_sect_profile) == expected_testing_sects,
+		"Testing profile keeps Wudang locked while preserving every other unlocked sect"
+	)
 	_check(
 		normal_profile == store.load_profile(),
 		"Testing profile expansion does not mutate the persisted normal profile"
@@ -822,15 +833,22 @@ func _run() -> void:
 	var catalog_glyphs: Dictionary = {}
 	for catalog_sect_id: StringName in Sects.get_all_sect_ids():
 		catalog_glyphs[String(Sects.get_definition(catalog_sect_id).get("glyph", ""))] = true
+	var found_card_outside_run_pool: bool = false
 	for random_id: StringName in random_start_ids:
 		var definition: Dictionary = Cards.get_definition(random_id)
 		_check(int(definition.get("tier", 0)) == 1, "%s is a tier-one random unlock" % random_id)
 		_check(String(definition.get("sect", "")) != "华山", "%s is outside the selected sect" % random_id)
-		var card_sect: String = String(definition.get("sect", ""))
 		_check(
-			not catalog_glyphs.has(card_sect) or run_pool_glyphs.has(card_sect),
-			"%s is either outside the sect catalog or belongs to the run pool" % random_id
+			String(definition.get("description", "")).is_empty(),
+			"%s has no effect text" % random_id
 		)
+		var card_sect: String = String(definition.get("sect", ""))
+		if catalog_glyphs.has(card_sect) and not run_pool_glyphs.has(card_sect):
+			found_card_outside_run_pool = true
+	_check(
+		found_card_outside_run_pool,
+		"Starting random cards may come from a catalog sect outside the run pool"
+	)
 	var unlocked_after_start: Array[StringName] = store.get_unlocked_ids(active_profile)
 	for card_id: StringName in Cards.get_all_card_ids():
 		var definition: Dictionary = Cards.get_definition(card_id)

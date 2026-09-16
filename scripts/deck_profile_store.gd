@@ -49,6 +49,7 @@ const TESTING_MAIN_DECK_IDS: Array[StringName] = [
 	&"YouFenLaiYi2",
 	&"TuNaShu2",
 ]
+const TESTING_LOCKED_SECT_ID: StringName = &"WuDangPai"
 const DEFAULT_LOCKED_IDS: Array[StringName] = [
 	&"CangSongYingKe1",
 	&"TaiShan18Pan1",
@@ -888,12 +889,10 @@ func begin_run_and_save(
 	var run_sect_pool_ids: Array[StringName] = _pick_run_sect_pool_ids(sect_id, picker)
 	if run_sect_pool_ids.size() != RUN_SECT_POOL_SIZE:
 		return {"ok": false, "profile": unchanged, "added_ids": []}
-	var sect_filter: Dictionary = _build_run_sect_filter(sect_id, run_sect_pool_ids)
 	var random_tier_one_ids: Array[StringName] = _pick_starting_tier_one_ids(
 		profile,
 		sect_tier_one_ids,
 		picker,
-		sect_filter,
 		allow_owned_starting_cards
 	)
 	if random_tier_one_ids.size() != MAIN_DECK_CAPACITY - DEFAULT_MAIN_DECK_IDS.size():
@@ -994,6 +993,8 @@ func get_unlocked_ids(profile: Dictionary) -> Array[StringName]:
 func create_testing_profile(profile: Dictionary) -> Dictionary:
 	var source: Dictionary = repair_profile(profile)
 	var all_ids: Array[StringName] = Catalog.get_all_card_ids()
+	var unlocked_sect_ids: Array[StringName] = get_unlocked_sect_ids(source)
+	unlocked_sect_ids.erase(TESTING_LOCKED_SECT_ID)
 	var requested_deck: Array[StringName] = get_main_deck_ids(source)
 	if requested_deck.size() < MAIN_DECK_CAPACITY:
 		requested_deck = TESTING_MAIN_DECK_IDS.duplicate()
@@ -1017,6 +1018,7 @@ func create_testing_profile(profile: Dictionary) -> Dictionary:
 		return {}
 	var result: Dictionary = source.duplicate(true)
 	result["pending_reward_card_ids"] = []
+	result["unlocked_sect_ids"] = _string_array(unlocked_sect_ids)
 	result["unlocked_card_ids"] = _string_array(all_ids)
 	result["main_deck"] = placement.get("main_deck", [])
 	result["library_slots"] = _padded_library(
@@ -1673,7 +1675,6 @@ func _pick_starting_tier_one_ids(
 	profile: Dictionary,
 	sect_tier_one_ids: Array[StringName],
 	rng: RandomNumberGenerator,
-	sect_filter: Dictionary,
 	allow_owned: bool
 ) -> Array[StringName]:
 	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
@@ -1683,9 +1684,9 @@ func _pick_starting_tier_one_ids(
 		var definition: Dictionary = Catalog.get_definition(card_id)
 		if (
 			int(definition.get("tier", 0)) == 1
+			and String(definition.get("description", "")).is_empty()
 			and card_id not in DEFAULT_MAIN_DECK_IDS
 			and card_id not in sect_tier_one_ids
-			and _card_passes_run_sect_filter(card_id, sect_filter)
 		):
 			if card_id in already_unlocked:
 				owned_fallbacks.append(card_id)
