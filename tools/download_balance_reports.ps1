@@ -14,7 +14,13 @@ $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($Endpoint)) {
     $Endpoint = $env:WUXIA_TELEMETRY_ADMIN_ENDPOINT
 }
+if ([string]::IsNullOrWhiteSpace($Endpoint)) {
+    $Endpoint = [Environment]::GetEnvironmentVariable("WUXIA_TELEMETRY_ADMIN_ENDPOINT", "User")
+}
 $adminToken = $env:WUXIA_TELEMETRY_ADMIN_TOKEN
+if ([string]::IsNullOrWhiteSpace($adminToken)) {
+    $adminToken = [Environment]::GetEnvironmentVariable("WUXIA_TELEMETRY_ADMIN_TOKEN", "User")
+}
 if ([string]::IsNullOrWhiteSpace($Endpoint)) {
     throw "Pass -Endpoint or set WUXIA_TELEMETRY_ADMIN_ENDPOINT."
 }
@@ -22,7 +28,7 @@ if (-not $Endpoint.StartsWith("https://", [System.StringComparison]::OrdinalIgno
     throw "The telemetry admin endpoint must use HTTPS."
 }
 if ([string]::IsNullOrWhiteSpace($adminToken)) {
-    throw "Set WUXIA_TELEMETRY_ADMIN_TOKEN in the current shell."
+    throw "Set WUXIA_TELEMETRY_ADMIN_TOKEN in the current shell or user environment."
 }
 
 $query = [System.Collections.Generic.List[string]]::new()

@@ -1,7 +1,9 @@
 # 平衡数据 CloudBase 后端
 
 该目录包含通关战报的 CloudBase Node.js 云函数，使用腾讯当前维护的
-`@cloudbase/js-sdk` v3，并由云函数环境自动提供鉴权信息。数据库使用上海地域的
+`@cloudbase/js-sdk` v3。事件云函数环境提供临时鉴权信息，函数将其显式传给
+`CLOUD_API` 数据库通道；不要改回默认 `GATEWAY`，否则管理导出查询会返回
+`INVALID_CREDENTIALS`。数据库使用上海地域的
 **云数据库／文档型数据库**，集合名称固定为 `run_reports`；不要选择 MySQL
 或 PostgreSQL。
 
@@ -40,3 +42,20 @@ npm install
 ```text
 https://wuxiacard-d9gvg1e2o15e3b73e-1488910861.ap-shanghai.app.tcloudbase.com/v1
 ```
+
+## 下载战报
+
+管理员令牌和导出地址已保存在当前 Windows 用户环境变量中，不写入仓库：
+
+- `WUXIA_TELEMETRY_ADMIN_TOKEN`
+- `WUXIA_TELEMETRY_ADMIN_ENDPOINT`
+
+下载 CSV：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/download_balance_reports.ps1
+```
+
+也可以使用 `-Format Json`，或用 `-From 2026-09-01 -To 2026-09-30`
+限制日期范围。脚本优先读取当前进程环境变量，并在新终端尚未继承时回退读取
+Windows 用户环境变量；它不会覆盖已存在的导出文件。

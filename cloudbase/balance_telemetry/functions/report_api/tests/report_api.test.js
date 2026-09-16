@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { handleRequest, reportsToCsv } = require('../index.js');
+const { cloudbaseInitOptions, handleRequest, reportsToCsv } = require('../index.js');
 
 function validReport() {
   return {
@@ -138,4 +138,25 @@ test('CSV uses one duel per row and escapes cells', () => {
   assert.ok(csv.startsWith('\uFEFFreport_id,'));
   assert.ok(csv.includes('"Hua,Shan"'));
   assert.equal(csv.trim().split('\r\n').length, 2);
+});
+
+test('server database access uses the Cloud API endpoint mode', () => {
+  const currentEnvironment = Symbol('current-environment');
+  assert.deepEqual(
+    cloudbaseInitOptions(
+      { SYMBOL_CURRENT_ENV: currentEnvironment },
+      {
+        TENCENTCLOUD_SECRETID: 'temporary-id',
+        TENCENTCLOUD_SECRETKEY: 'temporary-key',
+        TENCENTCLOUD_SESSIONTOKEN: 'temporary-token',
+      }
+    ),
+    {
+      env: currentEnvironment,
+      endPointMode: 'CLOUD_API',
+      secretId: 'temporary-id',
+      secretKey: 'temporary-key',
+      sessionToken: 'temporary-token',
+    }
+  );
 });

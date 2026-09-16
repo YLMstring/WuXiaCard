@@ -309,10 +309,21 @@ function isDuplicateError(error) {
   return text.includes('duplicate') || text.includes('already exists') || text.includes('11000');
 }
 
+function cloudbaseInitOptions(cloudbase, environment = process.env) {
+  return {
+    env: cloudbase.SYMBOL_CURRENT_ENV,
+    endPointMode: 'CLOUD_API',
+    secretId: environment.TENCENTCLOUD_SECRETID,
+    secretKey: environment.TENCENTCLOUD_SECRETKEY,
+    sessionToken: environment.TENCENTCLOUD_SESSIONTOKEN,
+  };
+}
+
 function createCloudRepository() {
   const cloudbase = require('@cloudbase/js-sdk');
-  // 云函数内使用当前环境及平台注入的临时凭据，不在代码中保存任何密钥。
-  const app = cloudbase.init({ env: cloudbase.SYMBOL_CURRENT_ENV });
+  // 管理端数据库访问固定走 CLOUD_API，并显式传入事件云函数当前实例的
+  // 临时三元组；默认 GATEWAY 或隐式发现路径无法可靠完成管理签名。
+  const app = cloudbase.init(cloudbaseInitOptions(cloudbase));
   const collection = app.database().collection(REPORT_COLLECTION);
   return {
     async create(report) {
@@ -358,6 +369,7 @@ function createCloudRepository() {
 exports.handleRequest = handleRequest;
 exports.sanitizeReport = sanitizeReport;
 exports.reportsToCsv = reportsToCsv;
+exports.cloudbaseInitOptions = cloudbaseInitOptions;
 
 exports.main = async (event) => {
   try {

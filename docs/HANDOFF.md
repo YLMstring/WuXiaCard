@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-15
+Updated: 2026-09-16
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -74,8 +74,11 @@ release-ready Android package.
   the two ordered five-card opening
   decks and duel outcome metadata, persist completed reports offline, and retry
   from the main menu. Editor/testing/headless/benchmark paths cannot upload.
-  The public upload route is configured; the administrator export token is not
-  yet configured, so that endpoint remains closed. See
+  The public upload route and administrator export route are live. The rotated
+  administrator token and export endpoint live only in the Windows user
+  environment; neither is committed. The CloudBase function fixes database
+  administration calls to `CLOUD_API` and explicitly passes the event
+  function's temporary credential triple. See
   `docs/superpowers/specs/2026-09-15-balance-telemetry-design.md` and
   `cloudbase/balance_telemetry/README.md`.
 - Android preset: `export_presets.cfg`
