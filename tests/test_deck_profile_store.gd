@@ -197,6 +197,48 @@ func _run() -> void:
 	_check(not bool(invalid_result.get("ok", true)), "An empty source cannot exchange")
 	_check(invalid_result.get("profile", {}) == reloaded, "Invalid exchange preserves the profile")
 
+	var removed_result: Dictionary = store.remove_deck_card_and_save(reloaded, 1)
+	_check(bool(removed_result.get("ok", false)), "A main-deck card can be removed atomically")
+	var removed_profile: Dictionary = removed_result.get("profile", {})
+	_check(String(removed_profile["main_deck"][1]).is_empty(), "Removing preserves the physical vacancy")
+	_check(
+		String(removed_profile["library_slots"][0]) == String(reloaded["main_deck"][1]),
+		"Removed card enters the library top"
+	)
+	_check(store.is_profile_valid(removed_profile), "A five-slot profile with a vacancy is valid")
+	_check(
+		store.repair_profile(removed_profile) == removed_profile,
+		"Profile repair preserves an intentional vacancy"
+	)
+
+	var added_result: Dictionary = store.add_library_card_to_deck_and_save(removed_profile, 0)
+	_check(bool(added_result.get("ok", false)), "A library card can fill the first vacancy atomically")
+	var added_profile: Dictionary = added_result.get("profile", {})
+	_check(
+		String(added_profile["main_deck"][1]) == String(reloaded["main_deck"][1]),
+		"The first vacancy receives the returning card"
+	)
+	_check(added_profile == reloaded, "Remove then add restores the original card partition and order")
+
+	var replacement_source_index: int = (reloaded["library_slots"] as Array).find(
+		"TaiZuChangQuan"
+	)
+	_check(replacement_source_index >= 0, "Replacement fixture finds an unrelated library card")
+	var replacement_source_id: String = String(reloaded["library_slots"][replacement_source_index])
+	var replaced_result: Dictionary = store.replace_deck_card_and_save(
+		reloaded,
+		replacement_source_index,
+		1
+	)
+	_check(bool(replaced_result.get("ok", false)), "A selected deck slot can be replaced atomically")
+	var replaced_profile: Dictionary = replaced_result.get("profile", {})
+	_check(String(replaced_profile["main_deck"][1]) == replacement_source_id, "Replacement enters its target slot")
+	_check(
+		String(replaced_profile["library_slots"][0]) == String(reloaded["main_deck"][1]),
+		"Replacement puts the displaced card at library top"
+	)
+	_check(store.save_profile(reloaded), "Deck-edit fixture restores the prior profile")
+
 	var unlock_result: Dictionary = store.unlock_and_save(reloaded, &"CangSongYingKe1")
 	_check(bool(unlock_result.get("ok", false)), "A valid unlock saves")
 	var unlocked: Dictionary = unlock_result.get("profile", {})

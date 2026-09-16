@@ -438,6 +438,8 @@ func is_profile_valid(profile: Dictionary) -> bool:
 	var placed_set: Dictionary = {}
 	for value: Variant in deck:
 		var card_id := StringName(String(value))
+		if card_id == &"":
+			continue
 		if not unlocked_set.has(card_id) or placed_set.has(card_id):
 			return false
 		placed_set[card_id] = true
@@ -753,6 +755,73 @@ func exchange_and_save(profile: Dictionary, library_index: int, deck_index: int)
 	if not is_profile_valid(candidate) or not save_profile(candidate):
 		return {"ok": false, "profile": unchanged}
 	return {"ok": true, "profile": candidate}
+
+
+func add_library_card_to_deck_and_save(
+	profile: Dictionary,
+	library_index: int
+) -> Dictionary:
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": profile.duplicate(true), "reason": &"invalid"}
+	return _apply_deck_edit_and_save(
+		profile,
+		DeckRules.build_player_add(
+			profile.get("main_deck", []) as Array,
+			profile.get("library_slots", []) as Array,
+			library_index
+		)
+	)
+
+
+func remove_deck_card_and_save(profile: Dictionary, deck_index: int) -> Dictionary:
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": profile.duplicate(true), "reason": &"invalid"}
+	return _apply_deck_edit_and_save(
+		profile,
+		DeckRules.build_player_remove(
+			profile.get("main_deck", []) as Array,
+			profile.get("library_slots", []) as Array,
+			deck_index
+		)
+	)
+
+
+func replace_deck_card_and_save(
+	profile: Dictionary,
+	library_index: int,
+	deck_index: int
+) -> Dictionary:
+	if not is_profile_valid(profile):
+		return {"ok": false, "profile": profile.duplicate(true), "reason": &"invalid"}
+	return _apply_deck_edit_and_save(
+		profile,
+		DeckRules.build_player_replace_at(
+			profile.get("main_deck", []) as Array,
+			profile.get("library_slots", []) as Array,
+			library_index,
+			deck_index
+		)
+	)
+
+
+func _apply_deck_edit_and_save(profile: Dictionary, edit: Dictionary) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile) or not bool(edit.get("ok", false)):
+		return {
+			"ok": false,
+			"profile": unchanged,
+			"reason": edit.get("reason", &"invalid"),
+		}
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["main_deck"] = (edit.get("main_deck", []) as Array).duplicate()
+	candidate["library_slots"] = (edit.get("library_slots", []) as Array).duplicate()
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged, "reason": &"save_failed"}
+	return {
+		"ok": true,
+		"profile": candidate,
+		"changed_deck_indices": edit.get("changed_deck_indices", []),
+	}
 
 
 func unlock_and_save(profile: Dictionary, card_id: StringName) -> Dictionary:

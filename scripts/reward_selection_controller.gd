@@ -13,7 +13,7 @@ const Sects = preload("res://scripts/sect_catalog.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const DEFAULT_STATUS: String = "选择一张奖励牌，长按拖动至下方"
+const DEFAULT_STATUS: String = "选择一张奖励牌，长按可直接领取"
 const DIFFICULTY_NUMERALS: Array[String] = [
 	"零",
 	"一",
@@ -42,9 +42,7 @@ var _profile_store: RefCounted
 var _reward_ids: Array[StringName] = []
 var _reward_display_owner_ids: Array[int] = []
 var _inspection_open: bool = false
-var _drag_source_index: int = -1
-var _drag_proxy: CardView = null
-var _drag_proxy_offset: Vector2 = Vector2.ZERO
+var _inspected_reward_index: int = -1
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -63,8 +61,8 @@ var _drag_proxy_offset: Vector2 = Vector2.ZERO
 @onready var go_second_button: Button = $DuelCanvas/GoSecondButton
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
 @onready var status_label: Label = $DuelCanvas/Status
-@onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
+@onready var detail_actions = $DuelCanvas/SelectionDetailActions
 
 
 func _ready() -> void:
@@ -93,11 +91,10 @@ func _ready() -> void:
 	_roll_reward_display_owners()
 	_refresh_reward_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
-	library_grid.drag_started.connect(_on_library_drag_started)
-	library_grid.drag_moved.connect(_on_library_drag_moved)
-	library_grid.drag_ended.connect(_on_library_drag_ended)
+	library_grid.hold_recognized.connect(_on_library_hold_recognized)
 	back_button.pressed.connect(_on_back_pressed)
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
+	detail_actions.bottom_action_pressed.connect(_on_detail_action_pressed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	enemy_seal_label.text = "友"
@@ -185,7 +182,7 @@ func _refresh_reward_grid() -> void:
 	for reward_index: int in range(3):
 		if reward_index < _reward_ids.size():
 			entries.append(String(_reward_ids[reward_index]))
-			drag_enabled.append(true)
+			drag_enabled.append(false)
 		else:
 			entries.append({"_display_placeholder": true})
 			drag_enabled.append(false)
@@ -223,13 +220,19 @@ func _roll_reward_display_owners() -> void:
 
 
 func _on_library_inspection_requested(
-	_logical_index: int,
+	logical_index: int,
 	data: Dictionary
 ) -> void:
-	_on_card_inspection_requested(data)
+	if logical_index < 0 or logical_index >= _reward_ids.size():
+		return
+	_open_card_inspector(data, logical_index)
 
 
 func _on_card_inspection_requested(data: Dictionary) -> void:
+	_open_card_inspector(data, -1)
+
+
+func _open_card_inspector(data: Dictionary, reward_index: int) -> void:
 	if _inspection_open or data.is_empty() or bool(data.get("_display_placeholder", false)):
 		return
 	var inspected_data: Dictionary = data
@@ -237,9 +240,18 @@ func _on_card_inspection_requested(data: Dictionary) -> void:
 	if Sects.has_sect(inspected_id):
 		inspected_data = _build_sect_inspector_data(data)
 	_inspection_open = true
+	_inspected_reward_index = reward_index
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
-	status_label.text = "查看卡牌详情 · 轻触返回"
+	if reward_index >= 0:
+		player_hand.visible = false
+		detail_actions.configure_bottom_action("领取奖励")
+		status_label.text = "查看卡牌详情 · 轻触其它位置返回"
+	else:
+		player_hand.visible = true
+		detail_actions.hide_bottom_action()
+		status_label.text = "查看卡牌详情 · 轻触返回"
+	card_inspector.set_close_exclusion_controls(detail_actions.get_exclusion_controls())
 	card_inspector.present(inspected_data, _get_library_rect())
 
 
@@ -262,6 +274,10 @@ func _on_inspection_closed() -> void:
 	if not _inspection_open:
 		return
 	_inspection_open = false
+	_inspected_reward_index = -1
+	card_inspector.set_close_exclusion_controls([])
+	detail_actions.hide_all()
+	player_hand.visible = true
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
 	status_label.text = _get_default_status()
@@ -271,44 +287,15 @@ func _get_default_status() -> String:
 	return DEFAULT_STATUS
 
 
-func _on_library_drag_started(
-	logical_index: int,
-	data: Dictionary,
-	pointer_position: Vector2
-) -> void:
-	if _inspection_open or _drag_proxy != null or logical_index >= _reward_ids.size():
+func _on_library_hold_recognized(logical_index: int, _data: Dictionary) -> void:
+	if _inspection_open or logical_index < 0 or logical_index >= _reward_ids.size():
 		return
-	_drag_source_index = logical_index
-	_drag_proxy = CARD_SCENE.instantiate() as CardView
-	drag_layer.add_child(_drag_proxy)
-	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
-	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
-	var source_size: Vector2 = _drag_proxy.size
-	if source_slot != null:
-		source_size = source_slot.get_drag_preview_size()
-	_drag_proxy.size = source_size
-	_drag_proxy_offset = Vector2(-source_size.x * 0.5, -source_size.y * 0.72)
-	_position_drag_proxy(pointer_position)
+	_claim_reward(logical_index)
 
 
-func _on_library_drag_moved(
-	_logical_index: int,
-	pointer_position: Vector2
-) -> void:
-	_position_drag_proxy(pointer_position)
-
-
-func _on_library_drag_ended(
-	logical_index: int,
-	pointer_position: Vector2
-) -> void:
-	if _drag_proxy == null or logical_index != _drag_source_index:
-		_clear_drag_proxy()
-		return
-	if player_hand.get_global_rect().has_point(pointer_position):
-		_claim_reward(logical_index)
-	_clear_drag_proxy()
+func _on_detail_action_pressed() -> void:
+	if _inspected_reward_index >= 0:
+		_claim_reward(_inspected_reward_index)
 
 
 func _claim_reward(reward_index: int) -> bool:
@@ -328,23 +315,6 @@ func _claim_reward(reward_index: int) -> bool:
 	return true
 
 
-func _position_drag_proxy(pointer_position: Vector2) -> void:
-	if _drag_proxy == null:
-		return
-	var local_pointer: Vector2 = (
-		drag_layer.get_global_transform_with_canvas().affine_inverse()
-		* pointer_position
-	)
-	_drag_proxy.position = local_pointer + _drag_proxy_offset
-
-
-func _clear_drag_proxy() -> void:
-	if _drag_proxy != null:
-		_drag_proxy.queue_free()
-	_drag_proxy = null
-	_drag_source_index = -1
-
-
 func _on_back_pressed() -> void:
 	back_requested.emit()
 
@@ -352,7 +322,7 @@ func _on_back_pressed() -> void:
 func _layout_scene() -> void:
 	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
 		return
-	SelectionShell.apply_core_layout(
+	var layout: Dictionary = SelectionShell.apply_core_layout(
 		size,
 		library_aspect_ratio,
 		decor_backdrop,
@@ -363,6 +333,10 @@ func _layout_scene() -> void:
 		library_grid,
 		player_hand,
 		status_label
+	)
+	detail_actions.apply_layout(
+		layout["opponent_hand_rect"],
+		layout["player_hand_rect"]
 	)
 	if _inspection_open:
 		card_inspector.set_board_rect(_get_library_rect())

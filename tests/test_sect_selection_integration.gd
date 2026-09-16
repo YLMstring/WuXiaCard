@@ -115,8 +115,8 @@ func _run() -> void:
 		)
 	var first_slot: Variant = grid.debug_get_bound_slot(0)
 	var first_card := first_slot.get_node("CardHost/CardView") as CardView
-	_check(first_slot.drag_enabled, "Default unlocked sect may drag")
-	_check(not grid.debug_get_bound_slot(1).drag_enabled, "Locked sect may not drag")
+	_check(not first_slot.drag_enabled, "Unlocked sects no longer use the old drag confirmation")
+	_check(not grid.debug_get_bound_slot(1).drag_enabled, "Locked sects also keep dragging disabled")
 	_check(not first_card.ki_badge_enabled, "Sect entries hide ki badges")
 	_check(not first_card.power_numbers_enabled, "Sect entries hide power numbers")
 
@@ -124,6 +124,14 @@ func _run() -> void:
 	first_slot.debug_end_pointer(first_slot.get_global_rect().get_center())
 	_check(selector.debug_get_selected_sect_id() == &"HuaShanPai", "Tapping selects the sect")
 	_check(selector.debug_is_inspecting(), "Tapping also opens sect inspection")
+	var detail_actions := canvas.get_node("SelectionDetailActions") as Control
+	var sect_action := detail_actions.get_node("BottomAction") as Button
+	_check(
+		sect_action.visible
+		and sect_action.text == "拜入师门"
+		and not player_hand.visible,
+		"Unlocked sect details replace the lower hand with the join action"
+	)
 	_check(
 		StringName(String(selector.card_inspector.get_card_snapshot().get("id", "")))
 		== &"HuaShanPai",
@@ -177,31 +185,32 @@ func _run() -> void:
 	var locked_center: Vector2 = locked_slot.get_global_rect().get_center()
 	locked_slot.debug_begin_pointer(locked_center)
 	locked_slot.debug_end_pointer(locked_center)
-	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 0, "Tapping a locked sect does not pulse")
-	selector.card_inspector.close()
-	await process_frame
-	locked_slot.debug_begin_pointer(locked_center)
-	locked_slot.debug_force_hold_timeout()
-	locked_slot.debug_end_pointer(locked_center)
-	_check(selector.debug_get_selected_sect_id() == locked_sect_id, "Holding a locked sect updates selection")
+	_check(selector.debug_get_selected_sect_id() == locked_sect_id, "Tapping a locked sect updates selection")
 	_check(
 		selector.debug_get_upper_preview_ids()
 		== _expected_preview_ids(locked_sect_id, false),
 		"A locked sect previews its five highest-tier cards"
 	)
-	_check(not selector.debug_is_inspecting(), "A hold does not open the inspector")
-	_check(not locked_slot.is_drag_armed(), "A locked hold never arms drag")
-	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked hold reports its status")
+	_check(selector.debug_is_inspecting(), "A locked sect still opens its details")
+	_check(
+		sect_action.visible
+		and sect_action.text == "拜入师门"
+		and sect_action.modulate.a < 1.0,
+		"Locked sect details show a visibly unavailable join action"
+	)
+	_check(selector.debug_get_status() == SelectorController.LOCKED_STATUS, "Locked details report their status")
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Locked sect status keeps the perceptually matched flavor color"
 	)
-	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 1, "A locked hold pulses exactly once")
-	locked_slot.debug_begin_pointer(locked_center)
-	locked_slot.debug_force_hold_timeout()
-	locked_slot.debug_end_pointer(locked_center)
-	_check(locked_slot.debug_get_rejected_drag_pulse_count() == 2, "A repeated locked hold restarts one pulse")
+	detail_actions.call("_on_bottom_pressed")
+	_check(
+		_builder_requests == 0 and selector.debug_get_status() == SelectorController.LOCKED_STATUS,
+		"Pressing the unavailable join action neither starts a run nor closes details"
+	)
+	selector.card_inspector.close()
+	await process_frame
 
 	_check(selector.debug_select_sect(&"HengShanPai"), "Debug selection accepts a known sect")
 	_check(
@@ -214,29 +223,22 @@ func _run() -> void:
 	_check(_back_count == 1, "Back icon emits one navigation-neutral request")
 
 	_check(selector.debug_select_sect(&"HuaShanPai"), "Default unlocked sect can be reselected")
-	var cancel_center: Vector2 = first_slot.get_global_rect().get_center()
-	first_slot.debug_begin_pointer(cancel_center)
-	first_slot.debug_force_hold_timeout()
-	first_slot.debug_move_pointer(cancel_center + Vector2(0.0, 20.0))
-	first_slot.debug_end_pointer(Vector2(4.0, 4.0))
-	_check(first_slot.debug_get_rejected_drag_pulse_count() == 0, "An unlocked hold never uses rejected-drag feedback")
-	_check(_builder_requests == 0, "Dropping outside the lower hand cancels selection")
+	_check(_builder_requests == 0, "Selecting a sect without its detail action does not begin a run")
 	_check(
 		&"CangSongYingKe1" not in Store.new(_save_path).get_unlocked_ids(
 			Store.new(_save_path).load_profile()
 		),
-		"Cancelled selection does not unlock cards"
+		"Merely previewing a sect does not unlock cards"
 	)
 
 	first_slot = grid.debug_get_bound_slot(0)
-	var drag_start: Vector2 = first_slot.get_global_rect().get_center()
-	var valid_drop: Vector2 = player_hand.get_global_rect().get_center()
-	first_slot.debug_begin_pointer(drag_start)
-	first_slot.debug_force_hold_timeout()
-	first_slot.debug_move_pointer(valid_drop)
-	first_slot.debug_end_pointer(valid_drop)
+	var confirm_center: Vector2 = first_slot.get_global_rect().get_center()
+	first_slot.debug_begin_pointer(confirm_center)
+	first_slot.debug_end_pointer(confirm_center)
+	_check(selector.debug_is_inspecting(), "Tapping the selected unlocked sect reopens details")
+	selector.call("_on_detail_action_pressed")
 	await process_frame
-	_check(_builder_requests == 1, "Dropping anywhere over the lower hand confirms selection")
+	_check(_builder_requests == 1, "Pressing the join action confirms sect selection")
 	var saved_profile: Dictionary = Store.new(_save_path).load_profile()
 	_check(
 		String(saved_profile["library_slots"][0]) == "CangSongYingKe1",

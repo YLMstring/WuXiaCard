@@ -17,6 +17,7 @@ var _press_position: Vector2 = Vector2.ZERO
 var _gesture_moved: bool = false
 var _card_snapshot: Dictionary = {}
 var _description_font_size: int = 15
+var _close_exclusion_controls: Array[Control] = []
 
 @onready var parchment: Control = $Parchment
 @onready var shadow: Panel = $Parchment/Shadow
@@ -121,6 +122,10 @@ func get_card_snapshot() -> Dictionary:
 	return _card_snapshot.duplicate(true)
 
 
+func set_close_exclusion_controls(controls: Array[Control]) -> void:
+	_close_exclusion_controls = controls.duplicate()
+
+
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
@@ -152,7 +157,7 @@ func _notification(what: int) -> void:
 
 
 func _begin_pointer(pointer_position: Vector2, pointer_id: int) -> void:
-	if _pointer_active:
+	if _pointer_active or _is_in_close_exclusion(pointer_position):
 		return
 	_pointer_active = true
 	_pointer_id = pointer_id
@@ -182,6 +187,17 @@ func _reset_pointer() -> void:
 	_pointer_id = -2
 	_press_position = Vector2.ZERO
 	_gesture_moved = false
+
+
+func _is_in_close_exclusion(pointer_position: Vector2) -> bool:
+	for control: Control in _close_exclusion_controls:
+		if (
+			is_instance_valid(control)
+			and control.visible
+			and control.get_global_rect().has_point(pointer_position)
+		):
+			return true
+	return false
 
 
 func _display_string(value: Variant) -> String:

@@ -17,6 +17,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_cleanup()
+	root.size = Vector2i(540, 960)
 	var fixture_store: RefCounted = Store.new(_save_path)
 	var fixture_profile: Dictionary = fixture_store.create_testing_profile(
 		fixture_store.create_default_profile()
@@ -250,143 +251,189 @@ func _run() -> void:
 	var reloaded: Dictionary = reload_store.load_profile()
 	_check(reloaded == exchanged, "Production exchange persists immediately")
 
-	var drag_source_id := StringName(String(exchanged["library_slots"][1]))
-	var drag_data: Dictionary = Catalog.create_instance(drag_source_id, DuelRules.PLAYER_OWNER, &"drag_source")
-	var source_library_slot: Variant = grid.debug_get_bound_slot(1)
-	var expected_drag_size: Vector2 = source_library_slot.get_drag_preview_size()
-	var target_slot := player_hand.get_child(1) as Control
-	var target_point: Vector2 = target_slot.get_global_rect().get_center()
-	builder.call("_on_library_drag_started", 1, drag_data, target_point)
-	var drag_proxy := canvas.get_node("DragLayer").get_child(-1) as CardView
+	var detail_actions := canvas.get_node("SelectionDetailActions") as Control
+	var top_actions := detail_actions.get_node("TopActions") as HBoxContainer
+	var bottom_action := detail_actions.get_node("BottomAction") as Button
 	_check(
-		drag_proxy.size.is_equal_approx(expected_drag_size),
-		"Library drag preview keeps the card's enlarged held size"
+		String((top_actions.get_child(0) as Button).text) == "筛选同品阶"
+		and String((top_actions.get_child(1) as Button).text) == "筛选同门派"
+		and String((top_actions.get_child(2) as Button).text) == "筛选同类别",
+		"Deck-builder details expose the three approved filters"
 	)
-	_check(
-		drag_proxy.owner_id == grid.get_display_owner_id(1),
-		"Library drag preview preserves the source card's mastery color"
-	)
-	_check(
-		(drag_proxy.get_node("Overlay/KiBadge") as Control).visible,
-		"Library drag preview shows its normal ki bead"
-	)
-	builder.call("_on_library_drag_ended", 1, target_point)
-	var dragged_profile: Dictionary = builder.debug_get_profile()
-	_check(String(dragged_profile["main_deck"][1]) == String(drag_source_id), "Production drag hit-test exchanges into target hand slot")
-	var before_invalid: Dictionary = dragged_profile.duplicate(true)
-	var invalid_source_id := StringName(String(dragged_profile["library_slots"][2]))
-	var invalid_data: Dictionary = Catalog.create_instance(invalid_source_id, DuelRules.PLAYER_OWNER, &"invalid_drag")
-	builder.call("_on_library_drag_started", 2, invalid_data, Vector2.ZERO)
-	builder.call("_on_library_drag_ended", 2, Vector2(-100.0, -100.0))
-	_check(builder.debug_get_profile() == before_invalid, "Invalid production drop leaves profile unchanged")
 
-	var filter_sect: String = _first_library_sect_with_count(before_invalid, 2)
-	_check(not filter_sect.is_empty(), "Sect-filter fixture finds at least two library cards from one sect")
-	var filtered_source_indices: Array[int] = _library_indices_for_sect(before_invalid, filter_sect)
-	var filter_source_index: int = filtered_source_indices[0]
-	var filter_source_id := StringName(String(before_invalid["library_slots"][filter_source_index]))
+	var full_profile: Dictionary = builder.debug_get_profile()
+	var full_source_id := StringName(String(full_profile["library_slots"][0]))
+	var full_source_data: Dictionary = Catalog.create_instance(
+		full_source_id,
+		DuelRules.PLAYER_OWNER,
+		&"full_hold"
+	)
+	builder.call("_on_library_hold_recognized", 0, full_source_data)
+	_check(
+		builder.debug_get_profile() == full_profile
+		and builder.debug_get_status() == "轻触卡组中的牌可进行替换",
+		"Holding a collection card against a full deck does not mutate the profile"
+	)
+
+	var removed_deck_index: int = 1
+	var removed_card_id: String = String(full_profile["main_deck"][removed_deck_index])
+	var removed_data: Dictionary = Catalog.create_instance(
+		StringName(removed_card_id),
+		DuelRules.PLAYER_OWNER,
+		&"remove_hold"
+	)
+	builder.call("_on_player_card_hold_recognized", removed_data, removed_deck_index)
+	var after_remove: Dictionary = builder.debug_get_profile()
+	_check(
+		String(after_remove["main_deck"][removed_deck_index]).is_empty()
+		and String(after_remove["library_slots"][0]) == removed_card_id,
+		"Holding a deck card removes it into the top of the collection"
+	)
+	_check(
+		not builder.debug_can_go_first() and not builder.debug_can_go_second(),
+		"An incomplete deck blocks both opening choices"
+	)
+	var duel_request_count: int = _duel_requests.size()
+	go_first.pressed.emit()
+	go_second.pressed.emit()
+	_check(
+		_duel_requests.size() == duel_request_count
+		and builder.debug_get_status() == "卡组需要五张牌",
+		"Blocked opening controls explain that the deck needs five cards"
+	)
+
+	var top_library_data: Dictionary = Catalog.create_instance(
+		StringName(String(after_remove["library_slots"][0])),
+		DuelRules.PLAYER_OWNER,
+		&"add_hold"
+	)
+	builder.call("_on_library_hold_recognized", 0, top_library_data)
+	var after_hold_add: Dictionary = builder.debug_get_profile()
+	_check(
+		String(after_hold_add["main_deck"][removed_deck_index]) == removed_card_id
+		and builder.debug_can_go_second(),
+		"Holding a collection card fills the first empty deck slot"
+	)
+
+	var detail_remove_index: int = 2
+	var detail_remove_id: String = String(after_hold_add["main_deck"][detail_remove_index])
+	var detail_remove_data: Dictionary = Catalog.create_instance(
+		StringName(detail_remove_id),
+		DuelRules.PLAYER_OWNER,
+		&"detail_remove"
+	)
+	builder.call("_on_player_card_inspection_requested", detail_remove_data, detail_remove_index)
+	_check(
+		builder.debug_is_inspecting()
+		and bottom_action.visible
+		and bottom_action.text == "移出卡组"
+		and not player_hand.visible,
+		"Tapping a deck card shows its remove action in the lower row"
+	)
+	await _click_control(bottom_action)
+	var after_detail_remove: Dictionary = builder.debug_get_profile()
+	_check(
+		not builder.debug_is_inspecting()
+		and String(after_detail_remove["main_deck"][detail_remove_index]).is_empty()
+		and String(after_detail_remove["library_slots"][0]) == detail_remove_id,
+		"The detail remove action moves the card to collection top and closes details"
+	)
+
+	var detail_add_data: Dictionary = Catalog.create_instance(
+		StringName(String(after_detail_remove["library_slots"][0])),
+		DuelRules.PLAYER_OWNER,
+		&"detail_add"
+	)
+	builder.call("_on_library_inspection_requested", 0, detail_add_data)
+	_check(
+		bottom_action.visible
+		and bottom_action.text == "加入卡组"
+		and not player_hand.visible,
+		"A collection detail with an empty slot shows the add action"
+	)
+	builder.call("_on_detail_action_pressed")
+	var after_detail_add: Dictionary = builder.debug_get_profile()
+	_check(
+		String(after_detail_add["main_deck"][detail_remove_index]) == detail_remove_id
+		and not builder.debug_is_inspecting(),
+		"The detail add action fills the vacancy and closes details"
+	)
+
+	var replacement_library_index: int = _find_library_card_without_deck_glyph(after_detail_add)
+	_check(replacement_library_index >= 0, "Replacement fixture finds a non-namesake collection card")
+	var replacement_id: String = String(after_detail_add["library_slots"][replacement_library_index])
+	var replacement_data: Dictionary = Catalog.create_instance(
+		StringName(replacement_id),
+		DuelRules.PLAYER_OWNER,
+		&"detail_replace"
+	)
+	builder.call("_on_library_inspection_requested", replacement_library_index, replacement_data)
+	_check(
+		builder.debug_is_replacement_target_mode()
+		and player_hand.visible
+		and not bottom_action.visible
+		and builder.debug_get_status() == "轻触卡组中的牌可进行替换",
+		"A full deck turns its visible cards into replacement targets"
+	)
+	var replacement_target_index: int = 0
+	var displaced_id: String = String(after_detail_add["main_deck"][replacement_target_index])
+	var replacement_target_card := (
+		player_hand.get_child(replacement_target_index).get_child(0) as CardView
+	)
+	await _click_control(replacement_target_card)
+	var after_replacement: Dictionary = builder.debug_get_profile()
+	_check(
+		String(after_replacement["main_deck"][replacement_target_index]) == replacement_id
+		and String(after_replacement["library_slots"][0]) == displaced_id
+		and not builder.debug_is_inspecting(),
+		"Tapping a deck target replaces it and returns the displaced card to collection top"
+	)
+
+	var filter_source_index: int = _first_occupied_library_index(after_replacement)
+	var filter_source_id := StringName(String(after_replacement["library_slots"][filter_source_index]))
 	var filter_source_data: Dictionary = Catalog.create_instance(
 		filter_source_id,
 		DuelRules.PLAYER_OWNER,
 		&"filter_source"
 	)
-	var opponent_target_point: Vector2 = opponent_hand.get_global_rect().get_center()
-	grid.set_scroll_offset(grid.debug_get_row_height() * 5.0)
-	builder.call(
-		"_on_library_drag_started",
-		filter_source_index,
-		filter_source_data,
-		opponent_target_point
-	)
-	builder.call("_on_library_drag_ended", filter_source_index, opponent_target_point)
+	var filter_profile_before: Dictionary = after_replacement.duplicate(true)
+	builder.call("_on_library_inspection_requested", filter_source_index, filter_source_data)
+	await _click_control(top_actions.get_child(1) as Button)
+	var filter_sect: String = String(Catalog.get_definition(filter_source_id).get("sect", ""))
 	_check(
-		String(builder.debug_get_library_filter_sect()) == filter_sect,
-		"Dropping a library card on the opponent hand establishes its sect filter"
+		builder.debug_get_library_filter_type() == &"sect"
+		and String(builder.debug_get_library_filter_value()) == filter_sect
+		and is_equal_approx(grid.get_scroll_offset(), 0.0),
+		"Choosing the sect action applies a compact same-sect filter at the top"
 	)
-	_check(
-		builder.debug_get_profile() == before_invalid,
-		"Establishing a sect filter does not mutate or save the deck profile"
-	)
-	_check(
-		is_equal_approx(grid.get_scroll_offset(), 0.0),
-		"Establishing a sect filter scrolls the library to the top"
-	)
+	_check(builder.debug_get_profile() == filter_profile_before, "Filtering never mutates the saved profile")
 	var filtered_mapping: Array[int] = builder.debug_get_library_source_indices()
+	var expected_filtered_indices: Array[int] = _library_indices_for_sect(filter_profile_before, filter_sect)
 	_check(
-		filtered_mapping.slice(0, filtered_source_indices.size()) == filtered_source_indices,
-		"Filtered compact slots preserve their real library indices in source order"
+		filtered_mapping.slice(0, expected_filtered_indices.size()) == expected_filtered_indices,
+		"Filtered display entries retain their real collection indices"
 	)
-	for display_index: int in range(filtered_source_indices.size()):
-		_check(
-			String(grid.library_slots[display_index])
-			== String(before_invalid["library_slots"][filtered_source_indices[display_index]]),
-			"Filtered slot %d displays its mapped same-sect card" % display_index
-		)
-	_check(
-		String(grid.library_slots[filtered_source_indices.size()]).is_empty(),
-		"Cards outside the active sect are hidden after the compact filtered prefix"
-	)
-	var filtered_display_index: int = filtered_source_indices.size() - 1
-	var filtered_real_index: int = filtered_source_indices[filtered_display_index]
-	var filtered_exchange_id := StringName(String(
-		before_invalid["library_slots"][filtered_real_index]
-	))
-	var filtered_exchange_data: Dictionary = Catalog.create_instance(
-		filtered_exchange_id,
-		DuelRules.PLAYER_OWNER,
-		&"filtered_exchange"
-	)
-	var filtered_deck_index: int = 0
-	var expected_filtered_exchange: Dictionary = fixture_store.exchange_and_save(
-		before_invalid,
-		filtered_real_index,
-		filtered_deck_index
-	)
-	var filtered_target_point: Vector2 = (
-		player_hand.get_child(filtered_deck_index) as Control
-	).get_global_rect().get_center()
-	builder.call(
-		"_on_library_drag_started",
-		filtered_display_index,
-		filtered_exchange_data,
-		filtered_target_point
-	)
-	builder.call(
-		"_on_library_drag_ended",
-		filtered_display_index,
-		filtered_target_point
-	)
-	var after_filtered_exchange: Dictionary = builder.debug_get_profile()
-	_check(
-		bool(expected_filtered_exchange.get("ok", false))
-		and after_filtered_exchange == expected_filtered_exchange.get("profile", {}),
-		"Filtered drag exchanges through the mapped real library index"
-	)
-	_check(
-		String(builder.debug_get_library_filter_sect()) == filter_sect,
-		"A filtered exchange retains and refreshes the active sect filter"
-	)
-	var cancel_data: Dictionary = Catalog.create_instance(
-		StringName(String(grid.library_slots[0])),
+	var filtered_first_id := StringName(String(grid.library_slots[0]))
+	var filtered_first_data: Dictionary = Catalog.create_instance(
+		filtered_first_id,
 		DuelRules.PLAYER_OWNER,
 		&"filter_cancel"
 	)
-	grid.set_scroll_offset(grid.debug_get_row_height())
-	builder.call("_on_library_drag_started", 0, cancel_data, opponent_target_point)
-	builder.call("_on_library_drag_ended", 0, opponent_target_point)
+	builder.call("_on_library_inspection_requested", 0, filtered_first_data)
+	await _click_control(top_actions.get_child(1) as Button)
 	_check(
-		String(builder.debug_get_library_filter_sect()).is_empty(),
-		"Dropping any filtered card on the opponent hand cancels instead of changing the filter"
-	)
-	_check(
-		is_equal_approx(grid.get_scroll_offset(), 0.0)
-		and grid.library_slots == after_filtered_exchange["library_slots"],
-		"Cancelling restores the full real library order at the top"
+		builder.debug_get_library_filter_type() == &""
+		and grid.library_slots == filter_profile_before["library_slots"],
+		"Choosing the active filter again cancels it and restores collection order"
 	)
 
 	grid.set_scroll_offset(grid.debug_get_row_height() * 10.0)
 	var saved_offset: float = grid.get_scroll_offset()
-	var inspect_data: Dictionary = Catalog.create_instance(StringName(exchanged["main_deck"][0]), DuelRules.PLAYER_OWNER, &"inspect")
+	var inspect_data: Dictionary = Catalog.create_instance(
+		StringName(String(filter_profile_before["main_deck"][0])),
+		DuelRules.PLAYER_OWNER,
+		&"inspect"
+	)
 	builder.call("_on_card_inspection_requested", inspect_data)
 	_check(builder.debug_is_inspecting() and not grid.visible, "Inspection replaces the library")
 	(builder.get_node("DuelCanvas/CardInspector") as Control).call("close")
@@ -543,12 +590,62 @@ func _occupied_count(slots: Array) -> int:
 	return result
 
 
+func _click_control(control: Control) -> void:
+	var click_position: Vector2 = control.get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = click_position
+	motion.global_position = click_position
+	root.push_input(motion)
+	await process_frame
+	var hovered: Control = root.gui_get_hovered_control()
+	_check(hovered == control, "Visible detail action receives pointer input above the inspector")
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = click_position
+	press.global_position = click_position
+	root.push_input(press)
+	await process_frame
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = click_position
+	release.global_position = click_position
+	root.push_input(release)
+	await process_frame
+
+
 func _find_card_at_tier(card_ids: Array, tier: int) -> int:
 	for index: int in range(card_ids.size()):
 		var card_id := StringName(String(card_ids[index]))
 		if card_id == &"":
 			continue
 		if int(Catalog.get_definition(card_id).get("tier", 0)) == tier:
+			return index
+	return -1
+
+
+func _first_occupied_library_index(profile_data: Dictionary) -> int:
+	var library_slots: Array = profile_data.get("library_slots", [])
+	for index: int in range(library_slots.size()):
+		if not String(library_slots[index]).is_empty():
+			return index
+	return -1
+
+
+func _find_library_card_without_deck_glyph(profile_data: Dictionary) -> int:
+	var deck_glyphs: Dictionary = {}
+	for value: Variant in profile_data.get("main_deck", []):
+		var card_id := StringName(String(value))
+		if Catalog.has_card(card_id):
+			deck_glyphs[String(Catalog.get_definition(card_id).get("glyph", ""))] = true
+	var library_slots: Array = profile_data.get("library_slots", [])
+	for index: int in range(library_slots.size()):
+		var card_id := StringName(String(library_slots[index]))
+		if not Catalog.has_card(card_id):
+			continue
+		var glyph: String = String(Catalog.get_definition(card_id).get("glyph", ""))
+		if not deck_glyphs.has(glyph):
 			return index
 	return -1
 

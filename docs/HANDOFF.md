@@ -251,21 +251,25 @@ The creator has made several direct UI and localization edits. Preserve those ed
   post-duel rewards exclude catalog sects outside both the selected sect and
   this pool, while non-catalog sect cards and guaranteed rewards remain
   eligible. Closing a run clears the pool. The reward screen shows its saved
-  glyphs in pool order in the lower status line.
+  glyphs in pool order as five revealed red sect cards in the upper hand.
 - The collection library has 1,000 logical entries arranged in four-card rows
   and only 20 live slot views. Library cards retain the standard 3:4 ratio and
   their name color reflects catalog tier.
   Occupied cards are a compact prefix followed by empty slots.
-- A library card exchanges with a main-deck slot after a roughly 0.25-second
-  hold and drag. When its glyph already exists in another main slot, the
-  profile performs the approved three-way rotation without leaving a gap. A
-  short tap inspects; immediate movement scrolls.
-- Dropping a held library card on the opponent-hand row applies a temporary
-  same-sect filter. Results form a compact prefix while retaining real library
-  order and a controller-owned display-to-source index map. Repeating that drop
-  cancels the filter; player-deck drops still exchange through the mapped real
-  index. Filtering never saves or mutates the profile and resets when the scene
-  is recreated.
+- A short tap opens card details. In deck building, details replace the upper
+  hand with mutually exclusive same-tier, same-sect, and same-weapon filters;
+  an active filter button cancels that filter. Results form a compact prefix
+  while retaining real library order and a controller-owned display-to-source
+  index map. Filtering never saves or mutates the profile.
+- Main decks retain five fixed physical slots and may persist empty slots, but
+  neither opening-side control can start a duel until all five are filled.
+  Holding a deck card removes it to the library top. Holding a library card
+  replaces an existing namesake or fills the first empty slot. With a full deck,
+  a tapped library card instead keeps the deck visible so one slot can be tapped
+  as the replacement target. Every deck edit saves atomically.
+- Reward details expose `领取奖励`, sect details expose `拜入师门`, and holding a
+  reward claims it directly. The former drag-to-claim, drag-to-join, and
+  drag-to-filter interactions are no longer used.
 - Primary unlocks insert at the library top. Still-locked lower-tier cards with
   the same `glyph` and sect append at the library bottom.
 - Crossing levels 2, 5, 8, or 11 unlocks all exact-tier cards of the selected

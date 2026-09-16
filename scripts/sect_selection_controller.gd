@@ -12,7 +12,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
-const DEFAULT_STATUS: String = "轻触门派查看详情，长按门派并拖至下方"
+const DEFAULT_STATUS: String = "轻触门派查看详情"
 const LOCKED_STATUS: String = "该门派尚未解锁"
 const DIFFICULTY_ENEMY_PREFIX: String = "江湖门派·进阶"
 const DIFFICULTY_NUMERALS: Array[String] = [
@@ -49,10 +49,8 @@ var _upper_preview_ids: Array[StringName] = []
 var _lower_preview_ids: Array[StringName] = []
 var _inspection_open: bool = false
 var _scroll_before_inspection: float = 0.0
-var _drag_source_index: int = -1
-var _drag_proxy: CardView = null
-var _drag_proxy_offset: Vector2 = Vector2.ZERO
 var _difficulty_feedback_tweens: Dictionary = {}
+var _inspecting_sect: bool = false
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -73,8 +71,8 @@ var _difficulty_feedback_tweens: Dictionary = {}
 @onready var go_second_button: Button = $DuelCanvas/GoSecondButton
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
 @onready var status_label: Label = $DuelCanvas/Status
-@onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
+@onready var detail_actions = $DuelCanvas/SelectionDetailActions
 
 
 func _ready() -> void:
@@ -118,10 +116,6 @@ func _ready() -> void:
 	library_grid.set_hold_duration(hold_duration)
 	_refresh_sect_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
-	library_grid.hold_recognized.connect(_on_library_hold_recognized)
-	library_grid.drag_started.connect(_on_library_drag_started)
-	library_grid.drag_moved.connect(_on_library_drag_moved)
-	library_grid.drag_ended.connect(_on_library_drag_ended)
 	back_button.pressed.connect(_on_back_pressed)
 	difficulty_left_button.pressed.connect(_on_difficulty_left_pressed)
 	difficulty_right_button.pressed.connect(_on_difficulty_right_pressed)
@@ -129,6 +123,8 @@ func _ready() -> void:
 		button.button_down.connect(_on_difficulty_button_down.bind(button))
 		button.button_up.connect(_on_difficulty_button_up.bind(button))
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
+	detail_actions.bottom_action_pressed.connect(_on_detail_action_pressed)
+	detail_actions.bottom_action_rejected.connect(_on_detail_action_rejected)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	enemy_seal_label.text = "友"
@@ -142,7 +138,7 @@ func debug_select_sect(sect_id: StringName, inspect: bool = false) -> bool:
 	var data: Dictionary = Sects.get_definition(sect_id)
 	_select_sect(data)
 	if inspect:
-		_open_inspector(_build_sect_inspector_data(data))
+		_open_inspector(_build_sect_inspector_data(data), true)
 	return true
 
 
@@ -211,7 +207,6 @@ func _update_difficulty_button_interaction() -> void:
 	var disabled: bool = (
 		not has_multiple_difficulties
 		or _inspection_open
-		or _drag_proxy != null
 	)
 	difficulty_left_button.disabled = disabled
 	difficulty_right_button.disabled = disabled
@@ -274,7 +269,6 @@ func _cycle_difficulty(delta: int) -> void:
 	if (
 		_max_unlocked_difficulty <= 0
 		or _inspection_open
-		or _drag_proxy != null
 	):
 		return
 	var difficulty_count: int = _max_unlocked_difficulty + 1
@@ -305,7 +299,7 @@ func _refresh_sect_grid() -> void:
 		display_owner_ids.append(
 			DuelRules.PLAYER_OWNER if unlocked else DuelRules.OPPONENT_OWNER
 		)
-		drag_enabled_values.append(unlocked)
+		drag_enabled_values.append(false)
 	library_grid.set_display_entries(
 		entries,
 		display_owner_ids,
@@ -430,21 +424,11 @@ func _spawn_preview_card_back(
 
 func _on_library_inspection_requested(_logical_index: int, data: Dictionary) -> void:
 	_select_sect(data)
-	_open_inspector(_build_sect_inspector_data(data))
-
-
-func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
-	_select_sect(data)
-	var sect_id := StringName(String(data.get("id", "")))
-	if sect_id not in _profile_store.get_unlocked_sect_ids(profile):
-		status_label.text = LOCKED_STATUS
-		library_grid.play_rejected_drag_pulse(logical_index)
-	else:
-		status_label.text = _difficulty_default_status()
+	_open_inspector(_build_sect_inspector_data(data), true)
 
 
 func _on_card_inspection_requested(data: Dictionary) -> void:
-	_open_inspector(data)
+	_open_inspector(data, false)
 
 
 func _build_sect_inspector_data(data: Dictionary) -> Dictionary:
@@ -465,15 +449,29 @@ func _build_sect_inspector_data(data: Dictionary) -> Dictionary:
 	return result
 
 
-func _open_inspector(data: Dictionary) -> void:
+func _open_inspector(data: Dictionary, is_sect: bool = false) -> void:
 	if _inspection_open or data.is_empty():
 		return
 	_inspection_open = true
+	_inspecting_sect = is_sect
 	_update_difficulty_button_interaction()
 	_scroll_before_inspection = library_grid.get_scroll_offset()
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
-	status_label.text = "查看详情 · 轻触返回"
+	if is_sect:
+		player_hand.visible = false
+		var unlocked: bool = _selected_sect_id in _profile_store.get_unlocked_sect_ids(profile)
+		detail_actions.configure_bottom_action("拜入师门", unlocked)
+		status_label.text = (
+			"查看详情 · 轻触其它位置返回"
+			if unlocked
+			else LOCKED_STATUS
+		)
+	else:
+		player_hand.visible = true
+		detail_actions.hide_bottom_action()
+		status_label.text = "查看详情 · 轻触返回"
+	card_inspector.set_close_exclusion_controls(detail_actions.get_exclusion_controls())
 	card_inspector.present(data, _get_library_rect())
 
 
@@ -481,6 +479,10 @@ func _on_inspection_closed() -> void:
 	if not _inspection_open:
 		return
 	_inspection_open = false
+	_inspecting_sect = false
+	card_inspector.set_close_exclusion_controls([])
+	detail_actions.hide_all()
+	player_hand.visible = true
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
 	library_grid.set_scroll_offset(_scroll_before_inspection)
@@ -488,51 +490,13 @@ func _on_inspection_closed() -> void:
 	_update_difficulty_button_interaction()
 
 
-func _on_library_drag_started(
-	logical_index: int,
-	data: Dictionary,
-	pointer_position: Vector2
-) -> void:
-	if _inspection_open or _drag_proxy != null:
-		return
-	var sect_id := StringName(String(data.get("id", "")))
-	if sect_id not in _profile_store.get_unlocked_sect_ids(profile):
-		status_label.text = LOCKED_STATUS
-		return
-	_drag_source_index = logical_index
-	_drag_proxy = CARD_SCENE.instantiate() as CardView
-	drag_layer.add_child(_drag_proxy)
-	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_proxy.set_ki_badge_enabled(false)
-	_drag_proxy.set_power_numbers_enabled(false)
-	_drag_proxy.configure(data, DuelRules.PLAYER_OWNER, false)
-	_update_difficulty_button_interaction()
-	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
-	var source_size: Vector2 = _drag_proxy.size
-	if source_slot != null:
-		source_size = source_slot.get_drag_preview_size()
-	_drag_proxy.size = source_size
-	_drag_proxy_offset = Vector2(-source_size.x * 0.5, -source_size.y * 0.72)
-	_position_drag_proxy(pointer_position)
-
-
-func _on_library_drag_moved(
-	_logical_index: int,
-	pointer_position: Vector2
-) -> void:
-	_position_drag_proxy(pointer_position)
-
-
-func _on_library_drag_ended(
-	logical_index: int,
-	pointer_position: Vector2
-) -> void:
-	if _drag_proxy == null or logical_index != _drag_source_index:
-		_clear_drag_proxy()
-		return
-	if player_hand.get_global_rect().has_point(pointer_position):
+func _on_detail_action_pressed() -> void:
+	if _inspecting_sect:
 		_complete_selected_sect()
-	_clear_drag_proxy()
+
+
+func _on_detail_action_rejected() -> void:
+	status_label.text = LOCKED_STATUS
 
 
 func _complete_selected_sect() -> bool:
@@ -560,24 +524,6 @@ func _complete_selected_sect() -> bool:
 	return true
 
 
-func _position_drag_proxy(pointer_position: Vector2) -> void:
-	if _drag_proxy == null:
-		return
-	var local_pointer: Vector2 = (
-		drag_layer.get_global_transform_with_canvas().affine_inverse()
-		* pointer_position
-	)
-	_drag_proxy.position = local_pointer + _drag_proxy_offset
-
-
-func _clear_drag_proxy() -> void:
-	if _drag_proxy != null:
-		_drag_proxy.queue_free()
-	_drag_proxy = null
-	_drag_source_index = -1
-	_update_difficulty_button_interaction()
-
-
 func _on_back_pressed() -> void:
 	back_requested.emit()
 
@@ -585,7 +531,7 @@ func _on_back_pressed() -> void:
 func _layout_scene() -> void:
 	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
 		return
-	SelectionShell.apply_core_layout(
+	var layout: Dictionary = SelectionShell.apply_core_layout(
 		size,
 		library_aspect_ratio,
 		decor_backdrop,
@@ -596,6 +542,10 @@ func _layout_scene() -> void:
 		library_grid,
 		player_hand,
 		status_label
+	)
+	detail_actions.apply_layout(
+		layout["opponent_hand_rect"],
+		layout["player_hand_rect"]
 	)
 	_layout_difficulty_buttons()
 	if _inspection_open:

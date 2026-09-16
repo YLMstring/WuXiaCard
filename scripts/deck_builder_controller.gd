@@ -8,12 +8,15 @@ const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
 const Decks = preload("res://scripts/duel_decks.gd")
 const Difficulty = preload("res://scripts/difficulty_rules.gd")
+const DeckRules = preload("res://scripts/deck_rules.gd")
 const Settings = preload("res://scripts/game_settings.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
-const DEFAULT_STATUS: String = "长按拖动中央卡牌，点击两侧进入战斗"
+const DEFAULT_STATUS: String = "轻触查看详情，长按快速调整卡组"
+const INCOMPLETE_DECK_NOTICE: String = "卡组需要五张牌"
+const REPLACE_NOTICE: String = "轻触卡组中的牌可进行替换"
 const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
@@ -33,19 +36,22 @@ var profile: Dictionary = {}
 var _profile_store: RefCounted
 var _inspection_open: bool = false
 var _scroll_before_inspection: float = 0.0
-var _drag_source_index: int = -1
-var _drag_source_library_index: int = -1
-var _drag_proxy: CardView = null
-var _drag_proxy_offset: Vector2 = Vector2.ZERO
 var _effective_enemy_card_ids: Array[StringName] = []
 var _go_first_allowed: bool = true
+var _go_second_allowed: bool = true
 var _go_first_ink_material: ShaderMaterial = null
 var _go_second_ink_material: ShaderMaterial = null
 var _choice_feedback_tweens: Dictionary = {}
 var _blocked_feedback_tween: Tween = null
 var _library_display_owner_ids: Array[int] = []
 var _library_source_indices: Array[int] = []
-var _library_filter_sect: StringName = &""
+var _library_filter_type: StringName = &""
+var _library_filter_value: Variant = null
+var _inspected_library_index: int = -1
+var _inspected_deck_index: int = -1
+var _inspected_data: Dictionary = {}
+var _replacement_target_mode: bool = false
+var _player_hand_default_child_index: int = -1
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -64,8 +70,8 @@ var _library_filter_sect: StringName = &""
 @onready var go_second_button: Button = $DuelCanvas/GoSecondButton
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
 @onready var status_label: Label = $DuelCanvas/Status
-@onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
+@onready var detail_actions = $DuelCanvas/SelectionDetailActions
 
 
 func _ready() -> void:
@@ -73,6 +79,7 @@ func _ready() -> void:
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
+	_player_hand_default_child_index = player_hand.get_index()
 	_style_header()
 	SelectionShell.style_bottom_status(status_label, card_inspector)
 	_create_hands()
@@ -80,13 +87,13 @@ func _ready() -> void:
 	library_grid.set_ki_badges_enabled(true)
 	_refresh_library_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
-	library_grid.drag_started.connect(_on_library_drag_started)
-	library_grid.drag_moved.connect(_on_library_drag_moved)
-	library_grid.drag_ended.connect(_on_library_drag_ended)
+	library_grid.hold_recognized.connect(_on_library_hold_recognized)
 	back_button.pressed.connect(_on_back_pressed)
 	go_first_button.pressed.connect(_on_go_first_pressed)
 	go_second_button.pressed.connect(_on_go_second_pressed)
 	card_inspector.inspection_closed.connect(_on_inspection_closed)
+	detail_actions.top_action_pressed.connect(_on_filter_action_pressed)
+	detail_actions.bottom_action_pressed.connect(_on_detail_action_pressed)
 	resized.connect(_layout_scene)
 	get_viewport().size_changed.connect(_layout_scene)
 	opponent_name.text = upcoming_enemy_name
@@ -144,7 +151,27 @@ func debug_get_library_source_indices() -> Array[int]:
 
 
 func debug_get_library_filter_sect() -> StringName:
-	return _library_filter_sect
+	return (
+		StringName(String(_library_filter_value))
+		if _library_filter_type == &"sect"
+		else &""
+	)
+
+
+func debug_get_library_filter_type() -> StringName:
+	return _library_filter_type
+
+
+func debug_get_library_filter_value() -> Variant:
+	return _library_filter_value
+
+
+func debug_is_replacement_target_mode() -> bool:
+	return _replacement_target_mode
+
+
+func debug_can_go_second() -> bool:
+	return _go_second_allowed
 
 
 func _get_mastered_card_set() -> Dictionary:
@@ -160,7 +187,7 @@ func _refresh_library_grid() -> void:
 	var display_values: Array = []
 	_library_display_owner_ids.clear()
 	_library_source_indices.clear()
-	if _library_filter_sect == &"":
+	if _library_filter_type == &"":
 		display_values = library_values.duplicate()
 		for source_index: int in range(DeckLibraryGrid.TOTAL_SLOTS):
 			_library_source_indices.append(source_index)
@@ -179,9 +206,7 @@ func _refresh_library_grid() -> void:
 			var card_id := StringName(String(library_values[source_index]))
 			if card_id == &"":
 				continue
-			if StringName(String(
-				Catalog.get_definition(card_id).get("sect", "")
-			)) != _library_filter_sect:
+			if not _card_matches_library_filter(card_id):
 				continue
 			display_values.append(library_values[source_index])
 			_library_source_indices.append(source_index)
@@ -189,8 +214,9 @@ func _refresh_library_grid() -> void:
 				card_id,
 				mastered_set
 			))
-	if _library_filter_sect != &"" and _library_source_indices.is_empty():
-		_library_filter_sect = &""
+	if _library_filter_type != &"" and _library_source_indices.is_empty():
+		_library_filter_type = &""
+		_library_filter_value = null
 		_refresh_library_grid()
 		library_grid.set_scroll_offset(0.0)
 		return
@@ -204,7 +230,19 @@ func _refresh_library_grid() -> void:
 	for display_index: int in range(displayed_count, DeckLibraryGrid.TOTAL_SLOTS):
 		_library_source_indices[display_index] = -1
 		_library_display_owner_ids[display_index] = DuelRules.PLAYER_OWNER
-	library_grid.set_library_slots(display_values, _library_display_owner_ids)
+	library_grid.set_display_entries(
+		display_values,
+		_library_display_owner_ids,
+		[],
+		true
+	)
+
+
+func _card_matches_library_filter(card_id: StringName) -> bool:
+	if _library_filter_type == &"" or not Catalog.has_card(card_id):
+		return true
+	var definition: Dictionary = Catalog.get_definition(card_id)
+	return definition.get(String(_library_filter_type), null) == _library_filter_value
 
 
 func _get_library_card_display_owner(card_id: StringName, mastered_set: Dictionary) -> int:
@@ -251,15 +289,25 @@ func _refresh_player_slot(deck_index: int) -> void:
 		slot.remove_child(child)
 		child.queue_free()
 	var card_id := StringName(String(profile["main_deck"][deck_index]))
+	if card_id == &"" or not Catalog.has_card(card_id):
+		return
 	var card_data: Dictionary = Catalog.create_instance(
 		card_id,
 		DuelRules.PLAYER_OWNER,
 		StringName("deck_builder_player_%d" % deck_index)
 	)
-	_spawn_card_in_slot(slot, card_data, DuelRules.PLAYER_OWNER)
+	var card: CardView = _spawn_card_in_slot(slot, card_data, DuelRules.PLAYER_OWNER, false)
+	card.set_long_press_enabled(true)
+	card.inspection_requested.connect(_on_player_card_inspection_requested.bind(deck_index))
+	card.hold_recognized.connect(_on_player_card_hold_recognized.bind(deck_index))
 
 
-func _spawn_card_in_slot(slot: PanelContainer, data: Dictionary, owner_id: int) -> CardView:
+func _spawn_card_in_slot(
+	slot: PanelContainer,
+	data: Dictionary,
+	owner_id: int,
+	connect_inspection: bool = true
+) -> CardView:
 	var card := CARD_SCENE.instantiate() as CardView
 	slot.add_child(card)
 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -269,23 +317,85 @@ func _spawn_card_in_slot(slot: PanelContainer, data: Dictionary, owner_id: int) 
 			_profile_store.get_run_difficulty(profile)
 		)
 	)
-	card.inspection_requested.connect(_on_card_inspection_requested)
+	if connect_inspection:
+		card.inspection_requested.connect(_on_card_inspection_requested)
 	return card
 
 
-func _on_library_inspection_requested(_logical_index: int, data: Dictionary) -> void:
-	_on_card_inspection_requested(data)
+func _on_library_inspection_requested(logical_index: int, data: Dictionary) -> void:
+	if logical_index < 0 or logical_index >= _library_source_indices.size():
+		return
+	var source_library_index: int = _library_source_indices[logical_index]
+	if source_library_index < 0:
+		return
+	_open_card_inspector(data, source_library_index, -1)
 
 
 func _on_card_inspection_requested(data: Dictionary) -> void:
+	_open_card_inspector(data, -1, -1)
+
+
+func _on_player_card_inspection_requested(data: Dictionary, deck_index: int) -> void:
+	if _inspection_open and _replacement_target_mode:
+		_replace_inspected_library_card(deck_index)
+		return
+	_open_card_inspector(data, -1, deck_index)
+
+
+func _open_card_inspector(
+	data: Dictionary,
+	library_index: int,
+	deck_index: int
+) -> void:
 	if _inspection_open or data.is_empty():
 		return
 	_inspection_open = true
+	_inspected_library_index = library_index
+	_inspected_deck_index = deck_index
+	_inspected_data = data.duplicate(true)
+	_replacement_target_mode = false
 	_scroll_before_inspection = library_grid.get_scroll_offset()
 	library_grid.set_interaction_enabled(false)
 	library_grid.visible = false
 	_set_start_controls_visible(false)
-	status_label.text = "查看卡牌详情 · 轻触返回"
+	opponent_hand.visible = false
+	detail_actions.configure_top_actions(
+		["筛选同品阶", "筛选同门派", "筛选同类别"],
+		_get_selected_filter_action_index(data)
+	)
+	if library_index >= 0:
+		var definition: Dictionary = Catalog.get_definition(
+			StringName(String(data.get("card_id", "")))
+		)
+		var namesake_index: int = DeckRules.find_deck_glyph_slot(
+			profile.get("main_deck", []) as Array,
+			String(definition.get("glyph", ""))
+		)
+		if namesake_index >= 0 or DeckRules.find_first_empty_deck_slot(
+			profile.get("main_deck", []) as Array
+		) >= 0:
+			player_hand.visible = false
+			detail_actions.configure_bottom_action("加入卡组")
+			status_label.text = "查看卡牌详情 · 轻触其它位置返回"
+		else:
+			_replacement_target_mode = true
+			player_hand.visible = true
+			player_hand.z_index = 13
+			_raise_player_hand_for_replacement()
+			detail_actions.hide_bottom_action()
+			status_label.text = REPLACE_NOTICE
+	elif deck_index >= 0:
+		player_hand.visible = false
+		detail_actions.configure_bottom_action("移出卡组")
+		status_label.text = "查看卡牌详情 · 轻触其它位置返回"
+	else:
+		player_hand.visible = true
+		detail_actions.hide_bottom_action()
+		status_label.text = "查看卡牌详情 · 轻触返回"
+	var exclusions: Array[Control] = detail_actions.get_exclusion_controls()
+	if _replacement_target_mode:
+		exclusions.append(player_hand)
+	card_inspector.set_close_exclusion_controls(exclusions)
 	card_inspector.present(data, _get_library_rect())
 
 
@@ -293,6 +403,16 @@ func _on_inspection_closed() -> void:
 	if not _inspection_open:
 		return
 	_inspection_open = false
+	_inspected_library_index = -1
+	_inspected_deck_index = -1
+	_inspected_data.clear()
+	_replacement_target_mode = false
+	card_inspector.set_close_exclusion_controls([])
+	detail_actions.hide_all()
+	opponent_hand.visible = true
+	player_hand.visible = true
+	player_hand.z_index = 0
+	_restore_player_hand_child_index()
 	library_grid.visible = true
 	library_grid.set_interaction_enabled(true)
 	library_grid.set_scroll_offset(_scroll_before_inspection)
@@ -301,99 +421,121 @@ func _on_inspection_closed() -> void:
 	status_label.text = DEFAULT_STATUS
 
 
-func _on_library_drag_started(logical_index: int, data: Dictionary, pointer_position: Vector2) -> void:
-	if _inspection_open or _drag_proxy != null:
+func _raise_player_hand_for_replacement() -> void:
+	duel_canvas.move_child(player_hand, duel_canvas.get_child_count() - 1)
+	duel_canvas.move_child(detail_actions, duel_canvas.get_child_count() - 1)
+
+
+func _restore_player_hand_child_index() -> void:
+	if _player_hand_default_child_index < 0:
 		return
-	if logical_index < 0 or logical_index >= _library_source_indices.size():
+	duel_canvas.move_child(player_hand, _player_hand_default_child_index)
+
+
+func _on_library_hold_recognized(logical_index: int, _data: Dictionary) -> void:
+	if _inspection_open or logical_index < 0 or logical_index >= _library_source_indices.size():
 		return
 	var source_library_index: int = _library_source_indices[logical_index]
 	if source_library_index < 0:
 		return
-	_drag_source_index = logical_index
-	_drag_source_library_index = source_library_index
-	_drag_proxy = CARD_SCENE.instantiate() as CardView
-	drag_layer.add_child(_drag_proxy)
-	_drag_proxy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_proxy.configure(data, library_grid.get_display_owner_id(logical_index), false)
-	var source_slot: Variant = library_grid.debug_get_bound_slot(logical_index)
-	var source_size: Vector2 = _drag_proxy.size
-	if source_slot != null:
-		source_size = source_slot.get_drag_preview_size()
-	_drag_proxy.size = source_size
-	_drag_proxy_offset = Vector2(-source_size.x * 0.5, -source_size.y * 0.72)
-	_position_drag_proxy(pointer_position)
-
-
-func _on_library_drag_moved(_logical_index: int, pointer_position: Vector2) -> void:
-	_position_drag_proxy(pointer_position)
-
-
-func _on_library_drag_ended(logical_index: int, pointer_position: Vector2) -> void:
-	if _drag_proxy == null or logical_index != _drag_source_index:
-		_clear_drag_proxy()
+	var result: Dictionary = _profile_store.add_library_card_to_deck_and_save(
+		profile,
+		source_library_index
+	)
+	if bool(result.get("ok", false)):
+		_apply_saved_profile(result.get("profile", profile))
 		return
-	if opponent_hand.get_global_rect().has_point(pointer_position):
-		_toggle_library_sect_filter(_drag_source_library_index)
-		_clear_drag_proxy()
+	status_label.text = (
+		REPLACE_NOTICE
+		if result.get("reason", &"") == &"full"
+		else "保存失败"
+	)
+
+
+func _on_player_card_hold_recognized(_data: Dictionary, deck_index: int) -> void:
+	if _inspection_open:
 		return
-	var deck_index: int = _get_player_slot_at(pointer_position)
-	if deck_index >= 0:
-		var result: Dictionary = _profile_store.exchange_and_save(
+	var result: Dictionary = _profile_store.remove_deck_card_and_save(profile, deck_index)
+	if bool(result.get("ok", false)):
+		_apply_saved_profile(result.get("profile", profile))
+	else:
+		status_label.text = "保存失败"
+
+
+func _on_detail_action_pressed() -> void:
+	if _inspected_library_index >= 0:
+		var add_result: Dictionary = _profile_store.add_library_card_to_deck_and_save(
 			profile,
-			_drag_source_library_index,
-			deck_index
+			_inspected_library_index
 		)
-		if bool(result.get("ok", false)):
-			profile = result["profile"]
-			for player_slot_index: int in range(Store.MAIN_DECK_CAPACITY):
-				_refresh_player_slot(player_slot_index)
-			_refresh_library_grid()
-			_refresh_start_controls()
-			status_label.text = DEFAULT_STATUS
+		if bool(add_result.get("ok", false)):
+			_apply_saved_profile(add_result.get("profile", profile))
+			card_inspector.close()
 		else:
 			status_label.text = "保存失败"
-	_clear_drag_proxy()
+		return
+	if _inspected_deck_index >= 0:
+		var remove_result: Dictionary = _profile_store.remove_deck_card_and_save(
+			profile,
+			_inspected_deck_index
+		)
+		if bool(remove_result.get("ok", false)):
+			_apply_saved_profile(remove_result.get("profile", profile))
+			card_inspector.close()
+		else:
+			status_label.text = "保存失败"
 
 
-func _toggle_library_sect_filter(source_library_index: int) -> void:
-	if _library_filter_sect != &"":
-		_library_filter_sect = &""
-	else:
-		var library_values: Array = profile.get("library_slots", [])
-		if source_library_index < 0 or source_library_index >= library_values.size():
-			return
-		var card_id := StringName(String(library_values[source_library_index]))
-		if card_id == &"" or not Catalog.has_card(card_id):
-			return
-		_library_filter_sect = StringName(String(
-			Catalog.get_definition(card_id).get("sect", "")
-		))
+func _replace_inspected_library_card(deck_index: int) -> void:
+	if _inspected_library_index < 0:
+		return
+	var result: Dictionary = _profile_store.replace_deck_card_and_save(
+		profile,
+		_inspected_library_index,
+		deck_index
+	)
+	if not bool(result.get("ok", false)):
+		status_label.text = "保存失败"
+		return
+	_apply_saved_profile(result.get("profile", profile))
+	card_inspector.close()
+
+
+func _apply_saved_profile(saved_profile: Dictionary) -> void:
+	profile = saved_profile
+	for player_slot_index: int in range(Store.MAIN_DECK_CAPACITY):
+		_refresh_player_slot(player_slot_index)
 	_refresh_library_grid()
-	library_grid.set_scroll_offset(0.0)
+	_refresh_start_controls()
 	status_label.text = DEFAULT_STATUS
 
 
-func _position_drag_proxy(pointer_position: Vector2) -> void:
-	if _drag_proxy == null:
+func _on_filter_action_pressed(action_index: int) -> void:
+	if _inspected_data.is_empty():
 		return
-	var local_pointer: Vector2 = drag_layer.get_global_transform_with_canvas().affine_inverse() * pointer_position
-	_drag_proxy.position = local_pointer + _drag_proxy_offset
+	var fields: Array[StringName] = [&"tier", &"sect", &"weapon"]
+	if action_index < 0 or action_index >= fields.size():
+		return
+	var filter_type: StringName = fields[action_index]
+	var filter_value: Variant = _inspected_data.get(String(filter_type), null)
+	if _library_filter_type == filter_type and _library_filter_value == filter_value:
+		_library_filter_type = &""
+		_library_filter_value = null
+	else:
+		_library_filter_type = filter_type
+		_library_filter_value = filter_value
+	card_inspector.close()
+	_refresh_library_grid()
+	library_grid.set_scroll_offset(0.0)
 
 
-func _get_player_slot_at(pointer_position: Vector2) -> int:
-	for slot_index: int in range(player_hand.get_child_count()):
-		var slot := player_hand.get_child(slot_index) as Control
-		if slot.get_global_rect().has_point(pointer_position):
-			return slot_index
+func _get_selected_filter_action_index(data: Dictionary) -> int:
+	var fields: Array[StringName] = [&"tier", &"sect", &"weapon"]
+	for index: int in range(fields.size()):
+		var field: StringName = fields[index]
+		if _library_filter_type == field and _library_filter_value == data.get(String(field), null):
+			return index
 	return -1
-
-
-func _clear_drag_proxy() -> void:
-	if _drag_proxy != null:
-		_drag_proxy.queue_free()
-	_drag_proxy = null
-	_drag_source_index = -1
-	_drag_source_library_index = -1
 
 
 func _on_back_pressed() -> void:
@@ -403,12 +545,16 @@ func _on_back_pressed() -> void:
 func _on_go_first_pressed() -> void:
 	if not _go_first_allowed:
 		status_label.text = _get_go_first_blocked_notice()
-		_play_blocked_choice_feedback()
+		_play_blocked_choice_feedback(go_first_button)
 		return
 	duel_requested.emit(DuelRules.PLAYER_OWNER)
 
 
 func _on_go_second_pressed() -> void:
+	if not _go_second_allowed:
+		status_label.text = INCOMPLETE_DECK_NOTICE
+		_play_blocked_choice_feedback(go_second_button)
+		return
 	duel_requested.emit(DuelRules.OPPONENT_OWNER)
 
 
@@ -426,6 +572,10 @@ func _layout_scene() -> void:
 		library_grid,
 		player_hand,
 		status_label
+	)
+	detail_actions.apply_layout(
+		layout["opponent_hand_rect"],
+		layout["player_hand_rect"]
 	)
 	var canvas_size: Vector2 = layout["canvas_size"]
 	var horizontal_margin: float = float(layout["horizontal_margin"])
@@ -488,21 +638,33 @@ func _refresh_start_controls() -> void:
 		return
 	var player_total: int = _get_tier_total(_get_player_main_deck_ids())
 	var enemy_total: int = _get_tier_total(_effective_enemy_card_ids)
-	_go_first_allowed = player_total <= enemy_total
+	var deck_complete: bool = DeckRules.is_main_deck_complete(
+		profile.get("main_deck", []) as Array,
+		Store.MAIN_DECK_CAPACITY
+	)
+	_go_first_allowed = deck_complete and player_total <= enemy_total
+	_go_second_allowed = deck_complete
 	if _go_first_ink_material != null:
 		_go_first_ink_material.set_shader_parameter(
 			"ink_color",
 			ACTIVE_INK_COLOR if _go_first_allowed else BLOCKED_INK_COLOR
 		)
 	if _go_second_ink_material != null:
-		_go_second_ink_material.set_shader_parameter("ink_color", ACTIVE_INK_COLOR)
+		_go_second_ink_material.set_shader_parameter(
+			"ink_color",
+			ACTIVE_INK_COLOR if _go_second_allowed else BLOCKED_INK_COLOR
+		)
 	go_first_button.modulate = Color.WHITE
 	go_second_button.modulate = Color.WHITE
 	go_first_button.tooltip_text = ""
 
 
 func _get_go_first_blocked_notice() -> String:
-	return GO_FIRST_NOT_HIGHER_NOTICE
+	return (
+		INCOMPLETE_DECK_NOTICE
+		if not _go_second_allowed
+		else GO_FIRST_NOT_HIGHER_NOTICE
+	)
 
 
 func _set_start_controls_visible(controls_visible: bool) -> void:
@@ -578,7 +740,10 @@ func _set_choice_pressed_ink(button: Button, pressed: bool) -> void:
 	if ink_material == null:
 		return
 	var resting_color: Color = ACTIVE_INK_COLOR
-	if button == go_first_button and not _go_first_allowed:
+	if (
+		(button == go_first_button and not _go_first_allowed)
+		or (button == go_second_button and not _go_second_allowed)
+	):
 		resting_color = BLOCKED_INK_COLOR
 	ink_material.set_shader_parameter(
 		"ink_color",
@@ -594,15 +759,17 @@ func _kill_choice_feedback_tween(button: Button) -> void:
 	_choice_feedback_tweens.erase(instance_id)
 
 
-func _play_blocked_choice_feedback() -> void:
+func _play_blocked_choice_feedback(button: Button) -> void:
 	if _blocked_feedback_tween != null and _blocked_feedback_tween.is_valid():
 		_blocked_feedback_tween.kill()
-	var resting_position: Vector2 = go_first_button.position
-	_blocked_feedback_tween = go_first_button.create_tween()
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(30)
+	var resting_position: Vector2 = button.position
+	_blocked_feedback_tween = button.create_tween()
 	_blocked_feedback_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x - 4.0, 0.035)
-	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x + 4.0, 0.055)
-	_blocked_feedback_tween.tween_property(go_first_button, "position:x", resting_position.x, 0.035)
+	_blocked_feedback_tween.tween_property(button, "position:x", resting_position.x - 4.0, 0.035)
+	_blocked_feedback_tween.tween_property(button, "position:x", resting_position.x + 4.0, 0.055)
+	_blocked_feedback_tween.tween_property(button, "position:x", resting_position.x, 0.035)
 
 
 func _style_header() -> void:

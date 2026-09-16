@@ -5,9 +5,11 @@ signal drag_started(card: CardView, pointer_position: Vector2)
 signal drag_moved(card: CardView, pointer_position: Vector2)
 signal drag_ended(card: CardView, pointer_position: Vector2)
 signal inspection_requested(card_data: Dictionary)
+signal hold_recognized(card_data: Dictionary)
 
 @export var touch_drag_offset: float = 48.0
 @export var drag_start_threshold: float = 12.0
+@export var hold_duration: float = 0.25
 
 const CARD_BACK_GLYPH: String = "◆"
 const CARD_PICTURE_SCALE: float = 0.8
@@ -51,6 +53,7 @@ var ki_badge_enabled: bool = true
 var power_numbers_enabled: bool = true
 var concealed_power_numbers_enabled: bool = true
 var effective_defending_power_override: bool = false
+var long_press_enabled: bool = false
 
 var _dragging: bool = false
 var _drag_follows_pointer: bool = true
@@ -61,6 +64,8 @@ var _home_index: int = -1
 var _pointer_pending: bool = false
 var _pending_pointer_id: int = -2
 var _pending_pointer_start: Vector2 = Vector2.ZERO
+var _long_press_recognized: bool = false
+var _hold_timer: Timer = null
 var _ki_bead_diameter: float = 26.0
 
 @onready var overlay: Control = $Overlay
@@ -84,6 +89,10 @@ func _ready() -> void:
 	_on_resized()
 	_refresh_face_content()
 	_apply_owner_style()
+	_hold_timer = Timer.new()
+	_hold_timer.one_shot = true
+	_hold_timer.timeout.connect(_on_hold_timeout)
+	add_child(_hold_timer)
 
 
 func configure(new_card_data: Dictionary, new_owner_id: int, is_playable: bool) -> void:
@@ -93,6 +102,12 @@ func configure(new_card_data: Dictionary, new_owner_id: int, is_playable: bool) 
 	_refresh_face_content()
 	_apply_owner_style()
 	_update_cursor()
+
+
+func set_long_press_enabled(value: bool) -> void:
+	long_press_enabled = value
+	if not long_press_enabled:
+		_reset_pending_pointer()
 
 
 func sync_runtime_data(new_card_data: Dictionary, new_owner_id: int) -> void:
@@ -515,6 +530,9 @@ func _begin_pointer_gesture(pointer_position: Vector2, pointer_id: int) -> void:
 	_pointer_pending = true
 	_pending_pointer_id = pointer_id
 	_pending_pointer_start = pointer_position
+	_long_press_recognized = false
+	if long_press_enabled and not playable and _hold_timer != null:
+		_hold_timer.start(maxf(0.0, hold_duration))
 
 
 func _update_pointer_gesture(pointer_position: Vector2) -> void:
@@ -538,16 +556,35 @@ func _end_pointer_gesture(pointer_position: Vector2, pointer_id: int) -> void:
 		return
 	if not _pointer_pending or pointer_id != _pending_pointer_id:
 		return
-	var is_tap: bool = pointer_position.distance_to(_pending_pointer_start) <= drag_start_threshold
+	var is_tap: bool = (
+		not _long_press_recognized
+		and pointer_position.distance_to(_pending_pointer_start) <= drag_start_threshold
+	)
 	_reset_pending_pointer()
 	if is_tap and not face_down:
 		inspection_requested.emit(card_data.duplicate(true))
 
 
 func _reset_pending_pointer() -> void:
+	if _hold_timer != null:
+		_hold_timer.stop()
 	_pointer_pending = false
 	_pending_pointer_id = -2
 	_pending_pointer_start = Vector2.ZERO
+	_long_press_recognized = false
+	if not _dragging:
+		scale = Vector2.ONE
+
+
+func _on_hold_timeout() -> void:
+	if not long_press_enabled or playable or not _pointer_pending or face_down:
+		return
+	_long_press_recognized = true
+	pivot_offset = size * 0.5
+	scale = Vector2(1.035, 1.035)
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(12)
+	hold_recognized.emit(card_data.duplicate(true))
 
 
 func _try_begin_drag(pointer_position: Vector2, pointer_id: int) -> void:

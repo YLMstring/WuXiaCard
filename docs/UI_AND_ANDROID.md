@@ -86,13 +86,18 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   friendly sources never create danger, and board-activation dragging never uses
   this overlay. Hover keeps the danger cell red, and every drag end/cancel clears
   the overlay.
-- In deck building, a held library card dropped on the opponent-hand row
-  creates a scene-local sect filter. Matching real library entries retain their
-  source order but are projected into a compact visible prefix; dragging any
-  filtered card to the same row cancels the filter. Player-deck drops translate
-  the visible index back to the real library index before using the existing
-  exchange transaction. Filter changes never save or reorder profile data and
-  always return the scroll to the top.
+- In deck building, tapping a card opens details. The upper hand row becomes
+  same-tier, same-sect, and same-weapon filter buttons; filters are mutually
+  exclusive, reselecting the active one cancels it, and every filter change
+  returns the scroll to the top without saving or reordering profile data.
+- The lower hand row becomes the applicable explicit action (`加入卡组`,
+  `移出卡组`, `领取奖励`, or `拜入师门`). With a full deck and a collection card
+  selected, the five deck cards remain visible as replacement targets instead.
+  Registered action controls do not trigger the inspector's tap-outside close.
+- Deck and collection cards use a roughly 0.25-second stationary hold as a
+  shortcut for remove/add; reward cards use it to claim. Immediate movement
+  still scrolls the library. Sect confirmation and all filters use explicit
+  detail buttons instead of drag targets.
 
 ## Beginner Tutorial
 

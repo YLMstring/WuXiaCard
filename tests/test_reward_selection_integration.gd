@@ -5,7 +5,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 const SAVE_PATH: String = "user://reward_selection_test.json"
-const DEFAULT_STATUS: String = "选择一张奖励牌，长按拖动至下方"
+const DEFAULT_STATUS: String = "选择一张奖励牌，长按可直接领取"
 
 var _checks: int = 0
 var _failures: int = 0
@@ -182,7 +182,15 @@ func _run() -> void:
 	await process_frame
 
 	reward.call("_on_library_inspection_requested", 0, first_slot.card_data)
-	_check(reward.debug_is_inspecting(), "Revealed reward opens normal inspection")
+	var detail_actions := reward.get_node("DuelCanvas/SelectionDetailActions") as Control
+	var reward_action := detail_actions.get_node("BottomAction") as Button
+	_check(
+		reward.debug_is_inspecting()
+		and reward_action.visible
+		and reward_action.text == "领取奖励"
+		and not (reward.get_node("DuelCanvas/PlayerHand") as Control).visible,
+		"Tapping a reward opens details with a claim action in the lower row"
+	)
 	(reward.get_node("DuelCanvas/CardInspector") as Control).call("close")
 	_check(
 		not reward.debug_is_inspecting()
@@ -191,28 +199,11 @@ func _run() -> void:
 	)
 
 	var deck_before: Array[StringName] = store.get_main_deck_ids(profile)
-	var source_point: Vector2 = first_slot.get_global_rect().get_center()
-	reward.call("_on_library_drag_started", 0, first_slot.card_data, source_point)
-	var drag_proxy := reward.get_node("DuelCanvas/DragLayer").get_child(-1) as CardView
-	_check(
-		drag_proxy.owner_id == grid.get_display_owner_id(0),
-		"Reward drag preview preserves the source card's mastery color"
-	)
-	_check(
-		(drag_proxy.get_node("Overlay/KiBadge") as Control).visible,
-		"Reward drag preview shows its normal ki bead"
-	)
-	reward.call("_on_library_drag_ended", 0, Vector2(-100.0, -100.0))
-	_check(
-		store.get_pending_reward_ids(store.load_profile()) == reward_ids,
-		"Dropping outside the hand preserves the offer"
-	)
-	reward.call("_on_library_drag_started", 0, first_slot.card_data, source_point)
-	var hand := reward.get_node("DuelCanvas/PlayerHand") as HBoxContainer
-	reward.call("_on_library_drag_ended", 0, hand.get_global_rect().get_center())
+	_check(not first_slot.drag_enabled, "Reward cards no longer arm the old drag interaction")
+	reward.call("_on_library_hold_recognized", 0, first_slot.card_data)
 	await process_frame
-	_check(_claim_count == 1, "A successful claim emits completion once")
-	_check(_claimed_card_id == reward_ids[0], "A successful claim emits the exact card ID")
+	_check(_claim_count == 1, "Holding a reward claims it exactly once")
+	_check(_claimed_card_id == reward_ids[0], "Holding emits the exact claimed card ID")
 	var claimed_profile: Dictionary = store.load_profile()
 	_check(reward_ids[0] in store.get_unlocked_ids(claimed_profile), "Scene claim unlocks reward")
 	_check(store.get_main_deck_ids(claimed_profile) == deck_before, "Scene claim preserves main deck")

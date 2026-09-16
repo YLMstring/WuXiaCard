@@ -13,6 +13,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_unique_glyphs()
 	_test_exchanges()
+	_test_deck_edits()
 	_test_repair()
 	_test_side_deck_derivation()
 	if _failures == 0:
@@ -40,6 +41,59 @@ func _test_unique_glyphs() -> void:
 		]),
 		"Different IDs with the same glyph are rejected"
 	)
+	_check(
+		Rules.has_unique_glyphs([&"CangSongYingKe2", &"", &"LeiZHenJian1"]),
+		"Empty fixed slots do not violate glyph uniqueness"
+	)
+
+
+func _test_deck_edits() -> void:
+	var main: Array = [
+		"CangSongYingKe2",
+		"LeiZHenJian1",
+		"",
+		"YouFenLaiYi2",
+		"TuNaShu2",
+	]
+	var library: Array = ["TaiZuChangQuan", "CangSongYingKe1", "KuiHua1", "", ""]
+	_check(not Rules.is_main_deck_complete(main), "A fixed empty slot makes the deck incomplete")
+	_check(Rules.find_first_empty_deck_slot(main) == 2, "The first physical empty slot is found")
+
+	var added: Dictionary = Rules.build_player_add(main, library, 0)
+	_check(bool(added.get("ok", false)), "A library card enters an empty slot")
+	_check(added["main_deck"][2] == "TaiZuChangQuan", "The first empty slot receives the card")
+	_check(
+		added["library_slots"] == ["CangSongYingKe1", "KuiHua1", "", "", ""],
+		"Removing a library card compacts the occupied prefix"
+	)
+
+	var namesake: Dictionary = Rules.build_player_add(
+		added["main_deck"],
+		added["library_slots"],
+		0
+	)
+	_check(bool(namesake.get("ok", false)), "A namesake addition succeeds")
+	_check(namesake["main_deck"][0] == "CangSongYingKe1", "Namesake replaces its old version")
+	_check(namesake["main_deck"][2] == "TaiZuChangQuan", "Namesake replacement ignores other vacancies")
+	_check(namesake["library_slots"][0] == "CangSongYingKe2", "Old namesake moves to library top")
+
+	var removed: Dictionary = Rules.build_player_remove(namesake["main_deck"], namesake["library_slots"], 3)
+	_check(bool(removed.get("ok", false)), "A deck card can be removed")
+	_check(String(removed["main_deck"][3]).is_empty(), "Removal preserves an empty physical slot")
+	_check(removed["library_slots"][0] == "YouFenLaiYi2", "Removed card moves to library top")
+
+	var full_main: Array = [
+		"CangSongYingKe2",
+		"LeiZHenJian1",
+		"KuiHua1",
+		"YouFenLaiYi2",
+		"TuNaShu2",
+	]
+	var replaced: Dictionary = Rules.build_player_replace_at(full_main, library, 0, 1)
+	_check(bool(replaced.get("ok", false)), "A full-deck target replacement succeeds")
+	_check(replaced["main_deck"][1] == "TaiZuChangQuan", "Incoming card occupies the selected slot")
+	_check(replaced["library_slots"][0] == "LeiZHenJian1", "Displaced target moves to library top")
+	_check(Rules.is_main_deck_complete(replaced["main_deck"]), "Replacement leaves a complete deck")
 
 
 func _test_exchanges() -> void:
@@ -96,7 +150,7 @@ func _test_repair() -> void:
 	_check(bool(repaired.get("ok", false)), "Legacy duplicate-glyph deck is repairable")
 	var deck: Array = repaired["main_deck"]
 	_check(deck[2] == &"CangSongYingKe2", "Highest-tier namesake stays in its original slot")
-	_check(deck[0] == &"TuNaShu2", "First stable library filler occupies the vacancy")
+	_check(deck[0] == &"", "Repair preserves the vacancy left by an invalid duplicate")
 	_check(Rules.has_unique_glyphs(deck), "Repaired deck has unique glyphs")
 	var library: Array = repaired["library_cards"]
 	_check(library.back() == &"CangSongYingKe1", "Removed lower namesake moves to library bottom")

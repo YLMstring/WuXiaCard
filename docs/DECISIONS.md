@@ -484,13 +484,20 @@ respectively, in row-major order. The source itself is eligible.
 - Library card names use tier colors: slate grey for tier 1, forest green for 2, steel blue for 3, muted violet for 4, dark orange for 5, and crimson for every other value.
 - The 1,000 logical library slots form 250 rows and are virtualized. Only three visible rows plus one buffer row above and below—20 slot Controls total—are live.
 - A short tap on any revealed card opens the existing inspector. Closing it restores the prior library scroll position.
-- Immediate pointer movement scrolls the library. Holding a library card for roughly 0.25 seconds arms a drag.
-- Dropping an armed library card with a new glyph onto a main-deck slot
-  exchanges the two cards. If that glyph already occupies another main slot,
-  the incoming card enters the chosen slot, the chosen-slot card moves into the
-  old namesake slot, and the old namesake returns to the exact library source.
-- Invalid drops and empty library slots do nothing.
-- Exchanges save immediately. If persistence fails, the displayed exchange is rolled back.
+- During deck inspection the upper row becomes three mutually exclusive filter
+  buttons for tier, sect, and weapon. Selecting the active filter again clears
+  it. Filtered entries remain a compact projection over stable real indices and
+  never mutate persistence.
+- The five main-deck positions are fixed physical slots and may contain saved
+  vacancies. An incomplete deck cannot choose either opening side.
+- Holding a main-deck card removes it to the library top. Holding a library card
+  replaces its existing namesake when present, otherwise fills the first empty
+  slot. A full deck instead uses its visible cards as tap-to-replace targets.
+- Detail actions provide `加入卡组` or `移出卡组`; all edits save atomically and
+  failed persistence leaves the prior profile displayed.
+- Reward details provide `领取奖励`, sect details provide `拜入师门`, and holding
+  a reward claims it directly. The old drag-to-exchange/filter/claim/join flow is
+  retired; immediate pointer movement continues to scroll.
 - The header icon only emits `back_requested`; a future scene router will decide where to navigate.
 - The deck builder has no score panels.
 

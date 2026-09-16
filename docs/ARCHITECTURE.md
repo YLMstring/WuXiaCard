@@ -245,9 +245,14 @@ thread-safe callback. Scene objects never cross the thread boundary.
   shallower, stale, or absent plans trigger a normal fresh search. Every AI
   hand play or activation waits until its decision has occupied at least two
   seconds, counting search time rather than adding a fixed post-search pause.
-- `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand slots, library-to-hand exchange, inspection, and the navigation-neutral `back_requested` signal.
+- `deck_builder_controller.gd` — owns deck-builder profile loading, fixed hand
+  slots (including persistent vacancies), atomic add/remove/replace edits,
+  inspection actions, three library filters, and the navigation-neutral
+  `back_requested` signal.
 - `deck_library_grid.gd` / `deck_library_grid.tscn` — four-column, 1,000-slot virtualized and scrollable library surface.
-- `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot gesture boundary: tap to inspect, hold then drag to exchange, or immediate movement to scroll.
+- `deck_library_slot.gd` / `deck_library_slot.tscn` — reusable library slot
+  gesture boundary: tap to inspect, hold to emit a scene-specific shortcut,
+  optional legacy drag support, or immediate movement to scroll.
 - `parchment_chrome.gd` — shared inspector/library scroll body, shadow, border, and rod styling.
 - `card_view.gd` / `card_view.tscn` — face/card-back rendering, art, powers, ki badge, drag gestures, and per-card animation.
 - `card_inspector.gd` / `card_inspector.tscn` — modal parchment inspector for
@@ -403,9 +408,13 @@ is deliberately hidden while scrolling remains enabled. Android/iOS use
 locally by the library so the project does not need global mouse-to-touch
 emulation, which could interfere with duel card dragging.
 
-The deck builder is a separate scene, `res://scenes/deck_builder.tscn`. It
-emits `back_requested` and deliberately does not know which future scene owns
-navigation. The playable duel remains `res://main.tscn`.
+The deck builder is a separate scene, `res://scenes/deck_builder.tscn`. It uses
+`selection_detail_actions.gd` to project context actions over the two hand rows:
+three mutually exclusive filters above and add/remove/replace controls below.
+The same component provides reward claim and sect join actions in the inherited
+selection scenes. The builder emits `back_requested` and deliberately does not
+know which future scene owns navigation. The playable duel remains
+`res://main.tscn`.
 
 `MainFlowController.victories_required` owns the configurable ending threshold
 (15 in production). Ordinary completed duels still route to reward selection;

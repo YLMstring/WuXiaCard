@@ -8,6 +8,7 @@ var _checks: int = 0
 var _failures: int = 0
 var _close_count: int = 0
 var _inspection_requests: int = 0
+var _hold_requests: int = 0
 
 
 func _init() -> void:
@@ -135,6 +136,16 @@ func _run() -> void:
 		"Every missing displayed value uses the placeholder"
 	)
 
+	var exclusion := Control.new()
+	root.add_child(exclusion)
+	exclusion.position = Vector2.ZERO
+	exclusion.size = Vector2(32.0, 32.0)
+	var exclusions: Array[Control] = [exclusion]
+	inspector.call("set_close_exclusion_controls", exclusions)
+	_submit_mouse_gesture(inspector, Vector2(8.0, 8.0), Vector2(8.0, 8.0))
+	_check(_close_count == 0 and bool(inspector.call("is_open")), "Tapping a registered detail action does not close inspection")
+	var no_exclusions: Array[Control] = []
+	inspector.call("set_close_exclusion_controls", no_exclusions)
 	_submit_mouse_gesture(inspector, Vector2(8.0, 8.0), Vector2(8.0, 8.0))
 	_check(_close_count == 1 and not bool(inspector.call("is_open")), "A stationary tap closes inspection exactly once")
 	inspector.call("present", {"glyph": "苍松迎客", "tier": 1}, board_rect)
@@ -143,6 +154,7 @@ func _run() -> void:
 	inspector.call("close")
 	inspector.call("close")
 	_check(_close_count == 2 and not bool(inspector.call("is_open")), "Repeated close requests are idempotent")
+	exclusion.queue_free()
 
 	inspector.queue_free()
 	await process_frame
@@ -264,12 +276,26 @@ func _check_card_view_gestures() -> void:
 		await process_frame
 		return
 	card.connect("inspection_requested", _on_card_inspection_requested)
+	card.connect("hold_recognized", _on_card_hold_recognized)
 
 	_submit_card_mouse_gesture(card, Vector2(48.0, 64.0), Vector2(48.0, 64.0))
 	_check(_inspection_requests == 1 and not bool(card.call("is_being_dragged")), "A stationary revealed-card tap requests inspection without dragging")
 	card.call("set_playable", false)
 	_submit_card_mouse_gesture(card, Vector2(48.0, 64.0), Vector2(48.0, 64.0))
 	_check(_inspection_requests == 2, "A revealed non-playable card can still be inspected")
+	card.call("set_long_press_enabled", true)
+	_submit_card_mouse_press(card, Vector2(48.0, 64.0))
+	card.call("_on_hold_timeout")
+	var hold_release := InputEventMouseButton.new()
+	hold_release.button_index = MOUSE_BUTTON_LEFT
+	hold_release.pressed = false
+	hold_release.position = Vector2(48.0, 64.0)
+	hold_release.global_position = hold_release.position
+	card.call("_gui_input", hold_release)
+	_check(
+		_hold_requests == 1 and _inspection_requests == 2,
+		"A recognized long press emits its action without also opening details"
+	)
 	card.call("set_face_down", true)
 	_check(
 		(card.get_node("Overlay/TopPower") as Label).visible
@@ -328,6 +354,10 @@ func _submit_card_mouse_press(card: Control, position: Vector2) -> void:
 
 func _on_card_inspection_requested(_card_data: Dictionary) -> void:
 	_inspection_requests += 1
+
+
+func _on_card_hold_recognized(_card_data: Dictionary) -> void:
+	_hold_requests += 1
 
 
 func _finish() -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scripts/deck_builder_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/duel_backdrop.gd" id="2_backdrop"]
@@ -13,6 +13,7 @@
 [ext_resource type="Texture2D" path="res://inkpics/发.png" id="11_fa"]
 [ext_resource type="Texture2D" path="res://inkpics/制.png" id="12_zhi"]
 [ext_resource type="Texture2D" path="res://inkpics/人.png" id="13_ren"]
+[ext_resource type="Script" path="res://scripts/selection_detail_actions.gd" id="14_detail_actions"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_qiang"]
 atlas = ExtResource("6_qiang")
@@ -289,3 +290,42 @@ mouse_filter = 2
 
 [node name="CardInspector" parent="DuelCanvas" instance=ExtResource("5_inspector")]
 layout_mode = 1
+
+[node name="SelectionDetailActions" type="Control" parent="DuelCanvas"]
+z_index = 13
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("14_detail_actions")
+
+[node name="TopActions" type="HBoxContainer" parent="DuelCanvas/SelectionDetailActions"]
+visible = false
+offset_left = 16.0
+offset_top = 82.0
+offset_right = 524.0
+offset_bottom = 213.0
+theme_override_constants/separation = 8
+
+[node name="TierFilter" type="Button" parent="DuelCanvas/SelectionDetailActions/TopActions"]
+layout_mode = 2
+text = "筛选同品阶"
+
+[node name="SectFilter" type="Button" parent="DuelCanvas/SelectionDetailActions/TopActions"]
+layout_mode = 2
+text = "筛选同门派"
+
+[node name="WeaponFilter" type="Button" parent="DuelCanvas/SelectionDetailActions/TopActions"]
+layout_mode = 2
+text = "筛选同类别"
+
+[node name="BottomAction" type="Button" parent="DuelCanvas/SelectionDetailActions"]
+visible = false
+offset_left = 16.0
+offset_top = 781.0
+offset_right = 524.0
+offset_bottom = 912.0
+text = "加入卡组"
