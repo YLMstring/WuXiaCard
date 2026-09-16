@@ -14,7 +14,7 @@ const Store = preload("res://scripts/deck_profile_store.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
-const DEFAULT_STATUS: String = "轻触查看详情，长按快速调整卡组"
+const DEFAULT_STATUS: String = "卡牌可轻触或长按，点击两侧进入战斗"
 const INCOMPLETE_DECK_NOTICE: String = "卡组需要五张牌"
 const REPLACE_NOTICE: String = "轻触卡组中的牌可进行替换"
 const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
