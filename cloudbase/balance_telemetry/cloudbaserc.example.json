@@ -5,7 +5,8 @@
     {
       "name": "report_api",
       "timeout": 10,
-      "runtime": "Nodejs18.15",
+      "runtime": "Nodejs20.19",
+      "installDependency": true,
       "handler": "index.main"
     }
   ]
