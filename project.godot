@@ -21,7 +21,7 @@ boot_splash/minimum_display_time=1200
 
 [balance_telemetry]
 
-endpoint=""
+endpoint="https://wuxiacard-d9gvg1e2o15e3b73e-1488910861.ap-shanghai.app.tcloudbase.com/v1/reports"
 
 [display]
 

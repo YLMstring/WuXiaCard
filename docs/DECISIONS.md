@@ -887,5 +887,5 @@ respectively, in row-major order. The source itself is eligible.
   The server uses the report ID as an idempotency key, so retries cannot create
   duplicate run documents.
 - The current `telemetry_enabled` gate exists so store-release consent can be
-  added without changing capture or transport semantics. Until a production
-  HTTPS endpoint is configured, no network request is made.
+  added without changing capture or transport semantics. The configured HTTPS
+  endpoint is used only by eligible normal Windows/Android exports.

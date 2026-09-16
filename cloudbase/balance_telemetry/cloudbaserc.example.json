@@ -1,4 +1,5 @@
 {
+  "version": "2.0",
   "envId": "replace-with-your-cloudbase-environment-id",
   "functionRoot": "./functions",
   "functions": [
@@ -7,7 +8,10 @@
       "timeout": 10,
       "runtime": "Nodejs20.19",
       "installDependency": true,
-      "handler": "index.main"
+      "handler": "index.main",
+      "envVariables": {
+        "BALANCE_TELEMETRY_ADMIN_TOKEN": "{{env.WUXIA_TELEMETRY_ADMIN_TOKEN}}"
+      }
     }
   ]
 }

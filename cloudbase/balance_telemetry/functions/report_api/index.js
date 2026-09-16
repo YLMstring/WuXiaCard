@@ -232,13 +232,19 @@ function isIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function matchesGatewayRoute(path, fullPath, relativePath) {
+  // CloudBase event invocation preserves the configured prefix, while HTTP
+  // Access Service removes that prefix before forwarding to an Event function.
+  return path === fullPath || path === relativePath;
+}
+
 async function handleRequest(event, dependencies) {
   const method = requestMethod(event);
   const path = requestPath(event);
   const repository = dependencies.repository;
   const now = dependencies.now || (() => new Date().toISOString());
 
-  if (method === 'POST' && path.endsWith('/v1/reports')) {
+  if (method === 'POST' && matchesGatewayRoute(path, '/v1/reports', '/reports')) {
     const headers = normalizedHeaders(event);
     if (!headers['content-type']?.toLowerCase().startsWith('application/json')) {
       return response(415, { error: 'application/json is required' });
@@ -264,7 +270,10 @@ async function handleRequest(event, dependencies) {
     return response(201, { ok: true, report_id: validation.report.report_id });
   }
 
-  if (method === 'GET' && path.endsWith('/v1/admin/export')) {
+  if (
+    method === 'GET' &&
+    matchesGatewayRoute(path, '/v1/admin/export', '/admin/export')
+  ) {
     const expectedToken = String(dependencies.adminToken || '');
     const authorization = normalizedHeaders(event).authorization || '';
     if (!expectedToken || authorization !== `Bearer ${expectedToken}`) {

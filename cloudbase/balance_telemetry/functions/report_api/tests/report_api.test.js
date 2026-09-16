@@ -69,6 +69,16 @@ test('stores one sanitized report and strips unknown fields', async () => {
   assert.equal(repo.created[0].unknown, undefined);
 });
 
+test('accepts the route after CloudBase strips the gateway prefix', async () => {
+  const repo = repository();
+  const result = await handleRequest(
+    event('POST', '/reports', JSON.stringify(validReport()), { 'content-type': 'application/json' }),
+    { repository: repo }
+  );
+  assert.equal(result.statusCode, 201);
+  assert.equal(repo.created.length, 1);
+});
+
 test('duplicate report id returns idempotent success semantics', async () => {
   const result = await handleRequest(
     event('POST', '/v1/reports', JSON.stringify(validReport()), { 'content-type': 'application/json' }),
@@ -112,6 +122,12 @@ test('admin export requires exact bearer token', async () => {
   );
   assert.equal(allowed.statusCode, 200);
   assert.equal(JSON.parse(allowed.body).reports.length, 1);
+
+  const relative = await handleRequest(
+    { ...event('GET', '/admin/export', '', { authorization: 'Bearer secret' }), queryStringParameters: { format: 'json' } },
+    { repository: repository('created', [validReport()]), adminToken: 'secret' }
+  );
+  assert.equal(relative.statusCode, 200);
 });
 
 test('CSV uses one duel per row and escapes cells', () => {

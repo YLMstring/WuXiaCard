@@ -26,10 +26,17 @@ npm install
    包含个人环境信息的本机配置。
 3. 创建足够长的随机管理 token，在云函数环境变量中设置
    `BALANCE_TELEMETRY_ADMIN_TOKEN`。
-4. 部署 `report_api`，再在“环境配置 → HTTP 访问服务”中配置路径透传路由，
-   使 `/v1/reports` 与 `/v1/admin/export` 指向该函数。
+4. 部署 `report_api`，再在 HTTP 网关中把 `/v1` 前缀路由到该函数。网关会
+   剥离前缀，因此函数同时接受 `/v1/reports` 与 `/reports`，以及
+   `/v1/admin/export` 与 `/admin/export`。
 5. 真实端到端验证完成后，把 `/v1/reports` 的 HTTPS 地址写入游戏
    `project.godot` 的 `balance_telemetry/endpoint`。
 
 上传接口没有客户端共享密钥；移动应用中的秘密无法可靠保密。管理导出接口则
 必须使用只存于云端环境变量和管理员本机环境变量的 Bearer token。
+
+当前生产环境为 `wuxiacard-d9gvg1e2o15e3b73e`，公网入口为：
+
+```text
+https://wuxiacard-d9gvg1e2o15e3b73e-1488910861.ap-shanghai.app.tcloudbase.com/v1
+```
