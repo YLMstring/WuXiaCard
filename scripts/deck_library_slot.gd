@@ -305,6 +305,15 @@ func _on_hold_timeout() -> void:
 		return
 	_hold_recognized = true
 	hold_recognized.emit(logical_index, card_data.duplicate(true))
+	# 持有处理器可能同步重绑当前虚拟槽位；重绑会取消原手势，
+	# 此时不能让旧的超时回调继续武装一个已清空或已换牌的槽位。
+	if (
+		not _pointer_active
+		or card_data.is_empty()
+		or placeholder
+		or not interaction_enabled
+	):
+		return
 	if not drag_enabled:
 		return
 	_drag_is_armed = true

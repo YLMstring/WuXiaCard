@@ -219,6 +219,31 @@ func _run() -> void:
 	first.debug_end_pointer(Vector2(10.0, 10.0))
 	_check(_inspection_count == 1 and _armed_count == 2, "Empty slot neither inspects nor arms")
 
+	var reentrant_values: Array = (profile["library_slots"] as Array).duplicate()
+	grid.set_display_entries(reentrant_values, display_owner_ids, [], true)
+	first = grid.debug_get_bound_slot(0)
+	grid.hold_recognized.connect(
+		func(logical_index: int, _data: Dictionary) -> void:
+			reentrant_values[logical_index] = ""
+			grid.set_display_entries(reentrant_values, display_owner_ids, [], true),
+		CONNECT_ONE_SHOT
+	)
+	first.debug_begin_pointer(Vector2(10.0, 10.0))
+	first.debug_force_hold_timeout()
+	_check(first.is_empty(), "Recognized hold may synchronously clear its virtualized slot")
+	_check(
+		not first.is_drag_armed(),
+		"A slot rebound during hold recognition does not arm a stale drag"
+	)
+	reentrant_values[1] = ""
+	grid.set_display_entries(reentrant_values, display_owner_ids, [], true)
+	_check(
+		grid.debug_get_bound_slot(1).is_empty(),
+		"A rebound hold leaves later virtualized library refreshes live"
+	)
+	first.debug_end_pointer(Vector2(10.0, 10.0))
+	grid.cancel_active_gesture()
+
 	var sect_data := {
 		"id": &"xuanyue_jianzong",
 		"glyph": "玄岳剑宗",
