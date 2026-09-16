@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { cloudbaseInitOptions, handleRequest, reportsToCsv } = require('../index.js');
+const { cloudbaseInitOptions, eventsToCsv, handleRequest, reportsToCsv } = require('../index.js');
 
 function validReport() {
   return {
@@ -40,17 +40,39 @@ function event(method, path, body = '', headers = {}) {
   return { httpMethod: method, path, body, headers };
 }
 
-function repository(createResult = 'created', reports = []) {
-  const created = [];
+function validPlayerEvent() {
   return {
-    created,
-    async create(report) {
-      created.push(report);
+    schema_version: 1,
+    event_id: 'event_0123456789abcdef0123456789abcdef',
+    anonymous_player_id: 'anon_0123456789abcdef0123456789abcdef',
+    event_type: 'beginner_flow_completed',
+    game_version: '1.0.2',
+    platform: 'Android',
+    occurred_at: 300,
+  };
+}
+
+function repository(createResult = 'created', reports = []) {
+	const createdReports = [];
+	const createdEvents = [];
+  return {
+	created: createdReports,
+	createdReports,
+	createdEvents,
+	async createReport(report) {
+	  createdReports.push(report);
       return createResult;
     },
-    async list() {
+	async createEvent(playerEvent) {
+	  createdEvents.push(playerEvent);
+	  return createResult;
+	},
+	async listReports() {
       return { reports, truncated: false };
     },
+	async listEvents() {
+	  return { events: createdEvents, truncated: false };
+	},
   };
 }
 
@@ -86,6 +108,40 @@ test('duplicate report id returns idempotent success semantics', async () => {
   );
   assert.equal(result.statusCode, 409);
   assert.equal(JSON.parse(result.body).duplicate, true);
+});
+
+test('stores one strict lightweight event on either gateway route', async () => {
+  const repo = repository();
+  const payload = validPlayerEvent();
+  const result = await handleRequest(
+	event('POST', '/v1/events', JSON.stringify(payload), { 'content-type': 'application/json' }),
+	{ repository: repo, now: () => '2026-09-16T00:00:00.000Z' }
+  );
+  assert.equal(result.statusCode, 201);
+  assert.equal(repo.createdEvents.length, 1);
+  assert.equal(repo.createdEvents[0]._id, payload.event_id);
+  assert.equal(repo.createdEvents[0].received_at, '2026-09-16T00:00:00.000Z');
+  const relative = await handleRequest(
+	event('POST', '/events', JSON.stringify(payload), { 'content-type': 'application/json' }),
+	{ repository: repository() }
+  );
+  assert.equal(relative.statusCode, 201);
+});
+
+test('rejects event extras and treats duplicate event ids idempotently', async () => {
+  const repo = repository();
+  const extra = { ...validPlayerEvent(), duels: [] };
+  const rejected = await handleRequest(
+	event('POST', '/v1/events', JSON.stringify(extra), { 'content-type': 'application/json' }),
+	{ repository: repo }
+  );
+  assert.equal(rejected.statusCode, 400);
+  assert.equal(repo.createdEvents.length, 0);
+  const duplicate = await handleRequest(
+	event('POST', '/v1/events', JSON.stringify(validPlayerEvent()), { 'content-type': 'application/json' }),
+	{ repository: repository('duplicate') }
+  );
+  assert.equal(duplicate.statusCode, 409);
 });
 
 test('rejects malformed reports before database access', async () => {
@@ -130,6 +186,23 @@ test('admin export requires exact bearer token', async () => {
   assert.equal(relative.statusCode, 200);
 });
 
+test('admin export selects the independent events dataset', async () => {
+  const repo = repository();
+  repo.createdEvents.push({ ...validPlayerEvent(), received_at: '2026-09-16T00:00:00.000Z' });
+  const jsonResult = await handleRequest(
+	{ ...event('GET', '/v1/admin/export', '', { authorization: 'Bearer secret' }), queryStringParameters: { format: 'json', dataset: 'events' } },
+	{ repository: repo, adminToken: 'secret' }
+  );
+  assert.equal(jsonResult.statusCode, 200);
+  assert.equal(JSON.parse(jsonResult.body).events.length, 1);
+  const csvResult = await handleRequest(
+	{ ...event('GET', '/v1/admin/export', '', { authorization: 'Bearer secret' }), queryStringParameters: { format: 'csv', dataset: 'events' } },
+	{ repository: repo, adminToken: 'secret' }
+  );
+  assert.equal(csvResult.statusCode, 200);
+  assert.ok(csvResult.body.includes('beginner_flow_completed'));
+});
+
 test('CSV uses one duel per row and escapes cells', () => {
   const payload = validReport();
   payload.sect_id = 'Hua,Shan';
@@ -137,6 +210,12 @@ test('CSV uses one duel per row and escapes cells', () => {
   const csv = reportsToCsv([payload]);
   assert.ok(csv.startsWith('\uFEFFreport_id,'));
   assert.ok(csv.includes('"Hua,Shan"'));
+  assert.equal(csv.trim().split('\r\n').length, 2);
+});
+
+test('event CSV uses one count event per row', () => {
+  const csv = eventsToCsv([{ ...validPlayerEvent(), received_at: '2026-09-16T00:00:00.000Z' }]);
+  assert.ok(csv.startsWith('\uFEFFevent_id,'));
   assert.equal(csv.trim().split('\r\n').length, 2);
 });
 

@@ -1,8 +1,11 @@
 class_name BalanceTelemetryStore
 extends RefCounted
 
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 const REPORT_SCHEMA_VERSION: int = 1
+const EVENT_SCHEMA_VERSION: int = 1
+const EVENT_BEGINNER_FLOW_COMPLETED: String = "beginner_flow_completed"
+const VALID_EVENT_TYPES: Array[String] = [EVENT_BEGINNER_FLOW_COMPLETED]
 const DEFAULT_SAVE_PATH: String = "user://wuxia_balance_telemetry.json"
 const OUTCOME_VICTORY: String = "victory"
 const OUTCOME_DEFEAT: String = "defeat"
@@ -23,16 +26,21 @@ func create_default_state() -> Dictionary:
 		"anonymous_player_id": _new_identifier("anon"),
 		"active_run": {},
 		"pending_reports": [],
+		"pending_events": [],
+		"recorded_event_types": [],
 		"diagnostics": [],
 	}
 
 
 func load_state() -> Dictionary:
-	var primary: Dictionary = _read_valid_state(save_path)
+	var primary_raw: Dictionary = _read_state(save_path)
+	var primary: Dictionary = _migrate_state(primary_raw)
 	if not primary.is_empty():
+		if int(primary_raw.get("schema_version", -1)) != SCHEMA_VERSION:
+			save_state(primary)
 		return primary
 	var backup_path: String = save_path + ".bak"
-	var backup: Dictionary = _read_valid_state(backup_path)
+	var backup: Dictionary = _migrate_state(_read_state(backup_path))
 	if not backup.is_empty():
 		_remove_if_present(save_path)
 		_write_primary_without_rotation(backup)
@@ -86,6 +94,10 @@ func is_state_valid(state: Dictionary) -> bool:
 		return false
 	if typeof(state.get("pending_reports", null)) != TYPE_ARRAY:
 		return false
+	if typeof(state.get("pending_events", null)) != TYPE_ARRAY:
+		return false
+	if typeof(state.get("recorded_event_types", null)) != TYPE_ARRAY:
+		return false
 	if typeof(state.get("diagnostics", null)) != TYPE_ARRAY:
 		return false
 	for report_value: Variant in state.get("pending_reports", []):
@@ -94,6 +106,22 @@ func is_state_valid(state: Dictionary) -> bool:
 		var report := report_value as Dictionary
 		if String(report.get("report_id", "")).is_empty():
 			return false
+	for event_value: Variant in state.get("pending_events", []):
+		if typeof(event_value) != TYPE_DICTIONARY:
+			return false
+		var player_event := event_value as Dictionary
+		if (
+			String(player_event.get("event_id", "")).is_empty()
+			or String(player_event.get("event_type", "")) not in VALID_EVENT_TYPES
+		):
+			return false
+	var recorded_types: Array = state.get("recorded_event_types", []) as Array
+	var unique_types: Dictionary = {}
+	for event_type_value: Variant in recorded_types:
+		var event_type: String = String(event_type_value)
+		if event_type not in VALID_EVENT_TYPES or unique_types.has(event_type):
+			return false
+		unique_types[event_type] = true
 	return true
 
 
@@ -264,6 +292,88 @@ func get_pending_reports() -> Array[Dictionary]:
 	return result
 
 
+func queue_player_event(event_type: String, game_version: String, platform: String) -> Dictionary:
+	if event_type not in VALID_EVENT_TYPES or platform not in ["Windows", "Android"]:
+		return {"ok": false}
+	var state: Dictionary = load_state()
+	var recorded_types := state.get("recorded_event_types", []) as Array
+	if event_type in recorded_types:
+		return {"ok": true, "queued": false, "already_recorded": true}
+	var anonymous_id: String = String(state.get("anonymous_player_id", ""))
+	var event_id: String = _event_identifier(anonymous_id, event_type)
+	var player_event: Dictionary = {
+		"schema_version": EVENT_SCHEMA_VERSION,
+		"event_id": event_id,
+		"anonymous_player_id": anonymous_id,
+		"event_type": event_type,
+		"game_version": game_version,
+		"platform": platform,
+		"occurred_at": _now_unix(),
+	}
+	var pending_events := state.get("pending_events", []) as Array
+	pending_events.append(player_event)
+	recorded_types.append(event_type)
+	state["pending_events"] = pending_events
+	state["recorded_event_types"] = recorded_types
+	return {
+		"ok": save_state(state),
+		"queued": true,
+		"event": player_event.duplicate(true),
+	}
+
+
+func get_pending_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for event_value: Variant in load_state().get("pending_events", []):
+		result.append((event_value as Dictionary).duplicate(true))
+	return result
+
+
+func confirm_event_uploaded(event_id: String) -> bool:
+	if event_id.is_empty():
+		return false
+	var state: Dictionary = load_state()
+	var retained: Array = []
+	var found: bool = false
+	for event_value: Variant in state.get("pending_events", []):
+		var player_event := event_value as Dictionary
+		if String(player_event.get("event_id", "")) == event_id:
+			found = true
+			continue
+		retained.append(player_event)
+	if not found:
+		return false
+	state["pending_events"] = retained
+	return save_state(state)
+
+
+func record_permanent_event_error(event_id: String, message: String) -> bool:
+	if event_id.is_empty():
+		return false
+	var state: Dictionary = load_state()
+	var found: bool = false
+	var pending_events := state.get("pending_events", []) as Array
+	for index: int in range(pending_events.size()):
+		var player_event := pending_events[index] as Dictionary
+		if String(player_event.get("event_id", "")) != event_id:
+			continue
+		player_event["permanent_error"] = message.left(500)
+		player_event["permanent_error_at"] = _now_unix()
+		pending_events[index] = player_event
+		found = true
+		break
+	if not found:
+		return false
+	state["pending_events"] = pending_events
+	(state["diagnostics"] as Array).append({
+		"kind": "event_rejected",
+		"event_id": event_id,
+		"message": message.left(500),
+		"recorded_at": _now_unix(),
+	})
+	return save_state(state)
+
+
 func confirm_report_uploaded(report_id: String) -> bool:
 	if report_id.is_empty():
 		return false
@@ -309,7 +419,7 @@ func record_permanent_error(report_id: String, message: String) -> bool:
 	return save_state(state)
 
 
-func _read_valid_state(path: String) -> Dictionary:
+func _read_state(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -321,8 +431,22 @@ func _read_valid_state(path: String) -> Dictionary:
 	var parsed: Variant = parser.data
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return {}
-	var state := parsed as Dictionary
-	return state if is_state_valid(state) else {}
+	return parsed as Dictionary
+
+
+func _migrate_state(state: Dictionary) -> Dictionary:
+	if state.is_empty():
+		return {}
+	var version: int = int(state.get("schema_version", -1))
+	if version == 1:
+		var migrated: Dictionary = state.duplicate(true)
+		migrated["schema_version"] = SCHEMA_VERSION
+		migrated["pending_events"] = []
+		migrated["recorded_event_types"] = []
+		return migrated if is_state_valid(migrated) else {}
+	if version == SCHEMA_VERSION and is_state_valid(state):
+		return state
+	return {}
 
 
 func _write_primary_without_rotation(state: Dictionary) -> bool:
@@ -359,6 +483,10 @@ func _string_array(values: Array) -> Array:
 func _new_identifier(prefix: String) -> String:
 	var random_bytes: PackedByteArray = Crypto.new().generate_random_bytes(16)
 	return "%s_%s" % [prefix, random_bytes.hex_encode()]
+
+
+func _event_identifier(anonymous_id: String, event_type: String) -> String:
+	return "event_%s" % ("%s|%s" % [anonymous_id, event_type]).sha256_text().left(32)
 
 
 func _now_unix() -> int:

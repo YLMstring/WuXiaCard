@@ -3,6 +3,8 @@ extends Node
 
 signal report_uploaded(report_id: String)
 signal report_rejected(report_id: String, message: String)
+signal event_uploaded(event_id: String)
+signal event_rejected(event_id: String, message: String)
 
 const RESPONSE_SUCCESS: StringName = &"success"
 const RESPONSE_RETRY: StringName = &"retry"
@@ -13,7 +15,8 @@ var _endpoint: String = ""
 var _enabled: bool = false
 var _request: HTTPRequest = null
 var _busy: bool = false
-var _active_report_id: String = ""
+var _active_kind: StringName = &""
+var _active_payload_id: String = ""
 
 
 func configure(store: RefCounted, endpoint: String, enabled: bool) -> void:
@@ -31,21 +34,24 @@ func configure(store: RefCounted, endpoint: String, enabled: bool) -> void:
 func try_upload_pending() -> bool:
 	if not _enabled or _busy or _store == null or _request == null:
 		return false
-	var report: Dictionary = _next_uploadable_report()
-	if report.is_empty():
+	var queued_item: Dictionary = _next_uploadable_item()
+	if queued_item.is_empty():
 		return false
-	_active_report_id = String(report.get("report_id", ""))
+	_active_kind = StringName(String(queued_item.get("kind", "")))
+	var payload := queued_item.get("payload", {}) as Dictionary
+	_active_payload_id = String(queued_item.get("id", ""))
 	_busy = true
 	var request_error: Error = _request.request(
-		_endpoint,
+		String(queued_item.get("endpoint", "")),
 		["Content-Type: application/json", "Accept: application/json"],
 		HTTPClient.METHOD_POST,
-		JSON.stringify(report)
+		JSON.stringify(payload)
 	)
 	if request_error == OK:
 		return true
 	_busy = false
-	_active_report_id = ""
+	_active_kind = &""
+	_active_payload_id = ""
 	return false
 
 
@@ -55,6 +61,13 @@ func is_busy() -> bool:
 
 static func is_valid_endpoint(endpoint: String) -> bool:
 	return endpoint.strip_edges().begins_with("https://")
+
+
+static func event_endpoint_from_report_endpoint(endpoint: String) -> String:
+	var normalized: String = endpoint.strip_edges().trim_suffix("/")
+	if not normalized.ends_with("/reports"):
+		return ""
+	return normalized.trim_suffix("/reports") + "/events"
 
 
 static func classify_response(result: int, response_code: int) -> StringName:
@@ -72,10 +85,26 @@ static func classify_response(result: int, response_code: int) -> StringName:
 	return RESPONSE_RETRY
 
 
-func _next_uploadable_report() -> Dictionary:
+func _next_uploadable_item() -> Dictionary:
 	for report: Dictionary in _store.get_pending_reports():
 		if String(report.get("permanent_error", "")).is_empty():
-			return report
+			return {
+				"kind": "report",
+				"id": String(report.get("report_id", "")),
+				"endpoint": _endpoint,
+				"payload": report,
+			}
+	var event_endpoint: String = event_endpoint_from_report_endpoint(_endpoint)
+	if event_endpoint.is_empty():
+		return {}
+	for player_event: Dictionary in _store.get_pending_events():
+		if String(player_event.get("permanent_error", "")).is_empty():
+			return {
+				"kind": "event",
+				"id": String(player_event.get("event_id", "")),
+				"endpoint": event_endpoint,
+				"payload": player_event,
+			}
 	return {}
 
 
@@ -87,21 +116,39 @@ func _on_request_completed(
 ) -> void:
 	if not _busy:
 		return
-	var report_id: String = _active_report_id
+	var payload_id: String = _active_payload_id
+	var active_kind: StringName = _active_kind
 	_busy = false
-	_active_report_id = ""
+	_active_kind = &""
+	_active_payload_id = ""
 	var classification: StringName = classify_response(result, response_code)
 	if classification == RESPONSE_SUCCESS:
-		if _store.confirm_report_uploaded(report_id):
-			report_uploaded.emit(report_id)
+		var confirmed: bool = (
+			_store.confirm_event_uploaded(payload_id)
+			if active_kind == &"event"
+			else _store.confirm_report_uploaded(payload_id)
+		)
+		if confirmed:
+			if active_kind == &"event":
+				event_uploaded.emit(payload_id)
+			else:
+				report_uploaded.emit(payload_id)
 			try_upload_pending.call_deferred()
 		return
 	if classification == RESPONSE_PERMANENT:
 		var message: String = body.get_string_from_utf8().strip_edges().left(500)
 		if message.is_empty():
 			message = "HTTP %d" % response_code
-		if _store.record_permanent_error(report_id, message):
-			report_rejected.emit(report_id, message)
+		var recorded: bool = (
+			_store.record_permanent_event_error(payload_id, message)
+			if active_kind == &"event"
+			else _store.record_permanent_error(payload_id, message)
+		)
+		if recorded:
+			if active_kind == &"event":
+				event_rejected.emit(payload_id, message)
+			else:
+				report_rejected.emit(payload_id, message)
 			try_upload_pending.call_deferred()
 	# Retryable failures deliberately stop here. A later main-menu visit or
 	# completed run starts a fresh attempt without a disconnected hot loop.

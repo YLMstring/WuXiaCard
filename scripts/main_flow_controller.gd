@@ -323,6 +323,7 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 			mastery_candidate_ids = completed_duel.get_mastery_candidate_ids()
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
+	var previous_beginner_stage: int = store.get_beginner_opening_stage(profile)
 	var kuihua0_unlocked_this_run: bool = (
 		not testing_mode
 		and &"KuiHua0" in store.get_unlocked_ids(profile)
@@ -346,6 +347,12 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 	var telemetry_duel_saved: bool = _complete_pending_balance_telemetry_duel(
 		reward_outcome
 	)
+	profile = duel_result.get("profile", profile)
+	_queue_beginner_flow_completed_event_if_needed(
+		previous_beginner_stage,
+		profile,
+		reward_outcome
+	)
 	if bool(duel_result.get("completed", false)):
 		var ending_summary: Dictionary = (
 			duel_result.get("ending_summary", {}) as Dictionary
@@ -357,7 +364,6 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 			)
 		_show_ending(ending_summary)
 		return
-	profile = duel_result.get("profile", profile)
 	var offer_result: Dictionary = store.create_reward_offer_and_save(
 		profile,
 		reward_outcome
@@ -538,6 +544,32 @@ func _seal_completed_balance_telemetry_run(final_score: int) -> void:
 		push_warning("Completed balance telemetry run could not be queued")
 		return
 	_try_upload_pending_balance_telemetry()
+
+
+func _queue_beginner_flow_completed_event_if_needed(
+	previous_stage: int,
+	profile: Dictionary,
+	outcome: StringName
+) -> void:
+	if (
+		_balance_telemetry_store == null
+		or outcome != Store.REWARD_VICTORY
+		or previous_stage != Store.BEGINNER_OPENING_WUSHI
+	):
+		return
+	var profile_store := Store.new(deck_profile_path)
+	if profile_store.get_beginner_opening_stage(profile) != Store.BEGINNER_OPENING_NONE:
+		return
+	var result: Dictionary = _balance_telemetry_store.queue_player_event(
+		BalanceStore.EVENT_BEGINNER_FLOW_COMPLETED,
+		String(ProjectSettings.get_setting("application/config/version", "")),
+		OS.get_name()
+	)
+	if not bool(result.get("ok", false)):
+		push_warning("Beginner flow telemetry event could not be queued")
+		return
+	if bool(result.get("queued", false)):
+		_try_upload_pending_balance_telemetry()
 
 
 func _try_upload_pending_balance_telemetry() -> void:

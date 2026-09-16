@@ -1,11 +1,17 @@
 'use strict';
 
 const REPORT_COLLECTION = 'run_reports';
+const EVENT_COLLECTION = 'player_events';
 const MAX_BODY_BYTES = 128 * 1024;
 const MAX_DUELS = 256;
 const MAX_EXPORT_REPORTS = 5000;
 const ID_PATTERN = /^[a-z]+_[0-9a-f]{32}$/;
 const CATALOG_ID_PATTERN = /^[A-Za-z0-9_]+$/;
+const EVENT_TYPES = new Set(['beginner_flow_completed']);
+const EVENT_FIELDS = new Set([
+  'schema_version', 'event_id', 'anonymous_player_id', 'event_type',
+  'game_version', 'platform', 'occurred_at',
+]);
 
 function response(statusCode, body, contentType = 'application/json; charset=utf-8') {
   return {
@@ -188,6 +194,39 @@ function sanitizeReport(value, receivedAt) {
   };
 }
 
+function sanitizeEvent(value, receivedAt) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'event must be an object' };
+  }
+  if (Object.keys(value).some((key) => !EVENT_FIELDS.has(key))) {
+    return { error: 'event contains unknown fields' };
+  }
+  if (
+    value.schema_version !== 1 ||
+    !isShortString(value.event_id, 64, ID_PATTERN) ||
+    !isShortString(value.anonymous_player_id, 64, ID_PATTERN) ||
+    !EVENT_TYPES.has(value.event_type) ||
+    typeof value.game_version !== 'string' || value.game_version.length > 32 ||
+    !['Windows', 'Android'].includes(value.platform) ||
+    !isIntegerInRange(value.occurred_at, 0, Number.MAX_SAFE_INTEGER)
+  ) {
+    return { error: 'event fields are invalid' };
+  }
+  return {
+    playerEvent: {
+      _id: value.event_id,
+      schema_version: 1,
+      event_id: value.event_id,
+      anonymous_player_id: value.anonymous_player_id,
+      event_type: value.event_type,
+      game_version: value.game_version,
+      platform: value.platform,
+      occurred_at: value.occurred_at,
+      received_at: receivedAt,
+    },
+  };
+}
+
 function parseQuery(event) {
   if (event.queryStringParameters && typeof event.queryStringParameters === 'object') {
     return event.queryStringParameters;
@@ -228,6 +267,21 @@ function reportsToCsv(reports) {
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
 
+function eventsToCsv(events) {
+  const rows = [[
+    'event_id', 'anonymous_player_id', 'event_type', 'game_version',
+    'platform', 'occurred_at', 'received_at',
+  ]];
+  for (const playerEvent of events) {
+    rows.push([
+      playerEvent.event_id, playerEvent.anonymous_player_id,
+      playerEvent.event_type, playerEvent.game_version, playerEvent.platform,
+      playerEvent.occurred_at, playerEvent.received_at,
+    ]);
+  }
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+
 function isIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -263,11 +317,37 @@ async function handleRequest(event, dependencies) {
     if (validation.error) {
       return response(400, { error: validation.error });
     }
-    const stored = await repository.create(validation.report);
+    const stored = await repository.createReport(validation.report);
     if (stored === 'duplicate') {
       return response(409, { ok: true, duplicate: true });
     }
     return response(201, { ok: true, report_id: validation.report.report_id });
+  }
+
+  if (method === 'POST' && matchesGatewayRoute(path, '/v1/events', '/events')) {
+    const headers = normalizedHeaders(event);
+    if (!headers['content-type']?.toLowerCase().startsWith('application/json')) {
+      return response(415, { error: 'application/json is required' });
+    }
+    const rawBody = rawRequestBody(event);
+    if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
+      return response(413, { error: 'event is too large' });
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch (_error) {
+      return response(400, { error: 'invalid JSON' });
+    }
+    const validation = sanitizeEvent(parsed, now());
+    if (validation.error) {
+      return response(400, { error: validation.error });
+    }
+    const stored = await repository.createEvent(validation.playerEvent);
+    if (stored === 'duplicate') {
+      return response(409, { ok: true, duplicate: true });
+    }
+    return response(201, { ok: true, event_id: validation.playerEvent.event_id });
   }
 
   if (
@@ -281,13 +361,17 @@ async function handleRequest(event, dependencies) {
     }
     const query = parseQuery(event);
     const format = String(query.format || 'json').toLowerCase();
+	const dataset = String(query.dataset || 'reports').toLowerCase();
     if (!['csv', 'json'].includes(format)) {
       return response(400, { error: 'format must be csv or json' });
     }
+	if (!['reports', 'events'].includes(dataset)) {
+	  return response(400, { error: 'dataset must be reports or events' });
+	}
     if ((query.from && !isIsoDate(query.from)) || (query.to && !isIsoDate(query.to))) {
       return response(400, { error: 'dates must use YYYY-MM-DD' });
     }
-    const listed = await repository.list({
+	const listed = await (dataset === 'events' ? repository.listEvents : repository.listReports)({
       from: query.from || '',
       to: query.to || '',
       limit: MAX_EXPORT_REPORTS,
@@ -296,9 +380,14 @@ async function handleRequest(event, dependencies) {
       return response(413, { error: 'date range contains too many reports; narrow it' });
     }
     if (format === 'csv') {
-      return response(200, reportsToCsv(listed.reports), 'text/csv; charset=utf-8');
+	  const csv = dataset === 'events'
+		? eventsToCsv(listed.events)
+		: reportsToCsv(listed.reports);
+	  return response(200, csv, 'text/csv; charset=utf-8');
     }
-    return response(200, { reports: listed.reports });
+	return response(200, dataset === 'events'
+	  ? { events: listed.events }
+	  : { reports: listed.reports });
   }
 
   return response(404, { error: 'not found' });
@@ -324,51 +413,63 @@ function createCloudRepository() {
   // 管理端数据库访问固定走 CLOUD_API，并显式传入事件云函数当前实例的
   // 临时三元组；默认 GATEWAY 或隐式发现路径无法可靠完成管理签名。
   const app = cloudbase.init(cloudbaseInitOptions(cloudbase));
-  const collection = app.database().collection(REPORT_COLLECTION);
+	const database = app.database();
+	const reportCollection = database.collection(REPORT_COLLECTION);
+	const eventCollection = database.collection(EVENT_COLLECTION);
+	async function create(collection, document) {
+	  try {
+		await collection.add(document);
+		return 'created';
+	  } catch (error) {
+		if (isDuplicateError(error)) return 'duplicate';
+		throw error;
+	  }
+	}
+	async function list(collection, key, { from, to, limit }) {
+	  const documents = [];
+	  const pageSize = 100;
+	  let offset = 0;
+	  while (documents.length <= limit) {
+		const result = await collection
+		  .orderBy('received_at', 'asc')
+		  .skip(offset)
+		  .limit(pageSize)
+		  .get();
+		const page = Array.isArray(result.data) ? result.data : [];
+		if (page.length === 0) break;
+		for (const document of page) {
+		  const day = String(document.received_at || '').slice(0, 10);
+		  if ((!from || day >= from) && (!to || day <= to)) documents.push(document);
+		}
+		offset += page.length;
+		if (page.length < pageSize) break;
+	  }
+	  return {
+		[key]: documents.slice(0, limit),
+		truncated: documents.length > limit,
+	  };
+	}
   return {
-    async create(report) {
-      try {
-        await collection.add(report);
-        return 'created';
-      } catch (error) {
-        if (isDuplicateError(error)) {
-          return 'duplicate';
-        }
-        throw error;
-      }
+	async createReport(report) {
+	  return create(reportCollection, report);
     },
-    async list({ from, to, limit }) {
-      const reports = [];
-      const pageSize = 100;
-      let offset = 0;
-      while (reports.length <= limit) {
-        const result = await collection
-          .orderBy('received_at', 'asc')
-          .skip(offset)
-          .limit(pageSize)
-          .get();
-        const page = Array.isArray(result.data) ? result.data : [];
-        if (page.length === 0) break;
-        for (const report of page) {
-          const day = String(report.received_at || '').slice(0, 10);
-          if ((!from || day >= from) && (!to || day <= to)) {
-            reports.push(report);
-          }
-        }
-        offset += page.length;
-        if (page.length < pageSize) break;
-      }
-      return {
-        reports: reports.slice(0, limit),
-        truncated: reports.length > limit,
-      };
+	async createEvent(playerEvent) {
+	  return create(eventCollection, playerEvent);
+	},
+	async listReports(options) {
+	  return list(reportCollection, 'reports', options);
+	},
+	async listEvents(options) {
+	  return list(eventCollection, 'events', options);
     },
   };
 }
 
 exports.handleRequest = handleRequest;
 exports.sanitizeReport = sanitizeReport;
+exports.sanitizeEvent = sanitizeEvent;
 exports.reportsToCsv = reportsToCsv;
+exports.eventsToCsv = eventsToCsv;
 exports.cloudbaseInitOptions = cloudbaseInitOptions;
 
 exports.main = async (event) => {

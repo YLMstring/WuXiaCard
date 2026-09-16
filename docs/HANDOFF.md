@@ -81,6 +81,12 @@ release-ready Android package.
   function's temporary credential triple. See
   `docs/superpowers/specs/2026-09-15-balance-telemetry-design.md` and
   `cloudbase/balance_telemetry/README.md`.
+- Telemetry local schema 2 additionally queues the installation-level
+  `beginner_flow_completed` milestone exactly once when a Huashan difficulty-0
+  run advances from the second fixed beginner enemy into the formal flow. It
+  contains no deck or duel details, retries offline through `/v1/events`, and
+  is stored separately in CloudBase collection `player_events`. Administrator
+  export selects it with `tools/download_balance_reports.ps1 -Dataset Events`.
 - Android preset: `export_presets.cfg`
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`

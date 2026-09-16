@@ -87,6 +87,40 @@ func _run() -> void:
 			and String((duels[0] as Dictionary).get("outcome", "")) == "victory",
 			"Queued report preserves starting side and result"
 		)
+
+	flow.call(
+		"_queue_beginner_flow_completed_event_if_needed",
+		ProfileStore.BEGINNER_OPENING_LINGHU,
+		profile_store.load_profile(),
+		&"victory"
+	)
+	_check(
+		(flow.debug_get_balance_telemetry_state().get("pending_events", []) as Array).is_empty(),
+		"The first tutorial victory does not record completion"
+	)
+	flow.call(
+		"_queue_beginner_flow_completed_event_if_needed",
+		ProfileStore.BEGINNER_OPENING_WUSHI,
+		profile_store.load_profile(),
+		&"victory"
+	)
+	var events := flow.debug_get_balance_telemetry_state().get("pending_events", []) as Array
+	_check(
+		events.size() == 1
+		and String((events[0] as Dictionary).get("event_type", ""))
+			== "beginner_flow_completed",
+		"The Wushi victory queues the installation-level completion event"
+	)
+	flow.call(
+		"_queue_beginner_flow_completed_event_if_needed",
+		ProfileStore.BEGINNER_OPENING_WUSHI,
+		profile_store.load_profile(),
+		&"victory"
+	)
+	_check(
+		(flow.debug_get_balance_telemetry_state().get("pending_events", []) as Array).size() == 1,
+		"Repeating the completion transition cannot duplicate the event"
+	)
 	flow.queue_free()
 	await process_frame
 	await process_frame

@@ -36,6 +36,17 @@ func _run() -> void:
 	_check(Uploader.is_valid_endpoint("https://example.com/v1/reports"), "HTTPS endpoints are accepted")
 	_check(not Uploader.is_valid_endpoint("http://example.com"), "Plain HTTP endpoints are rejected")
 	_check(
+		Uploader.event_endpoint_from_report_endpoint("https://example.com/v1/reports")
+			== "https://example.com/v1/events",
+		"The event endpoint is derived from the configured report route"
+	)
+	_check(
+		Uploader.event_endpoint_from_report_endpoint("https://example.com/v1/reports/")
+			== "https://example.com/v1/events"
+		and Uploader.event_endpoint_from_report_endpoint("https://example.com/v1/other").is_empty(),
+		"Endpoint derivation tolerates a trailing slash and rejects an unrelated route"
+	)
+	_check(
 		Settings.should_capture_balance_telemetry(false, false, false),
 		"Normal exported runtime captures telemetry"
 	)

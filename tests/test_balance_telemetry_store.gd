@@ -5,6 +5,7 @@ const Store = preload("res://scripts/balance_telemetry_store.gd")
 var _checks: int = 0
 var _failures: int = 0
 var _save_path: String = "user://balance_telemetry_store_test.json"
+var _legacy_path: String = "user://balance_telemetry_store_legacy_test.json"
 
 
 func _init() -> void:
@@ -125,6 +126,52 @@ func _run() -> void:
 	_check(not store.has_active_run(), "Reset leaves no active telemetry run")
 	_check(store.get_anonymous_player_id() == anonymous_id, "Reset does not rotate anonymous identity")
 
+	var queued_event: Dictionary = store.queue_player_event(
+		Store.EVENT_BEGINNER_FLOW_COMPLETED,
+		"1.0.2",
+		"Android"
+	)
+	_check(bool(queued_event.get("ok", false)), "A beginner completion event is queued")
+	var player_event := queued_event.get("event", {}) as Dictionary
+	var event_id: String = String(player_event.get("event_id", ""))
+	_check(
+		event_id.begins_with("event_")
+		and String(player_event.get("anonymous_player_id", "")) == anonymous_id
+		and String(player_event.get("event_type", "")) == Store.EVENT_BEGINNER_FLOW_COMPLETED
+		and not player_event.has("duels"),
+		"The lightweight event contains identity and type but no duel data"
+	)
+	_check(
+		Store.new(_save_path).get_pending_events().size() == 1,
+		"Pending events survive process-style reload"
+	)
+	var duplicate_event: Dictionary = store.queue_player_event(
+		Store.EVENT_BEGINNER_FLOW_COMPLETED,
+		"1.0.2",
+		"Android"
+	)
+	_check(
+		bool(duplicate_event.get("ok", false))
+		and bool(duplicate_event.get("already_recorded", false))
+		and store.get_pending_events().size() == 1,
+		"The same anonymous player records the milestone only once"
+	)
+	_check(
+		store.record_permanent_event_error(event_id, "invalid event")
+		and store.get_pending_events().size() == 1,
+		"Permanent event errors retain the event for diagnosis"
+	)
+	_check(store.confirm_event_uploaded(event_id), "A confirmed event leaves the upload queue")
+	_check(store.get_pending_events().is_empty(), "Confirmed events are removed")
+	_check(
+		bool(store.queue_player_event(
+			Store.EVENT_BEGINNER_FLOW_COMPLETED,
+			"1.0.2",
+			"Android"
+		).get("already_recorded", false)),
+		"An uploaded milestone remains deduplicated"
+	)
+
 	var state_before_corruption: Dictionary = store.load_state()
 	_check(store.save_state(state_before_corruption), "A second save creates a recoverable backup")
 	var corrupt_file := FileAccess.open(_save_path, FileAccess.WRITE)
@@ -135,6 +182,27 @@ func _run() -> void:
 		Store.new(_save_path).is_state_valid(recovered)
 		and String(recovered.get("anonymous_player_id", "")) == anonymous_id,
 		"A corrupt primary file recovers the previous valid backup"
+	)
+
+	var legacy_state: Dictionary = {
+		"schema_version": 1,
+		"anonymous_player_id": "anon_0123456789abcdef0123456789abcdef",
+		"active_run": {},
+		"pending_reports": [],
+		"diagnostics": [{"kind": "legacy"}],
+	}
+	var legacy_file := FileAccess.open(_legacy_path, FileAccess.WRITE)
+	legacy_file.store_string(JSON.stringify(legacy_state))
+	legacy_file.close()
+	var migrated: Dictionary = Store.new(_legacy_path).load_state()
+	_check(
+		int(migrated.get("schema_version", 0)) == Store.SCHEMA_VERSION
+		and String(migrated.get("anonymous_player_id", ""))
+			== String(legacy_state.get("anonymous_player_id", ""))
+		and (migrated.get("pending_events", []) as Array).is_empty()
+		and (migrated.get("recorded_event_types", []) as Array).is_empty()
+		and (migrated.get("diagnostics", []) as Array).size() == 1,
+		"Schema-one state migrates without rotating identity or losing diagnostics"
 	)
 
 	_cleanup()
@@ -157,10 +225,11 @@ func _strings(values: Array) -> Array:
 
 
 func _cleanup() -> void:
-	for suffix: String in ["", ".tmp", ".bak"]:
-		var path: String = _save_path + suffix
-		if FileAccess.file_exists(path):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	for base_path: String in [_save_path, _legacy_path]:
+		for suffix: String in ["", ".tmp", ".bak"]:
+			var path: String = base_path + suffix
+			if FileAccess.file_exists(path):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _finish() -> void:

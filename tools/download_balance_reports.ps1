@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+	[ValidateSet("Reports", "Events")]
+	[string]$Dataset = "Reports",
     [ValidateSet("Csv", "Json")]
     [string]$Format = "Csv",
     [string]$Endpoint = "",
@@ -33,6 +35,9 @@ if ([string]::IsNullOrWhiteSpace($adminToken)) {
 
 $query = [System.Collections.Generic.List[string]]::new()
 $query.Add("format=$($Format.ToLowerInvariant())")
+if ($Dataset -eq "Events") {
+	$query.Add("dataset=events")
+}
 if (-not [string]::IsNullOrWhiteSpace($From)) {
     $query.Add("from=$([uri]::EscapeDataString($From))")
 }
@@ -45,7 +50,8 @@ $requestUri = "$Endpoint$separator$($query -join '&')"
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $extension = $Format.ToLowerInvariant()
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $OutputPath = Join-Path (Get-Location) "balance-reports-$stamp.$extension"
+	$prefix = if ($Dataset -eq "Events") { "balance-events" } else { "balance-reports" }
+	$OutputPath = Join-Path (Get-Location) "$prefix-$stamp.$extension"
 }
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
 $outputDirectory = Split-Path -Parent $resolvedOutput
@@ -71,7 +77,7 @@ try {
         Get-Content -LiteralPath $temporaryOutput -Raw | ConvertFrom-Json | Out-Null
     }
     Move-Item -LiteralPath $temporaryOutput -Destination $resolvedOutput -Force
-    Write-Host "Downloaded balance reports: $resolvedOutput"
+	Write-Host "Downloaded balance $($Dataset.ToLowerInvariant()): $resolvedOutput"
 }
 finally {
     if (Test-Path -LiteralPath $temporaryOutput) {
