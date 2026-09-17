@@ -1798,8 +1798,18 @@ func _check_aspect_ratio_input_paths() -> void:
 			inspector.call("_input", release)
 			await process_frame
 			_check(
+				aspect_duel.debug_is_inspection_open(),
+				"Tapping outside the parchment keeps inspection open on a tall screen"
+			)
+			var parchment_center: Vector2 = inspector.get_node("Parchment").get_global_rect().get_center()
+			press.position = parchment_center
+			inspector.call("_input", press)
+			release.position = parchment_center
+			inspector.call("_input", release)
+			await process_frame
+			_check(
 				not aspect_duel.debug_is_inspection_open(),
-				"Tap-to-close inspection still accepts a decorative-extension tap"
+				"Tapping the parchment closes inspection on a tall screen"
 			)
 
 		aspect_duel.queue_free()
