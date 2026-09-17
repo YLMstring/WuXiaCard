@@ -7,6 +7,35 @@
 [ext_resource type="Texture2D" uid="uid://grtv0stqh3fu" path="res://pics/back_arrow.svg" id="5_back_arrow"]
 [ext_resource type="Script" uid="uid://cdho8m1h7t35l" path="res://scripts/attack_vfx.gd" id="6_ur6ul"]
 [ext_resource type="Texture2D" uid="uid://bqh76o5k465rm" path="res://inkpics/replay.png" id="7_replay"]
+[ext_resource type="Texture2D" uid="uid://bny4ttnx87beh" path="res://art/ui/selection_primary_ink.png" id="8_return_ink"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_return_normal"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+texture = ExtResource("8_return_ink")
+region_rect = Rect2(140, 220, 1720, 360)
+modulate_color = Color(1, 1, 1, 0.96)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_return_pressed"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+texture = ExtResource("8_return_ink")
+region_rect = Rect2(140, 220, 1720, 360)
+modulate_color = Color(0.82, 0.82, 0.82, 0.94)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_return_hover"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+texture = ExtResource("8_return_ink")
+region_rect = Rect2(140, 220, 1720, 360)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_return_focus"]
 
 [node name="Duel" type="Control" unique_id=736667207]
 layout_mode = 3
@@ -146,6 +175,26 @@ offset_top = 781.0
 offset_right = 524.0
 offset_bottom = 912.0
 theme_override_constants/separation = 4
+
+[node name="PostMatchReturnButton" type="Button" parent="DuelCanvas" unique_id=170123636]
+visible = false
+layout_mode = 0
+offset_left = 118.0
+offset_top = 813.0
+offset_right = 422.0
+offset_bottom = 881.0
+focus_mode = 0
+mouse_default_cursor_shape = 2
+theme_override_colors/font_color = Color(0.956863, 0.886275, 0.741176, 1)
+theme_override_colors/font_focus_color = Color(0.956863, 0.886275, 0.741176, 1)
+theme_override_colors/font_pressed_color = Color(0.956863, 0.886275, 0.741176, 1)
+theme_override_colors/font_hover_color = Color(0.956863, 0.886275, 0.741176, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleBoxTexture_return_normal")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_return_pressed")
+theme_override_styles/hover = SubResource("StyleBoxTexture_return_hover")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_return_focus")
+text = "打道回府"
 
 [node name="ReplayButton" type="Button" parent="DuelCanvas" unique_id=952790680]
 custom_minimum_size = Vector2(44, 44)

@@ -2,6 +2,7 @@ class_name MainFlowController
 extends Control
 
 const MAIN_MENU_SCENE: PackedScene = preload("res://scenes/main_menu.tscn")
+const README_HELP_SCENE: PackedScene = preload("res://scenes/readme_help.tscn")
 const SECT_SELECTION_SCENE: PackedScene = preload("res://scenes/sect_selection.tscn")
 const DECK_BUILDER_SCENE: PackedScene = preload("res://scenes/deck_builder.tscn")
 const REWARD_SELECTION_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
@@ -10,6 +11,7 @@ const ENDING_SCENE: PackedScene = preload("res://scenes/ending.tscn")
 const TUTORIAL_SCENE_PATH: String = "res://scenes/tutorial.tscn"
 const Music = preload("res://scripts/music_director.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
+const ReadmeHelpControllerData = preload("res://scripts/readme_help_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
 const DuelRules = preload("res://scripts/duel_rules.gd")
@@ -72,11 +74,19 @@ func _show_main_menu(notice: String = "") -> void:
 	menu.run_reset_confirmed.connect(_on_run_reset_confirmed)
 	menu.progress_reset_confirmed.connect(_on_progress_reset_confirmed)
 	menu.progression_unlock_requested.connect(_on_progression_unlock_requested)
+	menu.help_requested.connect(_on_help_requested)
 	_replace_screen(menu)
 	_music_director.request_context(Music.CONTEXT_MENU)
 	_try_upload_pending_balance_telemetry()
 	if not notice.is_empty():
 		menu.show_notice(notice)
+
+
+func _show_readme_help() -> void:
+	var help := README_HELP_SCENE.instantiate() as ReadmeHelpControllerData
+	help.back_requested.connect(_on_return_to_menu_requested)
+	_replace_screen(help)
+	_music_director.request_context(Music.CONTEXT_MENU)
 
 
 func _show_sect_selection() -> void:
@@ -216,6 +226,10 @@ func _on_journey_requested() -> void:
 			_finish_reset_on_current_menu("保存失败，请重试")
 	else:
 		_show_sect_selection()
+
+
+func _on_help_requested() -> void:
+	_show_readme_help()
 
 
 func _should_auto_start_default_run(store: RefCounted, profile: Dictionary) -> bool:

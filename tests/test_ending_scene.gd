@@ -48,12 +48,14 @@ func _run() -> void:
 	var menu := ending.get_node("MainMenu") as MainMenuController
 	var actions := menu.get_node("MenuLayer/Actions") as VBoxContainer
 	var notice := menu.get_node("MenuLayer/Notice") as Label
+	var help_button := menu.get_node("MenuLayer/Notice/HelpButton") as Button
 	var score := ending.get_node("EndingLayer/Score") as Label
 	var story_clip := ending.get_node_or_null("EndingLayer/StoryClip") as Control
 	var story := ending.get_node_or_null("EndingLayer/StoryClip/Story") as Label
 	_check(menu != null, "Ending scene instances the production main menu")
 	_check(not actions.visible, "Ending scene hides all three menu actions")
 	_check(not notice.visible, "Ending scene hides the ordinary menu notice")
+	_check(not help_button.is_visible_in_tree(), "Ending scene also hides the help-book entry")
 	_check(story_clip != null, "Ending scene owns a dedicated story clipping viewport")
 	_check(story != null, "Story is a child of the clipping viewport")
 	if story_clip == null or story == null:

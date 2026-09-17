@@ -1,0 +1,93 @@
+extends SceneTree
+
+const HELP_SCENE: PackedScene = preload("res://scenes/readme_help.tscn")
+const Markdown = preload("res://scripts/readme_markdown.gd")
+const HelpController = preload("res://scripts/readme_help_controller.gd")
+
+var _checks: int = 0
+var _failures: int = 0
+
+
+func _init() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var sample: String = """<a id="toc"></a>
+# 标题
+
+- **重点**与`代码`
+- [章节](#chapter)
+- [外部](https://example.com)
+
+<a id="chapter"></a>
+## 章节
+
+```text
+[示例]
+```
+"""
+	var converted: Dictionary = Markdown.convert(sample)
+	var bbcode: String = String(converted.get("bbcode", ""))
+	var anchors: Dictionary = converted.get("anchors", {}) as Dictionary
+	_check(bbcode.contains("[b]重点[/b]"), "Markdown converter preserves bold emphasis")
+	_check(bbcode.contains("section:chapter"), "Markdown converter emits an internal section link")
+	_check(not bbcode.contains("https://example.com"), "External targets are not made actionable")
+	_check(bbcode.contains("[lb]示例[rb]"), "Code blocks escape BBCode delimiters")
+	_check(anchors.has("toc") and anchors.has("chapter"), "HTML anchors become local scroll targets")
+
+	var help := HELP_SCENE.instantiate() as HelpController
+	help.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	help.size = Vector2(540.0, 960.0)
+	root.add_child(help)
+	await process_frame
+	await process_frame
+	var document := help.get_node("Parchment/Body/Margin/Layout/Document") as RichTextLabel
+	var parchment_art := help.get_node("Parchment/Artwork") as TextureRect
+	var back_button := help.get_node("BackButton") as Button
+	_check(document != null and document.bbcode_enabled, "Help page uses a BBCode-enabled rich document")
+	_check(
+		help.debug_get_document_text().contains("三分钟看懂怎么玩")
+		and help.debug_get_document_text().contains("技术细节"),
+		"Help page loads the bundled README from beginning through technical details"
+	)
+	_check(help.debug_get_anchor_line("toc") >= 0, "README table-of-contents anchor is available")
+	_check(help.debug_get_anchor_line("technical-details") > 0, "Late README anchors are available")
+	_check(
+		parchment_art.texture != null
+		and parchment_art.texture.resource_path == "res://art/ui/card_inspector_scroll.png",
+		"Help page uses the shared generated scroll artwork"
+	)
+	_check(back_button.size.x >= 42.0 and back_button.size.y >= 42.0, "Back control remains touch-sized")
+	var back_count := {"value": 0}
+	help.back_requested.connect(
+		func() -> void: back_count["value"] = int(back_count["value"]) + 1
+	)
+	back_button.pressed.emit()
+	_check(int(back_count["value"]) == 1, "Back control requests a return exactly once")
+
+	var export_text: String = FileAccess.get_file_as_string("res://export_presets.cfg")
+	_check(
+		export_text.count("include_filter=\"README.md\"") == 2,
+		"Both Android and Windows exports explicitly include README.md"
+	)
+
+	help.queue_free()
+	await process_frame
+	_finish()
+
+
+func _finish() -> void:
+	if _failures == 0:
+		print("README_HELP_TESTS_PASSED checks=%d" % _checks)
+	else:
+		push_error("README_HELP_TESTS_FAILED failures=%d checks=%d" % [_failures, _checks])
+	quit(_failures)
+
+
+func _check(condition: bool, message: String) -> void:
+	_checks += 1
+	if condition:
+		return
+	_failures += 1
+	push_error("CHECK_FAILED: %s" % message)

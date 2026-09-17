@@ -5,6 +5,7 @@ signal journey_requested
 signal run_reset_confirmed
 signal progress_reset_confirmed
 signal progression_unlock_requested
+signal help_requested
 
 const RUN_RESET_PRESSES: int = 5
 const PROGRESS_RESET_PRESSES: int = 10
@@ -53,6 +54,7 @@ const PROGRESS_RESET_INK: Texture2D = preload("res://inkpics/封剑归隐.png")
 @onready var run_reset_button: Button = $MenuLayer/Actions/RunResetButton
 @onready var progress_reset_button: Button = $MenuLayer/Actions/ProgressResetButton
 @onready var notice_label: Label = $MenuLayer/Notice
+@onready var help_button: Button = $MenuLayer/Notice/HelpButton
 @onready var run_reset_timer: Timer = $RunResetTimer
 @onready var progress_reset_timer: Timer = $ProgressResetTimer
 
@@ -71,6 +73,9 @@ func _ready() -> void:
 	journey_button.pressed.connect(_on_journey_pressed)
 	run_reset_button.pressed.connect(_on_run_reset_pressed)
 	progress_reset_button.pressed.connect(_on_progress_reset_pressed)
+	help_button.pressed.connect(_on_help_pressed)
+	help_button.button_down.connect(_on_help_button_down)
+	help_button.button_up.connect(_on_help_button_up)
 	run_reset_timer.timeout.connect(_on_run_reset_timeout)
 	progress_reset_timer.timeout.connect(_on_progress_reset_timeout)
 	for button: Button in [journey_button, run_reset_button, progress_reset_button]:
@@ -158,7 +163,7 @@ func _on_action_hover_changed(button: Button, hovered: bool) -> void:
 
 
 func show_notice(message: String) -> void:
-	notice_label.text = message
+	_set_notice_text(message)
 
 
 func reset_confirmation_state() -> void:
@@ -168,7 +173,7 @@ func reset_confirmation_state() -> void:
 	run_reset_timer.stop()
 	progress_reset_timer.stop()
 	if is_node_ready():
-		notice_label.text = ""
+		_set_notice_text("")
 
 
 func debug_get_confirmation_counts() -> Vector2i:
@@ -215,13 +220,13 @@ func _on_run_reset_pressed() -> void:
 		_run_reset_count = 0
 		_progression_unlock_step = 0
 		run_reset_timer.stop()
-		notice_label.text = ""
+		_set_notice_text("")
 		run_reset_confirmed.emit()
 		return
-	notice_label.text = _countdown_notice(
+	_set_notice_text(_countdown_notice(
 		RUN_RESET_PRESSES - _run_reset_count,
 		"放弃本局"
-	)
+	))
 
 
 func _on_progress_reset_pressed() -> void:
@@ -236,13 +241,13 @@ func _on_progress_reset_pressed() -> void:
 		_progress_reset_count = 0
 		_progression_unlock_step = 0
 		progress_reset_timer.stop()
-		notice_label.text = ""
+		_set_notice_text("")
 		progress_reset_confirmed.emit()
 		return
-	notice_label.text = _countdown_notice(
+	_set_notice_text(_countdown_notice(
 		PROGRESS_RESET_PRESSES - _progress_reset_count,
 		"删档重来"
-	)
+	))
 
 
 func _advance_progression_unlock_sequence(action: StringName) -> bool:
@@ -262,13 +267,44 @@ func _advance_progression_unlock_sequence(action: StringName) -> bool:
 func _on_run_reset_timeout() -> void:
 	_run_reset_count = 0
 	if _progress_reset_count == 0:
-		notice_label.text = ""
+		_set_notice_text("")
 
 
 func _on_progress_reset_timeout() -> void:
 	_progress_reset_count = 0
 	if _run_reset_count == 0:
-		notice_label.text = ""
+		_set_notice_text("")
+
+
+func _set_notice_text(message: String) -> void:
+	notice_label.text = message
+	help_button.visible = message.is_empty()
+
+
+func _on_help_pressed() -> void:
+	_vibrate(12)
+	help_requested.emit()
+
+
+func _on_help_button_down() -> void:
+	help_button.pivot_offset = help_button.size * 0.5
+	var tween: Tween = help_button.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(help_button, "scale", Vector2(0.92, 0.92), 0.06)
+	tween.tween_property(help_button, "modulate:a", 0.62, 0.06)
+
+
+func _on_help_button_up() -> void:
+	var tween: Tween = help_button.create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(help_button, "scale", Vector2.ONE, 0.12)
+	tween.tween_property(help_button, "modulate:a", 1.0, 0.12)
+
+
+func _vibrate(duration_ms: int) -> void:
+	if duration_ms > 0 and OS.has_feature("mobile"):
+		Input.vibrate_handheld(duration_ms)
 
 
 func _cancel_run_reset() -> void:
@@ -371,6 +407,9 @@ func _layout_menu() -> void:
 		actions_y + actions_height + button_gap - 275
 	)
 	notice_label.size = Vector2(notice_width, notice_height)
+	var help_size: float = clampf(notice_height, 52.0, 60.0)
+	help_button.size = Vector2(help_size, help_size)
+	help_button.position = (notice_label.size - help_button.size) * 0.5
 	notice_label.add_theme_font_size_override(
 		"font_size",
 		roundi(clampf(safe_width * 0.03, 16.0, 23.0))

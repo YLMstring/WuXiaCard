@@ -57,11 +57,16 @@ func _run() -> void:
 		"Library and inspector retain the same usable body size"
 	)
 	_check(
-		(inspector_parchment.get_node("Artwork") as TextureRect).visible
+		(grid.get_node("Artwork") as TextureRect).visible
+		and (grid.get_node("Artwork") as TextureRect).texture != null
+		and (grid.get_node("Artwork") as TextureRect).texture.resource_path == "res://art/ui/card_inspector_scroll.png"
+		and not (grid.get_node("TopRod") as Control).visible
+		and not (grid.get_node("BottomRod") as Control).visible
+		and (inspector_parchment.get_node("Artwork") as TextureRect).visible
 		and (inspector_parchment.get_node("Artwork") as TextureRect).texture != null
 		and not (inspector_parchment.get_node("TopRod") as Control).visible
 		and not (inspector_parchment.get_node("BottomRod") as Control).visible,
-		"Inspector uses generated parchment artwork instead of code-drawn rods"
+		"Library and inspector use the same generated parchment artwork instead of code-drawn rods"
 	)
 	var top_indices: Array[int] = grid.debug_get_bound_indices()
 	_check(top_indices.min() == 0 and top_indices.max() == 19, "Top pool covers five four-card rows without creating all slots")

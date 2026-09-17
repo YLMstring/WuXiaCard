@@ -34,7 +34,33 @@ func _run() -> void:
 
 	var replay_button := duel.get_node_or_null("DuelCanvas/ReplayButton") as Button
 	var replay_icon := duel.get_node_or_null("DuelCanvas/ReplayButton/ReplayIcon") as TextureRect
+	var player_hand := duel.get_node_or_null("DuelCanvas/PlayerHand") as HBoxContainer
+	var return_button := duel.get_node_or_null("DuelCanvas/PostMatchReturnButton") as Button
 	_check(replay_button != null, "Duel scene contains a replay button")
+	_check(player_hand != null and player_hand.visible, "Active duel displays the player hand")
+	_check(
+		return_button != null and not return_button.visible and return_button.text == "打道回府",
+		"Post-match return action starts hidden"
+	)
+	if return_button != null:
+		var return_style := return_button.get_theme_stylebox("normal") as StyleBoxTexture
+		_check(
+			return_style != null
+			and return_style.texture != null
+			and return_style.texture.resource_path == "res://art/ui/selection_primary_ink.png",
+			"Post-match return action uses the shared ink-brush button artwork"
+		)
+		return_button.button_down.emit()
+		_check(
+			return_button.scale.is_equal_approx(Vector2(0.96, 0.96)),
+			"Post-match return touch-down matches the other bottom actions"
+		)
+		return_button.button_up.emit()
+		await create_timer(0.14).timeout
+		_check(
+			return_button.scale.is_equal_approx(Vector2.ONE),
+			"Post-match return touch feedback springs back on release"
+		)
 	if replay_button != null:
 		_check(replay_button.flat and replay_button.text.is_empty(), "Replay control is icon-only and frame-free")
 		_check(replay_button.icon == null, "Replay button leaves built-in icon rendering unused")
@@ -95,6 +121,10 @@ func _run() -> void:
 		action_count += 1
 
 	_check(duel.debug_is_complete(), "Replay fixture reaches a completed duel")
+	_check(
+		player_hand != null and not player_hand.visible and return_button != null and return_button.visible,
+		"Completed duel replaces the player hand with the return action"
+	)
 	_check(duel.debug_is_replay_ready(), "Completed duel produces a ready replay")
 	_check(duel.debug_get_replay_action_count() == action_count, "Every successful real action is recorded exactly once")
 	_check(duel.debug_get_replay_initial_decks() == opening_side_decks, "Replay preserves exact shuffled opening side decks")
@@ -108,12 +138,20 @@ func _run() -> void:
 	duel.debug_start_replay()
 	await process_frame
 	_check(duel.debug_is_replaying(), "Completed replay request starts playback")
+	_check(
+		player_hand != null and player_hand.visible and return_button != null and not return_button.visible,
+		"Replay restores the player hand until playback completes"
+	)
 	_check(not await duel.debug_start_replay(), "Replay request during playback is a no-op")
 	var replay_frames: int = 0
 	while duel.debug_is_replaying() and replay_frames < 1000:
 		await process_frame
 		replay_frames += 1
 	_check(not duel.debug_is_replaying(), "Replay finishes within the safety frame bound")
+	_check(
+		player_hand != null and not player_hand.visible and return_button != null and return_button.visible,
+		"Finishing replay restores the post-match return action"
+	)
 	_check(StateKey.build(duel.duel_state) == final_key, "Replay reconstructs the exact final logical state")
 	_check(duel.debug_get_match_outcome() == final_outcome, "Replay preserves the original outcome")
 	_check((duel.get_node("DuelCanvas/TurnStatus") as Label).text == final_status, "Replay restores the original final status")
@@ -189,6 +227,11 @@ func _run() -> void:
 
 	var returned_outcomes: Array[StringName] = []
 	duel.return_requested.connect(func(outcome: StringName) -> void: returned_outcomes.append(outcome))
+	return_button.pressed.emit()
+	await process_frame
+	_check(returned_outcomes == [final_outcome], "Bottom return action emits the completed outcome")
+	duel.set("_return_emitted", false)
+	returned_outcomes.clear()
 	duel.replay_turn_delay = 0.2
 	duel.debug_start_replay()
 	wait_frames = 0

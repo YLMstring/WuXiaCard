@@ -7,6 +7,7 @@ const Enemies = preload("res://scripts/enemy_catalog.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
 const Sects = preload("res://scripts/sect_catalog.gd")
 const MenuController = preload("res://scripts/main_menu_controller.gd")
+const ReadmeHelpControllerData = preload("res://scripts/readme_help_controller.gd")
 const SelectorController = preload("res://scripts/sect_selection_controller.gd")
 const RewardController = preload("res://scripts/reward_selection_controller.gd")
 const Settings = preload("res://scripts/game_settings.gd")
@@ -181,6 +182,19 @@ func _run() -> void:
 
 	var menu := flow.debug_get_current_screen() as MenuController
 	_check(menu != null, "Main scene starts at the main menu")
+	var menu_music_context: StringName = flow.debug_get_music_director().debug_get_current_context()
+	(menu.get_node("MenuLayer/Notice/HelpButton") as Button).pressed.emit()
+	await process_frame
+	var help := flow.debug_get_current_screen() as ReadmeHelpControllerData
+	_check(help != null, "Main-menu book entry opens the offline README help page")
+	_check(
+		flow.debug_get_music_director().debug_get_current_context() == menu_music_context,
+		"README help remains in the existing main-menu music context"
+	)
+	(help.get_node("BackButton") as Button).pressed.emit()
+	await process_frame
+	menu = flow.debug_get_current_screen() as MenuController
+	_check(menu != null, "README help back arrow returns to the main menu")
 	var initial_run_reset_button := menu.get_node(
 		"MenuLayer/Actions/RunResetButton"
 	) as Button

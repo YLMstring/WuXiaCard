@@ -13,10 +13,8 @@ const FILTER_BACKGROUND: Color = Color("f1dfb8")
 const FILTER_HOVER_BACKGROUND: Color = Color("f6e8ca")
 const FILTER_PRESSED_BACKGROUND: Color = Color("ddc392")
 const FILTER_BORDER: Color = Color("8b673d")
-const PRIMARY_BACKGROUND: Color = Color("654127")
-const PRIMARY_HOVER_BACKGROUND: Color = Color("765033")
-const PRIMARY_PRESSED_BACKGROUND: Color = Color("51321f")
-const PRIMARY_BORDER: Color = Color("c69a54")
+const PRIMARY_INK_TEXTURE: Texture2D = preload("res://art/ui/selection_primary_ink.png")
+const PRIMARY_INK_REGION: Rect2 = Rect2(140.0, 220.0, 1720.0, 360.0)
 
 var _bottom_enabled: bool = true
 var _button_tweens: Dictionary = {}
@@ -126,24 +124,36 @@ func _style_filter_button(button: Button) -> void:
 
 func _style_primary_button(button: Button) -> void:
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 17)
+	button.add_theme_font_size_override("font_size", 18)
 	for color_name: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		button.add_theme_color_override(color_name, SELECTED_TEXT_COLOR)
 	button.add_theme_stylebox_override(
 		"normal",
-		_make_style(PRIMARY_BACKGROUND, PRIMARY_BORDER, 2, true)
+		_make_ink_style(Color(1.0, 1.0, 1.0, 0.96))
 	)
 	button.add_theme_stylebox_override(
 		"hover",
-		_make_style(PRIMARY_HOVER_BACKGROUND, PRIMARY_BORDER, 2, true)
+		_make_ink_style(Color.WHITE)
 	)
 	button.add_theme_stylebox_override(
 		"pressed",
-		_make_style(PRIMARY_PRESSED_BACKGROUND, PRIMARY_BORDER, 2, false)
+		_make_ink_style(Color(0.82, 0.82, 0.82, 0.94))
 	)
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	button.button_down.connect(_on_button_down.bind(button))
 	button.button_up.connect(_on_button_up.bind(button))
+
+
+func _make_ink_style(modulate_color: Color) -> StyleBoxTexture:
+	var style := StyleBoxTexture.new()
+	style.texture = PRIMARY_INK_TEXTURE
+	style.region_rect = PRIMARY_INK_REGION
+	style.modulate_color = modulate_color
+	style.content_margin_left = 18.0
+	style.content_margin_right = 18.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	return style
 
 
 func _apply_selected_style(button: Button, selected: bool) -> void:

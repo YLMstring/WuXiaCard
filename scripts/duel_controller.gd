@@ -7,6 +7,9 @@ signal opponent_card_played(glyph: String)
 const OUTCOME_VICTORY: StringName = &"victory"
 const OUTCOME_DEFEAT: StringName = &"defeat"
 const OUTCOME_ABANDONED: StringName = &"abandoned"
+const BOTTOM_ACTION_PRESSED_SCALE: Vector2 = Vector2(0.96, 0.96)
+const BOTTOM_ACTION_RELEASE_DURATION: float = 0.10
+const BOTTOM_ACTION_HAPTIC_MS: int = 12
 
 enum TurnState {
 	PLAYER,
@@ -133,6 +136,7 @@ var _is_replaying: bool = false
 var _is_replay_presenting_action: bool = false
 var _replay_generation: int = 0
 var _replay_feedback_tween: Tween = null
+var _post_match_return_feedback_tween: Tween = null
 var _replay_delay_remaining: float = 0.0
 var _undo_last_player_decision_enabled: bool = false
 var _undo_checkpoint_state: StateData = null
@@ -159,6 +163,7 @@ var _is_replaying_opponent_turn: bool = false
 @onready var exit_button: Button = $DuelCanvas/TopBar/ExitButton
 @onready var opponent_hand: HBoxContainer = $DuelCanvas/OpponentHand
 @onready var player_hand: HBoxContainer = $DuelCanvas/PlayerHand
+@onready var post_match_return_button: Button = $DuelCanvas/PostMatchReturnButton
 @onready var replay_button: Button = $DuelCanvas/ReplayButton
 @onready var score_overlay: VBoxContainer = $DuelCanvas/ScoreOverlay
 @onready var opponent_score_panel: PanelContainer = $DuelCanvas/ScoreOverlay/OpponentScorePanel
@@ -222,6 +227,9 @@ func _ready() -> void:
 	top_bar.move_child(enemy_seal, 0)
 	_style_static_ui()
 	exit_button.pressed.connect(_on_exit_pressed)
+	post_match_return_button.pressed.connect(_on_post_match_return_pressed)
+	post_match_return_button.button_down.connect(_on_post_match_return_button_down)
+	post_match_return_button.button_up.connect(_on_post_match_return_button_up)
 	replay_button.pressed.connect(_on_replay_pressed)
 	replay_button.button_down.connect(_on_replay_button_down)
 	replay_button.button_up.connect(_on_replay_button_up)
@@ -230,6 +238,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout_duel)
 	opponent_name.text = opponent_name_text
 	turn_state = TurnState.PLAYER if opening_owner == DuelRules.PLAYER_OWNER else TurnState.OPPONENT
+	_sync_terminal_hand_action()
 	_sync_hand_playability()
 	_update_score()
 	_update_turn_status()
@@ -2203,7 +2212,15 @@ func _finish_match() -> void:
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	if not _is_replaying:
 		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
+	_sync_terminal_hand_action()
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
+
+
+func _sync_terminal_hand_action() -> void:
+	# 终局时用归程按钮占据玩家手牌区；完整回放期间恢复手牌，便于观看每一步。
+	var show_return_button: bool = turn_state == TurnState.COMPLETE and not _is_replaying
+	player_hand.visible = not show_return_button
+	post_match_return_button.visible = show_return_button
 
 
 func _sync_hand_playability() -> void:
@@ -2954,6 +2971,14 @@ func _layout_duel() -> void:
 	opponent_hand.size = Vector2(available_hand_width, hand_height)
 	player_hand.position = Vector2(horizontal_margin, player_top)
 	player_hand.size = Vector2(available_hand_width, hand_height)
+	var return_button_size := Vector2(
+		player_hand.size.x * 0.60,
+		clampf(player_hand.size.y * 0.50, 54.0, 68.0)
+	)
+	post_match_return_button.position = (
+		player_hand.position + (player_hand.size - return_button_size) * 0.5
+	)
+	post_match_return_button.size = return_button_size
 	board_grid.position = board_position
 	board_grid.size = Vector2(board_width, board_height)
 	replay_button.size = Vector2(44.0, 44.0)
@@ -3327,6 +3352,38 @@ func _play_replay_button_feedback(
 	_replay_feedback_tween.tween_property(replay_button, "modulate:a", target_alpha, duration)
 
 
+func _on_post_match_return_button_down() -> void:
+	_kill_post_match_return_feedback()
+	post_match_return_button.pivot_offset = post_match_return_button.size * 0.5
+	post_match_return_button.scale = BOTTOM_ACTION_PRESSED_SCALE
+
+
+func _on_post_match_return_button_up() -> void:
+	_kill_post_match_return_feedback()
+	_post_match_return_feedback_tween = post_match_return_button.create_tween()
+	_post_match_return_feedback_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_post_match_return_feedback_tween.tween_property(
+		post_match_return_button,
+		"scale",
+		Vector2.ONE,
+		BOTTOM_ACTION_RELEASE_DURATION
+	)
+
+
+func _on_post_match_return_pressed() -> void:
+	_vibrate(BOTTOM_ACTION_HAPTIC_MS)
+	_on_exit_pressed()
+
+
+func _kill_post_match_return_feedback() -> void:
+	if (
+		_post_match_return_feedback_tween != null
+		and _post_match_return_feedback_tween.is_valid()
+	):
+		_post_match_return_feedback_tween.kill()
+	_post_match_return_feedback_tween = null
+
+
 func _start_replay() -> bool:
 	if (
 		turn_state != TurnState.COMPLETE
@@ -3339,6 +3396,7 @@ func _start_replay() -> bool:
 	var generation: int = _replay_generation
 	_is_replaying = true
 	_is_replay_presenting_action = false
+	_sync_terminal_hand_action()
 	var initial_state: StateData = _replay_record.get_initial_state()
 	if initial_state == null:
 		_restore_completed_replay_state("Replay initial state is unavailable")
@@ -3378,6 +3436,7 @@ func _start_replay() -> bool:
 	_match_outcome = _replay_record.get_outcome()
 	turn_status.text = _replay_record.get_final_status()
 	turn_status.modulate = Color.WHITE
+	_sync_terminal_hand_action()
 	_sync_hand_playability()
 	_update_score()
 	return true
@@ -3411,6 +3470,7 @@ func _restore_completed_replay_state(reason: String) -> void:
 	_match_outcome = _replay_record.get_outcome()
 	turn_status.text = _replay_record.get_final_status()
 	turn_status.modulate = Color.WHITE
+	_sync_terminal_hand_action()
 	_sync_hand_playability()
 	_update_score()
 

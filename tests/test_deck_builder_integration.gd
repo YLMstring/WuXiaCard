@@ -250,11 +250,18 @@ func _run() -> void:
 	var detail_actions := canvas.get_node("SelectionDetailActions") as Control
 	var top_actions := detail_actions.get_node("TopActions") as HBoxContainer
 	var bottom_action := detail_actions.get_node("BottomAction") as Button
+	var bottom_style := bottom_action.get_theme_stylebox("normal") as StyleBoxTexture
 	_check(
 		String((top_actions.get_child(0) as Button).text) == "筛选同品阶"
 		and String((top_actions.get_child(1) as Button).text) == "筛选同门派"
 		and String((top_actions.get_child(2) as Button).text) == "筛选同类别",
 		"Deck-builder details expose the three approved filters"
+	)
+	_check(
+		bottom_style != null
+		and bottom_style.texture != null
+		and bottom_style.texture.resource_path == "res://art/ui/selection_primary_ink.png",
+		"Bottom detail action uses the reusable blank ink-brush artwork"
 	)
 
 	var full_profile: Dictionary = builder.debug_get_profile()

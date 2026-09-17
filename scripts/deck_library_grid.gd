@@ -10,7 +10,15 @@ signal drag_ended(logical_index: int, pointer_position: Vector2)
 
 const SLOT_SCENE: PackedScene = preload("res://scenes/deck_library_slot.tscn")
 const SlotLayoutData = preload("res://scripts/deck_library_slot.gd")
-const ParchmentChromeData = preload("res://scripts/parchment_chrome.gd")
+const OLD_BODY_INSET: Vector2 = Vector2(4.0, 7.0)
+# 与卡牌详情共用同一张卷轴图，并把图中亮色布面精确映射到旧正文区域。
+# 正文空间完全不变，木轴和外部装饰只向旧边界之外延伸。
+const ARTWORK_CLOTH_UV_RECT: Rect2 = Rect2(
+	75.0 / 1024.0,
+	129.0 / 1536.0,
+	873.0 / 1024.0,
+	1281.0 / 1536.0
+)
 const COLUMN_COUNT: int = 4
 const TOTAL_SLOTS: int = 1000
 const TOTAL_ROWS: int = 250
@@ -57,6 +65,7 @@ var _total_rows: int = TOTAL_ROWS
 var _pooled_rows: int = POOLED_ROWS
 
 @onready var shadow: Panel = $Shadow
+@onready var artwork: TextureRect = $Artwork
 @onready var body: PanelContainer = $Body
 @onready var top_rod: Panel = $TopRod
 @onready var bottom_rod: Panel = $BottomRod
@@ -237,7 +246,23 @@ func _create_pool() -> void:
 
 
 func _queue_layout_grid() -> void:
+	_layout_parchment_artwork()
 	_layout_grid.call_deferred()
+
+
+func _layout_parchment_artwork() -> void:
+	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
+		return
+	var old_body_rect := Rect2(
+		OLD_BODY_INSET,
+		size - OLD_BODY_INSET * 2.0
+	)
+	var artwork_size := Vector2(
+		old_body_rect.size.x / ARTWORK_CLOTH_UV_RECT.size.x,
+		old_body_rect.size.y / ARTWORK_CLOTH_UV_RECT.size.y
+	)
+	artwork.position = old_body_rect.position - artwork_size * ARTWORK_CLOTH_UV_RECT.position
+	artwork.size = artwork_size
 
 
 func _layout_grid() -> void:
@@ -506,4 +531,8 @@ func _set_drag_scroll_locked(value: bool) -> void:
 
 
 func _style_parchment() -> void:
-	ParchmentChromeData.apply(shadow, body, top_rod, bottom_rod)
+	shadow.visible = false
+	top_rod.visible = false
+	bottom_rod.visible = false
+	artwork.visible = true
+	body.add_theme_stylebox_override("panel", StyleBoxEmpty.new())

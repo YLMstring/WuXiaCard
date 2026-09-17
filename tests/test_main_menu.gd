@@ -20,6 +20,8 @@ func _run() -> void:
 	var run_reset_button := menu.get_node("MenuLayer/Actions/RunResetButton") as Button
 	var progress_reset_button := menu.get_node("MenuLayer/Actions/ProgressResetButton") as Button
 	var notice := menu.get_node("MenuLayer/Notice") as Label
+	var help_button := menu.get_node("MenuLayer/Notice/HelpButton") as Button
+	var help_icon := menu.get_node("MenuLayer/Notice/HelpButton/Icon") as TextureRect
 	var artwork := menu.get_node("Artwork") as TextureRect
 	var title := menu.get_node("MenuLayer/Title") as Label
 	_check(title.text.is_empty(), "Title text is replaced")
@@ -27,6 +29,12 @@ func _run() -> void:
 	_check(run_reset_button.text.is_empty(), "Run-reset text is replaced")
 	_check(progress_reset_button.text.is_empty(), "Progress-reset text is replaced")
 	_check(notice.text.is_empty(), "Notice starts empty")
+	_check(help_button.visible, "Empty notice area displays the help-book button")
+	_check(
+		help_icon.texture != null
+		and help_icon.texture.resource_path == "res://art/ui/help_book.png",
+		"Help entry uses the bundled book artwork"
+	)
 	_check(artwork.texture != null, "Main-menu artwork texture is always assigned")
 	_check(
 		artwork.texture.get_width() == 1080 and artwork.texture.get_height() == 2400,
@@ -82,6 +90,7 @@ func _run() -> void:
 		"run_reset": 0,
 		"progress_reset": 0,
 		"progression_unlock": 0,
+		"help": 0,
 	}
 	menu.journey_requested.connect(
 		func() -> void: signal_counts["journey"] = int(signal_counts["journey"]) + 1
@@ -97,6 +106,11 @@ func _run() -> void:
 		func() -> void:
 			signal_counts["progression_unlock"] = int(signal_counts["progression_unlock"]) + 1
 	)
+	menu.help_requested.connect(
+		func() -> void: signal_counts["help"] = int(signal_counts["help"]) + 1
+	)
+	help_button.pressed.emit()
+	_check(int(signal_counts["help"]) == 1, "Book entry requests the offline help page")
 
 	progress_reset_button.pressed.emit()
 	_check(menu.debug_get_progression_unlock_step() == 0, "Unlock gesture cannot start from full reset")
@@ -123,6 +137,7 @@ func _run() -> void:
 
 	run_reset_button.pressed.emit()
 	_check(notice.text == "再按四次\n放弃本局", "Run-reset countdown starts at four in two lines")
+	_check(not help_button.visible, "A visible notice hides the help-book button")
 	for press_index: int in range(3):
 		run_reset_button.pressed.emit()
 	_check(int(signal_counts["run_reset"]) == 0, "Four run-reset presses do not confirm")
@@ -130,6 +145,7 @@ func _run() -> void:
 	run_reset_button.pressed.emit()
 	_check(int(signal_counts["run_reset"]) == 1, "The fifth run-reset press confirms")
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Confirmation clears run counter")
+	_check(help_button.visible, "Clearing a notice restores the help-book button")
 
 	progress_reset_button.pressed.emit()
 	_check(notice.text == "再按九次\n删档重来", "Progress-reset countdown starts at nine in two lines")
@@ -151,12 +167,14 @@ func _run() -> void:
 	_check(int(signal_counts["journey"]) == journey_count_before_unlock + 1, "Journey action emits once")
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Journey cancels both countdowns")
 	_check(notice.text.is_empty(), "Journey clears countdown notice")
+	_check(help_button.visible, "Journey restores the help entry after clearing countdown text")
 
 	menu.debug_set_confirmation_timeout(0.03)
 	run_reset_button.pressed.emit()
 	await create_timer(0.06).timeout
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Run countdown expires")
 	_check(notice.text.is_empty(), "Expired countdown clears its notice")
+	_check(help_button.visible, "Expired notice restores the help entry")
 	progress_reset_button.pressed.emit()
 	await create_timer(0.06).timeout
 	_check(menu.debug_get_confirmation_counts() == Vector2i.ZERO, "Progress countdown expires")
@@ -179,6 +197,7 @@ func _run() -> void:
 		"Normal-phone layout places the notice directly above the illustrated grid"
 	)
 	_check(notice.size.y >= 52.0, "Notice has enough height for two text lines")
+	_check(help_button.size.x >= 52.0 and help_button.size.y >= 52.0, "Help book remains touch-sized")
 	menu.size = Vector2(540.0, 1200.0)
 	await process_frame
 	var long_artwork: Rect2 = menu.debug_get_artwork_rect()
