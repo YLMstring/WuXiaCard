@@ -3,6 +3,8 @@ extends RefCounted
 
 const INTERNAL_LINK_PREFIX: String = "section:"
 const HEADING_SIZES: Array[int] = [30, 24, 20, 18, 17, 16]
+const MEDIUM_EMPHASIS_OPEN: String = "[outline_size=1][outline_color=#38261a]"
+const MEDIUM_EMPHASIS_CLOSE: String = "[/outline_color][/outline_size]"
 
 
 static func convert(markdown: String) -> Dictionary:
@@ -54,8 +56,13 @@ static func convert(markdown: String) -> Dictionary:
 			var heading_text: String = stripped.substr(heading_level + 1)
 			var font_size: int = HEADING_SIZES[mini(heading_level - 1, HEADING_SIZES.size() - 1)]
 			output.append(
-				"[font_size=%d][b][color=#38261a]%s[/color][/b][/font_size]"
-				% [font_size, _format_inline(heading_text)]
+				"[font_size=%d]%s[color=#38261a]%s[/color]%s[/font_size]"
+				% [
+					font_size,
+					MEDIUM_EMPHASIS_OPEN,
+					_format_inline(heading_text),
+					MEDIUM_EMPHASIS_CLOSE,
+				]
 			)
 			rendered_line += 1
 			line_index += 1
@@ -175,7 +182,11 @@ static func _format_inline(source: String) -> String:
 		if source.substr(cursor, 2) == "**":
 			var bold_end: int = source.find("**", cursor + 2)
 			if bold_end >= 0:
-				result += "[b]%s[/b]" % _escape_bbcode(source.substr(cursor + 2, bold_end - cursor - 2))
+				result += "%s%s%s" % [
+					MEDIUM_EMPHASIS_OPEN,
+					_escape_bbcode(source.substr(cursor + 2, bold_end - cursor - 2)),
+					MEDIUM_EMPHASIS_CLOSE,
+				]
 				cursor = bold_end + 2
 				continue
 		if source[cursor] == "`":

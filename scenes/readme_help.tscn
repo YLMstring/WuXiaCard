@@ -84,7 +84,7 @@ bbcode_enabled = true
 fit_content = false
 scroll_active = true
 scroll_following = false
-selection_enabled = true
+selection_enabled = false
 context_menu_enabled = false
 language = "zh"
 

@@ -31,11 +31,33 @@ func _run() -> void:
 	var converted: Dictionary = Markdown.convert(sample)
 	var bbcode: String = String(converted.get("bbcode", ""))
 	var anchors: Dictionary = converted.get("anchors", {}) as Dictionary
-	_check(bbcode.contains("[b]重点[/b]"), "Markdown converter preserves bold emphasis")
+	_check(
+		bbcode.contains(
+			"[outline_size=1][outline_color=#38261a]重点[/outline_color][/outline_size]"
+		)
+		and not bbcode.contains("[b]重点[/b]"),
+		"Markdown bold uses the readable medium-emphasis style"
+	)
+	_check(
+		bbcode.contains(
+			"[font_size=30][outline_size=1][outline_color=#38261a]"
+			+ "[color=#38261a]标题[/color][/outline_color][/outline_size][/font_size]"
+		)
+		and not bbcode.contains("[font_size=30][b]"),
+		"Markdown headings use the same readable medium-emphasis style"
+	)
 	_check(bbcode.contains("section:chapter"), "Markdown converter emits an internal section link")
 	_check(not bbcode.contains("https://example.com"), "External targets are not made actionable")
 	_check(bbcode.contains("[lb]示例[rb]"), "Code blocks escape BBCode delimiters")
 	_check(anchors.has("toc") and anchors.has("chapter"), "HTML anchors become local scroll targets")
+	var readme_source: String = FileAccess.get_file_as_string("res://README.md")
+	var rules_start: int = readme_source.find("<a id=\"rules-reference\"></a>")
+	var technical_start: int = readme_source.find("<a id=\"technical-details\"></a>")
+	var rules_section: String = readme_source.substr(rules_start, technical_start - rules_start)
+	_check(
+		rules_section.count("[返回目录](#toc)") == 10,
+		"Every child section under the detailed rules has its own return-to-contents link"
+	)
 
 	var help := HELP_SCENE.instantiate() as HelpController
 	help.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
@@ -64,6 +86,7 @@ func _run() -> void:
 		"Help page does not repeat a title or divider above the README"
 	)
 	_check(document != null and document.bbcode_enabled, "Help page uses a BBCode-enabled rich document")
+	_check(not document.selection_enabled, "Help text cannot enter selection mode during touch scrolling")
 	_check(
 		document.get_v_scroll_bar().modulate.a == 0.0,
 		"Help page keeps scrolling available without displaying its scrollbar"
