@@ -94,7 +94,7 @@ func _ready() -> void:
 		opponent_name,
 		back_button
 	)
-	SelectionShell.style_bottom_status(status_label, card_inspector)
+	SelectionShell.style_bottom_status(status_label)
 	SelectionShell.create_hand_slots(opponent_hand)
 	SelectionShell.create_hand_slots(player_hand)
 	_refresh_preview_hand(

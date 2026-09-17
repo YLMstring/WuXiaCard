@@ -177,7 +177,7 @@ var _is_replaying_opponent_turn: bool = false
 
 
 func _ready() -> void:
-	DuelBackdropData.style_bottom_status(turn_status, card_inspector)
+	DuelBackdropData.style_bottom_status(turn_status)
 	board_cards.resize(9)
 	board_cards.fill(null)
 	_create_board_cells()

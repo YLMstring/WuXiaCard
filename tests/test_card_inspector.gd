@@ -40,8 +40,11 @@ func _run() -> void:
 	await process_frame
 
 	var parchment: Control = inspector.get_node("Parchment") as Control
+	var backdrop: ColorRect = inspector.get_node("Backdrop") as ColorRect
+	var artwork: TextureRect = inspector.get_node("Parchment/Artwork") as TextureRect
 	var parchment_shadow: Control = inspector.get_node("Parchment/Shadow") as Control
 	var parchment_body: Control = inspector.get_node("Parchment/Body") as Control
+	var margin: MarginContainer = inspector.get_node("Parchment/Body/Margin") as MarginContainer
 	var content: VBoxContainer = inspector.get_node("Parchment/Body/Margin/Scroll/Content") as VBoxContainer
 	var title: Label = content.get_node("Title") as Label
 	var tags: HBoxContainer = content.get_node("Tags") as HBoxContainer
@@ -58,7 +61,44 @@ func _run() -> void:
 		"Exports include ICU text-server data for proper Chinese line breaking"
 	)
 	_check(bool(inspector.call("is_open")), "Present opens the inspector")
-	_check(parchment.position.is_equal_approx(board_rect.position) and parchment.size.is_equal_approx(board_rect.size), "Parchment exactly occupies the supplied board rectangle")
+	_check(backdrop.color.a == 0.0, "Inspector backdrop intercepts input without tinting the surrounding scene")
+	_check(
+		parchment.position.x < board_rect.position.x
+		and parchment.position.y < board_rect.position.y
+		and parchment.position.x + parchment.size.x > board_rect.end.x
+		and parchment.position.y + parchment.size.y > board_rect.end.y,
+		"Decorative parchment extends beyond the former board rectangle"
+	)
+	_check(
+		(parchment.position + parchment_body.position).is_equal_approx(
+			board_rect.position + Vector2(4.0, 7.0)
+		)
+		and parchment_body.size.is_equal_approx(board_rect.size - Vector2(8.0, 14.0)),
+		"Inspector text body keeps the old scroll geometry"
+	)
+	var cloth_uv_rect := Rect2(
+		75.0 / 1024.0,
+		129.0 / 1536.0,
+		873.0 / 1024.0,
+		1281.0 / 1536.0
+	)
+	_check(
+		(parchment.position + parchment.size * cloth_uv_rect.position).is_equal_approx(
+			board_rect.position + Vector2(4.0, 7.0)
+		)
+		and (parchment.size * cloth_uv_rect.size).is_equal_approx(
+			board_rect.size - Vector2(8.0, 14.0)
+		),
+		"Visible generated cloth exactly matches the old scroll cloth rectangle"
+	)
+	_check(
+		margin.get_theme_constant("margin_left") == 20
+		and margin.get_theme_constant("margin_top") == 20
+		and margin.get_theme_constant("margin_right") == 20
+		and margin.get_theme_constant("margin_bottom") == 18,
+		"Inspector text body keeps the old scroll content margins"
+	)
+	_check(artwork.visible and artwork.texture != null, "Inspector displays the generated scroll artwork")
 	_check(not parchment_shadow.visible and parchment_body.visible, "Inspector parchment hides its shadow without hiding the scroll body")
 	_check(title.text == "苍松迎客", "Glyph is displayed as the card name")
 	_check(sect_value.text == "华山派" and tier_value.text == "不凡" and weapon_value.text == "剑法", "Sect, tier, and weapon values are populated")

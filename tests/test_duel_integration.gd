@@ -140,7 +140,6 @@ func _check_layout(duel: Node) -> void:
 	var player_hand := duel.get_node("DuelCanvas/PlayerHand") as HBoxContainer
 	var board_grid := duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
 	var turn_status := duel.get_node("DuelCanvas/TurnStatus") as Label
-	var card_inspector := duel.get_node("DuelCanvas/CardInspector") as Control
 	var top_gap: float = board_grid.position.y - (opponent_hand.position.y + opponent_hand.size.y)
 	var bottom_gap: float = player_hand.position.y - (board_grid.position.y + board_grid.size.y)
 	var board_center_x: float = board_grid.position.x + board_grid.size.x * 0.5
@@ -154,10 +153,6 @@ func _check_layout(duel: Node) -> void:
 		turn_status.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and turn_status.modulate.is_equal_approx(Color.WHITE),
 		"Battle bottom status uses the perceptually matched flavor color"
-	)
-	_check(
-		turn_status.z_index > card_inspector.z_index,
-		"Battle bottom status renders above the inspector dimming backdrop"
 	)
 
 
@@ -1434,10 +1429,20 @@ func _check_card_inspector_modal() -> void:
 		"Inspector blocks duel actions without changing logical state"
 	)
 	var parchment: Control = inspector.get_node("Parchment") as Control
+	var parchment_body: Control = inspector.get_node("Parchment/Body") as Control
 	_check(
-		parchment.position.is_equal_approx(board_grid.position)
-		and parchment.size.is_equal_approx(board_grid.size),
-		"Inspector parchment exactly tracks the responsive board rectangle"
+		parchment.position.x < board_grid.position.x
+		and parchment.position.y < board_grid.position.y
+		and parchment.position.x + parchment.size.x > board_grid.position.x + board_grid.size.x
+		and parchment.position.y + parchment.size.y > board_grid.position.y + board_grid.size.y,
+		"Inspector parchment decoration grows beyond the responsive board rectangle"
+	)
+	_check(
+		(parchment.position + parchment_body.position).is_equal_approx(
+			board_grid.position + Vector2(4.0, 7.0)
+		)
+		and parchment_body.size.is_equal_approx(board_grid.size - Vector2(8.0, 14.0)),
+		"Inspector text body retains the old responsive board geometry"
 	)
 	inspect_duel.debug_close_inspection()
 	await process_frame

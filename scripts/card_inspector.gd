@@ -8,6 +8,20 @@ signal inspection_closed
 const PLACEHOLDER: String = "—"
 const DESCRIPTION_COLOR: Color = Color(0.2, 0.15, 0.1, 1)
 const EffectTextFormatter = preload("res://scripts/card_effect_text_formatter.gd")
+const OLD_BODY_INSET: Vector2 = Vector2(4.0, 7.0)
+const OLD_MARGIN_LEFT: int = 20
+const OLD_MARGIN_TOP: int = 20
+const OLD_MARGIN_RIGHT: int = 20
+const OLD_MARGIN_BOTTOM: int = 18
+# The bright cloth area inside the generated 1024x1536 artwork. Mapping this
+# rectangle onto the old body rect preserves the old visible parchment size;
+# the rods and transparent decoration are allowed to extend beyond it.
+const ARTWORK_CLOTH_UV_RECT: Rect2 = Rect2(
+	75.0 / 1024.0,
+	129.0 / 1536.0,
+	873.0 / 1024.0,
+	1281.0 / 1536.0
+)
 
 var _open: bool = false
 var _pointer_active: bool = false
@@ -67,20 +81,32 @@ func present(card_data: Dictionary, board_rect: Rect2) -> void:
 
 
 func set_board_rect(board_rect: Rect2) -> void:
-	parchment.position = board_rect.position
-	parchment.size = board_rect.size
 	var short_side: float = maxf(1.0, minf(board_rect.size.x, board_rect.size.y))
-	var side_margin: int = clampi(roundi(short_side * 0.075), 20, 30)
-	margin.add_theme_constant_override("margin_left", side_margin)
-	margin.add_theme_constant_override("margin_right", side_margin)
-	margin.add_theme_constant_override(
-		"margin_top",
-		clampi(roundi(short_side * 0.105), 28, 42)
+	var old_body_rect := Rect2(
+		board_rect.position + OLD_BODY_INSET,
+		board_rect.size - OLD_BODY_INSET * 2.0
 	)
-	margin.add_theme_constant_override(
-		"margin_bottom",
-		clampi(roundi(short_side * 0.070), 18, 28)
+	var artwork_size := Vector2(
+		old_body_rect.size.x / ARTWORK_CLOTH_UV_RECT.size.x,
+		old_body_rect.size.y / ARTWORK_CLOTH_UV_RECT.size.y
 	)
+	parchment.position = (
+		old_body_rect.position - artwork_size * ARTWORK_CLOTH_UV_RECT.position
+	)
+	parchment.size = artwork_size
+
+	# The generated image grows beyond the former scroll bounds, while the live
+	# text body keeps the exact geometry and margins of the old code-drawn scroll.
+	body.anchor_left = 0.0
+	body.anchor_top = 0.0
+	body.anchor_right = 0.0
+	body.anchor_bottom = 0.0
+	body.position = old_body_rect.position - parchment.position
+	body.size = old_body_rect.size
+	margin.add_theme_constant_override("margin_left", OLD_MARGIN_LEFT)
+	margin.add_theme_constant_override("margin_top", OLD_MARGIN_TOP)
+	margin.add_theme_constant_override("margin_right", OLD_MARGIN_RIGHT)
+	margin.add_theme_constant_override("margin_bottom", OLD_MARGIN_BOTTOM)
 	title.add_theme_font_size_override("font_size", clampi(int(short_side * 0.085), 22, 32))
 	_description_font_size = clampi(int(short_side * 0.046), 14, 18)
 	for paragraph: Label in _description_labels():

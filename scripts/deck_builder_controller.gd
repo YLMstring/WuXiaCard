@@ -81,7 +81,7 @@ func _ready() -> void:
 	profile = _profile_store.load_profile()
 	_player_hand_default_child_index = player_hand.get_index()
 	_style_header()
-	SelectionShell.style_bottom_status(status_label, card_inspector)
+	SelectionShell.style_bottom_status(status_label)
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
 	library_grid.set_ki_badges_enabled(true)

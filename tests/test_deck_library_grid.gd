@@ -51,18 +51,17 @@ func _run() -> void:
 		"Library and inspector hide only the shared parchment shadow"
 	)
 	_check(
-		(grid.get_node("Shadow") as Control).position.is_equal_approx((inspector_parchment.get_node("Shadow") as Control).position)
-		and (grid.get_node("Shadow") as Control).size.is_equal_approx((inspector_parchment.get_node("Shadow") as Control).size)
-		and (grid.get_node("Body") as Control).position.is_equal_approx((inspector_parchment.get_node("Body") as Control).position)
-		and (grid.get_node("Body") as Control).size.is_equal_approx((inspector_parchment.get_node("Body") as Control).size),
-		"Library shadow and body exactly match inspector parchment geometry"
+		(grid.get_node("Body") as Control).size.is_equal_approx(
+			(inspector_parchment.get_node("Body") as Control).size
+		),
+		"Library and inspector retain the same usable body size"
 	)
 	_check(
-		(grid.get_node("TopRod") as Control).position.is_equal_approx((inspector_parchment.get_node("TopRod") as Control).position)
-		and (grid.get_node("TopRod") as Control).size.is_equal_approx((inspector_parchment.get_node("TopRod") as Control).size)
-		and (grid.get_node("BottomRod") as Control).position.is_equal_approx((inspector_parchment.get_node("BottomRod") as Control).position)
-		and (grid.get_node("BottomRod") as Control).size.is_equal_approx((inspector_parchment.get_node("BottomRod") as Control).size),
-		"Library rods exactly match inspector parchment geometry"
+		(inspector_parchment.get_node("Artwork") as TextureRect).visible
+		and (inspector_parchment.get_node("Artwork") as TextureRect).texture != null
+		and not (inspector_parchment.get_node("TopRod") as Control).visible
+		and not (inspector_parchment.get_node("BottomRod") as Control).visible,
+		"Inspector uses generated parchment artwork instead of code-drawn rods"
 	)
 	var top_indices: Array[int] = grid.debug_get_bound_indices()
 	_check(top_indices.min() == 0 and top_indices.max() == 19, "Top pool covers five four-card rows without creating all slots")

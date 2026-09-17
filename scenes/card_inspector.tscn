@@ -23,7 +23,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
-color = Color(0.08, 0.055, 0.035, 0.025)
+color = Color(0, 0, 0, 0)
 
 [node name="Parchment" type="Control" parent="."]
 offset_right = 300.0

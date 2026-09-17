@@ -74,10 +74,6 @@ func _run() -> void:
 		and status_label.modulate.is_equal_approx(Color.WHITE),
 		"Deck builder bottom status uses the perceptually matched flavor color"
 	)
-	_check(
-		status_label.z_index > card_inspector.z_index,
-		"Deck builder bottom status renders above the inspector dimming backdrop"
-	)
 	_check(canvas.find_child("ScoreOverlay", true, false) == null, "Deck builder has no score panels")
 	_check(opponent_hand.get_child_count() == 5, "Opponent hand keeps five slots")
 	_check(player_hand.get_child_count() == 5, "Player main deck keeps five slots")
