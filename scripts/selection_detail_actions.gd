@@ -9,6 +9,14 @@ const ACTIVE_TEXT_COLOR: Color = Color("3a2a1c")
 const SELECTED_TEXT_COLOR: Color = Color("f4e2bd")
 const DISABLED_TEXT_COLOR: Color = Color(0.45, 0.43, 0.40, 0.82)
 const PRESSED_SCALE: Vector2 = Vector2(0.96, 0.96)
+const FILTER_BACKGROUND: Color = Color("f1dfb8")
+const FILTER_HOVER_BACKGROUND: Color = Color("f6e8ca")
+const FILTER_PRESSED_BACKGROUND: Color = Color("ddc392")
+const FILTER_BORDER: Color = Color("8b673d")
+const PRIMARY_BACKGROUND: Color = Color("654127")
+const PRIMARY_HOVER_BACKGROUND: Color = Color("765033")
+const PRIMARY_PRESSED_BACKGROUND: Color = Color("51321f")
+const PRIMARY_BORDER: Color = Color("c69a54")
 
 var _bottom_enabled: bool = true
 var _button_tweens: Dictionary = {}
@@ -21,18 +29,28 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for index: int in range(top_actions.get_child_count()):
 		var button := top_actions.get_child(index) as Button
-		_style_button(button)
+		_style_filter_button(button)
 		button.pressed.connect(_on_top_pressed.bind(index))
 	bottom_action.pressed.connect(_on_bottom_pressed)
-	_style_button(bottom_action)
+	_style_primary_button(bottom_action)
 	hide_all()
 
 
 func apply_layout(top_rect: Rect2, bottom_rect: Rect2) -> void:
-	top_actions.position = top_rect.position
-	top_actions.size = top_rect.size
-	bottom_action.position = bottom_rect.position
-	bottom_action.size = bottom_rect.size
+	var top_size := Vector2(
+		top_rect.size.x * 0.84,
+		clampf(top_rect.size.y * 0.48, 50.0, 64.0)
+	)
+	top_actions.position = top_rect.position + (top_rect.size - top_size) * 0.5
+	top_actions.size = top_size
+	top_actions.add_theme_constant_override("separation", 18)
+
+	var bottom_size := Vector2(
+		bottom_rect.size.x * 0.60,
+		clampf(bottom_rect.size.y * 0.50, 54.0, 68.0)
+	)
+	bottom_action.position = bottom_rect.position + (bottom_rect.size - bottom_size) * 0.5
+	bottom_action.size = bottom_size
 
 
 func configure_top_actions(labels: Array, selected_index: int = -1) -> void:
@@ -53,7 +71,7 @@ func configure_bottom_action(label: String, enabled: bool = true) -> void:
 	bottom_action.modulate = Color.WHITE if enabled else Color(0.72, 0.72, 0.72, 0.92)
 	bottom_action.add_theme_color_override(
 		"font_color",
-		ACTIVE_TEXT_COLOR if enabled else DISABLED_TEXT_COLOR
+		SELECTED_TEXT_COLOR if enabled else DISABLED_TEXT_COLOR
 	)
 
 
@@ -89,7 +107,7 @@ func _on_bottom_pressed() -> void:
 	bottom_action_pressed.emit()
 
 
-func _style_button(button: Button) -> void:
+func _style_filter_button(button: Button) -> void:
 	button.focus_mode = Control.FOCUS_NONE
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -98,9 +116,31 @@ func _style_button(button: Button) -> void:
 	button.add_theme_color_override("font_hover_color", ACTIVE_TEXT_COLOR)
 	button.add_theme_color_override("font_pressed_color", ACTIVE_TEXT_COLOR)
 	button.add_theme_color_override("font_focus_color", ACTIVE_TEXT_COLOR)
-	button.add_theme_stylebox_override("normal", _make_style(Color("ead7ad"), Color("795a36"), 1))
-	button.add_theme_stylebox_override("hover", _make_style(Color("f0dfbb"), Color("795a36"), 2))
-	button.add_theme_stylebox_override("pressed", _make_style(Color("d7bd8a"), Color("62462b"), 2))
+	button.add_theme_stylebox_override("normal", _make_style(FILTER_BACKGROUND, FILTER_BORDER, 1, false))
+	button.add_theme_stylebox_override("hover", _make_style(FILTER_HOVER_BACKGROUND, FILTER_BORDER, 2, false))
+	button.add_theme_stylebox_override("pressed", _make_style(FILTER_PRESSED_BACKGROUND, FILTER_BORDER, 2, false))
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	button.button_down.connect(_on_button_down.bind(button))
+	button.button_up.connect(_on_button_up.bind(button))
+
+
+func _style_primary_button(button: Button) -> void:
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 17)
+	for color_name: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		button.add_theme_color_override(color_name, SELECTED_TEXT_COLOR)
+	button.add_theme_stylebox_override(
+		"normal",
+		_make_style(PRIMARY_BACKGROUND, PRIMARY_BORDER, 2, true)
+	)
+	button.add_theme_stylebox_override(
+		"hover",
+		_make_style(PRIMARY_HOVER_BACKGROUND, PRIMARY_BORDER, 2, true)
+	)
+	button.add_theme_stylebox_override(
+		"pressed",
+		_make_style(PRIMARY_PRESSED_BACKGROUND, PRIMARY_BORDER, 2, false)
+	)
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	button.button_down.connect(_on_button_down.bind(button))
 	button.button_up.connect(_on_button_up.bind(button))
@@ -115,17 +155,45 @@ func _apply_selected_style(button: Button, selected: bool) -> void:
 		"font_hover_color",
 		SELECTED_TEXT_COLOR if selected else ACTIVE_TEXT_COLOR
 	)
+	button.add_theme_color_override(
+		"font_pressed_color",
+		SELECTED_TEXT_COLOR if selected else ACTIVE_TEXT_COLOR
+	)
 	button.add_theme_stylebox_override(
 		"normal",
 		_make_style(
-			Color("765438") if selected else Color("ead7ad"),
-			Color("c89554") if selected else Color("795a36"),
-			2 if selected else 1
+			Color("765438") if selected else FILTER_BACKGROUND,
+			Color("c89554") if selected else FILTER_BORDER,
+			2 if selected else 1,
+			false
+		)
+	)
+	button.add_theme_stylebox_override(
+		"hover",
+		_make_style(
+			Color("846041") if selected else FILTER_HOVER_BACKGROUND,
+			Color("d5aa68") if selected else FILTER_BORDER,
+			2,
+			false
+		)
+	)
+	button.add_theme_stylebox_override(
+		"pressed",
+		_make_style(
+			Color("65452f") if selected else FILTER_PRESSED_BACKGROUND,
+			Color("c89554") if selected else FILTER_BORDER,
+			2,
+			false
 		)
 	)
 
 
-func _make_style(background: Color, border: Color, border_width: int) -> StyleBoxFlat:
+func _make_style(
+	background: Color,
+	border: Color,
+	border_width: int,
+	with_shadow: bool
+) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = background
 	style.border_color = border
@@ -135,6 +203,10 @@ func _make_style(background: Color, border: Color, border_width: int) -> StyleBo
 	style.content_margin_right = 10.0
 	style.content_margin_top = 8.0
 	style.content_margin_bottom = 8.0
+	if with_shadow:
+		style.shadow_color = Color(0.20, 0.12, 0.06, 0.24)
+		style.shadow_size = 2
+		style.shadow_offset = Vector2(0.0, 2.0)
 	return style
 
 

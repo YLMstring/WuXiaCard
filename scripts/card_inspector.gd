@@ -7,7 +7,6 @@ signal inspection_closed
 
 const PLACEHOLDER: String = "—"
 const DESCRIPTION_COLOR: Color = Color(0.2, 0.15, 0.1, 1)
-const ParchmentChromeData = preload("res://scripts/parchment_chrome.gd")
 const EffectTextFormatter = preload("res://scripts/card_effect_text_formatter.gd")
 
 var _open: bool = false
@@ -20,10 +19,12 @@ var _description_font_size: int = 15
 var _close_exclusion_controls: Array[Control] = []
 
 @onready var parchment: Control = $Parchment
+@onready var artwork: TextureRect = $Parchment/Artwork
 @onready var shadow: Panel = $Parchment/Shadow
 @onready var body: PanelContainer = $Parchment/Body
 @onready var top_rod: Panel = $Parchment/TopRod
 @onready var bottom_rod: Panel = $Parchment/BottomRod
+@onready var margin: MarginContainer = $Parchment/Body/Margin
 @onready var scroll: ScrollContainer = $Parchment/Body/Margin/Scroll
 @onready var content: VBoxContainer = $Parchment/Body/Margin/Scroll/Content
 @onready var title: Label = $Parchment/Body/Margin/Scroll/Content/Title
@@ -69,6 +70,17 @@ func set_board_rect(board_rect: Rect2) -> void:
 	parchment.position = board_rect.position
 	parchment.size = board_rect.size
 	var short_side: float = maxf(1.0, minf(board_rect.size.x, board_rect.size.y))
+	var side_margin: int = clampi(roundi(short_side * 0.075), 20, 30)
+	margin.add_theme_constant_override("margin_left", side_margin)
+	margin.add_theme_constant_override("margin_right", side_margin)
+	margin.add_theme_constant_override(
+		"margin_top",
+		clampi(roundi(short_side * 0.105), 28, 42)
+	)
+	margin.add_theme_constant_override(
+		"margin_bottom",
+		clampi(roundi(short_side * 0.070), 18, 28)
+	)
 	title.add_theme_font_size_override("font_size", clampi(int(short_side * 0.085), 22, 32))
 	_description_font_size = clampi(int(short_side * 0.046), 14, 18)
 	for paragraph: Label in _description_labels():
@@ -224,7 +236,13 @@ func _display_tier(value: Variant) -> String:
 
 
 func _style_inspector() -> void:
-	ParchmentChromeData.apply(shadow, body, top_rod, bottom_rod)
+	# The parchment chrome is a generated texture; the live body remains a
+	# transparent content layer so no code-drawn inner frame is visible.
+	artwork.visible = true
+	shadow.visible = false
+	top_rod.visible = false
+	bottom_rod.visible = false
+	body.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 
 	for tag: PanelContainer in [sect_tag, tier_tag, weapon_tag]:
 		var tag_style := StyleBoxFlat.new()

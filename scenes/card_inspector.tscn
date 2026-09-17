@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/card_inspector.gd" id="1_inspector"]
+[ext_resource type="Texture2D" path="res://art/ui/card_inspector_scroll.png" id="2_scroll_art"]
 
 [node name="CardInspector" type="Control"]
 visible = false
@@ -29,6 +30,18 @@ offset_right = 300.0
 offset_bottom = 390.0
 mouse_filter = 2
 
+[node name="Artwork" type="TextureRect" parent="Parchment"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_scroll_art")
+expand_mode = 1
+stretch_mode = 0
+
 [node name="Shadow" type="Panel" parent="Parchment"]
 layout_mode = 1
 anchors_preset = 15
@@ -45,6 +58,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Body" type="PanelContainer" parent="Parchment"]
+z_index = 1
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
