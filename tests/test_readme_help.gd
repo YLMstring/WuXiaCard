@@ -44,6 +44,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	var document := help.get_node("Parchment/Body/Margin/Layout/Document") as RichTextLabel
+	var background_artwork := help.get_node("Artwork") as TextureRect
 	var parchment := help.get_node("Parchment") as Control
 	var body := help.get_node("Parchment/Body") as Control
 	var parchment_art := help.get_node("Parchment/Artwork") as TextureRect
@@ -93,13 +94,27 @@ func _run() -> void:
 		"Help page uses the shared generated scroll artwork"
 	)
 	_check(back_button.size.x >= 42.0 and back_button.size.y >= 42.0, "Back control remains touch-sized")
+	var reference_parchment_size: Vector2 = parchment.size
 	help.size = Vector2(540.0, 800.0)
 	await process_frame
 	await process_frame
-	var compact_safe_rect: Rect2 = Backdrop.fit_safe_rect(help.size)
+	var compact_viewport_rect := Rect2(Vector2.ZERO, help.size)
 	_check(
-		compact_safe_rect.encloses(Rect2(parchment.position, parchment.size)),
+		compact_viewport_rect.encloses(Rect2(parchment.position, parchment.size)),
 		"Extra-short screen keeps both scroll rollers fully visible"
+	)
+	_check(
+		is_equal_approx(parchment.size.x, reference_parchment_size.x),
+		"Extra-short screen preserves the scroll width instead of faking height with side pillars"
+	)
+	_check(
+		parchment.size.y < reference_parchment_size.y - 80.0,
+		"Extra-short screen genuinely reduces the scroll height"
+	)
+	_check(
+		background_artwork.position.is_equal_approx(Vector2.ZERO)
+		and background_artwork.size.is_equal_approx(help.size),
+		"Extra-short screen covers the full viewport and crops the background vertically"
 	)
 	_check(
 		body.get_global_rect().encloses(back_button.get_global_rect()),

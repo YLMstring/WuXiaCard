@@ -17,7 +17,7 @@ if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
 }
 $resolvedProject = [System.IO.Path]::GetFullPath($ProjectRoot)
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.2.apk"
+    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.3.apk"
 }
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
 

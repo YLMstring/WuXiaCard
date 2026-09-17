@@ -74,8 +74,12 @@ func _on_back_pressed() -> void:
 func _layout_page() -> void:
 	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
 		return
-	var artwork_rect: Rect2 = BackdropScript.fit_phone_artwork_rect(size)
-	var safe_rect: Rect2 = BackdropScript.fit_safe_rect(size)
+	var viewport_rect := Rect2(Vector2.ZERO, size)
+	var is_short_screen: bool = size.x / size.y > BackdropScript.SAFE_ASPECT
+	var artwork_rect: Rect2 = (
+		viewport_rect if is_short_screen else BackdropScript.fit_phone_artwork_rect(size)
+	)
+	var safe_rect: Rect2 = viewport_rect if is_short_screen else BackdropScript.fit_safe_rect(size)
 	backdrop.call("configure", artwork_rect)
 	background_artwork.position = artwork_rect.position
 	background_artwork.size = artwork_rect.size
