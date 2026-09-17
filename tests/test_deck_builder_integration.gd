@@ -310,17 +310,39 @@ func _run() -> void:
 		"Blocked opening controls explain that the deck needs five cards"
 	)
 
-	var top_library_data: Dictionary = Catalog.create_instance(
-		StringName(String(after_remove["library_slots"][0])),
-		DuelRules.PLAYER_OWNER,
-		&"add_hold"
-	)
-	builder.call("_on_library_hold_recognized", 0, top_library_data)
+	var top_library_slot: Variant = grid.debug_get_bound_slot(0)
+	top_library_slot.debug_begin_pointer(Vector2(10.0, 10.0))
+	top_library_slot.debug_force_hold_timeout()
+	top_library_slot.debug_end_pointer(Vector2(10.0, 10.0))
 	var after_hold_add: Dictionary = builder.debug_get_profile()
 	_check(
 		String(after_hold_add["main_deck"][removed_deck_index]) == removed_card_id
 		and builder.debug_can_go_second(),
 		"Holding a collection card fills the first empty deck slot"
+	)
+
+	var hand_refresh_index: int = 3
+	var hand_refresh_id: String = String(after_hold_add["main_deck"][hand_refresh_index])
+	var hand_refresh_slot := player_hand.get_child(hand_refresh_index) as PanelContainer
+	var hand_refresh_card := hand_refresh_slot.get_child(0) as CardView
+	hand_refresh_card.call("_begin_pointer_gesture", Vector2(10.0, 10.0), -1)
+	hand_refresh_card.call("_on_hold_timeout")
+	await process_frame
+	var after_hand_hold_remove: Dictionary = builder.debug_get_profile()
+	var refreshed_library_slot: Variant = grid.debug_get_bound_slot(0)
+	_check(
+		String(after_hand_hold_remove["main_deck"][hand_refresh_index]).is_empty()
+		and String(after_hand_hold_remove["library_slots"][0]) == hand_refresh_id
+		and String(refreshed_library_slot.card_data.get("card_id", "")) == hand_refresh_id,
+		"Holding a deck card refreshes the visible collection after a collection hold"
+	)
+	refreshed_library_slot.debug_begin_pointer(Vector2(10.0, 10.0))
+	refreshed_library_slot.debug_force_hold_timeout()
+	refreshed_library_slot.debug_end_pointer(Vector2(10.0, 10.0))
+	var after_hand_hold_restore: Dictionary = builder.debug_get_profile()
+	_check(
+		String(after_hand_hold_restore["main_deck"][hand_refresh_index]) == hand_refresh_id,
+		"A later collection hold still fills the vacancy after a deck-card hold"
 	)
 
 	var detail_remove_index: int = 2
