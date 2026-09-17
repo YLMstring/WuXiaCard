@@ -65,8 +65,9 @@ func _run() -> void:
 		)
 	_check(
 		selector.has_method("debug_get_selected_difficulty")
-		and _selected_difficulty(selector) == 0,
-		"A new selector begins on difficulty zero"
+		and _selected_difficulty(selector) == 0
+		and selector.debug_get_status() == SelectorController.DEFAULT_STATUS,
+		"A new selector begins on difficulty zero with the original prompt"
 	)
 	_check(
 		(canvas.get_node("TopBar/EnemySeal/Value") as Label).text == "友",
@@ -356,8 +357,8 @@ func _run() -> void:
 		_selected_difficulty(selector) == 0
 		and (canvas.get_node("TopBar/OpponentName") as Label).text
 		== selector.upcoming_enemy_name
-		and selector.debug_get_status() == SelectorController.DEFAULT_STATUS,
-		"The right arrow wraps to difficulty zero and restores existing text"
+		and selector.debug_get_status() == SelectorController.ADVANCED_DEFAULT_STATUS,
+		"Unlocked progression changes the difficulty-zero prompt to mention the arrows"
 	)
 	if left_difficulty_button != null:
 		left_difficulty_button.pressed.emit()

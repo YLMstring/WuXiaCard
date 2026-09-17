@@ -13,6 +13,7 @@ const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 
 const DEFAULT_STATUS: String = "轻触门派查看详情"
+const ADVANCED_DEFAULT_STATUS: String = "轻触门派查看详情，点击两侧挑战进阶"
 const LOCKED_STATUS: String = "该门派尚未解锁"
 const DIFFICULTY_ENEMY_PREFIX: String = "江湖门派·进阶"
 const DIFFICULTY_NUMERALS: Array[String] = [
@@ -176,7 +177,11 @@ func debug_get_status() -> String:
 
 func _difficulty_default_status() -> String:
 	if _selected_difficulty <= 0:
-		return DEFAULT_STATUS
+		return (
+			ADVANCED_DEFAULT_STATUS
+			if _max_unlocked_difficulty >= 1
+			else DEFAULT_STATUS
+		)
 	return "进阶%s：%s" % [
 		DIFFICULTY_NUMERALS[_selected_difficulty],
 		Difficulty.get_effect_text(_selected_difficulty),
