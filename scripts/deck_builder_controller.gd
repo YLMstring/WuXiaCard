@@ -16,7 +16,7 @@ const SelectionShell = preload("res://scripts/deck_selection_shell.gd")
 
 const DEFAULT_STATUS: String = "卡牌可轻触或长按，点击两侧进入战斗"
 const INCOMPLETE_DECK_NOTICE: String = "卡组需要五张牌"
-const REPLACE_NOTICE: String = "轻触卡组中的牌可进行替换"
+const REPLACE_NOTICE: String = "轻触下方卡组中的牌可进行替换"
 const GO_FIRST_NOT_HIGHER_NOTICE: String = "卡组总品阶不高于对手时方可选择先攻"
 const ACTIVE_INK_COLOR: Color = Color("1a1513")
 const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)

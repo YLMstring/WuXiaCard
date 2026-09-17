@@ -277,7 +277,7 @@ func _run() -> void:
 		== full_source_id
 		and player_hand.visible
 		and not bottom_action.visible
-		and builder.debug_get_status() == "轻触卡组中的牌可进行替换",
+		and builder.debug_get_status() == "轻触下方卡组中的牌可进行替换",
 		"Holding a collection card against a full deck opens the same replacement details"
 	)
 	card_inspector.close()
@@ -402,7 +402,7 @@ func _run() -> void:
 		builder.debug_is_replacement_target_mode()
 		and player_hand.visible
 		and not bottom_action.visible
-		and builder.debug_get_status() == "轻触卡组中的牌可进行替换",
+		and builder.debug_get_status() == "轻触下方卡组中的牌可进行替换",
 		"A full deck turns its visible cards into replacement targets"
 	)
 	var replacement_target_index: int = 0
