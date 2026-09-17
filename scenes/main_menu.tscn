@@ -85,7 +85,6 @@ mouse_filter = 2
 texture = ExtResource("3_help_book")
 expand_mode = 1
 stretch_mode = 5
-self_modulate = Color(0.31, 0.2, 0.13, 0.96)
 
 [node name="RunResetTimer" type="Timer" parent="." unique_id=1219115360]
 wait_time = 3.0

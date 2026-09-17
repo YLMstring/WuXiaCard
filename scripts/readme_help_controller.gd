@@ -30,6 +30,9 @@ func _ready() -> void:
 	background_artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	body.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	document.meta_clicked.connect(_on_document_meta_clicked)
+	var scroll_bar: VScrollBar = document.get_v_scroll_bar()
+	scroll_bar.modulate.a = 0.0
+	scroll_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back_button.pressed.connect(_on_back_pressed)
 	resized.connect(_layout_page)
 	_load_readme()
@@ -50,7 +53,7 @@ func _load_readme() -> void:
 	file.close()
 	document.text = String(converted.get("bbcode", ""))
 	_anchors = (converted.get("anchors", {}) as Dictionary).duplicate()
-	document.scroll_to_line(0)
+	document.scroll_to_paragraph(0)
 
 
 func _on_document_meta_clicked(meta: Variant) -> void:
@@ -60,7 +63,7 @@ func _on_document_meta_clicked(meta: Variant) -> void:
 	var anchor_id: String = target.trim_prefix(Markdown.INTERNAL_LINK_PREFIX)
 	if not _anchors.has(anchor_id):
 		return
-	document.scroll_to_line(int(_anchors[anchor_id]))
+	document.scroll_to_paragraph(int(_anchors[anchor_id]))
 
 
 func _on_back_pressed() -> void:
@@ -78,31 +81,38 @@ func _layout_page() -> void:
 	background_artwork.size = artwork_rect.size
 
 	var horizontal_inset: float = clampf(safe_rect.size.x * 0.096, 38.0, 54.0)
-	var body_rect := Rect2(
-		Vector2(
-			safe_rect.position.x + horizontal_inset,
-			safe_rect.position.y + safe_rect.size.y * 0.115
-		),
-		Vector2(
-			safe_rect.size.x - horizontal_inset * 2.0,
-			safe_rect.size.y * 0.775
-		)
+	var outer_horizontal_margin: float = clampf(safe_rect.size.x * 0.02, 8.0, 12.0)
+	var outer_vertical_margin: float = clampf(safe_rect.size.y * 0.025, 16.0, 28.0)
+	var desired_body_width: float = safe_rect.size.x - horizontal_inset * 2.0
+	var desired_body_height: float = safe_rect.size.y * 0.775
+	var parchment_width: float = minf(
+		desired_body_width / ARTWORK_CLOTH_UV_RECT.size.x,
+		safe_rect.size.x - outer_horizontal_margin * 2.0
+	)
+	var parchment_height: float = minf(
+		desired_body_height / ARTWORK_CLOTH_UV_RECT.size.y,
+		safe_rect.size.y - outer_vertical_margin * 2.0
 	)
 	var parchment_size := Vector2(
-		body_rect.size.x / ARTWORK_CLOTH_UV_RECT.size.x,
-		body_rect.size.y / ARTWORK_CLOTH_UV_RECT.size.y
+		parchment_width,
+		parchment_height
 	)
-	parchment.position = body_rect.position - parchment_size * ARTWORK_CLOTH_UV_RECT.position
+	parchment.position = safe_rect.position + (safe_rect.size - parchment_size) * 0.5
 	parchment.size = parchment_size
+	var body_rect := Rect2(
+		parchment.position + parchment_size * ARTWORK_CLOTH_UV_RECT.position,
+		parchment_size * ARTWORK_CLOTH_UV_RECT.size
+	)
 	body.position = body_rect.position - parchment.position
 	body.size = body_rect.size
 	parchment_artwork.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var button_size: float = clampf(safe_rect.size.x * 0.085, 42.0, 48.0)
+	var button_margin: float = clampf(body_rect.size.x * 0.025, 8.0, 12.0)
 	back_button.size = Vector2(button_size, button_size)
-	back_button.position = Vector2(
-		safe_rect.end.x - button_size - 14.0,
-		safe_rect.position.y + 14.0
+	back_button.position = body_rect.position + Vector2(
+		body_rect.size.x - button_size - button_margin,
+		button_margin
 	)
 
 

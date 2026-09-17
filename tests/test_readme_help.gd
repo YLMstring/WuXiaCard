@@ -3,6 +3,7 @@ extends SceneTree
 const HELP_SCENE: PackedScene = preload("res://scenes/readme_help.tscn")
 const Markdown = preload("res://scripts/readme_markdown.gd")
 const HelpController = preload("res://scripts/readme_help_controller.gd")
+const Backdrop = preload("res://scripts/main_menu_backdrop.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -43,9 +44,29 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	var document := help.get_node("Parchment/Body/Margin/Layout/Document") as RichTextLabel
+	var parchment := help.get_node("Parchment") as Control
+	var body := help.get_node("Parchment/Body") as Control
 	var parchment_art := help.get_node("Parchment/Artwork") as TextureRect
 	var back_button := help.get_node("BackButton") as Button
+	var reference_safe_rect: Rect2 = Backdrop.fit_safe_rect(help.size)
+	_check(
+		reference_safe_rect.encloses(Rect2(parchment.position, parchment.size)),
+		"Reference short screen keeps the complete scroll inside the safe area"
+	)
+	_check(
+		body.get_global_rect().encloses(back_button.get_global_rect()),
+		"Back button sits inside the scroll cloth"
+	)
+	_check(
+		help.get_node_or_null("Parchment/Body/Margin/Layout/PageTitle") == null
+		and help.get_node_or_null("Parchment/Body/Margin/Layout/Divider") == null,
+		"Help page does not repeat a title or divider above the README"
+	)
 	_check(document != null and document.bbcode_enabled, "Help page uses a BBCode-enabled rich document")
+	_check(
+		document.get_v_scroll_bar().modulate.a == 0.0,
+		"Help page keeps scrolling available without displaying its scrollbar"
+	)
 	_check(
 		help.debug_get_document_text().contains("三分钟看懂怎么玩")
 		and help.debug_get_document_text().contains("技术细节"),
@@ -53,12 +74,37 @@ func _run() -> void:
 	)
 	_check(help.debug_get_anchor_line("toc") >= 0, "README table-of-contents anchor is available")
 	_check(help.debug_get_anchor_line("technical-details") > 0, "Late README anchors are available")
+	document.meta_clicked.emit("section:technical-details")
+	await process_frame
+	await process_frame
+	var scroll_bar := document.get_v_scroll_bar()
+	var technical_paragraph: int = help.debug_get_anchor_line("technical-details")
+	var expected_scroll: float = minf(
+		document.get_paragraph_offset(technical_paragraph),
+		scroll_bar.max_value - scroll_bar.page
+	)
+	_check(
+		absf(scroll_bar.value - expected_scroll) <= 2.0,
+		"A table-of-contents link scrolls down to the requested late README section"
+	)
 	_check(
 		parchment_art.texture != null
 		and parchment_art.texture.resource_path == "res://art/ui/card_inspector_scroll.png",
 		"Help page uses the shared generated scroll artwork"
 	)
 	_check(back_button.size.x >= 42.0 and back_button.size.y >= 42.0, "Back control remains touch-sized")
+	help.size = Vector2(540.0, 800.0)
+	await process_frame
+	await process_frame
+	var compact_safe_rect: Rect2 = Backdrop.fit_safe_rect(help.size)
+	_check(
+		compact_safe_rect.encloses(Rect2(parchment.position, parchment.size)),
+		"Extra-short screen keeps both scroll rollers fully visible"
+	)
+	_check(
+		body.get_global_rect().encloses(back_button.get_global_rect()),
+		"Extra-short screen keeps the back button inside the scroll cloth"
+	)
 	var back_count := {"value": 0}
 	help.back_requested.connect(
 		func() -> void: back_count["value"] = int(back_count["value"]) + 1

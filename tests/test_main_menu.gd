@@ -35,6 +35,7 @@ func _run() -> void:
 		and help_icon.texture.resource_path == "res://art/ui/help_book.png",
 		"Help entry uses the bundled book artwork"
 	)
+	_check(help_icon.self_modulate == Color.WHITE, "Help artwork keeps its original color in game")
 	_check(artwork.texture != null, "Main-menu artwork texture is always assigned")
 	_check(
 		artwork.texture.get_width() == 1080 and artwork.texture.get_height() == 2400,
