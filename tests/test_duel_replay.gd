@@ -44,11 +44,21 @@ func _run() -> void:
 	)
 	if return_button != null:
 		var return_style := return_button.get_theme_stylebox("normal") as StyleBoxTexture
+		var expected_return_size := Vector2(
+			player_hand.size.x * 0.60,
+			clampf(player_hand.size.y * 0.50, 54.0, 68.0) * 1.3
+		)
 		_check(
 			return_style != null
 			and return_style.texture != null
 			and return_style.texture.resource_path == "res://art/ui/selection_primary_ink.png",
 			"Post-match return action uses the shared ink-brush button artwork"
+		)
+		_check(
+			return_button.size.is_equal_approx(expected_return_size)
+			and return_button.get_theme_font_size("font_size") == 23
+			and return_button.get_rect().get_center().is_equal_approx(player_hand.get_rect().get_center()),
+			"Post-match return action matches the shared bottom-button size and typography"
 		)
 		return_button.button_down.emit()
 		_check(

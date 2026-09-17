@@ -263,6 +263,17 @@ func _run() -> void:
 		and bottom_style.texture.resource_path == "res://art/ui/selection_primary_ink.png",
 		"Bottom detail action uses the reusable blank ink-brush artwork"
 	)
+	var player_hand_rect := Rect2(player_hand.position, player_hand.size)
+	var expected_bottom_size := Vector2(
+		player_hand_rect.size.x * 0.60,
+		clampf(player_hand_rect.size.y * 0.50, 54.0, 68.0) * 1.3
+	)
+	_check(
+		bottom_action.size.is_equal_approx(expected_bottom_size)
+		and bottom_action.get_theme_font_size("font_size") == 23
+		and bottom_action.get_rect().get_center().is_equal_approx(player_hand_rect.get_center()),
+		"Bottom detail action keeps 60% hand width while enlarging height and text by 1.3"
+	)
 
 	var full_profile: Dictionary = builder.debug_get_profile()
 	var full_source_id := StringName(String(full_profile["library_slots"][0]))

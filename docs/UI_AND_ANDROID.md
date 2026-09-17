@@ -97,6 +97,9 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   `移出卡组`, `领取奖励`, or `拜入师门`). With a full deck and a collection card
   selected, the five deck cards remain visible as replacement targets instead.
   Registered action controls do not trigger the inspector's tap-outside close.
+- Bottom ink-brush actions, including the post-match `打道回府`, occupy 60% of
+  the hand-row width, use 1.3 times the original button height, and use 23-pixel
+  text while retaining the hand row's center.
 - Deck and collection cards use a roughly 0.25-second stationary hold as a
   shortcut for remove/add; reward cards use it to claim. Immediate movement
   still scrolls the library. Sect confirmation and all filters use explicit

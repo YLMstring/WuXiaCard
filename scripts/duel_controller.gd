@@ -10,6 +10,7 @@ const OUTCOME_ABANDONED: StringName = &"abandoned"
 const BOTTOM_ACTION_PRESSED_SCALE: Vector2 = Vector2(0.96, 0.96)
 const BOTTOM_ACTION_RELEASE_DURATION: float = 0.10
 const BOTTOM_ACTION_HAPTIC_MS: int = 12
+const BOTTOM_ACTION_HEIGHT_SCALE: float = 1.3
 
 enum TurnState {
 	PLAYER,
@@ -2973,7 +2974,7 @@ func _layout_duel() -> void:
 	player_hand.size = Vector2(available_hand_width, hand_height)
 	var return_button_size := Vector2(
 		player_hand.size.x * 0.60,
-		clampf(player_hand.size.y * 0.50, 54.0, 68.0)
+		clampf(player_hand.size.y * 0.50, 54.0, 68.0) * BOTTOM_ACTION_HEIGHT_SCALE
 	)
 	post_match_return_button.position = (
 		player_hand.position + (player_hand.size - return_button_size) * 0.5

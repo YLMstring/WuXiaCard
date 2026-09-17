@@ -15,6 +15,8 @@ const FILTER_PRESSED_BACKGROUND: Color = Color("ddc392")
 const FILTER_BORDER: Color = Color("8b673d")
 const PRIMARY_INK_TEXTURE: Texture2D = preload("res://art/ui/selection_primary_ink.png")
 const PRIMARY_INK_REGION: Rect2 = Rect2(140.0, 220.0, 1720.0, 360.0)
+const BOTTOM_ACTION_HEIGHT_SCALE: float = 1.3
+const BOTTOM_ACTION_FONT_SIZE: int = 23
 
 var _bottom_enabled: bool = true
 var _button_tweens: Dictionary = {}
@@ -45,7 +47,7 @@ func apply_layout(top_rect: Rect2, bottom_rect: Rect2) -> void:
 
 	var bottom_size := Vector2(
 		bottom_rect.size.x * 0.60,
-		clampf(bottom_rect.size.y * 0.50, 54.0, 68.0)
+		clampf(bottom_rect.size.y * 0.50, 54.0, 68.0) * BOTTOM_ACTION_HEIGHT_SCALE
 	)
 	bottom_action.position = bottom_rect.position + (bottom_rect.size - bottom_size) * 0.5
 	bottom_action.size = bottom_size
@@ -124,7 +126,7 @@ func _style_filter_button(button: Button) -> void:
 
 func _style_primary_button(button: Button) -> void:
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_font_size_override("font_size", BOTTOM_ACTION_FONT_SIZE)
 	for color_name: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		button.add_theme_color_override(color_name, SELECTED_TEXT_COLOR)
 	button.add_theme_stylebox_override(
