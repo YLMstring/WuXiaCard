@@ -246,7 +246,7 @@ func _open_card_inspector(data: Dictionary, reward_index: int) -> void:
 	if reward_index >= 0:
 		player_hand.visible = false
 		detail_actions.configure_bottom_action("领取奖励")
-		status_label.text = "查看卡牌详情 · 轻触其它位置返回"
+		status_label.text = "查看卡牌详情 · 轻触返回"
 	else:
 		player_hand.visible = true
 		detail_actions.hide_bottom_action()
