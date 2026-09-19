@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_wuxiang_activation_attacks_after_discard_before_draw()
 	_test_wuxiang_four_attacks_once_after_a_batch()
 	_test_wuxiang_four_skips_paid_attack_without_ki()
+	_test_wuxiang_four_ignores_opponent_discard_batch()
 	_test_multiple_wuxiang_sources_resolve_row_major()
 	_test_lijing_four_locks_and_discards_two_as_one_batch()
 	if _failures == 0:
@@ -298,6 +299,43 @@ func _test_wuxiang_four_skips_paid_attack_without_ki() -> void:
 			&"wuxiang_empty_ki"
 		).get("ki", -1)) == 0,
 		"WuXiang cannot launch its paid post-discard attack without ki"
+	)
+
+
+func _test_wuxiang_four_ignores_opponent_discard_batch() -> void:
+	var wuxiang: Dictionary = Catalog.create_instance(
+		&"WuXiangJieZhi4", Rules.PLAYER_OWNER, &"wuxiang_enemy_discard_watcher"
+	)
+	var opponent_yikong: Dictionary = Catalog.create_instance(
+		&"YiKongDaoDi4", Rules.OPPONENT_OWNER, &"wuxiang_enemy_discard_source"
+	)
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(wuxiang, Rules.PLAYER_OWNER)
+	var transition: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[],
+			[
+				opponent_yikong,
+				_plain(&"wuxiang_enemy_discard_payment", Rules.OPPONENT_OWNER),
+			],
+			Rules.OPPONENT_OWNER
+		),
+		Action.make_play(0, 4, &"wuxiang_enemy_discard_source")
+	)
+	var events: Array = transition.get("events", [])
+	var wuxiang_trigger_count: int = 0
+	for event: Dictionary in _events_of_type(events, &"ability_triggered"):
+		if StringName(event.get("source_instance_id", &"")) == &"wuxiang_enemy_discard_watcher":
+			wuxiang_trigger_count += 1
+	_check(
+		_event_count(events, &"card_discarded") == 1
+		and wuxiang_trigger_count == 0
+		and int(_board_card(
+			transition.get("state") as State,
+			&"wuxiang_enemy_discard_watcher"
+		).get("ki", -1)) == 3,
+		"WuXiang tier four ignores discard batches owned by the opponent"
 	)
 
 

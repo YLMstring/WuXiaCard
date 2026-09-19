@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_filtered_draw_respects_hand_capacity()
 	_test_range_grant_deduplication_and_flip_loss()
 	_test_power_increase_batch_reactions()
+	_test_lijing_nested_power_increase_dispatches_one_reaction()
 	_finish()
 
 
@@ -724,6 +725,41 @@ func _test_power_increase_batch_reactions() -> void:
 		_count_events(no_effect.get("events", []), &"powers_changed") == 0
 		and _count_source_events(no_effect.get("events", []), &"ability_triggered", &"group_listener") == 0,
 		"A failed positive change dispatches no batch reaction"
+	)
+
+
+func _test_lijing_nested_power_increase_dispatches_one_reaction() -> void:
+	var listener: Dictionary = _plain(
+		&"lijing_batch_listener", [9, 9, 9, 9], Rules.PLAYER_OWNER
+	)
+	listener["active_abilities"] = [Catalog.YINYANG_RANGE_FOUR]
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(listener, Rules.PLAYER_OWNER)
+	board[2] = _slot(
+		_plain(&"lijing_batch_enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER),
+		Rules.OPPONENT_OWNER
+	)
+	var source: Dictionary = Catalog.create_instance(
+		&"LiJingRuLai4", Rules.PLAYER_OWNER, &"lijing_batch_source"
+	)
+	var result: Dictionary = Simulator.apply_action(
+		State.new(
+			board,
+			[
+				source,
+				_plain(&"lijing_batch_payment_a", [1, 1, 1, 1], Rules.PLAYER_OWNER),
+				_plain(&"lijing_batch_payment_b", [1, 1, 1, 1], Rules.PLAYER_OWNER),
+			],
+			[],
+			Rules.PLAYER_OWNER
+		),
+		Action.make_play(0, 4, &"lijing_batch_source")
+	)
+	_check(
+		_count_source_events(
+			result.get("events", []), &"ability_triggered", &"lijing_batch_listener"
+		) == 1,
+		"LiJing tier four's nested successful power increase dispatches one YinYang reaction"
 	)
 
 

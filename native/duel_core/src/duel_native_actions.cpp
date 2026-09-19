@@ -1047,6 +1047,9 @@ uint8_t DuelNativeCompactKernel::assign_power_change_batch(
 		Dictionary event = event_value;
 		const StringName type = event.get("type", StringName());
 		if (type == StringName("powers_changed")) {
+			// ACTION_IF 等嵌套动作可能已经在子层建立并结算了自己的点数批次。
+			// 外层只接管尚未分批的直接结果，避免同一变化再次触发批次完成事件。
+			if (!StringName(event.get("power_change_batch_id", StringName())).is_empty()) continue;
 			if (!has_power_change) {
 				const String suffix = (
 					action.power_change_batch_group.is_empty()
