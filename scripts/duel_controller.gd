@@ -36,6 +36,7 @@ const MINIMUM_REUSABLE_TURN_PLAN_DEPTH: int = 2
 const CardInspectorData = preload("res://scripts/card_inspector.gd")
 const ExtraTurnVfxData = preload("res://scripts/extra_turn_vfx.gd")
 const AttackVfxData = preload("res://scripts/attack_vfx.gd")
+const VictoryVfxData = preload("res://scripts/victory_vfx.gd")
 const DuelBackdropData = preload("res://scripts/duel_backdrop.gd")
 const ReplayRecordData = preload("res://scripts/duel_replay_record.gd")
 const Revelation = preload("res://scripts/duel_revelation.gd")
@@ -149,6 +150,7 @@ var _opponent_replay_checkpoint_action_count: int = 0
 var _opponent_replay_checkpoint_turn_count: int = 0
 var _opponent_replay_actions: Array[ActionData] = []
 var _is_replaying_opponent_turn: bool = false
+var _is_victory_vfx_playing: bool = false
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -175,6 +177,7 @@ var _is_replaying_opponent_turn: bool = false
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
 @onready var extra_turn_vfx: ExtraTurnVfxData = $DuelCanvas/ExtraTurnVfx
 @onready var attack_vfx: AttackVfxData = $DuelCanvas/AttackVfx
+@onready var victory_vfx: VictoryVfxData = get_node_or_null("DuelCanvas/VictoryVfx") as VictoryVfxData
 @onready var drag_layer: Control = $DuelCanvas/DragLayer
 @onready var placement_audio: AudioStreamPlayer = $PlacementAudio
 @onready var capture_audio: AudioStreamPlayer = $CaptureAudio
@@ -235,6 +238,8 @@ func _ready() -> void:
 	replay_button.button_down.connect(_on_replay_button_down)
 	replay_button.button_up.connect(_on_replay_button_up)
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
+	if victory_vfx != null:
+		victory_vfx.finished.connect(_on_victory_vfx_finished)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
 	opponent_name.text = opponent_name_text
@@ -251,6 +256,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_replay_generation += 1
 	_cancel_opponent_search()
+	if victory_vfx != null:
+		victory_vfx.cancel()
 
 
 func _get_valid_starting_owner() -> int:
@@ -2213,13 +2220,44 @@ func _finish_match() -> void:
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	if not _is_replaying:
 		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
-	_sync_terminal_hand_action()
+	if _match_outcome == OUTCOME_VICTORY:
+		_begin_victory_presentation()
+	else:
+		_show_terminal_controls()
 	print("DUEL_COMPLETE player=%d opponent=%d" % [player_total, opponent_total])
+
+
+func _begin_victory_presentation() -> void:
+	if _is_victory_vfx_playing:
+		return
+	if victory_vfx == null:
+		_show_terminal_controls()
+		return
+	_is_victory_vfx_playing = true
+	turn_status.visible = false
+	_sync_terminal_hand_action()
+	victory_vfx.play()
+
+
+func _on_victory_vfx_finished() -> void:
+	if not _is_victory_vfx_playing:
+		return
+	_is_victory_vfx_playing = false
+	_show_terminal_controls()
+
+
+func _show_terminal_controls() -> void:
+	turn_status.visible = true
+	_sync_terminal_hand_action()
 
 
 func _sync_terminal_hand_action() -> void:
 	# 终局时用归程按钮占据玩家手牌区；完整回放期间恢复手牌，便于观看每一步。
-	var show_return_button: bool = turn_state == TurnState.COMPLETE and not _is_replaying
+	var show_return_button: bool = (
+		turn_state == TurnState.COMPLETE
+		and not _is_replaying
+		and not _is_victory_vfx_playing
+	)
 	player_hand.visible = not show_return_button
 	post_match_return_button.visible = show_return_button
 
@@ -3167,6 +3205,8 @@ func _vibrate(duration_ms: int) -> void:
 
 
 func _on_replay_pressed() -> void:
+	if _is_victory_vfx_playing:
+		return
 	if turn_state == TurnState.COMPLETE and not _is_replaying:
 		if _replay_record.is_ready():
 			_start_replay()
@@ -3389,6 +3429,7 @@ func _start_replay() -> bool:
 	if (
 		turn_state != TurnState.COMPLETE
 		or _is_replaying
+		or _is_victory_vfx_playing
 		or not _replay_record.is_ready()
 	):
 		return false
@@ -3471,6 +3512,11 @@ func _restore_completed_replay_state(reason: String) -> void:
 	_match_outcome = _replay_record.get_outcome()
 	turn_status.text = _replay_record.get_final_status()
 	turn_status.modulate = Color.WHITE
+	if _is_victory_vfx_playing:
+		_is_victory_vfx_playing = false
+		if victory_vfx != null:
+			victory_vfx.cancel()
+	turn_status.visible = true
 	_sync_terminal_hand_action()
 	_sync_hand_playability()
 	_update_score()
@@ -3553,7 +3599,7 @@ func _clear_all_card_views() -> void:
 
 
 func _on_exit_pressed() -> void:
-	if _return_emitted:
+	if _return_emitted or _is_victory_vfx_playing:
 		return
 	var was_replaying: bool = _is_replaying
 	_return_emitted = true
@@ -3571,3 +3617,12 @@ func _on_exit_pressed() -> void:
 		else OUTCOME_ABANDONED
 	)
 	return_requested.emit(outcome)
+
+
+func debug_is_victory_vfx_playing() -> bool:
+	return _is_victory_vfx_playing
+
+
+func debug_complete_victory_vfx() -> void:
+	if victory_vfx != null:
+		victory_vfx.complete_immediately()

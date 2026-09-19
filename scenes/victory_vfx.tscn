@@ -1,0 +1,68 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/victory_vfx.gd" id="1_victory_vfx"]
+[ext_resource type="Texture2D" path="res://art/vfx/victory_ink_burst.png" id="2_ink_burst"]
+
+[node name="VictoryVfx" type="Control"]
+visible = false
+z_index = 100
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_victory_vfx")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.055, 0.04, 0.025, 0)
+
+[node name="InkBurst" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -240.0
+offset_right = 240.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_ink_burst")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="VictoryGlyph" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -150.0
+offset_right = 150.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.69, 0.25, 1)
+theme_override_colors/font_outline_color = Color(0.18, 0.09, 0.035, 0.95)
+theme_override_constants/outline_size = 7
+theme_override_font_sizes/font_size = 190
+text = "胜"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="GongPlayer" type="AudioStreamPlayer" parent="."]

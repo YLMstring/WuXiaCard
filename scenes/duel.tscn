@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://cdho8m1h7t35l" path="res://scripts/attack_vfx.gd" id="6_ur6ul"]
 [ext_resource type="Texture2D" uid="uid://bqh76o5k465rm" path="res://inkpics/replay.png" id="7_replay"]
 [ext_resource type="Texture2D" uid="uid://bny4ttnx87beh" path="res://art/ui/selection_primary_ink.png" id="8_return_ink"]
+[ext_resource type="PackedScene" path="res://scenes/victory_vfx.tscn" id="9_victory_vfx"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_return_normal"]
 content_margin_left = 18.0
@@ -293,6 +294,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("6_ur6ul")
+
+[node name="VictoryVfx" parent="DuelCanvas" unique_id=185028980 instance=ExtResource("9_victory_vfx")]
+layout_mode = 1
 
 [node name="PlacementAudio" type="AudioStreamPlayer" parent="." unique_id=502979519]
 
