@@ -5,7 +5,7 @@ param(
     [string]$TemplateArchive = "",
     [string]$AndroidSdkRoot = "",
     [string]$SigningKeystore = "",
-    [string]$SigningAlias = "androiddebugkey",
+    [string]$SigningAlias = "wuxiacard",
     [string]$OutputPath = ""
 )
 
@@ -17,9 +17,14 @@ if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
 }
 $resolvedProject = [System.IO.Path]::GetFullPath($ProjectRoot)
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.3.apk"
+    $OutputPath = Join-Path $resolvedProject "build\android\WuxiaCard-android-arm64-1.0.4.apk"
 }
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
+if ([string]::IsNullOrWhiteSpace($SigningKeystore) -and
+    -not [string]::IsNullOrWhiteSpace($env:WUXIA_ANDROID_KEYSTORE_PATH)) {
+    $SigningKeystore = $env:WUXIA_ANDROID_KEYSTORE_PATH
+}
+$usingReleaseKeystore = -not [string]::IsNullOrWhiteSpace($SigningKeystore)
 
 function Resolve-EnginePath {
     param([string]$RequestedPath)
@@ -279,43 +284,45 @@ $apksigner = Join-Path $buildTools "apksigner.bat"
 if (-not (Test-Path -LiteralPath $apksigner -PathType Leaf)) {
     throw "apksigner was not found: $apksigner"
 }
-$previousErrorActionPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& $apksigner verify $resolvedOutput 1>$null 2>$null
-$initialVerifyExitCode = $LASTEXITCODE
-$ErrorActionPreference = $previousErrorActionPreference
-if ($initialVerifyExitCode -ne 0) {
-    $usingDebugKeystore = [string]::IsNullOrWhiteSpace($SigningKeystore)
-    if ($usingDebugKeystore) {
-        $SigningKeystore = Join-Path $env:APPDATA "Godot\keystores\debug.keystore"
-    }
+if ($usingReleaseKeystore) {
     if (-not (Test-Path -LiteralPath $SigningKeystore -PathType Leaf)) {
         throw "Signing keystore was not found: $SigningKeystore"
     }
-
-    if ($usingDebugKeystore) {
-        Write-Warning "Signing this local release build with the Godot debug keystore."
-        & $apksigner sign --v4-signing-enabled false --ks $SigningKeystore `
-            --ks-key-alias $SigningAlias --ks-pass "pass:android" --key-pass "pass:android" `
-            $resolvedOutput
-    } else {
-        if ([string]::IsNullOrWhiteSpace($env:WUXIA_ANDROID_KEYSTORE_PASSWORD)) {
-            throw "Set WUXIA_ANDROID_KEYSTORE_PASSWORD before using a release keystore."
-        }
-        if ([string]::IsNullOrWhiteSpace($env:WUXIA_ANDROID_KEY_PASSWORD)) {
-            $env:WUXIA_ANDROID_KEY_PASSWORD = $env:WUXIA_ANDROID_KEYSTORE_PASSWORD
-        }
-        & $apksigner sign --v4-signing-enabled false --ks $SigningKeystore `
-            --ks-key-alias $SigningAlias --ks-pass env:WUXIA_ANDROID_KEYSTORE_PASSWORD `
-            --key-pass env:WUXIA_ANDROID_KEY_PASSWORD $resolvedOutput
+    if ([string]::IsNullOrWhiteSpace($env:WUXIA_ANDROID_KEYSTORE_PASSWORD)) {
+        throw "Set WUXIA_ANDROID_KEYSTORE_PASSWORD before using a release keystore."
     }
+    if ([string]::IsNullOrWhiteSpace($env:WUXIA_ANDROID_KEY_PASSWORD)) {
+        $env:WUXIA_ANDROID_KEY_PASSWORD = $env:WUXIA_ANDROID_KEYSTORE_PASSWORD
+    }
+    & $apksigner sign --v4-signing-enabled false --ks $SigningKeystore `
+        --ks-key-alias $SigningAlias --ks-pass env:WUXIA_ANDROID_KEYSTORE_PASSWORD `
+        --key-pass env:WUXIA_ANDROID_KEY_PASSWORD $resolvedOutput
     if ($LASTEXITCODE -ne 0) {
         throw "APK signing failed."
     }
-    & $apksigner verify --verbose --print-certs $resolvedOutput
-    if ($LASTEXITCODE -ne 0) {
-        throw "APK signature verification failed after signing."
+} else {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $apksigner verify $resolvedOutput 1>$null 2>$null
+    $initialVerifyExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($initialVerifyExitCode -ne 0) {
+        $debugKeystore = Join-Path $env:APPDATA "Godot\keystores\debug.keystore"
+        if (-not (Test-Path -LiteralPath $debugKeystore -PathType Leaf)) {
+            throw "Signing keystore was not found: $debugKeystore"
+        }
+        Write-Warning "Signing this local release build with the Godot debug keystore."
+        & $apksigner sign --v4-signing-enabled false --ks $debugKeystore `
+            --ks-key-alias androiddebugkey --ks-pass "pass:android" --key-pass "pass:android" `
+            $resolvedOutput
+        if ($LASTEXITCODE -ne 0) {
+            throw "APK signing failed."
+        }
     }
+}
+& $apksigner verify --verbose --print-certs $resolvedOutput
+if ($LASTEXITCODE -ne 0) {
+    throw "APK signature verification failed after signing."
 }
 
 Write-Host "ANDROID_RELEASE_BUILD_PASSED"

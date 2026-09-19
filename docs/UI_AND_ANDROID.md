@@ -155,29 +155,32 @@ The current machine was previously found to have:
 
 These are machine-specific facts, not portable project configuration. A replacement developer should inspect Godot Editor Settings → Export → Android rather than assuming the same paths.
 
-Never commit keystore passwords or private signing material. The existing debug export uses Godot-managed debug signing.
+Never commit keystore passwords or private signing material. Formal APK builds
+use the repository-external release keystore; local-only builds may explicitly
+fall back to Godot-managed debug signing.
 
 ## Export Preset Status
 
 `export_presets.cfg` currently:
 
 - is built through `tools/build_android_release.ps1`, whose default artifact is
-  `build/android/WuxiaCard-android-arm64-1.0.3.apk`;
+  `build/android/WuxiaCard-android-arm64-1.0.4.apk`;
 - uses the Gradle source-template export so the Android-to-Godot splash handoff
   can retain the original splash until engine setup completes;
 - selects ARM64 only;
 - leaves min/target SDK on automatic values;
-- uses placeholder package ID `com.example.$genname`;
+- uses the permanent package ID `com.wuxiacard.jiugonglunjian`;
 - declares Android Internet permission for completed-run balance telemetry;
-- falls back to the Godot debug keystore for local release builds when no
-  explicit release keystore is supplied.
+- uses the release keystore supplied through `WUXIA_ANDROID_KEYSTORE_PATH` and
+  its password environment variables for formal builds, while retaining an
+  explicit debug-keystore fallback for local-only builds.
 
 Before distribution:
 
-- choose a permanent reverse-domain package ID;
-- set version code/name policy;
+- retain the permanent reverse-domain package ID;
+- continue monotonically increasing version code and version name;
 - decide supported ABIs;
-- configure release signing securely;
+- back up the release keystore and its password separately before distribution;
 - verify target/min SDK against the current store;
 - audit permissions and data safety;
 - produce icons/store assets;

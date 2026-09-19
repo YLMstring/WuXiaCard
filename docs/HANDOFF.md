@@ -813,7 +813,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   Android/release are distribution gates rather than desktop production gates.
   See `docs/AI_SEARCH.md` before extending it. Do not restore a second rules or
   search engine as a fallback.
-- Android package ID is still `com.example.$genname`; only ARM64 is selected; release signing/store setup is unfinished.
+- Android package ID is `com.wuxiacard.jiugonglunjian`; only ARM64 is selected.
+  Formal local APK builds use the repository-external release keystore configured
+  through `WUXIA_ANDROID_KEYSTORE_PATH` and password environment variables.
 - Hundreds of images exist in `pics/`, but no licensing/provenance manifest was found. Resolve this before distribution.
 - Generated backup/temp scene files are tracked. Do not delete them without first confirming they are no longer needed.
 

@@ -23,6 +23,10 @@ WuxiaCard/
 __pycache__/
 node_modules/
 .env
+*.jks
+*.keystore
+*.p12
+release-signing-backup.txt
 /cloudbase/balance_telemetry/cloudbaserc.json
 /balance-reports-*.csv
 /balance-reports-*.json
