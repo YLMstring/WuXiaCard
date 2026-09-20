@@ -76,35 +76,33 @@ func _run() -> void:
 				+ float(victory_vfx.get("impact_duration"))
 			)
 			var boundary_time: float = float(victory_vfx.get("entry_duration"))
-			var speed_before_boundary: float = float(
-				victory_vfx.call("debug_get_drop_speed_y", boundary_time - 0.001)
+			var expected_uniform_speed: float = 153.0 / drop_duration
+			var start_speed: float = float(
+				victory_vfx.call("debug_get_drop_speed_y", 0.0)
 			)
-			var speed_after_boundary: float = float(
-				victory_vfx.call("debug_get_drop_speed_y", boundary_time + 0.001)
+			var boundary_speed: float = float(
+				victory_vfx.call("debug_get_drop_speed_y", boundary_time)
 			)
-			var old_terminal_speed: float = 2.0 * 76.0 / 0.55
-			_check(
-				float(victory_vfx.call("debug_get_drop_speed_y", 0.0)) >= 165.0,
-				"Victory emblem starts with a brisk downward speed while it fades in"
-			)
-			_check(
-				float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) >= -110.0
-				and float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) < 0.0,
-				"Victory emblem covers at least 43 pixels during the fade-in"
+			var terminal_speed: float = float(
+				victory_vfx.call("debug_get_drop_speed_y", drop_duration)
 			)
 			_check(
-				absf(speed_after_boundary - speed_before_boundary) < 1.0,
-				"Victory drop velocity stays continuous across 0.25 seconds"
+				is_equal_approx(start_speed, expected_uniform_speed)
+				and is_equal_approx(boundary_speed, expected_uniform_speed)
+				and is_equal_approx(terminal_speed, expected_uniform_speed),
+				"Victory emblem descends at one constant speed"
 			)
 			_check(
-				float(victory_vfx.call("debug_get_drop_speed_y", drop_duration))
-				>= old_terminal_speed,
-				"Victory drop keeps at least the former terminal impact speed"
+				is_equal_approx(
+					float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)),
+					lerpf(-153.0, 0.0, boundary_time / drop_duration)
+				),
+				"Victory emblem keeps its uniform trajectory during the fade-in"
 			)
 		_check(
 			victory_emblem != null
-			and victory_emblem.scale.is_equal_approx(Vector2(1.50, 1.50)),
-			"Victory emblem begins at the enlarged 1.50 scale"
+			and victory_emblem.scale.is_equal_approx(Vector2(2.0, 2.0)),
+			"Victory emblem begins at the enlarged 2.0 scale"
 		)
 		var fallback_glyph := victory_vfx.get_node("FallbackGlyph") as Label
 		_check(

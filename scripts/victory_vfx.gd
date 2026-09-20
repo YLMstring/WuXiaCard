@@ -5,8 +5,7 @@ signal settled
 signal finished
 
 const DROP_START_OFFSET_Y: float = -153.0
-const DROP_INITIAL_SLOPE: float = 0.775
-const DROP_INITIAL_SCALE: float = 1.50
+const DROP_INITIAL_SCALE: float = 2.0
 
 @export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
 @export_range(0.0, 2.0, 0.01) var entry_duration: float = 0.25
@@ -152,13 +151,8 @@ func debug_get_drop_offset_y(elapsed_seconds: float) -> float:
 	)
 
 
-func debug_get_drop_speed_y(elapsed_seconds: float) -> float:
-	var time: float = clampf(elapsed_seconds / _drop_duration(), 0.0, 1.0)
-	var curve_slope: float = (
-		DROP_INITIAL_SLOPE
-		+ 3.0 * (1.0 - DROP_INITIAL_SLOPE) * time * time
-	)
-	return -DROP_START_OFFSET_Y * curve_slope / _drop_duration()
+func debug_get_drop_speed_y(_elapsed_seconds: float) -> float:
+	return -DROP_START_OFFSET_Y / _drop_duration()
 
 
 func _mark_settled() -> void:
@@ -195,11 +189,7 @@ func _drop_duration() -> float:
 
 
 func _drop_curve_progress(normalized_time: float) -> float:
-	var time: float = clampf(normalized_time, 0.0, 1.0)
-	return (
-		DROP_INITIAL_SLOPE * time
-		+ (1.0 - DROP_INITIAL_SLOPE) * time * time * time
-	)
+	return clampf(normalized_time, 0.0, 1.0)
 
 
 func _set_drop_progress(progress: float) -> void:
@@ -216,7 +206,7 @@ func _set_drop_progress(progress: float) -> void:
 func _start_drop_motion() -> void:
 	_set_drop_progress(0.0)
 	_drop_animation = create_tween()
-	_drop_animation.set_trans(Tween.TRANS_LINEAR).set_ease(Tween.EASE_IN_OUT)
+	_drop_animation.set_trans(Tween.TRANS_LINEAR)
 	_drop_animation.tween_method(_set_drop_progress, 0.0, 1.0, _drop_duration())
 
 
