@@ -1,28 +1,42 @@
 class_name VictoryVfx
 extends Control
 
+signal settled
 signal finished
 
-@export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.30
-@export_range(0.0, 2.0, 0.01) var impact_duration: float = 0.22
-@export_range(0.0, 2.0, 0.01) var settle_duration: float = 0.12
-@export_range(0.0, 2.0, 0.01) var hold_duration: float = 0.56
-@export_range(0.0, 2.0, 0.01) var fade_duration: float = 0.35
+@export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
+@export_range(0.0, 2.0, 0.01) var entry_duration: float = 0.25
+@export_range(0.0, 2.0, 0.01) var impact_duration: float = 0.55
+@export_range(0.0, 2.0, 0.01) var settle_duration: float = 0.30
+@export_range(0.0, 4.0, 0.01) var hold_duration: float = 1.90
+@export_range(0.0, 2.0, 0.01) var fade_duration: float = 1.00
 @export_range(-80.0, 6.0, 0.5) var gong_volume_db: float = -5.0
 
 @onready var dimmer: ColorRect = $Dimmer
-@onready var ink_burst: TextureRect = $InkBurst
-@onready var victory_glyph: Label = $VictoryGlyph
+@onready var vignette: ColorRect = $Vignette
+@onready var radial_glow: ColorRect = $RadialGlow
+@onready var light_rays: ColorRect = $LightRays
+@onready var gold_particles: ColorRect = $GoldParticles
+@onready var victory_emblem: TextureRect = $VictoryEmblem
+@onready var fallback_glyph: Label = $FallbackGlyph
+@onready var impact_flash: ColorRect = $ImpactFlash
 @onready var gong_player: AudioStreamPlayer = $GongPlayer
 
 var _animation: Tween = null
 var _is_playing: bool = false
+var _is_settled: bool = false
 var _play_count: int = 0
+var _emblem_rest_position: Vector2 = Vector2.ZERO
+var _fallback_rest_position: Vector2 = Vector2.ZERO
+var _particles_rest_position: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_emblem_rest_position = victory_emblem.position
+	_fallback_rest_position = fallback_glyph.position
+	_particles_rest_position = gold_particles.position
 	_reset_visuals()
 	if not OS.has_feature("headless"):
 		gong_player.stream = _create_gong_stream()
@@ -35,31 +49,70 @@ func play() -> void:
 	_kill_animation()
 	_reset_visuals()
 	_is_playing = true
+	_is_settled = false
 	_play_count += 1
 	visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_strike_gong()
 
 	_animation = create_tween()
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_animation.tween_property(dimmer, "color:a", dimmer_alpha, impact_duration)
-	_animation.parallel().tween_property(ink_burst, "modulate:a", 0.88, impact_duration)
-	_animation.parallel().tween_property(ink_burst, "scale", Vector2(1.05, 1.05), impact_duration)
-	_animation.parallel().tween_property(victory_glyph, "modulate:a", 1.0, impact_duration)
-	_animation.parallel().tween_property(victory_glyph, "scale", Vector2(0.92, 0.92), impact_duration)
-	_animation.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_animation.tween_property(ink_burst, "scale", Vector2.ONE, settle_duration)
-	_animation.parallel().tween_property(victory_glyph, "scale", Vector2.ONE, settle_duration)
-	_animation.tween_interval(hold_duration)
+	_animation.tween_property(dimmer, "color:a", dimmer_alpha, entry_duration)
+	_animation.parallel().tween_property(vignette, "modulate:a", 1.0, entry_duration)
+	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.32, entry_duration)
+	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.32, entry_duration)
+	_animation.parallel().tween_property(victory_emblem, "position", _emblem_rest_position + Vector2(0.0, -76.0), entry_duration)
+	_animation.parallel().tween_property(fallback_glyph, "position", _fallback_rest_position + Vector2(0.0, -76.0), entry_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.20, entry_duration)
+
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_animation.tween_property(victory_emblem, "position", _emblem_rest_position, impact_duration)
+	_animation.parallel().tween_property(fallback_glyph, "position", _fallback_rest_position, impact_duration)
+	_animation.parallel().tween_property(victory_emblem, "scale", Vector2(0.92, 0.92), impact_duration)
+	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2(0.92, 0.92), impact_duration)
+	_animation.parallel().tween_property(victory_emblem, "modulate:a", 1.0, impact_duration)
+	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 1.0, impact_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.92, impact_duration)
+	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.12, 1.12), impact_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.78, impact_duration)
+	_animation.parallel().tween_property(light_rays, "scale", Vector2.ONE, impact_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.94, impact_duration)
+	_animation.parallel().tween_property(impact_flash, "scale", Vector2(1.22, 1.22), impact_duration)
+	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.78, impact_duration)
+	_animation.tween_callback(_strike_gong)
+
+	_animation.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_animation.tween_property(victory_emblem, "scale", Vector2.ONE, settle_duration)
+	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE, settle_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, settle_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.58, settle_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.46, settle_duration)
+	_animation.tween_callback(_mark_settled)
+
+	_animation.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_animation.tween_property(light_rays, "rotation", 0.16, hold_duration)
+	_animation.parallel().tween_property(gold_particles, "position", _particles_rest_position + Vector2(0.0, -18.0), hold_duration)
+	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.04, 1.04), hold_duration)
+
+	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 	_animation.tween_property(self, "modulate:a", 0.0, fade_duration)
 	_animation.tween_callback(_complete)
+
+
+func complete_settle_immediately() -> void:
+	if not _is_playing or _is_settled:
+		return
+	_kill_animation()
+	_apply_settled_visuals()
+	_mark_settled()
 
 
 func complete_immediately() -> void:
 	if not _is_playing:
 		return
 	_kill_animation()
+	if not _is_settled:
+		_apply_settled_visuals()
+		_mark_settled()
 	_complete()
 
 
@@ -68,6 +121,7 @@ func cancel() -> void:
 	if gong_player != null:
 		gong_player.stop()
 	_is_playing = false
+	_is_settled = false
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_visuals()
@@ -81,10 +135,20 @@ func debug_get_play_count() -> int:
 	return _play_count
 
 
+func _mark_settled() -> void:
+	if not _is_playing or _is_settled:
+		return
+	_is_settled = true
+	settled.emit()
+
+
 func _complete() -> void:
 	if not _is_playing:
 		return
+	if not _is_settled:
+		_mark_settled()
 	_is_playing = false
+	_is_settled = false
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_visuals()
@@ -101,14 +165,53 @@ func _reset_visuals() -> void:
 	modulate = Color.WHITE
 	if dimmer != null:
 		dimmer.color.a = 0.0
-	if ink_burst != null:
-		ink_burst.pivot_offset = ink_burst.size * 0.5
-		ink_burst.scale = Vector2(0.25, 0.25)
-		ink_burst.modulate = Color(1.0, 1.0, 1.0, 0.0)
-	if victory_glyph != null:
-		victory_glyph.pivot_offset = victory_glyph.size * 0.5
-		victory_glyph.scale = Vector2(1.8, 1.8)
-		victory_glyph.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	if vignette != null:
+		vignette.modulate.a = 0.0
+	if radial_glow != null:
+		radial_glow.pivot_offset = radial_glow.size * 0.5
+		radial_glow.scale = Vector2(0.62, 0.62)
+		radial_glow.modulate.a = 0.0
+	if light_rays != null:
+		light_rays.pivot_offset = light_rays.size * 0.5
+		light_rays.scale = Vector2(0.34, 0.34)
+		light_rays.rotation = -0.10
+		light_rays.modulate.a = 0.0
+	if gold_particles != null:
+		gold_particles.position = _particles_rest_position
+		gold_particles.modulate.a = 0.0
+	if victory_emblem != null:
+		victory_emblem.pivot_offset = victory_emblem.size * 0.5
+		victory_emblem.position = _emblem_rest_position + Vector2(0.0, -122.0)
+		victory_emblem.scale = Vector2(1.35, 1.35)
+		victory_emblem.modulate = Color(1.0, 1.0, 1.0, 0.0)
+		victory_emblem.visible = victory_emblem.texture != null
+	if fallback_glyph != null:
+		fallback_glyph.pivot_offset = fallback_glyph.size * 0.5
+		fallback_glyph.position = _fallback_rest_position + Vector2(0.0, -122.0)
+		fallback_glyph.scale = Vector2(1.35, 1.35)
+		fallback_glyph.modulate = Color(1.0, 1.0, 1.0, 0.0)
+		fallback_glyph.visible = victory_emblem == null or victory_emblem.texture == null
+	if impact_flash != null:
+		impact_flash.pivot_offset = impact_flash.size * 0.5
+		impact_flash.scale = Vector2(0.28, 0.28)
+		impact_flash.modulate.a = 0.0
+
+
+func _apply_settled_visuals() -> void:
+	dimmer.color.a = dimmer_alpha
+	vignette.modulate.a = 1.0
+	radial_glow.scale = Vector2(1.12, 1.12)
+	radial_glow.modulate.a = 0.58
+	light_rays.scale = Vector2.ONE
+	light_rays.modulate.a = 0.46
+	gold_particles.modulate.a = 0.78
+	victory_emblem.position = _emblem_rest_position
+	victory_emblem.scale = Vector2.ONE
+	victory_emblem.modulate.a = 1.0
+	fallback_glyph.position = _fallback_rest_position
+	fallback_glyph.scale = Vector2.ONE
+	fallback_glyph.modulate.a = 1.0
+	impact_flash.modulate.a = 0.0
 
 
 func _strike_gong() -> void:

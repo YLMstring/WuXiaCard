@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://oexm8s51w37c"
-path="res://.godot/imported/victory_ink_burst.png-669a9b3b9c8db81f2bf719c01214d7ad.ctex"
+uid="uid://dxagq5loi7q7r"
+path="res://.godot/imported/victory_emblem.png-03072a94a755a8c84e4b08709a9f3fa5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/vfx/victory_ink_burst.png"
-dest_files=["res://.godot/imported/victory_ink_burst.png-669a9b3b9c8db81f2bf719c01214d7ad.ctex"]
+source_file="res://art/vfx/victory_emblem.png"
+dest_files=["res://.godot/imported/victory_emblem.png-03072a94a755a8c84e4b08709a9f3fa5.ctex"]
 
 [params]
 

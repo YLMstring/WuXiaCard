@@ -151,6 +151,10 @@ var _opponent_replay_checkpoint_turn_count: int = 0
 var _opponent_replay_actions: Array[ActionData] = []
 var _is_replaying_opponent_turn: bool = false
 var _is_victory_vfx_playing: bool = false
+var _is_victory_vfx_settled: bool = false
+var _victory_vfx_started_for_match: bool = false
+var _turn_status_base_z_index: int = 0
+var _post_match_return_base_z_index: int = 0
 
 @onready var decor_backdrop: DuelBackdropData = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -230,6 +234,8 @@ func _ready() -> void:
 	_create_placeholder_audio()
 	top_bar.move_child(enemy_seal, 0)
 	_style_static_ui()
+	_turn_status_base_z_index = turn_status.z_index
+	_post_match_return_base_z_index = post_match_return_button.z_index
 	exit_button.pressed.connect(_on_exit_pressed)
 	post_match_return_button.pressed.connect(_on_post_match_return_pressed)
 	post_match_return_button.button_down.connect(_on_post_match_return_button_down)
@@ -239,6 +245,7 @@ func _ready() -> void:
 	replay_button.button_up.connect(_on_replay_button_up)
 	card_inspector.inspection_closed.connect(_on_card_inspection_closed)
 	if victory_vfx != null:
+		victory_vfx.settled.connect(_on_victory_vfx_settled)
 		victory_vfx.finished.connect(_on_victory_vfx_finished)
 	resized.connect(_layout_duel)
 	get_viewport().size_changed.connect(_layout_duel)
@@ -2220,7 +2227,12 @@ func _finish_match() -> void:
 		turn_status.text = "失败 · %d–%d" % [player_total, opponent_total]
 	if not _is_replaying:
 		_replay_record.complete(duel_state, _match_outcome, turn_status.text)
-	if _match_outcome == OUTCOME_VICTORY:
+	if (
+		_match_outcome == OUTCOME_VICTORY
+		and not _is_replaying
+		and not _victory_vfx_started_for_match
+	):
+		_victory_vfx_started_for_match = true
 		_begin_victory_presentation()
 	else:
 		_show_terminal_controls()
@@ -2234,15 +2246,29 @@ func _begin_victory_presentation() -> void:
 		_show_terminal_controls()
 		return
 	_is_victory_vfx_playing = true
+	_is_victory_vfx_settled = false
+	_restore_terminal_control_layers()
 	turn_status.visible = false
 	_sync_terminal_hand_action()
 	victory_vfx.play()
+
+
+func _on_victory_vfx_settled() -> void:
+	if not _is_victory_vfx_playing or _is_victory_vfx_settled:
+		return
+	_is_victory_vfx_settled = true
+	var foreground_z: int = victory_vfx.z_index + 1 if victory_vfx != null else 101
+	turn_status.z_index = foreground_z
+	post_match_return_button.z_index = foreground_z
+	_show_terminal_controls()
 
 
 func _on_victory_vfx_finished() -> void:
 	if not _is_victory_vfx_playing:
 		return
 	_is_victory_vfx_playing = false
+	_is_victory_vfx_settled = false
+	_restore_terminal_control_layers()
 	_show_terminal_controls()
 
 
@@ -2256,10 +2282,15 @@ func _sync_terminal_hand_action() -> void:
 	var show_return_button: bool = (
 		turn_state == TurnState.COMPLETE
 		and not _is_replaying
-		and not _is_victory_vfx_playing
+		and (not _is_victory_vfx_playing or _is_victory_vfx_settled)
 	)
 	player_hand.visible = not show_return_button
 	post_match_return_button.visible = show_return_button
+
+
+func _restore_terminal_control_layers() -> void:
+	turn_status.z_index = _turn_status_base_z_index
+	post_match_return_button.z_index = _post_match_return_base_z_index
 
 
 func _sync_hand_playability() -> void:
@@ -3412,8 +3443,10 @@ func _on_post_match_return_button_up() -> void:
 
 
 func _on_post_match_return_pressed() -> void:
+	if _return_emitted or (_is_victory_vfx_playing and not _is_victory_vfx_settled):
+		return
 	_vibrate(BOTTOM_ACTION_HAPTIC_MS)
-	_on_exit_pressed()
+	_leave_duel(true)
 
 
 func _kill_post_match_return_feedback() -> void:
@@ -3513,9 +3546,7 @@ func _restore_completed_replay_state(reason: String) -> void:
 	turn_status.text = _replay_record.get_final_status()
 	turn_status.modulate = Color.WHITE
 	if _is_victory_vfx_playing:
-		_is_victory_vfx_playing = false
-		if victory_vfx != null:
-			victory_vfx.cancel()
+		_cancel_victory_presentation()
 	turn_status.visible = true
 	_sync_terminal_hand_action()
 	_sync_hand_playability()
@@ -3599,8 +3630,16 @@ func _clear_all_card_views() -> void:
 
 
 func _on_exit_pressed() -> void:
-	if _return_emitted or _is_victory_vfx_playing:
+	_leave_duel(false)
+
+
+func _leave_duel(allow_settled_victory: bool) -> void:
+	if _return_emitted:
 		return
+	if _is_victory_vfx_playing:
+		if not allow_settled_victory or not _is_victory_vfx_settled:
+			return
+		_cancel_victory_presentation()
 	var was_replaying: bool = _is_replaying
 	_return_emitted = true
 	_replay_generation += 1
@@ -3619,6 +3658,14 @@ func _on_exit_pressed() -> void:
 	return_requested.emit(outcome)
 
 
+func _cancel_victory_presentation() -> void:
+	if victory_vfx != null:
+		victory_vfx.cancel()
+	_is_victory_vfx_playing = false
+	_is_victory_vfx_settled = false
+	_restore_terminal_control_layers()
+
+
 func debug_is_victory_vfx_playing() -> bool:
 	return _is_victory_vfx_playing
 
@@ -3626,3 +3673,8 @@ func debug_is_victory_vfx_playing() -> bool:
 func debug_complete_victory_vfx() -> void:
 	if victory_vfx != null:
 		victory_vfx.complete_immediately()
+
+
+func debug_settle_victory_vfx() -> void:
+	if victory_vfx != null:
+		victory_vfx.complete_settle_immediately()

@@ -40,11 +40,26 @@ func _run() -> void:
 	var victory_vfx := victory_duel.get_node_or_null("DuelCanvas/VictoryVfx") as Control
 	_check(victory_vfx != null, "Duel scene owns the victory presentation overlay")
 	if victory_vfx != null:
+		var victory_emblem := victory_vfx.get_node_or_null("VictoryEmblem") as TextureRect
+		_check(
+			victory_emblem != null and victory_emblem.texture != null,
+			"Victory presentation owns the approved red-gold emblem texture"
+		)
 		var gong_stream: AudioStreamWAV = victory_vfx.call("_create_gong_stream") as AudioStreamWAV
 		_check(
 			gong_stream != null and gong_stream.data.size() == 88200,
 			"Victory presentation owns a deterministic one-second gong waveform"
 		)
+		var settle_time: float = (
+			float(victory_vfx.get("entry_duration"))
+			+ float(victory_vfx.get("impact_duration"))
+			+ float(victory_vfx.get("settle_duration"))
+		)
+		var fade_time: float = settle_time + float(victory_vfx.get("hold_duration"))
+		var finish_time: float = fade_time + float(victory_vfx.get("fade_duration"))
+		_check(is_equal_approx(settle_time, 1.10), "Victory presentation settles at 1.10 seconds")
+		_check(is_equal_approx(fade_time, 3.00), "Victory presentation starts fading at 3.00 seconds")
+		_check(is_equal_approx(finish_time, 4.00), "Victory presentation finishes at 4.00 seconds")
 	_check(
 		bool(victory_duel.call("debug_is_victory_vfx_playing")),
 		"Victory starts the presentation before terminal controls appear"
@@ -64,40 +79,102 @@ func _run() -> void:
 	)
 	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
 	_check(victory_outcome["value"] == &"", "Victory presentation blocks leaving the duel")
-	victory_duel.call("debug_complete_victory_vfx")
+	(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).pressed.emit()
+	_check(victory_outcome["value"] == &"", "Victory presentation blocks early return before settling")
+	var first_play_count: int = int(victory_vfx.call("debug_get_play_count"))
+	victory_duel.call("_finish_match")
+	_check(
+		int(victory_vfx.call("debug_get_play_count")) == first_play_count,
+		"Repeated terminal checks do not stack victory presentations"
+	)
+	victory_duel.call("debug_settle_victory_vfx")
 	await process_frame
 	_check(
-		not bool(victory_duel.call("debug_is_victory_vfx_playing")),
-		"Completing the victory presentation releases its input gate"
+		bool(victory_duel.call("debug_is_victory_vfx_playing")),
+		"Settling the victory presentation keeps the remaining effect active"
 	)
 	_check(
 		(victory_duel.get_node("DuelCanvas/TurnStatus") as Label).visible,
-		"Completing the victory presentation reveals the final score text"
+		"Settling the victory presentation reveals the final score text"
 	)
 	_check(
 		(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).visible,
-		"Completing the victory presentation reveals the return action"
+		"Settling the victory presentation reveals the return action"
 	)
-	var first_play_count: int = int(victory_vfx.call("debug_get_play_count"))
-	victory_duel.set("_is_replaying", true)
-	victory_duel.call("_finish_match")
 	_check(
-		int(victory_vfx.call("debug_get_play_count")) == first_play_count + 1,
-		"Reaching the same victory terminal during replay starts the presentation again"
+		(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).z_index > victory_vfx.z_index,
+		"Settled return action stays above the victory input blocker"
 	)
-	victory_duel.call("_finish_match")
+	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
+	_check(victory_outcome["value"] == &"", "Top exit remains blocked while the settled effect is playing")
+	(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).pressed.emit()
 	_check(
-		int(victory_vfx.call("debug_get_play_count")) == first_play_count + 1,
-		"Repeated terminal checks do not stack victory presentations"
+		not bool(victory_duel.call("debug_is_victory_vfx_playing")),
+		"Settled return action cancels the remaining victory effect"
 	)
-	victory_duel.set("_is_replaying", false)
-	victory_duel.call("debug_complete_victory_vfx")
-	await process_frame
+	(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).pressed.emit()
 	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
-	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
-	_check(victory_outcome["value"] == &"victory", "Returning after a win reports victory")
+	_check(victory_outcome["value"] == &"victory", "Early return after settling reports victory")
 	_check(int(victory_outcome["count"]) == 1, "Repeated return presses emit one result")
 	victory_duel.queue_free()
+	await process_frame
+
+	var completed_victory: Node = DUEL_SCENE.instantiate()
+	completed_victory.set("testing_mode", true)
+	completed_victory.set("opening_layout_seed", -1)
+	root.add_child(completed_victory)
+	await process_frame
+	var completed_board: Array = Rules.empty_board()
+	completed_board[0] = {"owner": Rules.PLAYER_OWNER, "card": {}}
+	completed_victory.set("board", completed_board)
+	completed_victory.call("_finish_match")
+	completed_victory.call("debug_complete_victory_vfx")
+	await process_frame
+	_check(
+		not bool(completed_victory.call("debug_is_victory_vfx_playing")),
+		"Natural completion path releases the victory input gate"
+	)
+	_check(
+		(completed_victory.get_node("DuelCanvas/TurnStatus") as Label).visible,
+		"Natural completion path keeps the final score visible"
+	)
+	_check(
+		(completed_victory.get_node("DuelCanvas/PostMatchReturnButton") as Button).visible,
+		"Natural completion path keeps the return action visible"
+	)
+	completed_victory.queue_free()
+	await process_frame
+
+	var replay_victory: Node = DUEL_SCENE.instantiate()
+	replay_victory.set("testing_mode", true)
+	replay_victory.set("opening_layout_seed", -1)
+	root.add_child(replay_victory)
+	await process_frame
+	var replay_board: Array = Rules.empty_board()
+	replay_board[0] = {"owner": Rules.PLAYER_OWNER, "card": {}}
+	replay_victory.set("board", replay_board)
+	replay_victory.set("_is_replaying", true)
+	replay_victory.call("_finish_match")
+	var replay_vfx := replay_victory.get_node("DuelCanvas/VictoryVfx") as Control
+	_check(
+		int(replay_vfx.call("debug_get_play_count")) == 0,
+		"Reaching victory during replay skips the victory presentation"
+	)
+	_check(
+		not bool(replay_victory.call("debug_is_victory_vfx_playing")),
+		"Replay victory terminal has no active victory input gate"
+	)
+	_check(
+		(replay_victory.get_node("DuelCanvas/TurnStatus") as Label).visible,
+		"Replay victory terminal shows the final score immediately"
+	)
+	replay_victory.set("_is_replaying", false)
+	replay_victory.call("_sync_terminal_hand_action")
+	_check(
+		(replay_victory.get_node("DuelCanvas/PostMatchReturnButton") as Button).visible,
+		"Leaving replay mode exposes the final return action"
+	)
+	replay_victory.queue_free()
 	await process_frame
 
 	var defeat_outcome: Dictionary = {"value": &""}

@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-16
+Updated: 2026-09-20
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -66,6 +66,9 @@ release-ready Android package.
   indented. The formatter is pure presentation with a lossless fallback;
   snapshots retain the original catalog text, and `flavor` remains unchanged.
 - In-memory replay snapshot/log: `scripts/duel_replay_record.gd`
+- A real-player victory uses the red-gold `VictoryVfx` overlay for a four-second
+  presentation. The final score and “打道回府” become available when the emblem
+  settles at about 1.10 seconds; replay terminal states skip this effect.
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
   mode, while Windows and Android exports default to normal mode.
