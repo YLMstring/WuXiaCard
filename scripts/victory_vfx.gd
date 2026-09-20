@@ -4,6 +4,10 @@ extends Control
 signal settled
 signal finished
 
+const DROP_START_OFFSET_Y: float = -153.0
+const DROP_INITIAL_SLOPE: float = 0.55
+const DROP_INITIAL_SCALE: float = 1.50
+
 @export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
 @export_range(0.0, 2.0, 0.01) var entry_duration: float = 0.25
 @export_range(0.0, 2.0, 0.01) var impact_duration: float = 0.55
@@ -23,6 +27,7 @@ signal finished
 @onready var gong_player: AudioStreamPlayer = $GongPlayer
 
 var _animation: Tween = null
+var _drop_animation: Tween = null
 var _is_playing: bool = false
 var _is_settled: bool = false
 var _play_count: int = 0
@@ -53,6 +58,7 @@ func play() -> void:
 	_play_count += 1
 	visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_start_drop_motion()
 
 	_animation = create_tween()
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -60,14 +66,10 @@ func play() -> void:
 	_animation.parallel().tween_property(vignette, "modulate:a", 1.0, entry_duration)
 	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.32, entry_duration)
 	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.32, entry_duration)
-	_animation.parallel().tween_property(victory_emblem, "position", _emblem_rest_position + Vector2(0.0, -76.0), entry_duration)
-	_animation.parallel().tween_property(fallback_glyph, "position", _fallback_rest_position + Vector2(0.0, -76.0), entry_duration)
 	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.20, entry_duration)
 
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_animation.tween_property(victory_emblem, "position", _emblem_rest_position, impact_duration)
-	_animation.parallel().tween_property(fallback_glyph, "position", _fallback_rest_position, impact_duration)
-	_animation.parallel().tween_property(victory_emblem, "scale", Vector2(0.92, 0.92), impact_duration)
+	_animation.tween_property(victory_emblem, "scale", Vector2(0.92, 0.92), impact_duration)
 	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2(0.92, 0.92), impact_duration)
 	_animation.parallel().tween_property(victory_emblem, "modulate:a", 1.0, impact_duration)
 	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 1.0, impact_duration)
@@ -142,6 +144,23 @@ func debug_get_play_count() -> int:
 	return _play_count
 
 
+func debug_get_drop_offset_y(elapsed_seconds: float) -> float:
+	return lerpf(
+		DROP_START_OFFSET_Y,
+		0.0,
+		_drop_curve_progress(elapsed_seconds / _drop_duration())
+	)
+
+
+func debug_get_drop_speed_y(elapsed_seconds: float) -> float:
+	var time: float = clampf(elapsed_seconds / _drop_duration(), 0.0, 1.0)
+	var curve_slope: float = (
+		DROP_INITIAL_SLOPE
+		+ 2.0 * (1.0 - DROP_INITIAL_SLOPE) * time
+	)
+	return -DROP_START_OFFSET_Y * curve_slope / _drop_duration()
+
+
 func _mark_settled() -> void:
 	if not _is_playing or _is_settled:
 		return
@@ -166,6 +185,39 @@ func _kill_animation() -> void:
 	if _animation != null and _animation.is_valid():
 		_animation.kill()
 	_animation = null
+	if _drop_animation != null and _drop_animation.is_valid():
+		_drop_animation.kill()
+	_drop_animation = null
+
+
+func _drop_duration() -> float:
+	return maxf(entry_duration + impact_duration, 0.001)
+
+
+func _drop_curve_progress(normalized_time: float) -> float:
+	var time: float = clampf(normalized_time, 0.0, 1.0)
+	return (
+		DROP_INITIAL_SLOPE * time
+		+ (1.0 - DROP_INITIAL_SLOPE) * time * time
+	)
+
+
+func _set_drop_progress(progress: float) -> void:
+	var offset := Vector2(
+		0.0,
+		lerpf(DROP_START_OFFSET_Y, 0.0, _drop_curve_progress(progress))
+	)
+	if victory_emblem != null:
+		victory_emblem.position = _emblem_rest_position + offset
+	if fallback_glyph != null:
+		fallback_glyph.position = _fallback_rest_position + offset
+
+
+func _start_drop_motion() -> void:
+	_set_drop_progress(0.0)
+	_drop_animation = create_tween()
+	_drop_animation.set_trans(Tween.TRANS_LINEAR).set_ease(Tween.EASE_IN_OUT)
+	_drop_animation.tween_method(_set_drop_progress, 0.0, 1.0, _drop_duration())
 
 
 func _reset_visuals() -> void:
@@ -188,14 +240,14 @@ func _reset_visuals() -> void:
 		gold_particles.modulate.a = 0.0
 	if victory_emblem != null:
 		victory_emblem.pivot_offset = victory_emblem.size * 0.5
-		victory_emblem.position = _emblem_rest_position + Vector2(0.0, -122.0)
-		victory_emblem.scale = Vector2(1.35, 1.35)
+		victory_emblem.position = _emblem_rest_position + Vector2(0.0, DROP_START_OFFSET_Y)
+		victory_emblem.scale = Vector2.ONE * DROP_INITIAL_SCALE
 		victory_emblem.modulate = Color(1.0, 1.0, 1.0, 0.0)
 		victory_emblem.visible = victory_emblem.texture != null
 	if fallback_glyph != null:
 		fallback_glyph.pivot_offset = fallback_glyph.size * 0.5
-		fallback_glyph.position = _fallback_rest_position + Vector2(0.0, -122.0)
-		fallback_glyph.scale = Vector2(1.35, 1.35)
+		fallback_glyph.position = _fallback_rest_position + Vector2(0.0, DROP_START_OFFSET_Y)
+		fallback_glyph.scale = Vector2.ONE * DROP_INITIAL_SCALE
 		fallback_glyph.modulate = Color(1.0, 1.0, 1.0, 0.0)
 		fallback_glyph.visible = victory_emblem == null or victory_emblem.texture == null
 	if impact_flash != null:

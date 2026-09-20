@@ -60,6 +60,58 @@ func _run() -> void:
 		_check(is_equal_approx(settle_time, 1.10), "Victory presentation settles at 1.10 seconds")
 		_check(is_equal_approx(fade_time, 3.00), "Victory presentation starts fading at 3.00 seconds")
 		_check(is_equal_approx(finish_time, 4.00), "Victory presentation finishes at 4.00 seconds")
+		var has_drop_curve_api: bool = (
+			victory_vfx.has_method("debug_get_drop_offset_y")
+			and victory_vfx.has_method("debug_get_drop_speed_y")
+		)
+		_check(has_drop_curve_api, "Victory presentation exposes its deterministic drop curve")
+		if has_drop_curve_api:
+			var drop_duration: float = (
+				float(victory_vfx.get("entry_duration"))
+				+ float(victory_vfx.get("impact_duration"))
+			)
+			var boundary_time: float = float(victory_vfx.get("entry_duration"))
+			var speed_before_boundary: float = float(
+				victory_vfx.call("debug_get_drop_speed_y", boundary_time - 0.001)
+			)
+			var speed_after_boundary: float = float(
+				victory_vfx.call("debug_get_drop_speed_y", boundary_time + 0.001)
+			)
+			var old_terminal_speed: float = 2.0 * 76.0 / 0.55
+			_check(
+				float(victory_vfx.call("debug_get_drop_speed_y", 0.0)) > 0.0,
+				"Victory emblem starts descending while it fades in"
+			)
+			_check(
+				float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) > -153.0
+				and float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) < 0.0,
+				"Victory emblem is already descending before the old phase boundary"
+			)
+			_check(
+				absf(speed_after_boundary - speed_before_boundary) < 1.0,
+				"Victory drop velocity stays continuous across 0.25 seconds"
+			)
+			_check(
+				float(victory_vfx.call("debug_get_drop_speed_y", drop_duration))
+				>= old_terminal_speed,
+				"Victory drop keeps at least the former terminal impact speed"
+			)
+		_check(
+			victory_emblem != null
+			and victory_emblem.scale.is_equal_approx(Vector2(1.50, 1.50)),
+			"Victory emblem begins at the enlarged 1.50 scale"
+		)
+		var fallback_glyph := victory_vfx.get_node("FallbackGlyph") as Label
+		_check(
+			victory_emblem != null
+			and is_equal_approx(
+				victory_emblem.position.y
+				- (victory_vfx.get("_emblem_rest_position") as Vector2).y,
+				fallback_glyph.position.y
+				- (victory_vfx.get("_fallback_rest_position") as Vector2).y
+			),
+			"Fallback glyph begins with the same drop offset as the emblem"
+		)
 	_check(
 		bool(victory_duel.call("debug_is_victory_vfx_playing")),
 		"Victory starts the presentation before terminal controls appear"
@@ -89,6 +141,15 @@ func _run() -> void:
 	)
 	victory_duel.call("debug_settle_victory_vfx")
 	await process_frame
+	var settled_emblem := victory_vfx.get_node("VictoryEmblem") as TextureRect
+	var settled_emblem_position: Vector2 = settled_emblem.position
+	for frame_index: int in range(3):
+		await process_frame
+	_check(
+		settled_emblem.position.is_equal_approx(settled_emblem_position)
+		and settled_emblem.scale.is_equal_approx(Vector2.ONE),
+		"Forced settle prevents the drop tween from restoring an in-flight visual"
+	)
 	_check(
 		bool(victory_duel.call("debug_is_victory_vfx_playing")),
 		"Settling the victory presentation keeps the remaining effect active"

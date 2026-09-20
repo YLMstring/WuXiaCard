@@ -40,7 +40,7 @@
 - Consumes: existing `entry_duration`, `impact_duration`, `_emblem_rest_position`, `_fallback_rest_position`, `play()`, `cancel()`, and immediate-completion paths.
 - Produces: `debug_get_drop_offset_y(elapsed_seconds: float) -> float` and `debug_get_drop_speed_y(elapsed_seconds: float) -> float` for deterministic trajectory assertions; runtime motion remains internal.
 
-- [ ] **Step 1: Add failing trajectory and live-state assertions**
+- [x] **Step 1: Add failing trajectory and live-state assertions**
 
 In `tests/test_duel_outcome.gd`, immediately after the existing timing assertions, add:
 
@@ -105,13 +105,13 @@ After `debug_settle_victory_vfx()` and one processed frame, add:
 	)
 ```
 
-- [ ] **Step 2: Run the focused test and confirm the new assertions fail**
+- [x] **Step 2: Run the focused test and confirm the new assertions fail**
 
 Run the `test_duel_outcome.gd` SceneTree test with the project engine and Dummy audio.
 
 Expected: FAIL because `debug_get_drop_offset_y()` and `debug_get_drop_speed_y()` do not exist and the live initial scale is still `1.35`.
 
-- [ ] **Step 3: Add the continuous trajectory and independent motion tween**
+- [x] **Step 3: Add the continuous trajectory and independent motion tween**
 
 In `scripts/victory_vfx.gd`, add these constants and state:
 
@@ -198,13 +198,13 @@ Extend `_kill_animation()` so every completion and cancellation path stops both 
 	_drop_animation = null
 ```
 
-- [ ] **Step 4: Re-run script validation and focused outcome tests**
+- [x] **Step 4: Re-run script validation and focused outcome tests**
 
 Run Summer script validation for `res://scripts/victory_vfx.gd` and `res://tests/test_duel_outcome.gd`, then run `test_duel_outcome.gd` with Dummy audio.
 
 Expected: both scripts report zero errors; `DUEL_OUTCOME_TESTS_PASSED` includes the new trajectory checks.
 
-- [ ] **Step 5: Perform deterministic frame-by-frame visual verification**
+- [x] **Step 5: Perform deterministic frame-by-frame visual verification**
 
 Launch `res://scenes/duel.tscn` as a deterministic offscreen instance at fixed 60 FPS with Dummy audio. Trigger `VictoryVfx.play()` directly and capture/probe at frames corresponding to approximately `0.00`, `0.25`, `0.50`, `0.80`, and `1.10` seconds.
 
@@ -216,7 +216,7 @@ Expected:
 - At 0.80 seconds it reaches the rest position at `0.92` scale and the impact light peaks.
 - At 1.10 seconds it has rebounded to normal scale and terminal controls can appear.
 
-- [ ] **Step 6: Run regression verification**
+- [x] **Step 6: Run regression verification**
 
 Run:
 
@@ -226,7 +226,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1
 
 Expected: all 84 suites pass. Then run `git diff --check` and Summer diagnostics; no new errors or warnings may originate from the modified files.
 
-- [ ] **Step 7: Commit the implementation**
+- [x] **Step 7: Commit the implementation**
 
 ```powershell
 git add -- scripts/victory_vfx.gd tests/test_duel_outcome.gd docs/superpowers/plans/2026-09-20-victory-continuous-drop.md
