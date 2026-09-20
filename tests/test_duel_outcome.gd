@@ -37,7 +37,7 @@ func _run() -> void:
 	victory_duel.set("board", victory_board)
 	victory_duel.call("_finish_match")
 	_check(victory_duel.debug_get_match_outcome() == &"victory", "Higher player score records victory")
-	var victory_vfx := victory_duel.get_node_or_null("DuelCanvas/VictoryVfx") as Control
+	var victory_vfx := victory_duel.get_node_or_null("VictoryVfx") as Control
 	_check(victory_vfx != null, "Duel scene owns the victory presentation overlay")
 	if victory_vfx != null:
 		var victory_emblem := victory_vfx.get_node_or_null("VictoryEmblem") as TextureRect
@@ -155,7 +155,7 @@ func _run() -> void:
 	replay_victory.set("board", replay_board)
 	replay_victory.set("_is_replaying", true)
 	replay_victory.call("_finish_match")
-	var replay_vfx := replay_victory.get_node("DuelCanvas/VictoryVfx") as Control
+	var replay_vfx := replay_victory.get_node("VictoryVfx") as Control
 	_check(
 		int(replay_vfx.call("debug_get_play_count")) == 0,
 		"Reaching victory during replay skips the victory presentation"

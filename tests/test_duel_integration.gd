@@ -176,13 +176,20 @@ func _check_player_suppression_turn_warning(duel: Node) -> void:
 func _check_duel_canvas_structure(duel: Node) -> void:
 	var backdrop: Control = duel.get_node_or_null("DecorBackdrop") as Control
 	var canvas: Control = duel.get_node_or_null("DuelCanvas") as Control
+	var victory_vfx: Control = duel.get_node_or_null("VictoryVfx") as Control
 	_check(
 		backdrop != null
 		and backdrop.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"Decorative backdrop exists and cannot intercept input"
 	)
 	_check(canvas != null, "Fixed duel canvas exists")
-	if backdrop == null or canvas == null:
+	_check(
+		victory_vfx != null
+		and victory_vfx.get_parent() == duel
+		and victory_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Victory presentation is a non-interactive full-viewport root overlay"
+	)
+	if backdrop == null or canvas == null or victory_vfx == null:
 		return
 	_check(
 		backdrop.get_index() < canvas.get_index(),
@@ -412,6 +419,9 @@ func _check_fixed_duel_canvas_geometry(duel: Node) -> void:
 		await process_frame
 		var backdrop: Control = duel.get_node("DecorBackdrop") as Control
 		var canvas: Control = duel.get_node("DuelCanvas") as Control
+		var victory_vfx: Control = duel.get_node("VictoryVfx") as Control
+		var victory_dimmer: Control = victory_vfx.get_node("Dimmer") as Control
+		var victory_vignette: Control = victory_vfx.get_node("Vignette") as Control
 		_check(
 			absf(canvas.size.x / canvas.size.y - 9.0 / 16.0) < 0.001,
 			"Duel canvas remains 9:16 at %dx%d" % [target_size.x, target_size.y]
@@ -424,6 +434,13 @@ func _check_fixed_duel_canvas_geometry(duel: Node) -> void:
 			backdrop.position.is_equal_approx(Vector2.ZERO)
 			and backdrop.size.is_equal_approx(duel.size),
 			"Decorative backdrop fills the viewport at %dx%d" % [target_size.x, target_size.y]
+		)
+		_check(
+			victory_vfx.position.is_equal_approx(Vector2.ZERO)
+			and victory_vfx.size.is_equal_approx(duel.size)
+			and victory_dimmer.size.is_equal_approx(duel.size)
+			and victory_vignette.size.is_equal_approx(duel.size),
+			"Victory dimmer and vignette cover the full viewport at %dx%d" % [target_size.x, target_size.y]
 		)
 		_check(
 			int(backdrop.call("debug_get_layout_mode")) == expected_modes[target_index],

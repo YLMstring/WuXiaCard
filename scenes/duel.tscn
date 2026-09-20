@@ -295,7 +295,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("6_ur6ul")
 
-[node name="VictoryVfx" parent="DuelCanvas" unique_id=185028980 instance=ExtResource("9_victory_vfx")]
+[node name="VictoryVfx" parent="." unique_id=185028980 instance=ExtResource("9_victory_vfx")]
 layout_mode = 1
 
 [node name="PlacementAudio" type="AudioStreamPlayer" parent="." unique_id=502979519]
