@@ -75,8 +75,8 @@ func play() -> void:
 	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.12, 1.12), impact_duration)
 	_animation.parallel().tween_property(light_rays, "modulate:a", 0.78, impact_duration)
 	_animation.parallel().tween_property(light_rays, "scale", Vector2.ONE, impact_duration)
-	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.94, impact_duration)
-	_animation.parallel().tween_property(impact_flash, "scale", Vector2(1.22, 1.22), impact_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.68, impact_duration)
+	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE, impact_duration)
 	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.78, impact_duration)
 	_animation.tween_callback(_strike_gong)
 
@@ -94,7 +94,14 @@ func play() -> void:
 	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.04, 1.04), hold_duration)
 
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-	_animation.tween_property(self, "modulate:a", 0.0, fade_duration)
+	_animation.tween_property(dimmer, "color:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(vignette, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, fade_duration)
 	_animation.tween_callback(_complete)
 
 
@@ -193,7 +200,7 @@ func _reset_visuals() -> void:
 		fallback_glyph.visible = victory_emblem == null or victory_emblem.texture == null
 	if impact_flash != null:
 		impact_flash.pivot_offset = impact_flash.size * 0.5
-		impact_flash.scale = Vector2(0.28, 0.28)
+		impact_flash.scale = Vector2(0.48, 0.48)
 		impact_flash.modulate.a = 0.0
 
 

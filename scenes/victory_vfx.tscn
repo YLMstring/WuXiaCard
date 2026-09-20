@@ -4,31 +4,31 @@
 [ext_resource type="Texture2D" path="res://art/vfx/victory_emblem.png" id="2_victory_emblem"]
 
 [sub_resource type="Shader" id="Shader_vignette"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec2 p = UV * 2.0 - 1.0;\n\tp.x *= 0.60;\n\tfloat edge = smoothstep(0.38, 0.98, length(p));\n\tCOLOR = vec4(0.12, 0.025, 0.006, edge * 0.82);\n}\n"
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV * 2.0 - 1.0;\n\tp.x *= 0.60;\n\tfloat edge = smoothstep(0.38, 0.98, length(p));\n\tCOLOR = vec4(0.12, 0.025, 0.006, edge * 0.82) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 shader = SubResource("Shader_vignette")
 
 [sub_resource type="Shader" id="Shader_glow"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tfloat radius = length(UV - vec2(0.5)) * 2.0;\n\tfloat core = 1.0 - smoothstep(0.06, 0.92, radius);\n\tfloat halo = 1.0 - smoothstep(0.42, 1.0, radius);\n\tvec3 gold = mix(vec3(1.0, 0.40, 0.04), vec3(1.0, 0.88, 0.42), core);\n\tCOLOR = vec4(gold, (core * 0.34 + halo * 0.20));\n}\n"
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tfloat radius = length(UV - vec2(0.5)) * 2.0;\n\tfloat core = 1.0 - smoothstep(0.06, 0.92, radius);\n\tfloat halo = 1.0 - smoothstep(0.42, 1.0, radius);\n\tvec3 gold = mix(vec3(1.0, 0.40, 0.04), vec3(1.0, 0.88, 0.42), core);\n\tCOLOR = vec4(gold, (core * 0.34 + halo * 0.20)) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_glow"]
 shader = SubResource("Shader_glow")
 
 [sub_resource type="Shader" id="Shader_rays"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec2 p = UV - vec2(0.5);\n\tfloat radius = length(p) * 2.0;\n\tfloat angle = atan(p.y, p.x);\n\tfloat broad = pow(max(0.0, cos(angle * 8.0)), 10.0);\n\tfloat fine = pow(max(0.0, cos(angle * 17.0 + 0.45)), 24.0) * 0.52;\n\tfloat ring = smoothstep(0.10, 0.30, radius) * (1.0 - smoothstep(0.66, 1.0, radius));\n\tfloat alpha = (broad + fine) * ring * 0.48;\n\tCOLOR = vec4(1.0, 0.72, 0.18, alpha);\n}\n"
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV - vec2(0.5);\n\tfloat radius = length(p) * 2.0;\n\tfloat angle = atan(p.y, p.x);\n\tfloat broad = pow(max(0.0, cos(angle * 8.0)), 10.0);\n\tfloat fine = pow(max(0.0, cos(angle * 17.0 + 0.45)), 24.0) * 0.52;\n\tfloat ring = smoothstep(0.10, 0.30, radius) * (1.0 - smoothstep(0.66, 1.0, radius));\n\tfloat alpha = (broad + fine) * ring * 0.48;\n\tCOLOR = vec4(1.0, 0.72, 0.18, alpha) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_rays"]
 shader = SubResource("Shader_rays")
 
 [sub_resource type="Shader" id="Shader_particles"]
-code = "shader_type canvas_item;\n\nfloat hash(float value) {\n\treturn fract(sin(value * 91.3458) * 47453.5453);\n}\n\nvoid fragment() {\n\tfloat dots = 0.0;\n\tvec3 tint = vec3(1.0, 0.73, 0.22);\n\tfor (int i = 0; i < 22; i++) {\n\t\tfloat fi = float(i) + 1.0;\n\t\tvec2 point = vec2(hash(fi * 1.71), hash(fi * 3.97));\n\t\tfloat size = mix(0.004, 0.012, hash(fi * 7.13));\n\t\tfloat dot_alpha = 1.0 - smoothstep(size * 0.25, size, distance(UV, point));\n\t\tdots += dot_alpha * mix(0.42, 1.0, hash(fi * 5.29));\n\t}\n\tCOLOR = vec4(tint, clamp(dots, 0.0, 1.0) * 0.88);\n}\n"
+code = "shader_type canvas_item;\n\nfloat hash(float value) {\n\treturn fract(sin(value * 91.3458) * 47453.5453);\n}\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tfloat dots = 0.0;\n\tvec3 tint = vec3(1.0, 0.73, 0.22);\n\tfor (int i = 0; i < 22; i++) {\n\t\tfloat fi = float(i) + 1.0;\n\t\tvec2 point = vec2(hash(fi * 1.71), hash(fi * 3.97));\n\t\tfloat size = mix(0.004, 0.012, hash(fi * 7.13));\n\t\tfloat dot_alpha = 1.0 - smoothstep(size * 0.25, size, distance(UV, point));\n\t\tdots += dot_alpha * mix(0.42, 1.0, hash(fi * 5.29));\n\t}\n\tCOLOR = vec4(tint, clamp(dots, 0.0, 1.0) * 0.88) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_particles"]
 shader = SubResource("Shader_particles")
 
 [sub_resource type="Shader" id="Shader_flash"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tfloat radius = length(UV - vec2(0.5)) * 2.0;\n\tfloat core = 1.0 - smoothstep(0.0, 0.20, radius);\n\tfloat bloom = 1.0 - smoothstep(0.04, 1.0, radius);\n\tCOLOR = vec4(1.0, 0.91, 0.62, core * 0.96 + bloom * 0.48);\n}\n"
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV - vec2(0.5);\n\tfloat core = 1.0 - smoothstep(0.0, 0.075, length(p * vec2(1.0, 1.55)));\n\tfloat horizontal = exp(-abs(p.y) * 46.0) * (1.0 - smoothstep(0.08, 0.50, abs(p.x)));\n\tfloat vertical = exp(-abs(p.x) * 72.0) * (1.0 - smoothstep(0.04, 0.34, abs(p.y)));\n\tfloat halo = (1.0 - smoothstep(0.08, 0.62, length(p * vec2(1.0, 1.7)))) * 0.16;\n\tfloat alpha = clamp(core * 0.72 + horizontal * 0.44 + vertical * 0.16 + halo, 0.0, 1.0);\n\tCOLOR = vec4(1.0, 0.80, 0.34, alpha) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_flash"]
 shader = SubResource("Shader_flash")
@@ -114,6 +114,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="VictoryEmblem" type="TextureRect" parent="."]
+z_index = 1
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -133,6 +134,7 @@ stretch_mode = 5
 
 [node name="FallbackGlyph" type="Label" parent="."]
 visible = false
+z_index = 1
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -162,10 +164,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -275.0
-offset_right = 250.0
-offset_bottom = 225.0
+offset_left = -270.0
+offset_top = -145.0
+offset_right = 270.0
+offset_bottom = 95.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
