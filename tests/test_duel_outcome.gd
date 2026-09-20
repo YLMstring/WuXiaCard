@@ -57,6 +57,11 @@ func _run() -> void:
 		)
 		var fade_time: float = settle_time + float(victory_vfx.get("hold_duration"))
 		var finish_time: float = fade_time + float(victory_vfx.get("fade_duration"))
+		var impact_time: float = (
+			float(victory_vfx.get("entry_duration"))
+			+ float(victory_vfx.get("impact_duration"))
+		)
+		_check(is_equal_approx(impact_time, 0.70), "Victory emblem impacts at 0.70 seconds")
 		_check(is_equal_approx(settle_time, 1.10), "Victory presentation settles at 1.10 seconds")
 		_check(is_equal_approx(fade_time, 3.00), "Victory presentation starts fading at 3.00 seconds")
 		_check(is_equal_approx(finish_time, 4.00), "Victory presentation finishes at 4.00 seconds")
@@ -79,13 +84,13 @@ func _run() -> void:
 			)
 			var old_terminal_speed: float = 2.0 * 76.0 / 0.55
 			_check(
-				float(victory_vfx.call("debug_get_drop_speed_y", 0.0)) > 0.0,
-				"Victory emblem starts descending while it fades in"
+				float(victory_vfx.call("debug_get_drop_speed_y", 0.0)) >= 165.0,
+				"Victory emblem starts with a brisk downward speed while it fades in"
 			)
 			_check(
-				float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) > -153.0
+				float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) >= -110.0
 				and float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)) < 0.0,
-				"Victory emblem is already descending before the old phase boundary"
+				"Victory emblem covers at least 43 pixels during the fade-in"
 			)
 			_check(
 				absf(speed_after_boundary - speed_before_boundary) < 1.0,

@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-19-single-duel-victory-vfx-design.md`
 
+**Follow-up tuning:** After hands-on playtesting, the `0.80`-second impact still felt slow. The current requirement supersedes that original plan value: impact occurs at `0.70` seconds, initial speed is at least `165` logical pixels per second, the first `0.25` seconds cover at least `43` pixels, and the longer rebound still settles at `1.10` seconds.
+
 ## Global Constraints
 
 - `0.00–0.25` seconds combines fade-in and downward motion.
