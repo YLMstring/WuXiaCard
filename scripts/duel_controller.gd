@@ -837,7 +837,7 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 	board_grid.visible = false
 	score_overlay.visible = false
 	_sync_hand_playability()
-	turn_status.text = "查看卡牌详情 · 轻触卷轴返回"
+	turn_status.text = "查看卡牌详情 · 轻触返回"
 	card_inspector.present(card_data, _get_board_rect())
 
 
@@ -2974,7 +2974,7 @@ func _update_score() -> void:
 
 func _update_turn_status() -> void:
 	if _inspection_open:
-		turn_status.text = "查看卡牌详情 · 轻触卷轴返回"
+		turn_status.text = "查看卡牌详情 · 轻触返回"
 		return
 	if _is_replaying_opponent_turn:
 		turn_status.text = "回放中..."

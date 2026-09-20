@@ -468,14 +468,14 @@ func _open_inspector(data: Dictionary, is_sect: bool = false) -> void:
 		var unlocked: bool = _selected_sect_id in _profile_store.get_unlocked_sect_ids(profile)
 		detail_actions.configure_bottom_action("拜入师门", unlocked)
 		status_label.text = (
-			"查看门派详情 · 轻触卷轴返回"
+			"查看详情 · 轻触返回"
 			if unlocked
 			else LOCKED_STATUS
 		)
 	else:
 		player_hand.visible = true
 		detail_actions.hide_bottom_action()
-		status_label.text = "查看门派详情 · 轻触卷轴返回"
+		status_label.text = "查看详情 · 轻触返回"
 	card_inspector.set_close_exclusion_controls(detail_actions.get_exclusion_controls())
 	card_inspector.present(data, _get_library_rect())
 

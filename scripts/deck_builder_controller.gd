@@ -376,7 +376,7 @@ func _open_card_inspector(
 		) >= 0:
 			player_hand.visible = false
 			detail_actions.configure_bottom_action("加入卡组")
-			status_label.text = "查看卡牌详情 · 轻触卷轴返回"
+			status_label.text = "查看卡牌详情 · 轻触返回"
 		else:
 			_replacement_target_mode = true
 			player_hand.visible = true
@@ -387,11 +387,11 @@ func _open_card_inspector(
 	elif deck_index >= 0:
 		player_hand.visible = false
 		detail_actions.configure_bottom_action("移出卡组")
-		status_label.text = "查看卡牌详情 · 轻触卷轴返回"
+		status_label.text = "查看卡牌详情 · 轻触返回"
 	else:
 		player_hand.visible = true
 		detail_actions.hide_bottom_action()
-		status_label.text = "查看卡牌详情 · 轻触卷轴返回"
+		status_label.text = "查看卡牌详情 · 轻触返回"
 	var exclusions: Array[Control] = detail_actions.get_exclusion_controls()
 	if _replacement_target_mode:
 		exclusions.append(player_hand)

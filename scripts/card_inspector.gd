@@ -195,11 +195,7 @@ func _notification(what: int) -> void:
 
 
 func _begin_pointer(pointer_position: Vector2, pointer_id: int) -> void:
-	if (
-		_pointer_active
-		or not _is_on_parchment(pointer_position)
-		or _is_in_close_exclusion(pointer_position)
-	):
+	if _pointer_active or _is_in_close_exclusion(pointer_position):
 		return
 	_pointer_active = true
 	_pointer_id = pointer_id
@@ -218,7 +214,7 @@ func _end_pointer(pointer_position: Vector2, pointer_id: int) -> void:
 	if not _pointer_active or pointer_id != _pointer_id:
 		return
 	_update_pointer(pointer_position)
-	var should_close: bool = not _gesture_moved and _is_on_parchment(pointer_position)
+	var should_close: bool = not _gesture_moved
 	_reset_pointer()
 	if should_close:
 		close()
@@ -240,10 +236,6 @@ func _is_in_close_exclusion(pointer_position: Vector2) -> bool:
 		):
 			return true
 	return false
-
-
-func _is_on_parchment(pointer_position: Vector2) -> bool:
-	return parchment.get_global_rect().has_point(pointer_position)
 
 
 func _display_string(value: Variant) -> String:

@@ -187,19 +187,10 @@ func _run() -> void:
 	var no_exclusions: Array[Control] = []
 	inspector.call("set_close_exclusion_controls", no_exclusions)
 	_submit_mouse_gesture(inspector, Vector2(8.0, 8.0), Vector2(8.0, 8.0))
-	_check(
-		_close_count == 0 and bool(inspector.call("is_open")),
-		"A stationary tap outside the parchment keeps inspection open"
-	)
-	var parchment_center: Vector2 = parchment.get_global_rect().get_center()
-	_submit_mouse_gesture(inspector, parchment_center, parchment_center)
-	_check(
-		_close_count == 1 and not bool(inspector.call("is_open")),
-		"A stationary tap on the parchment closes inspection exactly once"
-	)
+	_check(_close_count == 1 and not bool(inspector.call("is_open")), "A stationary tap closes inspection exactly once")
 	inspector.call("present", {"glyph": "苍松迎客", "tier": 1}, board_rect)
-	_submit_mouse_gesture(inspector, parchment_center, parchment_center + Vector2(32.0, 0.0))
-	_check(_close_count == 1 and bool(inspector.call("is_open")), "A scroll gesture on the parchment does not close inspection")
+	_submit_mouse_gesture(inspector, Vector2(8.0, 8.0), Vector2(40.0, 8.0))
+	_check(_close_count == 1 and bool(inspector.call("is_open")), "A scroll-sized gesture does not close inspection")
 	inspector.call("close")
 	inspector.call("close")
 	_check(_close_count == 2 and not bool(inspector.call("is_open")), "Repeated close requests are idempotent")

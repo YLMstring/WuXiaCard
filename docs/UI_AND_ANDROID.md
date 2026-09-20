@@ -54,10 +54,7 @@ Hand slot backgrounds are separate from card backgrounds. If opponent and player
 
 Unknown or empty content uses a placeholder. Opening uses a snapshot of revealed card data. Face-down cards cannot open it.
 
-The modal blocks drag/play/activation. A stationary tap on the parchment closes
-it; taps outside the parchment do nothing, and a swipe is treated as scroll
-input. The board and score are hidden, while both hands, top bar, and bottom
-status remain visible.
+The modal blocks drag/play/activation. A tap closes it; a swipe is treated as scroll input. The board and score are hidden, while both hands, top bar, and bottom status remain visible.
 
 ## Chinese Line Wrapping
 
