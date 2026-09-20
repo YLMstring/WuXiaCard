@@ -2,31 +2,32 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the victory emblem visibly descend while fading in from 0.00–0.25 seconds, then continue accelerating without a velocity reset until impact at 0.80 seconds, starting at 1.50 scale.
+**Goal:** Make the victory emblem descend at one constant speed while fading in, reach impact at `0.70` seconds, and begin at `2.0` scale.
 
-**Architecture:** Keep the existing four-second presentation timeline for opacity, scale, light, sound, settle, hold, and fade. Move only emblem/fallback vertical position to a second tween spanning `entry_duration + impact_duration`; drive it with a small pure quadratic curve that begins with positive velocity and accelerates continuously, so the 0.25-second visual boundary cannot create a stall.
+**Architecture:** Keep the existing four-second presentation timeline for opacity, scale, light, sound, settle, hold, and fade. Move only emblem/fallback vertical position to a second tween spanning `entry_duration + impact_duration`; drive it with one linear trajectory so the 0.25-second visual boundary cannot create a stall or speed change.
+
+**Latest playtest tuning:** The trajectory now covers `153` logical pixels in `0.70` seconds at a constant speed of about `218.6` logical pixels per second. It covers about `54.6` pixels during the first `0.25` seconds, and the initial scale is `2.0`. This supersedes the accelerating-curve and terminal-speed targets retained in the original implementation notes below.
 
 **Tech Stack:** Godot/Summer Engine 4.7, typed GDScript, SceneTree integration tests.
 
 **Spec:** `docs/superpowers/specs/2026-09-19-single-duel-victory-vfx-design.md`
 
-**Follow-up tuning:** After hands-on playtesting, the `0.80`-second impact still felt slow. The current requirement supersedes that original plan value: impact occurs at `0.70` seconds, initial speed is at least `165` logical pixels per second, the first `0.25` seconds cover at least `43` pixels, and the longer rebound still settles at `1.10` seconds.
+**Follow-up tuning:** After hands-on playtesting, the `0.80`-second impact still felt slow. Impact now occurs at `0.70` seconds and the longer rebound still settles at `1.10` seconds.
 
 ## Global Constraints
 
 - `0.00–0.25` seconds combines fade-in and downward motion.
-- `0.25–0.80` seconds continues the same accelerating trajectory without resetting velocity.
-- Initial emblem and fallback scale is exactly `1.50`; impact scale remains `0.92`.
-- Impact remains at `0.80` seconds, settle at `1.10`, fade start at `3.00`, and completion at `4.00`.
-- The new terminal drop speed must be at least the old quadratic impact terminal speed, `2 × 76 / 0.55 ≈ 276.36` logical pixels per second.
+- `0.25–0.70` seconds continues at the same constant speed without resetting velocity.
+- Initial emblem and fallback scale is exactly `2.0`; impact scale remains `0.92`.
+- Impact remains at `0.70` seconds, settle at `1.10`, fade start at `3.00`, and completion at `4.00`.
+- The trajectory covers `153` logical pixels at about `218.6` logical pixels per second.
 - Victory fallback text must use the same position and scale trajectory as the image.
 - Cancel, immediate settle, natural completion, and scene exit must stop both tweens and leave no delayed callbacks.
 
 ## Review Focus
 
-- At exactly `0.25` seconds, velocity remains positive and continuous across the old phase boundary; the trajectory test samples immediately before and after it.
-- At `0.80` seconds, terminal velocity is at least `276.36` logical pixels per second; the test compares against the former motion analytically.
-- At zero elapsed time, the emblem is already assigned a positive downward velocity and begins at `1.50` scale; the test checks both curve data and live node state.
+- At the start, at `0.25` seconds, and at `0.70` seconds, the trajectory reports the same downward speed.
+- At zero elapsed time, the emblem is already assigned a positive downward velocity and begins at `2.0` scale; the test checks both curve data and live node state.
 - When immediate settle or cancellation occurs before impact, the independent motion tween cannot overwrite the settled/reset position afterward; the outcome test checks the live emblem after forced settle.
 - When the texture is unavailable and `FallbackGlyph` is used, its position and scale remain identical to `VictoryEmblem`; the same setter updates both nodes and the test compares their relative offsets.
 
