@@ -65,39 +65,25 @@ func _run() -> void:
 		_check(is_equal_approx(settle_time, 1.10), "Victory presentation settles at 1.10 seconds")
 		_check(is_equal_approx(fade_time, 3.00), "Victory presentation starts fading at 3.00 seconds")
 		_check(is_equal_approx(finish_time, 4.00), "Victory presentation finishes at 4.00 seconds")
-		var has_drop_curve_api: bool = (
-			victory_vfx.has_method("debug_get_drop_offset_y")
-			and victory_vfx.has_method("debug_get_drop_speed_y")
-		)
-		_check(has_drop_curve_api, "Victory presentation exposes its deterministic drop curve")
-		if has_drop_curve_api:
-			var drop_duration: float = (
+		var has_smash_curve_api: bool = victory_vfx.has_method("debug_get_smash_scale")
+		_check(has_smash_curve_api, "Victory presentation exposes its deterministic smash curve")
+		if has_smash_curve_api:
+			var smash_duration: float = (
 				float(victory_vfx.get("entry_duration"))
 				+ float(victory_vfx.get("impact_duration"))
 			)
 			var boundary_time: float = float(victory_vfx.get("entry_duration"))
-			var expected_uniform_speed: float = 153.0 / drop_duration
-			var start_speed: float = float(
-				victory_vfx.call("debug_get_drop_speed_y", 0.0)
-			)
-			var boundary_speed: float = float(
-				victory_vfx.call("debug_get_drop_speed_y", boundary_time)
-			)
-			var terminal_speed: float = float(
-				victory_vfx.call("debug_get_drop_speed_y", drop_duration)
-			)
 			_check(
-				is_equal_approx(start_speed, expected_uniform_speed)
-				and is_equal_approx(boundary_speed, expected_uniform_speed)
-				and is_equal_approx(terminal_speed, expected_uniform_speed),
-				"Victory emblem descends at one constant speed"
-			)
-			_check(
-				is_equal_approx(
-					float(victory_vfx.call("debug_get_drop_offset_y", boundary_time)),
-					lerpf(-153.0, 0.0, boundary_time / drop_duration)
+				is_equal_approx(float(victory_vfx.call("debug_get_smash_scale", 0.0)), 2.0)
+				and is_equal_approx(
+					float(victory_vfx.call("debug_get_smash_scale", boundary_time)),
+					lerpf(2.0, 0.92, boundary_time / smash_duration)
+				)
+				and is_equal_approx(
+					float(victory_vfx.call("debug_get_smash_scale", smash_duration)),
+					0.92
 				),
-				"Victory emblem keeps its uniform trajectory during the fade-in"
+				"Victory emblem keeps one continuous depth-smash scale trajectory"
 			)
 		_check(
 			victory_emblem != null
@@ -107,13 +93,13 @@ func _run() -> void:
 		var fallback_glyph := victory_vfx.get_node("FallbackGlyph") as Label
 		_check(
 			victory_emblem != null
-			and is_equal_approx(
-				victory_emblem.position.y
-				- (victory_vfx.get("_emblem_rest_position") as Vector2).y,
-				fallback_glyph.position.y
-				- (victory_vfx.get("_fallback_rest_position") as Vector2).y
+			and victory_emblem.position.is_equal_approx(
+				victory_vfx.get("_emblem_rest_position") as Vector2
+			)
+			and fallback_glyph.position.is_equal_approx(
+				victory_vfx.get("_fallback_rest_position") as Vector2
 			),
-			"Fallback glyph begins with the same drop offset as the emblem"
+			"Victory emblem and fallback remain centered without screen-space descent"
 		)
 	_check(
 		bool(victory_duel.call("debug_is_victory_vfx_playing")),
@@ -151,7 +137,7 @@ func _run() -> void:
 	_check(
 		settled_emblem.position.is_equal_approx(settled_emblem_position)
 		and settled_emblem.scale.is_equal_approx(Vector2.ONE),
-		"Forced settle prevents the drop tween from restoring an in-flight visual"
+		"Forced settle prevents the smash tween from restoring an in-flight visual"
 	)
 	_check(
 		bool(victory_duel.call("debug_is_victory_vfx_playing")),
