@@ -11,7 +11,9 @@ const SMASH_CUBIC_WEIGHT: float = 0.78
 const EARLY_REVEAL_DURATION: float = 0.12
 const IMPACT_HOLD_DURATION: float = 0.03
 const REBOUND_SCALE: float = 1.04
-const IMPACT_FLASH_ALPHA: float = 0.78
+const IMPACT_FLASH_ALPHA: float = 1.0
+const IMPACT_RING_ALPHA: float = 0.95
+const GONG_TRANSIENT_LEAD_TIME: float = 0.10
 
 @export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
 @export_range(0.0, 2.0, 0.01) var entry_duration: float = 0.25
@@ -30,11 +32,13 @@ const IMPACT_FLASH_ALPHA: float = 0.78
 @onready var gold_particles: ColorRect = $GoldParticles
 @onready var victory_emblem: TextureRect = $VictoryEmblem
 @onready var fallback_glyph: Label = $FallbackGlyph
+@onready var impact_ring: ColorRect = $ImpactRing
 @onready var impact_flash: ColorRect = $ImpactFlash
 @onready var gong_player: AudioStreamPlayer = $GongPlayer
 
 var _animation: Tween = null
 var _smash_animation: Tween = null
+var _gong_schedule: Tween = null
 var _is_playing: bool = false
 var _is_settled: bool = false
 var _play_count: int = 0
@@ -65,6 +69,7 @@ func play() -> void:
 	visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_start_smash_motion()
+	_start_gong_schedule()
 
 	var early_reveal_duration: float = minf(entry_duration, EARLY_REVEAL_DURATION)
 	var reveal_finish_duration: float = maxf(entry_duration - early_reveal_duration, 0.0)
@@ -95,13 +100,20 @@ func play() -> void:
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_animation.tween_property(victory_emblem, "scale", Vector2.ONE * REBOUND_SCALE, rebound_duration)
 	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE * REBOUND_SCALE, rebound_duration)
-	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, minf(rebound_duration, 0.10))
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.10, rebound_duration)
+	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE * 1.20, rebound_duration)
+	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.68, rebound_duration)
+	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 0.90, rebound_duration)
 	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.65, rebound_duration)
 	_animation.parallel().tween_property(light_rays, "modulate:a", 0.50, rebound_duration)
 
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_animation.tween_property(victory_emblem, "scale", Vector2.ONE, recovery_duration)
 	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE, recovery_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, recovery_duration)
+	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE * 1.34, recovery_duration)
+	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.0, recovery_duration)
+	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 1.38, recovery_duration)
 	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.58, recovery_duration)
 	_animation.parallel().tween_property(light_rays, "modulate:a", 0.46, recovery_duration)
 	_animation.tween_interval(_settle_hold_duration())
@@ -120,6 +132,7 @@ func play() -> void:
 	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.0, fade_duration)
 	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.0, fade_duration)
 	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.0, fade_duration)
+	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.0, fade_duration)
 	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, fade_duration)
 	_animation.tween_callback(_complete)
 
@@ -167,6 +180,10 @@ func debug_get_smash_scale(elapsed_seconds: float) -> float:
 	)
 
 
+func debug_get_gong_start_time() -> float:
+	return maxf(_smash_duration() - GONG_TRANSIENT_LEAD_TIME, 0.0)
+
+
 func _mark_settled() -> void:
 	if not _is_playing or _is_settled:
 		return
@@ -194,6 +211,9 @@ func _kill_animation() -> void:
 	if _smash_animation != null and _smash_animation.is_valid():
 		_smash_animation.kill()
 	_smash_animation = null
+	if _gong_schedule != null and _gong_schedule.is_valid():
+		_gong_schedule.kill()
+	_gong_schedule = null
 
 
 func _smash_duration() -> float:
@@ -231,6 +251,14 @@ func _start_smash_motion() -> void:
 	_smash_animation.tween_method(_set_smash_progress, 0.0, 1.0, _smash_duration())
 
 
+func _start_gong_schedule() -> void:
+	_gong_schedule = create_tween()
+	var output_pipeline_lead: float = maxf(AudioServer.get_output_latency(), 0.0)
+	output_pipeline_lead += maxf(AudioServer.get_time_to_next_mix(), 0.0)
+	_gong_schedule.tween_interval(maxf(debug_get_gong_start_time() - output_pipeline_lead, 0.0))
+	_gong_schedule.tween_callback(_strike_gong)
+
+
 func _reset_visuals() -> void:
 	modulate = Color.WHITE
 	if dimmer != null:
@@ -261,9 +289,13 @@ func _reset_visuals() -> void:
 		fallback_glyph.scale = Vector2.ONE * SMASH_INITIAL_SCALE
 		fallback_glyph.modulate = Color(1.0, 1.0, 1.0, 0.0)
 		fallback_glyph.visible = victory_emblem == null or victory_emblem.texture == null
+	if impact_ring != null:
+		impact_ring.pivot_offset = impact_ring.size * 0.5
+		impact_ring.scale = Vector2.ONE * 0.36
+		impact_ring.modulate.a = 0.0
 	if impact_flash != null:
 		impact_flash.pivot_offset = impact_flash.size * 0.5
-		impact_flash.scale = Vector2(0.48, 0.48)
+		impact_flash.scale = Vector2.ONE * 0.48
 		impact_flash.modulate.a = 0.0
 
 
@@ -281,18 +313,20 @@ func _apply_settled_visuals() -> void:
 	fallback_glyph.position = _fallback_rest_position
 	fallback_glyph.scale = Vector2.ONE
 	fallback_glyph.modulate.a = 1.0
+	impact_ring.modulate.a = 0.0
 	impact_flash.modulate.a = 0.0
 
 
 func _trigger_impact() -> void:
 	impact_flash.modulate.a = IMPACT_FLASH_ALPHA
-	impact_flash.scale = Vector2.ONE
-	radial_glow.modulate.a = 0.92
+	impact_flash.scale = Vector2.ONE * 0.54
+	impact_ring.modulate.a = IMPACT_RING_ALPHA
+	impact_ring.scale = Vector2.ONE * 0.42
+	radial_glow.modulate.a = 1.0
 	radial_glow.scale = Vector2(1.12, 1.12)
-	light_rays.modulate.a = 0.78
+	light_rays.modulate.a = 0.92
 	light_rays.scale = Vector2.ONE
-	gold_particles.modulate.a = 0.78
-	_strike_gong()
+	gold_particles.modulate.a = 0.92
 
 
 func _strike_gong() -> void:
