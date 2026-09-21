@@ -104,12 +104,34 @@ func _run() -> void:
 		first_highlighted_card.get_node("Overlay/NewCardGoldBorder") as ColorRect
 	)
 	var gold_material := gold_border.material as ShaderMaterial
+	var highlighted_panel_style := (
+		first_highlighted_card.get_theme_stylebox("panel") as StyleBoxFlat
+	)
+	var highlighted_card_rect: Rect2 = first_highlighted_card.get_global_rect()
+	var gold_border_rect: Rect2 = gold_border.get_global_rect()
+	var shader_control_size: Vector2 = gold_material.get_shader_parameter("control_size")
 	_check(
 		gold_material != null
 		and gold_material.shader != null
 		and gold_material.shader.resource_path
 		== "res://shaders/new_card_gold_border.gdshader",
 		"New-card border uses the dedicated continuously flowing gold shader"
+	)
+	_check(
+		highlighted_panel_style != null
+		and is_zero_approx(highlighted_panel_style.border_color.a),
+		"The flowing gold border replaces the ordinary owner-colored border"
+	)
+	_check(
+		gold_border_rect.position.is_equal_approx(
+			highlighted_card_rect.position - Vector2.ONE * 3.0
+		)
+		and gold_border_rect.size.is_equal_approx(
+			highlighted_card_rect.size + Vector2.ONE * 6.0
+		)
+		and shader_control_size.is_equal_approx(gold_border.size)
+		and gold_material.shader.code.contains("1.0 - inner_mask"),
+		"The flowing gold border is cut out over the card face and rendered outside it"
 	)
 	var rank_up_audio := builder.get_node("RankUpAudio") as AudioStreamPlayer
 	_check(
@@ -123,11 +145,15 @@ func _run() -> void:
 		0,
 		first_highlighted_slot.card_data
 	)
+	var expected_restored_border: Color = first_highlighted_card.call("_get_owner_border")
 	_check(
 		not first_highlighted_card.is_new_card_highlighted()
 		and second_highlighted_card.is_new_card_highlighted()
+		and (
+			first_highlighted_card.get_theme_stylebox("panel") as StyleBoxFlat
+		).border_color.is_equal_approx(expected_restored_border)
 		and dismissed_highlight_ids == [highlighted_card_ids[0]],
-		"Tapping a new card clears only that card's gold border"
+		"Tapping a new card restores only that card's ordinary owner border"
 	)
 	card_inspector.close()
 	await process_frame

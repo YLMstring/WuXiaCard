@@ -3,10 +3,11 @@ render_mode unshaded;
 
 uniform vec4 gold_base : source_color = vec4(0.76, 0.43, 0.07, 1.0);
 uniform vec4 gold_highlight : source_color = vec4(1.0, 0.94, 0.55, 1.0);
-uniform float border_width : hint_range(0.01, 0.12) = 0.055;
-uniform float corner_radius : hint_range(0.01, 0.20) = 0.085;
 uniform float flow_speed : hint_range(0.01, 0.50) = 0.10;
 uniform float highlight_width : hint_range(0.02, 0.30) = 0.13;
+uniform vec2 control_size = vec2(102.0, 134.0);
+uniform float border_width_px : hint_range(1.0, 8.0) = 3.0;
+uniform float inner_corner_radius_px : hint_range(1.0, 24.0) = 8.0;
 
 
 float rounded_box_distance(vec2 point, vec2 half_size, float radius) {
@@ -38,18 +39,17 @@ float perimeter_coordinate(vec2 uv) {
 
 
 void fragment() {
-	vec2 point = UV - vec2(0.5);
-	float antialias_width = max(fwidth(UV.x), fwidth(UV.y)) * 1.5;
+	vec2 point = (UV - vec2(0.5)) * control_size;
+	float antialias_width = max(fwidth(point.x), fwidth(point.y)) * 1.5;
 	float outer_distance = rounded_box_distance(
 		point,
-		vec2(0.5),
-		corner_radius
+		control_size * 0.5,
+		inner_corner_radius_px + border_width_px
 	);
-	float inner_radius = max(0.01, corner_radius - border_width);
 	float inner_distance = rounded_box_distance(
 		point,
-		vec2(0.5 - border_width),
-		inner_radius
+		control_size * 0.5 - vec2(border_width_px),
+		inner_corner_radius_px
 	);
 	float outer_mask = 1.0 - smoothstep(
 		-antialias_width,
@@ -57,11 +57,11 @@ void fragment() {
 		outer_distance
 	);
 	float inner_mask = 1.0 - smoothstep(
-		-antialias_width,
+		0.0,
 		antialias_width,
 		inner_distance
 	);
-	float border_mask = max(0.0, outer_mask - inner_mask);
+	float border_mask = outer_mask * (1.0 - inner_mask);
 
 	float phase = fract(perimeter_coordinate(UV) - TIME * flow_speed);
 	float wrapped_phase = min(phase, 1.0 - phase);

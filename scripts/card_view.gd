@@ -13,6 +13,7 @@ signal hold_recognized(card_data: Dictionary)
 
 const CARD_BACK_GLYPH: String = "◆"
 const CARD_PICTURE_SCALE: float = 0.8
+const NEW_CARD_GOLD_BORDER_OUTSET: float = 3.0
 const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Abilities = preload("res://scripts/duel_abilities.gd")
@@ -67,6 +68,7 @@ var _pending_pointer_start: Vector2 = Vector2.ZERO
 var _long_press_recognized: bool = false
 var _hold_timer: Timer = null
 var _ki_bead_diameter: float = 26.0
+var _new_card_highlighted: bool = false
 
 @onready var overlay: Control = $Overlay
 @onready var art_placeholder: Label = $Overlay/ArtPlaceholder
@@ -87,8 +89,13 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
 	resized.connect(_on_resized)
 	overlay.resized.connect(_center_card_picture)
+	overlay.resized.connect(_layout_new_card_gold_border)
+	var shared_gold_material := new_card_gold_border.material as ShaderMaterial
+	if shared_gold_material != null:
+		new_card_gold_border.material = shared_gold_material.duplicate() as ShaderMaterial
 	_on_resized()
 	_refresh_face_content()
+	new_card_gold_border.visible = _new_card_highlighted
 	_apply_owner_style()
 	_hold_timer = Timer.new()
 	_hold_timer.one_shot = true
@@ -112,11 +119,15 @@ func set_long_press_enabled(value: bool) -> void:
 
 
 func set_new_card_highlighted(value: bool) -> void:
-	new_card_gold_border.visible = value
+	_new_card_highlighted = value
+	if new_card_gold_border != null:
+		new_card_gold_border.visible = value
+	if is_node_ready():
+		_apply_owner_style()
 
 
 func is_new_card_highlighted() -> bool:
-	return new_card_gold_border.visible
+	return _new_card_highlighted
 
 
 func sync_runtime_data(new_card_data: Dictionary, new_owner_id: int) -> void:
@@ -627,6 +638,7 @@ func _try_end_drag(pointer_position: Vector2, pointer_id: int) -> void:
 
 func _on_resized() -> void:
 	pivot_offset = size * 0.5
+	_layout_new_card_gold_border()
 	var short_side: float = minf(size.x, size.y)
 	var picture_side: float = short_side * CARD_PICTURE_SCALE
 	card_picture.size = Vector2.ONE * picture_side
@@ -640,6 +652,17 @@ func _on_resized() -> void:
 
 func _center_card_picture() -> void:
 	card_picture.position = (overlay.size - card_picture.size) * 0.5
+
+
+func _layout_new_card_gold_border() -> void:
+	if not is_instance_valid(overlay) or not is_instance_valid(new_card_gold_border):
+		return
+	var outset := Vector2.ONE * NEW_CARD_GOLD_BORDER_OUTSET
+	new_card_gold_border.position = -overlay.position - outset
+	new_card_gold_border.size = size + outset * 2.0
+	var gold_material := new_card_gold_border.material as ShaderMaterial
+	if gold_material != null:
+		gold_material.set_shader_parameter("control_size", new_card_gold_border.size)
 
 
 func _layout_ki_badge(short_side: float) -> void:
@@ -761,7 +784,9 @@ func _style_ki_badge(bead_kind: StringName) -> void:
 func _apply_owner_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = _get_display_background()
-	style.border_color = _get_display_border()
+	style.border_color = (
+		Color.TRANSPARENT if _new_card_highlighted else _get_display_border()
+	)
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(8)
 	style.shadow_color = Color(0.08, 0.06, 0.05, 0.35)
