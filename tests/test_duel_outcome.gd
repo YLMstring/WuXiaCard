@@ -117,14 +117,21 @@ func _run() -> void:
 		var fallback_glyph := victory_vfx.get_node("FallbackGlyph") as Label
 		var impact_flash := victory_vfx.get_node_or_null("ImpactFlash") as ColorRect
 		var impact_ring := victory_vfx.get_node_or_null("ImpactRing") as ColorRect
+		var impact_flash_material := impact_flash.material as ShaderMaterial if impact_flash != null else null
+		var impact_flash_shader := impact_flash_material.shader if impact_flash_material != null else null
 		_check(
 			impact_flash != null
 			and impact_ring != null
-			and impact_flash.material is ShaderMaterial
+			and impact_flash_material != null
 			and impact_ring.material is ShaderMaterial
-			and impact_flash.z_index > victory_emblem.z_index
+			and impact_flash.z_index < victory_emblem.z_index
 			and impact_ring.z_index < victory_emblem.z_index,
-			"Victory impact layers a foreground gold-white burst over a background expanding ring"
+			"Victory impact keeps every animated light layer behind the emblem"
+		)
+		_check(
+			impact_flash_shader != null
+			and impact_flash_shader.code.contains("center_cutout"),
+			"Victory impact burst explicitly masks the emblem center"
 		)
 		_check(
 			victory_emblem != null
