@@ -63,6 +63,15 @@ func _run() -> void:
 			+ float(victory_vfx.get("impact_duration"))
 		)
 		_check(is_equal_approx(impact_time, 0.70), "Victory emblem impacts at 0.70 seconds")
+		var has_gong_timing_api: bool = victory_vfx.has_method("debug_get_gong_start_time")
+		_check(has_gong_timing_api, "Victory presentation exposes deterministic gong timing")
+		if has_gong_timing_api:
+			var gong_start_time: float = float(victory_vfx.call("debug_get_gong_start_time"))
+			_check(
+				is_equal_approx(gong_start_time, 0.60)
+				and is_equal_approx(gong_start_time + 0.10, impact_time),
+				"Gong starts early enough for its measured 0.10-second strike peak to meet impact"
+			)
 		_check(is_equal_approx(settle_time, 1.10), "Victory presentation settles at 1.10 seconds")
 		_check(is_equal_approx(fade_time, 3.00), "Victory presentation starts fading at 3.00 seconds")
 		_check(is_equal_approx(finish_time, 4.00), "Victory presentation finishes at 4.00 seconds")
@@ -106,6 +115,17 @@ func _run() -> void:
 			"Victory emblem begins at the enlarged 2.0 scale"
 		)
 		var fallback_glyph := victory_vfx.get_node("FallbackGlyph") as Label
+		var impact_flash := victory_vfx.get_node_or_null("ImpactFlash") as ColorRect
+		var impact_ring := victory_vfx.get_node_or_null("ImpactRing") as ColorRect
+		_check(
+			impact_flash != null
+			and impact_ring != null
+			and impact_flash.material is ShaderMaterial
+			and impact_ring.material is ShaderMaterial
+			and impact_flash.z_index > victory_emblem.z_index
+			and impact_ring.z_index < victory_emblem.z_index,
+			"Victory impact layers a foreground gold-white burst over a background expanding ring"
+		)
 		_check(
 			victory_emblem != null
 			and victory_emblem.position.is_equal_approx(
