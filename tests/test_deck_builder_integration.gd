@@ -118,6 +118,11 @@ func _run() -> void:
 		"New-card border uses the dedicated continuously flowing gold shader"
 	)
 	_check(
+		gold_material.shader.code.contains("vec4(gold.rgb, border_mask)")
+		and not gold_material.shader.code.contains("mix(0.88"),
+		"The gold border stays opaque instead of inheriting the owner background color"
+	)
+	_check(
 		highlighted_panel_style != null
 		and is_zero_approx(highlighted_panel_style.border_color.a),
 		"The flowing gold border replaces the ordinary owner-colored border"
