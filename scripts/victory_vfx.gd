@@ -12,7 +12,7 @@ const EARLY_REVEAL_DURATION: float = 0.12
 const IMPACT_HOLD_DURATION: float = 0.03
 const REBOUND_SCALE: float = 1.04
 const IMPACT_FLASH_ALPHA: float = 1.0
-const IMPACT_RING_ALPHA: float = 1.0
+const IMPACT_RING_ALPHA: float = 0.95
 const GONG_TRANSIENT_LEAD_TIME: float = 0.10
 
 @export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
@@ -102,8 +102,8 @@ func play() -> void:
 	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE * REBOUND_SCALE, rebound_duration)
 	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.50, rebound_duration)
 	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE * 1.14, rebound_duration)
-	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.78, rebound_duration)
-	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 1.22, rebound_duration)
+	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.68, rebound_duration)
+	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 0.90, rebound_duration)
 	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.65, rebound_duration)
 	_animation.parallel().tween_property(light_rays, "modulate:a", 0.50, rebound_duration)
 
@@ -113,7 +113,7 @@ func play() -> void:
 	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, recovery_duration)
 	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE * 1.30, recovery_duration)
 	_animation.parallel().tween_property(impact_ring, "modulate:a", 0.0, recovery_duration)
-	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 1.56, recovery_duration)
+	_animation.parallel().tween_property(impact_ring, "scale", Vector2.ONE * 1.38, recovery_duration)
 	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.58, recovery_duration)
 	_animation.parallel().tween_property(light_rays, "modulate:a", 0.46, recovery_duration)
 	_animation.tween_interval(_settle_hold_duration())
@@ -291,7 +291,7 @@ func _reset_visuals() -> void:
 		fallback_glyph.visible = victory_emblem == null or victory_emblem.texture == null
 	if impact_ring != null:
 		impact_ring.pivot_offset = impact_ring.size * 0.5
-		impact_ring.scale = Vector2.ONE * 0.82
+		impact_ring.scale = Vector2.ONE * 0.36
 		impact_ring.modulate.a = 0.0
 	if impact_flash != null:
 		impact_flash.pivot_offset = impact_flash.size * 0.5
@@ -321,7 +321,7 @@ func _trigger_impact() -> void:
 	impact_flash.modulate.a = IMPACT_FLASH_ALPHA
 	impact_flash.scale = Vector2.ONE * 0.92
 	impact_ring.modulate.a = IMPACT_RING_ALPHA
-	impact_ring.scale = Vector2.ONE * 0.88
+	impact_ring.scale = Vector2.ONE * 0.42
 	radial_glow.modulate.a = 1.0
 	radial_glow.scale = Vector2(1.12, 1.12)
 	light_rays.modulate.a = 0.92
