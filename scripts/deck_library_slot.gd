@@ -44,7 +44,6 @@ var _dragging: bool = false
 var _drag_vacancy_visible: bool = false
 var _rejected_drag_pulse_tween: Tween = null
 var _rejected_drag_pulse_count: int = 0
-var _card_entry_animation_count: int = 0
 
 @onready var card_host: Control = $CardHost
 @onready var empty_frame: PanelContainer = $CardHost/EmptyFrame
@@ -99,6 +98,7 @@ func bind(
 		card_view.configure(card_data, display_owner_id, false)
 		card_view.set_face_down(placeholder)
 	_set_drag_vacancy_visible(false)
+	card_view.set_new_card_highlighted(false)
 	modulate = Color.WHITE
 	scale = Vector2.ONE
 
@@ -181,23 +181,12 @@ func play_rejected_drag_pulse(
 	)
 
 
-func play_card_entry(
-	bloom_duration: float,
-	rise_duration: float,
-	ink_color: Color
-) -> void:
-	if not is_node_ready() or card_data.is_empty() or placeholder:
-		return
-	_card_entry_animation_count += 1
-	await card_view.play_draw_summon(bloom_duration, rise_duration, ink_color)
-
-
 func debug_get_rejected_drag_pulse_count() -> int:
 	return _rejected_drag_pulse_count
 
 
-func debug_get_card_entry_animation_count() -> int:
-	return _card_entry_animation_count
+func set_new_card_highlighted(value: bool) -> void:
+	card_view.set_new_card_highlighted(value and not card_data.is_empty() and not placeholder)
 
 
 func debug_begin_pointer(pointer_position: Vector2, pointer_id: int = -1) -> void:

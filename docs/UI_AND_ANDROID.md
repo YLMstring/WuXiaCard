@@ -101,9 +101,11 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   shortcut for remove/add; reward cards use it to claim. Immediate movement
   still scrolls the library. Sect confirmation and all filters use explicit
   detail buttons instead of drag targets.
-- Newly unlocked reward cards use the duel draw animation on the first
-  deck-builder entry that follows their award. Rank-up audio is keyed to an
-  actual character-level increase and is consumed on that same entry.
+- Directly awarded cards use a slowly flowing gold border in deck building;
+  inherited lower-tier namesakes do not. Tapping or holding the exact card
+  clears its border, while acquiring a later reward batch clears every older
+  border. Rank-up audio is keyed to an actual character-level increase, plays
+  as a sound effect over the existing music, and is consumed on entry.
 
 ## Beginner Tutorial
 

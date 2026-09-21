@@ -44,17 +44,20 @@ func _run() -> void:
 	var mastered_library_id := StringName(String(fixture_profile["library_slots"][0]))
 	fixture_profile["mastered_card_ids"] = [String(mastered_library_id)]
 	_check(fixture_store.save_profile(fixture_profile), "Mastery color fixture saves")
-	var entry_card_ids: Array[StringName] = [
+	var highlighted_card_ids: Array[StringName] = [
 		StringName(String(fixture_profile["library_slots"][0])),
 		StringName(String(fixture_profile["library_slots"][1])),
 	]
 	var builder: Variant = BUILDER_SCENE.instantiate()
 	builder.profile_path = _save_path
 	builder.testing_mode = false
-	builder.new_card_entry_ids = entry_card_ids
+	builder.new_card_highlight_ids = highlighted_card_ids
 	builder.play_rank_up_sound_on_ready = true
-	builder.card_entry_bloom_duration = 0.0
-	builder.card_entry_rise_duration = 0.0
+	var dismissed_highlight_ids: Array[StringName] = []
+	builder.new_card_highlight_dismissed.connect(
+		func(card_id: StringName) -> void:
+			dismissed_highlight_ids.append(card_id)
+	)
 	var enemy_fixture_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"DuGu9Jian1",
@@ -79,13 +82,34 @@ func _run() -> void:
 	var status_label := canvas.get_node("Status") as Label
 	var card_inspector := canvas.get_node("CardInspector") as Control
 	_check(
-		builder.debug_get_started_card_entry_ids() == entry_card_ids,
-		"Entering deck building reuses the draw entrance for each visible new card"
+		builder.debug_get_new_card_highlight_ids() == highlighted_card_ids,
+		"Entering deck building keeps the supplied newly acquired card IDs active"
+	)
+	var first_highlighted_slot: Variant = grid.debug_get_bound_slot(0)
+	var second_highlighted_slot: Variant = grid.debug_get_bound_slot(1)
+	var first_highlighted_card := (
+		first_highlighted_slot.get_node("CardHost/CardView") as CardView
+	)
+	var second_highlighted_card := (
+		second_highlighted_slot.get_node("CardHost/CardView") as CardView
 	)
 	_check(
-		grid.debug_get_bound_slot(0).debug_get_card_entry_animation_count() == 1
-		and grid.debug_get_bound_slot(1).debug_get_card_entry_animation_count() == 1,
-		"Each requested new card starts its entrance exactly once"
+		first_highlighted_card.is_new_card_highlighted()
+		and second_highlighted_card.is_new_card_highlighted()
+		and not (first_highlighted_card.get_node("Overlay/InkBloom") as Control).visible
+		and first_highlighted_card.scale.is_equal_approx(Vector2.ONE),
+		"New cards use a persistent gold border without the former entrance animation"
+	)
+	var gold_border := (
+		first_highlighted_card.get_node("Overlay/NewCardGoldBorder") as ColorRect
+	)
+	var gold_material := gold_border.material as ShaderMaterial
+	_check(
+		gold_material != null
+		and gold_material.shader != null
+		and gold_material.shader.resource_path
+		== "res://shaders/new_card_gold_border.gdshader",
+		"New-card border uses the dedicated continuously flowing gold shader"
 	)
 	var rank_up_audio := builder.get_node("RankUpAudio") as AudioStreamPlayer
 	_check(
@@ -94,6 +118,19 @@ func _run() -> void:
 		and rank_up_audio.stream.resource_path == "res://music/rank_up.wav",
 		"Rank-up entry plays the supplied audio resource once"
 	)
+	builder.call(
+		"_on_library_inspection_requested",
+		0,
+		first_highlighted_slot.card_data
+	)
+	_check(
+		not first_highlighted_card.is_new_card_highlighted()
+		and second_highlighted_card.is_new_card_highlighted()
+		and dismissed_highlight_ids == [highlighted_card_ids[0]],
+		"Tapping a new card clears only that card's gold border"
+	)
+	card_inspector.close()
+	await process_frame
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),
@@ -307,6 +344,10 @@ func _run() -> void:
 		DuelRules.PLAYER_OWNER,
 		&"full_hold"
 	)
+	dismissed_highlight_ids.clear()
+	var full_highlight_ids: Array[StringName] = [full_source_id]
+	builder.new_card_highlight_ids = full_highlight_ids
+	grid.set_new_card_highlight_ids(builder.new_card_highlight_ids)
 	builder.call("_on_library_hold_recognized", 0, full_source_data)
 	_check(
 		builder.debug_get_profile() == full_profile
@@ -318,6 +359,11 @@ func _run() -> void:
 		and not bottom_action.visible
 		and builder.debug_get_status() == "轻触下方卡组中的牌可进行替换",
 		"Holding a collection card against a full deck opens the same replacement details"
+	)
+	_check(
+		builder.debug_get_new_card_highlight_ids().is_empty()
+		and dismissed_highlight_ids == [full_source_id],
+		"Holding a new card clears its gold border before the normal hold action"
 	)
 	card_inspector.close()
 	await process_frame

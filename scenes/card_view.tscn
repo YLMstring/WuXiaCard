@@ -1,8 +1,12 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/card_view.gd" id="1_card"]
 [ext_resource type="Script" path="res://scripts/ink_bloom.gd" id="2_ink_bloom"]
 [ext_resource type="Script" path="res://scripts/centered_glyph_value.gd" id="3_value"]
+[ext_resource type="Shader" path="res://shaders/new_card_gold_border.gdshader" id="4_gold_border"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_gold_border"]
+shader = ExtResource("4_gold_border")
 
 [node name="CardView" type="PanelContainer"]
 custom_minimum_size = Vector2(54, 72)
@@ -66,6 +70,19 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("2_ink_bloom")
+
+[node name="NewCardGoldBorder" type="ColorRect" parent="Overlay"]
+visible = false
+z_index = 6
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = SubResource("ShaderMaterial_gold_border")
+color = Color(1, 1, 1, 1)
 
 [node name="TopPower" type="Label" parent="Overlay"]
 z_index = 1

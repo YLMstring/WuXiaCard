@@ -37,7 +37,8 @@ var _current_screen: Control = null
 var _normal_deck_profile_path: String = ""
 var _music_director: Node = null
 var _play_lose_on_next_deck_builder: bool = false
-var _pending_deck_builder_new_card_ids: Array[StringName] = []
+var _active_new_card_highlight_ids: Array[StringName] = []
+var _pending_new_card_highlight_ids: Array[StringName] = []
 var _play_rank_up_on_next_deck_builder: bool = false
 var _balance_telemetry_store: RefCounted = null
 var _balance_telemetry_uploader: Node = null
@@ -125,12 +126,17 @@ func _show_deck_builder() -> void:
 	builder.upcoming_enemy_card_ids = _enemy_deck_from_details(enemy)
 	builder.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 	builder.testing_mode = testing_mode
-	builder.new_card_entry_ids = _pending_deck_builder_new_card_ids.duplicate()
+	if not _pending_new_card_highlight_ids.is_empty():
+		_active_new_card_highlight_ids = _pending_new_card_highlight_ids.duplicate()
+		_pending_new_card_highlight_ids.clear()
+	builder.new_card_highlight_ids = _active_new_card_highlight_ids.duplicate()
 	builder.play_rank_up_sound_on_ready = _play_rank_up_on_next_deck_builder
-	_pending_deck_builder_new_card_ids.clear()
 	_play_rank_up_on_next_deck_builder = false
 	builder.duel_requested.connect(_on_duel_requested)
 	builder.back_requested.connect(_on_return_to_menu_requested)
+	builder.new_card_highlight_dismissed.connect(
+		_on_new_card_highlight_dismissed
+	)
 	_replace_screen(builder)
 	if _play_lose_on_next_deck_builder:
 		_play_lose_on_next_deck_builder = false
@@ -371,7 +377,7 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		reward_outcome
 	)
 	profile = duel_result.get("profile", profile)
-	_queue_new_card_entries(duel_result.get("added_ids", []))
+	_queue_new_card_highlights(duel_result.get("primary_ids", []))
 	if store.get_character_level(profile) > previous_character_level:
 		_play_rank_up_on_next_deck_builder = true
 	_queue_beginner_flow_completed_event_if_needed(
@@ -404,25 +410,35 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		_show_deck_builder()
 
 
-func _on_reward_claimed(
-	card_id: StringName,
-	added_ids: Array[StringName]
-) -> void:
-	_queue_new_card_entries(added_ids)
+func _on_reward_claimed(card_id: StringName) -> void:
+	_queue_new_card_highlights([card_id])
 	if card_id == &"KuiHua0":
 		_play_lose_on_next_deck_builder = true
 	_show_deck_builder()
 
 
-func _queue_new_card_entries(values: Array) -> void:
+func _queue_new_card_highlights(values: Array) -> void:
+	var normalized_ids: Array[StringName] = []
 	for value: Variant in values:
 		var card_id := StringName(String(value))
-		if card_id != &"" and card_id not in _pending_deck_builder_new_card_ids:
-			_pending_deck_builder_new_card_ids.append(card_id)
+		if card_id != &"" and card_id not in normalized_ids:
+			normalized_ids.append(card_id)
+	if normalized_ids.is_empty():
+		return
+	if _pending_new_card_highlight_ids.is_empty():
+		_active_new_card_highlight_ids.clear()
+	for card_id: StringName in normalized_ids:
+		if card_id not in _pending_new_card_highlight_ids:
+			_pending_new_card_highlight_ids.append(card_id)
+
+
+func _on_new_card_highlight_dismissed(card_id: StringName) -> void:
+	_active_new_card_highlight_ids.erase(card_id)
 
 
 func _clear_pending_deck_builder_feedback() -> void:
-	_pending_deck_builder_new_card_ids.clear()
+	_active_new_card_highlight_ids.clear()
+	_pending_new_card_highlight_ids.clear()
 	_play_rank_up_on_next_deck_builder = false
 
 

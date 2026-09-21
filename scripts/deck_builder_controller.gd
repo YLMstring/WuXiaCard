@@ -3,6 +3,7 @@ extends Control
 
 signal back_requested
 signal duel_requested(starting_owner_id: int)
+signal new_card_highlight_dismissed(card_id: StringName)
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -23,7 +24,6 @@ const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
 const CHOICE_SIZE_SCALE: float = 0.72
 const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
-const DEFAULT_CARD_ENTRY_INK_COLOR: Color = Color("211824")
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -31,10 +31,8 @@ const DEFAULT_CARD_ENTRY_INK_COLOR: Color = Color("211824")
 @export var remembered_enemy_glyphs: Array[String] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
-@export var card_entry_bloom_duration: float = 0.12
-@export var card_entry_rise_duration: float = 0.28
 
-var new_card_entry_ids: Array[StringName] = []
+var new_card_highlight_ids: Array[StringName] = []
 var play_rank_up_sound_on_ready: bool = false
 
 var testing_mode: bool = Settings.default_testing_mode()
@@ -58,7 +56,6 @@ var _inspected_deck_index: int = -1
 var _inspected_data: Dictionary = {}
 var _replacement_target_mode: bool = false
 var _player_hand_default_child_index: int = -1
-var _started_card_entry_ids: Array[StringName] = []
 var _rank_up_sound_play_count: int = 0
 
 @onready var decor_backdrop: Control = $DecorBackdrop
@@ -86,6 +83,7 @@ var _rank_up_sound_play_count: int = 0
 func _ready() -> void:
 	var catalog_errors: Array[String] = Catalog.validate_catalog()
 	assert(catalog_errors.is_empty(), "Invalid card catalog: %s" % str(catalog_errors))
+	new_card_highlight_ids = new_card_highlight_ids.duplicate()
 	_profile_store = Store.new(profile_path)
 	profile = _profile_store.load_profile()
 	_player_hand_default_child_index = player_hand.get_index()
@@ -94,6 +92,7 @@ func _ready() -> void:
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
 	library_grid.set_ki_badges_enabled(true)
+	library_grid.set_new_card_highlight_ids(new_card_highlight_ids)
 	_refresh_library_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)
 	library_grid.hold_recognized.connect(_on_library_hold_recognized)
@@ -110,7 +109,7 @@ func _ready() -> void:
 	_style_start_controls()
 	_refresh_start_controls()
 	_layout_scene.call_deferred()
-	_play_entry_feedback.call_deferred()
+	_play_rank_up_sound()
 
 
 func debug_exchange(library_index: int, deck_index: int) -> bool:
@@ -184,46 +183,28 @@ func debug_can_go_second() -> bool:
 	return _go_second_allowed
 
 
-func debug_get_started_card_entry_ids() -> Array[StringName]:
-	return _started_card_entry_ids.duplicate()
+func debug_get_new_card_highlight_ids() -> Array[StringName]:
+	return new_card_highlight_ids.duplicate()
 
 
 func debug_get_rank_up_sound_play_count() -> int:
 	return _rank_up_sound_play_count
 
 
-func _play_entry_feedback() -> void:
+func _play_rank_up_sound() -> void:
 	if play_rank_up_sound_on_ready:
 		_rank_up_sound_play_count += 1
 		rank_up_audio.play()
 	play_rank_up_sound_on_ready = false
-	var pending_entry_ids: Array[StringName] = new_card_entry_ids.duplicate()
-	new_card_entry_ids = []
-	if pending_entry_ids.is_empty() or not is_inside_tree():
-		return
 
-	# The grid lays out and rebinds its virtual slots after the builder's first layout.
-	# Wait for that binding so the animation targets the final visible CardViews.
-	await get_tree().process_frame
-	if not is_inside_tree():
+
+func _dismiss_new_card_highlight(data: Dictionary) -> void:
+	var card_id := StringName(String(data.get("card_id", data.get("id", ""))))
+	if card_id == &"" or card_id not in new_card_highlight_ids:
 		return
-	await get_tree().process_frame
-	if not is_inside_tree():
-		return
-	var library_values: Array = profile.get("library_slots", [])
-	for card_id: StringName in pending_entry_ids:
-		var logical_index: int = library_values.find(String(card_id))
-		if logical_index < 0:
-			continue
-		var slot: Variant = library_grid.debug_get_bound_slot(logical_index)
-		if slot == null:
-			continue
-		_started_card_entry_ids.append(card_id)
-		slot.play_card_entry(
-			card_entry_bloom_duration,
-			card_entry_rise_duration,
-			DEFAULT_CARD_ENTRY_INK_COLOR
-		)
+	new_card_highlight_ids.erase(card_id)
+	library_grid.set_new_card_highlight_ids(new_card_highlight_ids)
+	new_card_highlight_dismissed.emit(card_id)
 
 
 func _get_mastered_card_set() -> Dictionary:
@@ -380,6 +361,7 @@ func _on_library_inspection_requested(logical_index: int, data: Dictionary) -> v
 	var source_library_index: int = _library_source_indices[logical_index]
 	if source_library_index < 0:
 		return
+	_dismiss_new_card_highlight(data)
 	_open_card_inspector(data, source_library_index, -1)
 
 
@@ -490,6 +472,7 @@ func _on_library_hold_recognized(logical_index: int, data: Dictionary) -> void:
 	var source_library_index: int = _library_source_indices[logical_index]
 	if source_library_index < 0:
 		return
+	_dismiss_new_card_highlight(data)
 	var result: Dictionary = _profile_store.add_library_card_to_deck_and_save(
 		profile,
 		source_library_index

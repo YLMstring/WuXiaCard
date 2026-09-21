@@ -48,6 +48,7 @@ enum SlotLayoutMode {
 var library_slots: Array = []
 var library_display_owner_ids: Array[int] = []
 var library_drag_enabled: Array[bool] = []
+var new_card_highlight_ids: Dictionary = {}
 var display_power_numbers_enabled: bool = true
 var ki_badges_enabled: bool = false
 var interaction_enabled: bool = true
@@ -190,6 +191,18 @@ func set_ki_badges_enabled(value: bool) -> void:
 	ki_badges_enabled = value
 	for slot: Variant in _slot_pool:
 		slot.set_ki_badge_enabled(value)
+
+
+func set_new_card_highlight_ids(values: Array[StringName]) -> void:
+	new_card_highlight_ids.clear()
+	for card_id: StringName in values:
+		if card_id != &"":
+			new_card_highlight_ids[card_id] = true
+	for slot: Variant in _slot_pool:
+		var bound_card_id := StringName(String(
+			slot.card_data.get("card_id", slot.card_data.get("id", ""))
+		))
+		slot.set_new_card_highlighted(new_card_highlight_ids.has(bound_card_id))
 
 
 func debug_get_pool_size() -> int:
@@ -418,6 +431,10 @@ func _bind_slot(slot: Variant, logical_index: int) -> void:
 		library_drag_enabled[logical_index] if logical_index < library_drag_enabled.size() else false,
 		display_power_numbers_enabled
 	)
+	var bound_card_id := StringName(String(
+		display_data.get("card_id", display_data.get("id", ""))
+	))
+	slot.set_new_card_highlighted(new_card_highlight_ids.has(bound_card_id))
 	slot.set_ki_badge_enabled(ki_badges_enabled)
 	slot.set_interaction_enabled(interaction_enabled)
 

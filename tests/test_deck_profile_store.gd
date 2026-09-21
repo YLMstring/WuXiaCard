@@ -335,6 +335,17 @@ func _run() -> void:
 		[&"CangSongYingKe1", &"CangSongYingKe3", &"CangSongYingKe4"]
 	)
 	var family_library_before: Array = _occupied_values(family_profile["library_slots"])
+	var family_expansion: Dictionary = store.call(
+		"_build_unlock_expansion",
+		family_profile,
+		[&"CangSongYingKe4"]
+	)
+	_check(
+		(family_expansion.get("primary_ids", []) as Array) == [&"CangSongYingKe4"]
+		and (family_expansion.get("added_ids", []) as Array)
+		== [&"CangSongYingKe4", &"CangSongYingKe1", &"CangSongYingKe3"],
+		"Unlock expansion distinguishes the acquired reward from inherited namesakes"
+	)
 	var family_unlock: Dictionary = store.unlock_and_save(
 		family_profile,
 		&"CangSongYingKe4"
@@ -1040,6 +1051,10 @@ func _run() -> void:
 		and String(tier_reward_profile["library_slots"][0]) == "TuNaShu2",
 		"Level two unlocks tier-two Tuna before selected-sect cards"
 	)
+	_check(
+		(tier_reward_advance.get("primary_ids", []) as Array) == tier_reward_added,
+		"Level-two progression reports its direct rewards separately"
+	)
 	var reward_rng := RandomNumberGenerator.new()
 	reward_rng.seed = 2902
 	var post_tier_reward: Dictionary = store.create_reward_offer_and_save(
@@ -1101,6 +1116,11 @@ func _run() -> void:
 			(advance_result.get("added_ids", []) as Array) == expected_added_ids,
 			"Level %d reports ordered Tuna and exact-tier sect unlocks: actual=%s expected=%s"
 			% [expected_level, str(advance_result.get("added_ids", [])), str(expected_added_ids)]
+		)
+		_check(
+			(advance_result.get("primary_ids", []) as Array) == expected_added_ids,
+			"Level %d reports only direct progression rewards as primary IDs"
+			% expected_level
 		)
 		for unlocked_id: StringName in expected_added_ids:
 			_check(

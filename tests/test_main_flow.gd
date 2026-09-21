@@ -244,25 +244,48 @@ func _run() -> void:
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Completing the sect-selection tutorial enters deck building")
 	var active_profile: Dictionary = Store.new(runtime_save_path).load_profile()
-	var entry_fixture_id := StringName(String(active_profile["library_slots"][0]))
-	flow.call("_queue_new_card_entries", [entry_fixture_id, entry_fixture_id])
+	var first_highlight_id := StringName(String(active_profile["library_slots"][0]))
+	var second_highlight_id := StringName(String(active_profile["library_slots"][1]))
+	var replacement_highlight_id := StringName(String(active_profile["library_slots"][2]))
+	flow.call("_queue_new_card_highlights", [first_highlight_id, first_highlight_id])
+	flow.call("_queue_new_card_highlights", [second_highlight_id])
 	flow.call("_show_deck_builder")
-	await process_frame
-	await process_frame
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(
-		builder.debug_get_started_card_entry_ids() == [entry_fixture_id],
-		"Main flow hands each pending new card to the next deck-builder entry once"
+		builder.debug_get_new_card_highlight_ids()
+		== [first_highlight_id, second_highlight_id],
+		"Rewards acquired before one deck-builder entry form one highlighted batch"
 	)
 	flow.call("_show_deck_builder")
 	await process_frame
-	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(
+		builder.debug_get_new_card_highlight_ids()
+		== [first_highlight_id, second_highlight_id],
+		"Highlighted cards persist across later deck-builder entries until touched"
+	)
+	flow.call("_queue_new_card_highlights", [replacement_highlight_id])
+	flow.call("_show_deck_builder")
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(
-		builder.debug_get_started_card_entry_ids().is_empty(),
-		"A later deck-builder entry does not replay consumed new-card animation"
+		builder.debug_get_new_card_highlight_ids() == [replacement_highlight_id],
+		"A later reward batch replaces every older new-card highlight"
+	)
+	var replacement_slot: Variant = builder.library_grid.debug_get_bound_slot(2)
+	builder.call(
+		"_on_library_inspection_requested",
+		2,
+		replacement_slot.card_data
+	)
+	builder.card_inspector.close()
+	flow.call("_show_deck_builder")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(
+		builder.debug_get_new_card_highlight_ids().is_empty(),
+		"Touch dismissal remains cleared when deck building is opened again"
 	)
 	_check(bool(active_profile["run_active"]), "Sect confirmation persists active-run state")
 	_check(

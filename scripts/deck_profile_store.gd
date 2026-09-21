@@ -1337,6 +1337,7 @@ func record_completed_duel_and_save(
 		"advanced": bool(advancement.get("advanced", false)),
 		"profile": candidate,
 		"ending_summary": {},
+		"primary_ids": advancement.get("primary_ids", []),
 		"added_ids": advancement.get("added_ids", []),
 	}
 
@@ -1522,6 +1523,7 @@ func advance_after_victory_and_save(
 		"ok": true,
 		"advanced": bool(advancement.get("advanced", false)),
 		"profile": candidate,
+		"primary_ids": advancement.get("primary_ids", []),
 		"added_ids": advancement.get("added_ids", []),
 	}
 
@@ -1935,6 +1937,7 @@ func _build_victory_advancement(
 		"ok": true,
 		"advanced": true,
 		"profile": candidate,
+		"primary_ids": expansion.get("primary_ids", []),
 		"added_ids": expansion.get("added_ids", []),
 	}
 

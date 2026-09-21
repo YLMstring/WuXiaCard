@@ -73,6 +73,7 @@ var _ki_bead_diameter: float = 26.0
 @onready var card_picture: TextureRect = $Overlay/CardPicture
 @onready var ink_slash: ColorRect = $Overlay/InkSlash
 @onready var ink_bloom: InkBloom = $Overlay/InkBloom
+@onready var new_card_gold_border: ColorRect = $Overlay/NewCardGoldBorder
 @onready var top_power: Label = $Overlay/TopPower
 @onready var right_power: Label = $Overlay/RightPower
 @onready var bottom_power: Label = $Overlay/BottomPower
@@ -108,6 +109,14 @@ func set_long_press_enabled(value: bool) -> void:
 	long_press_enabled = value
 	if not long_press_enabled:
 		_reset_pending_pointer()
+
+
+func set_new_card_highlighted(value: bool) -> void:
+	new_card_gold_border.visible = value
+
+
+func is_new_card_highlighted() -> bool:
+	return new_card_gold_border.visible
 
 
 func sync_runtime_data(new_card_data: Dictionary, new_owner_id: int) -> void:
