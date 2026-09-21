@@ -5,12 +5,20 @@ signal settled
 signal finished
 
 const SMASH_INITIAL_SCALE: float = 2.0
-const SMASH_IMPACT_SCALE: float = 0.92
+const SMASH_IMPACT_SCALE: float = 0.90
+const SMASH_LINEAR_WEIGHT: float = 0.22
+const SMASH_CUBIC_WEIGHT: float = 0.78
+const EARLY_REVEAL_DURATION: float = 0.12
+const IMPACT_HOLD_DURATION: float = 0.03
+const REBOUND_SCALE: float = 1.04
+const IMPACT_FLASH_ALPHA: float = 0.78
 
 @export_range(0.0, 1.0, 0.01) var dimmer_alpha: float = 0.42
 @export_range(0.0, 2.0, 0.01) var entry_duration: float = 0.25
 @export_range(0.0, 2.0, 0.01) var impact_duration: float = 0.45
 @export_range(0.0, 2.0, 0.01) var settle_duration: float = 0.40
+@export_range(0.0, 0.5, 0.01) var rebound_duration: float = 0.12
+@export_range(0.0, 0.5, 0.01) var recovery_duration: float = 0.14
 @export_range(0.0, 4.0, 0.01) var hold_duration: float = 1.90
 @export_range(0.0, 2.0, 0.01) var fade_duration: float = 1.00
 @export_range(-80.0, 6.0, 0.5) var gong_volume_db: float = -5.0
@@ -42,8 +50,7 @@ func _ready() -> void:
 	_fallback_rest_position = fallback_glyph.position
 	_particles_rest_position = gold_particles.position
 	_reset_visuals()
-	if not OS.has_feature("headless"):
-		gong_player.stream = _create_gong_stream()
+	if gong_player != null:
 		gong_player.volume_db = gong_volume_db
 
 
@@ -59,32 +66,45 @@ func play() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_start_smash_motion()
 
+	var early_reveal_duration: float = minf(entry_duration, EARLY_REVEAL_DURATION)
+	var reveal_finish_duration: float = maxf(entry_duration - early_reveal_duration, 0.0)
 	_animation = create_tween()
 	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_animation.tween_property(dimmer, "color:a", dimmer_alpha, entry_duration)
-	_animation.parallel().tween_property(vignette, "modulate:a", 1.0, entry_duration)
-	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.32, entry_duration)
-	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.32, entry_duration)
-	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.20, entry_duration)
+	_animation.tween_property(dimmer, "color:a", dimmer_alpha * 0.72, early_reveal_duration)
+	_animation.parallel().tween_property(vignette, "modulate:a", 0.65, early_reveal_duration)
+	_animation.parallel().tween_property(victory_emblem, "modulate:a", 0.70, early_reveal_duration)
+	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 0.70, early_reveal_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.10, early_reveal_duration)
 
-	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_animation.tween_property(victory_emblem, "modulate:a", 1.0, impact_duration)
-	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 1.0, impact_duration)
-	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.92, impact_duration)
-	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.12, 1.12), impact_duration)
-	_animation.parallel().tween_property(light_rays, "modulate:a", 0.78, impact_duration)
-	_animation.parallel().tween_property(light_rays, "scale", Vector2.ONE, impact_duration)
-	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.68, impact_duration)
-	_animation.parallel().tween_property(impact_flash, "scale", Vector2.ONE, impact_duration)
-	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.78, impact_duration)
-	_animation.tween_callback(_strike_gong)
+	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_animation.tween_property(dimmer, "color:a", dimmer_alpha, reveal_finish_duration)
+	_animation.parallel().tween_property(vignette, "modulate:a", 1.0, reveal_finish_duration)
+	_animation.parallel().tween_property(victory_emblem, "modulate:a", 1.0, reveal_finish_duration)
+	_animation.parallel().tween_property(fallback_glyph, "modulate:a", 1.0, reveal_finish_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.20, reveal_finish_duration)
 
-	_animation.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_animation.tween_property(victory_emblem, "scale", Vector2.ONE, settle_duration)
-	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE, settle_duration)
-	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, settle_duration)
-	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.58, settle_duration)
-	_animation.parallel().tween_property(light_rays, "modulate:a", 0.46, settle_duration)
+	_animation.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_animation.tween_property(radial_glow, "modulate:a", 0.55, impact_duration)
+	_animation.parallel().tween_property(radial_glow, "scale", Vector2(1.05, 1.05), impact_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.50, impact_duration)
+	_animation.parallel().tween_property(light_rays, "scale", Vector2(0.92, 0.92), impact_duration)
+	_animation.parallel().tween_property(gold_particles, "modulate:a", 0.35, impact_duration)
+	_animation.tween_callback(_trigger_impact)
+	_animation.tween_interval(IMPACT_HOLD_DURATION)
+
+	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_animation.tween_property(victory_emblem, "scale", Vector2.ONE * REBOUND_SCALE, rebound_duration)
+	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE * REBOUND_SCALE, rebound_duration)
+	_animation.parallel().tween_property(impact_flash, "modulate:a", 0.0, minf(rebound_duration, 0.10))
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.65, rebound_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.50, rebound_duration)
+
+	_animation.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_animation.tween_property(victory_emblem, "scale", Vector2.ONE, recovery_duration)
+	_animation.parallel().tween_property(fallback_glyph, "scale", Vector2.ONE, recovery_duration)
+	_animation.parallel().tween_property(radial_glow, "modulate:a", 0.58, recovery_duration)
+	_animation.parallel().tween_property(light_rays, "modulate:a", 0.46, recovery_duration)
+	_animation.tween_interval(_settle_hold_duration())
 	_animation.tween_callback(_mark_settled)
 
 	_animation.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -124,8 +144,6 @@ func complete_immediately() -> void:
 
 func cancel() -> void:
 	_kill_animation()
-	if gong_player != null:
-		gong_player.stop()
 	_is_playing = false
 	_is_settled = false
 	visible = false
@@ -145,7 +163,7 @@ func debug_get_smash_scale(elapsed_seconds: float) -> float:
 	return lerpf(
 		SMASH_INITIAL_SCALE,
 		SMASH_IMPACT_SCALE,
-		clampf(elapsed_seconds / _smash_duration(), 0.0, 1.0)
+		_smash_curve_progress(elapsed_seconds / _smash_duration())
 	)
 
 
@@ -182,8 +200,24 @@ func _smash_duration() -> float:
 	return maxf(entry_duration + impact_duration, 0.001)
 
 
+func _smash_curve_progress(normalized_time: float) -> float:
+	var time: float = clampf(normalized_time, 0.0, 1.0)
+	return SMASH_LINEAR_WEIGHT * time + SMASH_CUBIC_WEIGHT * time * time * time
+
+
+func _settle_hold_duration() -> float:
+	return maxf(
+		settle_duration - IMPACT_HOLD_DURATION - rebound_duration - recovery_duration,
+		0.0
+	)
+
+
 func _set_smash_progress(progress: float) -> void:
-	var smash_scale: float = lerpf(SMASH_INITIAL_SCALE, SMASH_IMPACT_SCALE, progress)
+	var smash_scale: float = lerpf(
+		SMASH_INITIAL_SCALE,
+		SMASH_IMPACT_SCALE,
+		_smash_curve_progress(progress)
+	)
 	if victory_emblem != null:
 		victory_emblem.scale = Vector2.ONE * smash_scale
 	if fallback_glyph != null:
@@ -250,40 +284,33 @@ func _apply_settled_visuals() -> void:
 	impact_flash.modulate.a = 0.0
 
 
+func _trigger_impact() -> void:
+	impact_flash.modulate.a = IMPACT_FLASH_ALPHA
+	impact_flash.scale = Vector2.ONE
+	radial_glow.modulate.a = 0.92
+	radial_glow.scale = Vector2(1.12, 1.12)
+	light_rays.modulate.a = 0.78
+	light_rays.scale = Vector2.ONE
+	gold_particles.modulate.a = 0.78
+	_strike_gong()
+
+
 func _strike_gong() -> void:
 	if OS.has_feature("headless") or gong_player == null or gong_player.stream == null:
 		return
-	gong_player.play()
+	_spawn_gong_one_shot()
 
 
-func _create_gong_stream() -> AudioStreamWAV:
-	# 固定的加法合成避免依赖外部音频服务，也绝不触碰对局随机数。
-	const SAMPLE_RATE: int = 44100
-	const DURATION_SECONDS: float = 1.0
-	var sample_count: int = int(SAMPLE_RATE * DURATION_SECONDS)
-	var pcm := PackedByteArray()
-	pcm.resize(sample_count * 2)
-	for sample_index: int in range(sample_count):
-		var time: float = float(sample_index) / float(SAMPLE_RATE)
-		var attack: float = 1.0 - exp(-95.0 * time)
-		var body: float = exp(-3.25 * time)
-		var low_ring: float = (
-			0.55 * sin(TAU * 91.0 * time)
-			+ 0.28 * sin(TAU * 146.5 * time + 0.35)
-			+ 0.17 * sin(TAU * 232.0 * time + 0.9)
-			+ 0.09 * sin(TAU * 317.0 * time + 1.4)
-		)
-		var mallet: float = exp(-48.0 * time) * (
-			0.10 * sin(TAU * 731.0 * time)
-			+ 0.07 * sin(TAU * 1187.0 * time + 0.4)
-		)
-		var tail_fade: float = clampf((DURATION_SECONDS - time) / 0.12, 0.0, 1.0)
-		var value: float = clampf((attack * body * low_ring + mallet) * tail_fade, -1.0, 1.0)
-		pcm.encode_s16(sample_index * 2, int(value * 24500.0))
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = SAMPLE_RATE
-	stream.stereo = false
-	stream.loop_mode = AudioStreamWAV.LOOP_DISABLED
-	stream.data = pcm
-	return stream
+func _spawn_gong_one_shot() -> AudioStreamPlayer:
+	if gong_player == null or gong_player.stream == null or get_tree() == null:
+		return null
+	var one_shot := AudioStreamPlayer.new()
+	one_shot.name = "VictoryGongOneShot"
+	one_shot.stream = gong_player.stream
+	one_shot.volume_db = gong_player.volume_db
+	one_shot.bus = gong_player.bus
+	one_shot.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(one_shot, true)
+	one_shot.finished.connect(one_shot.queue_free, CONNECT_ONE_SHOT)
+	one_shot.play()
+	return one_shot
