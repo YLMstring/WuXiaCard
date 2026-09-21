@@ -119,6 +119,8 @@ func _run() -> void:
 		var impact_ring := victory_vfx.get_node_or_null("ImpactRing") as ColorRect
 		var impact_flash_material := impact_flash.material as ShaderMaterial if impact_flash != null else null
 		var impact_flash_shader := impact_flash_material.shader if impact_flash_material != null else null
+		var impact_ring_material := impact_ring.material as ShaderMaterial if impact_ring != null else null
+		var impact_ring_shader := impact_ring_material.shader if impact_ring_material != null else null
 		_check(
 			impact_flash != null
 			and impact_ring != null
@@ -130,8 +132,15 @@ func _run() -> void:
 		)
 		_check(
 			impact_flash_shader != null
-			and impact_flash_shader.code.contains("center_cutout"),
-			"Victory impact burst explicitly masks the emblem center"
+			and impact_flash_shader.code.contains("center_cutout")
+			and impact_flash_shader.code.contains("burst_ring"),
+			"Victory impact keeps the first masked burst ring"
+		)
+		_check(
+			impact_ring_shader != null
+			and not impact_ring_shader.code.contains("inner_ring")
+			and not impact_ring_shader.code.contains("outer_ring"),
+			"Victory impact removes the two later expanding rings"
 		)
 		_check(
 			victory_emblem != null

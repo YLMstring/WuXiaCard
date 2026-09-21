@@ -29,7 +29,7 @@ code = "shader_type canvas_item;\n\nfloat hash(float value) {\n\treturn fract(si
 shader = SubResource("Shader_particles")
 
 [sub_resource type="Shader" id="Shader_impact_ring"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV - vec2(0.5);\n\tp.x *= 1.22;\n\tfloat radius = length(p) * 2.0;\n\tfloat angle = atan(p.y, p.x);\n\tfloat outer_ring = 1.0 - smoothstep(0.018, 0.050, abs(radius - 0.70));\n\tfloat inner_ring = (1.0 - smoothstep(0.012, 0.035, abs(radius - 0.49))) * 0.72;\n\tfloat ornaments = pow(max(0.0, cos(angle * 8.0)), 22.0);\n\tornaments *= 1.0 - smoothstep(0.025, 0.070, abs(radius - 0.84));\n\tfloat corona = (1.0 - smoothstep(0.25, 0.95, radius)) * 0.18;\n\tfloat alpha = clamp(outer_ring + inner_ring + ornaments * 0.90 + corona, 0.0, 1.0);\n\tvec3 color = mix(vec3(0.72, 0.12, 0.01), vec3(1.0, 0.76, 0.20), clamp(outer_ring + inner_ring + ornaments, 0.0, 1.0));\n\tCOLOR = vec4(color, alpha) * canvas_tint;\n}\n"
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV - vec2(0.5);\n\tp.x *= 1.22;\n\tfloat radius = length(p) * 2.0;\n\tfloat angle = atan(p.y, p.x);\n\tfloat ornaments = pow(max(0.0, cos(angle * 8.0)), 22.0);\n\tornaments *= 1.0 - smoothstep(0.025, 0.070, abs(radius - 0.84));\n\tfloat corona = (1.0 - smoothstep(0.25, 0.95, radius)) * 0.18;\n\tfloat alpha = clamp(ornaments * 0.72 + corona, 0.0, 1.0);\n\tvec3 color = mix(vec3(0.72, 0.12, 0.01), vec3(1.0, 0.76, 0.20), ornaments);\n\tCOLOR = vec4(color, alpha) * canvas_tint;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_impact_ring"]
 shader = SubResource("Shader_impact_ring")
