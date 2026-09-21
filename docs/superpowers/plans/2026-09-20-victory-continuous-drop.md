@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Keep the victory emblem centered while it smashes toward the screen depth from `2.0` to `0.92` scale and reaches impact at `0.70` seconds.
+**Goal:** Keep the victory emblem centered while it accelerates toward the screen depth from `2.0` to `0.90` scale, then produces a crisp impact and short rebound at `0.70` seconds.
 
-**Architecture:** Keep the existing four-second presentation timeline for opacity, light, sound, settle, hold, and fade. Drive emblem/fallback scale with one linear tween spanning `entry_duration + impact_duration`; keep both nodes at their final screen-space positions throughout.
+**Architecture:** Keep the existing four-second presentation timeline and centered positions. Drive emblem/fallback scale through one continuous cubic-weighted trajectory spanning `entry_duration + impact_duration`, then use explicit impact hold, rebound, and recovery stages instead of a long Back ease.
 
-**Latest playtest tuning:** Screen-space descent is removed. The emblem remains centered and scales linearly from `2.0` to `0.92` over `0.70` seconds, producing a depth smash before rebounding to `1.0` at `1.10` seconds. This supersedes the positional-trajectory implementation notes retained below.
+**Latest playtest tuning:** Screen-space descent remains removed. The emblem becomes visible earlier and follows `progress = 0.22t + 0.78t³`, reaching `0.90` at `0.70` seconds. A roughly two-frame impact peak is followed by a `0.12`-second rebound to `1.04`, a `0.14`-second recovery to `1.0`, and a stable hold through `1.10`. `music/luo.mp3` replaces the generated placeholder gong and plays through a detached root-level one-shot that survives effect completion and scene changes. This supersedes the older implementation notes retained below.
 
 **Tech Stack:** Godot/Summer Engine 4.7, typed GDScript, SceneTree integration tests.
 
@@ -16,17 +16,19 @@
 
 ## Global Constraints
 
-- `0.00–0.25` seconds combines fade-in and continuous depth-smash scaling.
-- `0.25–0.70` seconds continues the same linear scale trajectory without a restart.
-- Initial emblem and fallback scale is exactly `2.0`; impact scale remains `0.92`.
+- `0.00–0.12` seconds reveals the emblem to about 70% while the continuous depth-smash scaling begins.
+- `0.12–0.70` seconds continues the same accelerating scale trajectory without a restart.
+- Initial emblem and fallback scale is exactly `2.0`; impact scale is `0.90`.
 - Impact remains at `0.70` seconds, settle at `1.10`, fade start at `3.00`, and completion at `4.00`.
 - Emblem and fallback positions remain at their final centered coordinates throughout the presentation.
+- Impact flash remains hidden before contact, peaks with `music/luo.mp3`, then clears during the short rebound.
+- Once started, the detached gong must play to completion and free itself; cancellation and scene changes must not stop it.
 - Victory fallback text must use the same position and scale trajectory as the image.
 - Cancel, immediate settle, natural completion, and scene exit must stop both tweens and leave no delayed callbacks.
 
 ## Review Focus
 
-- At the start, at `0.25` seconds, and at `0.70` seconds, the scale follows one linear `2.0 → 0.92` trajectory.
+- At the start, at `0.25` seconds, and at `0.70` seconds, the scale follows one continuous accelerating `2.0 → 0.90` trajectory.
 - At zero elapsed time, the emblem is centered and begins at `2.0` scale; the test checks both curve data and live node state.
 - When immediate settle or cancellation occurs before impact, the independent smash tween cannot overwrite the settled/reset scale afterward; the outcome test checks the live emblem after forced settle.
 - When the texture is unavailable and `FallbackGlyph` is used, its position and scale remain identical to `VictoryEmblem`; the same setter updates both nodes and the test compares their relative offsets.

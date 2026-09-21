@@ -1,7 +1,8 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/victory_vfx.gd" id="1_victory_vfx"]
 [ext_resource type="Texture2D" path="res://art/vfx/victory_emblem.png" id="2_victory_emblem"]
+[ext_resource type="AudioStream" path="res://music/luo.mp3" id="3_gong"]
 
 [sub_resource type="Shader" id="Shader_vignette"]
 code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec4 canvas_tint = COLOR;\n\tvec2 p = UV * 2.0 - 1.0;\n\tp.x *= 0.60;\n\tfloat edge = smoothstep(0.38, 0.98, length(p));\n\tCOLOR = vec4(0.12, 0.025, 0.006, edge * 0.82) * canvas_tint;\n}\n"
@@ -173,3 +174,4 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="GongPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_gong")

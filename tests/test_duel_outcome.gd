@@ -45,10 +45,11 @@ func _run() -> void:
 			victory_emblem != null and victory_emblem.texture != null,
 			"Victory presentation owns the approved red-gold emblem texture"
 		)
-		var gong_stream: AudioStreamWAV = victory_vfx.call("_create_gong_stream") as AudioStreamWAV
+		var gong_player := victory_vfx.get_node("GongPlayer") as AudioStreamPlayer
 		_check(
-			gong_stream != null and gong_stream.data.size() == 88200,
-			"Victory presentation owns a deterministic one-second gong waveform"
+			gong_player.stream is AudioStreamMP3
+			and gong_player.stream.resource_path == "res://music/luo.mp3",
+			"Victory presentation uses the approved gong recording"
 		)
 		var settle_time: float = (
 			float(victory_vfx.get("entry_duration"))
@@ -73,18 +74,32 @@ func _run() -> void:
 				+ float(victory_vfx.get("impact_duration"))
 			)
 			var boundary_time: float = float(victory_vfx.get("entry_duration"))
+			var boundary_progress: float = boundary_time / smash_duration
+			var curved_boundary_progress: float = (
+				0.22 * boundary_progress
+				+ 0.78 * boundary_progress * boundary_progress * boundary_progress
+			)
 			_check(
 				is_equal_approx(float(victory_vfx.call("debug_get_smash_scale", 0.0)), 2.0)
 				and is_equal_approx(
 					float(victory_vfx.call("debug_get_smash_scale", boundary_time)),
-					lerpf(2.0, 0.92, boundary_time / smash_duration)
+					lerpf(2.0, 0.90, curved_boundary_progress)
 				)
 				and is_equal_approx(
 					float(victory_vfx.call("debug_get_smash_scale", smash_duration)),
-					0.92
+					0.90
 				),
-				"Victory emblem keeps one continuous depth-smash scale trajectory"
+				"Victory emblem keeps one continuous accelerating depth-smash trajectory"
 			)
+		var rebound_duration_value: Variant = victory_vfx.get("rebound_duration")
+		var recovery_duration_value: Variant = victory_vfx.get("recovery_duration")
+		_check(
+			rebound_duration_value != null
+			and recovery_duration_value != null
+			and is_equal_approx(float(rebound_duration_value), 0.12)
+			and is_equal_approx(float(recovery_duration_value), 0.14),
+			"Victory impact uses a short explicit rebound instead of a soft back ease"
+		)
 		_check(
 			victory_emblem != null
 			and victory_emblem.scale.is_equal_approx(Vector2(2.0, 2.0)),
@@ -178,11 +193,23 @@ func _run() -> void:
 	completed_board[0] = {"owner": Rules.PLAYER_OWNER, "card": {}}
 	completed_victory.set("board", completed_board)
 	completed_victory.call("_finish_match")
+	var completed_vfx := completed_victory.get_node("VictoryVfx") as Control
+	var detached_gong := completed_vfx.call("_spawn_gong_one_shot") as AudioStreamPlayer
+	_check(
+		detached_gong != null
+		and detached_gong.get_parent() == root
+		and detached_gong.playing,
+		"Victory impact starts a detached gong one-shot"
+	)
 	completed_victory.call("debug_complete_victory_vfx")
 	await process_frame
 	_check(
 		not bool(completed_victory.call("debug_is_victory_vfx_playing")),
 		"Natural completion path releases the victory input gate"
+	)
+	_check(
+		is_instance_valid(detached_gong) and detached_gong.playing,
+		"Victory completion leaves the detached gong playing to its end"
 	)
 	_check(
 		(completed_victory.get_node("DuelCanvas/TurnStatus") as Label).visible,
@@ -192,6 +219,9 @@ func _run() -> void:
 		(completed_victory.get_node("DuelCanvas/PostMatchReturnButton") as Button).visible,
 		"Natural completion path keeps the return action visible"
 	)
+	if is_instance_valid(detached_gong):
+		detached_gong.stop()
+		detached_gong.queue_free()
 	completed_victory.queue_free()
 	await process_frame
 
