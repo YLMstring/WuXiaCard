@@ -44,9 +44,17 @@ func _run() -> void:
 	var mastered_library_id := StringName(String(fixture_profile["library_slots"][0]))
 	fixture_profile["mastered_card_ids"] = [String(mastered_library_id)]
 	_check(fixture_store.save_profile(fixture_profile), "Mastery color fixture saves")
+	var entry_card_ids: Array[StringName] = [
+		StringName(String(fixture_profile["library_slots"][0])),
+		StringName(String(fixture_profile["library_slots"][1])),
+	]
 	var builder: Variant = BUILDER_SCENE.instantiate()
 	builder.profile_path = _save_path
 	builder.testing_mode = false
+	builder.new_card_entry_ids = entry_card_ids
+	builder.play_rank_up_sound_on_ready = true
+	builder.card_entry_bloom_duration = 0.0
+	builder.card_entry_rise_duration = 0.0
 	var enemy_fixture_ids: Array[StringName] = [
 		&"CangSongYingKe2",
 		&"DuGu9Jian1",
@@ -60,6 +68,7 @@ func _run() -> void:
 	await process_frame
 	builder.call("_layout_scene")
 	await process_frame
+	await process_frame
 
 	var canvas: Control = builder.get_node("DuelCanvas") as Control
 	var opponent_hand: HBoxContainer = canvas.get_node("OpponentHand") as HBoxContainer
@@ -69,6 +78,22 @@ func _run() -> void:
 	var go_second := canvas.get_node("GoSecondButton") as Button
 	var status_label := canvas.get_node("Status") as Label
 	var card_inspector := canvas.get_node("CardInspector") as Control
+	_check(
+		builder.debug_get_started_card_entry_ids() == entry_card_ids,
+		"Entering deck building reuses the draw entrance for each visible new card"
+	)
+	_check(
+		grid.debug_get_bound_slot(0).debug_get_card_entry_animation_count() == 1
+		and grid.debug_get_bound_slot(1).debug_get_card_entry_animation_count() == 1,
+		"Each requested new card starts its entrance exactly once"
+	)
+	var rank_up_audio := builder.get_node("RankUpAudio") as AudioStreamPlayer
+	_check(
+		builder.debug_get_rank_up_sound_play_count() == 1
+		and rank_up_audio.stream != null
+		and rank_up_audio.stream.resource_path == "res://music/rank_up.wav",
+		"Rank-up entry plays the supplied audio resource once"
+	)
 	_check(
 		status_label.get_theme_color("font_color").is_equal_approx(Color(0.5, 0.42, 0.33, 1.0))
 		and status_label.modulate.is_equal_approx(Color.WHITE),

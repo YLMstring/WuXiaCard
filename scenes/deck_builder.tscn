@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/deck_builder_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/duel_backdrop.gd" id="2_backdrop"]
@@ -14,6 +14,7 @@
 [ext_resource type="Texture2D" path="res://inkpics/制.png" id="12_zhi"]
 [ext_resource type="Texture2D" path="res://inkpics/人.png" id="13_ren"]
 [ext_resource type="Script" path="res://scripts/selection_detail_actions.gd" id="14_detail_actions"]
+[ext_resource type="AudioStream" path="res://music/rank_up.wav" id="15_rank_up"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_qiang"]
 atlas = ExtResource("6_qiang")
@@ -55,6 +56,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_controller")
+
+[node name="RankUpAudio" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("15_rank_up")
 
 [node name="DecorBackdrop" type="Control" parent="."]
 z_index = -10

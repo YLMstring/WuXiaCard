@@ -244,6 +244,26 @@ func _run() -> void:
 	var builder := flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Completing the sect-selection tutorial enters deck building")
 	var active_profile: Dictionary = Store.new(runtime_save_path).load_profile()
+	var entry_fixture_id := StringName(String(active_profile["library_slots"][0]))
+	flow.call("_queue_new_card_entries", [entry_fixture_id, entry_fixture_id])
+	flow.call("_show_deck_builder")
+	await process_frame
+	await process_frame
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(
+		builder.debug_get_started_card_entry_ids() == [entry_fixture_id],
+		"Main flow hands each pending new card to the next deck-builder entry once"
+	)
+	flow.call("_show_deck_builder")
+	await process_frame
+	await process_frame
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(
+		builder.debug_get_started_card_entry_ids().is_empty(),
+		"A later deck-builder entry does not replay consumed new-card animation"
+	)
 	_check(bool(active_profile["run_active"]), "Sect confirmation persists active-run state")
 	_check(
 		String(active_profile["selected_sect_id"]) == "HuaShanPai",
@@ -418,6 +438,10 @@ func _run() -> void:
 	_check(int(level_two_enemy["level"]) == 2, "Victory assigns a same-level enemy")
 	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Deck builder previews the new enemy")
 	_check(
+		builder.debug_get_rank_up_sound_play_count() == 1,
+		"A real character-level increase requests rank-up audio on deck-builder entry"
+	)
+	_check(
 		store.get_remembered_enemy_glyphs(victorious_profile).is_empty(),
 		"New enemy starts with no remembered cards"
 	)
@@ -433,6 +457,10 @@ func _run() -> void:
 	await process_frame
 	builder = flow.debug_get_current_screen() as DeckBuilderController
 	_check(builder != null, "Testing-mode defeat skips an empty reward pool")
+	_check(
+		builder.debug_get_rank_up_sound_play_count() == 0,
+		"Later deck-builder entries do not replay the consumed rank-up audio"
+	)
 	var defeated_profile: Dictionary = store.load_profile()
 	_check(store.get_character_level(defeated_profile) == 2, "Defeat does not level up")
 	_check(

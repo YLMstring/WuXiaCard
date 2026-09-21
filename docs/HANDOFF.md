@@ -70,6 +70,10 @@ release-ready Android package.
   presentation. The final score and “打道回府” become available when the emblem
   settles at about 1.10 seconds; replay terminal states skip this effect.
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
+- The first deck-builder entry after a reward reuses `CardView.play_draw_summon`
+  for every newly unlocked card that is visible in the collection. A real
+  character-level increase also plays `res://music/rank_up.wav` once; ordinary
+  returns and later entries do not replay either cue.
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
   mode, while Windows and Android exports default to normal mode.
 - Gated balance telemetry is deployed to the Shanghai CloudBase environment

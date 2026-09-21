@@ -11,6 +11,7 @@ var _checks: int = 0
 var _failures: int = 0
 var _claim_count: int = 0
 var _claimed_card_id: StringName = &""
+var _claimed_added_ids: Array[StringName] = []
 var _back_count: int = 0
 
 
@@ -204,6 +205,11 @@ func _run() -> void:
 	await process_frame
 	_check(_claim_count == 1, "Holding a reward claims it exactly once")
 	_check(_claimed_card_id == reward_ids[0], "Holding emits the exact claimed card ID")
+	_check(
+		not _claimed_added_ids.is_empty()
+		and _claimed_added_ids[0] == reward_ids[0],
+		"Claim signal carries the complete newly unlocked card list"
+	)
 	var claimed_profile: Dictionary = store.load_profile()
 	_check(reward_ids[0] in store.get_unlocked_ids(claimed_profile), "Scene claim unlocks reward")
 	_check(store.get_main_deck_ids(claimed_profile) == deck_before, "Scene claim preserves main deck")
@@ -225,9 +231,13 @@ func _string_names(values: Array) -> Array[StringName]:
 	return result
 
 
-func _on_reward_claimed(card_id: StringName) -> void:
+func _on_reward_claimed(
+	card_id: StringName,
+	added_ids: Array[StringName]
+) -> void:
 	_claim_count += 1
 	_claimed_card_id = card_id
+	_claimed_added_ids = added_ids.duplicate()
 
 
 func _on_back_requested() -> void:

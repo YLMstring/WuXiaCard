@@ -37,6 +37,8 @@ var _current_screen: Control = null
 var _normal_deck_profile_path: String = ""
 var _music_director: Node = null
 var _play_lose_on_next_deck_builder: bool = false
+var _pending_deck_builder_new_card_ids: Array[StringName] = []
+var _play_rank_up_on_next_deck_builder: bool = false
 var _balance_telemetry_store: RefCounted = null
 var _balance_telemetry_uploader: Node = null
 var _pending_telemetry_duel_token: String = ""
@@ -123,6 +125,10 @@ func _show_deck_builder() -> void:
 	builder.upcoming_enemy_card_ids = _enemy_deck_from_details(enemy)
 	builder.remembered_enemy_glyphs = store.get_remembered_enemy_glyphs(profile)
 	builder.testing_mode = testing_mode
+	builder.new_card_entry_ids = _pending_deck_builder_new_card_ids.duplicate()
+	builder.play_rank_up_sound_on_ready = _play_rank_up_on_next_deck_builder
+	_pending_deck_builder_new_card_ids.clear()
+	_play_rank_up_on_next_deck_builder = false
 	builder.duel_requested.connect(_on_duel_requested)
 	builder.back_requested.connect(_on_return_to_menu_requested)
 	_replace_screen(builder)
@@ -245,6 +251,7 @@ func _on_run_reset_confirmed() -> void:
 	var result: Dictionary = store.reset_run_and_save(profile)
 	if bool(result.get("ok", false)):
 		_clear_active_balance_telemetry_run()
+		_clear_pending_deck_builder_feedback()
 	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
@@ -259,6 +266,7 @@ func _on_progress_reset_confirmed() -> void:
 	var result: Dictionary = store.reset_all_progress_and_save(profile)
 	if bool(result.get("ok", false)):
 		_clear_active_balance_telemetry_run()
+		_clear_pending_deck_builder_feedback()
 	result = _restore_testing_unlocks(store, result)
 	_finish_reset_on_current_menu(
 		""
@@ -337,6 +345,7 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 			mastery_candidate_ids = completed_duel.get_mastery_candidate_ids()
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
+	var previous_character_level: int = store.get_character_level(profile)
 	var previous_beginner_stage: int = store.get_beginner_opening_stage(profile)
 	var kuihua0_unlocked_this_run: bool = (
 		not testing_mode
@@ -362,6 +371,9 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		reward_outcome
 	)
 	profile = duel_result.get("profile", profile)
+	_queue_new_card_entries(duel_result.get("added_ids", []))
+	if store.get_character_level(profile) > previous_character_level:
+		_play_rank_up_on_next_deck_builder = true
 	_queue_beginner_flow_completed_event_if_needed(
 		previous_beginner_stage,
 		profile,
@@ -392,10 +404,26 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 		_show_deck_builder()
 
 
-func _on_reward_claimed(card_id: StringName) -> void:
+func _on_reward_claimed(
+	card_id: StringName,
+	added_ids: Array[StringName]
+) -> void:
+	_queue_new_card_entries(added_ids)
 	if card_id == &"KuiHua0":
 		_play_lose_on_next_deck_builder = true
 	_show_deck_builder()
+
+
+func _queue_new_card_entries(values: Array) -> void:
+	for value: Variant in values:
+		var card_id := StringName(String(value))
+		if card_id != &"" and card_id not in _pending_deck_builder_new_card_ids:
+			_pending_deck_builder_new_card_ids.append(card_id)
+
+
+func _clear_pending_deck_builder_feedback() -> void:
+	_pending_deck_builder_new_card_ids.clear()
+	_play_rank_up_on_next_deck_builder = false
 
 
 func _on_ending_return_requested() -> void:

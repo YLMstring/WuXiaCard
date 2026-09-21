@@ -101,6 +101,9 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   shortcut for remove/add; reward cards use it to claim. Immediate movement
   still scrolls the library. Sect confirmation and all filters use explicit
   detail buttons instead of drag targets.
+- Newly unlocked reward cards use the duel draw animation on the first
+  deck-builder entry that follows their award. Rank-up audio is keyed to an
+  actual character-level increase and is consumed on that same entry.
 
 ## Beginner Tutorial
 

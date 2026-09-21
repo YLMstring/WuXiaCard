@@ -2,7 +2,7 @@ class_name RewardSelectionController
 extends Control
 
 signal back_requested
-signal reward_claimed(card_id: StringName)
+signal reward_claimed(card_id: StringName, added_ids: Array[StringName])
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -311,7 +311,10 @@ func _claim_reward(reward_index: int) -> bool:
 		return false
 	profile = result.get("profile", profile)
 	_reward_ids.clear()
-	reward_claimed.emit(claimed_card_id)
+	var added_ids: Array[StringName] = []
+	for value: Variant in result.get("added_ids", []):
+		added_ids.append(StringName(String(value)))
+	reward_claimed.emit(claimed_card_id, added_ids)
 	return true
 
 

@@ -23,6 +23,7 @@ const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
 const CHOICE_SIZE_SCALE: float = 0.72
 const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
+const DEFAULT_CARD_ENTRY_INK_COLOR: Color = Color("211824")
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -30,6 +31,11 @@ const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
 @export var remembered_enemy_glyphs: Array[String] = []
 @export var hold_duration: float = 0.25
 @export var library_aspect_ratio: float = 0.78
+@export var card_entry_bloom_duration: float = 0.12
+@export var card_entry_rise_duration: float = 0.28
+
+var new_card_entry_ids: Array[StringName] = []
+var play_rank_up_sound_on_ready: bool = false
 
 var testing_mode: bool = Settings.default_testing_mode()
 var profile: Dictionary = {}
@@ -52,6 +58,8 @@ var _inspected_deck_index: int = -1
 var _inspected_data: Dictionary = {}
 var _replacement_target_mode: bool = false
 var _player_hand_default_child_index: int = -1
+var _started_card_entry_ids: Array[StringName] = []
+var _rank_up_sound_play_count: int = 0
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -72,6 +80,7 @@ var _player_hand_default_child_index: int = -1
 @onready var status_label: Label = $DuelCanvas/Status
 @onready var card_inspector: CardInspectorData = $DuelCanvas/CardInspector
 @onready var detail_actions = $DuelCanvas/SelectionDetailActions
+@onready var rank_up_audio: AudioStreamPlayer = $RankUpAudio
 
 
 func _ready() -> void:
@@ -101,6 +110,7 @@ func _ready() -> void:
 	_style_start_controls()
 	_refresh_start_controls()
 	_layout_scene.call_deferred()
+	_play_entry_feedback.call_deferred()
 
 
 func debug_exchange(library_index: int, deck_index: int) -> bool:
@@ -172,6 +182,48 @@ func debug_is_replacement_target_mode() -> bool:
 
 func debug_can_go_second() -> bool:
 	return _go_second_allowed
+
+
+func debug_get_started_card_entry_ids() -> Array[StringName]:
+	return _started_card_entry_ids.duplicate()
+
+
+func debug_get_rank_up_sound_play_count() -> int:
+	return _rank_up_sound_play_count
+
+
+func _play_entry_feedback() -> void:
+	if play_rank_up_sound_on_ready:
+		_rank_up_sound_play_count += 1
+		rank_up_audio.play()
+	play_rank_up_sound_on_ready = false
+	var pending_entry_ids: Array[StringName] = new_card_entry_ids.duplicate()
+	new_card_entry_ids = []
+	if pending_entry_ids.is_empty() or not is_inside_tree():
+		return
+
+	# The grid lays out and rebinds its virtual slots after the builder's first layout.
+	# Wait for that binding so the animation targets the final visible CardViews.
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	var library_values: Array = profile.get("library_slots", [])
+	for card_id: StringName in pending_entry_ids:
+		var logical_index: int = library_values.find(String(card_id))
+		if logical_index < 0:
+			continue
+		var slot: Variant = library_grid.debug_get_bound_slot(logical_index)
+		if slot == null:
+			continue
+		_started_card_entry_ids.append(card_id)
+		slot.play_card_entry(
+			card_entry_bloom_duration,
+			card_entry_rise_duration,
+			DEFAULT_CARD_ENTRY_INK_COLOR
+		)
 
 
 func _get_mastered_card_set() -> Dictionary:
