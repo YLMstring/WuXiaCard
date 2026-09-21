@@ -826,6 +826,7 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 	if (
 		_inspection_open
 		or turn_state == TurnState.RESOLVING
+		or _is_victory_vfx_playing
 		or (_is_replaying and _is_replay_presenting_action)
 		or _is_replaying_opponent_turn
 	):

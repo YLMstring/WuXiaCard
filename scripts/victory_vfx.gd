@@ -188,6 +188,7 @@ func _mark_settled() -> void:
 	if not _is_playing or _is_settled:
 		return
 	_is_settled = true
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	settled.emit()
 
 

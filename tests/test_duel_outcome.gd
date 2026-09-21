@@ -12,6 +12,8 @@ func _init() -> void:
 
 
 func _run() -> void:
+	root.size = Vector2i(540, 960)
+	await process_frame
 	var abandoned_outcome: Dictionary = {"value": &""}
 	var active_duel: Node = DUEL_SCENE.instantiate()
 	active_duel.set("testing_mode", true)
@@ -206,12 +208,34 @@ func _run() -> void:
 		(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).z_index > victory_vfx.z_index,
 		"Settled return action stays above the victory input blocker"
 	)
+	var overlay_releases_input: bool = (
+		victory_vfx.mouse_filter == Control.MOUSE_FILTER_IGNORE
+	)
+	var inspection_opened_during_vfx: bool = bool(
+		victory_duel.call("debug_open_inspection", {"glyph": "测"})
+	)
+	_check(
+		overlay_releases_input,
+		"Settled victory overlay releases pointer input for the return action"
+	)
+	_check(
+		not inspection_opened_during_vfx,
+		"Card inspection remains blocked while the settled victory effect is playing"
+	)
+	(victory_duel.get_node("DuelCanvas/ReplayButton") as Button).pressed.emit()
+	_check(
+		bool(victory_duel.call("debug_is_victory_vfx_playing")),
+		"Replay remains blocked while the settled victory effect is playing"
+	)
 	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
 	_check(victory_outcome["value"] == &"", "Top exit remains blocked while the settled effect is playing")
-	(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).pressed.emit()
+	var settled_return_button := (
+		victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button
+	)
+	await _click_control(settled_return_button)
 	_check(
 		not bool(victory_duel.call("debug_is_victory_vfx_playing")),
-		"Settled return action cancels the remaining victory effect"
+		"A real click on the settled return action cancels the remaining victory effect"
 	)
 	(victory_duel.get_node("DuelCanvas/PostMatchReturnButton") as Button).pressed.emit()
 	(victory_duel.get_node("DuelCanvas/TopBar/ExitButton") as Button).pressed.emit()
@@ -338,3 +362,31 @@ func _check(condition: bool, message: String) -> void:
 		return
 	_failures += 1
 	push_error("CHECK_FAILED: %s" % message)
+
+
+func _click_control(control: Control) -> void:
+	var click_position: Vector2 = control.get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = click_position
+	motion.global_position = click_position
+	root.push_input(motion)
+	await process_frame
+	var hovered: Control = root.gui_get_hovered_control()
+	_check(
+		hovered == control,
+		"Settled return action receives pointer input above the victory overlay"
+	)
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = click_position
+	press.global_position = click_position
+	root.push_input(press)
+	await process_frame
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = click_position
+	release.global_position = click_position
+	root.push_input(release)
+	await process_frame
