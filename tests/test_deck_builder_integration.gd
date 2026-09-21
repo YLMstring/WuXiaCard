@@ -123,15 +123,10 @@ func _run() -> void:
 		"The flowing gold border replaces the ordinary owner-colored border"
 	)
 	_check(
-		gold_border_rect.position.is_equal_approx(
-			highlighted_card_rect.position - Vector2.ONE * 3.0
-		)
-		and gold_border_rect.size.is_equal_approx(
-			highlighted_card_rect.size + Vector2.ONE * 6.0
-		)
+		gold_border_rect.is_equal_approx(highlighted_card_rect)
 		and shader_control_size.is_equal_approx(gold_border.size)
 		and gold_material.shader.code.contains("1.0 - inner_mask"),
-		"The flowing gold border is cut out over the card face and rendered outside it"
+		"The flowing gold border keeps the card's original outer size and grows inward"
 	)
 	var rank_up_audio := builder.get_node("RankUpAudio") as AudioStreamPlayer
 	_check(

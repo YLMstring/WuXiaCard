@@ -103,11 +103,11 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   detail buttons instead of drag targets.
 - Directly awarded cards use a slowly flowing gold border in deck building;
   inherited lower-tier namesakes do not. The gold effect replaces the ordinary
-  red/blue owner border and stays entirely outside the card face. Tapping or
-  holding the exact card restores its owner border, while acquiring a later
-  reward batch clears every older gold border. Rank-up audio is keyed to an
-  actual character-level increase, plays as a sound effect over the existing
-  music, and is consumed on entry.
+  red/blue owner border, keeps the same outer card dimensions, and extends
+  slightly inward. Tapping or holding the exact card restores its owner border,
+  while acquiring a later reward batch clears every older gold border. Rank-up
+  audio is keyed to an actual character-level increase, plays as a sound effect
+  over the existing music, and is consumed on entry.
 
 ## Beginner Tutorial
 

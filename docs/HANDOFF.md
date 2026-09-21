@@ -72,10 +72,11 @@ release-ready Android package.
 - Deck-builder presentation: `scripts/deck_builder_controller.gd`
 - Direct rank rewards and the player's chosen reward use a slowly flowing gold
   card border in deck building; inherited lower-tier namesakes do not. While
-  active, it replaces the ordinary red/blue owner border and renders entirely
-  outside the card face. The border persists across deck-builder entries until
-  that exact card is tapped or held, and the next reward batch replaces every
-  older border. A real
+  active, it replaces the ordinary red/blue owner border and stays within the
+  card's original outer bounds, extending slightly inward without changing its
+  overall size. The border persists across deck-builder entries until that
+  exact card is tapped or held, and the next reward batch replaces every older
+  border. A real
   character-level increase also plays `res://music/rank_up.wav` once as a
   separate sound effect without interrupting background music.
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing

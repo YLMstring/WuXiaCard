@@ -13,7 +13,6 @@ signal hold_recognized(card_data: Dictionary)
 
 const CARD_BACK_GLYPH: String = "◆"
 const CARD_PICTURE_SCALE: float = 0.8
-const NEW_CARD_GOLD_BORDER_OUTSET: float = 3.0
 const MAX_TITLE_ROWS: int = 4
 const FULL_WIDTH_SPACE: String = "　"
 const Abilities = preload("res://scripts/duel_abilities.gd")
@@ -657,9 +656,8 @@ func _center_card_picture() -> void:
 func _layout_new_card_gold_border() -> void:
 	if not is_instance_valid(overlay) or not is_instance_valid(new_card_gold_border):
 		return
-	var outset := Vector2.ONE * NEW_CARD_GOLD_BORDER_OUTSET
-	new_card_gold_border.position = -overlay.position - outset
-	new_card_gold_border.size = size + outset * 2.0
+	new_card_gold_border.position = -overlay.position
+	new_card_gold_border.size = size
 	var gold_material := new_card_gold_border.material as ShaderMaterial
 	if gold_material != null:
 		gold_material.set_shader_parameter("control_size", new_card_gold_border.size)
