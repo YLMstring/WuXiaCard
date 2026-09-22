@@ -22,7 +22,7 @@ $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
 $outputDirectory = Split-Path -Parent $resolvedOutput
 
 if ([string]::IsNullOrWhiteSpace($ArchivePath)) {
-    $ArchivePath = Join-Path $resolvedProject "build\九宫论剑-windows-x86_64-1.0.5.zip"
+    $ArchivePath = Join-Path $resolvedProject "build\九宫论剑-windows-x86_64-1.0.6.zip"
 }
 $resolvedArchive = [System.IO.Path]::GetFullPath($ArchivePath)
 
