@@ -52,21 +52,23 @@ https://wuxiacard-d9gvg1e2o15e3b73e-1488910861.ap-shanghai.app.tcloudbase.com/v1
 - `WUXIA_TELEMETRY_ADMIN_TOKEN`
 - `WUXIA_TELEMETRY_ADMIN_ENDPOINT`
 
-下载 CSV：
+同时下载通关报告和新手流程完成计数（默认 CSV）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/download_balance_reports.ps1
 ```
 
-下载新手流程完成计数：
+也可以只下载其中一类：
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File tools/download_balance_reports.ps1 -Dataset Reports
 powershell -ExecutionPolicy Bypass -File tools/download_balance_reports.ps1 -Dataset Events
 ```
 
 也可以使用 `-Format Json`，或用 `-From 2026-09-01 -To 2026-09-30`
 限制日期范围。脚本优先读取当前进程环境变量，并在新终端尚未继承时回退读取
-Windows 用户环境变量；它不会覆盖已存在的导出文件。
+Windows 用户环境变量；它不会覆盖已存在的导出文件。`-OutputPath` 仅适用于
+`-Dataset Reports` 或 `-Dataset Events` 的单类下载。
 
 `beginner_flow_completed` 在同一匿名安装中最多记录一次，只包含匿名 ID、事件
 类型、版本、平台与时间，不包含卡组或对局内容。客户端离线时会暂存并在以后重试。

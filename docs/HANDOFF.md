@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-20
+Updated: 2026-09-22
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -98,7 +98,8 @@ release-ready Android package.
   run advances from the second fixed beginner enemy into the formal flow. It
   contains no deck or duel details, retries offline through `/v1/events`, and
   is stored separately in CloudBase collection `player_events`. Administrator
-  export selects it with `tools/download_balance_reports.ps1 -Dataset Events`.
+  export downloads both datasets by default; `-Dataset Events` selects only
+  these events.
 - Android preset: `export_presets.cfg`
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`

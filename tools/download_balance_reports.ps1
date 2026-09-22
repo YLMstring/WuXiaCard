@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-	[ValidateSet("Reports", "Events")]
-	[string]$Dataset = "Reports",
+	[ValidateSet("All", "Reports", "Events")]
+	[string]$Dataset = "All",
     [ValidateSet("Csv", "Json")]
     [string]$Format = "Csv",
     [string]$Endpoint = "",
@@ -12,6 +12,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ($Dataset -eq "All" -and -not [string]::IsNullOrWhiteSpace($OutputPath)) {
+	throw "-OutputPath can only be used when downloading a single dataset."
+}
 
 if ([string]::IsNullOrWhiteSpace($Endpoint)) {
     $Endpoint = $env:WUXIA_TELEMETRY_ADMIN_ENDPOINT
@@ -33,54 +37,75 @@ if ([string]::IsNullOrWhiteSpace($adminToken)) {
     throw "Set WUXIA_TELEMETRY_ADMIN_TOKEN in the current shell or user environment."
 }
 
-$query = [System.Collections.Generic.List[string]]::new()
-$query.Add("format=$($Format.ToLowerInvariant())")
-if ($Dataset -eq "Events") {
-	$query.Add("dataset=events")
+$selectedDatasets = if ($Dataset -eq "All") {
+	@("Reports", "Events")
+} else {
+	@($Dataset)
 }
-if (-not [string]::IsNullOrWhiteSpace($From)) {
-    $query.Add("from=$([uri]::EscapeDataString($From))")
-}
-if (-not [string]::IsNullOrWhiteSpace($To)) {
-    $query.Add("to=$([uri]::EscapeDataString($To))")
-}
-$separator = if ($Endpoint.Contains("?")) { "&" } else { "?" }
-$requestUri = "$Endpoint$separator$($query -join '&')"
+$extension = $Format.ToLowerInvariant()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$exports = [System.Collections.Generic.List[hashtable]]::new()
 
-if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $extension = $Format.ToLowerInvariant()
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-	$prefix = if ($Dataset -eq "Events") { "balance-events" } else { "balance-reports" }
-	$OutputPath = Join-Path (Get-Location) "$prefix-$stamp.$extension"
+foreach ($selectedDataset in $selectedDatasets) {
+	$query = [System.Collections.Generic.List[string]]::new()
+	$query.Add("format=$extension")
+	if ($selectedDataset -eq "Events") {
+		$query.Add("dataset=events")
+	}
+	if (-not [string]::IsNullOrWhiteSpace($From)) {
+		$query.Add("from=$([uri]::EscapeDataString($From))")
+	}
+	if (-not [string]::IsNullOrWhiteSpace($To)) {
+		$query.Add("to=$([uri]::EscapeDataString($To))")
+	}
+	$separator = if ($Endpoint.Contains("?")) { "&" } else { "?" }
+	$requestUri = "$Endpoint$separator$($query -join '&')"
+	$selectedOutputPath = $OutputPath
+	if ([string]::IsNullOrWhiteSpace($selectedOutputPath)) {
+		$prefix = if ($selectedDataset -eq "Events") {
+			"balance-events"
+		} else {
+			"balance-reports"
+		}
+		$selectedOutputPath = Join-Path (Get-Location) "$prefix-$stamp.$extension"
+	}
+	$resolvedOutput = [System.IO.Path]::GetFullPath($selectedOutputPath)
+	if (Test-Path -LiteralPath $resolvedOutput) {
+		throw "Refusing to overwrite an existing export: $resolvedOutput"
+	}
+	$exports.Add(@{
+		Dataset = $selectedDataset
+		RequestUri = $requestUri
+		OutputPath = $resolvedOutput
+	})
 }
-$resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
-$outputDirectory = Split-Path -Parent $resolvedOutput
-if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container)) {
-    New-Item -ItemType Directory -Path $outputDirectory | Out-Null
-}
-if (Test-Path -LiteralPath $resolvedOutput) {
-    throw "Refusing to overwrite an existing export: $resolvedOutput"
-}
-$temporaryOutput = "$resolvedOutput.tmp"
 
-try {
-    Invoke-WebRequest `
-        -Uri $requestUri `
-        -Headers @{ Authorization = "Bearer $adminToken" } `
-        -OutFile $temporaryOutput `
-        -UseBasicParsing
+foreach ($export in $exports) {
+	$resolvedOutput = [string]$export.OutputPath
+	$outputDirectory = Split-Path -Parent $resolvedOutput
+	if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container)) {
+		New-Item -ItemType Directory -Path $outputDirectory | Out-Null
+	}
+	$temporaryOutput = "$resolvedOutput.tmp"
+	try {
+		Invoke-WebRequest `
+			-Uri ([string]$export.RequestUri) `
+			-Headers @{ Authorization = "Bearer $adminToken" } `
+			-OutFile $temporaryOutput `
+			-UseBasicParsing
 
-    if ((Get-Item -LiteralPath $temporaryOutput).Length -eq 0) {
-        throw "The export response was empty."
-    }
-    if ($Format -eq "Json") {
-        Get-Content -LiteralPath $temporaryOutput -Raw | ConvertFrom-Json | Out-Null
-    }
-    Move-Item -LiteralPath $temporaryOutput -Destination $resolvedOutput -Force
-	Write-Host "Downloaded balance $($Dataset.ToLowerInvariant()): $resolvedOutput"
-}
-finally {
-    if (Test-Path -LiteralPath $temporaryOutput) {
-        Remove-Item -LiteralPath $temporaryOutput -Force
-    }
+		if ((Get-Item -LiteralPath $temporaryOutput).Length -eq 0) {
+			throw "The export response was empty."
+		}
+		if ($Format -eq "Json") {
+			Get-Content -LiteralPath $temporaryOutput -Raw | ConvertFrom-Json | Out-Null
+		}
+		Move-Item -LiteralPath $temporaryOutput -Destination $resolvedOutput -Force
+		Write-Host "Downloaded balance $(([string]$export.Dataset).ToLowerInvariant()): $resolvedOutput"
+	}
+	finally {
+		if (Test-Path -LiteralPath $temporaryOutput) {
+			Remove-Item -LiteralPath $temporaryOutput -Force
+		}
+	}
 }
