@@ -462,7 +462,7 @@ func _run() -> void:
 	_check(builder.upcoming_enemy_name == String(level_two_enemy["name"]), "Deck builder previews the new enemy")
 	_check(
 		builder.debug_get_rank_up_sound_play_count() == 1,
-		"A real character-level increase requests rank-up audio on deck-builder entry"
+		"A real character-tier increase requests rank-up audio on deck-builder entry"
 	)
 	_check(
 		store.get_remembered_enemy_glyphs(victorious_profile).is_empty(),
@@ -493,6 +493,24 @@ func _run() -> void:
 	_check(
 		store.get_pending_reward_ids(defeated_profile).is_empty(),
 		"Testing-mode defeat has no reward because every card is unlocked"
+	)
+
+	(builder.get_node("DuelCanvas/GoSecondButton") as Button).pressed.emit()
+	await process_frame
+	duel = flow.debug_get_current_screen() as DuelController
+	duel.return_requested.emit(&"victory")
+	await process_frame
+	builder = flow.debug_get_current_screen() as DeckBuilderController
+	_check(builder != null, "Same-tier testing-mode victory returns to deck building")
+	var level_three_profile: Dictionary = store.load_profile()
+	_check(
+		store.get_character_level(level_three_profile) == 3
+		and store.get_character_tier(level_three_profile) == 2,
+		"A second formal victory increases level without crossing a tier"
+	)
+	_check(
+		builder.debug_get_rank_up_sound_play_count() == 0,
+		"A same-tier level increase does not request rank-up audio"
 	)
 
 	(builder.get_node("DuelCanvas/TopBar/BackButton") as Button).pressed.emit()

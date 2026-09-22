@@ -77,7 +77,7 @@ release-ready Android package.
   overall size. The border persists across deck-builder entries until that
   exact card is tapped or held, and the next reward batch replaces every older
   border. A real
-  character-level increase also plays `res://music/rank_up.wav` once as a
+  character-tier increase also plays `res://music/rank_up.wav` once as a
   separate sound effect without interrupting background music.
 - Testing policy: `scripts/game_settings.gd`; editor Play defaults to testing
   mode, while Windows and Android exports default to normal mode.

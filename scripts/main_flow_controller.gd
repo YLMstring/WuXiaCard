@@ -351,7 +351,7 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 			mastery_candidate_ids = completed_duel.get_mastery_candidate_ids()
 	var store := Store.new(deck_profile_path)
 	var profile: Dictionary = store.load_profile()
-	var previous_character_level: int = store.get_character_level(profile)
+	var previous_character_tier: int = store.get_character_tier(profile)
 	var previous_beginner_stage: int = store.get_beginner_opening_stage(profile)
 	var kuihua0_unlocked_this_run: bool = (
 		not testing_mode
@@ -378,7 +378,7 @@ func _on_duel_return_requested(outcome: StringName) -> void:
 	)
 	profile = duel_result.get("profile", profile)
 	_queue_new_card_highlights(duel_result.get("primary_ids", []))
-	if store.get_character_level(profile) > previous_character_level:
+	if store.get_character_tier(profile) > previous_character_tier:
 		_play_rank_up_on_next_deck_builder = true
 	_queue_beginner_flow_completed_event_if_needed(
 		previous_beginner_stage,
