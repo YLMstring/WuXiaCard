@@ -4038,6 +4038,21 @@ const _CARD_DEFINITIONS: Dictionary = {
 			WUDANG_FLIPPED_CARD_ATTACK,
 		],
 	},
+	&"WuDangMianZhang4": {
+		"id": &"WuDangMianZhang4",
+		"glyph": "空碗盛饭",
+		"picture": "res://pics/LKT010_081.png",
+		"sect": "全真派",
+		"tier": 4,
+		"weapon": "拳法",
+		"description": "我可以在友方占据的位置进场，若如此做，先将该友方移除。翻面前，将我移除，我将其它牌翻面后，失去此效果。我将其它牌翻面后，令其发起攻击。",
+		"flavor": "老顽童周伯通所创七十二路空明拳中的招式，要旨在于空、柔二字，所谓“大成若缺，其用不弊。大盈若冲，其用不穷”。",
+		"powers": [3, 8, 3, 8],
+		"abilities": [
+			WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+			WUDANG_FLIPPED_CARD_ATTACK,
+		],
+	},
 	&"HuZhuaJueHuSHou1": {
 		"id": &"HuZhuaJueHuSHou1",
 		"glyph": "虎爪绝户手",
