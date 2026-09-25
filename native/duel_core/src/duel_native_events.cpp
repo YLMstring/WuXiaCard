@@ -74,6 +74,23 @@ bool DuelNativeCompactKernel::conditions_match(
 				}
 				break;
 			}
+			case ConditionOpcode::TRIGGER_CARD_HAS_ADJACENT_ALLY: {
+				const int32_t trigger_cell = find_board_card(value, context.trigger_card_index, -1);
+				if (trigger_cell < 0) break;
+				const int32_t trigger_owner = value.board_owners[trigger_cell];
+				for (int32_t direction = 0; direction < 4; ++direction) {
+					const int32_t neighbor = neighbor_index(trigger_cell, direction);
+					if (
+						neighbor >= 0
+						&& value.board_card_indices[neighbor] >= 0
+						&& value.board_owners[neighbor] == trigger_owner
+					) {
+						matched = true;
+						break;
+					}
+				}
+				break;
+			}
 			case ConditionOpcode::EXILE_EFFECT_SOURCE_IS_ALLY:
 				matched = (
 					context.exile_effect_source_owner != 0

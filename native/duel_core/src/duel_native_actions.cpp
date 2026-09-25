@@ -838,17 +838,21 @@ bool DuelNativeCompactKernel::selector_conditions_match(
 			case SelectorConditionOpcode::IS_NOT_SOURCE:
 				matched = candidate_card_index != context.ability_source_card_index;
 				break;
-			case SelectorConditionOpcode::ADJACENT_TO_SOURCE:
+			case SelectorConditionOpcode::ADJACENT_TO_SOURCE: {
+				const int32_t anchor_cell = condition.anchor_card_ref == CardRefOpcode::TRIGGER_CARD
+					? find_board_card(value, context.trigger_card_index, -1)
+					: (source_zone == 0 ? source_index : -1);
 				matched = (
-					candidate_zone == 0 && source_zone == 0
+					candidate_zone == 0 && anchor_cell >= 0
 					&& (
-						neighbor_index(candidate_logical_index, 0) == source_index
-						|| neighbor_index(candidate_logical_index, 1) == source_index
-						|| neighbor_index(candidate_logical_index, 2) == source_index
-						|| neighbor_index(candidate_logical_index, 3) == source_index
+						neighbor_index(candidate_logical_index, 0) == anchor_cell
+						|| neighbor_index(candidate_logical_index, 1) == anchor_cell
+						|| neighbor_index(candidate_logical_index, 2) == anchor_cell
+						|| neighbor_index(candidate_logical_index, 3) == anchor_cell
 					)
 				);
 				break;
+			}
 			case SelectorConditionOpcode::SURROUNDED_BY_ALLIES: {
 				if (candidate_zone != 0 || source_zone != 0) break;
 				int32_t neighbor_count = 0;
@@ -1531,6 +1535,21 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 	StringName pending_power_change_group;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
+		int32_t exile_target_card_index = -1;
+		if (action.opcode == ActionOpcode::EXILE_CARD) {
+			execution_state.last_exile_succeeded = false;
+			if (action.card_ref == CardRefOpcode::SELECTED_CARD) {
+				exile_target_card_index = action_context.selected_card_index;
+			} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
+				exile_target_card_index = event_context.trigger_card_index;
+			} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
+				exile_target_card_index = action_context.ability_source_card_index;
+			} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
+				exile_target_card_index = event_context.attacker_card_index;
+			}
+		} else if (action.opcode == ActionOpcode::FOR_EACH_SELECTED_CARD) {
+			execution_state.last_exile_succeeded = false;
+		}
 		if (
 			!defer_power_change_batch
 			&& !pending_power_change_group.is_empty()
@@ -1557,6 +1576,24 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			resolution
 		);
 		const int64_t direct_event_end = resolution.events.size();
+		if (
+			action.opcode == ActionOpcode::EXILE_CARD
+			&& exile_target_card_index >= 0
+			&& exile_target_card_index < static_cast<int32_t>(value.card_instance_ids.size())
+		) {
+			const StringName target_instance_id = value.card_instance_ids[exile_target_card_index];
+			for (int64_t event_index = first_event_index; event_index < direct_event_end; ++event_index) {
+				if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
+				const Dictionary event = resolution.events[event_index];
+				if (
+					StringName(event.get("type", StringName())) == StringName("card_exiled")
+					&& StringName(event.get("instance_id", StringName())) == target_instance_id
+				) {
+					execution_state.last_exile_succeeded = true;
+					break;
+				}
+			}
+		}
 		if (
 			direct_event_end > first_event_index
 			&& (
@@ -1704,6 +1741,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 			true
 		);
 		if (outcome == ActionOutcome::UNSUPPORTED || outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
+		execution_state.last_exile_succeeded = nested_execution_state.last_exile_succeeded;
 		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
 	}
 	return aggregate;
@@ -1734,6 +1772,9 @@ bool DuelNativeCompactKernel::action_conditions_match(
 				break;
 			case ConditionOpcode::LAST_DISCARD_BATCH_SIZE_AT_LEAST:
 				matched = execution_state.last_discard_batch_size >= condition.amount;
+				break;
+			case ConditionOpcode::LAST_EXILE_SUCCEEDED:
+				matched = execution_state.last_exile_succeeded;
 				break;
 			case ConditionOpcode::ATTACK_FLIPPED_ANY_CARD:
 				matched = condition.inverted
@@ -2090,7 +2131,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 		case ActionOpcode::RETURN_CARD_TO_HAND:
 			return return_card_to_hand(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE:
-			return swap_action_subject_with_ability_source(value, group, event_context, action_context, exile_stack, resolution);
+			return swap_action_subject_with_ability_source(value, group, action, event_context, action_context, exile_stack, resolution);
 		case ActionOpcode::SWAP_SELF_WITH_TRIGGER_CARD: {
 			if (event_context.trigger_card_index < 0) return ActionOutcome::NO_EFFECT;
 			ActionContext trigger_context = action_context;
@@ -2101,6 +2142,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			return swap_action_subject_with_ability_source(
 				value,
 				group,
+				action,
 				event_context,
 				trigger_context,
 				exile_stack,
@@ -2179,6 +2221,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			const ActionOutcome outcome = swap_action_subject_with_ability_source(
 				value,
 				group,
+				action,
 				event_context,
 				target_context,
 				exile_stack,

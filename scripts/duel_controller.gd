@@ -969,20 +969,24 @@ func _commit_action(
 	card.z_index = 1
 	card.scale = Vector2(0.9, 0.9) if action.action_type == ActionData.TYPE_PLAY else Vector2.ONE
 	card.rotation = 0.0
-	if action.action_type == ActionData.TYPE_PLAY:
+	var occupied_play: bool = (
+		action.action_type == ActionData.TYPE_PLAY
+		and board_cards[action.target_index] != null
+	)
+	if action.action_type == ActionData.TYPE_PLAY and not occupied_play:
 		card.reparent(board_cells[action.target_index], false)
 		board_cards[action.target_index] = card
 
-	if action.action_type == ActionData.TYPE_PLAY:
+	if action.action_type == ActionData.TYPE_PLAY and not occupied_play:
 		_play_placement_feedback()
-	if action.action_type == ActionData.TYPE_PLAY and snap_duration > 0.0:
+	if action.action_type == ActionData.TYPE_PLAY and not occupied_play and snap_duration > 0.0:
 		var snap_tween: Tween = create_tween()
 		snap_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		snap_tween.tween_property(card, "scale", Vector2.ONE, snap_duration)
 		await snap_tween.finished
 	else:
 		card.scale = Vector2.ONE
-	if action.action_type == ActionData.TYPE_PLAY:
+	if action.action_type == ActionData.TYPE_PLAY and not occupied_play:
 		await _wait_after_board_entry()
 
 	var resolved_targets: int = await _present_transition_events(
@@ -990,7 +994,8 @@ func _commit_action(
 		owner_id,
 		action.action_type == ActionData.TYPE_PLAY,
 		_get_card_instance_id(card),
-		presentation_started_msec
+		presentation_started_msec,
+		card if occupied_play else null
 	)
 	_reconcile_board_card_views()
 	if resolved_targets > 1:
@@ -1350,7 +1355,8 @@ func _present_transition_events(
 	fallback_owner: int,
 	is_play_action: bool = false,
 	played_instance_id: StringName = &"",
-	presentation_started_msec: int = 0
+	presentation_started_msec: int = 0,
+	pending_play_card: CardView = null
 ) -> int:
 	var resolved_targets: int = 0
 	var last_pulsed_instance_id: StringName = &""
@@ -1370,6 +1376,26 @@ func _present_transition_events(
 		var consumed_events: int = 1
 		if event_type == &"ability_activated":
 			_presentation_trace.append(event_type)
+		elif event_type == &"card_placed" and pending_play_card != null:
+			if (
+				is_instance_valid(pending_play_card)
+				and StringName(event.get("instance_id", &"")) == played_instance_id
+				and target_cell >= 0
+				and target_cell < board_cards.size()
+				and board_cards[target_cell] == null
+			):
+				pending_play_card.reparent(board_cells[target_cell], false)
+				board_cards[target_cell] = pending_play_card
+				_play_placement_feedback()
+				if snap_duration > 0.0:
+					var snap_tween: Tween = create_tween()
+					snap_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+					snap_tween.tween_property(pending_play_card, "scale", Vector2.ONE, snap_duration)
+					await snap_tween.finished
+				else:
+					pending_play_card.scale = Vector2.ONE
+				await _wait_after_board_entry()
+			pending_play_card = null
 		elif event_type == &"card_moved":
 			if deferred_swap_events.has(event_index):
 				var first_swap_event: Dictionary = deferred_swap_events[event_index]
@@ -1550,6 +1576,8 @@ func _present_transition_events(
 				deferred_exile_events[exiled_instance_id] = event.duplicate(true)
 			elif exiled_card != null:
 				await _present_exiled_card_view(event, exiled_card)
+				if exiled_card == pending_play_card:
+					pending_play_card = null
 			resolved_targets += 1
 		event_index += consumed_events
 	return resolved_targets
@@ -2414,7 +2442,18 @@ func _get_card_view_by_instance(instance_id: StringName) -> CardView:
 	var player_card: CardView = _get_hand_card_view_by_instance(player_hand, instance_id)
 	if player_card != null:
 		return player_card
-	return _get_hand_card_view_by_instance(opponent_hand, instance_id)
+	var opponent_card: CardView = _get_hand_card_view_by_instance(opponent_hand, instance_id)
+	if opponent_card != null:
+		return opponent_card
+	for child: Node in drag_layer.get_children():
+		var floating_card := child as CardView
+		if (
+			floating_card != null
+			and is_instance_valid(floating_card)
+			and _get_card_instance_id(floating_card) == instance_id
+		):
+			return floating_card
+	return null
 
 
 func _get_first_empty_hand_slot(container: HBoxContainer) -> PanelContainer:

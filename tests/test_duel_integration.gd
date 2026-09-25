@@ -53,6 +53,7 @@ func _run() -> void:
 	_check_card_edge_labels(duel)
 	await _check_card_picture_layout()
 	await _check_hand_drag_targets_follow_simulator_legality()
+	await _check_occupied_ally_play_presentation()
 	await _check_hand_play_danger_highlights()
 	await _check_owner_aura_board_transparency()
 	_check_hand_slots(duel.get_node("DuelCanvas/PlayerHand"))
@@ -2310,6 +2311,40 @@ func _logical_hand_index_for_card_id(
 		):
 			return index
 	return -1
+
+
+func _check_occupied_ally_play_presentation() -> void:
+	root.size = Vector2i(540, 960)
+	var duel: Node = _instantiate_duel()
+	duel.set("testing_mode", true)
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var board: Array = Rules.empty_board()
+	board[4] = {
+		"card": Catalog.create_instance(&"QiXinJuHui1", Rules.PLAYER_OWNER, &"occupied_ally"),
+		"owner": Rules.PLAYER_OWNER,
+	}
+	var state := State.new(
+		board,
+		[Catalog.create_instance(&"KongWanChengFan4", Rules.PLAYER_OWNER, &"replacing_card")],
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"opponent_card")],
+		Rules.PLAYER_OWNER
+	)
+	duel.call("_rebuild_views_from_state", state)
+	await process_frame
+	var hand_card: Control = _first_card(duel.get_node("DuelCanvas/PlayerHand"))
+	_check(4 in (duel.call("_get_drag_targets", hand_card) as Array), "Occupied ally is a legal drag target")
+	_check(await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "Occupied ally play commits through controller")
+	_check(duel.debug_get_board_card_instance_id(4) == &"replacing_card", "Replacement card view takes the occupied cell")
+	_check(duel.debug_get_removed_count(Rules.PLAYER_OWNER) == 1, "Old ally is removed during presentation")
+	_check(
+		&"card_exiled" in duel.debug_get_presentation_trace(),
+		"Occupied play presents the old ally's removal"
+	)
+	duel.queue_free()
+	await process_frame
 
 
 func _instantiate_duel() -> Node:

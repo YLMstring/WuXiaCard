@@ -165,6 +165,8 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_is_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ENEMY;
 	else if (type == StringName("trigger_card_in_range")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IN_RANGE;
 	else if (type == StringName("trigger_card_adjacent_to_source")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE;
+	else if (type == StringName("trigger_card_has_adjacent_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_HAS_ADJACENT_ALLY;
+	else if (type == StringName("last_exile_succeeded")) compiled.opcode = ConditionOpcode::LAST_EXILE_SUCCEEDED;
 	else if (type == StringName("exile_effect_source_is_ally")) compiled.opcode = ConditionOpcode::EXILE_EFFECT_SOURCE_IS_ALLY;
 	else if (type == StringName("trigger_card_revealed_to_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF;
 	else if (type == StringName("trigger_card_was_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ENEMY;
@@ -212,6 +214,13 @@ DuelNativeCompactKernel::CompiledSelectorCondition DuelNativeCompactKernel::comp
 		else if (type == StringName("selected_card_flipped_by_current_attack")) compiled.opcode = SelectorConditionOpcode::FLIPPED_BY_CURRENT_ATTACK;
 		else if (type == StringName("selected_card_powers_can_change")) compiled.opcode = SelectorConditionOpcode::POWERS_CAN_CHANGE;
 		else if (type == StringName("selected_card_has_nonzero_power")) compiled.opcode = SelectorConditionOpcode::HAS_NONZERO_POWER;
+	} else if (
+		type == StringName("selected_card_adjacent_to_source")
+		&& condition.size() == 2
+		&& StringName(condition.get("card", StringName())) == StringName("trigger_card")
+	) {
+		compiled.opcode = SelectorConditionOpcode::ADJACENT_TO_SOURCE;
+		compiled.anchor_card_ref = CardRefOpcode::TRIGGER_CARD;
 	} else if (
 		type == StringName("selected_card_weapon_is")
 		&& condition.size() == 2
@@ -593,9 +602,16 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		}
 	} else if (
 		type == StringName("self_swapped_with_ability_source")
-		&& action.size() == 1 + generic_field_count
+		&& (
+			action.size() == 1 + generic_field_count
+			|| (
+				action.size() == 2 + generic_field_count
+				&& StringName(action.get("card", StringName())) == StringName("trigger_card")
+			)
+		)
 	) {
 		compiled.opcode = ActionOpcode::SELF_SWAPPED_WITH_ABILITY_SOURCE;
+		if (action.has("card")) compiled.card_ref = CardRefOpcode::TRIGGER_CARD;
 	} else if (
 		type == StringName("swap_self_with_trigger_card")
 		&& action.size() == 1 + generic_field_count

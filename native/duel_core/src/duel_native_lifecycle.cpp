@@ -120,22 +120,31 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::move_card_betwee
 DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subject_with_ability_source(
 	NativeState &value,
 	const EventGroup &group,
+	const CompiledAction &action,
 	const EventContext &event_context,
 	const ActionContext &action_context,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
 ) const {
-	(void)event_context;
-	const int32_t source_card_index = group.source_card_index;
+	const bool use_trigger_card = action.card_ref == CardRefOpcode::TRIGGER_CARD;
+	const int32_t source_card_index = use_trigger_card
+		? event_context.trigger_card_index
+		: group.source_card_index;
 	const int32_t target_card_index = action_context.action_subject_card_index;
 	if (
 		source_card_index < 0
 		|| target_card_index < 0
 		|| source_card_index == target_card_index
 	) return ActionOutcome::NO_EFFECT;
-	const int32_t source_owner = action_context.ability_source_owner;
+	const int32_t source_owner = use_trigger_card
+		? event_context.trigger_owner
+		: action_context.ability_source_owner;
 	const int32_t target_owner = action_context.action_subject_owner;
-	int32_t source_cell = find_board_card(value, source_card_index, group.source_cell);
+	int32_t source_cell = find_board_card(
+		value,
+		source_card_index,
+		use_trigger_card ? event_context.trigger_cell : group.source_cell
+	);
 	int32_t target_cell = find_board_card(
 		value,
 		target_card_index,
@@ -177,9 +186,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 		|| value.board_owners[target_cell] != target_owner
 	) {
 		append_resolution(resolution, source_before);
-		return resolution_has_output(source_before)
-			? ActionOutcome::APPLIED
-			: ActionOutcome::NO_EFFECT;
+		return ActionOutcome::NO_EFFECT;
 	}
 
 	const Variant reserved_target_extra = value.board_slot_extras[target_cell];
@@ -364,6 +371,19 @@ int32_t DuelNativeCompactKernel::leftmost_empty_hand_slot(
 	return -1;
 }
 
+bool DuelNativeCompactKernel::card_can_play_on_ally_occupied(
+	const NativeState &value,
+	int32_t card_index
+) const {
+	if (card_index < 0 || card_index >= static_cast<int32_t>(value.card_template_indices.size())) {
+		return false;
+	}
+	const int32_t template_index = value.card_template_indices[card_index];
+	return template_index >= 0
+		&& template_index < static_cast<int32_t>(template_play_on_ally_occupied.size())
+		&& template_play_on_ally_occupied[template_index] != 0;
+}
+
 bool DuelNativeCompactKernel::owner_has_legal_play(
 	const NativeState &value,
 	int32_t owner_id
@@ -376,11 +396,23 @@ bool DuelNativeCompactKernel::owner_has_legal_play(
 	) {
 		return false;
 	}
-	return std::find(
+	if (std::find(
 		value.board_card_indices.begin(),
 		value.board_card_indices.end(),
 		-1
-	) != value.board_card_indices.end();
+	) != value.board_card_indices.end()) return true;
+	bool has_owned_cell = false;
+	for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
+		if (value.board_card_indices[cell] >= 0 && value.board_owners[cell] == owner_id) {
+			has_owned_cell = true;
+			break;
+		}
+	}
+	if (!has_owned_cell) return false;
+	for (const int32_t card_index : value.zones[hand_zone_index]) {
+		if (card_can_play_on_ally_occupied(value, card_index)) return true;
+	}
+	return false;
 }
 
 bool DuelNativeCompactKernel::owner_has_legal_action(

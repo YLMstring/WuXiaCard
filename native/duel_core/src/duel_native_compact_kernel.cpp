@@ -283,6 +283,24 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	);
 	state.board_slot_extras = payload.get("board_slot_extras", Array());
 	state.card_template_pool = payload.get("card_template_pool", Array());
+	template_play_on_ally_occupied.clear();
+	template_play_on_ally_occupied.reserve(static_cast<size_t>(state.card_template_pool.size()));
+	for (int64_t index = 0; index < state.card_template_pool.size(); ++index) {
+		const Variant template_value = state.card_template_pool[index];
+		if (template_value.get_type() != Variant::DICTIONARY) {
+			last_error = "Card template pool contains a non-Dictionary value";
+			return false;
+		}
+		const Dictionary card_template = template_value;
+		const Variant permission = card_template.get("play_on_ally_occupied_cell", Variant());
+		if (permission.get_type() != Variant::NIL && permission.get_type() != Variant::BOOL) {
+			last_error = "Card template play_on_ally_occupied_cell must be Boolean";
+			return false;
+		}
+		template_play_on_ally_occupied.push_back(
+			permission.get_type() == Variant::BOOL && static_cast<bool>(permission) ? 1 : 0
+		);
+	}
 	state.active_ability_set_pool = payload.get("active_ability_set_pool", Array());
 	state.suppression_set_pool = payload.get("suppression_set_pool", Array());
 	const Variant fresh_prototypes_value = payload.get("fresh_card_prototypes", Array());
@@ -688,10 +706,6 @@ bool DuelNativeCompactKernel::transition_play(
 		reason = "Target cell is outside the board";
 		return false;
 	}
-	if (source.board_card_indices[static_cast<size_t>(target_cell)] != -1) {
-		reason = "Target board cell is occupied";
-		return false;
-	}
 	const int32_t played_card_index = source_hand[static_cast<size_t>(hand_index)];
 	if (played_card_index < 0 || played_card_index >= static_cast<int32_t>(source.card_instance_ids.size())) {
 		reason = "Hand references an invalid card index";
@@ -700,6 +714,17 @@ bool DuelNativeCompactKernel::transition_play(
 	const StringName played_instance_id = source.card_instance_ids[played_card_index];
 	if (!action.source_instance_id.is_empty() && action.source_instance_id != played_instance_id) {
 		reason = "Expected instance ID does not match the hand card";
+		return false;
+	}
+	const int32_t replaced_card_index = source.board_card_indices[static_cast<size_t>(target_cell)];
+	if (
+		replaced_card_index >= 0
+		&& (
+			!card_can_play_on_ally_occupied(source, played_card_index)
+			|| source.board_owners[target_cell] != moving_owner
+		)
+	) {
+		reason = "Target board cell is occupied";
 		return false;
 	}
 	{
@@ -717,8 +742,45 @@ bool DuelNativeCompactKernel::transition_play(
 		next.scalars[13] = 1;
 		next.scalars[5] -= 1;
 	}
+	resolution = Resolution();
+	std::vector<int32_t> exile_stack;
+	if (replaced_card_index >= 0) {
+		EventContext replace_context;
+		replace_context.trigger_cell = target_cell;
+		replace_context.trigger_card_index = replaced_card_index;
+		replace_context.trigger_owner = moving_owner;
+		replace_context.trigger_zone = 0;
+		replace_context.trigger_logical_index = target_cell;
+		replace_context.trigger_was_on_board = true;
+		if (!exile_card(
+			next,
+			replaced_card_index,
+			target_cell,
+			played_card_index,
+			moving_owner,
+			false,
+			StringName("ally_occupied_hand_play"),
+			replace_context,
+			exile_stack,
+			resolution,
+			false
+		)) {
+			supported = false;
+			reason = resolution.reason;
+			return false;
+		}
+		if (next.board_card_indices[static_cast<size_t>(target_cell)] >= 0) {
+			reason = "Occupied ally remained on the target cell after its exile reaction";
+			return false;
+		}
+	}
 	std::vector<int32_t> &next_hand = next.zones[hand_zone_index];
-	next_hand.erase(next_hand.begin() + hand_index);
+	const auto played_in_hand = std::find(next_hand.begin(), next_hand.end(), played_card_index);
+	if (played_in_hand == next_hand.end()) {
+		reason = "Hand card left its source zone during occupied-cell removal";
+		return false;
+	}
+	next_hand.erase(played_in_hand);
 	next.card_runtime_flags[played_card_index] &= static_cast<uint8_t>(~(1 << 7));
 	next.card_hand_slots[played_card_index] = -1;
 	add_reveal_observer(next.card_reveal_codes[played_card_index], moving_owner);
@@ -728,8 +790,6 @@ bool DuelNativeCompactKernel::transition_play(
 		next.board_slot_extras[target_cell] = Dictionary();
 	}
 
-	resolution = Resolution();
-	std::vector<int32_t> exile_stack;
 	Dictionary placed_event;
 	placed_event["type"] = StringName("card_placed");
 	placed_event["source_cell"] = target_cell;

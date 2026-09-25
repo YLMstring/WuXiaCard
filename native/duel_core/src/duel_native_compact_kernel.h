@@ -100,6 +100,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_IS_ENEMY,
 		TRIGGER_CARD_IN_RANGE,
 		TRIGGER_CARD_ADJACENT_TO_SOURCE,
+		TRIGGER_CARD_HAS_ADJACENT_ALLY,
 		EXILE_EFFECT_SOURCE_IS_ALLY,
 		TRIGGER_CARD_REVEALED_TO_SELF,
 		TRIGGER_CARD_WAS_ENEMY,
@@ -126,6 +127,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SOURCE_HAS_ADJACENT_EMPTY_CELL,
 		SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
+		LAST_EXILE_SUCCEEDED,
 		DISCARD_OWNER_IS_SELF,
 		SELECTED_CARD_REVEALED_TO_SELF,
 		ABILITY_SOURCE_IN_ZONE,
@@ -308,6 +310,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		SelectorConditionOpcode opcode = SelectorConditionOpcode::UNSUPPORTED;
 		String weapon;
 		RelativeOwnerOpcode relative_owner = RelativeOwnerOpcode::UNSUPPORTED;
+		CardRefOpcode anchor_card_ref = CardRefOpcode::ABILITY_SOURCE;
 		ResourceOpcode resource = ResourceOpcode::NONE;
 		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
 		int32_t amount = 0;
@@ -376,6 +379,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	// 一次能力链共享的少量瞬时信息。它不写入存档，也不进入局面状态键。
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
+		bool last_exile_succeeded = false;
 		int32_t current_source_cell = -1;
 		int32_t last_summoned_card_index = -1;
 		int32_t last_summoned_cell = -1;
@@ -852,6 +856,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	std::vector<Variant> ability_declaration_pool;
 	std::vector<bool> ability_declaration_owner_aura;
 	std::vector<FreshCardPrototype> fresh_card_prototypes;
+	std::vector<uint8_t> template_play_on_ally_occupied;
 	int32_t empty_deck_draw_prototype_index = -1;
 	bool loaded = false;
 	String last_error;
@@ -1455,6 +1460,7 @@ private:
 	ActionOutcome swap_action_subject_with_ability_source(
 		NativeState &value,
 		const EventGroup &group,
+		const CompiledAction &action,
 		const EventContext &event_context,
 		const ActionContext &action_context,
 		std::vector<int32_t> &exile_stack,
@@ -1664,6 +1670,7 @@ private:
 	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;
 	bool owner_has_legal_play(const NativeState &value, int32_t owner_id) const;
+	bool card_can_play_on_ally_occupied(const NativeState &value, int32_t card_index) const;
 	bool owner_has_legal_action(const NativeState &value, int32_t owner_id) const;
 	bool is_terminal(const NativeState &value) const;
 	void apply_extra_card_play_requests(

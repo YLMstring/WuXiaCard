@@ -67,6 +67,7 @@ const CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE: StringName = (
 )
 const CONDITION_TRIGGER_CARD_WEAPON: StringName = &"trigger_card_weapon"
 const CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE: StringName = &"trigger_card_adjacent_to_source"
+const CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY: StringName = &"trigger_card_has_adjacent_ally"
 const CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL: StringName = &"source_has_adjacent_empty_cell"
 const CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY: StringName = &"source_has_empty_between_enemy"
 const CONDITION_SELECTED_CARD_IS_ALLY: StringName = &"selected_card_is_ally"
@@ -93,6 +94,7 @@ const CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY: StringName = &"exile_effect_source_
 const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
 const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
+const CONDITION_LAST_EXILE_SUCCEEDED: StringName = &"last_exile_succeeded"
 const CONDITION_ABILITY_SOURCE_IN_ZONE: StringName = &"ability_source_in_zone"
 const CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY: StringName = (
 	&"power_increase_batch_includes_ally"
@@ -250,6 +252,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_POWERS_COULD_CHANGE,
 	CONDITION_TRIGGER_CARD_WEAPON,
 	CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE,
+	CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY,
 	CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL,
 	CONDITION_SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 	CONDITION_ATTACK_IS_NOT_REPEAT,
@@ -277,6 +280,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_OWNER_HAND_EMPTY,
 	CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
+	CONDITION_LAST_EXILE_SUCCEEDED,
 	CONDITION_ATTACK_FLIPPED_ANY_CARD,
 	CONDITION_SELECTED_CARD_REVEALED_TO_SELF,
 ]
@@ -372,7 +376,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"JinYanGong2",
 	&"JinYanGong3",
 	&"JinYanGong4",
-	&"JinYanGong5",
+	&"XianTianGong5",
 	&"ZuoYouHuBo5",
 	&"QiXinJuHui1",
 	&"QiXinJuHui2",
@@ -444,7 +448,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"WuDangMianZhang1",
 	&"WuDangMianZhang2",
 	&"WuDangMianZhang3",
-	&"WuDangMianZhang4",
+	&"KongWanChengFan4",
 	&"HuZhuaJueHuSHou1",
 	&"HuZhuaJueHuSHou2",
 	&"HuZhuaJueHuSHou3",
@@ -2521,6 +2525,313 @@ const YUSUI_FLIP_ADJACENT_AND_REBIRTH_BEFORE_EXILE: Dictionary = {
 	}],
 }
 
+const QZ_SPEND_KI_TO_PREVENT_FLIP: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY},
+			{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+		],
+		"actions": [
+			{"type": ACTION_SPEND_KI, "amount": 1, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+		],
+	}],
+}
+
+const QZ_TIAN_ADJACENT_ALLIES_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+			},
+			"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}],
+}
+
+const QZ_TIAN_ALL_OTHER_ALLIES_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+				],
+			},
+			"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}],
+}
+
+const QZ_TIAN_SELF_PREVENTED_SWAP_RESUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
+				 "on_invalid_context": STOP_RULE},
+				{"type": ACTION_RESUMMON_CARD_IN_PLACE, "card": CARD_REF_ABILITY_SOURCE},
+			],
+		}],
+	}],
+}
+
+const QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+					 "card": CARD_REF_TRIGGER_CARD},
+				],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
+				 "card": CARD_REF_TRIGGER_CARD,
+				 "on_invalid_context": STOP_RULE},
+				{"type": ACTION_RESUMMON_CARD_IN_PLACE,
+				 "card": CARD_REF_TRIGGER_CARD},
+			],
+		}],
+	}],
+}
+
+const QZ_JINYAN_ENTRY_DRAW: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+	}],
+}
+
+const QZ_JINYAN_ALLY_DRAW_GAIN_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DRAWN,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+		             "card": CARD_REF_TRIGGER_CARD}],
+	}],
+}
+
+const QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DRAWN,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_XIANTIAN_OPENING_HAND_KI: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_DUEL_STARTED,
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+			},
+			"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+			             "card": CARD_REF_SELECTED_CARD}],
+		}],
+	}],
+}
+
+const QZ_QIXIN_ADJACENT_ALLY_ENTRY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_DING_FLIP_GAIN_KI_AND_PROTECT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_DING_FLIP_PROTECT_AND_ALLY_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+					],
+				},
+				"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+		],
+	}],
+}
+
+const QZ_DING_FLIP_PROTECT_ALLY_POWERS_AND_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+					],
+				},
+				"actions": [{"type": ACTION_CHANGE_POWERS, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+					],
+				},
+				"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+		],
+	}],
+}
+
+const QZ_HUBO_OWNER_AURA: Dictionary = {
+	"triggers": [
+		{
+			"event": TRIGGER_CARD_BEFORE_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+			"actions": [
+				{"type": ACTION_SPEND_KI, "amount": 1,
+				 "card": CARD_REF_TRIGGER_CARD},
+				{"type": ACTION_CHANGE_POWERS, "amount": -1,
+				 "card": CARD_REF_TRIGGER_CARD},
+			],
+		},
+		{
+			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [
+				{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [{
+							"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+							"played_by": OWNER_ABILITY_SOURCE,
+						}],
+						"limit": 1,
+					},
+					"actions": [{"type": ACTION_EXILE_CARD,
+					             "card": CARD_REF_SELECTED_CARD}],
+				},
+				{
+					"type": ACTION_IF,
+					"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
+					"actions": [
+						{"type": ACTION_DRAW_CARDS, "amount": 1},
+						{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+					],
+				},
+			],
+		},
+	],
+}
+
+const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_GRANT_OWNER_AURA, "aura": QZ_HUBO_OWNER_AURA},
+		],
+	}],
+}
+
 const _CARD_DEFINITIONS: Dictionary = {
 	&"TianGangBeiDou2": {
 		"id": &"TianGangBeiDou2",
@@ -2533,7 +2844,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "天罡北斗阵是全真教中最上乘的玄门功夫，王重阳当年曾为此阵花过无数心血。小则以之联手搏击，化而为大，可用于战阵。敌人来攻时，正面首当其冲者不用出力招架，却由身旁道侣侧击反攻，犹如一人身兼数人武功，确然威不可当。",
 		"powers": [4, 3, 4, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK],
 	},
 	&"TianGangBeiDou3": {
 		"id": &"TianGangBeiDou3",
@@ -2546,7 +2857,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "天罡北斗阵是全真教中最上乘的玄门功夫，王重阳当年曾为此阵花过无数心血。小则以之联手搏击，化而为大，可用于战阵。敌人来攻时，正面首当其冲者不用出力招架，却由身旁道侣侧击反攻，犹如一人身兼数人武功，确然威不可当。",
 		"powers": [4, 3, 4, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK, QZ_SPEND_KI_TO_PREVENT_FLIP],
 	},
 	&"TianGangBeiDou4": {
 		"id": &"TianGangBeiDou4",
@@ -2559,7 +2870,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "天罡北斗阵是全真教中最上乘的玄门功夫，王重阳当年曾为此阵花过无数心血。小则以之联手搏击，化而为大，可用于战阵。敌人来攻时，正面首当其冲者不用出力招架，却由身旁道侣侧击反攻，犹如一人身兼数人武功，确然威不可当。",
 		"powers": [4, 3, 4, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK, QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_TIAN_SELF_PREVENTED_SWAP_RESUMMON],
 	},
 	&"TianGangBeiDou5": {
 		"id": &"TianGangBeiDou5",
@@ -2572,7 +2883,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "天罡北斗阵是全真教中最上乘的玄门功夫，王重阳当年曾为此阵花过无数心血。小则以之联手搏击，化而为大，可用于战阵。敌人来攻时，正面首当其冲者不用出力招架，却由身旁道侣侧击反攻，犹如一人身兼数人武功，确然威不可当。",
 		"powers": [4, 3, 4, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_TIAN_ALL_OTHER_ALLIES_ATTACK, QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON],
 	},
 	&"JinYanGong2": {
 		"id": &"JinYanGong2",
@@ -2584,7 +2895,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
-		"abilities": [],
+		"abilities": [QZ_JINYAN_ENTRY_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 	},
 	&"JinYanGong3": {
 		"id": &"JinYanGong3",
@@ -2598,6 +2909,8 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
+			QZ_JINYAN_ENTRY_DRAW,
+			QZ_JINYAN_ALLY_DRAW_GAIN_KI,
 		],
 	},
 	&"JinYanGong4": {
@@ -2612,10 +2925,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
+			QZ_JINYAN_ENTRY_DRAW,
+			QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT,
 		],
 	},
-	&"JinYanGong5": {
-		"id": &"JinYanGong5",
+	&"XianTianGong5": {
+		"id": &"XianTianGong5",
 		"glyph": "先天功",
 		"picture": "res://pics/LKT010_006.png",
 		"sect": "全真派",
@@ -2624,7 +2939,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "对局开始时，所有手牌内力加一。",
 		"flavor": "全真派至高无上的内功心法，重阳真人传给一灯大师的神功，一神守内，一神游外。",
 		"powers": [1, 1, 1, 1],
-		"abilities": [],
+		"abilities": [QZ_XIANTIAN_OPENING_HAND_KI],
 	},
 	&"ZuoYouHuBo5": {
 		"id": &"ZuoYouHuBo5",
@@ -2636,7 +2951,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场前，将我移除，你获得以下效果：友方进场前，点数和内力减一；回合结束时，移除上一张从我的手牌中打出的牌，若如此做，抽一张牌，额外出一张牌。",
 		"flavor": "老顽童周伯通所创的分身出击功夫，双手各使不同武功，如有两个人在各自发招，武功斗然间增强一倍。虽然身上内力分在两手，招数上总是占了大大便宜。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [QZ_HUBO_BEFORE_SUMMON],
 	},
 	&"QiXinJuHui1": {
 		"id": &"QiXinJuHui1",
@@ -2649,7 +2964,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "丘处机等人从天罡北斗阵法中演化出的并力攻敌法门，每一招之出，都将数人劲力集于一点。",
 		"powers": [3, 7, 3, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP],
 	},
 	&"QiXinJuHui2": {
 		"id": &"QiXinJuHui2",
@@ -2662,7 +2977,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "丘处机等人从天罡北斗阵法中演化出的并力攻敌法门，每一招之出，都将数人劲力集于一点。",
 		"powers": [3, 7, 3, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_QIXIN_ADJACENT_ALLY_ENTRY],
 	},
 	&"QiXinJuHui3": {
 		"id": &"QiXinJuHui3",
@@ -2675,7 +2990,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "丘处机等人从天罡北斗阵法中演化出的并力攻敌法门，每一招之出，都将数人劲力集于一点。",
 		"powers": [3, 7, 3, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
 	},
 	&"QiXinJuHui4": {
 		"id": &"QiXinJuHui4",
@@ -2688,7 +3003,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "丘处机等人从天罡北斗阵法中演化出的并力攻敌法门，每一招之出，都将数人劲力集于一点。",
 		"powers": [3, 7, 3, 7],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [KUIHUA_MINIMUM_DEFENSE_RETAINED, QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
 	},
 	&"DingYangZhen1": {
 		"id": &"DingYangZhen1",
@@ -2700,7 +3015,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，若我有相邻友方，耗内力以阻止翻面。",
 		"flavor": "端凝厚重的正宗全真剑法，左手捏着剑诀，左足踏开，向上斜刺。这一招神完气足，劲、功、式、力，无不恰到好处，看来平平无奇，但要练到没半点瑕疵，天资稍差之人积一世之功也未必能够。",
 		"powers": [7, 5, 5, 7],
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP],
 	},
 	&"DingYangZhen2": {
 		"id": &"DingYangZhen2",
@@ -2712,7 +3027,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，若我有相邻友方，耗内力以阻止翻面。将敌方翻面后，令其内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
 		"flavor": "端凝厚重的正宗全真剑法，左手捏着剑诀，左足踏开，向上斜刺。这一招神完气足，劲、功、式、力，无不恰到好处，看来平平无奇，但要练到没半点瑕疵，天资稍差之人积一世之功也未必能够。",
 		"powers": [8, 5, 5, 8],
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_DING_FLIP_GAIN_KI_AND_PROTECT],
 	},
 	&"DingYangZhen3": {
 		"id": &"DingYangZhen3",
@@ -2724,7 +3039,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，若我有相邻友方，耗内力以阻止翻面。将敌方翻面后，令其获得以下效果：【我翻面前，若我有相邻友方，耗内力以阻止翻面】。将敌方翻面后，所有其它友方内力加一。",
 		"flavor": "端凝厚重的正宗全真剑法，左手捏着剑诀，左足踏开，向上斜刺。这一招神完气足，劲、功、式、力，无不恰到好处，看来平平无奇，但要练到没半点瑕疵，天资稍差之人积一世之功也未必能够。",
 		"powers": [8, 5, 5, 8],
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_DING_FLIP_PROTECT_AND_ALLY_KI],
 	},
 	&"DingYangZhen4": {
 		"id": &"DingYangZhen4",
@@ -2736,7 +3051,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "我翻面前，若我有相邻友方，耗内力以阻止翻面。将敌方翻面后，令其获得以下效果：【我翻面前，若我有相邻友方，耗内力以阻止翻面】。将敌方翻面后，所有其它友方点数和内力加一。",
 		"flavor": "端凝厚重的正宗全真剑法，左手捏着剑诀，左足踏开，向上斜刺。这一招神完气足，劲、功、式、力，无不恰到好处，看来平平无奇，但要练到没半点瑕疵，天资稍差之人积一世之功也未必能够。",
 		"powers": [8, 6, 6, 8],
-		"abilities": [],
+		"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_DING_FLIP_PROTECT_ALLY_POWERS_AND_KI],
 	},
 	&"CangSongYingKe1": {
 		"id": &"CangSongYingKe1",
@@ -4068,8 +4383,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 			WUDANG_FLIPPED_CARD_ATTACK,
 		],
 	},
-	&"WuDangMianZhang4": {
-		"id": &"WuDangMianZhang4",
+	&"KongWanChengFan4": {
+		"play_on_ally_occupied_cell": true,
+		"id": &"KongWanChengFan4",
 		"glyph": "空碗盛饭",
 		"picture": "res://pics/LKT010_081.png",
 		"sect": "全真派",
@@ -5692,7 +6008,7 @@ static func create_instance(
 	instance_id: StringName
 ) -> Dictionary:
 	var definition: Dictionary = get_definition(card_id)
-	return {
+	var instance: Dictionary = {
 		"instance_id": instance_id,
 		"card_id": card_id,
 		"glyph": String(definition["glyph"]),
@@ -5710,6 +6026,9 @@ static func create_instance(
 		"active_abilities": _normalize_abilities(definition["abilities"] as Array),
 		"revealed_to_owner_ids": [original_owner],
 	}
+	if bool(definition.get("play_on_ally_occupied_cell", false)):
+		instance["play_on_ally_occupied_cell"] = true
+	return instance
 
 
 static func validate_ability(ability: Dictionary, card_id: StringName = &"fixture") -> Array[String]:
@@ -5829,6 +6148,11 @@ static func _validate_definition(
 			errors.append("Card %s has a non-integer power" % card_id)
 	if definition.has("effects"):
 		errors.append("Card %s still declares retired effects data" % card_id)
+	if (
+		definition.has("play_on_ally_occupied_cell")
+		and typeof(definition.get("play_on_ally_occupied_cell")) != TYPE_BOOL
+	):
+		errors.append("Card %s requires a Boolean play_on_ally_occupied_cell" % card_id)
 	for gate_field: StringName in [&"effect_gate", &"unlocks_effect_gate"]:
 		if not definition.has(gate_field):
 			continue
@@ -6378,6 +6702,13 @@ static func _validate_action(
 			errors.append(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE and action.has("card"):
+		allowed_keys.append(&"card")
+		if StringName(action.get("card", &"")) != CARD_REF_TRIGGER_CARD:
+			errors.append(
+				"Card %s %s swap override must be the trigger card"
+				% [card_id, context_name]
 			)
 	if action_type == ACTION_CHANGE_POWERS:
 		allowed_keys.append(&"amount")
@@ -6959,6 +7290,10 @@ static func _validate_selector_condition(
 			OWNER_OPPONENT_OF_ABILITY_SOURCE,
 		]:
 			errors.append("Card %s %s previous-play condition requires a relative owner" % [card_id, context_name])
+	if condition_type == CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE and condition.has("card"):
+		allowed_keys.append(&"card")
+		if StringName(condition.get("card", &"")) != CARD_REF_TRIGGER_CARD:
+			errors.append("Card %s %s adjacency anchor must be the trigger card" % [card_id, context_name])
 	if condition_type == CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE:
 		allowed_keys.append(&"amount")
 		allowed_keys.append(&"resource")

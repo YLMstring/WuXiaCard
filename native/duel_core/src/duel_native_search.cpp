@@ -465,8 +465,12 @@ DuelNativeCompactKernel::get_legal_native_actions(
 			card_index < 0
 			|| card_index >= static_cast<int32_t>(value.card_instance_ids.size())
 		) continue;
+		const bool can_replace_ally = card_can_play_on_ally_occupied(value, card_index);
 		for (size_t cell = 0; cell < value.board_card_indices.size(); ++cell) {
-			if (value.board_card_indices[cell] >= 0) continue;
+			if (
+				value.board_card_indices[cell] >= 0
+				&& (!can_replace_ally || value.board_owners[cell] != owner_id)
+			) continue;
 			NativeAction action;
 			action.type = NativeActionType::PLAY;
 			action.source_index = static_cast<int32_t>(hand_index);
