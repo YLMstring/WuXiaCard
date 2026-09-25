@@ -456,10 +456,10 @@ func _test_activate_ability_declarations() -> void:
 			)
 			_check(
 				activation.get("actions", []) == [
-					{"type": expected_first_action},
+					{"type": expected_first_action, "on_invalid_context": Catalog.STOP_RULE},
 					{"type": Catalog.ACTION_STANDARD_ATTACK_WITH_SELF},
 				],
-				"%s activation %d performs its board operation then attacks" % [card_id, ability_index]
+				"%s activation %d attacks only after its board operation succeeds" % [card_id, ability_index]
 			)
 		var instance: Dictionary = Catalog.create_instance(card_id, 1, StringName("test_%s" % card_id))
 		_check((Abilities.get_activate_abilities(instance) as Array).size() == rules.size(), "%s instances preserve every activation" % card_id)

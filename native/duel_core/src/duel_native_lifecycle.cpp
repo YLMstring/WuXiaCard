@@ -77,9 +77,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::move_card_betwee
 			|| value.board_card_indices[target_cell] >= 0
 		) {
 			append_resolution(resolution, movement_resolution);
-			return resolution_has_output(movement_resolution)
-				? ActionOutcome::APPLIED
-				: ActionOutcome::NO_EFFECT;
+			// 前置效果仍然生效，但移动本身被打断；后续动作的 STOP_RULE
+			// 必须看到这次移动没有完成。
+			return ActionOutcome::NO_EFFECT;
 		}
 	}
 

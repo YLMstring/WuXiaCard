@@ -3162,7 +3162,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_MOVE_SELF_TO_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -3190,7 +3190,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_MOVE_SELF_TO_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -3204,7 +3204,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_SWAP_SELF_WITH_TARGET},
+						{"type": ACTION_SWAP_SELF_WITH_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -3232,7 +3232,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_MOVE_SELF_TO_TARGET},
+						{"type": ACTION_MOVE_SELF_TO_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -3246,7 +3246,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_SWAP_SELF_WITH_TARGET},
+						{"type": ACTION_SWAP_SELF_WITH_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},
@@ -3260,7 +3260,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 						{"type": ACTION_SPEND_KI, "amount": 1},
 					],
 					"actions": [
-						{"type": ACTION_SWAP_SELF_WITH_TARGET},
+						{"type": ACTION_SWAP_SELF_WITH_TARGET, "on_invalid_context": STOP_RULE},
 						{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
 					],
 				},

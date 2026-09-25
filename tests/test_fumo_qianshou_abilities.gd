@@ -98,6 +98,7 @@ func _test_fumo_reduces_moving_allies_and_can_cancel_move() -> void:
 	var state := State.new(board)
 	var moved: Dictionary = _move_first_adjacent(state, 4, &"moving_ally")
 	_check(_board_cell(state, &"moving_ally") == 1, "A surviving ally completes its move")
+	_check(StringName(moved.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED, "A completed move reports APPLIED")
 	_check(
 		_board_card(state, &"moving_ally").get("powers", []) == [1, 1, 1, 1],
 		"Fumo reduces an allied moving card before movement"
@@ -114,6 +115,23 @@ func _test_fumo_reduces_moving_allies_and_can_cancel_move() -> void:
 	_check(_removed_has(zero_state, Rules.PLAYER_OWNER, &"zero_mover"), "Zero mover enters its original owner's removed zone")
 	_check(_event_count(canceled.get("events", []), &"card_moved") == 0, "Removal cancels the pending move")
 	_check(_event_count(canceled.get("events", []), &"powers_changed") == 2, "Multiple Fumo sources reduce a mover in row-major order")
+	_check(StringName(canceled.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT, "A canceled move reports NO_EFFECT even when before-move effects apply")
+
+	var stopped_state := State.new(
+		zero_board, [], [], Rules.PLAYER_OWNER, 1,
+		[_plain(&"draw_after_move", Rules.PLAYER_OWNER)]
+	)
+	var stopped: Dictionary = Executor.execute_actions(
+		stopped_state, 4, &"zero_mover", Rules.PLAYER_OWNER,
+		[
+			{"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": Catalog.STOP_RULE},
+			{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1},
+		],
+		{"ability_source_instance_id": &"zero_mover", "ability_source_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(StringName(stopped.get("result", &"")) == Catalog.ACTION_RESULT_INVALID_CONTEXT, "STOP_RULE recognizes a move canceled after before-move effects")
+	_check(_removed_has(stopped_state, Rules.PLAYER_OWNER, &"zero_mover"), "STOP_RULE preserves the before-move exile")
+	_check(stopped_state.get_hand(Rules.PLAYER_OWNER).is_empty() and (stopped_state.decks[Rules.PLAYER_OWNER] as Array).size() == 1, "STOP_RULE skips the follow-up draw")
 
 
 func _test_fumo_ignores_numberless_moving_card() -> void:

@@ -49,6 +49,7 @@ func _run() -> void:
 	_test_multiple_activation_generation_and_identity()
 	_test_ordered_ally_swap_then_attack()
 	_test_ordered_enemy_swap_then_attack()
+	_test_youfen_failed_move_or_swap_stops_attack()
 	_test_activate_runs_standard_attack_without_after_summoned_abilities()
 	_test_flipped_activate_ability_is_lost_but_ki_remains()
 	_test_greedy_tie_prefers_play_over_spending_ki()
@@ -1568,6 +1569,53 @@ func _test_ordered_enemy_swap_then_attack() -> void:
 		and _count_events(transition.get("events", []), &"card_exiled") == 0,
 		"Reservation and restoration emit no summon or exile events"
 	)
+
+
+func _test_youfen_failed_move_or_swap_stops_attack() -> void:
+	var cases: Array[Dictionary] = [
+		{"card_id": &"YouFenLaiYi2", "activation_index": 0, "swap": false},
+		{"card_id": &"YouFenLaiYi3", "activation_index": 0, "swap": false},
+		{"card_id": &"YouFenLaiYi3", "activation_index": 1, "swap": true},
+		{"card_id": &"YouFenLaiYi4", "activation_index": 0, "swap": false},
+		{"card_id": &"YouFenLaiYi4", "activation_index": 1, "swap": true},
+		{"card_id": &"YouFenLaiYi4", "activation_index": 2, "swap": true},
+	]
+	for case_data: Dictionary in cases:
+		var card_id := StringName(case_data["card_id"])
+		var activation_index: int = int(case_data["activation_index"])
+		var is_swap: bool = bool(case_data["swap"])
+		var board: Array = Rules.empty_board()
+		board[4] = {
+			"card": Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"youfen_failed_move"),
+			"owner": Rules.PLAYER_OWNER,
+		}
+		board[3] = {
+			"card": _make_runtime_card("Attackable enemy", [1, 1, 1, 1], Rules.OPPONENT_OWNER, &"youfen_enemy"),
+			"owner": Rules.OPPONENT_OWNER,
+		}
+		var target_index: int = 8 if is_swap else 5
+		var target_owner: int = Rules.OPPONENT_OWNER if is_swap and activation_index == 2 else Rules.PLAYER_OWNER
+		board[target_index] = {
+			"card": _make_runtime_card("Invalid target", [1, 1, 1, 1], target_owner, &"youfen_target"),
+			"owner": target_owner,
+		}
+		var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+		var activation: Dictionary = (Catalog.get_definition(card_id)["abilities"][activation_index] as Dictionary)["activation"]
+		var result: Dictionary = Executor.execute_actions(
+			state, 4, &"youfen_failed_move", Rules.PLAYER_OWNER,
+			activation["actions"],
+			{
+				"ability_source_instance_id": &"youfen_failed_move",
+				"ability_source_owner_id": Rules.PLAYER_OWNER,
+				"activation_target_kind": Action.TARGET_BOARD_CELL,
+				"activation_target_index": target_index,
+				"selected_card_instance_id": &"youfen_target",
+			}
+		)
+		var label: String = "%s activation %d" % [card_id, activation_index]
+		_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_INVALID_CONTEXT, "%s stops when movement fails" % label)
+		_check(_count_events(result.get("events", []), &"attack_started") == 0, "%s does not attack from the original cell" % label)
+		_check(int((state.board[3] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER, "%s leaves the attackable enemy unchanged" % label)
 
 
 func _test_activate_runs_standard_attack_without_after_summoned_abilities() -> void:

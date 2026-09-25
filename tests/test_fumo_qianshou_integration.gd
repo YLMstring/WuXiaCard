@@ -29,6 +29,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	duel.debug_set_fast_mode(true)
+	await _test_canceled_move_view(duel)
 	await _test_after_exile_perfect_copy_view(duel)
 	await _test_flip_protection_discard_then_copy_view(duel)
 	duel.queue_free()
@@ -42,6 +43,36 @@ func _run() -> void:
 			% [_failures, _checks]
 		)
 	quit(_failures)
+
+
+func _test_canceled_move_view(duel: Node) -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(
+		Catalog.create_instance(&"FuMoQuan3", Rules.PLAYER_OWNER, &"integration_fumo"),
+		Rules.PLAYER_OWNER
+	)
+	var mover: Dictionary = Catalog.create_instance(
+		&"JianFaQinYin2", Rules.PLAYER_OWNER, &"integration_move_canceled"
+	)
+	mover["powers"] = [1, 1, 1, 1]
+	board[4] = _slot(mover, Rules.PLAYER_OWNER)
+	var opponent_hand: Array = [Catalog.create_instance(
+		&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"integration_move_opponent"
+	)]
+	duel.call("_rebuild_views_from_state", State.new(
+		board, [], opponent_hand, Rules.PLAYER_OWNER
+	))
+	var trace_start: int = (duel.debug_get_presentation_trace() as Array).size()
+	_check(await duel.debug_commit_activate(Rules.PLAYER_OWNER, 4, 5, false), "Production duel accepts the move activation")
+	_check(
+		duel.debug_get_removed_count(Rules.PLAYER_OWNER) == 1
+		and not duel.debug_has_board_card_view(4)
+		and not duel.debug_has_board_card_view(5),
+		"Before-move exile clears the mover's view without placing it at the target"
+	)
+	_check(duel.duel_state.extra_card_plays_remaining == 0, "Canceled move grants no extra card play")
+	var trace: Array = (duel.debug_get_presentation_trace() as Array).slice(trace_start)
+	_check(trace.has(&"card_exiled") and not trace.has(&"card_moved"), "Canceled move presents exile without movement")
 
 
 func _test_after_exile_perfect_copy_view(duel: Node) -> void:
