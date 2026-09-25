@@ -60,18 +60,426 @@
 
 ### 双手互搏 5
 
-进场前移除自身，然后给当时所属玩家授予一份独立的持续效果；自身不进行后续进场攻击。每份效果在己方牌进场前依顺序令该确切进场牌四侧点数各减 1，内力减 1，分别按既有下限处理：点数各侧最低 0，四侧全 0 时按正常规则移除；内力最低 0，不要求牌原本有内力。如果点数变化已移除进场牌，后续内力动作不再作用于该实例。
+进场前移除自身，然后给当时所属玩家授予一份独立的持续效果；自身不进行后续进场攻击。每份效果在己方牌进场前先令该确切进场牌内力减 1，再令四侧点数各减 1。先处理内力是为了避免四侧归零移除后仍修改移除区中的内力。两种资源均按既有下限处理：内力最低 0，不要求牌原本有内力；点数各侧最低 0，四侧全 0 时按正常规则移除。
 
 该玩家回合结束时，查找其最近一次**从自己手牌实际打出**的确切实例，不限本回合。即使该牌后来换格或翻成敌方，只要它仍在场，就尝试正常移除；只有该确切实例确实产生 `card_exiled` 结果，才抽 1 张牌并申请 1 次额外出牌。该记录可能指向刚打出并已移除的双手互搏本身，此时不抽牌、不追加出牌。多个双手互搏持续效果分别结算，但同一确切目标只能成功移除一次；后续效果不凭同 ID 的其他实例代替。抽牌满手或牌库空的行为沿用现有抽牌规则；追加出牌沿用每方每实际回合最多一次的额度及合法出牌检查。四侧 `-1` 的不可变点数哨兵仍遵守现有 `can_change_powers()`，不强制变成四个 0。
 
 持续效果使用现有 owner-held aura，来源牌移除后依然归授予时的玩家持有；不将能力写入任意场上卡牌，也不对所有离场区域做事件扫描。上一张手牌出牌身份沿用现有 `last_hand_play_by_owner` 记录和 `CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY`，不新增平行状态。
 
+## 目录能力声明
+
+以下是本次设计要求写入 `scripts/card_catalog.gd` 的完整能力声明；共用常量在各卡 `abilities` 数组中按列出的顺序引用。`CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY`、`ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY`、`CONDITION_LAST_EXILE_SUCCEEDED` 与顶层 `play_on_ally_occupied_cell` 是本设计新增的通用目录词汇，不是已实现原语。除这四项外均使用现有词汇。
+
+共同的保护能力与现有复用能力：
+
+```gdscript
+const QZ_SPEND_KI_TO_PREVENT_FLIP: Dictionary = {
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY},
+			{"type": CONDITION_KI_AT_LEAST, "amount": 1},
+		],
+		"actions": [
+			{"type": ACTION_SPEND_KI, "amount": 1, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+		],
+	}],
+}
+
+# 现有声明；保留其 retained_on_flip、触发条件和动作顺序。
+const TIYUNZONG_LOCKED_FLIP_MOVE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BEFORE_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
+			{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
+		],
+		"actions": [
+			{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+		],
+	}],
+}
+
+const KUIHUA_MINIMUM_DEFENSE_RETAINED: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
+}
+
+const WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP: Dictionary = {
+	"triggers": [
+		{
+			"event": CARD_BEFORE_FLIPPED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
+		},
+		{
+			"event": CARD_AFTER_FLIPPED,
+			"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+			"actions": [{"type": ACTION_REMOVE_THIS_ABILITY}],
+		},
+	],
+}
+
+const WUDANG_FLIPPED_CARD_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [{"type": CONDITION_ATTACKER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+			"card": CARD_REF_TRIGGER_CARD,
+		}],
+	}],
+}
+```
+
+天罡北斗阵的进场攻击与受保护后的交换：
+
+```gdscript
+const QZ_TIAN_ADJACENT_ALLIES_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+			},
+			"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}],
+}
+
+const QZ_TIAN_ALL_OTHER_ALLIES_ATTACK: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+				],
+			},
+			"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+		}],
+	}],
+}
+
+const QZ_TIAN_SELF_PREVENTED_SWAP_RESUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+				],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
+				 "on_invalid_context": STOP_RULE},
+				{"type": ACTION_RESUMMON_CARD_IN_PLACE, "card": CARD_REF_ABILITY_SOURCE},
+			],
+		}],
+	}],
+}
+
+const QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON: Dictionary = {
+	"triggers": [{
+		"event": CARD_FLIP_PREVENTED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [
+			{"type": ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY,
+			 "card": CARD_REF_TRIGGER_CARD, "on_invalid_context": STOP_RULE},
+			{"type": ACTION_RESUMMON_CARD_IN_PLACE, "card": CARD_REF_TRIGGER_CARD},
+		],
+	}],
+}
+```
+
+金雁功、先天功与七星聚会：
+
+```gdscript
+const QZ_JINYAN_ENTRY_DRAW: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+	}],
+}
+
+const QZ_JINYAN_ALLY_DRAW_GAIN_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DRAWN,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+		             "card": CARD_REF_TRIGGER_CARD}],
+	}],
+}
+
+const QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_DRAWN,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_XIANTIAN_OPENING_HAND_KI: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_DUEL_STARTED,
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_HAND],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+			},
+			"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+			             "card": CARD_REF_SELECTED_CARD}],
+		}],
+	}],
+}
+
+const QZ_QIXIN_ADJACENT_ALLY_ENTRY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_ADJACENT_TO_SOURCE},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [
+			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+```
+
+定阳针的成功翻面效果；三、四阶的“其他友方”排除定阳针本身，但包括刚翻成友方的目标：
+
+```gdscript
+const QZ_DING_FLIP_GAIN_KI_AND_PROTECT: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GAIN_KI, "amount": 1, "card": CARD_REF_TRIGGER_CARD},
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+		],
+	}],
+}
+
+const QZ_DING_FLIP_PROTECT_AND_ALLY_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+					],
+				},
+				"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+		],
+	}],
+}
+
+const QZ_DING_FLIP_PROTECT_ALLY_POWERS_AND_KI: Dictionary = {
+	"triggers": [{
+		"event": CARD_AFTER_FLIPPED,
+		"conditions": [
+			{"type": CONDITION_ATTACKER_CARD_IS_SELF},
+			{"type": CONDITION_TRIGGER_CARD_WAS_ENEMY},
+		],
+		"actions": [
+			{"type": ACTION_GRANT_TRIGGER_CARD_ABILITY,
+			 "ability": QZ_SPEND_KI_TO_PREVENT_FLIP},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+					],
+				},
+				"actions": [{"type": ACTION_CHANGE_POWERS, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+						{"type": CONDITION_SELECTED_CARD_IS_NOT_SOURCE},
+					],
+				},
+				"actions": [{"type": ACTION_GAIN_KI, "amount": 1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+		],
+	}],
+}
+```
+
+双手互搏的自我移除及授予玩家的独立持续效果：
+
+```gdscript
+const QZ_HUBO_OWNER_AURA: Dictionary = {
+	"triggers": [
+		{
+			"event": TRIGGER_CARD_BEFORE_SUMMONED,
+			"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+			"actions": [
+				{"type": ACTION_SPEND_KI, "amount": 1,
+				 "card": CARD_REF_TRIGGER_CARD},
+				{"type": ACTION_CHANGE_POWERS, "amount": -1,
+				 "card": CARD_REF_TRIGGER_CARD},
+			],
+		},
+		{
+			"event": TRIGGER_END_OWNER_TURN,
+			"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+			"actions": [
+				{
+					"type": ACTION_FOR_EACH_SELECTED_CARD,
+					"selector": {
+						"zones": [CARD_ZONE_BOARD],
+						"conditions": [{
+							"type": CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
+							"played_by": OWNER_ABILITY_SOURCE,
+						}],
+						"limit": 1,
+					},
+					"actions": [{"type": ACTION_EXILE_CARD,
+					             "card": CARD_REF_SELECTED_CARD}],
+				},
+				{
+					"type": ACTION_IF,
+					"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
+					"actions": [
+						{"type": ACTION_DRAW_CARDS, "amount": 1},
+						{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
+					],
+				},
+			],
+		},
+	],
+}
+
+const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_EXILE_SELF},
+			{
+				"type": ACTION_IF,
+				"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
+				"actions": [{"type": ACTION_GRANT_OWNER_AURA,
+				             "aura": QZ_HUBO_OWNER_AURA}],
+			},
+		],
+	}],
+}
+```
+
+逐卡目录能力组合；未列出的目录字段保持现值。这里的数组顺序就是目录实际执行顺序，不把低阶效果隐式继承到高阶：
+
+```gdscript
+&"TianGangBeiDou2": {"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK]},
+&"TianGangBeiDou3": {"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK,
+	QZ_SPEND_KI_TO_PREVENT_FLIP]},
+&"TianGangBeiDou4": {"abilities": [QZ_TIAN_ADJACENT_ALLIES_ATTACK,
+	QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_TIAN_SELF_PREVENTED_SWAP_RESUMMON]},
+&"TianGangBeiDou5": {"abilities": [QZ_TIAN_ALL_OTHER_ALLIES_ATTACK,
+	QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON]},
+&"JinYanGong2": {"abilities": [QZ_JINYAN_ENTRY_DRAW,
+	QZ_JINYAN_ALLY_DRAW_GAIN_KI]},
+&"JinYanGong3": {"abilities": [TIYUNZONG_LOCKED_FLIP_MOVE,
+	QZ_JINYAN_ENTRY_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI]},
+&"JinYanGong4": {"abilities": [TIYUNZONG_LOCKED_FLIP_MOVE,
+	QZ_JINYAN_ENTRY_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT]},
+&"XianTianGong5": {"abilities": [QZ_XIANTIAN_OPENING_HAND_KI]},
+&"QiXinJuHui1": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP]},
+&"QiXinJuHui2": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP,
+	QZ_QIXIN_ADJACENT_ALLY_ENTRY]},
+&"QiXinJuHui3": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP,
+	QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY]},
+&"QiXinJuHui4": {"abilities": [KUIHUA_MINIMUM_DEFENSE_RETAINED,
+	QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY]},
+&"DingYangZhen1": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP]},
+&"DingYangZhen2": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP,
+	QZ_DING_FLIP_GAIN_KI_AND_PROTECT]},
+&"DingYangZhen3": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP,
+	QZ_DING_FLIP_PROTECT_AND_ALLY_KI]},
+&"DingYangZhen4": {"abilities": [QZ_SPEND_KI_TO_PREVENT_FLIP,
+	QZ_DING_FLIP_PROTECT_ALLY_POWERS_AND_KI]},
+&"KongWanChengFan4": {
+	"play_on_ally_occupied_cell": true,
+	"abilities": [WUDANG_EXILE_BEFORE_FLIP_UNTIL_OWN_FLIP,
+		WUDANG_FLIPPED_CARD_ATTACK],
+},
+&"ZuoYouHuBo5": {"abilities": [QZ_HUBO_BEFORE_SUMMON]},
+```
+
 ## 必要的原生接口改动
 
 1. 为触发牌提供“当前至少有一个相邻友方”的通用条件；使用四邻局部读取，处理翻面保护与七星聚会 3–4 阶，不检查卡 ID。
 2. 为现有交换结算增加 `ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY` 声明入口，必填 `card` 引用。旧交换动作的默认行为和事件顺序保持不变；新入口先解析该确切牌，从它的四邻找到首个当前友方，确认双方仍相邻且归属有效，再调用同一交换结算。
-3. 给目录卡定义增加窄范围的“可在友方占据格子出牌并先移除原牌”落点声明。原生合法行动枚举、`owner_has_legal_play`、出牌转换以及目录校验使用同一声明，避免 AI 和玩家分叉。未声明的牌仍只可落在空格。
-4. 为 `ACTION_IF` 增加“上一项移除动作确实移除了其确切目标”的结算内条件。现有 `ACTION_EXILE_CARD` 在移除前触发将目标挪走时也报告动作已执行，故不能用其当前返回值判断双手互搏的“若如此做”。条件只记录本次动作对应目标是否出现 `card_exiled`，不写入 `DuelState`，也不改变其他移除动作的返回语义。
+3. 给目录卡定义增加布尔字段 `play_on_ally_occupied_cell`，表示“可在友方占据格子出牌并先移除原牌”。原生合法行动枚举、`owner_has_legal_play`、出牌转换以及目录校验使用同一声明，避免 AI 和玩家分叉。未声明的牌仍只可落在空格。
+4. 为 `ACTION_IF` 增加 `CONDITION_LAST_EXILE_SUCCEEDED`：上一项直接移除动作（`ACTION_EXILE_SELF` 或 `ACTION_EXILE_CARD`）确实让其确切目标产生 `card_exiled`。现有 `ACTION_EXILE_CARD` 在移除前触发将目标挪走时也报告动作已执行，故不能用其当前返回值判断双手互搏的“若如此做”。进入 `ACTION_FOR_EACH_SELECTED_CARD` 前把该结果重置为假；选中至多一个目标时，将这个目标的移除结果传给外层后续 `ACTION_IF`，而不传递其他嵌套动作的临时状态。该结果只存在于本次触发结算上下文，不写入 `DuelState`，也不改变其他移除动作的返回语义。自我移除未成功时不授予玩家持续效果；抽牌和额外出牌留在玩家光环的顶层动作列表中执行，以确保受益者是光环持有者，即使被移除的旧牌已经翻成敌方。
 
 目录 schema、原生编译和运行时效果均要拒绝未知或不匹配的声明。所有新规则输出既有纯数据事件；若必要，仅在控制器通用事件呈现上修正顺序，不引入命名卡牌分支。热路径先判断相关事件和手牌声明，再做常数级邻接/目标判断。
 

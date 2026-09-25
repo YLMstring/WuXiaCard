@@ -36,6 +36,9 @@ Never implement a historical plan merely because it exists. Confirm that it stil
 - `DuelState` and `DuelAction` contain pure data only. No scene nodes, Controls, tweens, audio players, or mutable live UI references.
 - Search code must remain card-agnostic. It may evaluate generic powers, ownership, zones, ki, legal actions, and active-ability counts; it must not check named card IDs.
 - Card definitions live in `scripts/card_catalog.gd`. Encounter hands live in `scripts/duel_decks.gd`.
+- Card design documents must include complete catalog ability declarations and the
+  exact `abilities` array for every affected card, as specified in
+  `docs/ADDING_CARDS_AND_ABILITIES.md`; prose alone is not a complete design.
 - Runtime card identity uses `instance_id`. Never rely on visual child order after cards are drawn into fixed hand slots.
 - A card may have multiple innate catalog activations in array order. Dynamically
   granting a new activation removes every current activation-bearing ability,
