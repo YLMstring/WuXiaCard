@@ -623,6 +623,12 @@ instance. Movement contexts expose that instance as `CARD_REF_TRIGGER_CARD`;
 `CONDITION_MOVING_CARD_IS_ALLY` compares its current owner with each trigger
 source.
 
+`ACTION_EXILE_CARD` reports `APPLIED` only when its exact target emits
+`card_exiled`. If a before-exile reaction moves or rescues that target, the
+action reports `NO_EFFECT` while retaining any reaction effects already
+resolved. Use `on_invalid_context = STOP_RULE` when later actions require the
+exile to complete. `ACTION_EXILE_SELF` retains its separate return semantics.
+
 Every completed exile emits `CARD_AFTER_EXILED` after the card has entered its
 original owner's removed zone. The context preserves the pre-exile runtime
 snapshot, former zone/cell/current owner, and exile reason. Global sources are

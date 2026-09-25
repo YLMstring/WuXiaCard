@@ -68,7 +68,7 @@
 
 ## 目录能力声明
 
-以下是本次设计要求写入 `scripts/card_catalog.gd` 的完整能力声明；共用常量在各卡 `abilities` 数组中按列出的顺序引用。`CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY`、`CONDITION_LAST_EXILE_SUCCEEDED` 与顶层 `play_on_ally_occupied_cell` 是本设计新增的通用目录词汇；`CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 和 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE` 的可选 `card` 是现有原语的参数扩展。其余词汇已经存在。
+以下是本次设计要求写入 `scripts/card_catalog.gd` 的完整能力声明；共用常量在各卡 `abilities` 数组中按列出的顺序引用。`CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY` 与顶层 `play_on_ally_occupied_cell` 是本设计新增的通用目录词汇；`CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 和 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE` 的可选 `card` 是现有原语的参数扩展。其余词汇已经存在。
 
 共同的保护能力与现有复用能力：
 
@@ -418,15 +418,10 @@ const QZ_HUBO_OWNER_AURA: Dictionary = {
 					},
 					"actions": [{"type": ACTION_EXILE_CARD,
 					             "card": CARD_REF_SELECTED_CARD}],
+					"on_invalid_context": STOP_RULE,
 				},
-				{
-					"type": ACTION_IF,
-					"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
-					"actions": [
-						{"type": ACTION_DRAW_CARDS, "amount": 1},
-						{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
-					],
-				},
+				{"type": ACTION_DRAW_CARDS, "amount": 1},
+				{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 			],
 		},
 	],
@@ -488,7 +483,7 @@ const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
 1. 为触发牌提供“当前至少有一个相邻友方”的通用条件；使用四邻局部读取，处理翻面保护与七星聚会 3–4 阶，不检查卡 ID。
 2. 扩展现有 `CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 和 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE`，仅允许可选的 `card: CARD_REF_TRIGGER_CARD` 把邻接锚点及交换一端从 ability source 换成确切触发牌。未声明时仍使用 ability source，旧目录无需改动。选牌依棋盘格顺序取首个当前友方；交换前后重检两个实例、相邻关系和当前归属，调用原有交换结算。移动前反应有输出但两牌并未换位时，交换动作报告 `NO_EFFECT` 以使 `STOP_RULE` 阻止重新进场；反应产生的事件依旧保留，现有只在交换成功后继续攻击的能力也因此符合其文字规则。
 3. 给目录卡定义增加布尔字段 `play_on_ally_occupied_cell`，表示“可在友方占据格子出牌并先移除原牌”。原生合法行动枚举、`owner_has_legal_play`、出牌转换以及目录校验使用同一声明，避免 AI 和玩家分叉。未声明的牌仍只可落在空格。
-4. 为 `ACTION_IF` 增加 `CONDITION_LAST_EXILE_SUCCEEDED`：上一项 `ACTION_EXILE_CARD` 确实让其确切目标产生 `card_exiled`。现有 `ACTION_EXILE_CARD` 在移除前触发将目标挪走时也报告动作已执行，故不能用其当前返回值判断双手互搏回合末的“若如此做”。进入 `ACTION_FOR_EACH_SELECTED_CARD` 前把该结果重置为假；选中至多一个目标时，将这个目标的移除结果传给外层后续 `ACTION_IF`，而不传递其他嵌套动作的临时状态。该结果只存在于本次触发结算上下文，不写入 `DuelState`，也不改变其他移除动作的返回语义。双手互搏进场前的自我移除没有此条件：无论移除结果如何，都授予持续效果。抽牌和额外出牌留在玩家光环的顶层动作列表中执行，以确保受益者是光环持有者，即使被移除的旧牌已经翻成敌方。
+4. `ACTION_EXILE_CARD` 只有让确切目标产生 `card_exiled` 才返回 `APPLIED`；移除前触发将目标挪走或重新进场时返回 `NO_EFFECT`，但保留触发期间已经发生的效果。双手互搏在至多一个目标的 `ACTION_FOR_EACH_SELECTED_CARD` 上声明 `STOP_RULE`：目标不存在或未实际移除时，停止后续抽牌和额外出牌。双手互搏进场前的自我移除仍沿用原有返回语义：无论移除结果如何，都授予持续效果。抽牌和额外出牌留在玩家光环的顶层动作列表中执行，以确保受益者是光环持有者，即使被移除的旧牌已经翻成敌方。
 
 目录 schema、原生编译和运行时效果均要拒绝未知或不匹配的声明。所有新规则输出既有纯数据事件；若必要，仅在控制器通用事件呈现上修正顺序，不引入命名卡牌分支。热路径先判断相关事件和手牌声明，再做常数级邻接/目标判断。
 

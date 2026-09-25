@@ -1535,21 +1535,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 	StringName pending_power_change_group;
 	for (size_t action_index = 0; action_index < actions.size(); ++action_index) {
 		const CompiledAction &action = actions[action_index];
-		int32_t exile_target_card_index = -1;
-		if (action.opcode == ActionOpcode::EXILE_CARD) {
-			execution_state.last_exile_succeeded = false;
-			if (action.card_ref == CardRefOpcode::SELECTED_CARD) {
-				exile_target_card_index = action_context.selected_card_index;
-			} else if (action.card_ref == CardRefOpcode::TRIGGER_CARD) {
-				exile_target_card_index = event_context.trigger_card_index;
-			} else if (action.card_ref == CardRefOpcode::ABILITY_SOURCE) {
-				exile_target_card_index = action_context.ability_source_card_index;
-			} else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) {
-				exile_target_card_index = event_context.attacker_card_index;
-			}
-		} else if (action.opcode == ActionOpcode::FOR_EACH_SELECTED_CARD) {
-			execution_state.last_exile_succeeded = false;
-		}
 		if (
 			!defer_power_change_batch
 			&& !pending_power_change_group.is_empty()
@@ -1576,24 +1561,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions_
 			resolution
 		);
 		const int64_t direct_event_end = resolution.events.size();
-		if (
-			action.opcode == ActionOpcode::EXILE_CARD
-			&& exile_target_card_index >= 0
-			&& exile_target_card_index < static_cast<int32_t>(value.card_instance_ids.size())
-		) {
-			const StringName target_instance_id = value.card_instance_ids[exile_target_card_index];
-			for (int64_t event_index = first_event_index; event_index < direct_event_end; ++event_index) {
-				if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
-				const Dictionary event = resolution.events[event_index];
-				if (
-					StringName(event.get("type", StringName())) == StringName("card_exiled")
-					&& StringName(event.get("instance_id", StringName())) == target_instance_id
-				) {
-					execution_state.last_exile_succeeded = true;
-					break;
-				}
-			}
-		}
 		if (
 			direct_event_end > first_event_index
 			&& (
@@ -1741,7 +1708,6 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 			true
 		);
 		if (outcome == ActionOutcome::UNSUPPORTED || outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
-		execution_state.last_exile_succeeded = nested_execution_state.last_exile_succeeded;
 		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
 	}
 	return aggregate;
@@ -1772,9 +1738,6 @@ bool DuelNativeCompactKernel::action_conditions_match(
 				break;
 			case ConditionOpcode::LAST_DISCARD_BATCH_SIZE_AT_LEAST:
 				matched = execution_state.last_discard_batch_size >= condition.amount;
-				break;
-			case ConditionOpcode::LAST_EXILE_SUCCEEDED:
-				matched = execution_state.last_exile_succeeded;
 				break;
 			case ConditionOpcode::ATTACK_FLIPPED_ANY_CARD:
 				matched = condition.inverted
@@ -1900,9 +1863,21 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			else if (action.card_ref == CardRefOpcode::ATTACKER_CARD) target = event_context.attacker_card_index;
 			else return ActionOutcome::UNSUPPORTED;
 			if (target < 0) return ActionOutcome::NO_EFFECT;
-			return exile_card(value, target, action_source_cell, action_context.ability_source_card_index, group.source_owner, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)
-				? ActionOutcome::APPLIED
-				: ActionOutcome::UNSUPPORTED;
+			if (target >= static_cast<int32_t>(value.card_instance_ids.size())) return ActionOutcome::NO_EFFECT;
+			const StringName target_instance_id = value.card_instance_ids[target];
+			const int64_t first_event_index = resolution.events.size();
+			if (!exile_card(value, target, action_source_cell, action_context.ability_source_card_index, group.source_owner, target == action_context.ability_source_card_index, StringName("ability_exile_card"), event_context, exile_stack, resolution, action_context.record_direct_board_changes)) {
+				return ActionOutcome::UNSUPPORTED;
+			}
+			for (int64_t event_index = first_event_index; event_index < resolution.events.size(); ++event_index) {
+				if (resolution.events[event_index].get_type() != Variant::DICTIONARY) continue;
+				const Dictionary event = resolution.events[event_index];
+				if (
+					StringName(event.get("type", StringName())) == StringName("card_exiled")
+					&& StringName(event.get("instance_id", StringName())) == target_instance_id
+				) return ActionOutcome::APPLIED;
+			}
+			return ActionOutcome::NO_EFFECT;
 		}
 		case ActionOpcode::PREVENT_TRIGGER_FLIP:
 			if (event_context.trigger_card_index < 0 || event_context.new_owner < 1 || event_context.new_owner > 2) {

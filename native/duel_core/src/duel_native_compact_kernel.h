@@ -127,7 +127,6 @@ class DuelNativeCompactKernel : public RefCounted {
 		SOURCE_HAS_ADJACENT_EMPTY_CELL,
 		SOURCE_HAS_EMPTY_BETWEEN_ENEMY,
 		LAST_DISCARD_BATCH_SIZE_AT_LEAST,
-		LAST_EXILE_SUCCEEDED,
 		DISCARD_OWNER_IS_SELF,
 		SELECTED_CARD_REVEALED_TO_SELF,
 		ABILITY_SOURCE_IN_ZONE,
@@ -379,7 +378,6 @@ class DuelNativeCompactKernel : public RefCounted {
 	// 一次能力链共享的少量瞬时信息。它不写入存档，也不进入局面状态键。
 	struct ActionExecutionState {
 		int32_t last_discard_batch_size = 0;
-		bool last_exile_succeeded = false;
 		int32_t current_source_cell = -1;
 		int32_t last_summoned_card_index = -1;
 		int32_t last_summoned_cell = -1;

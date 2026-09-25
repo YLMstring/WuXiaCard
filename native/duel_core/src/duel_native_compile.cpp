@@ -166,7 +166,6 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_in_range")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IN_RANGE;
 	else if (type == StringName("trigger_card_adjacent_to_source")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE;
 	else if (type == StringName("trigger_card_has_adjacent_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_HAS_ADJACENT_ALLY;
-	else if (type == StringName("last_exile_succeeded")) compiled.opcode = ConditionOpcode::LAST_EXILE_SUCCEEDED;
 	else if (type == StringName("exile_effect_source_is_ally")) compiled.opcode = ConditionOpcode::EXILE_EFFECT_SOURCE_IS_ALLY;
 	else if (type == StringName("trigger_card_revealed_to_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_REVEALED_TO_SELF;
 	else if (type == StringName("trigger_card_was_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ENEMY;

@@ -94,7 +94,6 @@ const CONDITION_EXILE_EFFECT_SOURCE_IS_ALLY: StringName = &"exile_effect_source_
 const CONDITION_SOURCE_OWNER_HAND_EMPTY: StringName = &"source_owner_hand_empty"
 const CONDITION_DISCARD_OWNER_IS_SELF: StringName = &"discard_owner_is_self"
 const CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST: StringName = &"last_discard_batch_size_at_least"
-const CONDITION_LAST_EXILE_SUCCEEDED: StringName = &"last_exile_succeeded"
 const CONDITION_ABILITY_SOURCE_IN_ZONE: StringName = &"ability_source_in_zone"
 const CONDITION_POWER_INCREASE_BATCH_INCLUDES_ALLY: StringName = (
 	&"power_increase_batch_includes_ally"
@@ -280,7 +279,6 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 const KNOWN_ACTION_CONDITIONS: Array[StringName] = [
 	CONDITION_SOURCE_OWNER_HAND_EMPTY,
 	CONDITION_LAST_DISCARD_BATCH_SIZE_AT_LEAST,
-	CONDITION_LAST_EXILE_SUCCEEDED,
 	CONDITION_ATTACK_FLIPPED_ANY_CARD,
 	CONDITION_SELECTED_CARD_REVEALED_TO_SELF,
 ]
@@ -2807,15 +2805,10 @@ const QZ_HUBO_OWNER_AURA: Dictionary = {
 					},
 					"actions": [{"type": ACTION_EXILE_CARD,
 					             "card": CARD_REF_SELECTED_CARD}],
+					"on_invalid_context": STOP_RULE,
 				},
-				{
-					"type": ACTION_IF,
-					"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
-					"actions": [
-						{"type": ACTION_DRAW_CARDS, "amount": 1},
-						{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
-					],
-				},
+				{"type": ACTION_DRAW_CARDS, "amount": 1},
+				{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 			],
 		},
 	],

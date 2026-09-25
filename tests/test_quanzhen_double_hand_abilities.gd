@@ -4,6 +4,7 @@ const Catalog = preload("res://scripts/card_catalog.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
+const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const State = preload("res://scripts/duel_state.gd")
 
 var _checks: int = 0
@@ -23,6 +24,8 @@ func _run() -> void:
 	_test_remote_entry_and_flip_rewards()
 	_test_double_hand_aura()
 	_test_double_hand_previous_turn_target()
+	_test_exile_card_requires_actual_removal()
+	_test_double_hand_prevented_exile()
 	if _failures == 0:
 		print("QUANZHEN_DOUBLE_HAND_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -310,6 +313,60 @@ func _test_double_hand_previous_turn_target() -> void:
 	)
 	_check(_event_count(result.get("events", []), &"card_exiled") == 0, "Absent exact prior play does not exile same-ID clone")
 	_check(_event_count(result.get("events", []), &"extra_card_play_granted") == 0, "Absent exact prior play grants no extra play")
+
+
+func _test_exile_card_requires_actual_removal() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(_plain(&"exile_source", Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	board[4] = _slot(Catalog.create_instance(&"YuSuiKunGang3", Rules.PLAYER_OWNER, &"rescued_target"), Rules.PLAYER_OWNER)
+	var state := State.new(board)
+	var result: Dictionary = Executor.execute_actions(
+		state, 0, &"exile_source", Rules.PLAYER_OWNER,
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD}],
+		{"trigger_cell": 4, "trigger_instance_id": &"rescued_target", "trigger_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(_event_count(result.get("events", []), &"card_exiled") == 0, "YuSui's before-exile reaction prevents actual removal")
+	_check(_instance_at(state, 4) == &"rescued_target", "Prevented exile preserves the target instance")
+	_check(StringName(_card_at(state, 4).get("card_id", &"")) == &"BaGuaFangWei", "Before-exile transformation still takes effect")
+	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_NO_EFFECT, "Explicit exile reports NO_EFFECT when its target was rescued")
+	board[4] = _slot(_plain(&"plain_target", Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+	state = State.new(board)
+	result = Executor.execute_actions(
+		state, 0, &"exile_source", Rules.PLAYER_OWNER,
+		[{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD}],
+		{"trigger_cell": 4, "trigger_instance_id": &"plain_target", "trigger_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(_removed_has(state, Rules.PLAYER_OWNER, &"plain_target"), "Plain target is actually removed")
+	_check(StringName(result.get("result", &"")) == Catalog.ACTION_RESULT_APPLIED, "Explicit exile reports APPLIED after actual removal")
+
+
+func _test_double_hand_prevented_exile() -> void:
+	var state := State.new(
+		Rules.empty_board(),
+		[Catalog.create_instance(&"ZuoYouHuBo5", Rules.PLAYER_OWNER, &"rescue_hubo")],
+		[_plain(&"rescue_opponent", Rules.OPPONENT_OWNER)],
+		Rules.PLAYER_OWNER, 1, [_plain(&"rescue_reward", Rules.PLAYER_OWNER)]
+	)
+	var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0, &"rescue_hubo"))
+	var next: State = result.get("state") as State
+	if next == null:
+		_check(false, "Double Hand prevented-exile fixture starts")
+		return
+	next.board[4] = _slot(Catalog.create_instance(&"YuSuiKunGang3", Rules.PLAYER_OWNER, &"last_play_rescued"), Rules.PLAYER_OWNER)
+	next.last_hand_play_by_owner[Rules.PLAYER_OWNER] = {
+		"played_by_owner_id": Rules.PLAYER_OWNER,
+		"card_id": &"YuSuiKunGang3",
+		"instance_id": &"last_play_rescued",
+	}
+	result = Simulator._resolve_trigger_event(
+		next, Catalog.TRIGGER_END_OWNER_TURN,
+		{"turn_owner_id": Rules.PLAYER_OWNER}
+	)
+	_check(_instance_at(next, 4) == &"last_play_rescued", "Double Hand target survives through its exile reaction")
+	_check(StringName(_card_at(next, 4).get("card_id", &"")) == &"BaGuaFangWei", "Double Hand attempted the target's exile")
+	_check(_event_count(result.get("events", []), &"card_exiled") == 0, "Rescued prior play emits no exile event")
+	_check(_event_count(result.get("events", []), &"card_drawn") == 0, "Prevented removal does not draw")
+	_check(_event_count(result.get("events", []), &"extra_card_play_granted") == 0, "Prevented removal grants no extra play")
 
 
 func _plain(
