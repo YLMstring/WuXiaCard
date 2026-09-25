@@ -10,7 +10,7 @@
 
 ## 方案选择
 
-采用小范围的通用规则扩展。已有的抽牌、内力增减、点数增减、攻击、阻止翻面、交换、重新进场、玩家持有的持续效果和额外出牌负责主要行为。只为目前无法准确表达的部分补局部邻接判断、以确切卡牌引用为中心的首邻友方交换入口，以及卡牌声明控制的友方占位出牌。新交换入口复用现有交换结算、前后移动触发和视图事件，不复制另一套交换算法。
+采用小范围的通用规则扩展。已有的抽牌、内力增减、点数增减、攻击、阻止翻面、交换、重新进场、玩家持有的持续效果和额外出牌负责主要行为。只为目前无法准确表达的部分补局部邻接判断、现有相邻交换动作与选牌条件的可选卡牌引用，以及卡牌声明控制的友方占位出牌。交换仍复用现有结算、前后移动触发和视图事件，不复制另一套交换算法。
 
 备选方案一是扩建通用的目标表达式和手牌出场规则框架。它可以减少日后个别声明，但本批卡牌只需少量能力，验证面和搜索热路径成本更大。备选方案二是在 C++ 按这几张卡的 ID 写分支，改动看似短，却会让 AI、玩家和目录能力的同一路径失去保证。两者均不采用。
 
@@ -30,7 +30,7 @@
 
 3–5 阶获得共享的耗内力阻止自身翻面效果。4 阶在自身翻面被阻止后，与当前首个相邻友方交换，若交换成功则将自身重新进场。5 阶改为任何友方翻面被阻止后，让被阻止的那张牌与**它**当前首个相邻友方交换，再让该牌重新进场；这张牌可以不挨着天罡北斗阵。
 
-4 阶的交换直接沿用泰山十八盘所用的选牌与 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE`，选牌声明使用 `limit: 1`。5 阶的能力来源和被阻止的牌不同；现有 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE`、`ACTION_SWAP_SELF_WITH_TRIGGER_CARD` 都固定让能力来源参与交换，直接使用会移动阵法本身。增加一个接受 `card: CARD_REF_TRIGGER_CARD` 的通用“与首个相邻友方交换”声明入口；它从该确切牌的四邻取行优先首个友方，内部调用原有相邻交换结算。无相邻友方、交换被移动前触发打断、来源失效等情况均不执行随后的重新进场。若交换成功但特殊进场已达 20 次上限，交换保留，重新进场按现有上限成为无效果。
+4 阶的交换直接沿用泰山十八盘所用的选牌与 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE`，选牌声明使用 `limit: 1`。5 阶的能力来源和被阻止的牌不同；给现有 `CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 与 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE` 增加可选的 `card: CARD_REF_TRIGGER_CARD`，仅在显式声明时把原本的 ability source 换成被阻止的确切牌。先按行优先选出该牌首个相邻友方，再调用原有相邻交换结算；旧声明不带 `card` 时仍以 ability source 为邻接锚点和交换一端。无相邻友方、交换被移动前触发打断、来源失效等情况均不执行随后的重新进场。交换动作必须以是否实际完成两张确切实例换位来判定成功，不能把移动前反应输出的其他事件误当作交换成功；既有事件仍照常保留。若交换成功但特殊进场已达 20 次上限，交换保留，重新进场按现有上限成为无效果。
 
 ### 金雁功 2–4、先天功 5
 
@@ -60,7 +60,7 @@
 
 ### 双手互搏 5
 
-进场前移除自身，然后给当时所属玩家授予一份独立的持续效果；自身不进行后续进场攻击。每份效果在己方牌进场前先令该确切进场牌内力减 1，再令四侧点数各减 1。先处理内力是为了避免四侧归零移除后仍修改移除区中的内力。两种资源均按既有下限处理：内力最低 0，不要求牌原本有内力；点数各侧最低 0，四侧全 0 时按正常规则移除。
+进场前先执行自我移除，再无条件给当时所属玩家授予一份独立的持续效果；授予不依赖移除是否成功。通常自身已离场，不进行后续进场攻击；若其他移除前反应打断了自我移除，自身仍在场时按正常进场生命周期继续，持续效果仍已授予。每份效果在己方牌进场前先令该确切进场牌内力减 1，再令四侧点数各减 1。先处理内力是为了避免四侧归零移除后仍修改移除区中的内力。两种资源均按既有下限处理：内力最低 0，不要求牌原本有内力；点数各侧最低 0，四侧全 0 时按正常规则移除。
 
 该玩家回合结束时，查找其最近一次**从自己手牌实际打出**的确切实例，不限本回合。即使该牌后来换格或翻成敌方，只要它仍在场，就尝试正常移除；只有该确切实例确实产生 `card_exiled` 结果，才抽 1 张牌并申请 1 次额外出牌。该记录可能指向刚打出并已移除的双手互搏本身，此时不抽牌、不追加出牌。多个双手互搏持续效果分别结算，但同一确切目标只能成功移除一次；后续效果不凭同 ID 的其他实例代替。抽牌满手或牌库空的行为沿用现有抽牌规则；追加出牌沿用每方每实际回合最多一次的额度及合法出牌检查。四侧 `-1` 的不可变点数哨兵仍遵守现有 `can_change_powers()`，不强制变成四个 0。
 
@@ -68,7 +68,7 @@
 
 ## 目录能力声明
 
-以下是本次设计要求写入 `scripts/card_catalog.gd` 的完整能力声明；共用常量在各卡 `abilities` 数组中按列出的顺序引用。`CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY`、`ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY`、`CONDITION_LAST_EXILE_SUCCEEDED` 与顶层 `play_on_ally_occupied_cell` 是本设计新增的通用目录词汇，不是已实现原语。除这四项外均使用现有词汇。
+以下是本次设计要求写入 `scripts/card_catalog.gd` 的完整能力声明；共用常量在各卡 `abilities` 数组中按列出的顺序引用。`CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY`、`CONDITION_LAST_EXILE_SUCCEEDED` 与顶层 `play_on_ally_occupied_cell` 是本设计新增的通用目录词汇；`CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 和 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE` 的可选 `card` 是现有原语的参数扩展。其余词汇已经存在。
 
 共同的保护能力与现有复用能力：
 
@@ -202,11 +202,25 @@ const QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON: Dictionary = {
 	"triggers": [{
 		"event": CARD_FLIP_PREVENTED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
-		"actions": [
-			{"type": ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY,
-			 "card": CARD_REF_TRIGGER_CARD, "on_invalid_context": STOP_RULE},
-			{"type": ACTION_RESUMMON_CARD_IN_PLACE, "card": CARD_REF_TRIGGER_CARD},
-		],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ALLY},
+					{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+					 "card": CARD_REF_TRIGGER_CARD},
+				],
+				"limit": 1,
+			},
+			"actions": [
+				{"type": ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE,
+				 "card": CARD_REF_TRIGGER_CARD,
+				 "on_invalid_context": STOP_RULE},
+				{"type": ACTION_RESUMMON_CARD_IN_PLACE,
+				 "card": CARD_REF_TRIGGER_CARD},
+			],
+		}],
 	}],
 }
 ```
@@ -424,12 +438,7 @@ const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
 			{"type": ACTION_EXILE_SELF},
-			{
-				"type": ACTION_IF,
-				"conditions": [{"type": CONDITION_LAST_EXILE_SUCCEEDED}],
-				"actions": [{"type": ACTION_GRANT_OWNER_AURA,
-				             "aura": QZ_HUBO_OWNER_AURA}],
-			},
+			{"type": ACTION_GRANT_OWNER_AURA, "aura": QZ_HUBO_OWNER_AURA},
 		],
 	}],
 }
@@ -477,14 +486,14 @@ const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
 ## 必要的原生接口改动
 
 1. 为触发牌提供“当前至少有一个相邻友方”的通用条件；使用四邻局部读取，处理翻面保护与七星聚会 3–4 阶，不检查卡 ID。
-2. 为现有交换结算增加 `ACTION_SWAP_CARD_WITH_FIRST_ADJACENT_ALLY` 声明入口，必填 `card` 引用。旧交换动作的默认行为和事件顺序保持不变；新入口先解析该确切牌，从它的四邻找到首个当前友方，确认双方仍相邻且归属有效，再调用同一交换结算。
+2. 扩展现有 `CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE` 和 `ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE`，仅允许可选的 `card: CARD_REF_TRIGGER_CARD` 把邻接锚点及交换一端从 ability source 换成确切触发牌。未声明时仍使用 ability source，旧目录无需改动。选牌依棋盘格顺序取首个当前友方；交换前后重检两个实例、相邻关系和当前归属，调用原有交换结算。移动前反应有输出但两牌并未换位时，交换动作报告 `NO_EFFECT` 以使 `STOP_RULE` 阻止重新进场；反应产生的事件依旧保留，现有只在交换成功后继续攻击的能力也因此符合其文字规则。
 3. 给目录卡定义增加布尔字段 `play_on_ally_occupied_cell`，表示“可在友方占据格子出牌并先移除原牌”。原生合法行动枚举、`owner_has_legal_play`、出牌转换以及目录校验使用同一声明，避免 AI 和玩家分叉。未声明的牌仍只可落在空格。
-4. 为 `ACTION_IF` 增加 `CONDITION_LAST_EXILE_SUCCEEDED`：上一项直接移除动作（`ACTION_EXILE_SELF` 或 `ACTION_EXILE_CARD`）确实让其确切目标产生 `card_exiled`。现有 `ACTION_EXILE_CARD` 在移除前触发将目标挪走时也报告动作已执行，故不能用其当前返回值判断双手互搏的“若如此做”。进入 `ACTION_FOR_EACH_SELECTED_CARD` 前把该结果重置为假；选中至多一个目标时，将这个目标的移除结果传给外层后续 `ACTION_IF`，而不传递其他嵌套动作的临时状态。该结果只存在于本次触发结算上下文，不写入 `DuelState`，也不改变其他移除动作的返回语义。自我移除未成功时不授予玩家持续效果；抽牌和额外出牌留在玩家光环的顶层动作列表中执行，以确保受益者是光环持有者，即使被移除的旧牌已经翻成敌方。
+4. 为 `ACTION_IF` 增加 `CONDITION_LAST_EXILE_SUCCEEDED`：上一项 `ACTION_EXILE_CARD` 确实让其确切目标产生 `card_exiled`。现有 `ACTION_EXILE_CARD` 在移除前触发将目标挪走时也报告动作已执行，故不能用其当前返回值判断双手互搏回合末的“若如此做”。进入 `ACTION_FOR_EACH_SELECTED_CARD` 前把该结果重置为假；选中至多一个目标时，将这个目标的移除结果传给外层后续 `ACTION_IF`，而不传递其他嵌套动作的临时状态。该结果只存在于本次触发结算上下文，不写入 `DuelState`，也不改变其他移除动作的返回语义。双手互搏进场前的自我移除没有此条件：无论移除结果如何，都授予持续效果。抽牌和额外出牌留在玩家光环的顶层动作列表中执行，以确保受益者是光环持有者，即使被移除的旧牌已经翻成敌方。
 
 目录 schema、原生编译和运行时效果均要拒绝未知或不匹配的声明。所有新规则输出既有纯数据事件；若必要，仅在控制器通用事件呈现上修正顺序，不引入命名卡牌分支。热路径先判断相关事件和手牌声明，再做常数级邻接/目标判断。
 
 ## 验证与性能
 
-先为目录与原生模拟器编写会在能力缺失时失败的聚焦测试，再实现声明和 UI 呈现。覆盖各阶能力差异、行优先“首个”、多目标攻击与翻面后重检、保护耗内力、保护由其他效果触发、交换前移动打断、重新进场新实例及 20 次上限、叠加来源、抽牌满手、四侧归零、跨回合上一张手牌、目标翻敌或离场、无行动跳过回合、占位出牌前置移除与失败回滚。用正常模式和测试模式在 540×960 竖屏走受影响的拖牌、攻击、翻面和抽牌路径。
+先为目录与原生模拟器编写会在能力缺失时失败的聚焦测试，再实现声明和 UI 呈现。覆盖各阶能力差异、行优先“首个”、多目标攻击与翻面后重检、保护耗内力、保护由其他效果触发、交换前移动反应虽产出事件却打断实际交换、旧天外玉龙能力在此情况下停止后续攻击、重新进场新实例及 20 次上限、叠加来源、双手互搏自我移除被打断后仍授予持续效果、抽牌满手、四侧归零、跨回合上一张手牌、目标翻敌或离场、无行动跳过回合、占位出牌前置移除与失败回滚。用正常模式和测试模式在 540×960 竖屏走受影响的拖牌、攻击、翻面和抽牌路径。
 
 改动前完整基线：2026-09-25 在当前源码与已安装 Summer Engine 上运行 `tools/run_tests.ps1`，84/84 套件通过。实现后先跑聚焦测试，再跑完整套件。修改合法行动枚举或事件热路径前，按仓库要求保留完全匹配的改前源码和 Release native build，同机器同配置同 fixture 做交错 A/B；记录搜索行动、得分、遍历是否一致和相关热点耗时，发现可重复回退立即报告，不把未经测量的改动称作提速。
