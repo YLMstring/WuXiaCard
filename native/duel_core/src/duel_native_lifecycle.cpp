@@ -642,6 +642,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	Resolution resolution = restore_temporary_abilities(value, value.scalars[1]);
 	value.scalars[3] = 0;
 	value.scalars[4] = 0;
+	value.scalars[ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN_SCALAR] = 0;
 	value.scalars[6] = 0;
 	value.scalars[13] = 0;
 	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;

@@ -23,6 +23,7 @@ namespace godot::duel_native_internal {
 // 这些转换位于 Godot/原生数据边界，热路径应停留在 std::vector 与紧凑标量中。
 inline constexpr int32_t HISTORY_SCORE_LIMIT = 1'000'000;
 // 特殊方式进场按双方分别计数；普通手牌出牌不占用这个额度。
+inline constexpr int32_t ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN_SCALAR = 2;
 inline constexpr int32_t PLAYER_SPECIAL_SUMMONS_SCALAR = 14;
 inline constexpr int32_t OPPONENT_SPECIAL_SUMMONS_SCALAR = 15;
 inline constexpr int32_t MAX_SPECIAL_SUMMONS_PER_OWNER_TURN = 20;

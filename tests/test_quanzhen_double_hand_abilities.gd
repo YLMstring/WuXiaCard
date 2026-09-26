@@ -6,6 +6,8 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const Executor = preload("res://tests/helpers/duel_native_action_test_harness.gd")
 const State = preload("res://scripts/duel_state.gd")
+const CompactState = preload("res://scripts/duel_compact_state.gd")
+const StateKey = preload("res://scripts/duel_state_key.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -21,7 +23,9 @@ func _run() -> void:
 	_test_neighbor_flip_protection_and_swaps()
 	_test_array_attacks()
 	_test_draw_and_opening_hand_effects()
-	_test_jinyan_turn_start_timing()
+	_test_jinyan_turn_end_timing()
+	_test_jinyan_flip_attribution()
+	_test_jinyan_turn_flip_state()
 	_test_remote_entry_and_flip_rewards()
 	_test_qixin_other_ally_only()
 	_test_double_hand_aura()
@@ -59,12 +63,12 @@ func _test_catalog_declarations() -> void:
 			"Unrelated %s remains without abilities" % card_id
 		)
 	var expected_abilities: Dictionary = {
-		&"JinYanGong2": [Catalog.QZ_JINYAN_START_TURN_DRAW,
+		&"JinYanGong2": [Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong3": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_START_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
+			Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong4": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_START_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
+			Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
 		&"QiXinJuHui3": [Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
 			Catalog.QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
 		&"QiXinJuHui4": [Catalog.KUIHUA_MINIMUM_DEFENSE_RETAINED,
@@ -186,13 +190,9 @@ func _test_draw_and_opening_hand_effects() -> void:
 	_check(bool(result.get("valid", false)), "JinYan hand play resolves")
 	var next: State = result.get("state") as State
 	if next != null:
-		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 1, "JinYan does not draw in its entry turn")
-		result = Simulator.apply_action(next, Action.make_play(0, 0, &"opponent"))
-		_check(bool(result.get("valid", false)), "Opponent play advances to JinYan owner's next turn")
-		next = result.get("state") as State
-	if next != null:
+		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 2, "JinYan draws on its entry turn end without enemy flip")
 		var drawn: Dictionary = _hand_card(next, Rules.PLAYER_OWNER, &"drawn")
-		_check(not drawn.is_empty(), "JinYan draws at next owner turn start")
+		_check(not drawn.is_empty(), "JinYan draws at own turn end")
 		if not drawn.is_empty():
 			_check(int(drawn.get("ki", 0)) == 1, "JinYan gives the drawn card one ki")
 	jinyan = Catalog.create_instance(&"JinYanGong4", Rules.PLAYER_OWNER, &"jinyan_four")
@@ -204,15 +204,11 @@ func _test_draw_and_opening_hand_effects() -> void:
 	result = Simulator.apply_action(state, Action.make_play(0, 4, &"jinyan_four"))
 	next = result.get("state") as State
 	if next != null:
-		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 1, "JinYan four does not draw in its entry turn")
-		result = Simulator.apply_action(next, Action.make_play(0, 0, &"opponent_four"))
-		_check(bool(result.get("valid", false)), "Opponent play advances to JinYan four owner's next turn")
-		next = result.get("state") as State
-		if next != null:
-			var drawn_four: Dictionary = _hand_card(next, Rules.PLAYER_OWNER, &"drawn_four")
-			_check(not drawn_four.is_empty(), "JinYan four draws at next owner turn start")
-			_check(int(drawn_four.get("ki", 0)) == 1, "JinYan four gives drawn card ki")
-			_check((drawn_four.get("active_abilities", []) as Array).size() == 1, "JinYan four grants drawn card protection")
+		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 2, "JinYan four draws on its entry turn end")
+		var drawn_four: Dictionary = _hand_card(next, Rules.PLAYER_OWNER, &"drawn_four")
+		_check(not drawn_four.is_empty(), "JinYan four draws at own turn end")
+		_check(int(drawn_four.get("ki", 0)) == 1, "JinYan four gives drawn card ki")
+		_check((drawn_four.get("active_abilities", []) as Array).size() == 1, "JinYan four grants drawn card protection")
 
 	state = State.new(Rules.empty_board(), [
 		Catalog.create_instance(&"XianTianGong5", Rules.PLAYER_OWNER, &"xiantian"),
@@ -223,7 +219,7 @@ func _test_draw_and_opening_hand_effects() -> void:
 	_check(int((state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("ki", 0)) == 1, "XianTian buffs other opening cards")
 
 
-func _test_jinyan_turn_start_timing() -> void:
+func _test_jinyan_turn_end_timing() -> void:
 	for card_id: StringName in [&"JinYanGong2", &"JinYanGong3", &"JinYanGong4"]:
 		var board: Array = Rules.empty_board()
 		board[4] = _slot(Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"timed_jinyan"), Rules.PLAYER_OWNER)
@@ -238,16 +234,133 @@ func _test_jinyan_turn_start_timing() -> void:
 		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores enemy turn end" % card_id)
 		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_END_OWNER_TURN,
 			{"turn_owner_id": Rules.PLAYER_OWNER})
-		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores own turn end" % card_id)
+		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s draws at own turn end" % card_id)
 		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_START_OWNER_TURN,
 			{"turn_owner_id": Rules.OPPONENT_OWNER})
-		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores enemy turn start" % card_id)
+		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s ignores enemy turn start" % card_id)
 		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_START_OWNER_TURN,
 			{"turn_owner_id": Rules.PLAYER_OWNER})
-		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s draws at own turn start" % card_id)
+		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s ignores own turn start" % card_id)
 		if not state.get_hand(Rules.PLAYER_OWNER).is_empty():
 			_check(int((state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1,
-				"%s buffs its start-turn draw" % card_id)
+				"%s buffs its end-turn draw" % card_id)
+
+
+func _test_jinyan_flip_attribution() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"capture_jinyan"), Rules.PLAYER_OWNER)
+	board[4] = _slot(_plain(&"capture_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var state := State.new(board, [_plain(&"capture_attacker", Rules.PLAYER_OWNER, [1, 5, 1, 1])],
+		[_plain(&"opponent_reserve", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER, 1,
+		[_plain(&"capture_draw", Rules.PLAYER_OWNER)])
+	var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 3, &"capture_attacker"))
+	_check(bool(result.get("valid", false)), "JinYan capture action resolves")
+	var next: State = result.get("state") as State
+	if next != null:
+		_check(int((next.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+			"Player actually flips enemy")
+		_check(_hand_card(next, Rules.PLAYER_OWNER, &"capture_draw").is_empty(),
+			"JinYan skips end-turn draw after own successful enemy flip")
+
+	board = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"self_jinyan"), Rules.PLAYER_OWNER)
+	var self_flip: Dictionary = _plain(&"enemy_self_flip", Rules.OPPONENT_OWNER)
+	self_flip["active_abilities"] = [{"triggers": [{
+		"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY}],
+		"actions": [{"type": Catalog.ACTION_FLIP_SELF,
+			"new_owner": Catalog.OWNER_OPPONENT_OF_CARD_CURRENT}],
+	}]}]
+	board[4] = _slot(self_flip, Rules.OPPONENT_OWNER)
+	state = State.new(board, [_plain(&"harmless_play", Rules.PLAYER_OWNER)],
+		[_plain(&"opponent_waiting", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER, 1,
+		[_plain(&"self_flip_draw", Rules.PLAYER_OWNER)])
+	result = Simulator.apply_action(state, Action.make_play(0, 8, &"harmless_play"))
+	_check(bool(result.get("valid", false)), "Enemy self-flip action resolves")
+	next = result.get("state") as State
+	if next != null:
+		_check(int((next.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+			"Enemy effect flips itself to player side")
+		_check(not _hand_card(next, Rules.PLAYER_OWNER, &"self_flip_draw").is_empty(),
+			"Enemy's own flip does not suppress JinYan draw")
+
+	board = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"protected_jinyan"), Rules.PLAYER_OWNER)
+	board[4] = _slot(Catalog.create_instance(&"QiXinJuHui1", Rules.OPPONENT_OWNER, &"protected_enemy"), Rules.OPPONENT_OWNER)
+	board[1] = _slot(_plain(&"enemy_ally", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	state = State.new(board, [_plain(&"protected_attacker", Rules.PLAYER_OWNER, [1, 5, 1, 1])],
+		[_plain(&"protected_reserve", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER, 1,
+		[_plain(&"protected_draw", Rules.PLAYER_OWNER)])
+	result = Simulator.apply_action(state, Action.make_play(0, 3, &"protected_attacker"))
+	_check(bool(result.get("valid", false)), "Prevented capture action resolves")
+	next = result.get("state") as State
+	if next != null:
+		_check(int((next.board[4] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER,
+			"Enemy protection prevents capture")
+		_check(not _hand_card(next, Rules.PLAYER_OWNER, &"protected_draw").is_empty(),
+			"Prevented flip does not suppress JinYan draw")
+
+	board = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"ability_jinyan"), Rules.PLAYER_OWNER)
+	board[4] = _slot(_plain(&"ability_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var flipping_play: Dictionary = _plain(&"ability_play", Rules.PLAYER_OWNER)
+	flipping_play["active_abilities"] = [{"triggers": [{
+		"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {"zones": [Catalog.CARD_ZONE_BOARD],
+				"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY}]},
+			"actions": [{"type": Catalog.ACTION_FLIP_SELF,
+				"new_owner": Catalog.OWNER_ABILITY_SOURCE}],
+		}],
+	}]}]
+	state = State.new(board, [flipping_play], [_plain(&"ability_opponent", Rules.OPPONENT_OWNER)],
+		Rules.PLAYER_OWNER, 1, [_plain(&"ability_draw", Rules.PLAYER_OWNER)])
+	result = Simulator.apply_action(state, Action.make_play(0, 8, &"ability_play"))
+	_check(bool(result.get("valid", false)), "Player ability flip action resolves")
+	next = result.get("state") as State
+	if next != null:
+		_check(int((next.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
+			"Player's non-attack ability flips enemy")
+		_check(_hand_card(next, Rules.PLAYER_OWNER, &"ability_draw").is_empty(),
+			"Player-caused non-attack flip suppresses JinYan draw")
+
+
+func _test_jinyan_turn_flip_state() -> void:
+	var board: Array = Rules.empty_board()
+	board[0] = _slot(Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"state_jinyan"), Rules.PLAYER_OWNER)
+	board[3] = _slot(_plain(&"state_attacker", Rules.PLAYER_OWNER, [1, 5, 1, 1]), Rules.PLAYER_OWNER)
+	board[4] = _slot(_plain(&"state_enemy", Rules.OPPONENT_OWNER), Rules.OPPONENT_OWNER)
+	var state := State.new(board, [_plain(&"state_play", Rules.PLAYER_OWNER)],
+		[_plain(&"state_opponent", Rules.OPPONENT_OWNER)], Rules.PLAYER_OWNER, 1,
+		[_plain(&"state_draw", Rules.PLAYER_OWNER)])
+	var result: Dictionary = Simulator._resolve_attack_target(state, 3, &"state_attacker", 4,
+		&"state_enemy", &"test_turn_flip")
+	_check(bool(result.get("valid", false)), "Direct attack resolves for turn-state test")
+	_check(state.active_owner_flipped_enemy_this_turn,
+		"Successful player-caused flip marks current turn across native transition")
+	_check(state.duplicate_state().active_owner_flipped_enemy_this_turn,
+		"Turn-flip mark survives DuelState copy")
+	var compact := CompactState.new()
+	_check(compact.capture_state(state), "Turn-flip state captures into compact snapshot")
+	_check(compact.scalars[CompactState.SCALAR_ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN] == 1,
+		"Retired scalar slot two carries turn-flip mark")
+	var restored: State = compact.restore() as State
+	_check(restored != null and restored.active_owner_flipped_enemy_this_turn,
+		"Turn-flip mark restores from compact snapshot")
+	var no_flip_mark: State = state.duplicate_state()
+	no_flip_mark.active_owner_flipped_enemy_this_turn = false
+	_check(StateKey.build_compact(state) != StateKey.build_compact(no_flip_mark),
+		"Search state key distinguishes current-turn flip history")
+	result = Simulator.apply_action(state, Action.make_play(0, 8, &"state_play"))
+	_check(bool(result.get("valid", false)), "Current turn finishes after retained flip")
+	var next: State = result.get("state") as State
+	if next != null:
+		_check(_hand_card(next, Rules.PLAYER_OWNER, &"state_draw").is_empty(),
+			"Earlier same-turn capture suppresses end-turn JinYan draw")
+		_check(not next.active_owner_flipped_enemy_this_turn,
+			"Completed owner-turn boundary clears turn-flip mark")
 
 
 func _test_remote_entry_and_flip_rewards() -> void:

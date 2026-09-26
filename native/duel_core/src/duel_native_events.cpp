@@ -219,6 +219,9 @@ bool DuelNativeCompactKernel::conditions_match(
 			case ConditionOpcode::TURN_OWNER_IS_SELF:
 				matched = context.turn_owner != 0 && context.turn_owner == group.source_owner;
 				break;
+			case ConditionOpcode::ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN:
+				matched = value.scalars[ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN_SCALAR] == 0;
+				break;
 			case ConditionOpcode::OWNER_DID_NOT_WIN:
 				matched = std::find(
 					context.winning_owners.begin(),

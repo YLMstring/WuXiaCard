@@ -30,7 +30,8 @@ The simulator must remain authoritative. If live play and AI would resolve the s
 ### Data
 
 - `duel_state.gd` — pure mutable simulation data: board, hands, decks,
-  discard/removed zones, active player, turn count, owner-turn serial,
+  discard/removed zones, active player, turn count, whether the active owner
+  successfully flipped an enemy this turn,
   per-owner attack and special-summon counts, remaining extra card plays, the
   per-owner-turn grant latch, end-boundary state, queued-effect scaffolding,
   last successful hand plays, ordered owner-held aura entries and their next

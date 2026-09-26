@@ -195,6 +195,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
 	else if (type == StringName("drawn_card_is_enemy")) compiled.opcode = ConditionOpcode::DRAWN_CARD_IS_ENEMY;
 	else if (type == StringName("turn_owner_is_self")) compiled.opcode = ConditionOpcode::TURN_OWNER_IS_SELF;
+	else if (type == StringName("active_owner_did_not_flip_enemy_this_turn")) compiled.opcode = ConditionOpcode::ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN;
 	else if (type == StringName("owner_did_not_win")) compiled.opcode = ConditionOpcode::OWNER_DID_NOT_WIN;
 	else if (type == StringName("moving_card_is_self")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_SELF;
 	else if (type == StringName("moving_card_is_ally")) compiled.opcode = ConditionOpcode::MOVING_CARD_IS_ALLY;

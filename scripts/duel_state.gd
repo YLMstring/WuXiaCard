@@ -13,6 +13,7 @@ var discard_piles: Dictionary = {}
 var removed_cards: Dictionary = {}
 var active_player: int = Rules.PLAYER_OWNER
 var turn_count: int = 1
+var active_owner_flipped_enemy_this_turn: bool = false
 var attacks_started_by_owner: Dictionary = {}
 var special_summons_by_owner: Dictionary = {}
 var extra_card_plays_remaining: int = 0
@@ -201,6 +202,7 @@ func duplicate_state() -> DuelState:
 	copied.removed_cards = _duplicate_card_zones(removed_cards)
 	copied.active_player = active_player
 	copied.turn_count = turn_count
+	copied.active_owner_flipped_enemy_this_turn = active_owner_flipped_enemy_this_turn
 	copied.run_difficulty = run_difficulty
 	copied.difficulty_eight_draw_consumed = difficulty_eight_draw_consumed
 	copied.max_turns = max_turns
@@ -239,6 +241,7 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)
 	copied.max_turns = max_turns
+	copied.active_owner_flipped_enemy_this_turn = active_owner_flipped_enemy_this_turn
 	copied.active_abilities = active_abilities.duplicate(true)
 	copied.effect_queue = effect_queue.duplicate(true)
 	copied.pending_choice = pending_choice.duplicate(true)

@@ -1321,7 +1321,8 @@ Dictionary DuelNativeCompactKernel::resolve_non_attack_flip_transition(
 		reason,
 		true,
 		exile_stack,
-		resolution
+		resolution,
+		0
 	);
 	return materialize_direct_transition(
 		next,

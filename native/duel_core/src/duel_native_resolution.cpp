@@ -268,7 +268,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			resolved_capture_owner,
 			before_context,
 			exile_stack,
-			flip_resolution
+			flip_resolution,
+			true,
+			request.attacker_owner
 		)) return flip_resolution;
 		stop_after_current_target = (
 			stop_after_current_target || resolution_flipped_attacker(flip_resolution)
@@ -685,7 +687,8 @@ bool DuelNativeCompactKernel::flip_card(
 	const EventContext &context,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution,
-	bool record_capture_index
+	bool record_capture_index,
+	int32_t effect_owner
 ) const {
 	// 翻面顺序是规则：先改变所属方并发出翻面事件；再移除普通非保留能力；
 	// 结算 CARD_AFTER_FLIPPED；最后移除独立的“自身翻面后”非保留能力。
@@ -705,6 +708,11 @@ bool DuelNativeCompactKernel::flip_card(
 		}
 	}
 	value.board_owners[current_target_cell] = static_cast<uint8_t>(new_owner);
+	if (
+		effect_owner == value.scalars[0]
+		&& previous_owner != effect_owner
+		&& new_owner == effect_owner
+	) value.scalars[ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN_SCALAR] = 1;
 	Dictionary flipped;
 	flipped["type"] = StringName("card_flipped");
 	flipped["source_cell"] = attacker_cell;

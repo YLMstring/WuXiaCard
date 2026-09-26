@@ -51,8 +51,10 @@ These decisions were explicitly established during development and should not be
 ## Turn and Activation Rules
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
-- JinYanGong 2–4 draw at the start of their current owner's turn, before
-  checking for legal actions; they no longer draw on entry. QiXinJuHui 3–4 apply
+- JinYanGong 2–4 draw at the end of their current owner's turn only if that
+  owner has not successfully flipped an enemy in that turn. Prevented flips and
+  flips caused by the enemy's own effect do not count. They do not draw on entry.
+  QiXinJuHui 3–4 apply
   their entry reward to other allied cards adjacent to any ally, never to
   themselves. The current complete ability arrays are in
   `docs/superpowers/specs/2026-09-26-jinyan-qixin-balance-design.md`.

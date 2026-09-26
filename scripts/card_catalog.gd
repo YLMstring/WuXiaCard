@@ -49,6 +49,7 @@ const CONDITION_TRIGGER_CARD_IN_RANGE: StringName = &"trigger_card_in_range"
 const CONDITION_TRIGGER_CARD_IS_SELF: StringName = &"trigger_card_is_self"
 const CONDITION_ATTACKER_CARD_IS_SELF: StringName = &"attacker_card_is_self"
 const CONDITION_TURN_OWNER_IS_SELF: StringName = &"turn_owner_is_self"
+const CONDITION_ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN: StringName = &"active_owner_did_not_flip_enemy_this_turn"
 const CONDITION_TRIGGER_CARD_REVEALED_TO_SELF: StringName = &"trigger_card_revealed_to_self"
 const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
@@ -235,6 +236,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_TRIGGER_CARD_IS_SELF,
 	CONDITION_ATTACKER_CARD_IS_SELF,
 	CONDITION_TURN_OWNER_IS_SELF,
+	CONDITION_ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN,
 	CONDITION_TRIGGER_CARD_REVEALED_TO_SELF,
 	CONDITION_TRIGGER_CARD_WAS_ENEMY,
 	CONDITION_ATTACKER_CARD_IS_ENEMY,
@@ -2623,10 +2625,13 @@ const QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON: Dictionary = {
 	}],
 }
 
-const QZ_JINYAN_START_TURN_DRAW: Dictionary = {
+const QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_START_OWNER_TURN,
-		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"event": TRIGGER_END_OWNER_TURN,
+		"conditions": [
+			{"type": CONDITION_TURN_OWNER_IS_SELF},
+			{"type": CONDITION_ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN},
+		],
 		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
 	}],
 }
@@ -2889,7 +2894,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
-		"abilities": [QZ_JINYAN_START_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
+		"abilities": [QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 	},
 	&"JinYanGong3": {
 		"id": &"JinYanGong3",
@@ -2903,7 +2908,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
-			QZ_JINYAN_START_TURN_DRAW,
+			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI,
 		],
 	},
@@ -2919,7 +2924,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
-			QZ_JINYAN_START_TURN_DRAW,
+			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT,
 		],
 	},

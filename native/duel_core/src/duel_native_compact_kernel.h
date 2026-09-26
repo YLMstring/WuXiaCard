@@ -59,7 +59,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	// 内容留在 side_payload。card_index 是本局稳定索引，instance_id 才是对外身份。
 	struct NativeState {
 		// scalars 的 ABI 与 scripts/duel_compact_state.gd 一致：
-		// 0 当前行动方；1 从 1 开始的单方回合数；2 保留兼容槽位；3/4 双方本回合攻击数；
+		// 0 当前行动方；1 从 1 开始的单方回合数；2 本回合行动方是否成功将敌方翻面；3/4 双方本回合攻击数；
 		// 5 剩余额外出牌；6 回合结束触发是否已结算；7 最大回合数；8/9 待生效压制；
 		// 10 难度；11 进阶八是否已触发；12 状态版本；13 本回合是否已获得额外出牌；
 		// 14/15 双方本回合特殊进场次数。槽位顺序进入存档、状态键和原生 ABI，不可随意移动。
@@ -119,6 +119,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		TRIGGER_CARD_WEAPON,
 		DRAWN_CARD_IS_ENEMY,
 		TURN_OWNER_IS_SELF,
+		ACTIVE_OWNER_DID_NOT_FLIP_ENEMY_THIS_TURN,
 		OWNER_DID_NOT_WIN,
 		KI_AT_LEAST,
 		MOVING_CARD_IS_SELF,
@@ -1435,7 +1436,8 @@ private:
 		const StringName &reason,
 		bool record_direct_board_changes,
 		std::vector<int32_t> &exile_stack,
-		Resolution &resolution
+		Resolution &resolution,
+		int32_t effect_owner
 	) const;
 	ActionOutcome grant_ability_to_subject(
 		NativeState &value,
@@ -1663,7 +1665,8 @@ private:
 		const EventContext &context,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution,
-		bool record_capture_index = true
+		bool record_capture_index,
+		int32_t effect_owner
 	) const;
 	Dictionary restore_runtime_card(const NativeState &value, int32_t card_index) const;
 	int32_t leftmost_empty_hand_slot(const NativeState &value, int32_t owner_id) const;

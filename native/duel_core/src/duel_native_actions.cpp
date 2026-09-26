@@ -1354,7 +1354,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::flip_action_subj
 		StringName("ability_non_attack_flip"),
 		action_context.record_direct_board_changes,
 		exile_stack,
-		resolution
+		resolution,
+		action_context.ability_source_owner
 	);
 }
 
@@ -1365,7 +1366,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resolve_non_atta
 	const StringName &reason,
 	bool record_direct_board_changes,
 	std::vector<int32_t> &exile_stack,
-	Resolution &resolution
+	Resolution &resolution,
+	int32_t effect_owner
 ) const {
 	const int32_t target_cell = find_board_card(value, target_card_index);
 	if (
@@ -1417,7 +1419,8 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::resolve_non_atta
 		flip_context,
 		exile_stack,
 		flipped,
-		record_direct_board_changes
+		record_direct_board_changes,
+		effect_owner
 	)) {
 		append_resolution(resolution, flipped);
 		if (resolution.reason.is_empty()) resolution.reason = flipped.reason;

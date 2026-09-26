@@ -344,6 +344,7 @@ static func _overwrite_state(target: StateData, source: StateData) -> void:
 	for property_name: StringName in [
 		&"active_player",
 		&"turn_count",
+		&"active_owner_flipped_enemy_this_turn",
 		&"attacks_started_by_owner",
 		&"special_summons_by_owner",
 		&"extra_card_plays_remaining",

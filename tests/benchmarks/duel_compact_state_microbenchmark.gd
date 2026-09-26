@@ -145,7 +145,7 @@ func _measure_compact_copy(snapshots: Array[CompactState]) -> Dictionary:
 			var copied: CompactState = snapshot.duplicate_compact() as CompactState
 			sink = (
 				sink
-				^ copied.scalars[CompactState.SCALAR_RESERVED_OWNER_TURN_SERIAL]
+				^ copied.scalars[CompactState.SCALAR_ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN]
 				^ copied.board_card_indices.size()
 				^ pass_index
 			)
