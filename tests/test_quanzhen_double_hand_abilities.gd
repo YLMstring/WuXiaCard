@@ -21,7 +21,9 @@ func _run() -> void:
 	_test_neighbor_flip_protection_and_swaps()
 	_test_array_attacks()
 	_test_draw_and_opening_hand_effects()
+	_test_jinyan_turn_end_timing()
 	_test_remote_entry_and_flip_rewards()
+	_test_qixin_other_ally_only()
 	_test_double_hand_aura()
 	_test_double_hand_previous_turn_target()
 	_test_exile_card_requires_actual_removal()
@@ -57,10 +59,17 @@ func _test_catalog_declarations() -> void:
 			"Unrelated %s remains without abilities" % card_id
 		)
 	var expected_abilities: Dictionary = {
+		&"JinYanGong2": [Catalog.QZ_JINYAN_END_TURN_DRAW,
+			Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong3": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_ENTRY_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
+			Catalog.QZ_JINYAN_END_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong4": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_ENTRY_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
+			Catalog.QZ_JINYAN_END_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
+		&"QiXinJuHui3": [Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
+			Catalog.QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
+		&"QiXinJuHui4": [Catalog.KUIHUA_MINIMUM_DEFENSE_RETAINED,
+			Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
+			Catalog.QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
 		&"XianTianGong5": [Catalog.QZ_XIANTIAN_OPENING_HAND_KI],
 		&"DingYangZhen3": [Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
 			Catalog.QZ_DING_FLIP_PROTECT_AND_ALLY_KI],
@@ -200,6 +209,27 @@ func _test_draw_and_opening_hand_effects() -> void:
 	_check(int((state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("ki", 0)) == 1, "XianTian buffs other opening cards")
 
 
+func _test_jinyan_turn_end_timing() -> void:
+	for card_id: StringName in [&"JinYanGong2", &"JinYanGong3", &"JinYanGong4"]:
+		var board: Array = Rules.empty_board()
+		board[4] = _slot(Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"timed_jinyan"), Rules.PLAYER_OWNER)
+		var state := State.new(board, [], [_plain(&"timed_opponent", Rules.OPPONENT_OWNER)],
+			Rules.PLAYER_OWNER, 1, [_plain(&"timed_draw", Rules.PLAYER_OWNER)])
+		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			{"trigger_instance_id": &"timed_jinyan", "trigger_cell": 4,
+			 "trigger_owner_id": Rules.PLAYER_OWNER})
+		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s does not draw on entry" % card_id)
+		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_END_OWNER_TURN,
+			{"turn_owner_id": Rules.OPPONENT_OWNER})
+		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores enemy turn end" % card_id)
+		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_END_OWNER_TURN,
+			{"turn_owner_id": Rules.PLAYER_OWNER})
+		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s draws at own turn end" % card_id)
+		if not state.get_hand(Rules.PLAYER_OWNER).is_empty():
+			_check(int((state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1,
+				"%s buffs its end-turn draw" % card_id)
+
+
 func _test_remote_entry_and_flip_rewards() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = _slot(Catalog.create_instance(&"QiXinJuHui2", Rules.PLAYER_OWNER, &"local_qixin"), Rules.PLAYER_OWNER)
@@ -245,6 +275,23 @@ func _test_remote_entry_and_flip_rewards() -> void:
 	_check((_card_at(state, 3).get("powers", []) as Array) == [2, 2, 2, 2], "DingYang includes flipped target in power gain")
 	_check(int(_card_at(state, 0).get("ki", 0)) == 1, "DingYang grants other ally ki")
 	_check((_card_at(state, 0).get("powers", []) as Array) == [2, 2, 2, 2], "DingYang grants other ally powers")
+
+
+func _test_qixin_other_ally_only() -> void:
+	for card_id: StringName in [&"QiXinJuHui3", &"QiXinJuHui4"]:
+		var board: Array = Rules.empty_board()
+		board[4] = _slot(_plain(&"qixin_neighbor", Rules.PLAYER_OWNER), Rules.PLAYER_OWNER)
+		var state := State.new(board,
+			[Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"entering_qixin")],
+			[_plain(&"qixin_opponent", Rules.OPPONENT_OWNER)])
+		var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 7, &"entering_qixin"))
+		_check(bool(result.get("valid", false)), "%s enters beside ally" % card_id)
+		var next: State = result.get("state") as State
+		if next != null:
+			_check(int(_card_at(next, 7).get("ki", -1)) == 1,
+				"%s does not buff its own entry" % card_id)
+			_check(int(_card_at(next, 4).get("ki", -1)) == 0,
+				"%s does not buff existing neighbor" % card_id)
 
 
 func _test_double_hand_aura() -> void:

@@ -18,7 +18,11 @@ bool DuelNativeCompactKernel::conditions_match(
 		bool matched = false;
 		switch (condition.opcode) {
 			case ConditionOpcode::TRIGGER_CARD_IS_SELF:
-				matched = context.trigger_card_index == group.source_card_index;
+				matched = context.trigger_card_index >= 0 && (
+					condition.inverted
+					? context.trigger_card_index != group.source_card_index
+					: context.trigger_card_index == group.source_card_index
+				);
 				break;
 			case ConditionOpcode::TRIGGER_CARD_IS_ALLY:
 			case ConditionOpcode::TRIGGER_CARD_IS_ENEMY: {

@@ -51,6 +51,11 @@ These decisions were explicitly established during development and should not be
 ## Turn and Activation Rules
 
 - On a turn, choose exactly one: play a hand card or activate a card already on the board.
+- JinYanGong 2–4 draw at the end of their current owner's turn, including a
+  skipped action phase; they no longer draw on entry. QiXinJuHui 3–4 apply
+  their entry reward to other allied cards adjacent to any ally, never to
+  themselves. The current complete ability arrays are in
+  `docs/superpowers/specs/2026-09-26-jinyan-qixin-balance-design.md`.
 - If the next owner has no legal action in a nonterminal position, only that
   owner's action phase is skipped. Their start- and end-owner-turn triggers
   still resolve, and the empty turn does not increment the action counter.

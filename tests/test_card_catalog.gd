@@ -594,6 +594,8 @@ func _test_trigger_ability_schema() -> void:
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": -1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1, "inverted": 1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "conditions": [{"type": Catalog.CONDITION_KI_AT_LEAST, "amount": 1, "extra": true}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
+		{"triggers": [{"event": Catalog.TRIGGER_CARD_SUMMONED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF, "inverted": 1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
+		{"triggers": [{"event": Catalog.TRIGGER_CARD_SUMMONED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF, "extra": true}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON, "weapon": ""}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},
 		{"triggers": [{"event": Catalog.CARD_AFTER_EXILED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_WEAPON, "weapon": "术数", "inverted": 1}], "actions": [{"type": Catalog.ACTION_GAIN_KI, "amount": 1}]}]},

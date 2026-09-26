@@ -2623,10 +2623,10 @@ const QZ_TIAN_ALLY_PREVENTED_SWAP_RESUMMON: Dictionary = {
 	}],
 }
 
-const QZ_JINYAN_ENTRY_DRAW: Dictionary = {
+const QZ_JINYAN_END_TURN_DRAW: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_CARD_AFTER_SUMMONED,
-		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"event": TRIGGER_END_OWNER_TURN,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
 	}],
 }
@@ -2687,6 +2687,7 @@ const QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY: Dictionary = {
 		"event": TRIGGER_CARD_SUMMONED,
 		"conditions": [
 			{"type": CONDITION_TRIGGER_CARD_IS_ALLY},
+			{"type": CONDITION_TRIGGER_CARD_IS_SELF, "inverted": true},
 			{"type": CONDITION_TRIGGER_CARD_HAS_ADJACENT_ALLY},
 		],
 		"actions": [
@@ -2888,7 +2889,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "回合结束时，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
-		"abilities": [QZ_JINYAN_ENTRY_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
+		"abilities": [QZ_JINYAN_END_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 	},
 	&"JinYanGong3": {
 		"id": &"JinYanGong3",
@@ -2902,7 +2903,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
-			QZ_JINYAN_ENTRY_DRAW,
+			QZ_JINYAN_END_TURN_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI,
 		],
 	},
@@ -2918,7 +2919,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [3, 1, 1, 3],
 		"abilities": [
 			TIYUNZONG_LOCKED_FLIP_MOVE,
-			QZ_JINYAN_ENTRY_DRAW,
+			QZ_JINYAN_END_TURN_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT,
 		],
 	},
@@ -6318,6 +6319,7 @@ static func _ability_has_self_after_flip_trigger(ability: Dictionary) -> bool:
 				condition_value is Dictionary
 				and StringName((condition_value as Dictionary).get("type", &""))
 				== CONDITION_TRIGGER_CARD_IS_SELF
+				and not bool((condition_value as Dictionary).get("inverted", false))
 			):
 				return true
 	return false
@@ -6476,6 +6478,13 @@ static func _validate_condition(
 					"Card %s %s ki_at_least condition requires a boolean inverted"
 					% [card_id, context_name]
 				)
+	if condition_type == CONDITION_TRIGGER_CARD_IS_SELF and condition.has("inverted"):
+		allowed_keys.append(&"inverted")
+		if typeof(condition.get("inverted")) != TYPE_BOOL:
+			errors.append(
+				"Card %s %s trigger-card self condition requires a boolean inverted"
+				% [card_id, context_name]
+			)
 	if condition_type == CONDITION_TRIGGER_CARD_WEAPON:
 		allowed_keys.append(&"weapon")
 		var weapon_value: Variant = condition.get("weapon", null)

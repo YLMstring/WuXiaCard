@@ -159,9 +159,23 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 		compiled.opcode = ConditionOpcode::POWER_INCREASE_BATCH_INCLUDES_ALLY;
 		return compiled;
 	}
+	if (
+		type == StringName("trigger_card_is_self")
+		&& (
+			condition.size() == 1
+			|| (
+				condition.size() == 2
+				&& condition.has("inverted")
+				&& Variant(condition.get("inverted", Variant())).get_type() == Variant::BOOL
+			)
+		)
+	) {
+		compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
+		compiled.inverted = static_cast<bool>(condition.get("inverted", false));
+		return compiled;
+	}
 	if (condition.size() != 1) return compiled;
-	if (type == StringName("trigger_card_is_self")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_SELF;
-	else if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
+	if (type == StringName("trigger_card_is_ally")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ALLY;
 	else if (type == StringName("trigger_card_is_enemy")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IS_ENEMY;
 	else if (type == StringName("trigger_card_in_range")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_IN_RANGE;
 	else if (type == StringName("trigger_card_adjacent_to_source")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_ADJACENT_TO_SOURCE;
@@ -1177,7 +1191,9 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 	if (compiled.isolated_self_after_flip) {
 		bool has_self_condition = false;
 		for (const CompiledCondition &condition : compiled.triggers[0].conditions) {
-			has_self_condition = has_self_condition || condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_SELF;
+			has_self_condition = has_self_condition || (
+				condition.opcode == ConditionOpcode::TRIGGER_CARD_IS_SELF && !condition.inverted
+			);
 		}
 		compiled.isolated_self_after_flip = has_self_condition;
 	}
