@@ -49,7 +49,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_004.png",
 		"sect": "武当山",
 		"tier": 5,
-		"weapon": "拳法/掌法/剑法/轻功",
+		"weapon": "拳法/掌法/剑法",
 		"description": "武当派的能力十分全面，无论是进攻，防守还是对策都游刃有余。击败张三丰解锁。",
 		"flavor": "武当与少林并称武林中的泰山北斗，武功以绵密见长，讲究借力打力，以柔克刚。",
 	},
@@ -92,6 +92,16 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"weapon": "剑法/掌法/心法",
 		"description": "嵩山派擅长使用场上的卡牌配合形成点数差距，压制对手。击败左冷禅解锁。",
 		"flavor": "嵩山派武功乃堂堂之阵，正正之师，剑法气象森严，便似千军万马奔驰而来，长枪大戟，黄沙千里。",
+	},
+	&"QuanZhenPai": {
+		"id": &"QuanZhenPai",
+		"glyph": "全真派",
+		"picture": "res://pics/LKT010_475.png",
+		"sect": "终南山",
+		"tier": 4,
+		"weapon": "剑法/阵法/心法",
+		"description": "全真派擅长保护场上卡牌，组成无法撼动的阵型。击败丘处机解锁。",
+		"flavor": "全真派武功讲究清静无为，以柔克刚，乃天下玄门正宗，内家功夫越练越深，永无止境。",
 	},
 }
 
