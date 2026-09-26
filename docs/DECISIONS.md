@@ -351,6 +351,14 @@ respectively, in row-major order. The source itself is eligible.
   rewards bypass this random-pool restriction. The pool persists for the run,
   is displayed in saved order on the reward screen, and is cleared when the run
   closes.
+- Every sect definition declares `min_random_difficulty`. A sect enters new-run
+  random sect pools only at or above that difficulty; currently Quanzhen opens
+  at difficulty 4 and all other sects at 0. Random enemy selection applies the
+  same threshold to every card in the enemy's deck, so one gated sect card is
+  enough to exclude that enemy below the threshold. Existing run pools are
+  repaired against their saved difficulty. The threshold never restricts an
+  already-unlocked sect chosen by the player, and explicit enemy IDs used for
+  tests or debugging bypass random selection.
 - The initial unlocked pool is every catalog card not listed in
   `DeckProfileStore.DEFAULT_LOCKED_IDS`. The default main deck takes five of
   those cards and every remaining unlocked card begins in the library.

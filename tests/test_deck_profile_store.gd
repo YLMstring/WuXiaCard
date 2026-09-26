@@ -1253,8 +1253,64 @@ func _run() -> void:
 		"Progression-unlock save failure rolls back"
 	)
 
+	_test_sect_random_difficulty_gate(store)
 	_cleanup()
 	_finish()
+
+
+func _test_sect_random_difficulty_gate(store: RefCounted) -> void:
+	var source: Dictionary = store.create_default_profile()
+	source["max_unlocked_difficulty"] = 4
+	var high_pool_can_include_quanzhen: bool = false
+	var low_run: Dictionary = {}
+	for seed_value: int in range(1, 21):
+		var low_rng := RandomNumberGenerator.new()
+		low_rng.seed = seed_value
+		var low_result: Dictionary = store.begin_run_and_save(
+			source, &"HuaShanPai", [], &"qingfeng_xuedi", low_rng, false, 3
+		)
+		_check(bool(low_result.get("ok", false)), "Difficulty-three run %d starts" % seed_value)
+		var low_profile: Dictionary = low_result.get("profile", {})
+		if low_run.is_empty():
+			low_run = low_profile
+		_check(
+			&"QuanZhenPai" not in store.get_run_sect_pool_ids(low_profile),
+			"Difficulty-three random sect pool excludes Quanzhen for seed %d" % seed_value
+		)
+		var high_rng := RandomNumberGenerator.new()
+		high_rng.seed = seed_value
+		var high_result: Dictionary = store.begin_run_and_save(
+			source, &"HuaShanPai", [], &"qingfeng_xuedi", high_rng, false, 4
+		)
+		_check(bool(high_result.get("ok", false)), "Difficulty-four run %d starts" % seed_value)
+		if &"QuanZhenPai" in store.get_run_sect_pool_ids(high_result.get("profile", {})):
+			high_pool_can_include_quanzhen = true
+	_check(high_pool_can_include_quanzhen, "Difficulty-four random sect pool can include Quanzhen")
+	var invalid_low_pool: Dictionary = low_run.duplicate(true)
+	(invalid_low_pool["run_sect_pool_ids"] as Array)[0] = "QuanZhenPai"
+	_check(not store.is_profile_valid(invalid_low_pool), "Low-difficulty saved pool rejects gated sect")
+	var repaired: Dictionary = store.repair_profile(invalid_low_pool)
+	_check(
+		store.is_profile_valid(repaired)
+		and &"QuanZhenPai" not in store.get_run_sect_pool_ids(repaired)
+		and store.get_run_sect_pool_ids(repaired).size() == Store.RUN_SECT_POOL_SIZE,
+		"Repair removes gated sect and restores five allowed sects"
+	)
+	var unlocked_source: Dictionary = source.duplicate(true)
+	(unlocked_source["unlocked_sect_ids"] as Array).append("QuanZhenPai")
+	var manual_result: Dictionary = store.begin_run_and_save(
+		unlocked_source, &"QuanZhenPai", [], &"qingfeng_xuedi", null, false, 0
+	)
+	_check(
+		bool(manual_result.get("ok", false))
+		and store.get_selected_sect_id(manual_result.get("profile", {})) == &"QuanZhenPai"
+		and &"QuanZhenPai" not in store.get_run_sect_pool_ids(manual_result.get("profile", {})),
+		"Unlocked Quanzhen remains manually selectable at difficulty zero"
+	)
+	_check(
+		store._choose_enemy_id(4, &"yanbo_yuke2", 0) == &"yanbo_yuke2",
+		"Explicit enemy override remains available below its random opening difficulty"
+	)
 
 
 func _occupied_count(slots: Array) -> int:

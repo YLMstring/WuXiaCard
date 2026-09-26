@@ -81,6 +81,27 @@ func _run() -> void:
 		"Seeded enemy selection is deterministic"
 	)
 	_check(Catalog.pick_random_enemy_id(0) == &"", "Invalid levels have no enemy")
+	for fixture: Dictionary in [
+		{"level": 4, "enemy_id": &"yanbo_yuke2"},
+		{"level": 6, "enemy_id": &"chilian_sanke2"},
+		{"level": 10, "enemy_id": &"wuying_ke3"},
+	]:
+		var level: int = int(fixture["level"])
+		var enemy_id: StringName = fixture["enemy_id"]
+		_check(
+			enemy_id not in Catalog.get_random_enemy_ids_for_level(level, 3)
+			and enemy_id in Catalog.get_random_enemy_ids_for_level(level, 4),
+			"%s enters random enemies at difficulty four" % enemy_id
+		)
+	var mixed_enemy: Dictionary = Catalog.get_definition(&"yanbo_yuke")
+	(mixed_enemy["deck"] as Array)[0] = &"TianGangBeiDou2"
+	_check(
+		not Catalog.is_enemy_randomly_available(mixed_enemy, 3)
+		and Catalog.is_enemy_randomly_available(mixed_enemy, 4),
+		"One gated sect card controls the whole mixed enemy deck"
+	)
+	for level: int in range(1, 16):
+		_check(not Catalog.get_random_enemy_ids_for_level(level, 3).is_empty(), "Low difficulty keeps a random enemy at level %d" % level)
 	_check(
 		not Catalog.is_self_castration_enabled(&"qingfeng_xuedi"),
 		"Young Escort Lin Pingzhi explicitly disables self-castration"

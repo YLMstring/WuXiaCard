@@ -513,9 +513,19 @@ func _lock_library_card(profile: Dictionary, card_id: StringName) -> void:
 
 
 func _first_library_card_for_tier(profile: Dictionary, tier: int) -> StringName:
+	var sect_pool: Array[StringName] = []
+	for value: Variant in profile.get("run_sect_pool_ids", []):
+		sect_pool.append(StringName(String(value)))
+	var sect_filter: Dictionary = Store._build_run_sect_filter(
+		StringName(String(profile.get("selected_sect_id", ""))), sect_pool
+	)
 	for value: Variant in profile.get("library_slots", []):
 		var card_id := StringName(String(value))
-		if card_id != &"" and int(Cards.get_definition(card_id).get("tier", 0)) == tier:
+		if (
+			card_id != &""
+			and int(Cards.get_definition(card_id).get("tier", 0)) == tier
+			and Store._card_passes_run_sect_filter(card_id, sect_filter)
+		):
 			return card_id
 	return &""
 

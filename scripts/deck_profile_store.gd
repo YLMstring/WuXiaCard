@@ -295,6 +295,7 @@ func is_profile_valid(profile: Dictionary) -> bool:
 			if (
 				run_sect_id not in sect_catalog_ids
 				or run_sect_id == selected_sect_id
+				or not Sects.is_randomly_available(run_sect_id, run_difficulty)
 				or observed_run_sects.has(run_sect_id)
 			):
 				return false
@@ -603,6 +604,7 @@ func repair_profile(profile: Dictionary) -> Dictionary:
 			if schema_version >= SECT_POOL_SCHEMA_VERSION
 			else [],
 			selected_sect_id,
+			run_difficulty,
 			profile
 		)
 		if schema_version >= TUTORIAL_STATE_SCHEMA_VERSION:
@@ -886,7 +888,7 @@ func begin_run_and_save(
 	if picker == null:
 		picker = RandomNumberGenerator.new()
 		picker.randomize()
-	var run_sect_pool_ids: Array[StringName] = _pick_run_sect_pool_ids(sect_id, picker)
+	var run_sect_pool_ids: Array[StringName] = _pick_run_sect_pool_ids(sect_id, difficulty, picker)
 	if run_sect_pool_ids.size() != RUN_SECT_POOL_SIZE:
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	var random_tier_one_ids: Array[StringName] = _pick_starting_tier_one_ids(
@@ -909,7 +911,7 @@ func begin_run_and_save(
 		beginner_opening_stage = BEGINNER_OPENING_LINGHU
 		enemy_id = BEGINNER_LINGHU_ENEMY_ID
 	else:
-		enemy_id = _choose_enemy_id(1, enemy_id_override)
+		enemy_id = _choose_enemy_id(1, enemy_id_override, difficulty)
 	if enemy_id == &"":
 		return {"ok": false, "profile": unchanged, "added_ids": []}
 	_apply_unlock_expansion(candidate, expansion)
@@ -1562,11 +1564,12 @@ func _default_unlocked_ids() -> Array[StringName]:
 
 func _pick_run_sect_pool_ids(
 	selected_sect_id: StringName,
+	difficulty: int,
 	rng: RandomNumberGenerator
 ) -> Array[StringName]:
 	var candidates: Array[StringName] = []
 	for sect_id: StringName in Sects.get_all_sect_ids():
-		if sect_id != selected_sect_id:
+		if sect_id != selected_sect_id and Sects.is_randomly_available(sect_id, difficulty):
 			candidates.append(sect_id)
 	_shuffle_string_names(candidates, rng)
 	var result: Array[StringName] = []
@@ -1580,6 +1583,7 @@ func _pick_run_sect_pool_ids(
 func _repair_run_sect_pool_ids(
 	raw_value: Variant,
 	selected_sect_id: StringName,
+	difficulty: int,
 	profile: Dictionary
 ) -> Array[StringName]:
 	var catalog_ids: Array[StringName] = Sects.get_all_sect_ids()
@@ -1592,6 +1596,7 @@ func _repair_run_sect_pool_ids(
 			if (
 				sect_id in catalog_ids
 				and sect_id != selected_sect_id
+				and Sects.is_randomly_available(sect_id, difficulty)
 				and sect_id not in result
 				and result.size() < RUN_SECT_POOL_SIZE
 			):
@@ -1600,7 +1605,11 @@ func _repair_run_sect_pool_ids(
 		return result
 	var remaining: Array[StringName] = []
 	for sect_id: StringName in catalog_ids:
-		if sect_id != selected_sect_id and sect_id not in result:
+		if (
+			sect_id != selected_sect_id
+			and Sects.is_randomly_available(sect_id, difficulty)
+			and sect_id not in result
+		):
 			remaining.append(sect_id)
 	var picker := RandomNumberGenerator.new()
 	picker.seed = _stable_run_sect_pool_seed(profile, selected_sect_id)
@@ -1903,7 +1912,9 @@ func _build_victory_advancement(
 			"added_ids": [],
 		}
 	var next_level: int = current_level + 1
-	var next_enemy_id: StringName = _choose_enemy_id(next_level, enemy_id_override)
+	var next_enemy_id: StringName = _choose_enemy_id(
+		next_level, enemy_id_override, get_run_difficulty(profile)
+	)
 	if next_enemy_id == &"":
 		return {
 			"ok": false,
@@ -2286,7 +2297,7 @@ func _build_inactive_deck_placement(
 	}
 
 
-func _choose_enemy_id(level: int, enemy_id_override: StringName) -> StringName:
+func _choose_enemy_id(level: int, enemy_id_override: StringName, difficulty: int) -> StringName:
 	if enemy_id_override != &"":
 		if (
 			Enemies.has_enemy(enemy_id_override)
@@ -2294,7 +2305,7 @@ func _choose_enemy_id(level: int, enemy_id_override: StringName) -> StringName:
 		):
 			return enemy_id_override
 		return &""
-	return Enemies.pick_random_enemy_id(level)
+	return Enemies.pick_random_enemy_id(level, null, difficulty)
 
 
 static func _shuffle_string_names(

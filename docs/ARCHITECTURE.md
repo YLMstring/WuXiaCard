@@ -42,6 +42,11 @@ The simulator must remain authoritative. If live play and AI would resolve the s
   independent initial/final `DuelState` snapshots, ordered duplicate
   `DuelAction` entries, the completed outcome, and final status text.
 - `card_catalog.gd` — card definitions, schema constants, normalization, instance creation, and validation.
+- `sect_catalog.gd` — sect definitions and their required per-sect
+  `min_random_difficulty` values for random content; manual sect selection uses
+  the complete catalog.
+- `enemy_catalog.gd` — complete enemy definitions plus difficulty-filtered
+  random candidates derived from each enemy deck's card sects.
 - `deck_profile_store.gd` — versioned persistent deck profile, validation/repair,
   atomic save, tier and namesake unlock expansion, main-deck/library exchanges,
   completed-duel progression, and per-sect best-score achievements.
@@ -338,6 +343,9 @@ five ordered active-run `run_sect_pool_ids`. A preserved older active run derive
 one deterministic pool from stable save contents; inactive profiles keep it
 empty. The profile store uses that pool only while constructing opening random
 cards and ordinary reward candidates, so it never enters duel or search state.
+It selects and repairs the pool using each sect's catalog threshold and the
+active run difficulty. Random enemy selection uses the same threshold through
+the enemy catalog; explicit enemy overrides keep the complete level roster.
 `record_completed_duel_and_save()` is the sole
 production boundary for finished wins/losses. It increments duel history and,
 for a win, either advances progression or constructs the ending summary,

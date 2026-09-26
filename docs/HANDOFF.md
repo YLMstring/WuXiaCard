@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -40,6 +40,12 @@ release-ready Android package.
 - Legacy GDScript trigger, selector, targeting, and action-executor modules have
   been retired; do not restore them as an Oracle or fallback path.
 - Card database: `scripts/card_catalog.gd`
+- Each sect declares `min_random_difficulty` in `scripts/sect_catalog.gd`.
+  Quanzhen enters random sect pools and enemy candidates at difficulty 4;
+  other sects currently enter at 0. Random enemy eligibility checks every deck
+  card's sect, while unlocked Quanzhen remains manually selectable at any
+  difficulty and explicit test enemy IDs remain available. See
+  `docs/superpowers/specs/2026-09-26-quanzhen-difficulty-gate-design.md`.
 - The 18 newly declared Quanzhen and Double Hand cards now use catalog abilities
   through the shared native simulator. `KongWanChengFan4` can replace an allied
   occupied cell after resolving that ally's normal exile lifecycle;

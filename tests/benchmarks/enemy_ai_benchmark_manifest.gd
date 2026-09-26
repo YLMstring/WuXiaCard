@@ -11,7 +11,7 @@ const QUICK_PAIRS: Array[Array] = [
 	[&"luoxia_jianji", &"heisha_xingzhe"],
 	[&"cangyan_hufa3", &"cangyan_hufa2"],
 	[&"canghai_haoke", &"qianji_xiansheng"],
-	[&"zhenyue_shi", &"wuying_ke2"],
+	[&"wuying_ke", &"wuying_ke3"],
 	[&"chisha_menzhu2", &"chisha_menzhu3"],
 	[&"wulin_sanren", &"wulin_sanren2"],
 ]
@@ -25,7 +25,7 @@ const PILOT_PAIRS: Array[Array] = [
 const PRODUCTION_PAIRS: Array[Array] = [
 	[&"tieshan_menren", &"qingzhu_daoke"],
 	[&"cangyan_hufa3", &"cangyan_hufa2"],
-	[&"zhenyue_shi", &"wuying_ke2"],
+	[&"wuying_ke", &"wuying_ke3"],
 	[&"wulin_sanren", &"wulin_sanren2"],
 ]
 

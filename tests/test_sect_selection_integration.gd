@@ -465,6 +465,32 @@ func _run() -> void:
 	)
 	selector.queue_free()
 	await process_frame
+	var quanzhen_profile: Dictionary = store.create_default_profile()
+	(quanzhen_profile["unlocked_sect_ids"] as Array).append("QuanZhenPai")
+	_check(store.save_profile(quanzhen_profile), "Unlocked Quanzhen selector fixture saves")
+	selector = SECT_SCENE.instantiate() as SelectorController
+	selector.profile_path = _save_path
+	root.add_child(selector)
+	selector.size = Vector2(540.0, 960.0)
+	await process_frame
+	await process_frame
+	var quanzhen_grid := selector.get_node("DuelCanvas/DeckLibraryGrid") as DeckLibraryGrid
+	var quanzhen_index: int = Sects.get_all_sect_ids().find(&"QuanZhenPai")
+	_check(
+		quanzhen_index >= 0
+		and quanzhen_grid.get_display_owner_id(quanzhen_index) == DuelRules.PLAYER_OWNER,
+		"Unlocked Quanzhen appears selectable at difficulty zero"
+	)
+	_check(selector.debug_select_sect(&"QuanZhenPai"), "Player selects Quanzhen at difficulty zero")
+	_check(selector.debug_confirm_selected_sect(), "Quanzhen begins a difficulty-zero run")
+	var quanzhen_run: Dictionary = store.load_profile()
+	_check(
+		store.get_selected_sect_id(quanzhen_run) == &"QuanZhenPai"
+		and store.get_run_difficulty(quanzhen_run) == 0,
+		"Selection saves a difficulty-zero Quanzhen run"
+	)
+	selector.queue_free()
+	await process_frame
 	_cleanup()
 	_finish()
 

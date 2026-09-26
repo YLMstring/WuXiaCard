@@ -14,12 +14,14 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"heisha_xingzhe",
 	&"beiling_shuangying",
 	&"yanbo_yuke",
+	&"yanbo_yuke2",
 	&"cangyan_hufa3",
 	&"cangyan_hufa2",
 	&"cangyan_hufa",
 	&"tingyu_zhangshi",
 	&"jinling_kuaijian",
 	&"chilian_sanke",
+	&"chilian_sanke2",
 	&"xuanhuo_qishi",
 	&"baishi_daoren",
 	&"fengsha_lingzhu",
@@ -29,6 +31,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"zhenyue_shi",
 	&"wuying_ke",
 	&"wuying_ke2",
+	&"wuying_ke3",
 	&"tingchao_zhuren",
 	&"tingchao_zhuren2",
 	&"chisha_menzhu",
@@ -120,6 +123,25 @@ static func get_enemy_ids_for_level(level: int) -> Array[StringName]:
 	return result
 
 
+static func is_enemy_randomly_available(definition: Dictionary, difficulty: int) -> bool:
+	for card_value: Variant in definition.get("deck", []):
+		var card_id := StringName(String(card_value))
+		if not Cards.has_card(card_id):
+			return false
+		var card_sect: String = String(Cards.get_definition(card_id).get("sect", ""))
+		if not Sects.is_card_sect_randomly_available(card_sect, difficulty):
+			return false
+	return true
+
+
+static func get_random_enemy_ids_for_level(level: int, difficulty: int) -> Array[StringName]:
+	var result: Array[StringName] = []
+	for enemy_id: StringName in get_enemy_ids_for_level(level):
+		if is_enemy_randomly_available(_enemy_definitions[enemy_id] as Dictionary, difficulty):
+			result.append(enemy_id)
+	return result
+
+
 static func is_self_castration_enabled(enemy_id: StringName) -> bool:
 	if not has_enemy(enemy_id):
 		return true
@@ -131,9 +153,10 @@ static func is_self_castration_enabled(enemy_id: StringName) -> bool:
 
 static func pick_random_enemy_id(
 	level: int,
-	rng: RandomNumberGenerator = null
+	rng: RandomNumberGenerator = null,
+	difficulty: int = 0
 ) -> StringName:
-	var candidates: Array[StringName] = get_enemy_ids_for_level(level)
+	var candidates: Array[StringName] = get_random_enemy_ids_for_level(level, difficulty)
 	if candidates.is_empty():
 		return &""
 	var picker: RandomNumberGenerator = rng

@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_definition_contents()
 	_test_schema_validation()
 	_test_copy_isolation()
+	_test_random_difficulty_declarations()
 
 	if _failures == 0:
 		print("SECT_CATALOG_TESTS_PASSED checks=%d" % _checks)
@@ -110,6 +111,26 @@ func _test_copy_isolation() -> void:
 	first["glyph"] = "已修改"
 	var second: Dictionary = Catalog.get_definition(&"HuaShanPai")
 	_check(second.get("glyph", "") == original_glyph, "Definition getter returns a deep defensive copy")
+
+
+func _test_random_difficulty_declarations() -> void:
+	for sect_id: StringName in Catalog.get_all_sect_ids():
+		var definition: Dictionary = Catalog.get_definition(sect_id)
+		var expected: int = 4 if sect_id == &"QuanZhenPai" else 0
+		_check(
+			int(definition.get("min_random_difficulty", -1)) == expected,
+			"%s declares its random-content opening difficulty" % sect_id
+		)
+	var fixture: Dictionary = Catalog.get_definition(&"QuanZhenPai")
+	fixture["id"] = &"fixture"
+	for invalid_value: Variant in [-1, 11, 4.0, "4"]:
+		fixture["min_random_difficulty"] = invalid_value
+		_check(
+			not Catalog.validate_definition(fixture).is_empty(),
+			"Random opening difficulty rejects %s" % str(invalid_value)
+		)
+	fixture.erase("min_random_difficulty")
+	_check(not Catalog.validate_definition(fixture).is_empty(), "Every sect must declare its random opening difficulty")
 
 
 func _check(condition: bool, message: String) -> void:

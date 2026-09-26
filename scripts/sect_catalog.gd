@@ -1,6 +1,8 @@
 class_name SectCatalog
 extends RefCounted
 
+const Difficulty = preload("res://scripts/difficulty_rules.gd")
+
 const ALL_SECT_IDS: Array[StringName] = [
 	&"HuaShanPai",
 	&"ShaoLinPai",
@@ -9,6 +11,7 @@ const ALL_SECT_IDS: Array[StringName] = [
 	&"HengShanPai",
 	&"tingchao_gu",
 	&"SongShanPai",
+	&"QuanZhenPai",
 ]
 
 const _DEFINITION_FIELDS: Array[StringName] = [
@@ -17,6 +20,7 @@ const _DEFINITION_FIELDS: Array[StringName] = [
 	&"picture",
 	&"sect",
 	&"tier",
+	&"min_random_difficulty",
 	&"weapon",
 	&"description",
 	&"flavor",
@@ -29,6 +33,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_545.png",
 		"sect": "华山",
 		"tier": 4,
+		"min_random_difficulty": 0,
 		"weapon": "剑法/心法",
 		"description": "华山派擅长强化自身招式，并在场上发动多次攻击。初始门派，无需解锁。",
 		"flavor": "华山派正宗功夫以气功为根基，剑法变化繁复，轻灵机巧，恰如春日双燕飞舞柳间，高低左右，回转如意。",
@@ -39,6 +44,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_077.png",
 		"sect": "嵩山",
 		"tier": 5,
+		"min_random_difficulty": 0,
 		"weapon": "佛法",
 		"description": "少林派擅长通过弃牌创造难以想象的华丽场面。击败无名老僧解锁。",
 		"flavor": "少林寺数百年来号称天下武学正宗，佛门子弟学武，乃在强身健体，护法伏魔。修习任何武功之时，务须心存慈悲仁善之念。倘若不以佛学为基，则练武之时，必定伤及自身。",
@@ -49,6 +55,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_004.png",
 		"sect": "武当山",
 		"tier": 5,
+		"min_random_difficulty": 0,
 		"weapon": "拳法/掌法/剑法",
 		"description": "武当派的能力十分全面，无论是进攻，防守还是对策都游刃有余。击败张三丰解锁。",
 		"flavor": "武当与少林并称武林中的泰山北斗，武功以绵密见长，讲究借力打力，以柔克刚。",
@@ -59,6 +66,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_553.png",
 		"sect": "泰山",
 		"tier": 5,
+		"min_random_difficulty": 0,
 		"weapon": "重剑/术数",
 		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。击败天门解锁。",
 		"flavor": "泰山剑招以厚重沉稳见长，规矩谨严而又不失迅疾，犹似行云流水。",
@@ -69,6 +77,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_491.png",
 		"sect": "恒山",
 		"tier": 4,
+		"min_random_difficulty": 0,
 		"weapon": "轻剑/阵法",
 		"description": "恒山派擅长保护友方，防守反击。击败定闲解锁。",
 		"flavor": "恒山剑法破绽极少，若言守御之严，仅逊于武当派的太极剑法，但偶尔忽出攻招，却又在太极剑法之上。",
@@ -79,6 +88,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_556.png",
 		"sect": "衡山",
 		"tier": 4,
+		"min_random_difficulty": 0,
 		"weapon": "轻剑",
 		"description": "衡山派擅长解除对手的防御，用巧妙的移动和攻击来逆转局势。击败莫大解锁。",
 		"flavor": "衡山剑法灵动难测，变幻无方，一招既占先机，后招绵绵而至，再强的高手也难以抵御。",
@@ -89,6 +99,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_476.png",
 		"sect": "嵩山",
 		"tier": 4,
+		"min_random_difficulty": 0,
 		"weapon": "剑法/掌法/心法",
 		"description": "嵩山派擅长使用场上的卡牌配合形成点数差距，压制对手。击败左冷禅解锁。",
 		"flavor": "嵩山派武功乃堂堂之阵，正正之师，剑法气象森严，便似千军万马奔驰而来，长枪大戟，黄沙千里。",
@@ -99,6 +110,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"picture": "res://pics/LKT010_475.png",
 		"sect": "终南山",
 		"tier": 4,
+		"min_random_difficulty": 4,
 		"weapon": "剑法/阵法/心法",
 		"description": "全真派擅长保护场上卡牌，组成无法撼动的阵型。击败丘处机解锁。",
 		"flavor": "全真派武功讲究清静无为，以柔克刚，乃天下玄门正宗，内家功夫越练越深，永无止境。",
@@ -118,6 +130,20 @@ static func get_definition(sect_id: StringName) -> Dictionary:
 	assert(has_sect(sect_id), "Unknown sect ID: %s" % sect_id)
 	var definition: Dictionary = _SECT_DEFINITIONS.get(sect_id, {})
 	return definition.duplicate(true)
+
+
+static func is_randomly_available(sect_id: StringName, difficulty: int) -> bool:
+	if not has_sect(sect_id):
+		return false
+	return difficulty >= int((_SECT_DEFINITIONS[sect_id] as Dictionary)["min_random_difficulty"])
+
+
+static func is_card_sect_randomly_available(card_sect: String, difficulty: int) -> bool:
+	for sect_id: StringName in ALL_SECT_IDS:
+		var definition: Dictionary = _SECT_DEFINITIONS[sect_id] as Dictionary
+		if String(definition["glyph"]) == card_sect:
+			return difficulty >= int(definition["min_random_difficulty"])
+	return true
 
 
 static func validate_definition(
@@ -187,3 +213,10 @@ static func _validate_definition(
 	var tier_value: Variant = definition.get("tier", null)
 	if typeof(tier_value) != TYPE_INT or int(tier_value) <= 0:
 		errors.append("Sect %s requires a positive integer prestige tier" % sect_id)
+	var random_difficulty_value: Variant = definition.get("min_random_difficulty", null)
+	if (
+		typeof(random_difficulty_value) != TYPE_INT
+		or int(random_difficulty_value) < Difficulty.MIN_DIFFICULTY
+		or int(random_difficulty_value) > Difficulty.MAX_DIFFICULTY
+	):
+		errors.append("Sect %s requires min_random_difficulty from 0 to 10" % sect_id)

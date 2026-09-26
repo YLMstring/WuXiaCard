@@ -3,6 +3,7 @@ extends SceneTree
 const REWARD_SCENE: PackedScene = preload("res://scenes/reward_selection.tscn")
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 
 const SAVE_PATH: String = "user://reward_selection_test.json"
 const DEFAULT_STATUS: String = "选择一张奖励牌，长按可直接领取"
@@ -35,6 +36,16 @@ func _run() -> void:
 		10
 	)
 	profile = begin_result.get("profile", profile)
+	var saved_pool: Array = profile.get("run_sect_pool_ids", []) as Array
+	if "QuanZhenPai" in saved_pool:
+		for sect_id: StringName in Sects.get_all_sect_ids():
+			if (
+				sect_id != &"HuaShanPai"
+				and String(sect_id) not in saved_pool
+				and Sects.is_randomly_available(sect_id, 0)
+			):
+				saved_pool[saved_pool.find("QuanZhenPai")] = String(sect_id)
+				break
 	var run_sect_pool_ids: Array[StringName] = store.get_run_sect_pool_ids(profile)
 	_check(run_sect_pool_ids.size() == 5, "Reward-scene fixture has five run sects")
 	profile["best_scores_by_sect"] = {
