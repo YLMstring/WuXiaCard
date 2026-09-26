@@ -2,13 +2,13 @@
 
 ## 已确认的目录规则
 
-以玩家已写入 `scripts/card_catalog.gd` 的五张卡牌描述为准。金雁功 2–4 阶在**当前持有者的回合结束**时抽一张牌，不再进场后抽牌；抽到的牌仍由在场金雁功赋予内力，4 阶还授予原有保护能力。卡被翻面后，非保留的抽牌和抽牌增益能力照既有规则消失；3–4 阶锁定移动仍保留。七星聚会 3–4 阶只给**其它**友方进场牌增益；进场牌仍须与任一友方相邻。七星聚会 1–2 阶的能力及 4 阶的锁定攻击修正不变。
+金雁功 2–4 阶在**当前持有者的回合开始**时抽一张牌，不在进场后或回合结束时抽牌；抽到的牌仍由在场金雁功赋予内力，4 阶还授予原有保护能力。打出金雁功的当回合已经开始，因此首次自动抽牌发生在下一次己方回合开始时。卡被翻面后，非保留的抽牌和抽牌增益能力照既有规则消失；3–4 阶锁定移动仍保留。七星聚会 3–4 阶只给**其它**友方进场牌增益；进场牌仍须与任一友方相邻。七星聚会 1–2 阶的能力及 4 阶的锁定攻击修正不变。
 
 ## 实现边界
 
-金雁功复用 `TRIGGER_END_OWNER_TURN` 和 `CONDITION_TURN_OWNER_IS_SELF`，无需新回合时钟或状态。七星聚会给现有 `CONDITION_TRIGGER_CARD_IS_SELF` 增加可选布尔 `inverted: true`；与既有 `CONDITION_TRIGGER_CARD_IS_ALLY` 组合即为“其它友方”。该条件只比较确切实例，不添加全棋盘扫描。未写 `inverted` 时保持原有的正向语义；若进场连锁中该牌已离场或转为敌方，原有友方条件仍阻止结算。
+金雁功复用 `TRIGGER_START_OWNER_TURN` 和 `CONDITION_TURN_OWNER_IS_SELF`，无需新回合时钟或状态。七星聚会给现有 `CONDITION_TRIGGER_CARD_IS_SELF` 增加可选布尔 `inverted: true`；与既有 `CONDITION_TRIGGER_CARD_IS_ALLY` 组合即为“其它友方”。该条件只比较确切实例，不添加全棋盘扫描。未写 `inverted` 时保持原有的正向语义；若进场连锁中该牌已离场或转为敌方，原有友方条件仍阻止结算。
 
-金雁功进场后结束本回合时可能在同一次 `apply_action` 内抽牌；测试必须区分事件阶段，不能仅以整次行动后的手牌数量判断触发时机。验证覆盖自身回合末、敌方回合末、七星聚会自身进场和其它友方进场。变更不改 UI、存档结构或搜索规则；普通目录能力仍由 native 编译一次，再在模拟与搜索中复用。
+金雁功进场时不抽牌；测试分别检查进场、双方回合结束、敌方回合开始以及下一次己方回合开始，另用真实连续出牌验证回合切换后才抽牌。七星聚会的自身进场和其它友方进场继续沿用已有测试。变更不改 UI、存档结构或搜索规则；普通目录能力仍由 native 编译一次，再在模拟与搜索中复用。
 
 ## 完整能力声明
 
@@ -50,9 +50,9 @@ const KUIHUA_MINIMUM_DEFENSE_RETAINED: Dictionary = {
 	"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
 }
 
-const QZ_JINYAN_END_TURN_DRAW: Dictionary = {
+const QZ_JINYAN_START_TURN_DRAW: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_END_OWNER_TURN,
+		"event": TRIGGER_START_OWNER_TURN,
 		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
 	}],
@@ -101,15 +101,15 @@ const QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY: Dictionary = {
 受影响的卡牌必须采用以下**精确能力顺序**：
 
 ```gdscript
-&"JinYanGong2": [QZ_JINYAN_END_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI]
+&"JinYanGong2": [QZ_JINYAN_START_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI]
 &"JinYanGong3": [TIYUNZONG_LOCKED_FLIP_MOVE,
-	QZ_JINYAN_END_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI]
+	QZ_JINYAN_START_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI]
 &"JinYanGong4": [TIYUNZONG_LOCKED_FLIP_MOVE,
-	QZ_JINYAN_END_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT]
+	QZ_JINYAN_START_TURN_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT]
 &"QiXinJuHui3": [QZ_SPEND_KI_TO_PREVENT_FLIP,
 	QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY]
 &"QiXinJuHui4": [KUIHUA_MINIMUM_DEFENSE_RETAINED,
 	QZ_SPEND_KI_TO_PREVENT_FLIP, QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY]
 ```
 
-七星聚会 1–2 阶的能力数组不变。金雁功的抽牌与其它回合末触发一起按棋盘格与能力顺序结算；牌库空或手牌满时沿用现有 `ACTION_DRAW_CARDS` 行为。
+七星聚会 1–2 阶的能力数组不变。金雁功的抽牌与其它回合开始触发一起按棋盘格与能力顺序结算；牌库空或手牌满时沿用现有 `ACTION_DRAW_CARDS` 行为。

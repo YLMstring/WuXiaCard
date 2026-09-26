@@ -21,7 +21,7 @@ func _run() -> void:
 	_test_neighbor_flip_protection_and_swaps()
 	_test_array_attacks()
 	_test_draw_and_opening_hand_effects()
-	_test_jinyan_turn_end_timing()
+	_test_jinyan_turn_start_timing()
 	_test_remote_entry_and_flip_rewards()
 	_test_qixin_other_ally_only()
 	_test_double_hand_aura()
@@ -59,12 +59,12 @@ func _test_catalog_declarations() -> void:
 			"Unrelated %s remains without abilities" % card_id
 		)
 	var expected_abilities: Dictionary = {
-		&"JinYanGong2": [Catalog.QZ_JINYAN_END_TURN_DRAW,
+		&"JinYanGong2": [Catalog.QZ_JINYAN_START_TURN_DRAW,
 			Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong3": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_END_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
+			Catalog.QZ_JINYAN_START_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 		&"JinYanGong4": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
-			Catalog.QZ_JINYAN_END_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
+			Catalog.QZ_JINYAN_START_TURN_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
 		&"QiXinJuHui3": [Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
 			Catalog.QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],
 		&"QiXinJuHui4": [Catalog.KUIHUA_MINIMUM_DEFENSE_RETAINED,
@@ -178,27 +178,41 @@ func _test_array_attacks() -> void:
 func _test_draw_and_opening_hand_effects() -> void:
 	var jinyan: Dictionary = Catalog.create_instance(&"JinYanGong2", Rules.PLAYER_OWNER, &"jinyan")
 	var state := State.new(
-		Rules.empty_board(), [jinyan], [_plain(&"opponent", Rules.OPPONENT_OWNER)],
+		Rules.empty_board(), [jinyan, _plain(&"reserve", Rules.PLAYER_OWNER)],
+		[_plain(&"opponent", Rules.OPPONENT_OWNER)],
 		Rules.PLAYER_OWNER, 1, [_plain(&"drawn", Rules.PLAYER_OWNER)]
 	)
 	var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4, &"jinyan"))
 	_check(bool(result.get("valid", false)), "JinYan hand play resolves")
 	var next: State = result.get("state") as State
 	if next != null:
-		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 1, "JinYan draws one card")
-		if not next.get_hand(Rules.PLAYER_OWNER).is_empty():
-			_check(int((next.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1, "JinYan gives the drawn card one ki")
+		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 1, "JinYan does not draw in its entry turn")
+		result = Simulator.apply_action(next, Action.make_play(0, 0, &"opponent"))
+		_check(bool(result.get("valid", false)), "Opponent play advances to JinYan owner's next turn")
+		next = result.get("state") as State
+	if next != null:
+		var drawn: Dictionary = _hand_card(next, Rules.PLAYER_OWNER, &"drawn")
+		_check(not drawn.is_empty(), "JinYan draws at next owner turn start")
+		if not drawn.is_empty():
+			_check(int(drawn.get("ki", 0)) == 1, "JinYan gives the drawn card one ki")
 	jinyan = Catalog.create_instance(&"JinYanGong4", Rules.PLAYER_OWNER, &"jinyan_four")
 	state = State.new(
-		Rules.empty_board(), [jinyan], [_plain(&"opponent_four", Rules.OPPONENT_OWNER)],
+		Rules.empty_board(), [jinyan, _plain(&"reserve_four", Rules.PLAYER_OWNER)],
+		[_plain(&"opponent_four", Rules.OPPONENT_OWNER)],
 		Rules.PLAYER_OWNER, 1, [_plain(&"drawn_four", Rules.PLAYER_OWNER)]
 	)
 	result = Simulator.apply_action(state, Action.make_play(0, 4, &"jinyan_four"))
 	next = result.get("state") as State
-	if next != null and not next.get_hand(Rules.PLAYER_OWNER).is_empty():
-		var drawn_four: Dictionary = next.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary
-		_check(int(drawn_four.get("ki", 0)) == 1, "JinYan four gives drawn card ki")
-		_check((drawn_four.get("active_abilities", []) as Array).size() == 1, "JinYan four grants drawn card protection")
+	if next != null:
+		_check(next.get_hand(Rules.PLAYER_OWNER).size() == 1, "JinYan four does not draw in its entry turn")
+		result = Simulator.apply_action(next, Action.make_play(0, 0, &"opponent_four"))
+		_check(bool(result.get("valid", false)), "Opponent play advances to JinYan four owner's next turn")
+		next = result.get("state") as State
+		if next != null:
+			var drawn_four: Dictionary = _hand_card(next, Rules.PLAYER_OWNER, &"drawn_four")
+			_check(not drawn_four.is_empty(), "JinYan four draws at next owner turn start")
+			_check(int(drawn_four.get("ki", 0)) == 1, "JinYan four gives drawn card ki")
+			_check((drawn_four.get("active_abilities", []) as Array).size() == 1, "JinYan four grants drawn card protection")
 
 	state = State.new(Rules.empty_board(), [
 		Catalog.create_instance(&"XianTianGong5", Rules.PLAYER_OWNER, &"xiantian"),
@@ -209,7 +223,7 @@ func _test_draw_and_opening_hand_effects() -> void:
 	_check(int((state.get_hand(Rules.PLAYER_OWNER)[1] as Dictionary).get("ki", 0)) == 1, "XianTian buffs other opening cards")
 
 
-func _test_jinyan_turn_end_timing() -> void:
+func _test_jinyan_turn_start_timing() -> void:
 	for card_id: StringName in [&"JinYanGong2", &"JinYanGong3", &"JinYanGong4"]:
 		var board: Array = Rules.empty_board()
 		board[4] = _slot(Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"timed_jinyan"), Rules.PLAYER_OWNER)
@@ -224,10 +238,16 @@ func _test_jinyan_turn_end_timing() -> void:
 		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores enemy turn end" % card_id)
 		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_END_OWNER_TURN,
 			{"turn_owner_id": Rules.PLAYER_OWNER})
-		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s draws at own turn end" % card_id)
+		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores own turn end" % card_id)
+		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_START_OWNER_TURN,
+			{"turn_owner_id": Rules.OPPONENT_OWNER})
+		_check(state.get_hand(Rules.PLAYER_OWNER).is_empty(), "%s ignores enemy turn start" % card_id)
+		Simulator._resolve_trigger_event(state, Catalog.TRIGGER_START_OWNER_TURN,
+			{"turn_owner_id": Rules.PLAYER_OWNER})
+		_check(state.get_hand(Rules.PLAYER_OWNER).size() == 1, "%s draws at own turn start" % card_id)
 		if not state.get_hand(Rules.PLAYER_OWNER).is_empty():
 			_check(int((state.get_hand(Rules.PLAYER_OWNER)[0] as Dictionary).get("ki", 0)) == 1,
-				"%s buffs its end-turn draw" % card_id)
+				"%s buffs its start-turn draw" % card_id)
 
 
 func _test_remote_entry_and_flip_rewards() -> void:
@@ -428,6 +448,13 @@ func _plain(
 
 func _slot(card: Dictionary, owner_id: int) -> Dictionary:
 	return {"card": card, "owner": owner_id}
+
+
+func _hand_card(state: State, owner_id: int, instance_id: StringName) -> Dictionary:
+	for value: Variant in state.get_hand(owner_id):
+		if value is Dictionary and StringName((value as Dictionary).get("instance_id", &"")) == instance_id:
+			return value as Dictionary
+	return {}
 
 
 func _card_at(state: State, cell: int) -> Dictionary:

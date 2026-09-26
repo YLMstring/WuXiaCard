@@ -53,7 +53,7 @@ release-ready Android package.
   instance across turns. The approved ability declarations and per-card arrays
   are recorded in `docs/superpowers/specs/2026-09-25-quanzhen-double-hand-design.md`.
 - The later JinYanGong/QiXinJuHui balance pass makes JinYanGong 2–4 draw at
-  their current owner's turn end instead of on entry. QiXinJuHui 3–4 buff only
+  their current owner's turn start instead of on entry. QiXinJuHui 3–4 buff only
   other allied entrants adjacent to any ally. This reuses the existing
   `CONDITION_TRIGGER_CARD_IS_SELF` with optional `inverted: true`; see
   `docs/superpowers/specs/2026-09-26-jinyan-qixin-balance-design.md` for the
