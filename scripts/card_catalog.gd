@@ -2885,7 +2885,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "全真派",
 		"tier": 2,
 		"weapon": "轻功",
-		"description": "进场后，抽一张牌。你抽牌时，令抽到的牌内力加一。",
+		"description": "回合结束时，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
 		"abilities": [QZ_JINYAN_ENTRY_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
@@ -2897,7 +2897,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "全真派",
 		"tier": 3,
 		"weapon": "轻功",
-		"description": "锁定：我翻面前，改为向首个相邻空格移动。进场后，抽一张牌。你抽牌时，令抽到的牌内力加一。",
+		"description": "锁定：我翻面前，改为向首个相邻空格移动。回合结束时，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
 		"abilities": [
@@ -2913,7 +2913,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "全真派",
 		"tier": 4,
 		"weapon": "轻功",
-		"description": "锁定：我翻面前，改为向首个相邻空格移动。进场后，抽一张牌。你抽牌时，令抽到的牌内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
+		"description": "锁定：我翻面前，改为向首个相邻空格移动。回合结束时，抽一张牌。你抽牌时，令抽到的牌内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
 		"abilities": [
