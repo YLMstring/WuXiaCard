@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-26
+Updated: 2026-09-27
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -59,6 +59,12 @@ release-ready Android package.
   `CONDITION_TRIGGER_CARD_IS_SELF` with optional `inverted: true`; see
   `docs/superpowers/specs/2026-09-26-jinyan-qixin-balance-design.md` for the
   exact current declarations and ability arrays.
+- JinYanGong 3–4 and TiYunZong 3–4 now share a retained `CARD_BE_ATTACKED`
+  evasion: move to the first adjacent empty cell outside the attacker's range,
+  falling back to the first adjacent empty cell. Attack revalidation determines
+  whether an in-range fallback still flips. Non-attack flips do not trigger it.
+  See `docs/superpowers/specs/2026-09-27-locked-attack-evasion-design.md` for
+  the complete current declarations and ability arrays.
 - Persistent deck profile: `scripts/deck_profile_store.gd`
 - Encounter hands and side-pool construction: `scripts/duel_decks.gd`
 - Runtime/presentation bridge: `scripts/duel_controller.gd`

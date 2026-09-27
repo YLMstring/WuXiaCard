@@ -1454,17 +1454,19 @@ const TIYUNZONG_RESUMMON_ACTIVATION: Dictionary = {
 	},
 }
 
-const TIYUNZONG_LOCKED_FLIP_MOVE: Dictionary = {
+const LOCKED_ATTACK_EVASION: Dictionary = {
 	"retained_on_flip": true,
 	"triggers": [{
-		"event": CARD_BEFORE_FLIPPED,
+		"event": CARD_BE_ATTACKED,
 		"conditions": [
 			{"type": CONDITION_TRIGGER_CARD_IS_SELF},
 			{"type": CONDITION_SOURCE_HAS_ADJACENT_EMPTY_CELL},
 		],
 		"actions": [
-			{"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY, "on_invalid_context": STOP_RULE},
-			{"type": ACTION_PREVENT_TRIGGER_FLIP},
+			{
+				"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
+				"prefer_outside_attacker_range": true,
+			},
 		],
 	}],
 }
@@ -2903,11 +2905,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "全真派",
 		"tier": 3,
 		"weapon": "轻功",
-		"description": "锁定：我翻面前，改为向首个相邻空格移动。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一。",
+		"description": "锁定：被攻击时，尝试移出攻击范围。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
 		"abilities": [
-			TIYUNZONG_LOCKED_FLIP_MOVE,
+			LOCKED_ATTACK_EVASION,
 			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI,
 		],
@@ -2919,11 +2921,11 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "全真派",
 		"tier": 4,
 		"weapon": "轻功",
-		"description": "锁定：我翻面前，改为向首个相邻空格移动。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
+		"description": "锁定：被攻击时，尝试移出攻击范围。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
 		"powers": [3, 1, 1, 3],
 		"abilities": [
-			TIYUNZONG_LOCKED_FLIP_MOVE,
+			LOCKED_ATTACK_EVASION,
 			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT,
 		],
@@ -4042,12 +4044,12 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "武当派",
 		"tier": 3,
 		"weapon": "轻功",
-		"description": "锁定：我翻面前，改为向首个相邻空格移动。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
+		"description": "锁定：被攻击时，尝试移出攻击范围。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
 		"abilities": [
-			TIYUNZONG_LOCKED_FLIP_MOVE,
+			LOCKED_ATTACK_EVASION,
 			TIYUNZONG_RESUMMON_ACTIVATION,
 		],
 	},
@@ -4058,13 +4060,13 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "武当派",
 		"tier": 4,
 		"weapon": "轻功",
-		"description": "当任意牌被我的友方具有的效果所移除时，你抽一张牌。锁定：我翻面前，改为向首个相邻空格移动。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
+		"description": "当任意牌被我的友方具有的效果所移除时，你抽一张牌。锁定：被攻击时，尝试移出攻击范围。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
 		"powers": [1, 3, 1, 3],
 		"starting_ki": 1,
 		"abilities": [
 			TIYUNZONG_DRAW_ON_ALLY_EFFECT_EXILE,
-			TIYUNZONG_LOCKED_FLIP_MOVE,
+			LOCKED_ATTACK_EVASION,
 			TIYUNZONG_RESUMMON_ACTIVATION,
 		],
 	},
@@ -6709,6 +6711,13 @@ static func _validate_action(
 			errors.append(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
+			)
+	if action_type == ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY and action.has("prefer_outside_attacker_range"):
+		allowed_keys.append(&"prefer_outside_attacker_range")
+		if typeof(action.get("prefer_outside_attacker_range")) != TYPE_BOOL:
+			errors.append(
+				"Card %s %s move action requires a Boolean prefer_outside_attacker_range"
+				% [card_id, context_name]
 			)
 	if action_type == ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE and action.has("card"):
 		allowed_keys.append(&"card")

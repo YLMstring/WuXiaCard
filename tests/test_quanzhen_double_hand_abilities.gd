@@ -65,9 +65,9 @@ func _test_catalog_declarations() -> void:
 	var expected_abilities: Dictionary = {
 		&"JinYanGong2": [Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
 			Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
-		&"JinYanGong3": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
+		&"JinYanGong3": [Catalog.LOCKED_ATTACK_EVASION,
 			Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI],
-		&"JinYanGong4": [Catalog.TIYUNZONG_LOCKED_FLIP_MOVE,
+		&"JinYanGong4": [Catalog.LOCKED_ATTACK_EVASION,
 			Catalog.QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, Catalog.QZ_JINYAN_ALLY_DRAW_GAIN_KI_AND_PROTECT],
 		&"QiXinJuHui3": [Catalog.QZ_SPEND_KI_TO_PREVENT_FLIP,
 			Catalog.QZ_QIXIN_ANY_ALLIED_NEIGHBOR_ENTRY],

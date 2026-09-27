@@ -17,7 +17,8 @@ func _init() -> void:
 func _run() -> void:
 	_test_vocabulary_and_catalog_declarations()
 	_test_activation_resummons_fresh_instances_in_order()
-	_test_flip_move_replaces_only_when_move_succeeds()
+	_test_attack_evasion_prioritizes_safety()
+	_test_attack_evasion_falls_back_and_ignores_other_flips()
 	_test_tier_four_draws_for_allied_effect_exiles()
 	_finish()
 
@@ -88,7 +89,7 @@ func _test_activation_resummons_fresh_instances_in_order() -> void:
 	_check(fresh_ki_index < extra_index, "Fresh TiYun spends ki before granting the extra play")
 
 
-func _test_flip_move_replaces_only_when_move_succeeds() -> void:
+func _test_attack_evasion_prioritizes_safety() -> void:
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"moving_tiyun"), Rules.OPPONENT_OWNER)
 	var transition: Dictionary = Simulator.apply_action(
@@ -100,9 +101,54 @@ func _test_flip_move_replaces_only_when_move_succeeds() -> void:
 	_check(
 		_find_board_instance(next_state.board, &"moving_tiyun") == 3
 		and int((next_state.board[3] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER,
-		"TiYun moves to the lowest-index adjacent empty cell and prevents flip"
+		"TiYun moves to the first adjacent cell outside the attacker's range"
 	)
-	_check(_count_events(transition.get("events", []), &"card_flip_prevented") == 1, "Successful move explicitly prevents the flip")
+	_check(_count_events(transition.get("events", []), &"card_flip_prevented") == 0, "Escaping range needs no explicit flip prevention")
+
+	var ranged_board: Array = Rules.empty_board()
+	ranged_board[2] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"ranged_tiyun"), Rules.OPPONENT_OWNER)
+	var ranged_transition: Dictionary = Simulator.apply_action(
+		State.new(ranged_board, [_ranged_attacker(&"ranged_attacker")], [], Rules.PLAYER_OWNER),
+		Action.make_play(0, 0, &"ranged_attacker")
+	)
+	_check(
+		_find_board_instance((ranged_transition.get("state") as State).board, &"ranged_tiyun") == 5,
+		"Evasion skips the first adjacent empty cell when it remains in two-cell attack range"
+	)
+
+	var vacated_board: Array = Rules.empty_board()
+	vacated_board[1] = _slot(Catalog.create_instance(&"JinYanGong3", Rules.OPPONENT_OWNER, &"vacated_jinyan"), Rules.OPPONENT_OWNER)
+	var vacated_transition: Dictionary = Simulator.apply_action(
+		State.new(vacated_board, [_ranged_attacker(&"vacated_attacker")], [], Rules.PLAYER_OWNER),
+		Action.make_play(0, 0, &"vacated_attacker")
+	)
+	_check(
+		_find_board_instance((vacated_transition.get("state") as State).board, &"vacated_jinyan") == 4,
+		"The old cell counts as empty when checking whether a two-cell attack reaches the destination"
+	)
+
+
+func _test_attack_evasion_falls_back_and_ignores_other_flips() -> void:
+	var fallback_board: Array = Rules.empty_board()
+	fallback_board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"fallback_tiyun"), Rules.OPPONENT_OWNER)
+	var fallback_transition: Dictionary = Simulator.apply_action(
+		State.new(fallback_board, [_all_range_attacker(&"fallback_attacker")], [], Rules.PLAYER_OWNER),
+		Action.make_play(0, 0, &"fallback_attacker")
+	)
+	var fallback_state: State = fallback_transition.get("state") as State
+	_check(_find_board_instance(fallback_state.board, &"fallback_tiyun") == 1, "No safe empty cell falls back to the first adjacent empty cell")
+	_check(int((fallback_state.board[1] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Attack still flips the card after an in-range fallback move")
+
+	var non_attack_board: Array = Rules.empty_board()
+	non_attack_board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"non_attack_tiyun"), Rules.OPPONENT_OWNER)
+	var non_attack_transition: Dictionary = Simulator.resolve_non_attack_flip(
+		State.new(non_attack_board, [], [], Rules.PLAYER_OWNER),
+		&"non_attack_tiyun",
+		Rules.PLAYER_OWNER
+	)
+	var non_attack_state: State = non_attack_transition.get("state") as State
+	_check(_find_board_instance(non_attack_state.board, &"non_attack_tiyun") == 4, "Non-attack flips do not trigger evasion")
+	_check(int((non_attack_state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "Non-attack flips proceed normally")
 
 	var full_board: Array = Rules.empty_board()
 	full_board[4] = _slot(Catalog.create_instance(&"TiYunZong3", Rules.OPPONENT_OWNER, &"trapped_tiyun"), Rules.OPPONENT_OWNER)
@@ -115,8 +161,8 @@ func _test_flip_move_replaces_only_when_move_succeeds() -> void:
 	var trapped_state: State = trapped_transition.get("state") as State
 	_check(int((trapped_state.board[4] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER, "TiYun flips normally when no adjacent empty cell exists")
 	_check(
-		_card_has_trigger((trapped_state.board[4] as Dictionary).get("card", {}), Catalog.CARD_BEFORE_FLIPPED),
-		"Locked flip-move ability survives the ownership flip"
+		_card_has_trigger((trapped_state.board[4] as Dictionary).get("card", {}), Catalog.CARD_BE_ATTACKED),
+		"Locked attack-evasion ability survives the ownership flip"
 	)
 
 
@@ -307,6 +353,27 @@ func _one_shot_draw_zero_power_ability() -> Dictionary:
 			],
 		}],
 	}
+
+
+func _ranged_attacker(instance_id: StringName) -> Dictionary:
+	return _plain(
+		instance_id,
+		[9, 9, 9, 9],
+		Rules.PLAYER_OWNER,
+		[{"modifiers": [{"type": Catalog.MODIFIER_ORTHOGONAL_ATTACK_RANGE_TWO, "allow_intervening_ally": false}]}]
+	)
+
+
+func _all_range_attacker(instance_id: StringName) -> Dictionary:
+	return _plain(
+		instance_id,
+		[9, 9, 9, 9],
+		Rules.PLAYER_OWNER,
+		[{"modifiers": [
+			{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE},
+			{"type": Catalog.MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS},
+		]}]
+	)
 
 
 func _plain(instance_id: StringName, powers: Array[int], owner_id: int, abilities: Array = []) -> Dictionary:

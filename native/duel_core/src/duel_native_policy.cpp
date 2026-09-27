@@ -404,10 +404,11 @@ bool DuelNativeCompactKernel::ability_has_summon_interception(
 bool DuelNativeCompactKernel::empty_cell_in_card_attack_range(
 	const NativeState &value,
 	int32_t source_cell,
-	int32_t target_cell
+	int32_t target_cell,
+	int32_t vacated_cell
 ) const {
-	// 这里只回答空格是否位于当前几何攻击范围内。点数、禁攻门控与后续连锁
-	// 故意不参与判断：红光是保守的视觉警告，不承诺迎击最终一定成功。
+	// 只判断空格的几何攻击范围，供危险提示和攻击前闪避选格使用。
+	// 点数、禁攻门控与后续连锁不属于范围；vacated_cell 是即将移开的原格。
 	if (
 		source_cell < 0
 		|| source_cell >= static_cast<int32_t>(value.board_card_indices.size())
@@ -455,6 +456,7 @@ bool DuelNativeCompactKernel::empty_cell_in_card_attack_range(
 	else if (row_delta > 0) direction = 2;
 	else if (column_delta < 0) direction = 3;
 	const int32_t intervening_cell = neighbor_index(source_cell, direction);
+	if (intervening_cell == vacated_cell) return true;
 	const int32_t intervening_card_index = value.board_card_indices[intervening_cell];
 	if (intervening_card_index < 0) return true;
 	const bool intervening_is_ally = value.board_owners[intervening_cell] == source_owner;

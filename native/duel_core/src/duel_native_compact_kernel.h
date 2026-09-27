@@ -346,6 +346,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool preserve_instance = false;
 		bool preserve_powers = false;
 		bool repeat_attack = false;
+		bool prefer_outside_attacker_range = false;
 		bool target_policy_specified = false;
 		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
 		ResourceOpcode resource = ResourceOpcode::NONE;
@@ -1206,7 +1207,8 @@ private:
 	bool empty_cell_in_card_attack_range(
 		const NativeState &value,
 		int32_t source_cell,
-		int32_t target_cell
+		int32_t target_cell,
+		int32_t vacated_cell = -1
 	) const;
 	bool ability_active_in_zone(const CompiledAbility &ability, int32_t zone) const;
 	bool card_receives_aura_modifier(

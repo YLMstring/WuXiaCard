@@ -692,9 +692,14 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.opcode = ActionOpcode::SWAP_SELF_WITH_TARGET;
 	} else if (
 		type == StringName("move_self_to_first_adjacent_empty")
-		&& action.size() == 1 + generic_field_count
+		&& action.size() == 1 + generic_field_count + (action.has("prefer_outside_attacker_range") ? 1 : 0)
 	) {
 		compiled.opcode = ActionOpcode::MOVE_SELF_TO_FIRST_ADJACENT_EMPTY;
+		if (action.has("prefer_outside_attacker_range")) {
+			const Variant preference = action.get("prefer_outside_attacker_range", Variant());
+			if (preference.get_type() != Variant::BOOL) compiled.declaration_valid = false;
+			else compiled.prefer_outside_attacker_range = static_cast<bool>(preference);
+		}
 	} else if (
 		type == StringName("move_self_to_first_empty_between_enemy")
 		&& action.size() == 1 + generic_field_count

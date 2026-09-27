@@ -28,6 +28,7 @@ func _run() -> void:
 	await process_frame
 	duel.debug_set_fast_mode(true)
 	await _walk_activation_through_controller(duel)
+	await _walk_attack_evasion_through_controller(duel)
 	duel.queue_free()
 	await process_frame
 	_cleanup_profile()
@@ -128,6 +129,33 @@ func _walk_activation_through_controller(duel: Node) -> void:
 	_check(
 		not is_instance_valid(old_tiyun_view) and not is_instance_valid(old_ally_view),
 		"Both departed CardViews are freed after their fade presentation"
+	)
+
+
+func _walk_attack_evasion_through_controller(duel: Node) -> void:
+	var board: Array = Rules.empty_board()
+	board[2] = {
+		"card": Catalog.create_instance(&"JinYanGong3", Rules.OPPONENT_OWNER, &"integration_evasion_target"),
+		"owner": Rules.OPPONENT_OWNER,
+	}
+	var attacker: Dictionary = Catalog.create_instance(
+		&"NianhuaWeiXiao3",
+		Rules.PLAYER_OWNER,
+		&"integration_evasion_attacker"
+	)
+	attacker["powers"] = [9, 9, 9, 9]
+	duel.call("_rebuild_views_from_state", State.new(board, [attacker], [], Rules.PLAYER_OWNER))
+	var committed: bool = await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 0, false)
+	await process_frame
+	_check(committed, "Attack-evasion fixture commits through the production controller")
+	_check(
+		duel.debug_get_board_card_instance_id(5) == &"integration_evasion_target"
+		and duel.debug_get_board_card_instance_id(2) == &"",
+		"Production presentation moves the attacked JinYanGong to the first safe cell"
+	)
+	_check(
+		&"card_moved" in duel.debug_get_presentation_trace(),
+		"Production controller presents the evasion movement"
 	)
 
 

@@ -765,6 +765,14 @@ respectively, in row-major order. The source itself is eligible.
 
 ## 梯云纵四
 
+- JinYanGong 3–4 and TiYunZong 3–4 share a retained attack-time evasion.
+  On `CARD_BE_ATTACKED`, they choose the first adjacent empty cell outside the
+  attacker's geometric range, or the first adjacent empty cell if none is safe.
+  Moving vacates the original cell before range is rechecked. If the fallback
+  remains in range, the pending attack can still flip the card; non-attack
+  flips never invoke this reaction. The exact catalog declarations are in
+  `docs/superpowers/specs/2026-09-27-locked-attack-evasion-design.md`.
+
 - Its draw reaction is discovered at `CARD_BEFORE_EXILED`. It matches when the
   pending exile was caused by an effect whose source-owner snapshot equals
   TiYunZong4's current owner. Direct exile, self-exile, and

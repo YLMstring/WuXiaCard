@@ -2289,6 +2289,16 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				|| source_zone != 0
 				|| source_owner != action_context.action_subject_owner
 			) return ActionOutcome::NO_EFFECT;
+			int32_t attacker_cell = -1;
+			if (action.prefer_outside_attacker_range && event_context.attacker_card_index >= 0) {
+				attacker_cell = find_board_card(
+					value,
+					event_context.attacker_card_index,
+					event_context.attacker_cell
+				);
+			}
+			int32_t fallback_cell = -1;
+			int32_t chosen_cell = -1;
 			for (int32_t target_cell = 0; target_cell < static_cast<int32_t>(value.board_card_indices.size()); ++target_cell) {
 				if (value.board_card_indices[target_cell] >= 0) continue;
 				bool adjacent = false;
@@ -2299,27 +2309,36 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					}
 				}
 				if (!adjacent) continue;
-				const ActionOutcome outcome = move_card_between_cells(
-					value,
-					current_cell,
-					current_cell,
-					target_cell,
-					moving_card_index,
-					source_owner,
-					true,
-					exile_stack,
-					resolution
-				);
-				if (outcome == ActionOutcome::APPLIED) {
-					execution_state.current_source_cell = find_board_card(
-						value,
-						group.source_card_index,
-						target_cell
-					);
+				if (fallback_cell < 0) fallback_cell = target_cell;
+				if (
+					attacker_cell < 0
+					|| !empty_cell_in_card_attack_range(value, attacker_cell, target_cell, current_cell)
+				) {
+					chosen_cell = target_cell;
+					break;
 				}
-				return outcome;
 			}
-			return ActionOutcome::NO_EFFECT;
+			if (chosen_cell < 0) chosen_cell = fallback_cell;
+			if (chosen_cell < 0) return ActionOutcome::NO_EFFECT;
+			const ActionOutcome outcome = move_card_between_cells(
+				value,
+				current_cell,
+				current_cell,
+				chosen_cell,
+				moving_card_index,
+				source_owner,
+				true,
+				exile_stack,
+				resolution
+			);
+			if (outcome == ActionOutcome::APPLIED) {
+				execution_state.current_source_cell = find_board_card(
+					value,
+					group.source_card_index,
+					chosen_cell
+				);
+			}
+			return outcome;
 		}
 		case ActionOpcode::MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: {
 			int32_t source_zone = -1;
