@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-27
+Updated: 2026-09-28
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,15 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+The fifteen GuMu card IDs are registered with catalog-driven abilities. Next-hand
+grants and DuGu's anticipation share one per-owner FIFO effect queue: one record
+per grantor card name resolves on each normal hand play, while later same-name
+records wait. The queue survives turns and source-card departure. GuMu's special
+extra play removes a physical hand card but resolves it as discard-sourced, so it
+does not consume the queue or update last-hand-play history. See
+`docs/superpowers/specs/2026-09-28-gumu-cards-design.md` for exact declarations
+and the independent attack, movement, and extra-play timing rules.
 
 Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second
