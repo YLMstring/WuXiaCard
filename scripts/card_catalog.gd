@@ -2952,7 +2952,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
-		"powers": [3, 1, 3, 1],
+		"powers": [4, 2, 4, 2],
 		"abilities": [],
 	},
 	&"KongBi3": {
@@ -2962,9 +2962,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 3,
 		"weapon": "身法",
-		"description": "你获得额外出牌机会时，抽一张牌。锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
+		"description": "锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
-		"powers": [3, 1, 3, 1],
+		"powers": [4, 2, 4, 2],
 		"abilities": [],
 	},
 	&"KongBi4": {
@@ -2974,9 +2974,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 4,
 		"weapon": "身法",
-		"description": "你获得额外出牌机会时，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
+		"description": "每当你尝试额外出牌前，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
-		"powers": [3, 1, 3, 1],
+		"powers": [4, 2, 4, 2],
 		"abilities": [],
 	},
 	&"TianLuoDiWang2": {
