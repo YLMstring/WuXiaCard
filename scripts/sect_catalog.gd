@@ -12,6 +12,7 @@ const ALL_SECT_IDS: Array[StringName] = [
 	&"tingchao_gu",
 	&"SongShanPai",
 	&"QuanZhenPai",
+	&"GuMuPai",
 ]
 
 const _DEFINITION_FIELDS: Array[StringName] = [
@@ -109,11 +110,22 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"glyph": "全真派",
 		"picture": "res://pics/LKT010_475.png",
 		"sect": "终南山",
-		"tier": 4,
+		"tier": 5,
 		"min_random_difficulty": 4,
 		"weapon": "剑法/阵法/心法",
 		"description": "全真派擅长保护场上卡牌，组成无法撼动的阵型。击败丘处机解锁。",
 		"flavor": "全真派武功讲究清静无为，以柔克刚，乃天下玄门正宗，内家功夫越练越深，永无止境。",
+	},
+	&"GuMuPai": {
+		"id": &"GuMuPai",
+		"glyph": "古墓派",
+		"picture": "res://pics/LKT010_254.png",
+		"sect": "终南山",
+		"tier": 4,
+		"min_random_difficulty": 4,
+		"weapon": "剑法/掌法/身法",
+		"description": "古墓派擅长通过卡牌配合形成巧妙连招，解除对手的防御。击败小龙女解锁。",
+		"flavor": "古墓派武学修习内功之法与一般武功大异，内功渐高，学者只身轻足健，出手快捷，于常人发出一招的时刻中可连发三四招，但招力却并不相应而增，因此剑法虽精，却不易伤敌。",
 	},
 }
 

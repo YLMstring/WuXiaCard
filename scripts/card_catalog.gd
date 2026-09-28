@@ -2992,6 +2992,18 @@ const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
 }
 
 const _CARD_DEFINITIONS: Dictionary = {
+	&"YuNvWuFeng": {
+		"id": &"YuNvWuFeng",
+		"glyph": "玉女无锋",
+		"picture": "res://pics/LKT010_491.png",
+		"sect": "古墓派",
+		"tier": 6,
+		"weapon": "剑法",
+		"description": "我永远视为从弃牌堆，而非手牌中打出。进场时，所有相邻敌方点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。",
+		"flavor": "古墓派的“玉女无锋剑”剑招奇幻，变化莫测，似乎平平无奇，突然间幻招忽生，看去极像要抛剑认输，却怪事陡起，剑招忽从万万不可能之处生出，实令人眼花缭乱，手足无措。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [],
+	},
 	&"LangJiTianYa1": {
 		"id": &"LangJiTianYa1",
 		"glyph": "浪迹天涯",
@@ -3023,10 +3035,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 3,
 		"weapon": "剑法",
-		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场后，若只有一个相邻敌方，与其交换位置。",
+		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "玉女剑法的险恶家数，挥剑直劈，去势固然凌厉，抑且风姿绰约，飘逸无比。",
 		"powers": [6, 6, 3, 3],
-		"starting_ki": 1,
 		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SWAP],
 	},
 	&"XiaoYuanYiJu1": {
@@ -3060,10 +3071,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 3,
 		"weapon": "剑法",
-		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
+		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"starting_ki": 1,
 		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"LengYueKuiRen1": {
@@ -3097,10 +3107,9 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 3,
 		"weapon": "剑法",
-		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
+		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
-		"starting_ki": 1,
 		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"KongBi2": {
