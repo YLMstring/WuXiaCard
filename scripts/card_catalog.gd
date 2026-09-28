@@ -3076,7 +3076,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
-		"powers": [3, 1, 1, 3],
+		"powers": [2, 1, 1, 2],
 		"abilities": [QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW, QZ_JINYAN_ALLY_DRAW_GAIN_KI],
 	},
 	&"JinYanGong3": {
@@ -3088,7 +3088,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
-		"powers": [3, 1, 1, 3],
+		"powers": [2, 1, 1, 2],
 		"abilities": [
 			LOCKED_ATTACK_EVASION,
 			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
@@ -3104,7 +3104,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。回合结束时，若本回合你未将任何敌方翻面，抽一张牌。你抽牌时，令抽到的牌内力加一，并获得以下效果：我翻面前，若我有相邻友方，耗内力以阻止翻面。",
 		"flavor": "全真派极精深的轻身本领，以上乘内功为基，捷若猿猴，轻如飞鸟。",
-		"powers": [3, 1, 1, 3],
+		"powers": [2, 1, 1, 2],
 		"abilities": [
 			LOCKED_ATTACK_EVASION,
 			QZ_JINYAN_END_TURN_NO_ENEMY_FLIP_DRAW,
@@ -4214,7 +4214,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
-		"powers": [1, 3, 1, 3],
+		"powers": [1, 2, 1, 2],
 		"starting_ki": 1,
 		"abilities": [TIYUNZONG_RESUMMON_ACTIVATION],
 	},
@@ -4227,7 +4227,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
-		"powers": [1, 3, 1, 3],
+		"powers": [1, 2, 1, 2],
 		"starting_ki": 1,
 		"abilities": [
 			LOCKED_ATTACK_EVASION,
@@ -4243,7 +4243,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "身法",
 		"description": "当任意牌被我的友方具有的效果所移除时，你抽一张牌。锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。指定：选择一个其它友方，令其与我依次在彼此的位置重新进场，然后耗内力以额外出一张牌。",
 		"flavor": "武当派名闻天下的轻功，长于纵跃，在空中轻轻回旋，姿态飘逸。",
-		"powers": [1, 3, 1, 3],
+		"powers": [1, 2, 1, 2],
 		"starting_ki": 1,
 		"abilities": [
 			TIYUNZONG_DRAW_ON_ALLY_EFFECT_EXILE,
