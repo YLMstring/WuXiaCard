@@ -2236,6 +2236,41 @@ func _check_ability_pulse_sequencing() -> void:
 		bool(duel.get_node("DuelCanvas/AttackVfx").call("debug_is_clean")),
 		"Controller attack playback leaves no residual overlay"
 	)
+	duel.set("attack_lunge_step_duration", 0.03)
+	duel.set("power_change_pre_delay", 0.02)
+	duel.set("power_change_duration", 0.03)
+	var repeated_lunge_start: int = (duel.debug_get_attack_lunge_trace() as Array).size()
+	var repeated_power_start: int = duel.debug_get_power_change_presentation_trace().size()
+	var repeated_presentation_start: int = duel.debug_get_presentation_trace().size()
+	await duel.call(
+		"_present_transition_events",
+		[
+			{"type": &"attack_attempted", "source_cell": 0, "source_instance_id": source_a, "target_cell": 8, "target_instance_id": source_b},
+			{"type": &"powers_changed", "instance_id": source_b, "previous_powers": [2, 2, 2, 7], "powers": [2, 2, 2, 6], "animate_separately": true},
+			{"type": &"attack_attempted", "source_cell": 0, "source_instance_id": source_a, "target_cell": 8, "target_instance_id": source_b},
+			{"type": &"powers_changed", "instance_id": source_b, "previous_powers": [2, 2, 2, 6], "powers": [2, 2, 2, 5], "animate_separately": true},
+		],
+		Rules.PLAYER_OWNER
+	)
+	var repeated_lunges: Array = (duel.debug_get_attack_lunge_trace() as Array).slice(repeated_lunge_start)
+	var repeated_powers: Array[Dictionary] = duel.debug_get_power_change_presentation_trace().slice(repeated_power_start)
+	var repeated_presentation: Array[StringName] = duel.debug_get_presentation_trace().slice(repeated_presentation_start)
+	_check(repeated_lunges.size() == 2, "Two failed attack attempts play two complete lunges")
+	_check(repeated_powers.size() == 2, "Two failed attack attempts play two separate power animations")
+	if repeated_powers.size() == 2:
+		_check(repeated_powers[0].get("powers", []) == [2, 2, 2, 6] and repeated_powers[1].get("previous_powers", []) == [2, 2, 2, 6], "Power animations preserve the intermediate value")
+		_check(int(repeated_powers[1].get("started_msec", 0)) > int(repeated_powers[0].get("started_msec", 0)), "Second power animation starts after the first")
+	_check(repeated_presentation == [&"attack_attempted", &"attack_lunge_completed", &"powers_changed", &"attack_attempted", &"attack_lunge_completed", &"powers_changed"], "Attack and power animations play in attempt order")
+	var face_down_target: Node = duel.call("_get_board_card_view_by_instance", source_b)
+	face_down_target.call("set_face_down", true)
+	_check(bool(face_down_target.call("has_visible_power_numbers")), "Face-down board target still displays known powers")
+	var face_down_trace_start: int = duel.debug_get_power_change_presentation_trace().size()
+	await duel.call(
+		"_present_transition_events",
+		[{"type": &"powers_changed", "instance_id": source_b, "zone": &"board", "previous_powers": [2, 2, 2, 5], "powers": [2, 2, 2, 4], "animate_separately": true}],
+		Rules.PLAYER_OWNER
+	)
+	_check(duel.debug_get_power_change_presentation_trace().size() == face_down_trace_start + 1, "Visible powers on a face-down board target still animate")
 	duel.queue_free()
 	await process_frame
 

@@ -162,6 +162,13 @@ func _run() -> void:
 		and (hidden_card.get("card_data") as Dictionary).get("powers", []) == hidden_final,
 		"Hidden power changes synchronize data without revealing metadata"
 	)
+	var hidden_second_final: Array = _offset(hidden_final, -1)
+	await duel.call(
+		"_present_transition_events",
+		[{"type": &"powers_changed", "instance_id": hidden_id, "zone": &"hand", "previous_powers": hidden_final, "powers": hidden_second_final, "animate_separately": true}],
+		Rules.OPPONENT_OWNER
+	)
+	_check(duel.debug_get_power_change_presentation_trace().size() == trace.size(), "A concealed hand card never animates a separate power loss")
 
 	duel.set("power_change_pre_delay", 0.04)
 	duel.set("power_change_duration", 0.04)

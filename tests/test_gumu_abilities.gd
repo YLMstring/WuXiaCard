@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_next_hand_queue()
 	_test_duplicate_queue_names_defer()
 	_test_attack_modifiers_are_independent()
+	_test_attack_attempt_presentation_events()
 	_test_extra_play_attempt_draws_at_cap()
 	_test_discard_source_extra_play_preserves_queue()
 	_test_ally_attack_evasion()
@@ -107,6 +108,43 @@ func _test_attack_modifiers_are_independent() -> void:
 		var target: Dictionary = (next.board[5] as Dictionary).get("card", {})
 		_check(int((next.board[5] as Dictionary).get("owner", 0)) == (Rules.PLAYER_OWNER if mode == 2 else Rules.OPPONENT_OWNER), "Double attempt and weakening are independent %d" % mode)
 		_check(int((target.get("powers", []) as Array)[3]) == (5 if mode == 0 or mode == 2 else 6), "Only failed comparison with weakening changes power %d" % mode)
+
+
+func _test_attack_attempt_presentation_events() -> void:
+	for defense: int in [6, 7]:
+		var attacker: Dictionary = Catalog.create_instance(&"LangJiTianYa2", Rules.PLAYER_OWNER, &"attempt_%d" % defense)
+		attacker["active_abilities"] = [
+			Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE,
+			Catalog.GUMU_ATTACK_EACH_TARGET_TWICE,
+		]
+		var defender: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"target_%d" % defense)
+		defender["powers"] = [2, 2, 2, defense]
+		var board: Array = Rules.empty_board()
+		board[5] = {"card": defender, "owner": Rules.OPPONENT_OWNER}
+		var result: Dictionary = Simulator.apply_action(
+			State.new(board, [attacker], [], Rules.PLAYER_OWNER),
+			Action.make_play(0, 4, StringName("attempt_%d" % defense))
+		)
+		_check(bool(result.get("valid", false)), "Two-attempt presentation fixture resolves %d" % defense)
+		var relevant: Array[Dictionary] = []
+		for item: Variant in result.get("events", []):
+			if item is Dictionary and StringName(item.get("type", &"")) in [&"attack_attempted", &"attack_started", &"powers_changed"]:
+				relevant.append(item)
+		var expected: Array = (
+			[&"attack_attempted", &"powers_changed", &"attack_started"]
+			if defense == 6 else
+			[&"attack_attempted", &"powers_changed", &"attack_attempted", &"powers_changed"]
+		)
+		var actual: Array[StringName] = []
+		for event: Dictionary in relevant:
+			actual.append(StringName(event.get("type", &"")))
+		_check(actual == expected, "Every attempt has its own ordered attack and power events for defense %d: %s" % [defense, actual])
+		for event: Dictionary in relevant:
+			if StringName(event.get("type", &"")) == &"powers_changed":
+				_check(bool(event.get("animate_separately", false)), "Failure power loss is marked for separate animation")
+		if defense == 7 and relevant.size() == 4:
+			_check((relevant[1].get("previous_powers", []) as Array)[3] == 7 and (relevant[1].get("powers", []) as Array)[3] == 6, "First failure animates seven to six")
+			_check((relevant[3].get("previous_powers", []) as Array)[3] == 6 and (relevant[3].get("powers", []) as Array)[3] == 5, "Second failure animates six to five")
 
 
 func _test_extra_play_attempt_draws_at_cap() -> void:

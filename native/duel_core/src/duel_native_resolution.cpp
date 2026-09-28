@@ -121,6 +121,18 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		const int32_t attacked_cell = locked_cell;
 		if (!is_target_in_attack_range(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
 		if (include_power_failures && winning_attack_direction_mask(value, attacker_cell, attacked_cell, attack_policy) == 0) {
+			// A failed comparison is still a visible attack attempt. Keep attack_started
+			// reserved for successful comparisons and their gameplay triggers.
+			Dictionary attempt_event;
+			attempt_event["type"] = StringName("attack_attempted");
+			attempt_event["source_cell"] = attacker_cell;
+			attempt_event["source_instance_id"] = value.card_instance_ids[request.attacker_card_index];
+			attempt_event["source_owner_id"] = request.attacker_owner;
+			attempt_event["target_cell"] = attacked_cell;
+			attempt_event["target_instance_id"] = value.card_instance_ids[attacked_card_index];
+			attempt_event["target_owner_id"] = value.board_owners[attacked_cell];
+			attempt_event["attack_reason"] = request.reason;
+			resolution.events.append(attempt_event);
 			if (weaken_on_failure) {
 				EventGroup group;
 				group.source_cell = attacker_cell;
@@ -136,8 +148,14 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 				ActionContext action_context;
 				action_context.ability_source_card_index = request.attacker_card_index;
 				action_context.ability_source_owner = request.attacker_owner;
+				const int64_t power_event_index = resolution.events.size();
 				const ActionOutcome outcome = change_powers(value, group, action, context, action_context, attacker_cell, exile_stack, resolution);
 				if (outcome == ActionOutcome::UNSUPPORTED) { resolution.supported = false; return resolution; }
+				if (outcome == ActionOutcome::APPLIED) {
+					Dictionary power_event = resolution.events[power_event_index];
+					power_event["animate_separately"] = true;
+					resolution.events[power_event_index] = power_event;
+				}
 			}
 			continue;
 		}

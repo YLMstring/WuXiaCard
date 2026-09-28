@@ -1424,7 +1424,7 @@ func _present_transition_events(
 						events,
 						event_index
 					)
-		elif event_type == &"attack_started":
+		elif event_type == &"attack_started" or event_type == &"attack_attempted":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
 				waited_after_draw = true
@@ -1482,7 +1482,16 @@ func _present_transition_events(
 			await _present_ki_changed_event(event)
 		elif event_type == &"powers_changed":
 			var batch_id := StringName(event.get("power_change_batch_id", &""))
-			if batch_id == &"":
+			if bool(event.get("animate_separately", false)):
+				var animated_event: Dictionary = event.duplicate()
+				animated_event["power_change_batch_id"] = &"attack_failure"
+				await _present_power_change_batch(
+					[animated_event],
+					0,
+					&"attack_failure",
+					StringName(event.get("zone", &"")) == &"board"
+				)
+			elif batch_id == &"":
 				_present_powers_changed_event(event)
 			else:
 				var batch_indices: Array[int] = await _present_power_change_batch(
@@ -1668,7 +1677,8 @@ func _present_powers_changed_event(event: Dictionary) -> void:
 func _present_power_change_batch(
 	events: Array,
 	start_index: int,
-	batch_id: StringName
+	batch_id: StringName,
+	animate_visible_face_down: bool = false
 ) -> Array[int]:
 	var batch_indices: Array[int] = []
 	var grouped: Dictionary = {}
@@ -1705,7 +1715,7 @@ func _present_power_change_batch(
 		if card == null:
 			continue
 		var amount: int = _power_total(resulting_powers) - _power_total(previous_powers)
-		if card.is_face_down():
+		if card.is_face_down() and not (animate_visible_face_down and card.has_visible_power_numbers()):
 			card.set_runtime_powers(resulting_powers)
 			continue
 		card.set_runtime_powers(previous_powers)
@@ -1726,7 +1736,7 @@ func _present_power_change_batch(
 			continue
 		var previous_powers: Array = change.get("previous_powers", [])
 		var resulting_powers: Array = change.get("powers", [])
-		if card.is_face_down():
+		if card.is_face_down() and not (animate_visible_face_down and card.has_visible_power_numbers()):
 			card.set_runtime_powers(resulting_powers)
 			continue
 		var amount: int = int(change.get("amount", 0))

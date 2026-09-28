@@ -150,6 +150,10 @@ func is_face_down() -> bool:
 	return face_down
 
 
+func has_visible_power_numbers() -> bool:
+	return top_power.visible
+
+
 func _refresh_face_content() -> void:
 	var powers: Array = card_data.get("powers", [0, 0, 0, 0])
 	top_power.text = str(powers[DuelRules.TOP])
@@ -229,7 +233,7 @@ func play_power_change(
 	if previous_powers.size() != 4 or resulting_powers.size() != 4:
 		return
 	set_runtime_powers(previous_powers)
-	if face_down or duration <= 0.0:
+	if (face_down and not has_visible_power_numbers()) or duration <= 0.0:
 		set_runtime_powers(resulting_powers)
 		return
 	set_runtime_powers(resulting_powers)
