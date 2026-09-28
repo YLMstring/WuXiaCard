@@ -377,6 +377,7 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
+	&"YuNvWuFeng",
 	&"LangJiTianYa1",
 	&"LangJiTianYa2",
 	&"LangJiTianYa3",
