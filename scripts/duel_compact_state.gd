@@ -68,6 +68,8 @@ const MUTABLE_CARD_KEYS: Array[StringName] = [
 const SIDE_PAYLOAD_KEYS: Array[StringName] = [
 	&"active_abilities",
 	&"effect_queue",
+	&"acquired_ability_indices_by_instance_id",
+	&"next_hand_play_from_discard_owner",
 	&"pending_choice",
 	&"repetition_hashes",
 	&"remembered_glyphs_by_owner",
@@ -176,10 +178,6 @@ func restore() -> StateData:
 		scalars[SCALAR_END_TURN_TRIGGERS_RESOLVED]
 	)
 	restored.max_turns = scalars[SCALAR_MAX_TURNS]
-	restored.pending_non_retained_suppression_by_owner = {
-		Rules.PLAYER_OWNER: scalars[SCALAR_PLAYER_PENDING_SUPPRESSION],
-		Rules.OPPONENT_OWNER: scalars[SCALAR_OPPONENT_PENDING_SUPPRESSION],
-	}
 	restored.run_difficulty = scalars[SCALAR_RUN_DIFFICULTY]
 	restored.difficulty_eight_draw_consumed = bool(
 		scalars[SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED]
@@ -187,13 +185,28 @@ func restore() -> StateData:
 	restored.state_version = scalars[SCALAR_STATE_VERSION]
 
 	for key: StringName in SIDE_PAYLOAD_KEYS:
-		var restored_value: Variant = side_payload.get(key)
+		var restored_value: Variant = side_payload.get(key, restored.get(String(key)))
 		restored.set(
 			String(key),
 			restored_value.duplicate(true)
 			if restored_value is Array or restored_value is Dictionary
 			else restored_value
 		)
+	# 老紧凑状态把料敌机先层数放在标量 8/9；读取时一次性迁入队列。
+	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var legacy_count: int = scalars[
+			SCALAR_PLAYER_PENDING_SUPPRESSION if owner_id == Rules.PLAYER_OWNER
+			else SCALAR_OPPONENT_PENDING_SUPPRESSION
+		]
+		for index: int in range(legacy_count):
+			restored.effect_queue.append({
+				"owner_id": owner_id,
+				"grantor_name": "料敌机先",
+				"actions": [{
+					"type": Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
+					"card": Catalog.CARD_REF_TRIGGER_CARD,
+				}],
+			})
 	return restored
 
 
@@ -450,12 +463,13 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"max_turns": state.max_turns,
 		"active_abilities": state.active_abilities,
 		"effect_queue": state.effect_queue,
+		"acquired_ability_indices_by_instance_id": state.acquired_ability_indices_by_instance_id,
+		"next_hand_play_from_discard_owner": state.next_hand_play_from_discard_owner,
 		"pending_choice": state.pending_choice,
 		"repetition_hashes": state.repetition_hashes,
 		"remembered_glyphs_by_owner": state.remembered_glyphs_by_owner,
 		"future_draw_reveal_audiences": state.future_draw_reveal_audiences,
 		"last_hand_play_by_owner": state.last_hand_play_by_owner,
-		"pending_non_retained_suppression_by_owner": state.pending_non_retained_suppression_by_owner,
 		"enabled_effect_gates_by_owner": state.enabled_effect_gates_by_owner,
 		"owner_auras_by_owner": state.owner_auras_by_owner,
 		"next_owner_aura_handle": state.next_owner_aura_handle,
@@ -475,8 +489,8 @@ func _capture_state(state: StateData) -> bool:
 		state.extra_card_plays_remaining,
 		int(state.end_turn_triggers_resolved),
 		state.max_turns,
-		int(state.pending_non_retained_suppression_by_owner.get(Rules.PLAYER_OWNER, 0)),
-		int(state.pending_non_retained_suppression_by_owner.get(Rules.OPPONENT_OWNER, 0)),
+		0,
+		0,
 		state.run_difficulty,
 		int(state.difficulty_eight_draw_consumed),
 		state.state_version,

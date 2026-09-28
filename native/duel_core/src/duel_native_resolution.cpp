@@ -44,6 +44,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		request.attacker_owner,
 		request.requested_policy
 	);
+	const bool attack_twice = card_has_modifier(value, request.attacker_card_index, request.attacker_owner, ModifierOpcode::ATTACK_EACH_TARGET_TWICE);
+	const bool weaken_on_failure = card_has_modifier(value, request.attacker_card_index, request.attacker_owner, ModifierOpcode::WEAKEN_TARGET_ON_POWER_FAILURE);
+	const bool include_power_failures = attack_twice || weaken_on_failure;
 	std::vector<int32_t> target_cells;
 	if (request.targeted) {
 		const int32_t target_cell = find_board_card(
@@ -60,17 +63,25 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 				initial_attack_cell,
 				target_cell,
 				attack_policy,
-				false
+				include_power_failures
 			)
 		) target_cells.push_back(target_cell);
 	} else {
 		target_cells = get_attack_targets(
 			value,
 			initial_attack_cell,
-			attack_policy
+			attack_policy,
+			include_power_failures
 		);
 	}
-	if (!target_cells.empty()) {
+	std::vector<std::pair<int32_t, int32_t>> locked_targets;
+	locked_targets.reserve(target_cells.size() * (attack_twice ? 2 : 1));
+	for (const int32_t target_cell : target_cells) {
+		const int32_t target_index = value.board_card_indices[target_cell];
+		locked_targets.push_back({target_cell, target_index});
+		if (attack_twice) locked_targets.push_back({target_cell, target_index});
+	}
+	if (!locked_targets.empty()) {
 		value.scalars[request.attacker_owner == 1 ? 3 : 4] += 1;
 	}
 	bool attack_started = false;
@@ -78,6 +89,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 	bool attack_flipped_any_card = false;
 	uint8_t used_attacker_power_directions = 0;
 	std::vector<EventContext::AttackFlipRecord> attack_flips;
+	std::unordered_set<int32_t> already_flipped_targets;
 	auto resolution_flipped_attacker = [&](const Resolution &candidate) -> bool {
 		const StringName attacker_instance_id = value.card_instance_ids[request.attacker_card_index];
 		for (int64_t event_index = 0; event_index < candidate.events.size(); ++event_index) {
@@ -90,7 +102,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		}
 		return false;
 	};
-	for (const int32_t locked_cell : target_cells) {
+	for (const auto &[locked_cell, locked_card_index] : locked_targets) {
+		if (already_flipped_targets.count(locked_card_index) > 0) continue;
 		// target_cells 在攻击开始时锁定。每个目标前仍确认实例存在和范围合法，
 		// 但 skip_power_comparison=true，点数只在最初建立攻击时比较一次。
 		bool stop_after_current_target = false;
@@ -104,9 +117,30 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 			|| value.board_owners[attacker_cell] != request.attacker_owner
 		) break;
 		const int32_t attacked_card_index = value.board_card_indices[locked_cell];
-		if (attacked_card_index < 0) continue;
+		if (attacked_card_index < 0 || attacked_card_index != locked_card_index) continue;
 		const int32_t attacked_cell = locked_cell;
 		if (!is_target_in_attack_range(value, attacker_cell, attacked_cell, attack_policy, true)) continue;
+		if (include_power_failures && winning_attack_direction_mask(value, attacker_cell, attacked_cell, attack_policy) == 0) {
+			if (weaken_on_failure) {
+				EventGroup group;
+				group.source_cell = attacker_cell;
+				group.source_card_index = request.attacker_card_index;
+				group.source_owner = request.attacker_owner;
+				CompiledAction action;
+				action.card_ref = CardRefOpcode::TRIGGER_CARD;
+				action.amount = -1;
+				EventContext context;
+				context.trigger_card_index = attacked_card_index;
+				context.trigger_cell = attacked_cell;
+				context.trigger_owner = value.board_owners[attacked_cell];
+				ActionContext action_context;
+				action_context.ability_source_card_index = request.attacker_card_index;
+				action_context.ability_source_owner = request.attacker_owner;
+				const ActionOutcome outcome = change_powers(value, group, action, context, action_context, attacker_cell, exile_stack, resolution);
+				if (outcome == ActionOutcome::UNSUPPORTED) { resolution.supported = false; return resolution; }
+			}
+			continue;
+		}
 		const int32_t attacked_owner = value.board_owners[attacked_cell];
 		const StringName attacked_instance_id = value.card_instance_ids[attacked_card_index];
 		used_attacker_power_directions |= winning_attack_direction_mask(
@@ -287,6 +321,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 		flip_record.card_index = attacked_card_index;
 		flip_record.previous_owner = flipped_previous_owner;
 		attack_flips.push_back(flip_record);
+		already_flipped_targets.insert(locked_card_index);
 		if (stop_after_current_target) break;
 	}
 	if (attack_started) {

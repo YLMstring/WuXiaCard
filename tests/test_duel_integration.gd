@@ -160,13 +160,13 @@ func _check_layout(duel: Node) -> void:
 func _check_player_suppression_turn_warning(duel: Node) -> void:
 	var state: Variant = duel.get("duel_state")
 	var turn_status: Label = duel.get_node("DuelCanvas/TurnStatus") as Label
-	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 1
+	state.effect_queue.append({"owner_id": Rules.PLAYER_OWNER, "grantor_name": "料敌机先", "actions": [{"type": &"permanently_remove_non_retained_abilities", "card": &"trigger_card"}]})
 	duel.call("_update_turn_status")
 	_check(
 		turn_status.text == "本次打出的手牌将永久失去效果",
 		"Pending enemy anticipation warns the player before their next hand play"
 	)
-	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 0
+	state.effect_queue.clear()
 	duel.call("_update_turn_status")
 	_check(
 		turn_status.text == "你的回合 · 拖动卡牌",

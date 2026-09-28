@@ -22,12 +22,13 @@ var end_turn_triggers_resolved: bool = false
 var max_turns: int = 100
 var active_abilities: Array = []
 var effect_queue: Array = []
+var acquired_ability_indices_by_instance_id: Dictionary = {}
+var next_hand_play_from_discard_owner: int = 0
 var pending_choice: Dictionary = {}
 var repetition_hashes: Array = []
 var remembered_glyphs_by_owner: Dictionary = {}
 var future_draw_reveal_audiences: Dictionary = {}
 var last_hand_play_by_owner: Dictionary = {}
-var pending_non_retained_suppression_by_owner: Dictionary = {}
 var enabled_effect_gates_by_owner: Dictionary = {}
 var owner_auras_by_owner: Dictionary = {}
 var next_owner_aura_handle: int = 1
@@ -77,10 +78,6 @@ func _init(
 	last_hand_play_by_owner = {
 		Rules.PLAYER_OWNER: {},
 		Rules.OPPONENT_OWNER: {},
-	}
-	pending_non_retained_suppression_by_owner = {
-		Rules.PLAYER_OWNER: 0,
-		Rules.OPPONENT_OWNER: 0,
 	}
 	enabled_effect_gates_by_owner = {
 		Rules.PLAYER_OWNER: [],
@@ -208,12 +205,13 @@ func duplicate_state() -> DuelState:
 	copied.max_turns = max_turns
 	copied.active_abilities = active_abilities.duplicate()
 	copied.effect_queue = effect_queue.duplicate(true)
+	copied.acquired_ability_indices_by_instance_id = acquired_ability_indices_by_instance_id.duplicate(true)
+	copied.next_hand_play_from_discard_owner = next_hand_play_from_discard_owner
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
 	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
 	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
 	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
-	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
 	copied.next_owner_aura_handle = next_owner_aura_handle
@@ -244,12 +242,13 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.active_owner_flipped_enemy_this_turn = active_owner_flipped_enemy_this_turn
 	copied.active_abilities = active_abilities.duplicate(true)
 	copied.effect_queue = effect_queue.duplicate(true)
+	copied.acquired_ability_indices_by_instance_id = acquired_ability_indices_by_instance_id.duplicate(true)
+	copied.next_hand_play_from_discard_owner = next_hand_play_from_discard_owner
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
 	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
 	copied.future_draw_reveal_audiences = future_draw_reveal_audiences.duplicate(true)
 	copied.last_hand_play_by_owner = last_hand_play_by_owner.duplicate(true)
-	copied.pending_non_retained_suppression_by_owner = pending_non_retained_suppression_by_owner.duplicate(true)
 	copied.enabled_effect_gates_by_owner = enabled_effect_gates_by_owner.duplicate(true)
 	copied.owner_auras_by_owner = _duplicate_owner_auras(owner_auras_by_owner)
 	copied.next_owner_aura_handle = next_owner_aura_handle

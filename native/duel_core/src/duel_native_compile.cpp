@@ -556,6 +556,33 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 			compiled.declaration_valid = false;
 		}
 	} else if (
+		type == StringName("queue_next_hand_play_ability")
+		&& (action.size() == 2 + generic_field_count
+			|| action.size() == 4 + generic_field_count)
+	) {
+		compiled.opcode = ActionOpcode::QUEUE_NEXT_HAND_PLAY_ABILITY;
+		const Variant granted = action.get("ability", Variant());
+		if (granted.get_type() != Variant::DICTIONARY || Dictionary(granted).is_empty()) {
+			compiled.declaration_valid = false;
+		} else {
+			compiled.granted_ability_index = intern_compiled_ability(granted);
+			if (!compiled_ability_pool[compiled.granted_ability_index].declaration_valid) {
+				compiled.declaration_valid = false;
+			}
+		}
+		if (action.has("include_acquired_from")) {
+			compiled.include_acquired_abilities = true;
+			if (
+				StringName(action.get("include_acquired_from", StringName()))
+				!= StringName("ability_source")
+				|| Variant(action.get("exclude_ability", Variant())).get_type()
+				!= Variant::DICTIONARY
+			) compiled.declaration_valid = false;
+			else compiled.excluded_ability_index = intern_compiled_ability(
+				action.get("exclude_ability", Variant())
+			);
+		}
+	} else if (
 		type == StringName("grant_owner_aura")
 		&& action.size() == 2 + generic_field_count
 	) {
@@ -692,9 +719,16 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.opcode = ActionOpcode::SWAP_SELF_WITH_TARGET;
 	} else if (
 		type == StringName("move_self_to_first_adjacent_empty")
-		&& action.size() == 1 + generic_field_count + (action.has("prefer_outside_attacker_range") ? 1 : 0)
+		&& action.size() == 1 + generic_field_count
+			+ (action.has("prefer_outside_attacker_range") ? 1 : 0)
+			+ (action.has("card") ? 1 : 0)
 	) {
 		compiled.opcode = ActionOpcode::MOVE_SELF_TO_FIRST_ADJACENT_EMPTY;
+		if (action.has("card")) {
+			compiled.card_ref_explicit = true;
+			compiled.card_ref = compile_card_ref(action.get("card", StringName()));
+			if (compiled.card_ref != CardRefOpcode::TRIGGER_CARD) compiled.declaration_valid = false;
+		}
 		if (action.has("prefer_outside_attacker_range")) {
 			const Variant preference = action.get("prefer_outside_attacker_range", Variant());
 			if (preference.get_type() != Variant::BOOL) compiled.declaration_valid = false;
@@ -799,12 +833,20 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		) compiled.declaration_valid = false;
 	} else if (
 		type == StringName("grant_extra_card_play")
-		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count)
+		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count
+			|| action.size() == 4 + generic_field_count)
 		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
 		&& static_cast<int64_t>(action.get("amount", 0)) > 0
 	) {
 		compiled.opcode = ActionOpcode::GRANT_EXTRA_CARD_PLAY;
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
+		if (action.has("next_hand_play_source")) {
+			compiled.next_hand_play_from_discard = (
+				StringName(action.get("next_hand_play_source", StringName()))
+				== StringName("discard")
+			);
+			if (!compiled.next_hand_play_from_discard) compiled.declaration_valid = false;
+		}
 		compiled.card_ref_explicit = action.has("card");
 		if (compiled.card_ref_explicit) {
 			compiled.card_ref = compile_card_ref(action.get("card", StringName()));
@@ -974,6 +1016,8 @@ DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modif
 		else if (type == StringName("enemy_cannot_attack_during_owner_turn")) compiled.opcode = ModifierOpcode::ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN;
 		else if (type == StringName("self_attacks_all")) compiled.opcode = ModifierOpcode::SELF_ATTACKS_ALL;
 		else if (type == StringName("cannot_attack")) compiled.opcode = ModifierOpcode::CANNOT_ATTACK;
+		else if (type == StringName("attack_each_target_twice")) compiled.opcode = ModifierOpcode::ATTACK_EACH_TARGET_TWICE;
+		else if (type == StringName("weaken_target_on_power_failure")) compiled.opcode = ModifierOpcode::WEAKEN_TARGET_ON_POWER_FAILURE;
 	} else if (
 		type == StringName("opponent_play_cell_only_if_no_other_action")
 		&& modifier.size() == 2
@@ -1296,10 +1340,11 @@ bool DuelNativeCompactKernel::compile_runtime_suppression_batches() {
 				const Variant index_value = entry.get("index", Variant());
 				const Variant ability_value = entry.get("ability", Variant());
 				if (
-					entry.size() != 2
+					(entry.size() != 2 && entry.size() != 3)
 					|| index_value.get_type() != Variant::INT
 					|| static_cast<int64_t>(index_value) < 0
 					|| ability_value.get_type() != Variant::DICTIONARY
+					|| (entry.has("acquired") && Variant(entry.get("acquired", Variant())).get_type() != Variant::BOOL)
 				) {
 					last_error = "Temporary suppression entry has an invalid declaration shape";
 					return false;
@@ -1309,6 +1354,7 @@ bool DuelNativeCompactKernel::compile_runtime_suppression_batches() {
 					static_cast<int64_t>(index_value)
 				);
 				compiled_entry.compiled_ability_index = intern_compiled_ability(ability_value);
+				compiled_entry.acquired = static_cast<bool>(entry.get("acquired", false));
 				compiled_entry.handle = state.next_ability_handle++;
 				compiled_batch.entries.push_back(compiled_entry);
 			}
@@ -1334,10 +1380,9 @@ bool DuelNativeCompactKernel::validate_play_support(
 		return false;
 	}
 	const Array state_abilities = value.side_payload.get("active_abilities", Array());
-	const Array effect_queue = value.side_payload.get("effect_queue", Array());
 	const Dictionary pending_choice = value.side_payload.get("pending_choice", Dictionary());
-	if (!state_abilities.is_empty() || !effect_queue.is_empty() || !pending_choice.is_empty()) {
-		reason = "Play transition requires no state abilities, queued effects, or pending choice";
+	if (!state_abilities.is_empty() || !pending_choice.is_empty()) {
+		reason = "Play transition requires no state abilities or pending choice";
 		return false;
 	}
 	if (value.card_ids.size() != value.card_instance_ids.size()) {

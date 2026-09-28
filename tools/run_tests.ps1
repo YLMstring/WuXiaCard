@@ -113,6 +113,7 @@ $testScripts = @(
 	"test_fumo_qianshou_abilities.gd",
 	"test_fumo_qianshou_integration.gd",
 	"test_dugu_nine_swords_abilities.gd",
+	"test_gumu_abilities.gd",
 	"test_kuihua_abilities.gd",
 	"test_taiji_abilities.gd",
 	"test_wudang_nine_cards.gd",

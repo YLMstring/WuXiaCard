@@ -318,6 +318,25 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		static_cast<int64_t>(fallback_index_value)
 	);
 	state.side_payload = payload.get("side_payload", Dictionary());
+	if (state.scalars.size() > 9 && (state.scalars[8] > 0 || state.scalars[9] > 0)) {
+		Array queue = state.side_payload.get("effect_queue", Array());
+		for (int32_t owner = 1; owner <= 2; ++owner) {
+			for (int32_t index = 0; index < state.scalars[owner == 1 ? 8 : 9]; ++index) {
+				Dictionary suppression;
+				suppression["type"] = StringName("permanently_remove_non_retained_abilities");
+				suppression["card"] = StringName("trigger_card");
+				Array actions;
+				actions.append(suppression);
+				Dictionary record;
+				record["owner_id"] = owner;
+				record["grantor_name"] = String::utf8("\xE6\x96\x99\xE6\x95\x8C\xE6\x9C\xBA\xE5\x85\x88");
+				record["actions"] = actions;
+				queue.append(record);
+			}
+			state.scalars[owner == 1 ? 8 : 9] = 0;
+		}
+		state.side_payload["effect_queue"] = queue;
+	}
 	state.has_rule_metadata = (
 		payload.has("card_template_pool")
 		&& payload.has("active_ability_set_pool")
@@ -413,7 +432,21 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	loaded = validate_shape();
 	if (loaded) {
 		compile_ability_sets();
+		const Array effect_queue = state.side_payload.get("effect_queue", Array());
+		for (int64_t record_index = 0; record_index < effect_queue.size(); ++record_index) {
+			if (effect_queue[record_index].get_type() != Variant::DICTIONARY) continue;
+			const Dictionary record = effect_queue[record_index];
+			const Array actions = record.get("actions", Array());
+			for (int64_t action_index = 0; action_index < actions.size(); ++action_index) {
+				if (actions[action_index].get_type() != Variant::DICTIONARY) continue;
+				const Dictionary action = actions[action_index];
+				if (StringName(action.get("type", StringName())) != StringName("grant_trigger_card_ability")) continue;
+				const Variant declaration = action.get("ability", Variant());
+				if (declaration.get_type() == Variant::DICTIONARY) intern_compiled_ability(declaration);
+			}
+		}
 		state.next_ability_handle = 1;
+		const Dictionary acquired_by_instance = state.side_payload.get("acquired_ability_indices_by_instance_id", Dictionary());
 		state.card_runtime_abilities.clear();
 		state.card_runtime_abilities.reserve(state.card_instance_ids.size());
 		for (size_t card_index = 0; card_index < state.card_instance_ids.size(); ++card_index) {
@@ -426,9 +459,12 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 			std::vector<RuntimeAbilityEntry> runtime_entries;
 			if (ability_indices != nullptr) {
 				runtime_entries.reserve(ability_indices->size());
-				for (const int32_t compiled_index : *ability_indices) {
+				const Array acquired_indices = acquired_by_instance.get(state.card_instance_ids[card_index], Array());
+				for (size_t ability_position = 0; ability_position < ability_indices->size(); ++ability_position) {
+					const int32_t compiled_index = (*ability_indices)[ability_position];
 					RuntimeAbilityEntry entry;
 					entry.compiled_ability_index = compiled_index;
+					entry.acquired = acquired_indices.has(static_cast<int32_t>(ability_position));
 					entry.handle = state.next_ability_handle++;
 					runtime_entries.push_back(entry);
 				}
@@ -742,6 +778,8 @@ bool DuelNativeCompactKernel::transition_play(
 		next.scalars[13] = 1;
 		next.scalars[5] -= 1;
 	}
+	const bool discard_source_play = static_cast<int32_t>(next.side_payload.get("next_hand_play_from_discard_owner", 0)) == moving_owner;
+	next.side_payload.erase("next_hand_play_from_discard_owner");
 	resolution = Resolution();
 	std::vector<int32_t> exile_stack;
 	if (replaced_card_index >= 0) {
@@ -796,13 +834,13 @@ bool DuelNativeCompactKernel::transition_play(
 	placed_event["target_cell"] = target_cell;
 	placed_event["owner_id"] = moving_owner;
 	placed_event["instance_id"] = played_instance_id;
-	Resolution suppression_resolution = consume_pending_hand_play_suppression(
-		next,
-		played_card_index,
-		moving_owner,
-		static_cast<int32_t>(target_cell)
-	);
-	append_resolution(resolution, suppression_resolution);
+	if (!discard_source_play) {
+		Resolution queued_resolution = consume_next_hand_play_effects(
+			next, played_card_index, moving_owner, static_cast<int32_t>(target_cell)
+		);
+		if (!queued_resolution.supported) { supported = false; reason = queued_resolution.reason; return false; }
+		append_resolution(resolution, queued_resolution);
+	}
 
 	SummonRequest summon_request;
 	// 普通出牌先静态落位，再统一进入 summon 生命周期。重定向来源在进场时快照，
@@ -835,7 +873,7 @@ bool DuelNativeCompactKernel::transition_play(
 	Resolution finish_resolution = finish_action(
 		next,
 		moving_owner,
-		played_card_index,
+		discard_source_play ? -1 : played_card_index,
 		resolution.extra_play_requests,
 		exile_stack
 	);

@@ -684,7 +684,8 @@ DuelNativeCompactKernel::AttackPolicy DuelNativeCompactKernel::get_standard_atta
 std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
 	const NativeState &value,
 	int32_t source_cell,
-	const AttackPolicy &policy
+	const AttackPolicy &policy,
+	bool skip_power_comparison
 ) const {
 	// 候选顺序必须稳定，因为“首个合法目标”会锁定当前找到的第一张牌；该牌
 	// 随后在 CARD_BE_ATTACKED 中失效时，攻击结束而不会顺延到第二张。
@@ -723,7 +724,7 @@ std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
 		ModifierOpcode::STANDARD_ATTACK_FIRST_LEGAL_TARGET
 	);
 	for (const int32_t target_cell : candidates) {
-		if (!can_attack_target(value, source_cell, target_cell, policy, false)) continue;
+		if (!can_attack_target(value, source_cell, target_cell, policy, skip_power_comparison)) continue;
 		targets.push_back(target_cell);
 		if (first_legal_only) break;
 	}

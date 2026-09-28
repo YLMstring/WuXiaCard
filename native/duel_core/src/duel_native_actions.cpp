@@ -537,7 +537,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::permanently_remo
 	return removed_any ? ActionOutcome::APPLIED : ActionOutcome::NO_EFFECT;
 }
 
-DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_hand_play_suppression(
+DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_next_hand_play_effects(
 	NativeState &value,
 	int32_t card_index,
 	int32_t owner_id,
@@ -550,20 +550,82 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::consume_pending_han
 		|| card_index < 0
 		|| card_index >= static_cast<int32_t>(value.card_runtime_abilities.size())
 	) return resolution;
-	const int32_t scalar_index = owner_id == 1 ? 8 : 9;
-	if (value.scalars[scalar_index] <= 0) return resolution;
-	value.scalars[scalar_index] -= 1;
-
-	Dictionary consumed;
-	consumed["type"] = StringName("non_retained_suppression_consumed");
-	consumed["source_cell"] = cell;
-	consumed["target_cell"] = cell;
-	consumed["owner_id"] = owner_id;
-	consumed["instance_id"] = value.card_instance_ids[card_index];
-	consumed["pending_count"] = value.scalars[scalar_index];
-	resolution.events.append(consumed);
-
-	permanently_remove_non_retained_abilities(value, card_index, -1, cell, resolution);
+	const Array queue = value.side_payload.get("effect_queue", Array());
+	if (queue.is_empty()) return resolution;
+	Array selected;
+	Array deferred;
+	std::vector<String> seen_names;
+	for (int64_t index = 0; index < queue.size(); ++index) {
+		const Variant item = queue[index];
+		if (item.get_type() != Variant::DICTIONARY) { deferred.append(item); continue; }
+		const Dictionary record = item;
+		if (static_cast<int32_t>(record.get("owner_id", 0)) != owner_id
+			|| !record.has("grantor_name") || !record.has("actions")) {
+			deferred.append(item);
+			continue;
+		}
+		const String name = record.get("grantor_name", String());
+		if (std::find(seen_names.begin(), seen_names.end(), name) != seen_names.end()) {
+			deferred.append(item);
+			continue;
+		}
+		seen_names.push_back(name);
+		selected.append(item);
+	}
+	if (selected.is_empty()) return resolution;
+	value.side_payload["effect_queue"] = deferred;
+	EventGroup group;
+	group.source_cell = cell;
+	group.source_card_index = card_index;
+	group.source_owner = owner_id;
+	ActionContext action_context;
+	action_context.ability_source_cell = cell;
+	action_context.ability_source_card_index = card_index;
+	action_context.ability_source_owner = owner_id;
+	action_context.action_subject_card_index = card_index;
+	action_context.action_subject_owner = owner_id;
+	for (int64_t record_index = 0; record_index < selected.size(); ++record_index) {
+		const Dictionary record = selected[record_index];
+		const Array actions = record.get("actions", Array());
+		for (int64_t action_index = 0; action_index < actions.size(); ++action_index) {
+			const Dictionary queued_action = actions[action_index];
+			const StringName type = queued_action.get("type", StringName());
+			if (type == StringName("grant_trigger_card_ability")) {
+				const Variant declaration = queued_action.get("ability", Variant());
+				int32_t compiled_index = -1;
+				for (size_t index = 0; index < ability_declaration_pool.size(); ++index) {
+					if (ability_declaration_pool[index] == declaration) { compiled_index = static_cast<int32_t>(index); break; }
+				}
+				if (compiled_index < 0 || !compiled_ability_pool[compiled_index].declaration_valid) { resolution.supported = false; resolution.reason = "Queued ability declaration is unknown or unsupported"; return resolution; }
+				CompiledAction grant;
+				grant.granted_ability_index = compiled_index;
+				const ActionOutcome outcome = grant_ability_to_subject(value, group, grant, action_context, card_index, cell, resolution);
+				if (outcome == ActionOutcome::UNSUPPORTED) { resolution.supported = false; return resolution; }
+			} else if (type == StringName("permanently_remove_non_retained_abilities")) {
+				Dictionary consumed;
+				consumed["type"] = StringName("non_retained_suppression_consumed");
+				consumed["source_cell"] = cell;
+				consumed["target_cell"] = cell;
+				consumed["owner_id"] = owner_id;
+				consumed["instance_id"] = value.card_instance_ids[card_index];
+				int32_t remaining = 0;
+				const Array current_queue = value.side_payload.get("effect_queue", Array());
+				for (int64_t index = 0; index < current_queue.size(); ++index) {
+					if (current_queue[index].get_type() != Variant::DICTIONARY) continue;
+					const Dictionary pending = current_queue[index];
+					if (String(pending.get("grantor_name", String())) == String::utf8("\xE6\x96\x99\xE6\x95\x8C\xE6\x9C\xBA\xE5\x85\x88")
+						&& static_cast<int32_t>(pending.get("owner_id", 0)) == owner_id) ++remaining;
+				}
+				consumed["pending_count"] = remaining;
+				resolution.events.append(consumed);
+				permanently_remove_non_retained_abilities(value, card_index, -1, cell, resolution);
+			} else {
+				resolution.supported = false;
+				resolution.reason = "Unsupported next-hand effect action";
+				return resolution;
+			}
+		}
+	}
 	return resolution;
 }
 
@@ -608,6 +670,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::temporarily_remo
 		suppressed_entry.original_index = static_cast<int32_t>(ability_index);
 		suppressed_entry.compiled_ability_index = entry.compiled_ability_index;
 		suppressed_entry.handle = entry.handle;
+		suppressed_entry.acquired = entry.acquired;
 		batch.entries.push_back(suppressed_entry);
 
 		const int32_t cell = zone == 0 ? logical_index : -1;
@@ -683,6 +746,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::restore_temporary_a
 				RuntimeAbilityEntry restored_entry;
 				restored_entry.compiled_ability_index = entry.compiled_ability_index;
 				restored_entry.handle = entry.handle;
+				restored_entry.acquired = entry.acquired;
 				active.insert(active.begin() + insert_index, restored_entry);
 
 				const int32_t cell = zone == StringName("board") ? logical_index : -1;
@@ -757,6 +821,7 @@ Array DuelNativeCompactKernel::materialize_suppression_batches(
 			Dictionary materialized_entry;
 			materialized_entry["index"] = entry.original_index;
 			materialized_entry["ability"] = ability_declaration_pool[entry.compiled_ability_index];
+			if (entry.acquired) materialized_entry["acquired"] = true;
 			entries.append(materialized_entry);
 		}
 		Dictionary materialized_batch;
@@ -1477,6 +1542,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::grant_ability_to
 	RuntimeAbilityEntry entry;
 	entry.compiled_ability_index = action.granted_ability_index;
 	entry.handle = value.next_ability_handle++;
+	entry.acquired = true;
 	entries.push_back(entry);
 	Dictionary event;
 	event["type"] = StringName("ability_gained");
@@ -1793,6 +1859,37 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 	if (!action.declaration_valid) return ActionOutcome::UNSUPPORTED;
 	const int32_t action_source_cell = execution_state.current_source_cell;
 	switch (action.opcode) {
+		case ActionOpcode::QUEUE_NEXT_HAND_PLAY_ABILITY: {
+			const int32_t source = action_context.ability_source_card_index;
+			const int32_t owner = action_context.ability_source_owner;
+			if (source < 0 || source >= static_cast<int32_t>(value.card_instance_ids.size())
+				|| owner < 1 || owner > 2 || action.granted_ability_index < 0
+				|| action.granted_ability_index >= static_cast<int32_t>(ability_declaration_pool.size())) return ActionOutcome::NO_EFFECT;
+			const int32_t template_index = value.card_template_indices[source];
+			if (template_index < 0 || template_index >= value.card_template_pool.size()) return ActionOutcome::UNSUPPORTED;
+			const Dictionary card_template = value.card_template_pool[template_index];
+			Array actions;
+			Dictionary grant;
+			grant["type"] = StringName("grant_trigger_card_ability");
+			grant["ability"] = ability_declaration_pool[action.granted_ability_index];
+			actions.append(grant);
+			if (action.include_acquired_abilities) {
+				for (const RuntimeAbilityEntry &entry : value.card_runtime_abilities[source]) {
+					if (!entry.acquired || entry.compiled_ability_index == action.excluded_ability_index) continue;
+					Dictionary extra = grant.duplicate(true);
+					extra["ability"] = ability_declaration_pool[entry.compiled_ability_index];
+					actions.append(extra);
+				}
+			}
+			Dictionary queued;
+			queued["owner_id"] = owner;
+			queued["grantor_name"] = String(card_template.get("glyph", String()));
+			queued["actions"] = actions;
+			Array queue = value.side_payload.get("effect_queue", Array());
+			queue.append(queued);
+			value.side_payload["effect_queue"] = queue;
+			return ActionOutcome::APPLIED;
+		}
 		case ActionOpcode::DRAW_CARDS: {
 			EventContext draw_context = event_context;
 			draw_context.ability_source_cell = action_context.ability_source_cell;
@@ -2282,12 +2379,14 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			int32_t source_zone = -1;
 			int32_t source_owner = 0;
 			int32_t current_cell = -1;
-			const int32_t moving_card_index = action_context.action_subject_card_index;
+			const int32_t moving_card_index = action.card_ref_explicit && action.card_ref == CardRefOpcode::TRIGGER_CARD
+				? event_context.trigger_card_index : action_context.action_subject_card_index;
 			if (
 				moving_card_index < 0
 				|| !locate_card(value, moving_card_index, source_zone, source_owner, current_cell)
 				|| source_zone != 0
-				|| source_owner != action_context.action_subject_owner
+				|| (action.card_ref_explicit && action.card_ref == CardRefOpcode::TRIGGER_CARD
+					? source_owner != event_context.trigger_owner : source_owner != action_context.action_subject_owner)
 			) return ActionOutcome::NO_EFFECT;
 			int32_t attacker_cell = -1;
 			if (action.prefer_outside_attacker_range && event_context.attacker_card_index >= 0) {
@@ -2680,6 +2779,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			request.source_card_index = source_card_index;
 			request.source_cell = source_cell;
 			request.amount = action.amount;
+			request.next_hand_play_from_discard = action.next_hand_play_from_discard;
 			resolution.extra_play_requests.push_back(request);
 			return ActionOutcome::APPLIED;
 		}
@@ -2694,15 +2794,33 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			const int32_t recipient_owner = action.recipient == RecipientOpcode::SELF
 				? source_owner
 				: other_owner(source_owner);
-			const int32_t scalar_index = recipient_owner == 1 ? 8 : 9;
-			value.scalars[scalar_index] += action.amount;
+			Array queue = value.side_payload.get("effect_queue", Array());
+			Dictionary suppression;
+			suppression["type"] = StringName("permanently_remove_non_retained_abilities");
+			suppression["card"] = StringName("trigger_card");
+			for (int32_t index = 0; index < action.amount; ++index) {
+				Dictionary queued;
+				queued["owner_id"] = recipient_owner;
+				queued["grantor_name"] = String::utf8("\xE6\x96\x99\xE6\x95\x8C\xE6\x9C\xBA\xE5\x85\x88");
+				Array actions;
+				actions.append(suppression);
+				queued["actions"] = actions;
+				queue.append(queued);
+			}
+			value.side_payload["effect_queue"] = queue;
+			int32_t pending_count = 0;
+			for (int64_t index = 0; index < queue.size(); ++index) {
+				const Dictionary pending = queue[index];
+				if (static_cast<int32_t>(pending.get("owner_id", 0)) == recipient_owner
+					&& String(pending.get("grantor_name", String())) == String::utf8("\xE6\x96\x99\xE6\x95\x8C\xE6\x9C\xBA\xE5\x85\x88")) ++pending_count;
+			}
 			Dictionary added;
 			added["type"] = StringName("non_retained_suppression_added");
 			added["source_cell"] = action_source_cell;
 			added["source_instance_id"] = value.card_instance_ids[action_context.action_subject_card_index];
 			added["owner_id"] = recipient_owner;
 			added["amount"] = action.amount;
-			added["pending_count"] = value.scalars[scalar_index];
+			added["pending_count"] = pending_count;
 			resolution.events.append(added);
 			return ActionOutcome::APPLIED;
 		}
@@ -2982,6 +3100,7 @@ int32_t DuelNativeCompactKernel::append_perfect_copy_board_card(
 		RuntimeAbilityEntry entry;
 		entry.compiled_ability_index = copied_entry.compiled_ability_index;
 		entry.handle = value.next_ability_handle++;
+		entry.acquired = copied_entry.acquired;
 		runtime_entries.push_back(entry);
 	}
 	value.card_runtime_abilities.push_back(runtime_entries);
@@ -2996,6 +3115,7 @@ int32_t DuelNativeCompactKernel::append_perfect_copy_board_card(
 			entry.original_index = copied_entry.original_index;
 			entry.compiled_ability_index = copied_entry.compiled_ability_index;
 			entry.handle = value.next_ability_handle++;
+			entry.acquired = copied_entry.acquired;
 			batch.entries.push_back(entry);
 		}
 		suppression_batches.push_back(batch);

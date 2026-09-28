@@ -25,6 +25,7 @@ const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
+const TRIGGER_EXTRA_CARD_PLAY_GRANTED: StringName = &"extra_card_play_granted"
 const TRIGGER_POWER_INCREASE_BATCH_FINISHED: StringName = &"power_increase_batch_finished"
 const TRIGGER_DUEL_STARTED: StringName = &"duel_started"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
@@ -107,6 +108,7 @@ const ACTION_ATTACK_TRIGGER_CARD: StringName = &"attack_trigger_card"
 const ACTION_GAIN_KI: StringName = &"gain_ki"
 const ACTION_SPEND_KI: StringName = &"spend_ki"
 const ACTION_GRANT_EXTRA_CARD_PLAY: StringName = &"grant_extra_card_play"
+const ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY: StringName = &"queue_next_hand_play_ability"
 const ACTION_MOVE_SELF_TO_TARGET: StringName = &"move_self_to_target"
 const ACTION_SWAP_SELF_WITH_TARGET: StringName = &"swap_self_with_target"
 const ACTION_STANDARD_ATTACK_WITH_SELF: StringName = &"standard_attack_with_self"
@@ -177,6 +179,8 @@ const MODIFIER_STANDARD_ATTACK_FIRST_LEGAL_TARGET: StringName = &"standard_attac
 const MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN: StringName = &"enemy_cannot_attack_during_owner_turn"
 const MODIFIER_SELF_ATTACKS_ALL: StringName = &"self_attacks_all"
 const MODIFIER_CANNOT_ATTACK: StringName = &"cannot_attack"
+const MODIFIER_ATTACK_EACH_TARGET_TWICE: StringName = &"attack_each_target_twice"
+const MODIFIER_WEAKEN_TARGET_ON_POWER_FAILURE: StringName = &"weaken_target_on_power_failure"
 const MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION: StringName = (
 	&"opponent_play_cell_only_if_no_other_action"
 )
@@ -211,6 +215,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_BEFORE_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
 	TRIGGER_CARD_AFTER_ATTACK,
+	TRIGGER_EXTRA_CARD_PLAY_GRANTED,
 	TRIGGER_POWER_INCREASE_BATCH_FINISHED,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_EXILED,
@@ -300,6 +305,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_GAIN_KI,
 	ACTION_SPEND_KI,
 	ACTION_GRANT_EXTRA_CARD_PLAY,
+	ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
 	ACTION_MOVE_SELF_TO_TARGET,
 	ACTION_SWAP_SELF_WITH_TARGET,
 	ACTION_STANDARD_ATTACK_WITH_SELF,
@@ -365,10 +371,27 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
 	MODIFIER_SELF_ATTACKS_ALL,
 	MODIFIER_CANNOT_ATTACK,
+	MODIFIER_ATTACK_EACH_TARGET_TWICE,
+	MODIFIER_WEAKEN_TARGET_ON_POWER_FAILURE,
 	MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
+	&"LangJiTianYa1",
+	&"LangJiTianYa2",
+	&"LangJiTianYa3",
+	&"XiaoYuanYiJu1",
+	&"XiaoYuanYiJu2",
+	&"XiaoYuanYiJu3",
+	&"LengYueKuiRen1",
+	&"LengYueKuiRen2",
+	&"LengYueKuiRen3",
+	&"KongBi2",
+	&"KongBi3",
+	&"KongBi4",
+	&"TianLuoDiWang2",
+	&"TianLuoDiWang3",
+	&"TianLuoDiWang4",
 	&"TianGangBeiDou2",
 	&"TianGangBeiDou3",
 	&"TianGangBeiDou4",
@@ -2833,6 +2856,141 @@ const QZ_HUBO_BEFORE_SUMMON: Dictionary = {
 	}],
 }
 
+const GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+			},
+			"actions": [{"type": ACTION_TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES}],
+		}],
+	}],
+}
+
+const GUMU_MINIMUM_DEFENSE_ON_ATTACK: Dictionary = {
+	"retained_on_flip": true,
+	"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
+}
+
+const GUMU_ATTACK_EACH_TARGET_TWICE: Dictionary = {
+	"modifiers": [{"type": MODIFIER_ATTACK_EACH_TARGET_TWICE}],
+}
+
+const GUMU_WEAKEN_TARGET_ON_POWER_FAILURE: Dictionary = {
+	"modifiers": [{"type": MODIFIER_WEAKEN_TARGET_ON_POWER_FAILURE}],
+}
+
+const GUMU_QUEUE_NEXT_SWAP: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			"ability": KUIHUA3_SWAP_SINGLE_ADJACENT_ENEMY,
+		}],
+	}],
+}
+
+const GUMU_QUEUE_NEXT_SUPPRESSION: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			"ability": GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON,
+		}],
+	}],
+}
+
+const GUMU_QUEUE_NEXT_MINIMUM_DEFENSE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			"ability": GUMU_MINIMUM_DEFENSE_ON_ATTACK,
+		}],
+	}],
+}
+
+const GUMU_TIER_THREE_ACTIVATION: Dictionary = {
+	"retained_on_flip": true,
+	"activation": {
+		"input": ACTIVATION_DRAG_TO_TARGET,
+		"target_rule": TARGET_ANY_ENEMY_BOARD,
+		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+		"actions": [
+			{"type": ACTION_CHANGE_POWERS, "amount": -1,
+			 "card": CARD_REF_SELECTED_CARD},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1,
+			 "next_hand_play_source": CARD_ZONE_DISCARD},
+		],
+	},
+}
+
+const GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_EXTRA_CARD_PLAY_GRANTED,
+		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
+		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
+	}],
+}
+
+const GUMU_ALLY_ATTACK_EVASION: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [{
+			"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
+			"card": CARD_REF_TRIGGER_CARD,
+			"prefer_outside_attacker_range": true,
+		}],
+	}],
+}
+
+const GUMU_ENEMY_MOVE_WEAKEN: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_AFTER_MOVED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ENEMY}],
+		"actions": [{"type": ACTION_CHANGE_POWERS, "amount": -1,
+		             "card": CARD_REF_TRIGGER_CARD}],
+	}],
+}
+
+const GUMU_TIANLUO_QUEUE: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_GRANT_ABILITY_TO_SELF,
+			 "ability": GUMU_ENEMY_MOVE_WEAKEN},
+			{"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			 "ability": GUMU_ENEMY_MOVE_WEAKEN},
+		],
+	}],
+}
+
+const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": ACTION_GRANT_ABILITY_TO_SELF,
+			 "ability": GUMU_ENEMY_MOVE_WEAKEN},
+			{"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			 "ability": GUMU_ENEMY_MOVE_WEAKEN,
+			 "include_acquired_from": CARD_REF_ABILITY_SOURCE,
+			 "exclude_ability": GUMU_ENEMY_MOVE_WEAKEN},
+		],
+	}],
+}
+
 const _CARD_DEFINITIONS: Dictionary = {
 	&"LangJiTianYa1": {
 		"id": &"LangJiTianYa1",
@@ -2844,7 +3002,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，令你下一张从手牌中打出的牌获得以下效果：进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "玉女剑法的险恶家数，挥剑直劈，去势固然凌厉，抑且风姿绰约，飘逸无比。",
 		"powers": [6, 6, 3, 3],
-		"abilities": [],
+		"abilities": [GUMU_QUEUE_NEXT_SWAP],
 	},
 	&"LangJiTianYa2": {
 		"id": &"LangJiTianYa2",
@@ -2856,7 +3014,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "玉女剑法的险恶家数，挥剑直劈，去势固然凌厉，抑且风姿绰约，飘逸无比。",
 		"powers": [6, 6, 3, 3],
-		"abilities": [],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SWAP],
 	},
 	&"LangJiTianYa3": {
 		"id": &"LangJiTianYa3",
@@ -2869,7 +3027,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "玉女剑法的险恶家数，挥剑直劈，去势固然凌厉，抑且风姿绰约，飘逸无比。",
 		"powers": [6, 6, 3, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SWAP],
 	},
 	&"XiaoYuanYiJu1": {
 		"id": &"XiaoYuanYiJu1",
@@ -2881,7 +3039,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [],
+		"abilities": [GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"XiaoYuanYiJu2": {
 		"id": &"XiaoYuanYiJu2",
@@ -2893,7 +3051,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"XiaoYuanYiJu3": {
 		"id": &"XiaoYuanYiJu3",
@@ -2905,7 +3063,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [],
+		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"LengYueKuiRen1": {
 		"id": &"LengYueKuiRen1",
@@ -2917,7 +3075,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
-		"abilities": [],
+		"abilities": [GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"LengYueKuiRen2": {
 		"id": &"LengYueKuiRen2",
@@ -2929,7 +3087,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
-		"abilities": [],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"LengYueKuiRen3": {
 		"id": &"LengYueKuiRen3",
@@ -2941,7 +3099,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
-		"abilities": [],
+		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"KongBi2": {
 		"id": &"KongBi2",
@@ -2953,7 +3111,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [],
+		"abilities": [LOCKED_ATTACK_EVASION],
 	},
 	&"KongBi3": {
 		"id": &"KongBi3",
@@ -2965,7 +3123,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [],
+		"abilities": [GUMU_ALLY_ATTACK_EVASION],
 	},
 	&"KongBi4": {
 		"id": &"KongBi4",
@@ -2977,7 +3135,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "每当你尝试额外出牌前，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [],
+		"abilities": [GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, GUMU_ALLY_ATTACK_EVASION],
 	},
 	&"TianLuoDiWang2": {
 		"id": &"TianLuoDiWang2",
@@ -2989,7 +3147,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减一】。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [GUMU_TIANLUO_QUEUE],
 	},
 	&"TianLuoDiWang3": {
 		"id": &"TianLuoDiWang3",
@@ -3001,7 +3159,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减一】。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_TIANLUO_QUEUE],
 	},
 	&"TianLuoDiWang4": {
 		"id": &"TianLuoDiWang4",
@@ -3013,7 +3171,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减一】，若我还获得了其它额外效果，下一张从手牌中打出的牌也获得这些效果。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
-		"abilities": [],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_TIANLUO_QUEUE_WITH_ACQUIRED],
 	},
 	&"TianGangBeiDou2": {
 		"id": &"TianGangBeiDou2",
@@ -6445,6 +6603,7 @@ static func _normalize_nested_grants(actions_value: Variant) -> void:
 		if StringName(action.get("type", &"")) in [
 			ACTION_GRANT_TRIGGER_CARD_ABILITY,
 			ACTION_GRANT_ABILITY_TO_SELF,
+			ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
 		]:
 			var granted_value: Variant = action.get("ability", null)
 			if granted_value is Dictionary:
@@ -6832,6 +6991,10 @@ static func _validate_action(
 			)
 		if is_cost:
 			errors.append("Card %s activation cost cannot specify a card reference" % card_id)
+	if action_type == ACTION_GRANT_EXTRA_CARD_PLAY and action.has("next_hand_play_source"):
+		allowed_keys.append(&"next_hand_play_source")
+		if StringName(action.get("next_hand_play_source", &"")) != CARD_ZONE_DISCARD:
+			errors.append("Card %s %s extra-play source override must be discard" % [card_id, context_name])
 	if action_type == ACTION_TRANSFER_CARD_RESOURCE:
 		for field: StringName in [&"from", &"to"]:
 			allowed_keys.append(field)
@@ -6893,13 +7056,18 @@ static func _validate_action(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
-	if action_type == ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY and action.has("prefer_outside_attacker_range"):
-		allowed_keys.append(&"prefer_outside_attacker_range")
-		if typeof(action.get("prefer_outside_attacker_range")) != TYPE_BOOL:
-			errors.append(
-				"Card %s %s move action requires a Boolean prefer_outside_attacker_range"
-				% [card_id, context_name]
-			)
+	if action_type == ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY:
+		if action.has("prefer_outside_attacker_range"):
+			allowed_keys.append(&"prefer_outside_attacker_range")
+			if typeof(action.get("prefer_outside_attacker_range")) != TYPE_BOOL:
+				errors.append(
+					"Card %s %s move action requires a Boolean prefer_outside_attacker_range"
+					% [card_id, context_name]
+				)
+		if action.has("card"):
+			allowed_keys.append(&"card")
+			if StringName(action.get("card", &"")) != CARD_REF_TRIGGER_CARD:
+				errors.append("Card %s %s move override must be the trigger card" % [card_id, context_name])
 	if action_type == ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE and action.has("card"):
 		allowed_keys.append(&"card")
 		if StringName(action.get("card", &"")) != CARD_REF_TRIGGER_CARD:
@@ -7160,13 +7328,23 @@ static func _validate_action(
 			errors.append("Card %s %s reveal-card action requires a known card reference" % [card_id, context_name])
 		if StringName(action.get("observer", &"")) not in KNOWN_OWNER_REFERENCES:
 			errors.append("Card %s %s reveal-card action requires a known observer" % [card_id, context_name])
-	if action_type in [ACTION_GRANT_TRIGGER_CARD_ABILITY, ACTION_GRANT_ABILITY_TO_SELF]:
+	if action_type in [ACTION_GRANT_TRIGGER_CARD_ABILITY, ACTION_GRANT_ABILITY_TO_SELF, ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY]:
 		allowed_keys.append(&"ability")
 		var granted_value: Variant = action.get("ability", null)
 		if not granted_value is Dictionary:
 			errors.append("Card %s %s grant action requires an ability Dictionary" % [card_id, context_name])
 		else:
 			_validate_ability(card_id, granted_value as Dictionary, errors)
+	if action_type == ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY and action.has("include_acquired_from"):
+		allowed_keys.append(&"include_acquired_from")
+		allowed_keys.append(&"exclude_ability")
+		if StringName(action.get("include_acquired_from", &"")) != CARD_REF_ABILITY_SOURCE:
+			errors.append("Card %s %s acquired ability source must be ability_source" % [card_id, context_name])
+		var excluded_value: Variant = action.get("exclude_ability", null)
+		if not excluded_value is Dictionary:
+			errors.append("Card %s %s queue exclusion requires an ability Dictionary" % [card_id, context_name])
+		else:
+			_validate_ability(card_id, excluded_value as Dictionary, errors)
 	if action_type == ACTION_GRANT_OWNER_AURA:
 		allowed_keys.append(&"aura")
 		var aura_value: Variant = action.get("aura", null)

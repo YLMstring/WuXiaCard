@@ -28,6 +28,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct RuntimeAbilityEntry {
 		int32_t compiled_ability_index = -1;
 		uint64_t handle = 0;
+		bool acquired = false;
 	};
 
 	struct RuntimeOwnerAuraEntry {
@@ -40,6 +41,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		int32_t original_index = -1;
 		int32_t compiled_ability_index = -1;
 		uint64_t handle = 0;
+		bool acquired = false;
 	};
 
 	struct RuntimeSuppressionBatch {
@@ -166,6 +168,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		REVEAL_HAND_CARDS,
 		REVEAL_CARD,
 		GRANT_EXTRA_CARD_PLAY,
+		QUEUE_NEXT_HAND_PLAY_ABILITY,
 		ADD_PENDING_NON_RETAINED_SUPPRESSION,
 		TEMPORARILY_REMOVE_NON_RETAINED_ABILITIES,
 		PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
@@ -288,6 +291,8 @@ class DuelNativeCompactKernel : public RefCounted {
 		ENEMY_CANNOT_ATTACK_DURING_OWNER_TURN,
 		SELF_ATTACKS_ALL,
 		CANNOT_ATTACK,
+		ATTACK_EACH_TARGET_TWICE,
+		WEAKEN_TARGET_ON_POWER_FAILURE,
 		OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 		UNSUPPORTED,
 	};
@@ -347,6 +352,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool preserve_powers = false;
 		bool repeat_attack = false;
 		bool prefer_outside_attacker_range = false;
+		bool next_hand_play_from_discard = false;
+		bool include_acquired_abilities = false;
+		int32_t excluded_ability_index = -1;
 		bool target_policy_specified = false;
 		AttackTargetPolicy target_policy = AttackTargetPolicy::ENEMIES_ONLY;
 		ResourceOpcode resource = ResourceOpcode::NONE;
@@ -556,6 +564,7 @@ class DuelNativeCompactKernel : public RefCounted {
 			int32_t source_card_index = -1;
 			int32_t source_cell = -1;
 			int32_t amount = 0;
+			bool next_hand_play_from_discard = false;
 		};
 		bool supported = true;
 		String reason;
@@ -1250,7 +1259,8 @@ private:
 	std::vector<int32_t> get_attack_targets(
 		const NativeState &value,
 		int32_t source_cell,
-		const AttackPolicy &policy
+		const AttackPolicy &policy,
+		bool skip_power_comparison = false
 	) const;
 	bool can_attack_target(
 		const NativeState &value,
@@ -1564,7 +1574,7 @@ private:
 		Array &events
 	) const;
 	void clear_runtime_suppression(NativeState &value, int32_t card_index) const;
-	Resolution consume_pending_hand_play_suppression(
+	Resolution consume_next_hand_play_effects(
 		NativeState &value,
 		int32_t card_index,
 		int32_t owner_id,
@@ -1680,7 +1690,8 @@ private:
 		NativeState &value,
 		int32_t moving_owner,
 		const std::vector<Resolution::ExtraPlayRequest> &requests,
-		Resolution &resolution
+		Resolution &resolution,
+		std::vector<int32_t> &exile_stack
 	) const;
 	Resolution resolve_before_full_board_end(
 		NativeState &value,

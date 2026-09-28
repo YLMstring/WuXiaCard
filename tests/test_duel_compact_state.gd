@@ -99,10 +99,7 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 		Rules.PLAYER_OWNER: {"card_id": &"TaiZuChangQuan1", "instance_id": &"old"},
 		Rules.OPPONENT_OWNER: {},
 	}
-	state.pending_non_retained_suppression_by_owner = {
-		Rules.PLAYER_OWNER: 2,
-		Rules.OPPONENT_OWNER: 1,
-	}
+	state.effect_queue.append({"owner_id": Rules.PLAYER_OWNER, "grantor_name": "料敌机先", "actions": [{"type": Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES, "card": Catalog.CARD_REF_TRIGGER_CARD}]})
 	state.enabled_effect_gates_by_owner = {
 		Rules.PLAYER_OWNER: [&"fixture_gate"],
 		Rules.OPPONENT_OWNER: [],

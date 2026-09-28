@@ -3023,14 +3023,10 @@ func _update_turn_status() -> void:
 		TurnState.PLAYER:
 			if testing_mode:
 				turn_status.text = "Testing · Player side · play or activate"
-			elif (
-				duel_state != null
-				and int(
-					duel_state.pending_non_retained_suppression_by_owner.get(
-						DuelRules.PLAYER_OWNER,
-						0
-					)
-				) > 0
+			elif duel_state != null and duel_state.effect_queue.any(func(entry: Variant) -> bool:
+				return entry is Dictionary \
+					and int(entry.get("owner_id", 0)) == DuelRules.PLAYER_OWNER \
+					and String(entry.get("grantor_name", "")) == "料敌机先"
 			):
 				turn_status.text = "本次打出的手牌将永久失去效果"
 			else:

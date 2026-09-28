@@ -38,6 +38,14 @@ func _run() -> void:
 	for value: Variant in displaced:
 		if String(value) not in high_tier_deck and String(value) not in occupied_library:
 			occupied_library.append(String(value))
+	# The bead assertion below needs a ki-bearing library card, regardless of
+	# catalog insertion order as new families are added.
+	for index: int in range(3, occupied_library.size()):
+		if int(Catalog.get_definition(StringName(occupied_library[index])).get("starting_ki", 0)) > 0:
+			var original_slot_three: String = occupied_library[3]
+			occupied_library[3] = occupied_library[index]
+			occupied_library[index] = original_slot_three
+			break
 	while occupied_library.size() < Store.LIBRARY_CAPACITY:
 		occupied_library.append("")
 	fixture_profile["library_slots"] = occupied_library

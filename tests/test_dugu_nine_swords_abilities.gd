@@ -57,15 +57,15 @@ func _test_state_copy_and_key() -> void:
 		"card_id": &"CangSongYingKe1",
 		"instance_id": &"history_one",
 	}
-	state.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER] = 2
+	_queue_suppression(state, Rules.OPPONENT_OWNER, 2)
 	var copied: State = state.duplicate_state() as State
 	copied.last_hand_play_by_owner[Rules.PLAYER_OWNER]["instance_id"] = &"history_two"
-	copied.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER] = 1
+	copied.effect_queue.pop_back()
 	_check(
 		StringName(state.last_hand_play_by_owner[Rules.PLAYER_OWNER]["instance_id"]) == &"history_one",
 		"Hand-play history is deeply copied"
 	)
-	_check(int(state.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER]) == 2, "Pending suppression counts are deeply copied")
+	_check(_count_suppression(state, Rules.OPPONENT_OWNER) == 2, "Pending suppression entries are deeply copied")
 	_check(StateKey.build(state) != StateKey.build(copied), "State keys encode Dugu state")
 
 
@@ -127,7 +127,7 @@ func _test_anticipate_suppresses_next_card() -> void:
 	var prepared: State = first.get("state") as State
 	_check(
 		prepared.board[4] == null and prepared.extra_card_plays_remaining == 1
-		and int(prepared.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER]) == 1,
+		and _count_suppression(prepared, Rules.OPPONENT_OWNER) == 1,
 		"Anticipate exiles itself, draws, grants an extra play, and queues suppression"
 	)
 	prepared = (Simulator.apply_action(prepared, Action.make_play(0, 8, &"followup")).get("state") as State)
@@ -135,7 +135,7 @@ func _test_anticipate_suppresses_next_card() -> void:
 	var resolved: State = second.get("state") as State
 	var runtime: Dictionary = (resolved.board[0] as Dictionary).get("card", {})
 	_check(
-		int(resolved.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER]) == 0
+		_count_suppression(resolved, Rules.OPPONENT_OWNER) == 0
 		and (runtime.get("active_abilities", []) as Array).size() == 1
 		and bool(((runtime.get("active_abilities", []) as Array)[0] as Dictionary).get("retained_on_flip", false)),
 		"The next hand-played card permanently loses only non-retained abilities"
@@ -152,12 +152,12 @@ func _test_anticipate_includes_heart_methods() -> void:
 	var heart: Dictionary = _catalog_card(&"TuNaShu1", Rules.OPPONENT_OWNER, &"heart")
 	heart["active_abilities"] = [_before_summon_ability([{"type": Catalog.ACTION_GAIN_KI, "amount": 1}], false)]
 	var state := State.new(Rules.empty_board(), [], [heart], Rules.OPPONENT_OWNER)
-	state.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER] = 1
+	_queue_suppression(state, Rules.OPPONENT_OWNER, 1)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4, &"heart"))
 	var next_state: State = transition.get("state") as State
 	var runtime: Dictionary = (next_state.board[4] as Dictionary).get("card", {})
 	_check(
-		int(next_state.pending_non_retained_suppression_by_owner[Rules.OPPONENT_OWNER]) == 0
+		_count_suppression(next_state, Rules.OPPONENT_OWNER) == 0
 		and (runtime.get("active_abilities", []) as Array).is_empty() and int(runtime.get("ki", 0)) == 0,
 		"Heart methods consume suppression and lose non-retained abilities too"
 	)
@@ -169,15 +169,15 @@ func _test_pending_suppression_stacks_and_consumes_for_abilityless_cards() -> vo
 	var second_card: Dictionary = _catalog_card(&"CangSongYingKe2", Rules.PLAYER_OWNER, &"stack_second")
 	second_card["active_abilities"] = []
 	var state := State.new(Rules.empty_board(), [first_card, second_card], [], Rules.PLAYER_OWNER)
-	state.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER] = 2
+	_queue_suppression(state, Rules.PLAYER_OWNER, 2)
 	state.extra_card_plays_remaining = 1
 	var first_transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0, &"stack_first"))
 	var after_first: State = first_transition.get("state") as State
 	var second_transition: Dictionary = Simulator.apply_action(after_first, Action.make_play(0, 8, &"stack_second"))
 	var after_second: State = second_transition.get("state") as State
 	_check(
-		int(after_first.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER]) == 1
-		and int(after_second.pending_non_retained_suppression_by_owner[Rules.PLAYER_OWNER]) == 0,
+		_count_suppression(after_first, Rules.PLAYER_OWNER) == 1
+		and _count_suppression(after_second, Rules.PLAYER_OWNER) == 0,
 		"Each hand play consumes exactly one stacked layer, even without abilities"
 	)
 	_check(
@@ -225,6 +225,23 @@ func _test_break_all_transforms_enemies_and_preserves_runtime_identity() -> void
 
 func _before_summon_ability(actions: Array, retained: bool) -> Dictionary:
 	return {"retained_on_flip": retained, "triggers": [{"event": Catalog.TRIGGER_CARD_BEFORE_SUMMONED, "conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}], "actions": actions.duplicate(true)}]}
+
+
+func _queue_suppression(state: State, owner_id: int, count: int) -> void:
+	for index: int in range(count):
+		state.effect_queue.append({
+			"owner_id": owner_id,
+			"grantor_name": "料敌机先",
+			"actions": [{"type": Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES, "card": Catalog.CARD_REF_TRIGGER_CARD}],
+		})
+
+
+func _count_suppression(state: State, owner_id: int) -> int:
+	var count: int = 0
+	for entry: Variant in state.effect_queue:
+		if entry is Dictionary and int(entry.get("owner_id", 0)) == owner_id and String(entry.get("grantor_name", "")) == "料敌机先":
+			count += 1
+	return count
 
 
 func _catalog_card(card_id: StringName, owner_id: int, instance_id: StringName) -> Dictionary:

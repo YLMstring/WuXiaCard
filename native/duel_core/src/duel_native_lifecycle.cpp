@@ -426,12 +426,15 @@ bool DuelNativeCompactKernel::owner_has_legal_action(
 }
 
 bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
-	// 终局只在结算队列清空且当前额外出牌无法继续时判断。turn_count 表示正在
-	// 开始的单方回合，所以完成第 100 回合后变为 101，条件必须是 > max_turns。
+	// 下次手牌赋能可长期等待，不阻止正常终局；其它即时队列条目仍需结算。
 	const Array effect_queue = value.side_payload.get("effect_queue", Array());
-	if (!effect_queue.is_empty()) {
-		return false;
+	for (int64_t index = 0; index < effect_queue.size(); ++index) {
+		if (effect_queue[index].get_type() != Variant::DICTIONARY) return false;
+		const Dictionary entry = effect_queue[index];
+		if (!entry.has("owner_id") || !entry.has("grantor_name") || !entry.has("actions")) return false;
 	}
+	// turn_count 表示正在
+	// 开始的单方回合，所以完成第 100 回合后变为 101，条件必须是 > max_turns。
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
 		return false;
 	}
@@ -461,30 +464,47 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 	NativeState &value,
 	int32_t moving_owner,
 	const std::vector<Resolution::ExtraPlayRequest> &requests,
-	Resolution &resolution
+	Resolution &resolution,
+	std::vector<int32_t> &exile_stack
 ) const {
-	// 同一单方回合最多获得一次额外出牌。多个同时请求合并为一个机会，事件仍
-	// 记录全部来源，便于界面解释本次额外出牌由哪些效果共同产生。
-	if (value.scalars[13] != 0) return;
+	// 请求尝试先触发规则事件，再由本回合一次额度决定是否真正获得机会。
 	Array source_instance_ids;
-	for (const Resolution::ExtraPlayRequest &request : requests) {
+	Array all_request_sources;
+	std::vector<Resolution::ExtraPlayRequest> pending_requests = requests;
+	for (size_t request_index = 0; request_index < pending_requests.size(); ++request_index) {
+		if (request_index >= 64) { resolution.supported = false; resolution.reason = "Extra-play request chain exceeded depth limit"; return; }
+		const Resolution::ExtraPlayRequest request = pending_requests[request_index];
 		if (
 			request.owner_id != moving_owner
 			|| request.amount <= 0
 			|| request.source_card_index < 0
 			|| request.source_card_index >= static_cast<int32_t>(value.card_instance_ids.size())
 		) continue;
-		source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
+		all_request_sources.append(value.card_instance_ids[request.source_card_index]);
+		for (int32_t attempt = 0; attempt < request.amount; ++attempt) {
+			EventContext context;
+			context.turn_owner = moving_owner;
+			context.trigger_card_index = request.source_card_index;
+			context.trigger_cell = request.source_cell;
+			context.trigger_owner = moving_owner;
+			Resolution before = resolve_event(value, StringName("extra_card_play_granted"), context, exile_stack);
+			if (!before.supported) { resolution.supported = false; resolution.reason = before.reason; return; }
+			pending_requests.insert(pending_requests.end(), before.extra_play_requests.begin(), before.extra_play_requests.end());
+			append_resolution(resolution, before);
+			if (value.scalars[13] != 0) continue;
+			source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
+			value.scalars[13] = 1;
+			value.scalars[5] = std::max(value.scalars[5], 1);
+			if (request.next_hand_play_from_discard) value.side_payload["next_hand_play_from_discard_owner"] = moving_owner;
+		}
 	}
 	if (source_instance_ids.is_empty()) return;
-	value.scalars[13] = 1;
-	value.scalars[5] = std::max(value.scalars[5], 1);
 	Dictionary granted;
 	granted["type"] = StringName("extra_card_play_granted");
 	granted["owner_id"] = moving_owner;
 	granted["amount"] = 1;
-	granted["request_count"] = source_instance_ids.size();
-	granted["source_instance_ids"] = source_instance_ids;
+	granted["request_count"] = all_request_sources.size();
+	granted["source_instance_ids"] = all_request_sources;
 	resolution.events.append(granted);
 }
 
@@ -545,8 +565,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		value,
 		moving_owner,
 		extra_play_requests,
-		resolution
+		resolution,
+		exile_stack
 	);
+	if (!resolution.supported) return resolution;
 	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
 		value.scalars[0] = moving_owner;
 		return resolution;
@@ -569,8 +591,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 			value,
 			moving_owner,
 			end_resolution.extra_play_requests,
-			resolution
+			resolution,
+			exile_stack
 		);
+		if (!resolution.supported) return resolution;
 	}
 
 	Resolution before_end = resolve_before_full_board_end(value, exile_stack);
@@ -618,8 +642,10 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 			value,
 			turn_owner,
 			empty_end_resolution.extra_play_requests,
-			resolution
+			resolution,
+			exile_stack
 		);
+		if (!resolution.supported) return resolution;
 		Resolution empty_before_end = resolve_before_full_board_end(value, exile_stack);
 		if (!empty_before_end.supported) return empty_before_end;
 		append_resolution(resolution, empty_before_end);
@@ -647,6 +673,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[13] = 0;
 	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;
 	value.scalars[OPPONENT_SPECIAL_SUMMONS_SCALAR] = 0;
+	value.side_payload.erase("next_hand_play_from_discard_owner");
 	Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 	repetition_hashes = repetition_hashes.duplicate(false);
 	repetition_hashes.append(board_repetition_signature(value));
@@ -765,6 +792,16 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	payload["fresh_card_prototypes"] = value.fresh_card_prototype_pool;
 	payload["empty_deck_draw_prototype_index"] = empty_deck_draw_prototype_index;
 	Dictionary side_payload = value.side_payload.duplicate(true);
+	Dictionary acquired_by_instance;
+	for (size_t card_index = 0; card_index < value.card_instance_ids.size(); ++card_index) {
+		Array acquired_indices;
+		const std::vector<RuntimeAbilityEntry> &entries = value.card_runtime_abilities[card_index];
+		for (size_t index = 0; index < entries.size(); ++index) {
+			if (entries[index].acquired) acquired_indices.append(static_cast<int32_t>(index));
+		}
+		if (!acquired_indices.is_empty()) acquired_by_instance[value.card_instance_ids[card_index]] = acquired_indices;
+	}
+	side_payload["acquired_ability_indices_by_instance_id"] = acquired_by_instance;
 	Dictionary owner_auras;
 	for (int32_t owner_id = 1; owner_id <= 2; ++owner_id) {
 		Array entries;
@@ -806,6 +843,8 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 		for (const RuntimeAbilityEntry &entry : abilities) {
 			hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
 			hash *= 1099511628211ULL;
+			hash ^= static_cast<uint64_t>(entry.acquired);
+			hash *= 1099511628211ULL;
 		}
 	}
 	for (int32_t owner_index = 0; owner_index < 2; ++owner_index) {
@@ -831,6 +870,8 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 				hash *= 1099511628211ULL;
 				hash ^= static_cast<uint64_t>(entry.compiled_ability_index);
 				hash *= 1099511628211ULL;
+				hash ^= static_cast<uint64_t>(entry.acquired);
+				hash *= 1099511628211ULL;
 			}
 		}
 	}
@@ -841,6 +882,13 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 		hash ^= static_cast<uint64_t>(instance_id.hash());
 		hash *= 1099511628211ULL;
 	}
+	const Array effect_queue = value.side_payload.get("effect_queue", Array());
+	if (!effect_queue.is_empty()) {
+		hash ^= static_cast<uint64_t>(effect_queue.hash());
+		hash *= 1099511628211ULL;
+	}
+	hash ^= static_cast<uint64_t>(static_cast<int32_t>(value.side_payload.get("next_hand_play_from_discard_owner", 0)));
+	hash *= 1099511628211ULL;
 	return hash;
 }
 
