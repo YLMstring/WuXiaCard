@@ -3063,6 +3063,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
+		"starting_ki": 1,
 		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"LengYueKuiRen1": {
@@ -3099,6 +3100,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定，指定：选择场上的一张敌方牌，令其点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
+		"starting_ki": 1,
 		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"KongBi2": {
