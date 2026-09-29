@@ -125,6 +125,9 @@ var _opponent_turn_plan: Array[Dictionary] = []
 var _opponent_search_start_count: int = 0
 var _last_search_report: Dictionary = {}
 var _inspection_open: bool = false
+var _inspection_opened_msec: int = 0
+var _inspection_paused_msec: int = 0
+var _manual_inspection_in_replay_action: bool = false
 var _board_visible_before_inspection: bool = true
 var _scores_visible_before_inspection: bool = true
 var _match_outcome: StringName = &""
@@ -825,17 +828,20 @@ func _on_card_drag_ended(card: CardView, pointer_position: Vector2) -> void:
 func _on_card_inspection_requested(card_data: Dictionary) -> void:
 	if (
 		_inspection_open
-		or turn_state == TurnState.RESOLVING
 		or _is_victory_vfx_playing
-		or (_is_replaying and _is_replay_presenting_action)
-		or _is_replaying_opponent_turn
 	):
 		return
+	if turn_state == TurnState.RESOLVING and (
+		(_is_replaying and _is_replay_presenting_action)
+		or _is_replaying_opponent_turn
+	):
+		_manual_inspection_in_replay_action = true
 	_open_card_inspection(card_data)
 
 
 func _open_card_inspection(card_data: Dictionary) -> void:
 	_inspection_open = true
+	_inspection_opened_msec = Time.get_ticks_msec()
 	_board_visible_before_inspection = board_grid.visible
 	_scores_visible_before_inspection = score_overlay.visible
 	_status_before_inspection = turn_status.text
@@ -885,12 +891,20 @@ func _present_replay_self_exile_inspection(card: CardView) -> bool:
 func _on_card_inspection_closed() -> void:
 	if not _inspection_open:
 		return
+	_inspection_paused_msec += maxi(Time.get_ticks_msec() - _inspection_opened_msec, 0)
+	_inspection_opened_msec = 0
 	_inspection_open = false
 	board_grid.visible = _board_visible_before_inspection
 	score_overlay.visible = _scores_visible_before_inspection
 	turn_status.text = _status_before_inspection
 	_sync_hand_playability()
 	_update_turn_status()
+
+
+func _wait_for_inspection_boundary() -> bool:
+	while is_inside_tree() and _inspection_open and not _return_emitted:
+		await get_tree().process_frame
+	return is_inside_tree() and not _return_emitted
 
 
 func _return_card_home(card: CardView) -> void:
@@ -970,6 +984,8 @@ func _commit_action(
 	var transition: Dictionary = Simulator.apply_action(duel_state, action)
 	if not bool(transition.get("valid", false)):
 		return
+	_inspection_paused_msec = 0
+	_manual_inspection_in_replay_action = false
 	if capture_undo_checkpoint:
 		_undo_checkpoint_state = undo_state_before_action
 		_undo_checkpoint_replay_action_count = undo_replay_action_count
@@ -1024,11 +1040,18 @@ func _commit_action(
 		snap_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		snap_tween.tween_property(card, "scale", Vector2.ONE, snap_duration)
 		await snap_tween.finished
+		if not await _wait_for_inspection_boundary():
+			return
 	else:
 		card.scale = Vector2.ONE
 	if action.action_type == ActionData.TYPE_PLAY and not occupied_play:
 		await _wait_after_board_entry()
-	if _should_inspect_replayed_self_exile(action, owner_id, events):
+	if not await _wait_for_inspection_boundary():
+		return
+	if (
+		not _manual_inspection_in_replay_action
+		and _should_inspect_replayed_self_exile(action, owner_id, events)
+	):
 		if not await _present_replay_self_exile_inspection(card):
 			return
 
@@ -1040,6 +1063,8 @@ func _commit_action(
 		presentation_started_msec,
 		card if occupied_play else null
 	)
+	if not await _wait_for_inspection_boundary():
+		return
 	_reconcile_board_card_views()
 	if resolved_targets > 1:
 		_vibrate(multi_capture_haptic_ms)
@@ -1124,10 +1149,16 @@ func _find_reciprocal_movement_event_index(
 func _wait_for_summon_swap_readability(started_msec: int) -> void:
 	if summon_swap_readable_duration <= 0.0 or started_msec <= 0:
 		return
-	var elapsed: float = float(Time.get_ticks_msec() - started_msec) / 1000.0
-	var remaining: float = summon_swap_readable_duration - elapsed
-	if remaining > 0.0:
+	while is_inside_tree():
+		var elapsed: float = float(
+			Time.get_ticks_msec() - started_msec - _inspection_paused_msec
+		) / 1000.0
+		var remaining: float = summon_swap_readable_duration - elapsed
+		if remaining <= 0.0:
+			return
 		await get_tree().create_timer(remaining).timeout
+		if not await _wait_for_inspection_boundary():
+			return
 
 
 func _present_movement_event_group(
@@ -1410,6 +1441,8 @@ func _present_transition_events(
 	var deferred_exile_events: Dictionary = {}
 	var deferred_swap_events: Dictionary = {}
 	while event_index < events.size():
+		if not await _wait_for_inspection_boundary():
+			return resolved_targets
 		if consumed_power_event_indices.has(event_index):
 			event_index += 1
 			continue
@@ -1435,6 +1468,8 @@ func _present_transition_events(
 					snap_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 					snap_tween.tween_property(pending_play_card, "scale", Vector2.ONE, snap_duration)
 					await snap_tween.finished
+					if not await _wait_for_inspection_boundary():
+						return resolved_targets
 				else:
 					pending_play_card.scale = Vector2.ONE
 				await _wait_after_board_entry()
@@ -1470,6 +1505,8 @@ func _present_transition_events(
 		elif event_type == &"attack_started" or event_type == &"attack_attempted":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
+				if not await _wait_for_inspection_boundary():
+					return resolved_targets
 				waited_after_draw = true
 			_presentation_trace.append(event_type)
 			var source_cell: int = int(event.get("source_cell", -1))
@@ -1552,6 +1589,8 @@ func _present_transition_events(
 			drew_card = true
 		elif event_type == &"card_summoned":
 			await _present_generated_summon_event(event)
+			if not await _wait_for_inspection_boundary():
+				return resolved_targets
 			var summoned_instance_id := StringName(event.get("instance_id", &""))
 			if deferred_exile_events.has(summoned_instance_id):
 				var deferred_exile: Dictionary = deferred_exile_events[summoned_instance_id]
@@ -1603,6 +1642,8 @@ func _present_transition_events(
 		elif event_type == &"card_flipped":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
+				if not await _wait_for_inspection_boundary():
+					return resolved_targets
 				waited_after_draw = true
 			_presentation_trace.append(&"card_flipped")
 			var flipped_card := board_cards[target_cell] as CardView
@@ -1617,11 +1658,15 @@ func _present_transition_events(
 		elif event_type == &"card_exiled":
 			if drew_card and not waited_after_draw:
 				await _wait_after_draw_before_board_effect()
+				if not await _wait_for_inspection_boundary():
+					return resolved_targets
 				waited_after_draw = true
 			_presentation_trace.append(&"card_exiled")
 			var self_removal: bool = bool(event.get("self_removal", false))
 			if not self_removal and exile_step_delay > 0.0:
 				await get_tree().create_timer(exile_step_delay).timeout
+				if not await _wait_for_inspection_boundary():
+					return resolved_targets
 			var exiled_instance_id := StringName(event.get("instance_id", &""))
 			var exiled_card: CardView = _get_card_view_by_instance(exiled_instance_id)
 			if exiled_card == null and exiled_instance_id != &"":
@@ -1770,6 +1815,8 @@ func _present_power_change_batch(
 		})
 	if not visible_changes.is_empty() and power_change_pre_delay > 0.0:
 		await get_tree().create_timer(power_change_pre_delay).timeout
+		if not await _wait_for_inspection_boundary():
+			return batch_indices
 	var started_msec: int = Time.get_ticks_msec()
 	var animated_count: int = 0
 	for change: Dictionary in visible_changes:
@@ -1877,6 +1924,8 @@ func _present_generated_summon_event(event: Dictionary) -> void:
 	board_cards[target_cell] = card
 	_presentation_trace.append(&"card_summoned")
 	await card.play_draw_summon(draw_bloom_duration, draw_rise_duration, draw_ink_color)
+	if not await _wait_for_inspection_boundary():
+		return
 	await _wait_after_board_entry()
 
 
@@ -2051,6 +2100,8 @@ func _present_card_returned_to_hand_event(event: Dictionary) -> void:
 		_presentation_trace.append(&"card_return_faded")
 		await returning_view.play_fade_out(card_fade_duration)
 		returning_view.queue_free()
+		if not await _wait_for_inspection_boundary():
+			return
 	_presentation_trace.append(&"card_returned_to_hand")
 	await _present_hand_addition_event(event, &"card_added_to_hand")
 

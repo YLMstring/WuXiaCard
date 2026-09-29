@@ -68,10 +68,14 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
 - Drag beyond threshold: play or activate.
 - Tap face-down card: no inspection or identity metadata leak; visible powers
   below difficulty 8 are intentional.
-- Tap during resolution: inspector does not open.
+- Tap a revealed card during resolution, including either replay mode: the
+  inspector opens immediately. The current animation step finishes behind it;
+  the next step waits until the inspector closes. A manual inspection during a
+  replay action suppresses that action's enemy self-exile automatic inspection.
 - During full-match or last-opponent-turn replay, an enemy-played card that
   self-exiles in that play automatically opens the inspector after reveal and
-  before event animation. Closing it resumes playback; normal duels do not pause.
+  before event animation when no manual inspection opened during that action.
+  Closing it resumes playback; normal duels do not open it automatically.
 - Inspector open: no duel action commits.
 - AI may think in background, but its move waits to apply.
 - Mouse must mirror touch.

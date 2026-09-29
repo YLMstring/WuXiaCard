@@ -19,8 +19,11 @@ func _init() -> void:
 
 func _run() -> void:
 	await _check_live_play_and_trigger_filter()
+	await _check_manual_inspection_during_live_resolution()
 	await _check_full_replay()
 	await _check_opponent_turn_replay()
+	await _check_manual_preempts_automatic_replay(false)
+	await _check_manual_preempts_automatic_replay(true)
 	await _check_cancelled_replay_closes_inspection()
 	if _failures == 0:
 		print("REPLAY_SELF_EXILE_INSPECTION_PASSED checks=%d" % _checks)
@@ -77,6 +80,104 @@ func _check_live_play_and_trigger_filter() -> void:
 	_check(bool(duel.call("_should_inspect_replayed_self_exile", same_name_new_instance, Rules.OPPONENT_OWNER, [{"type": &"card_exiled", "self_removal": true, "instance_id": &"second_yunv"}])), "Later same-name instance qualifies independently")
 	duel.debug_set_fast_mode(true)
 	_check(not bool(duel.call("_should_inspect_replayed_self_exile", played, Rules.OPPONENT_OWNER, exact_exile)), "Fast presentation skips automatic modal")
+	duel.queue_free()
+	await process_frame
+
+
+func _check_manual_inspection_during_live_resolution() -> void:
+	var duel: DuelController = await _new_duel()
+	duel.snap_duration = 0.30
+	duel.card_fade_duration = 0.30
+	duel.call("_rebuild_views_from_state", _make_state(true))
+	duel.debug_commit_move(Rules.OPPONENT_OWNER, 0, 4, false)
+	var played_card: CardView = _board_card(duel, 4)
+	_check(played_card != null, "Live resolution exposes the just-revealed played card")
+	if played_card != null:
+		_submit_card_tap(played_card)
+	_check(duel.debug_is_inspection_open(), "A tap opens inspection immediately during live resolution")
+	await create_timer(0.36).timeout
+	_check(
+		not (&"board_entry_pause" in duel.debug_get_presentation_trace()),
+		"The running snap finishes behind inspection without starting the next presentation step"
+	)
+	duel.debug_close_inspection()
+	for _frame: int in range(120):
+		if &"card_exiled" in duel.debug_get_presentation_trace():
+			break
+		await process_frame
+	_check(&"card_exiled" in duel.debug_get_presentation_trace(), "Live resolution resumes the exile after close")
+	var fading_card: CardView = _board_card(duel, 4)
+	_check(fading_card != null, "The self-exiling card remains tappable during its fade")
+	if fading_card != null:
+		_submit_card_tap(fading_card)
+	_check(duel.debug_is_inspection_open(), "Exile fade accepts immediate inspection")
+	await create_timer(0.36).timeout
+	var inspector: CardInspector = duel.get_node("DuelCanvas/CardInspector") as CardInspector
+	var snapshot: Dictionary = inspector.get("_card_snapshot")
+	_check(
+		StringName(snapshot.get("instance_id", &"")) == &"opponent_yunv"
+		and not is_instance_valid(fading_card),
+		"The inspector retains its tapped snapshot after the fading card is freed"
+	)
+	_check(
+		duel.turn_state == DuelController.TurnState.RESOLVING,
+		"Resolution does not advance after the exile fade while inspection remains open"
+	)
+	duel.debug_close_inspection()
+	for _frame: int in range(120):
+		if duel.turn_state != DuelController.TurnState.RESOLVING:
+			break
+		await process_frame
+	_check(duel.turn_state != DuelController.TurnState.RESOLVING, "Closing fade inspection resumes resolution")
+	duel.queue_free()
+	await process_frame
+
+
+func _check_manual_preempts_automatic_replay(opponent_turn: bool) -> void:
+	var duel: DuelController = await _new_duel()
+	duel.snap_duration = 0.30
+	var initial: State = _make_state(opponent_turn)
+	var action: Action = Action.make_play(0, 4, &"opponent_yunv")
+	var finished: State = Simulator.apply_action(initial, action).get("state") as State
+	var record := ReplayRecord.new()
+	record.begin(initial)
+	record.record_action(action)
+	if opponent_turn:
+		duel.set("_opponent_replay_checkpoint_state", initial.duplicate_state())
+		duel.set("_opponent_replay_checkpoint_action_count", 0)
+		var recorded_actions: Array[Action] = [action]
+		duel.set("_opponent_replay_actions", recorded_actions)
+	else:
+		record.complete(finished, &"defeat", "回放结束")
+	duel.set("_replay_record", record)
+	duel.call("_rebuild_views_from_state", finished)
+	if opponent_turn:
+		duel.debug_replay_last_opponent_turn()
+	else:
+		duel.set("turn_state", DuelController.TurnState.COMPLETE)
+		duel.debug_start_replay()
+	var inspected_card: CardView = (
+		_first_hand_card(duel, Rules.PLAYER_OWNER)
+		if opponent_turn else _board_card(duel, 4)
+	)
+	_check(inspected_card != null, "Replay exposes a public card during its snap")
+	if inspected_card != null:
+		_submit_card_tap(inspected_card)
+	var label: String = "opponent-turn" if opponent_turn else "full"
+	_check(duel.debug_is_inspection_open(), "%s replay accepts immediate manual inspection" % label)
+	await create_timer(0.36).timeout
+	_check(
+		not (&"board_entry_pause" in duel.debug_get_presentation_trace()),
+		"%s replay holds the next step while manual inspection stays open" % label
+	)
+	duel.debug_close_inspection()
+	await _wait_for_replay_end(duel, opponent_turn)
+	_check(
+		not (duel.debug_is_replaying_opponent_turn() if opponent_turn else duel.debug_is_replaying()),
+		"%s replay skips the conflicting automatic inspection" % label
+	)
+	_check(not duel.debug_is_inspection_open(), "%s replay ends with inspection closed" % label)
+	_check(&"card_exiled" in duel.debug_get_presentation_trace(), "%s replay still presents exile" % label)
 	duel.queue_free()
 	await process_frame
 
@@ -180,6 +281,36 @@ func _inspected_card_is_yunv(duel: DuelController) -> bool:
 		and String(snapshot.get("glyph", "")) == "玉女无锋"
 		and not String(snapshot.get("description", "")).is_empty()
 	)
+
+
+func _board_card(duel: DuelController, cell_index: int) -> CardView:
+	var board: GridContainer = duel.get_node("DuelCanvas/BoardCenter/BoardGrid") as GridContainer
+	for child: Node in board.get_child(cell_index).get_children():
+		if child is CardView:
+			return child as CardView
+	return null
+
+
+func _first_hand_card(duel: DuelController, owner_id: int) -> CardView:
+	var hand_path: String = (
+		"DuelCanvas/PlayerHand" if owner_id == Rules.PLAYER_OWNER else "DuelCanvas/OpponentHand"
+	)
+	for slot: Node in duel.get_node(hand_path).get_children():
+		for child: Node in slot.get_children():
+			if child is CardView:
+				return child as CardView
+	return null
+
+
+func _submit_card_tap(card: CardView) -> void:
+	var center: Vector2 = card.get_global_rect().get_center()
+	for pressed: bool in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.pressed = pressed
+		event.position = center
+		event.global_position = center
+		card._gui_input(event)
 
 
 func _wait_for_inspection(duel: DuelController) -> void:

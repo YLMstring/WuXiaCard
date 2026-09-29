@@ -29,7 +29,11 @@ actions without producing progression side effects.
 During full-match and last-opponent-turn replay, an enemy hand play that exiles
 its own played instance pauses before event animation and opens the existing
 inspector; closing it resumes the same action. Live duels keep playing without
-that modal. See `docs/superpowers/specs/2026-09-29-replay-self-exile-inspection-design.md`.
+that automatic modal. Revealed cards can also be inspected immediately during
+live and replay resolution: the current animation step finishes, then the
+presentation waits for the inspector to close. Manual inspection in a replay
+action suppresses that action's self-exile popup. See
+`docs/superpowers/specs/2026-09-29-live-resolution-card-inspection-design.md`.
 
 The main flow routes the main menu, sect selection, a seven-page beginner
 tutorial, deck builder, duel, reward selection, and a completed-run ending. The deck-building scene persists a

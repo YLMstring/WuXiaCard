@@ -1497,7 +1497,8 @@ func _check_card_inspector_modal() -> void:
 
 	inspect_duel.set("turn_state", 1)
 	var resolving_opened: bool = inspect_duel.debug_open_inspection(player_card.get("card_data"))
-	_check(not resolving_opened, "Inspection requests are rejected during resolution")
+	_check(resolving_opened, "Revealed cards remain inspectable during resolution")
+	inspect_duel.debug_close_inspection()
 	inspect_duel.set("turn_state", 0)
 	inspect_duel.queue_free()
 	await process_frame
