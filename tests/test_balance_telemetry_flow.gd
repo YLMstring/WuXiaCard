@@ -123,8 +123,9 @@ func _run() -> void:
 	)
 	flow.queue_free()
 	await process_frame
-	await process_frame
-	await process_frame
+	_check(not is_instance_valid(flow), "Telemetry fixture releases its main scene before exit")
+	# Let the audio server release the menu MP3 playback before this test process quits.
+	await create_timer(0.2).timeout
 
 	_cleanup()
 	_finish()
