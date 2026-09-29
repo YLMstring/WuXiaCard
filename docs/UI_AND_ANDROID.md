@@ -69,6 +69,9 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
 - Tap face-down card: no inspection or identity metadata leak; visible powers
   below difficulty 8 are intentional.
 - Tap during resolution: inspector does not open.
+- During full-match or last-opponent-turn replay, an enemy-played card that
+  self-exiles in that play automatically opens the inspector after reveal and
+  before event animation. Closing it resumes playback; normal duels do not pause.
 - Inspector open: no duel action commits.
 - AI may think in background, but its move waits to apply.
 - Mouse must mirror touch.

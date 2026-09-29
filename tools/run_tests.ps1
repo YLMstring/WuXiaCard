@@ -78,6 +78,7 @@ $testScripts = @(
 	"test_card_mastery.gd",
 	"test_duel_replay_record.gd",
 	"test_duel_replay.gd",
+	"test_replay_self_exile_inspection.gd",
 	"test_duel_undo.gd",
     "test_enemy_memory.gd",
     "test_reward_profile.gd",

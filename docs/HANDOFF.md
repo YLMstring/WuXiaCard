@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-28
+Updated: 2026-09-29
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -26,6 +26,10 @@ Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second
 turn cadence, preserves opponent concealment, and permits inspection between
 actions without producing progression side effects.
+During full-match and last-opponent-turn replay, an enemy hand play that exiles
+its own played instance pauses before event animation and opens the existing
+inspector; closing it resumes the same action. Live duels keep playing without
+that modal. See `docs/superpowers/specs/2026-09-29-replay-self-exile-inspection-design.md`.
 
 The main flow routes the main menu, sect selection, a seven-page beginner
 tutorial, deck builder, duel, reward selection, and a completed-run ending. The deck-building scene persists a

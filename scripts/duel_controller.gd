@@ -831,6 +831,10 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 		or _is_replaying_opponent_turn
 	):
 		return
+	_open_card_inspection(card_data)
+
+
+func _open_card_inspection(card_data: Dictionary) -> void:
 	_inspection_open = true
 	_board_visible_before_inspection = board_grid.visible
 	_scores_visible_before_inspection = score_overlay.visible
@@ -840,6 +844,42 @@ func _on_card_inspection_requested(card_data: Dictionary) -> void:
 	_sync_hand_playability()
 	turn_status.text = "查看详情 · 轻触返回"
 	card_inspector.present(card_data, _get_board_rect())
+
+
+func _should_inspect_replayed_self_exile(
+	action: ActionData,
+	owner_id: int,
+	events: Array
+) -> bool:
+	if (
+		_fast_mode
+		or not (_is_replaying or _is_replaying_opponent_turn)
+		or owner_id != DuelRules.OPPONENT_OWNER
+		or action.action_type != ActionData.TYPE_PLAY
+	):
+		return false
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) == &"card_exiled"
+			and bool(event.get("self_removal", false))
+			and StringName(event.get("instance_id", &"")) == action.source_instance_id
+		):
+			return true
+	return false
+
+
+func _present_replay_self_exile_inspection(card: CardView) -> bool:
+	var generation: int = _replay_generation
+	_open_card_inspection(card.card_data)
+	await card_inspector.inspection_closed
+	return (
+		is_inside_tree()
+		and generation == _replay_generation
+		and (_is_replaying or _is_replaying_opponent_turn)
+	)
 
 
 func _on_card_inspection_closed() -> void:
@@ -988,6 +1028,9 @@ func _commit_action(
 		card.scale = Vector2.ONE
 	if action.action_type == ActionData.TYPE_PLAY and not occupied_play:
 		await _wait_after_board_entry()
+	if _should_inspect_replayed_self_exile(action, owner_id, events):
+		if not await _present_replay_self_exile_inspection(card):
+			return
 
 	var resolved_targets: int = await _present_transition_events(
 		events,
@@ -3405,6 +3448,8 @@ func _replay_last_opponent_turn() -> bool:
 			DuelRules.OPPONENT_OWNER,
 			false
 		)
+		if not _is_replaying_opponent_turn or not is_inside_tree():
+			return false
 	_is_replaying_opponent_turn = false
 	_sync_hand_playability()
 	_update_turn_status()
@@ -3438,6 +3483,8 @@ func _restore_failed_opponent_turn_replay(
 	checkpoint_action_count: int
 ) -> void:
 	_is_replaying_opponent_turn = false
+	if _inspection_open:
+		card_inspector.close()
 	_replay_record.truncate_actions(checkpoint_action_count)
 	for action_index: int in range(checkpoint_action_count, original_actions.size()):
 		_replay_record.record_action(original_actions[action_index])
@@ -3581,11 +3628,13 @@ func _wait_replay_delay(generation: int) -> bool:
 
 func _restore_completed_replay_state(reason: String) -> void:
 	push_warning(reason)
+	_is_replaying = false
+	_is_replay_presenting_action = false
+	if _inspection_open:
+		card_inspector.close()
 	var final_state: StateData = _replay_record.get_final_state()
 	if final_state != null:
 		_rebuild_views_from_state(final_state)
-	_is_replaying = false
-	_is_replay_presenting_action = false
 	_replay_delay_remaining = 0.0
 	turn_state = TurnState.COMPLETE
 	_match_outcome = _replay_record.get_outcome()
@@ -3692,6 +3741,8 @@ func _leave_duel(allow_settled_victory: bool) -> void:
 	_is_replaying = false
 	_is_replay_presenting_action = false
 	_is_replaying_opponent_turn = false
+	if _inspection_open:
+		card_inspector.close()
 	_replay_delay_remaining = 0.0
 	_cancel_opponent_search()
 	var outcome: StringName = (
