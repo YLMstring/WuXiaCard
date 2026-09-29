@@ -147,6 +147,16 @@ Ordinary abilities are board-only. Do not add `active_zones`: the one-time
 lifecycle hooks such as `CARD_AFTER_DISCARDED` are discovered through their
 dedicated event entry. All other ordinary events scan the board only.
 
+`MODIFIER_HAND_PLAY_AS_DISCARD` is a narrow pre-play exception to the
+board-only rule above. The play transition checks only the played instance's
+currently held abilities before consuming the next-hand effect queue. If the
+modifier is present, the physical card still leaves a hand slot and uses its
+play opportunity, but resolves as discard-sourced: it does not consume the
+next-hand queue or update last-hand-play history. A card can mark this ability
+`retained_on_flip = true` when the card text says the rule is locked. An
+`ACTION_GRANT_EXTRA_CARD_PLAY` with `next_hand_play_source: CARD_ZONE_DISCARD`
+uses the same source behavior for the *next* opportunity.
+
 Cards cannot contain `auras` directly. To create a continuing player effect,
 grant an owner-held aura from an opening or board trigger:
 
@@ -436,6 +446,10 @@ Create a fresh catalog card in a hand:
 `RECIPIENT_SELF` or `RECIPIENT_OPPONENT`. The action does not draw from a deck.
 It creates a fresh catalog instance with a deterministic unique runtime ID and
 returns `NO_EFFECT` when the destination hand already contains five cards.
+For a fixed `card_id`, optional `"only_if_absent": true` also returns `NO_EFFECT`
+if that recipient already holds any instance with the same card ID. It does not
+reserve a future draw or consume a generated instance ID. This field is not
+valid with a dynamic `card` specification.
 
 The same action can derive the catalog ID from an existing card-reference
 snapshot instead of naming a fixed card:
@@ -474,6 +488,11 @@ It preserves current powers, ki, `original_owner`, active abilities, and other
 runtime card fields, but clears old physical-zone placement such as a hand
 slot. `ACTION_SUMMON_CARD` accepts the same specification and sends the clone
 through the complete ordinary summon and standard-attack pipeline.
+
+Fixed-card `ACTION_ADD_CARD_TO_HAND` declarations, like transforms, cause the
+compact root to precompile the referenced catalog card as a fresh prototype.
+This matters when the generated card was not present anywhere in the initial
+hands, board, deck, or discard.
 
 Attack with the first three matching board cards, fully resolving each attack
 before revalidating the next snapshot member:

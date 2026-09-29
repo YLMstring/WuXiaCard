@@ -181,6 +181,7 @@ const MODIFIER_SELF_ATTACKS_ALL: StringName = &"self_attacks_all"
 const MODIFIER_CANNOT_ATTACK: StringName = &"cannot_attack"
 const MODIFIER_ATTACK_EACH_TARGET_TWICE: StringName = &"attack_each_target_twice"
 const MODIFIER_WEAKEN_TARGET_ON_POWER_FAILURE: StringName = &"weaken_target_on_power_failure"
+const MODIFIER_HAND_PLAY_AS_DISCARD: StringName = &"hand_play_as_discard"
 const MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION: StringName = (
 	&"opponent_play_cell_only_if_no_other_action"
 )
@@ -373,6 +374,7 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 	MODIFIER_CANNOT_ATTACK,
 	MODIFIER_ATTACK_EACH_TARGET_TWICE,
 	MODIFIER_WEAKEN_TARGET_ON_POWER_FAILURE,
+	MODIFIER_HAND_PLAY_AS_DISCARD,
 	MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 ]
 
@@ -2918,19 +2920,50 @@ const GUMU_QUEUE_NEXT_MINIMUM_DEFENSE: Dictionary = {
 	}],
 }
 
-const GUMU_TIER_THREE_ACTIVATION: Dictionary = {
+const GUMU_TIER_THREE_ADD_YUNV: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_ADD_CARD_TO_HAND,
+			"card_id": &"YuNvWuFeng",
+			"recipient": RECIPIENT_SELF,
+			"only_if_absent": true,
+		}],
+	}],
+}
+
+const GUMU_YUNV_DISCARD_SOURCE: Dictionary = {
 	"retained_on_flip": true,
-	"activation": {
-		"input": ACTIVATION_DRAG_TO_TARGET,
-		"target_rule": TARGET_ANY_ENEMY_BOARD,
-		"costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+	"modifiers": [{"type": MODIFIER_HAND_PLAY_AS_DISCARD}],
+}
+
+const GUMU_YUNV_ENTER: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": TRIGGER_CARD_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
 		"actions": [
-			{"type": ACTION_CHANGE_POWERS, "amount": -1,
-			 "card": CARD_REF_SELECTED_CARD},
-			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1,
-			 "next_hand_play_source": CARD_ZONE_DISCARD},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [
+						{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+						{"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+						{"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
+					],
+				},
+				"actions": [{"type": ACTION_CHANGE_POWERS, "amount": -1,
+				             "card": CARD_REF_SELECTED_CARD}],
+			},
+			{
+				"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+				"amount": 1,
+				"next_hand_play_source": CARD_ZONE_DISCARD,
+			},
 		],
-	},
+	}],
 }
 
 const GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT: Dictionary = {
@@ -3003,7 +3036,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "锁定：我永远视为从弃牌堆，而非手牌中打出。锁定：进场时，所有相邻敌方点数减一，额外出一张牌，该牌视为从弃牌堆，而非手牌中打出。",
 		"flavor": "古墓派的“玉女无锋剑”剑招奇幻，变化莫测，似乎平平无奇，突然间幻招忽生，看去极像要抛剑认输，却怪事陡起，剑招忽从万万不可能之处生出，实令人眼花缭乱，手足无措。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [GUMU_YUNV_DISCARD_SOURCE, GUMU_YUNV_ENTER],
 	},
 	&"LangJiTianYa1": {
 		"id": &"LangJiTianYa1",
@@ -3039,7 +3072,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场后，若只有一个相邻敌方，与其交换位置。",
 		"flavor": "玉女剑法的险恶家数，挥剑直劈，去势固然凌厉，抑且风姿绰约，飘逸无比。",
 		"powers": [6, 6, 3, 3],
-		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SWAP],
+		"abilities": [GUMU_TIER_THREE_ADD_YUNV, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SWAP],
 	},
 	&"XiaoYuanYiJu1": {
 		"id": &"XiaoYuanYiJu1",
@@ -3075,7 +3108,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果，直到当前回合结束。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
+		"abilities": [GUMU_TIER_THREE_ADD_YUNV, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
 	},
 	&"LengYueKuiRen1": {
 		"id": &"LengYueKuiRen1",
@@ -3111,7 +3144,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：【锁定：我攻击时，防御者的点数视为其最小一侧的点数】。",
 		"flavor": "古墓派剑法的厉害招数，长剑抖动，闪出十余点银光，剑尖将敌人上半身尽数罩住，倘若不明这一招的来龙去脉，十九会尽全力守护上身，小腹便非中剑不可。",
 		"powers": [3, 6, 6, 3],
-		"abilities": [GUMU_TIER_THREE_ACTIVATION, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
+		"abilities": [GUMU_TIER_THREE_ADD_YUNV, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
 	},
 	&"KongBi2": {
 		"id": &"KongBi2",
@@ -7247,8 +7280,16 @@ static func _validate_action(
 		allowed_keys.append(&"card_id")
 		allowed_keys.append(&"card")
 		allowed_keys.append(&"recipient")
+		allowed_keys.append(&"only_if_absent")
 		var has_fixed_card_id: bool = action.has("card_id")
 		var has_card_spec: bool = action.has("card")
+		if action.has("only_if_absent") and (
+			typeof(action["only_if_absent"]) != TYPE_BOOL or not has_fixed_card_id
+		):
+			errors.append(
+				"Card %s %s action %s requires Boolean only_if_absent with fixed card_id"
+				% [card_id, context_name, action_type]
+			)
 		if has_fixed_card_id == has_card_spec:
 			errors.append(
 				"Card %s %s action %s requires exactly one of card_id or card"

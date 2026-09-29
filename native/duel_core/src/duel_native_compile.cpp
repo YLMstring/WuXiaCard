@@ -762,10 +762,19 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		) compiled.declaration_valid = false;
 	} else if (
 		type == StringName("add_card_to_hand")
-		&& action.size() == 3 + generic_field_count
+		&& (action.size() == 3 + generic_field_count || action.size() == 4 + generic_field_count)
 		&& (action.has("card_id") != action.has("card"))
+		&& (
+			!action.has("only_if_absent")
+			|| (
+				action.has("card_id")
+				&& Variant(action.get("only_if_absent", Variant())).get_type() == Variant::BOOL
+			)
+		)
+		&& (action.size() == 3 + generic_field_count + (action.has("only_if_absent") ? 1 : 0))
 	) {
 		compiled.opcode = ActionOpcode::ADD_CARD_TO_HAND;
+		compiled.only_if_absent = static_cast<bool>(action.get("only_if_absent", false));
 		const StringName recipient = action.get("recipient", StringName());
 		if (recipient == StringName("self")) compiled.recipient = RecipientOpcode::SELF;
 		else if (recipient == StringName("opponent")) compiled.recipient = RecipientOpcode::OPPONENT;
@@ -1018,6 +1027,7 @@ DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modif
 		else if (type == StringName("cannot_attack")) compiled.opcode = ModifierOpcode::CANNOT_ATTACK;
 		else if (type == StringName("attack_each_target_twice")) compiled.opcode = ModifierOpcode::ATTACK_EACH_TARGET_TWICE;
 		else if (type == StringName("weaken_target_on_power_failure")) compiled.opcode = ModifierOpcode::WEAKEN_TARGET_ON_POWER_FAILURE;
+		else if (type == StringName("hand_play_as_discard")) compiled.opcode = ModifierOpcode::HAND_PLAY_AS_DISCARD;
 	} else if (
 		type == StringName("opponent_play_cell_only_if_no_other_action")
 		&& modifier.size() == 2

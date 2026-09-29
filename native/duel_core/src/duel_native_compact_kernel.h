@@ -293,6 +293,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		CANNOT_ATTACK,
 		ATTACK_EACH_TARGET_TWICE,
 		WEAKEN_TARGET_ON_POWER_FAILURE,
+		HAND_PLAY_AS_DISCARD,
 		OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION,
 		UNSUPPORTED,
 	};
@@ -353,6 +354,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool repeat_attack = false;
 		bool prefer_outside_attacker_range = false;
 		bool next_hand_play_from_discard = false;
+		bool only_if_absent = false;
 		bool include_acquired_abilities = false;
 		int32_t excluded_ability_index = -1;
 		bool target_policy_specified = false;

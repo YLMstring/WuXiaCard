@@ -2610,6 +2610,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				) return ActionOutcome::NO_EFFECT;
 				card_id = value.card_ids[copied_card_index];
 			}
+			if (action.only_if_absent) {
+				for (const int32_t hand_card_index : hand) {
+					if (value.card_ids[hand_card_index] == card_id) return ActionOutcome::NO_EFFECT;
+				}
+			}
 			const StringName instance_id = make_generated_instance_id(value, card_id);
 			String append_reason;
 			const int32_t added_card_index = action.card_spec == CardSpecOpcode::PERFECT_COPY

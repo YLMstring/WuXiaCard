@@ -610,12 +610,12 @@ func _capture_fresh_card_prototypes() -> bool:
 				"active_ability_set_index": active_ability_set_index,
 			})
 
-			var transform_targets: Array[StringName] = []
-			_collect_transform_target_card_ids(
+			var fresh_targets: Array[StringName] = []
+			_collect_fresh_card_target_ids(
 				fresh.get("active_abilities", []) as Array,
-				transform_targets
+				fresh_targets
 			)
-			for target_card_id: StringName in transform_targets:
+			for target_card_id: StringName in fresh_targets:
 				if target_card_id == &"" or queued_card_ids.has(target_card_id):
 					continue
 				queued_card_ids[target_card_id] = true
@@ -636,22 +636,25 @@ func _capture_fresh_card_prototypes() -> bool:
 	return true
 
 
-func _collect_transform_target_card_ids(
+func _collect_fresh_card_target_ids(
 	value: Variant,
 	target_card_ids: Array[StringName]
 ) -> void:
 	if value is Array:
 		for item: Variant in value as Array:
-			_collect_transform_target_card_ids(item, target_card_ids)
+			_collect_fresh_card_target_ids(item, target_card_ids)
 		return
 	if not value is Dictionary:
 		return
 
 	var value_dictionary := value as Dictionary
-	if StringName(value_dictionary.get("type", &"")) == Catalog.ACTION_TRANSFORM_CARD:
+	if StringName(value_dictionary.get("type", &"")) in [
+		Catalog.ACTION_TRANSFORM_CARD,
+		Catalog.ACTION_ADD_CARD_TO_HAND,
+	]:
 		target_card_ids.append(StringName(value_dictionary.get("card_id", &"")))
 	for nested_value: Variant in value_dictionary.values():
-		_collect_transform_target_card_ids(nested_value, target_card_ids)
+		_collect_fresh_card_target_ids(nested_value, target_card_ids)
 
 
 func _capture_card(card: Dictionary) -> int:

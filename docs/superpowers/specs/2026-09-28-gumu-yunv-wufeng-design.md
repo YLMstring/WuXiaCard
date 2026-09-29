@@ -1,6 +1,6 @@
 # 古墓派三阶生成玉女无锋
 
-状态：创作者已确认规则方案；待审核本文档后实施。本文档以 2026-09-28 的 `scripts/card_catalog.gd` 卡面文字为准，取代此前古墓派设计文档中三阶剑法的指定发动能力段落。其余古墓派规则仍以现行代码及原设计文档为准。
+状态：创作者已确认并实装。本文档以 2026-09-28 的 `scripts/card_catalog.gd` 卡面文字为准，取代此前古墓派设计文档中三阶剑法的指定发动能力段落。其余古墓派规则仍以现行代码及原设计文档为准。
 
 ## 范围与行为
 
@@ -137,9 +137,11 @@ const GUMU_YUNV_ENTER: Dictionary = {
                     "conditions": [
                         {"type": CONDITION_SELECTED_CARD_IS_ENEMY},
                         {"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+                        {"type": CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE},
                     ],
                 },
-                "actions": [{"type": ACTION_CHANGE_POWERS, "amount": -1}],
+                "actions": [{"type": ACTION_CHANGE_POWERS, "amount": -1,
+                             "card": CARD_REF_SELECTED_CARD}],
             },
             {
                 "type": ACTION_GRANT_EXTRA_CARD_PLAY,

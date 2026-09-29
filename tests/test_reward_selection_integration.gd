@@ -37,15 +37,18 @@ func _run() -> void:
 	)
 	profile = begin_result.get("profile", profile)
 	var saved_pool: Array = profile.get("run_sect_pool_ids", []) as Array
-	if "QuanZhenPai" in saved_pool:
+	for pool_index: int in range(saved_pool.size()):
+		if Sects.is_randomly_available(StringName(String(saved_pool[pool_index])), 0):
+			continue
 		for sect_id: StringName in Sects.get_all_sect_ids():
 			if (
 				sect_id != &"HuaShanPai"
 				and String(sect_id) not in saved_pool
 				and Sects.is_randomly_available(sect_id, 0)
 			):
-				saved_pool[saved_pool.find("QuanZhenPai")] = String(sect_id)
+				saved_pool[pool_index] = String(sect_id)
 				break
+	profile["run_sect_pool_ids"] = saved_pool
 	var run_sect_pool_ids: Array[StringName] = store.get_run_sect_pool_ids(profile)
 	_check(run_sect_pool_ids.size() == 5, "Reward-scene fixture has five run sects")
 	profile["best_scores_by_sect"] = {

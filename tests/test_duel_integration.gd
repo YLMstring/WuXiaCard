@@ -75,6 +75,7 @@ func _run() -> void:
 	await _check_player_gate_exile()
 	await _check_opponent_tiger_exile()
 	await _check_cangsong_reaction_presentation()
+	await _check_yunv_presentation()
 	await _check_player_draw_and_instance_mapping()
 	await _check_opponent_draw_visibility()
 	await _check_intercepted_draw_uses_transient_card_view()
@@ -2118,6 +2119,59 @@ func _check_cangsong_reaction_presentation() -> void:
 		"Consecutive reaction and exile triggers from one card pulse only once"
 	)
 	exile_duel.queue_free()
+	await process_frame
+
+
+func _check_yunv_presentation() -> void:
+	var tier_duel: Node = _instantiate_duel()
+	root.add_child(tier_duel)
+	await process_frame
+	await process_frame
+	tier_duel.debug_set_fast_mode(true)
+	var tier_state: State = tier_duel.get("duel_state") as State
+	var tier_hand: Array = tier_state.get_hand(Rules.PLAYER_OWNER)
+	var original: Dictionary = tier_hand[0]
+	var tier_card: Dictionary = Catalog.create_instance(
+		&"LangJiTianYa3", Rules.PLAYER_OWNER,
+		StringName(original.get("instance_id", &""))
+	)
+	tier_card["hand_slot_index"] = int(original.get("hand_slot_index", 0))
+	tier_hand[0] = tier_card
+	var tier_view: CardView = _cards_below(tier_duel.get_node("DuelCanvas/PlayerHand"))[0] as CardView
+	tier_view.sync_runtime_data(tier_card, Rules.PLAYER_OWNER)
+	_check(await tier_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "Tier-three GuMu card commits through the production controller")
+	await process_frame
+	var generated_view: CardView = null
+	for candidate: Control in _cards_below(tier_duel.get_node("DuelCanvas/PlayerHand")):
+		var card_view: CardView = candidate as CardView
+		if card_view != null and StringName(card_view.card_data.get("card_id", &"")) == &"YuNvWuFeng":
+			generated_view = card_view
+	_check(generated_view != null, "Generated YuNv appears as a real card view in the fixed hand slots")
+	_check(&"card_added_to_hand" in tier_duel.debug_get_presentation_trace(), "Generated card uses the existing hand-add presentation event")
+	tier_duel.queue_free()
+	await process_frame
+
+	var yunv_duel: Node = _instantiate_duel()
+	root.add_child(yunv_duel)
+	await process_frame
+	await process_frame
+	yunv_duel.debug_set_fast_mode(true)
+	var yunv_state: State = yunv_duel.get("duel_state") as State
+	var yunv_hand: Array = yunv_state.get_hand(Rules.PLAYER_OWNER)
+	original = yunv_hand[0]
+	var yunv_card: Dictionary = Catalog.create_instance(
+		&"YuNvWuFeng", Rules.PLAYER_OWNER,
+		StringName(original.get("instance_id", &""))
+	)
+	yunv_card["hand_slot_index"] = int(original.get("hand_slot_index", 0))
+	yunv_hand[0] = yunv_card
+	var yunv_view: CardView = _cards_below(yunv_duel.get_node("DuelCanvas/PlayerHand"))[0] as CardView
+	yunv_view.sync_runtime_data(yunv_card, Rules.PLAYER_OWNER)
+	_check(await yunv_duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "YuNv commits through the production controller")
+	_check(&"extra_card_play_granted" in yunv_duel.debug_get_presentation_trace(), "YuNv uses existing extra-play feedback")
+	var after_yunv: State = yunv_duel.get("duel_state") as State
+	_check(after_yunv != null and after_yunv.next_hand_play_from_discard_owner == Rules.PLAYER_OWNER, "Production state retains the discard-source follow-up")
+	yunv_duel.queue_free()
 	await process_frame
 
 

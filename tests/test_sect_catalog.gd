@@ -116,7 +116,7 @@ func _test_copy_isolation() -> void:
 func _test_random_difficulty_declarations() -> void:
 	for sect_id: StringName in Catalog.get_all_sect_ids():
 		var definition: Dictionary = Catalog.get_definition(sect_id)
-		var expected: int = 4 if sect_id == &"QuanZhenPai" else 0
+		var expected: int = 4 if sect_id in [&"QuanZhenPai", &"GuMuPai"] else 0
 		_check(
 			int(definition.get("min_random_difficulty", -1)) == expected,
 			"%s declares its random-content opening difficulty" % sect_id

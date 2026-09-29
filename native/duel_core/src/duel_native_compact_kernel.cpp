@@ -778,7 +778,22 @@ bool DuelNativeCompactKernel::transition_play(
 		next.scalars[13] = 1;
 		next.scalars[5] -= 1;
 	}
-	const bool discard_source_play = static_cast<int32_t>(next.side_payload.get("next_hand_play_from_discard_owner", 0)) == moving_owner;
+	bool card_play_as_discard = false;
+	if (card_effects_enabled(source, played_card_index, moving_owner)) {
+		for (size_t ability_index = 0; ability_index < source.card_runtime_abilities[played_card_index].size(); ++ability_index) {
+			const CompiledAbility *ability = runtime_ability(source, played_card_index, static_cast<int32_t>(ability_index));
+			if (ability == nullptr) continue;
+			for (const CompiledModifier &modifier : ability->modifiers) {
+				if (modifier.opcode == ModifierOpcode::HAND_PLAY_AS_DISCARD) {
+					card_play_as_discard = true;
+					break;
+				}
+			}
+			if (card_play_as_discard) break;
+		}
+	}
+	const bool discard_source_play = card_play_as_discard
+		|| static_cast<int32_t>(next.side_payload.get("next_hand_play_from_discard_owner", 0)) == moving_owner;
 	next.side_payload.erase("next_hand_play_from_discard_owner");
 	resolution = Resolution();
 	std::vector<int32_t> exile_stack;

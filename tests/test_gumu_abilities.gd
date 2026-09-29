@@ -17,6 +17,10 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_catalog_abilities()
+	_test_conditional_generated_card()
+	_test_locked_discard_source_hand_play()
+	_test_tier_three_generation()
+	_test_yunv_adjacent_entry()
 	_test_next_hand_queue()
 	_test_duplicate_queue_names_defer()
 	_test_attack_modifiers_are_independent()
@@ -35,6 +39,7 @@ func _run() -> void:
 
 func _test_catalog_abilities() -> void:
 	for card_id: StringName in [
+		&"YuNvWuFeng",
 		&"LangJiTianYa1", &"LangJiTianYa2", &"LangJiTianYa3",
 		&"XiaoYuanYiJu1", &"XiaoYuanYiJu2", &"XiaoYuanYiJu3",
 		&"LengYueKuiRen1", &"LengYueKuiRen2", &"LengYueKuiRen3",
@@ -44,6 +49,117 @@ func _test_catalog_abilities() -> void:
 		_check(Catalog.has_card(card_id), "%s is registered" % card_id)
 		_check(not (Catalog.get_definition(card_id).get("abilities", []) as Array).is_empty(),
 			"%s has rule abilities" % card_id)
+	var expected_arrays: Dictionary = {
+		&"YuNvWuFeng": [Catalog.GUMU_YUNV_DISCARD_SOURCE, Catalog.GUMU_YUNV_ENTER],
+		&"LangJiTianYa3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_SWAP],
+		&"XiaoYuanYiJu3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_SUPPRESSION],
+		&"LengYueKuiRen3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
+	}
+	for card_id: StringName in expected_arrays:
+		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
+		_check(abilities == expected_arrays[card_id], "%s follows its complete designed ability array" % card_id)
+		for ability_value: Variant in abilities:
+			_check(not (ability_value as Dictionary).has("activation"), "%s has no retired tier-three activation" % card_id)
+	for ability: Dictionary in Catalog.get_definition(&"YuNvWuFeng").get("abilities", []):
+		_check(bool(ability.get("retained_on_flip", false)), "Both YuNv locked abilities retain on flip")
+
+
+func _test_conditional_generated_card() -> void:
+	var ability: Dictionary = {
+		"triggers": [{
+			"event": Catalog.TRIGGER_CARD_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{
+				"type": Catalog.ACTION_ADD_CARD_TO_HAND,
+				"card_id": &"YuNvWuFeng",
+				"recipient": Catalog.RECIPIENT_SELF,
+				"only_if_absent": true,
+			}],
+		}],
+	}
+	_check(Catalog.validate_ability(ability).is_empty(), "Fixed-card add accepts an optional absence guard")
+	for invalid_value: Variant in ["yes", 1]:
+		var invalid: Dictionary = ability.duplicate(true)
+		invalid["triggers"][0]["actions"][0]["only_if_absent"] = invalid_value
+		_check(not Catalog.validate_ability(invalid).is_empty(), "Absence guard rejects a non-Boolean value")
+	var dynamic: Dictionary = ability.duplicate(true)
+	dynamic["triggers"][0]["actions"][0].erase("card_id")
+	dynamic["triggers"][0]["actions"][0]["card"] = {
+		"type": Catalog.CARD_SPEC_FRESH_COPY,
+		"of": Catalog.CARD_REF_ABILITY_SOURCE,
+	}
+	_check(not Catalog.validate_ability(dynamic).is_empty(), "Absence guard requires a fixed card ID")
+	for existing: bool in [false, true]:
+		var source: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"generate_source")
+		source["active_abilities"] = [ability]
+		var board: Array = Rules.empty_board()
+		board[4] = {"card": source, "owner": Rules.PLAYER_OWNER}
+		var hand: Array = [Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"other_hand")]
+		if existing:
+			var already: Dictionary = Catalog.create_instance(&"YuNvWuFeng", Rules.PLAYER_OWNER, &"already_yunv")
+			already["hand_slot_index"] = 4
+			hand.append(already)
+		var opponent_hand: Array = []
+		if not existing:
+			opponent_hand.append(Catalog.create_instance(&"YuNvWuFeng", Rules.OPPONENT_OWNER, &"opponent_prototype"))
+		var state := State.new(board, hand, opponent_hand, Rules.PLAYER_OWNER)
+		var result: Dictionary = Simulator._resolve_trigger_event(state, Catalog.TRIGGER_CARD_SUMMONED, {
+			"trigger_instance_id": &"generate_source",
+			"trigger_cell": 4,
+			"trigger_owner_id": Rules.PLAYER_OWNER,
+		})
+		_check(bool(result.get("valid", false)), "Guarded generated-card trigger resolves with existing=%s" % str(existing))
+		var found: int = 0
+		for card_value: Variant in state.hands[Rules.PLAYER_OWNER]:
+			if StringName((card_value as Dictionary).get("card_id", &"")) == &"YuNvWuFeng":
+				found += 1
+		_check(found == 1, "Guarded addition leaves exactly one YuNv with existing=%s" % str(existing))
+		_check(_event_count(result.get("events", []), &"card_added_to_hand") == (0 if existing else 1), "Only a missing YuNv emits an add event")
+	var full_source: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"full_source")
+	full_source["active_abilities"] = [ability]
+	var full_board: Array = Rules.empty_board()
+	full_board[4] = {"card": full_source, "owner": Rules.PLAYER_OWNER}
+	var full_hand: Array = []
+	for index: int in range(5):
+		full_hand.append(Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, StringName("full_%d" % index)))
+	var full_state := State.new(full_board, full_hand, [], Rules.PLAYER_OWNER)
+	var full_result: Dictionary = Simulator._resolve_trigger_event(full_state, Catalog.TRIGGER_CARD_SUMMONED, {
+		"trigger_instance_id": &"full_source", "trigger_cell": 4,
+		"trigger_owner_id": Rules.PLAYER_OWNER,
+	})
+	_check(bool(full_result.get("valid", false)), "Full hand does not invalidate guarded generation")
+	_check((full_state.hands[Rules.PLAYER_OWNER] as Array).size() == 5, "Full hand remains unchanged")
+
+
+func _test_locked_discard_source_hand_play() -> void:
+	var source_ability: Dictionary = {
+		"retained_on_flip": true,
+		"modifiers": [{"type": &"hand_play_as_discard"}],
+	}
+	_check(Catalog.validate_ability(source_ability).is_empty(), "Locked discard-source hand modifier is a valid ability")
+	for has_opportunity_marker: bool in [false, true]:
+		var played: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"source_play")
+		played["active_abilities"] = [source_ability]
+		var state := State.new(Rules.empty_board(), [played], [], Rules.PLAYER_OWNER)
+		state.effect_queue = [_queue_grant("冷月窥人", Catalog.GUMU_MINIMUM_DEFENSE_ON_ATTACK)]
+		if has_opportunity_marker:
+			state.next_hand_play_from_discard_owner = Rules.PLAYER_OWNER
+		var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4, &"source_play"))
+		var next: State = result.get("state") as State
+		_check(bool(result.get("valid", false)) and next != null, "Locked source play resolves with marker=%s" % str(has_opportunity_marker))
+		if next == null:
+			continue
+		_check(next.effect_queue.size() == 1, "Locked source play leaves next-hand queue intact")
+		_check((next.last_hand_play_by_owner.get(Rules.PLAYER_OWNER, {}) as Dictionary).is_empty(), "Locked source play does not update hand-play history")
+		_check(next.next_hand_play_from_discard_owner == 0, "Existing source marker clears after play")
+	var flipped: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"locked_flip")
+	flipped["active_abilities"] = [source_ability]
+	var flip_board: Array = Rules.empty_board()
+	flip_board[4] = {"card": flipped, "owner": Rules.PLAYER_OWNER}
+	var flip_state := State.new(flip_board)
+	Simulator.resolve_non_attack_flip(flip_state, &"locked_flip", Rules.OPPONENT_OWNER)
+	var remaining: Array = ((flip_state.board[4] as Dictionary).get("card", {}) as Dictionary).get("active_abilities", [])
+	_check(remaining.size() == 1, "Locked source modifier survives ownership flip")
 
 
 func _test_next_hand_queue() -> void:
@@ -150,13 +266,14 @@ func _test_attack_attempt_presentation_events() -> void:
 func _test_extra_play_attempt_draws_at_cap() -> void:
 	var board: Array = Rules.empty_board()
 	board[0] = {"card": Catalog.create_instance(&"KongBi4", Rules.PLAYER_OWNER, &"draw_guard"), "owner": Rules.PLAYER_OWNER}
-	board[4] = {"card": Catalog.create_instance(&"LangJiTianYa3", Rules.PLAYER_OWNER, &"extra_source"), "owner": Rules.PLAYER_OWNER}
-	board[5] = {"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"extra_target"), "owner": Rules.OPPONENT_OWNER}
-	var state := State.new(board, [], [], Rules.PLAYER_OWNER, 1, [Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"draw_reward")])
+	var state := State.new(board,
+		[Catalog.create_instance(&"YuNvWuFeng", Rules.PLAYER_OWNER, &"extra_source")],
+		[], Rules.PLAYER_OWNER, 1,
+		[Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"draw_reward")])
 	state.extra_card_play_granted_this_turn = true
-	var result: Dictionary = Simulator.apply_action(state, Action.make_activate(4, &"extra_source", Action.TARGET_BOARD_CELL, 5))
+	var result: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4, &"extra_source"))
 	var next: State = result.get("state") as State
-	_check(bool(result.get("valid", false)), "Tier-three activation resolves at an already-used extra-play cap")
+	_check(bool(result.get("valid", false)), "YuNv entry resolves at an already-used extra-play cap")
 	if next == null:
 		return
 	_check(_event_count(result.get("events", []), &"card_drawn") == 1, "KongBi draws before the capped extra-play attempt")
@@ -164,21 +281,21 @@ func _test_extra_play_attempt_draws_at_cap() -> void:
 
 
 func _test_discard_source_extra_play_preserves_queue() -> void:
-	var board: Array = Rules.empty_board()
-	board[0] = {"card": Catalog.create_instance(&"LangJiTianYa3", Rules.PLAYER_OWNER, &"discard_source"), "owner": Rules.PLAYER_OWNER}
-	board[8] = {"card": Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"discard_target"), "owner": Rules.OPPONENT_OWNER}
-	var state := State.new(board, [
+	var state := State.new(Rules.empty_board(), [
+		Catalog.create_instance(&"YuNvWuFeng", Rules.PLAYER_OWNER, &"discard_source"),
 		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"discard_play"),
 		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"normal_play"),
 	], [], Rules.PLAYER_OWNER)
 	state.effect_queue = [_queue_grant("冷月窥人", Catalog.GUMU_MINIMUM_DEFENSE_ON_ATTACK)]
-	var activated: Dictionary = Simulator.apply_action(state, Action.make_activate(0, &"discard_source", Action.TARGET_BOARD_CELL, 8))
-	var after_activation: State = activated.get("state") as State
-	_check(bool(activated.get("valid", false)) and after_activation != null, "Tier-three activation grants a discard-source extra play")
-	if after_activation == null:
+	var entered: Dictionary = Simulator.apply_action(state, Action.make_play(0, 4, &"discard_source"))
+	var after_entry: State = entered.get("state") as State
+	_check(bool(entered.get("valid", false)) and after_entry != null, "YuNv entry grants a discard-source extra play")
+	if after_entry == null:
 		return
-	_check(after_activation.next_hand_play_from_discard_owner == Rules.PLAYER_OWNER, "Extra opportunity carries discard-source marker")
-	var played: Dictionary = Simulator.apply_action(after_activation, Action.make_play(0, 4, &"discard_play"))
+	_check(after_entry.effect_queue.size() == 1, "YuNv itself does not consume the hand-play queue")
+	_check((after_entry.last_hand_play_by_owner.get(Rules.PLAYER_OWNER, {}) as Dictionary).is_empty(), "YuNv itself does not update hand-play history")
+	_check(after_entry.next_hand_play_from_discard_owner == Rules.PLAYER_OWNER, "Extra opportunity carries discard-source marker")
+	var played: Dictionary = Simulator.apply_action(after_entry, Action.make_play(0, 0, &"discard_play"))
 	var after_play: State = played.get("state") as State
 	_check(bool(played.get("valid", false)) and after_play != null, "Discard-source physical hand card is played")
 	if after_play == null:
@@ -189,6 +306,55 @@ func _test_discard_source_extra_play_preserves_queue() -> void:
 	var ordinary: Dictionary = Simulator.apply_action(after_play, Action.make_play(0, 5, &"normal_play"))
 	var after_ordinary: State = ordinary.get("state") as State
 	_check(bool(ordinary.get("valid", false)) and after_ordinary != null and after_ordinary.effect_queue.is_empty(), "Next normal hand play consumes waiting effect")
+
+
+func _test_tier_three_generation() -> void:
+	for card_id: StringName in [&"LangJiTianYa3", &"XiaoYuanYiJu3", &"LengYueKuiRen3"]:
+		var entering: Dictionary = Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"tier_three")
+		var result: Dictionary = Simulator.apply_action(
+			State.new(Rules.empty_board(), [entering], [], Rules.PLAYER_OWNER),
+			Action.make_play(0, 4, &"tier_three")
+		)
+		var next: State = result.get("state") as State
+		_check(bool(result.get("valid", false)) and next != null, "%s enters without pre-existing YuNv" % card_id)
+		if next == null:
+			continue
+		var count: int = 0
+		for card_value: Variant in next.hands[Rules.PLAYER_OWNER]:
+			if StringName((card_value as Dictionary).get("card_id", &"")) == &"YuNvWuFeng":
+				count += 1
+		_check(count == 1, "%s creates one YuNv from an otherwise absent catalog card" % card_id)
+		_check(_event_count(result.get("events", []), &"card_added_to_hand") == 1, "%s emits the generated-card event" % card_id)
+		_check((next.board[4] as Dictionary).get("card", {}).get("active_abilities", []).size() == 4, "%s keeps its four current rule abilities" % card_id)
+		var existing: Dictionary = Catalog.create_instance(&"YuNvWuFeng", Rules.PLAYER_OWNER, &"existing_yunv")
+		var duplicate: Dictionary = Simulator.apply_action(
+			State.new(Rules.empty_board(), [entering, existing], [], Rules.PLAYER_OWNER),
+			Action.make_play(0, 4, &"tier_three")
+		)
+		_check(bool(duplicate.get("valid", false)), "%s enters with YuNv already held" % card_id)
+		_check(_event_count(duplicate.get("events", []), &"card_added_to_hand") == 0, "%s does not generate a duplicate YuNv" % card_id)
+
+
+func _test_yunv_adjacent_entry() -> void:
+	var board: Array = Rules.empty_board()
+	var weakened: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"weak_neighbor")
+	weakened["powers"] = [2, 2, 2, 2]
+	var exiled: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", Rules.OPPONENT_OWNER, &"zero_neighbor")
+	exiled["powers"] = [1, 1, 1, 1]
+	board[1] = {"card": weakened, "owner": Rules.OPPONENT_OWNER}
+	board[5] = {"card": exiled, "owner": Rules.OPPONENT_OWNER}
+	var result: Dictionary = Simulator.apply_action(State.new(board, [
+		Catalog.create_instance(&"YuNvWuFeng", Rules.PLAYER_OWNER, &"yunv_enter"),
+		Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"followup"),
+	], [], Rules.PLAYER_OWNER), Action.make_play(0, 4, &"yunv_enter"))
+	var next: State = result.get("state") as State
+	_check(bool(result.get("valid", false)) and next != null, "YuNv resolves entry beside two enemies")
+	if next == null:
+		return
+	_check(((next.board[1] as Dictionary).get("card", {}) as Dictionary).get("powers", []) == [1, 1, 1, 1], "First adjacent enemy loses one on each side")
+	_check(next.board[5] == null, "Second adjacent enemy is exiled when all powers reach zero")
+	_check(_event_count(result.get("events", []), &"powers_changed") == 2, "Each adjacent enemy gets its own point-change event")
+	_check(next.next_hand_play_from_discard_owner == Rules.PLAYER_OWNER, "YuNv still grants discard-source follow-up after weakening")
 
 
 func _test_ally_attack_evasion() -> void:

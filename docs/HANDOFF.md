@@ -10,14 +10,17 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
-The fifteen GuMu card IDs are registered with catalog-driven abilities. Next-hand
-grants and DuGu's anticipation share one per-owner FIFO effect queue: one record
-per grantor card name resolves on each normal hand play, while later same-name
-records wait. The queue survives turns and source-card departure. GuMu's special
-extra play removes a physical hand card but resolves it as discard-sourced, so it
-does not consume the queue or update last-hand-play history. See
-`docs/superpowers/specs/2026-09-28-gumu-cards-design.md` for exact declarations
-and the independent attack, movement, and extra-play timing rules.
+The fifteen original GuMu card IDs and the six-tier YuNvWuFeng are registered
+with catalog-driven abilities. Next-hand grants and DuGu's anticipation share
+one per-owner FIFO effect queue: one record per grantor card name resolves on
+each normal hand play, while later same-name records wait. The queue survives
+turns and source-card departure. Three tier-three sword cards now generate a
+YuNvWuFeng on entry if their owner's hand lacks one, instead of offering their
+old targeted activation. YuNvWuFeng itself, and the extra hand play it grants
+on entry, resolve as discard-sourced: they do not consume the queue or update
+last-hand-play history. See `docs/superpowers/specs/2026-09-28-gumu-yunv-wufeng-design.md`
+for the changed complete declarations and `docs/superpowers/specs/2026-09-28-gumu-cards-design.md`
+for the remaining GuMu attack, movement, and FIFO rules.
 
 Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second
