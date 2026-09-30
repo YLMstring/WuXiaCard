@@ -2896,6 +2896,22 @@ const GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON: Dictionary = {
 	}],
 }
 
+const GUMU_REMOVE_ENEMIES_BEFORE_SUMMON: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [{"type": CONDITION_SELECTED_CARD_IS_ENEMY}],
+			},
+			"actions": [{"type": ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
+			             "card": CARD_REF_SELECTED_CARD}],
+		}],
+	}],
+}
+
 const GUMU_MINIMUM_DEFENSE_ON_ATTACK: Dictionary = {
 	"retained_on_flip": true,
 	"modifiers": [{"type": MODIFIER_DEFENDING_POWER_USES_MINIMUM_SIDE}],
@@ -2927,6 +2943,17 @@ const GUMU_QUEUE_NEXT_SUPPRESSION: Dictionary = {
 		"actions": [{
 			"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
 			"ability": GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON,
+		}],
+	}],
+}
+
+const GUMU_QUEUE_NEXT_PERMANENT_SUPPRESSION: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [{
+			"type": ACTION_QUEUE_NEXT_HAND_PLAY_ABILITY,
+			"ability": GUMU_REMOVE_ENEMIES_BEFORE_SUMMON,
 		}],
 	}],
 }
@@ -3006,6 +3033,20 @@ const GUMU_ALLY_ATTACK_EVASION: Dictionary = {
 			"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
 			"card": CARD_REF_TRIGGER_CARD,
 			"prefer_outside_attacker_range": true,
+		}],
+	}],
+}
+
+const GUMU_ALLY_ATTACK_EVASION_OR_EXILE: Dictionary = {
+	"retained_on_flip": true,
+	"triggers": [{
+		"event": CARD_BE_ATTACKED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+		"actions": [{
+			"type": ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY,
+			"card": CARD_REF_TRIGGER_CARD,
+			"prefer_outside_attacker_range": true,
+			"on_no_effect": [{"type": ACTION_EXILE_CARD, "card": CARD_REF_TRIGGER_CARD}],
 		}],
 	}],
 }
@@ -3131,7 +3172,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
+		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_PERMANENT_SUPPRESSION],
 	},
 	&"XiaoYuanYiJu4": {
 		"id": &"XiaoYuanYiJu4",
@@ -3143,7 +3184,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，若你手中没有玉女无锋，获取一张玉女无锋。发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令你下一张从手牌中打出的牌获得以下效果：进场前，使所有敌方失去效果。",
 		"flavor": "玉女剑法中的招式，短剑轻扬，飘身而进，丰神脱俗，姿式娴雅，剑锋向敌人下盘连点数点。",
 		"powers": [3, 3, 6, 6],
-		"abilities": [GUMU_TIER_THREE_ADD_YUNV, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_SUPPRESSION],
+		"abilities": [GUMU_TIER_THREE_ADD_YUNV, GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_QUEUE_NEXT_PERMANENT_SUPPRESSION],
 	},
 	&"LengYueKuiRen1": {
 		"id": &"LengYueKuiRen1",
@@ -3227,7 +3268,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "每当你尝试额外出牌前，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先，若未能成功移动，将其移除。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, GUMU_ALLY_ATTACK_EVASION],
+		"abilities": [GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, GUMU_ALLY_ATTACK_EVASION_OR_EXILE],
 	},
 	&"TianLuoDiWang2": {
 		"id": &"TianLuoDiWang2",
@@ -6704,7 +6745,7 @@ static func _normalize_nested_grants(actions_value: Variant) -> void:
 			var aura_value: Variant = action.get("aura", null)
 			if aura_value is Dictionary:
 				action["aura"] = normalize_owner_aura(aura_value as Dictionary)
-		_normalize_nested_grants(action.get("actions", []))
+		_normalize_nested_grants(action.get("actions", action.get("on_no_effect", [])))
 
 
 static func _validate_ability(
@@ -7156,6 +7197,17 @@ static func _validate_action(
 					% [card_id, context_name, action_type]
 				)
 	if action_type == ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY:
+		if action.has("on_no_effect"):
+			allowed_keys.append(&"on_no_effect")
+			var fallback_value: Variant = action.get("on_no_effect", null)
+			if not fallback_value is Array or (fallback_value as Array).is_empty():
+				errors.append("Card %s %s move fallback requires non-empty actions" % [card_id, context_name])
+			else:
+				for fallback_action: Variant in fallback_value as Array:
+					if not fallback_action is Dictionary:
+						errors.append("Card %s %s move fallback requires action dictionaries" % [card_id, context_name])
+					else:
+						_validate_action(card_id, "%s move fallback" % context_name, fallback_action, false, errors)
 		if action.has("prefer_outside_attacker_range"):
 			allowed_keys.append(&"prefer_outside_attacker_range")
 			if typeof(action.get("prefer_outside_attacker_range")) != TYPE_BOOL:

@@ -736,8 +736,24 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		&& action.size() == 1 + generic_field_count
 			+ (action.has("prefer_outside_attacker_range") ? 1 : 0)
 			+ (action.has("card") ? 1 : 0)
+			+ (action.has("on_no_effect") ? 1 : 0)
 	) {
 		compiled.opcode = ActionOpcode::MOVE_SELF_TO_FIRST_ADJACENT_EMPTY;
+		if (action.has("on_no_effect")) {
+			const Variant fallback = action.get("on_no_effect", Variant());
+			if (fallback.get_type() != Variant::ARRAY) {
+				compiled.declaration_valid = false;
+			} else {
+				const Array children = fallback;
+				if (children.is_empty()) compiled.declaration_valid = false;
+				compiled.child_actions.reserve(static_cast<size_t>(children.size()));
+				for (int64_t index = 0; index < children.size(); ++index) {
+					const CompiledAction child = compile_action(children[index]);
+					if (!child.declaration_valid) compiled.declaration_valid = false;
+					compiled.child_actions.push_back(child);
+				}
+			}
+		}
 		if (action.has("card")) {
 			compiled.card_ref_explicit = true;
 			compiled.card_ref = compile_card_ref(action.get("card", StringName()));

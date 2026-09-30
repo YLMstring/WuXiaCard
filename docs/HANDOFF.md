@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-29
+Updated: 2026-09-30
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -10,17 +10,36 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
-The fifteen original GuMu card IDs and the six-tier YuNvWuFeng are registered
+The seventeen GuMu card IDs and the six-tier YuNvWuFeng are registered
 with catalog-driven abilities. Next-hand grants and DuGu's anticipation share
 one per-owner FIFO effect queue: one record per grantor card name resolves on
 each normal hand play, while later same-name records wait. The queue survives
-turns and source-card departure. Three tier-three sword cards now generate a
-YuNvWuFeng on entry if their owner's hand lacks one, instead of offering their
-old targeted activation. YuNvWuFeng itself, and the extra hand play it grants
+turns and source-card departure. LangJiTianYa3, LengYueKuiRen3 and XiaoYuanYiJu4
+generate a YuNvWuFeng on entry if their owner's hand lacks one. XiaoYuanYiJu3
+no longer generates it. XiaoYuanYiJu1/2 queue temporary enemy suppression;
+tiers 3/4 queue permanent loss of non-retained enemy abilities. KongBi1 evades
+attacks on itself; tiers 2–4 move the attacked ally. Only tier 4 exiles that
+exact ally when movement really fails, via the existing move primitive's
+optional `on_no_effect` actions. TianLuoDiWang2–4 grant a retained enemy-move
+four-side `-2` effect to themselves and the next normal hand play; tier 4
+still transfers acquired abilities without copying that grant twice.
+See `docs/superpowers/specs/2026-09-30-gumu-balance-adjustments-design.md`
+for complete current declarations and arrays.
+YuNvWuFeng itself, and the extra hand play it grants
 on entry, resolve as discard-sourced: they do not consume the queue or update
 last-hand-play history. See `docs/superpowers/specs/2026-09-28-gumu-yunv-wufeng-design.md`
 for the changed complete declarations and `docs/superpowers/specs/2026-09-28-gumu-cards-design.md`
 for the remaining GuMu attack, movement, and FIFO rules.
+
+Validation on 2026-09-30: GuMu fixtures pass 257 checks, native declaration
+audit/search/controller suites pass, and the muted 540×960 production-controller
+playtest covers failed/successful evasion, permanent suppression, YuNv generation,
+and movement power loss. The full suite passes 83/87: the four pre-existing
+failures are `test_enemy_catalog.gd` (fixed level-10 WuYingKe fixture; current
+catalog level 11), `test_duel_state_key.gd`, `test_duel_compact_state.gd` and
+`test_duel_ai_benchmark.gd` (historical opening/schedule counts after enemy
+level changes). These also failed before this adjustment; their assertions
+still need a separate roster review.
 
 Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second

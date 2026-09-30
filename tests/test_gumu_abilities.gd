@@ -6,6 +6,7 @@ const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
 const State = preload("res://scripts/duel_state.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 
 var _checks: int = 0
 var _failures: int = 0
@@ -17,6 +18,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_catalog_abilities()
+	_test_move_fallback_declarations()
 	_test_conditional_generated_card()
 	_test_locked_discard_source_hand_play()
 	_test_tier_three_generation()
@@ -28,6 +30,9 @@ func _run() -> void:
 	_test_extra_play_attempt_draws_at_cap()
 	_test_discard_source_extra_play_preserves_queue()
 	_test_ally_attack_evasion()
+	_test_evasion_failure()
+	_test_suppression_duration()
+	_test_tianluo_locked_move_penalty()
 	_test_tianluo_acquired_snapshot()
 	_test_legacy_suppression_scalar_migrates()
 	if _failures == 0:
@@ -41,9 +46,9 @@ func _test_catalog_abilities() -> void:
 	for card_id: StringName in [
 		&"YuNvWuFeng",
 		&"LangJiTianYa1", &"LangJiTianYa2", &"LangJiTianYa3",
-		&"XiaoYuanYiJu1", &"XiaoYuanYiJu2", &"XiaoYuanYiJu3",
+		&"XiaoYuanYiJu1", &"XiaoYuanYiJu2", &"XiaoYuanYiJu3", &"XiaoYuanYiJu4",
 		&"LengYueKuiRen1", &"LengYueKuiRen2", &"LengYueKuiRen3",
-		&"KongBi2", &"KongBi3", &"KongBi4",
+		&"KongBi1", &"KongBi2", &"KongBi3", &"KongBi4",
 		&"TianLuoDiWang2", &"TianLuoDiWang3", &"TianLuoDiWang4",
 	]:
 		_check(Catalog.has_card(card_id), "%s is registered" % card_id)
@@ -52,8 +57,10 @@ func _test_catalog_abilities() -> void:
 	var expected_arrays: Dictionary = {
 		&"YuNvWuFeng": [Catalog.GUMU_YUNV_DISCARD_SOURCE, Catalog.GUMU_YUNV_ENTER],
 		&"LangJiTianYa3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_SWAP],
-		&"XiaoYuanYiJu3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_SUPPRESSION],
 		&"LengYueKuiRen3": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_MINIMUM_DEFENSE],
+		&"XiaoYuanYiJu3": [Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_PERMANENT_SUPPRESSION],
+		&"XiaoYuanYiJu4": [Catalog.GUMU_TIER_THREE_ADD_YUNV, Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, Catalog.GUMU_QUEUE_NEXT_PERMANENT_SUPPRESSION],
+		&"KongBi4": [Catalog.GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, Catalog.GUMU_ALLY_ATTACK_EVASION_OR_EXILE],
 	}
 	for card_id: StringName in expected_arrays:
 		var abilities: Array = Catalog.get_definition(card_id).get("abilities", [])
@@ -62,6 +69,27 @@ func _test_catalog_abilities() -> void:
 			_check(not (ability_value as Dictionary).has("activation"), "%s has no retired tier-three activation" % card_id)
 	for ability: Dictionary in Catalog.get_definition(&"YuNvWuFeng").get("abilities", []):
 		_check(bool(ability.get("retained_on_flip", false)), "Both YuNv locked abilities retain on flip")
+
+
+func _test_move_fallback_declarations() -> void:
+	var ability: Dictionary = Catalog.GUMU_ALLY_ATTACK_EVASION_OR_EXILE.duplicate(true)
+	_check(Catalog.validate_ability(ability).is_empty(), "Move fallback declaration is valid")
+	_check(Abilities.has_other_card_exile(Catalog.create_instance(&"KongBi4", 1, &"bead_four")), "KongBi fourth-tier exile branch participates in generic bead recognition")
+	_check(not Abilities.has_other_card_exile(Catalog.create_instance(&"KongBi3", 1, &"bead_three")), "Third-tier evasion has no exile marker")
+	for invalid_value: Variant in [[], true, [42], [{"type": &"unknown_action"}], [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD, "unknown": true}]]:
+		var invalid: Dictionary = ability.duplicate(true)
+		invalid["triggers"][0]["actions"][0]["on_no_effect"] = invalid_value
+		_check(not Catalog.validate_ability(invalid).is_empty(), "Catalog rejects malformed move fallback")
+		var card: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 1, &"invalid_fallback")
+		card["active_abilities"] = [invalid]
+		var compact := Compact.new()
+		_check(compact.capture_state(State.new(Rules.empty_board(), [card])), "Invalid declaration fixture captures for independent native audit")
+		var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+		_check(not bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "Native compiler independently rejects malformed move fallback")
+	var nested: Dictionary = ability.duplicate(true)
+	nested["triggers"][0]["actions"][0]["on_no_effect"] = [{"type": Catalog.ACTION_GRANT_ABILITY_TO_SELF, "ability": {"modifiers": [{"type": Catalog.MODIFIER_CANNOT_ATTACK}]}}]
+	var normalized: Dictionary = Catalog.normalize_ability(nested)
+	_check(normalized["triggers"][0]["actions"][0]["on_no_effect"][0]["ability"].has("retained_on_flip"), "Nested fallback grants are normalized like ordinary action grants")
 
 
 func _test_conditional_generated_card() -> void:
@@ -309,7 +337,7 @@ func _test_discard_source_extra_play_preserves_queue() -> void:
 
 
 func _test_tier_three_generation() -> void:
-	for card_id: StringName in [&"LangJiTianYa3", &"XiaoYuanYiJu3", &"LengYueKuiRen3"]:
+	for card_id: StringName in [&"LangJiTianYa3", &"XiaoYuanYiJu4", &"LengYueKuiRen3"]:
 		var entering: Dictionary = Catalog.create_instance(card_id, Rules.PLAYER_OWNER, &"tier_three")
 		var result: Dictionary = Simulator.apply_action(
 			State.new(Rules.empty_board(), [entering], [], Rules.PLAYER_OWNER),
@@ -333,6 +361,10 @@ func _test_tier_three_generation() -> void:
 		)
 		_check(bool(duplicate.get("valid", false)), "%s enters with YuNv already held" % card_id)
 		_check(_event_count(duplicate.get("events", []), &"card_added_to_hand") == 0, "%s does not generate a duplicate YuNv" % card_id)
+	var third: Dictionary = Simulator.apply_action(State.new(Rules.empty_board(), [
+		Catalog.create_instance(&"XiaoYuanYiJu3", Rules.PLAYER_OWNER, &"xiao_three")
+	], [], Rules.PLAYER_OWNER), Action.make_play(0, 4, &"xiao_three"))
+	_check(bool(third.get("valid", false)) and _event_count(third.get("events", []), &"card_added_to_hand") == 0, "Xiao tier three no longer generates YuNv")
 
 
 func _test_yunv_adjacent_entry() -> void:
@@ -369,6 +401,134 @@ func _test_ally_attack_evasion() -> void:
 	if next == null:
 		return
 	_check(next.board[1] == null and next.board[2] != null and StringName(((next.board[2] as Dictionary).get("card", {}) as Dictionary).get("instance_id", &"")) == &"evasion_ally", "Attacked ally moves to first adjacent cell outside attack range")
+
+
+func _test_evasion_failure() -> void:
+	# A full set of neighbours: only tier four removes the attacked instance.
+	for tier: int in range(1, 5):
+		var board: Array = Rules.empty_board()
+		board[0] = {"card": Catalog.create_instance(&"TaiZuChangQuan", 1, &"block_left"), "owner": 1}
+		board[1] = {"card": Catalog.create_instance(StringName("KongBi%d" % tier), 1, &"blocked_self"), "owner": 1}
+		board[2] = {"card": Catalog.create_instance(&"TaiZuChangQuan", 1, &"block_right"), "owner": 1}
+		var attacker: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 2, &"blocked_attacker")
+		attacker["powers"] = [9, 9, 9, 9]
+		board[4] = {"card": attacker, "owner": 2}
+		var state := State.new(board)
+		var result: Dictionary = Simulator._resolve_attack_target(state, 4, &"blocked_attacker", 1, &"blocked_self", &"test")
+		_check(bool(result.get("valid", false)), "Blocked KongBi%d attack resolves" % tier)
+		_check((state.board[1] == null) == (tier == 4), "Only tier four exiles itself on failed movement")
+		_check(_event_count(result.get("events", []), &"card_exiled") == (1 if tier == 4 else 0), "Failed movement emits exactly the intended exile event")
+	# The fourth tier protects another ally, including interruption after a cell was available.
+	for mode: int in range(3):
+		var board: Array = Rules.empty_board()
+		board[0] = {"card": Catalog.create_instance(&"KongBi4", 1, &"failure_guard"), "owner": 1}
+		var target: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 1, &"failure_target")
+		if mode == 1:
+			target["active_abilities"] = [{"triggers": [{
+				"event": Catalog.CARD_BEFORE_MOVED,
+				"conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_SELF}],
+				"actions": [{"type": Catalog.ACTION_SUMMON_CARD,
+					"card": {"type": Catalog.CARD_SPEC_FRESH_COPY, "of": Catalog.CARD_REF_ABILITY_SOURCE},
+					"cell": {"type": Catalog.CELL_REF_FIRST_ADJACENT_EMPTY, "card": Catalog.CARD_REF_ABILITY_SOURCE}}],
+			}]}]
+		board[1] = {"card": target, "owner": 1}
+		if mode == 0:
+			board[2] = {"card": Catalog.create_instance(&"TaiZuChangQuan", 1, &"failure_blocker"), "owner": 1}
+		var attacker: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 2, &"failure_attacker")
+		attacker["powers"] = [9, 9, 9, 9]
+		if mode == 2:
+			attacker["active_abilities"] = [{"modifiers": [{"type": Catalog.MODIFIER_UNLIMITED_ATTACK_RANGE}]}]
+		board[4] = {"card": attacker, "owner": 2}
+		var state := State.new(board)
+		var result: Dictionary = Simulator._resolve_attack_target(state, 4, &"failure_attacker", 1, &"failure_target", &"test")
+		_check(bool(result.get("valid", false)), "Fourth-tier ally movement mode %d resolves" % mode)
+		_check(_event_count(result.get("events", []), &"card_moved") == (1 if mode == 2 else 0), "Only an actual movement emits card_moved")
+		_check(_event_count(result.get("events", []), &"card_exiled") == (0 if mode == 2 else 1), "Only actual failure exiles the attacked ally")
+		_check(state.board[0] != null, "Failure does not exile the protecting card")
+		if mode == 1:
+			_check(state.board[2] != null and StringName((state.board[2] as Dictionary)["card"]["instance_id"]) != &"failure_target", "Interrupted movement preserves the new blocker instance")
+		if mode == 2:
+			_check(state.board[2] != null and StringName((state.board[2] as Dictionary)["card"]["instance_id"]) == &"failure_target", "A successful move inside attack range does not trigger the failure branch")
+
+
+func _test_suppression_duration() -> void:
+	for tier: int in range(1, 5):
+		var board: Array = Rules.empty_board()
+		var enemy: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 2, &"suppression_enemy")
+		enemy["active_abilities"] = [Catalog.GUMU_ATTACK_EACH_TARGET_TWICE, Catalog.GUMU_YUNV_DISCARD_SOURCE]
+		board[8] = {"card": enemy, "owner": 2}
+		var ally: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 1, &"suppression_ally")
+		ally["active_abilities"] = [Catalog.GUMU_ATTACK_EACH_TARGET_TWICE]
+		board[6] = {"card": ally, "owner": 1}
+		var follow: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 1, &"suppression_follow")
+		follow["active_abilities"] = [{"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": [{"type": Catalog.ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1}],
+		}]}]
+		var result: Dictionary = Simulator.apply_action(State.new(board, [
+			Catalog.create_instance(StringName("XiaoYuanYiJu%d" % tier), 1, &"suppression_source"), follow,
+			Catalog.create_instance(&"TaiZuChangQuan", 1, &"suppression_end")
+		], [], 1), Action.make_play(0, 4, &"suppression_source"))
+		var queued: State = result.get("state") as State
+		_check(bool(result.get("valid", false)) and queued != null, "Xiao tier %d queues its effect" % tier)
+		if queued == null:
+			continue
+		_check((queued.board[8] as Dictionary)["card"]["active_abilities"].size() == 2, "Queueing alone does not suppress enemies")
+		queued.active_player = 1
+		var played: Dictionary = Simulator.apply_action(queued, Action.make_play(0, 0, &"suppression_follow"))
+		var suppressed: State = played.get("state") as State
+		_check(bool(played.get("valid", false)) and suppressed != null, "Queued suppression resolves")
+		if suppressed == null:
+			continue
+		_check(suppressed.active_player == 1, "Suppression is observed before owner-turn end")
+		_check((suppressed.board[8] as Dictionary)["card"]["active_abilities"] == [Catalog.GUMU_YUNV_DISCARD_SOURCE], "Enemy loses non-locked abilities but retains locked abilities")
+		_check((suppressed.board[6] as Dictionary)["card"]["active_abilities"].size() == 1, "Suppression leaves friendly abilities intact")
+		var ended: Dictionary = Simulator.apply_action(suppressed, Action.make_play(0, 2, &"suppression_end"))
+		var final_state: State = ended.get("state") as State
+		_check(bool(ended.get("valid", false)) and final_state != null, "Suppression fixture closes the owner turn")
+		if final_state != null:
+			_check((final_state.board[8] as Dictionary)["card"]["active_abilities"].size() == (2 if tier <= 2 else 1), "Only tiers one and two restore suppressed effects at turn end")
+
+
+func _test_tianluo_locked_move_penalty() -> void:
+	for tier: int in range(2, 5):
+		var entering: Dictionary = Catalog.create_instance(StringName("TianLuoDiWang%d" % tier), 1, &"net_source")
+		var result: Dictionary = Simulator.apply_action(State.new(Rules.empty_board(), [entering,
+			Catalog.create_instance(&"TaiZuChangQuan", 1, &"net_recipient")
+		], [], 1), Action.make_play(0, 0, &"net_source"))
+		var queued: State = result.get("state") as State
+		_check(bool(result.get("valid", false)) and queued != null, "TianLuo%d grants itself and queues" % tier)
+		if queued == null:
+			continue
+		queued.active_player = 1
+		var follow: Dictionary = Simulator.apply_action(queued, Action.make_play(0, 2, &"net_recipient"))
+		var state: State = follow.get("state") as State
+		_check(bool(follow.get("valid", false)) and state != null, "TianLuo queued grant reaches the next hand card")
+		if state == null:
+			continue
+		for flipped: bool in [false, true]:
+			if flipped:
+				Simulator.resolve_non_attack_flip(state, &"net_source", 2)
+				Simulator.resolve_non_attack_flip(state, &"net_recipient", 2)
+			var owner: int = 1 if flipped else 2
+			var moving: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", owner, &"net_mover")
+			moving["powers"] = [9, 9, 9, 9]
+			moving["ki"] = 1
+			moving["active_abilities"] = [{"activation": {
+				"input": Catalog.ACTIVATION_DRAG_TO_TARGET,
+				"target_rule": Catalog.TARGET_ADJACENT_EMPTY_BOARD,
+				"costs": [{"type": Catalog.ACTION_SPEND_KI, "amount": 1}],
+				"actions": [{"type": Catalog.ACTION_MOVE_SELF_TO_TARGET}],
+			}}]
+			state.board[4] = {"card": moving, "owner": owner}
+			state.active_player = owner
+			var moved: Dictionary = Simulator.apply_action(state, Action.make_activate(4, &"net_mover", Action.TARGET_BOARD_CELL, 7))
+			var after: State = moved.get("state") as State
+			_check(bool(moved.get("valid", false)) and after != null, "Enemy movement resolves before/after net ownership flip")
+			if bool(moved.get("valid", false)) and after != null and after.board[7] != null:
+				_check((after.board[7] as Dictionary)["card"]["powers"] == [5, 5, 5, 5], "Source and recipient each apply minus two, also after flipping")
+				_check(_event_count(moved.get("events", []), &"powers_changed") == 2, "Fourth-tier snapshot does not duplicate its printed movement penalty")
 
 
 func _test_tianluo_acquired_snapshot() -> void:

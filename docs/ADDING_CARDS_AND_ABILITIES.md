@@ -642,6 +642,16 @@ instance. Movement contexts expose that instance as `CARD_REF_TRIGGER_CARD`;
 `CONDITION_MOVING_CARD_IS_ALLY` compares its current owner with each trigger
 source.
 
+`ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY` optionally accepts a nonempty
+`on_no_effect` action array. It runs only after a valid board-card movement
+attempt returns `NO_EFFECT`, including interruption by `CARD_BEFORE_MOVED`.
+It does not run after actual movement, even if the destination remains in
+attack range, nor after an unsupported operation or an invalid event reference.
+The fallback composes existing actions and shares the current action context;
+it does not add a saved result flag. Its outcome becomes the composite action's
+outcome for any following `STOP_RULE` policy. Nested grants and bead recognition
+traverse this array like other nested actions.
+
 `ACTION_EXILE_CARD` reports `APPLIED` only when its exact target emits
 `card_exiled`. If a before-exile reaction moves or rescues that target, the
 action reports `NO_EFFECT` while retaining any reaction effects already

@@ -2426,6 +2426,15 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				|| (action.card_ref_explicit && action.card_ref == CardRefOpcode::TRIGGER_CARD
 					? source_owner != event_context.trigger_owner : source_owner != action_context.action_subject_owner)
 			) return ActionOutcome::NO_EFFECT;
+			// Only a valid board-card movement attempt may run the optional fallback.
+			// Inspect the actual movement outcome, including before-move interruption.
+			const auto on_no_effect = [&]() {
+				if (action.child_actions.empty()) return ActionOutcome::NO_EFFECT;
+				return execute_actions_with_state(
+					value, group, action.child_actions, event_context, action_context,
+					execution_state, exile_stack, resolution
+				);
+			};
 			int32_t attacker_cell = -1;
 			if (action.prefer_outside_attacker_range && event_context.attacker_card_index >= 0) {
 				attacker_cell = find_board_card(
@@ -2456,7 +2465,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				}
 			}
 			if (chosen_cell < 0) chosen_cell = fallback_cell;
-			if (chosen_cell < 0) return ActionOutcome::NO_EFFECT;
+			if (chosen_cell < 0) return on_no_effect();
 			const ActionOutcome outcome = move_card_between_cells(
 				value,
 				current_cell,
@@ -2475,6 +2484,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 					chosen_cell
 				);
 			}
+			if (outcome == ActionOutcome::NO_EFFECT) return on_no_effect();
 			return outcome;
 		}
 		case ActionOpcode::MOVE_SELF_TO_FIRST_EMPTY_BETWEEN_ENEMY: {

@@ -349,7 +349,7 @@ static func _actions_have_type(actions_value: Variant, expected_type: StringName
 		var action: Dictionary = action_value
 		if StringName(action.get("type", &"")) == expected_type:
 			return true
-		if _actions_have_type(action.get("actions", null), expected_type):
+		if _actions_have_type(action.get("actions", action.get("on_no_effect", null)), expected_type):
 			return true
 	return false
 
@@ -392,7 +392,7 @@ static func _actions_have_any_type(actions_value: Variant, expected_types: Array
 		var action: Dictionary = action_value
 		if StringName(action.get("type", &"")) in expected_types:
 			return true
-		if _actions_have_any_type(action.get("actions", null), expected_types):
+		if _actions_have_any_type(action.get("actions", action.get("on_no_effect", null)), expected_types):
 			return true
 	return false
 
@@ -418,7 +418,7 @@ static func _actions_have_selected_card_self_attack(
 			or action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD
 		)
 		if _actions_have_selected_card_self_attack(
-			action.get("actions", null),
+			action.get("actions", action.get("on_no_effect", null)),
 			nested_inside_iteration
 		):
 			return true
@@ -470,7 +470,7 @@ static func _actions_have_power_change_direction(
 			# 目录目前唯一的动态点数值是牌数；它不会为负，语义上属于增加。
 			if amount is Dictionary and direction > 0:
 				return true
-		if _actions_have_power_change_direction(action.get("actions", null), direction):
+		if _actions_have_power_change_direction(action.get("actions", action.get("on_no_effect", null)), direction):
 			return true
 	return false
 
@@ -501,7 +501,7 @@ static func _actions_exile_source(
 		if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
 			nested_subject_is_source = false
 		if _actions_exile_source(
-			action.get("actions", null),
+			action.get("actions", action.get("on_no_effect", null)),
 			nested_subject_is_source,
 			trigger_card_is_source
 		):
@@ -537,7 +537,7 @@ static func _actions_exile_other_card(
 		if action_type == Catalog.ACTION_FOR_EACH_SELECTED_CARD:
 			nested_subject_is_source = false
 		if _actions_exile_other_card(
-			action.get("actions", null),
+			action.get("actions", action.get("on_no_effect", null)),
 			nested_subject_is_source,
 			trigger_card_is_source
 		):
