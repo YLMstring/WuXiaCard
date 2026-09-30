@@ -3009,6 +3009,7 @@ const GUMU_ALLY_ATTACK_EVASION: Dictionary = {
 }
 
 const GUMU_ENEMY_MOVE_WEAKEN: Dictionary = {
+	"retained_on_flip": true,
 	"triggers": [{
 		"event": CARD_AFTER_MOVED,
 		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ENEMY}],
@@ -3209,7 +3210,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 2,
 		"weapon": "掌法",
-		"description": "进场后，令我和你下一张从手牌中打出的牌获得以下效果：【敌方移动后，点数减二】。",
+		"description": "进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减二】。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [GUMU_TIANLUO_QUEUE],
@@ -3221,7 +3222,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 3,
 		"weapon": "掌法",
-		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【敌方移动后，点数减二】。",
+		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减二】。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_TIANLUO_QUEUE],
@@ -3233,7 +3234,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "古墓派",
 		"tier": 4,
 		"weapon": "掌法",
-		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减一】，若我还获得了其它额外效果，下一张从手牌中打出的牌也获得这些效果。",
+		"description": "发起攻击时，对所有目标依次尝试两次。若尝试攻击时因点数不足而无法攻击，令目标点数减一。进场后，令我和你下一张从手牌中打出的牌获得以下效果：【锁定：敌方移动后，点数减二】，若我还获得了其它额外效果，下一张从手牌中打出的牌也获得这些效果。",
 		"flavor": "这路“天罗地网势”掌法绵密无比，乃林朝英独得之秘，需练到双掌挡得住九九八十一只麻雀飞翔，不让一只雀儿漏出掌去，虽系空手，威力实不逊于手中有剑，便似八十一只麻雀四面八方向对方进攻一般。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [GUMU_ATTACK_EACH_TARGET_TWICE, GUMU_WEAKEN_TARGET_ON_POWER_FAILURE, GUMU_TIANLUO_QUEUE_WITH_ACQUIRED],
