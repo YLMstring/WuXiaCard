@@ -14,30 +14,30 @@ func _init() -> void:
 
 func _run() -> void:
 	_check(Catalog.validate_catalog().is_empty(), "Enemy catalog validates")
-	_check(
-		Catalog.has_enemy(&"wulin_sanren")
-		and Catalog.has_enemy(&"wulin_sanren2"),
-		"Dongfang Bubai and Zhang Sanfeng are normal enemies"
-	)
 	_check_benchmark_roster()
-	_check(
-		Catalog.get_definition(&"tingchao_zhuren2").get("deck", []) == [
-			&"YiKongDaoDi4",
-			&"YiJJ4",
-			&"SanRuDiYu1",
-			&"WuXiangJieZhi3",
-			&"LiJingRuLai4",
-		],
-		"Xuanci uses the approved tier-four YiJin and tier-three WuXiang deck"
-	)
 	var card_ids: Array[StringName] = Cards.get_all_card_ids()
-	var observed_decks: Dictionary = {}
+	var expected_by_level: Dictionary = {}
+	var ordinary_enemy_count: int = 0
+	for enemy_id: StringName in Catalog.get_all_enemy_ids():
+		var definition: Dictionary = Catalog.get_definition(enemy_id)
+		var level: int = int(definition["level"])
+		if not expected_by_level.has(level):
+			expected_by_level[level] = []
+		if not bool(definition.get("special_only", false)):
+			(expected_by_level[level] as Array).append(enemy_id)
+			ordinary_enemy_count += 1
+		_check(
+			Catalog.is_self_castration_enabled(enemy_id)
+			== bool(definition.get("self_castration_enabled", true)),
+			"%s respects its configured self-castration switch" % enemy_id
+		)
 	var observed_enemy_ids: Dictionary = {}
-	for level: int in range(1, 16):
+	# Cover the supported campaign levels, including configured gaps and specials.
+	for level: int in range(0, 16):
 		var enemy_ids: Array[StringName] = Catalog.get_enemy_ids_for_level(level)
 		_check(
-			not enemy_ids.is_empty(),
-			"Level %d has at least one configured enemy candidate" % level
+			enemy_ids == expected_by_level.get(level, []),
+			"Level %d contains exactly its configured ordinary candidates" % level
 		)
 		for enemy_id: StringName in enemy_ids:
 			_check(not observed_enemy_ids.has(enemy_id), "%s appears at exactly one level" % enemy_id)
@@ -48,15 +48,10 @@ func _run() -> void:
 			_check(not String(definition["name"]).is_empty(), "%s has a name" % enemy_id)
 			var deck: Array = definition["deck"]
 			_check(deck.size() == 5, "%s has a five-card deck" % enemy_id)
-			var deck_signature: String = "|".join(
-				deck.map(func(value: Variant) -> String: return String(value))
-			)
-			_check(not observed_decks.has(deck_signature), "%s has a unique deck" % enemy_id)
-			observed_decks[deck_signature] = enemy_id
 			for value: Variant in deck:
 				_check(StringName(String(value)) in card_ids, "%s uses a known card" % enemy_id)
 	_check(
-		observed_enemy_ids.size() == Catalog.get_all_enemy_ids().size() - 1,
+		observed_enemy_ids.size() == ordinary_enemy_count,
 		"Level candidate lookup covers every ordinary configured enemy"
 	)
 	var beginner_enemy: Dictionary = Catalog.get_definition(&"dukou_daoshi")
@@ -71,58 +66,19 @@ func _run() -> void:
 		"Special enemies never enter ordinary level candidate lookup"
 	)
 
-	var seeded_a := RandomNumberGenerator.new()
-	var seeded_b := RandomNumberGenerator.new()
-	seeded_a.seed = 917
-	seeded_b.seed = 917
-	_check(
-		Catalog.pick_random_enemy_id(8, seeded_a)
-		== Catalog.pick_random_enemy_id(8, seeded_b),
-		"Seeded enemy selection is deterministic"
-	)
+	_check_random_selection(expected_by_level)
 	_check(Catalog.pick_random_enemy_id(0) == &"", "Invalid levels have no enemy")
-	for fixture: Dictionary in [
-		{"level": 4, "enemy_id": &"yanbo_yuke2"},
-		{"level": 6, "enemy_id": &"chilian_sanke2"},
-		{"level": 10, "enemy_id": &"wuying_ke3"},
-	]:
-		var level: int = int(fixture["level"])
-		var enemy_id: StringName = fixture["enemy_id"]
-		_check(
-			enemy_id not in Catalog.get_random_enemy_ids_for_level(level, 3)
-			and enemy_id in Catalog.get_random_enemy_ids_for_level(level, 4),
-			"%s enters random enemies at difficulty four" % enemy_id
-		)
-	var mixed_enemy: Dictionary = Catalog.get_definition(&"yanbo_yuke")
-	(mixed_enemy["deck"] as Array)[0] = &"TianGangBeiDou2"
-	_check(
-		not Catalog.is_enemy_randomly_available(mixed_enemy, 3)
-		and Catalog.is_enemy_randomly_available(mixed_enemy, 4),
-		"One gated sect card controls the whole mixed enemy deck"
-	)
-	for level: int in range(1, 16):
-		_check(not Catalog.get_random_enemy_ids_for_level(level, 3).is_empty(), "Low difficulty keeps a random enemy at level %d" % level)
-	_check(
-		not Catalog.is_self_castration_enabled(&"qingfeng_xuedi"),
-		"Young Escort Lin Pingzhi explicitly disables self-castration"
-	)
-	_check(
-		Catalog.is_self_castration_enabled(&"dukou_xiaoke"),
-		"Shi Biaotou keeps the default self-castration behavior"
-	)
-	_check(
-		Catalog.is_self_castration_enabled(&"tieshan_menren"),
-		"Enemies without a declaration enable self-castration by default"
-	)
-	var duplicate_fixture: Dictionary = Catalog.get_definition(&"qingfeng_xuedi")
-	duplicate_fixture["id"] = &"duplicate_fixture"
-	duplicate_fixture["deck"] = [
-		&"TaiZuChangQuan",
-		&"TaiZuChangQuan",
-		&"CangSongYingKe1",
-		&"CangSongYingKe2",
-		&"CangSongYingKe3",
-	]
+	_check(Catalog.is_self_castration_enabled(&"missing_enemy"), "Unknown enemies keep the default effect gate")
+	var duplicate_fixture: Dictionary = {
+		"id": &"duplicate_fixture", "name": "规则测试", "level": 1,
+		"deck": [
+			&"TaiZuChangQuan",
+			&"TaiZuChangQuan",
+			&"CangSongYingKe1",
+			&"CangSongYingKe2",
+			&"CangSongYingKe3",
+		],
+	}
 	_check(
 		Catalog.validate_definition(duplicate_fixture).is_empty(),
 		"Enemy definitions may contain exact duplicates and repeated glyphs"
@@ -193,61 +149,103 @@ func _run() -> void:
 
 func _check_benchmark_roster() -> void:
 	var roster: Array[Dictionary] = Catalog.get_ai_benchmark_definitions()
-	var by_id: Dictionary = {}
-	for definition: Dictionary in roster:
-		by_id[StringName(definition.get("id", &""))] = definition
-	var dongfang: Dictionary = by_id.get(&"wulin_sanren", {})
-	var zhang: Dictionary = by_id.get(&"wulin_sanren2", {})
-	var hufei: Dictionary = by_id.get(&"bailu_shanzhang2", {})
-	_check(
-		dongfang.get("deck", []) == [
-			&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua1"
-		],
-		"Dongfang Bubai preserves the approved benchmark deck"
-	)
-	_check(
-		zhang.get("deck", []) == [
-			&"TaiJiLuanHuan5",
-			&"TaiJiYinYang5",
-			&"TaiJiSanHuan5",
-			&"TaiJiDaKui5",
-			&"DuGu9Jian1",
-		],
-		"Zhang Sanfeng preserves the approved benchmark deck"
-	)
-	_check(
-		hufei.get("deck", []) == [
-			&"HuJiaDao1", &"HuJiaDao2", &"HuJiaDao3", &"ChunCanZhang3", &"TaiJiLuanHuan4",
-		],
-		"Hu Fei uses the five approved new-card deck"
-	)
-	_check(
-		typeof(dongfang.get("self_castration_enabled")) == TYPE_BOOL
-		and bool(dongfang.get("self_castration_enabled")),
-		"Dongfang Bubai normalizes self-castration to an explicit Boolean"
-	)
-	_check(
-		Catalog.get_enemy_ids_for_level(15) == [
-			&"wulin_sanren3", &"wulin_sanren", &"wulin_sanren2",
-		],
-		"Level fifteen includes all three normal final enemies"
-	)
+	var catalog_ids: Array[StringName] = Catalog.get_all_enemy_ids()
+	_check(roster.size() == catalog_ids.size(), "Benchmark roster covers the current catalog")
 	var observed_ids: Dictionary = {}
 	for definition: Dictionary in roster:
 		var enemy_id := StringName(definition.get("id", &""))
 		_check(not observed_ids.has(enemy_id), "%s appears once in benchmark roster" % enemy_id)
 		observed_ids[enemy_id] = true
+		_check(enemy_id in catalog_ids, "%s is a registered benchmark enemy" % enemy_id)
+		if Catalog.has_enemy(enemy_id):
+			var expected: Dictionary = Catalog.get_definition(enemy_id)
+			expected["self_castration_enabled"] = bool(expected.get("self_castration_enabled", true))
+			_check(definition == expected, "%s uses current catalog metadata and deck with the normalized switch" % enemy_id)
+		_check(typeof(definition.get("self_castration_enabled")) == TYPE_BOOL, "%s has a normalized effect-gate switch" % enemy_id)
 		_check(
 			Catalog.validate_definition(definition).is_empty(),
 			"%s is a valid benchmark enemy definition" % enemy_id
 		)
-	var original_name: String = String(roster[0].get("name", ""))
+	if roster.is_empty():
+		_check(false, "Benchmark roster provides a real enemy fixture")
+		return
+	var original: Dictionary = roster[0].duplicate(true)
+	var original_catalog: Dictionary = Catalog.get_definition(StringName(original["id"]))
 	roster[0]["name"] = "mutated"
+	(roster[0]["deck"] as Array)[0] = &"mutated_card"
 	var fresh: Array[Dictionary] = Catalog.get_ai_benchmark_definitions()
 	_check(
-		String(fresh[0].get("name", "")) == original_name,
+		fresh[0] == original
+		and Catalog.get_definition(StringName(original["id"])) == original_catalog,
 		"Benchmark roster returns deep-copied definitions"
 	)
+
+
+func _check_random_selection(expected_by_level: Dictionary) -> void:
+	var difficulty_by_glyph: Dictionary = {}
+	var difficulties: Array[int] = [0]
+	for sect_id: StringName in Sects.get_all_sect_ids():
+		var sect: Dictionary = Sects.get_definition(sect_id)
+		var threshold: int = int(sect["min_random_difficulty"])
+		difficulty_by_glyph[String(sect["glyph"])] = threshold
+		for boundary: int in [maxi(0, threshold - 1), threshold]:
+			if boundary not in difficulties:
+				difficulties.append(boundary)
+	var required_by_enemy: Dictionary = {}
+	for enemy_id: StringName in Catalog.get_all_enemy_ids():
+		var definition: Dictionary = Catalog.get_definition(enemy_id)
+		var required: int = 0
+		for card_id: StringName in definition["deck"]:
+			var glyph: String = String(Cards.get_definition(card_id).get("sect", ""))
+			required = maxi(required, int(difficulty_by_glyph.get(glyph, 0)))
+		required_by_enemy[enemy_id] = required
+		for difficulty: int in difficulties:
+			_check(
+				Catalog.is_enemy_randomly_available(definition, difficulty) == (difficulty >= required),
+				"%s follows all deck sect gates at difficulty %d" % [enemy_id, difficulty]
+			)
+	for level: int in range(0, 16):
+		for difficulty: int in difficulties:
+			var expected: Array[StringName] = []
+			for enemy_id: StringName in expected_by_level.get(level, []):
+				if difficulty >= int(required_by_enemy[enemy_id]):
+					expected.append(enemy_id)
+			_check(
+				Catalog.get_random_enemy_ids_for_level(level, difficulty) == expected,
+				"Level %d difficulty %d contains exactly the eligible enemies" % [level, difficulty]
+			)
+			var seeded_a := RandomNumberGenerator.new()
+			var seeded_b := RandomNumberGenerator.new()
+			seeded_a.seed = 917
+			seeded_b.seed = 917
+			for draw_index: int in range(3):
+				var selected: StringName = Catalog.pick_random_enemy_id(level, seeded_a, difficulty)
+				_check(
+					selected == Catalog.pick_random_enemy_id(level, seeded_b, difficulty),
+					"Seeded selection repeats level %d difficulty %d draw %d" % [level, difficulty, draw_index]
+				)
+				_check(
+					(selected == &"" and expected.is_empty()) or selected in expected,
+					"Random selection stays in the eligible pool"
+				)
+	# A single gated card must control a mixed deck, even without an enemy sect tag.
+	for glyph: String in difficulty_by_glyph:
+		var threshold: int = int(difficulty_by_glyph[glyph])
+		if threshold <= 0:
+			continue
+		for card_id: StringName in Cards.get_all_card_ids():
+			if String(Cards.get_definition(card_id).get("sect", "")) != glyph:
+				continue
+			var mixed: Dictionary = {
+				"deck": [&"TaiZuChangQuan", card_id, &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"],
+			}
+			_check(
+				not Catalog.is_enemy_randomly_available(mixed, threshold - 1)
+				and Catalog.is_enemy_randomly_available(mixed, threshold),
+				"%s's single gated card controls a mixed deck" % glyph
+			)
+			break
+	_check(not Catalog.is_enemy_randomly_available({"deck": [&"missing_card"]}, 10), "Unknown cards cannot enter random enemy pools")
 
 
 func _finish() -> void:

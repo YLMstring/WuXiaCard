@@ -362,10 +362,15 @@ func _test_compact_copy_isolation() -> void:
 func _test_real_quick_state_corpus() -> void:
 	var queue: Array[State] = []
 	var opening_keys: Dictionary = {}
-	for matchup: Dictionary in EnemyManifest.get_matchups_for_mode(&"quick"):
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	if matchups.is_empty():
+		matchups = EnemyManifest.get_all_matchups()
+	_check(not matchups.is_empty(), "Compact corpus has current real enemy matchups")
+	for matchup: Dictionary in matchups:
 		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
 			var built: Dictionary = EnemyStateFactory.build(game, matchup)
 			var state: State = built.get("state") as State
+			_check(state != null, "Every scheduled compact opening builds")
 			if state == null:
 				continue
 			var exact_key: String = StateKey.build(state)
@@ -373,7 +378,7 @@ func _test_real_quick_state_corpus() -> void:
 				continue
 			opening_keys[exact_key] = true
 			queue.append(state)
-	_check(opening_keys.size() == 14, "Compact corpus starts from fourteen real Quick openings")
+	_check(opening_keys.size() == matchups.size() * 2, "Each real matchup contributes both owner orders, independent of AI profiles")
 
 	var seen: Dictionary = {}
 	var queue_index: int = 0

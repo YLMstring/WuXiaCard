@@ -6,6 +6,7 @@ const EnemyStateFactory = preload("res://tests/benchmarks/enemy_ai_benchmark_sta
 const Runner = preload("res://tests/benchmarks/duel_ai_benchmark.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const StateKey = preload("res://scripts/duel_state_key.gd")
+const Enemies = preload("res://scripts/enemy_catalog.gd")
 
 var _failures: int = 0
 var _checks: int = 0
@@ -69,7 +70,7 @@ func _run() -> void:
 		"Identical profiles have matching fallback rates"
 	)
 	var enemy_smoke_matchups: Array[Dictionary] = [
-		EnemyManifest.get_matchups_for_mode(&"quick")[0]
+		EnemyManifest.get_all_matchups()[0]
 	]
 	var final_config: Dictionary = Runner.variant_config("Final")
 	var enemy_smoke: Dictionary = Runner.run_enemy_matchups(
@@ -130,10 +131,22 @@ func _check_enemy_manifest() -> void:
 	for enemy: Dictionary in roster:
 		var enemy_id := StringName(enemy.get("id", &""))
 		_check(not roster_ids.has(enemy_id), "Enemy benchmark roster IDs are unique: %s" % enemy_id)
-		roster_ids[enemy_id] = true
+		roster_ids[enemy_id] = enemy
 		_check((enemy.get("deck", []) as Array).size() == 5, "%s contributes five main cards" % enemy_id)
 	var matchups: Array[Dictionary] = EnemyManifest.get_all_matchups()
-	var same_level_count: int = 0
+	var expected_pairs: Dictionary = {}
+	for first_index: int in range(roster.size()):
+		var first: Dictionary = roster[first_index]
+		for second_index: int in range(first_index + 1, roster.size()):
+			var second: Dictionary = roster[second_index]
+			var same_level: bool = int(first["level"]) == int(second["level"])
+			# The manifest also declares Feng Qingyang versus final-level enemies.
+			var feng_final: bool = (
+				(first["id"] == &"tianmen_yishi" and int(second["level"]) == 15)
+				or (second["id"] == &"tianmen_yishi" and int(first["level"]) == 15)
+			)
+			if same_level or feng_final:
+				expected_pairs[_pair_key(StringName(first["id"]), StringName(second["id"]))] = true
 	var matchup_ids: Dictionary = {}
 	var pair_keys: Dictionary = {}
 	for matchup: Dictionary in matchups:
@@ -143,25 +156,24 @@ func _check_enemy_manifest() -> void:
 		_check(not matchup_ids.has(matchup_id), "Matchup IDs are unique: %s" % matchup_id)
 		matchup_ids[matchup_id] = true
 		_check(first_id != second_id, "%s is not a self-match" % matchup_id)
-		var ordered: Array[String] = [String(first_id), String(second_id)]
-		ordered.sort()
-		var pair_key: String = "|".join(ordered)
+		var pair_key: String = _pair_key(first_id, second_id)
 		_check(not pair_keys.has(pair_key), "%s is an unrepeated unordered pair" % matchup_id)
 		pair_keys[pair_key] = true
-		if int(matchup.get("enemy_a_level", 0)) == int(matchup.get("enemy_b_level", -1)):
-			same_level_count += 1
+		_check(expected_pairs.has(pair_key), "%s belongs to the current pairing policy" % matchup_id)
+		for side: String in ["a", "b"]:
+			var enemy_id := StringName(matchup.get("enemy_%s_id" % side, &""))
+			var definition: Dictionary = roster_ids.get(enemy_id, {})
+			_check(not definition.is_empty(), "%s references a current enemy" % matchup_id)
+			_check(
+				matchup.get("enemy_%s_level" % side, -1) == definition.get("level", -2)
+				and matchup.get("enemy_%s_name" % side, "") == definition.get("name", "missing"),
+				"%s uses current enemy %s metadata" % [matchup_id, side]
+			)
 		var games: Array[Dictionary] = EnemyManifest.expand_matchup(matchup)
 		_check(games.size() == 4, "%s expands to four balanced games" % matchup_id)
 		_check(_assignment_is_balanced(games, first_id), "%s balances enemy A across profile and owner" % matchup_id)
 		_check(_assignment_is_balanced(games, second_id), "%s balances enemy B across profile and owner" % matchup_id)
-	var expected_same_level_count: int = 0
-	for level: int in range(1, 16):
-		var level_count: int = 0
-		for enemy: Dictionary in roster:
-			if int(enemy.get("level", 0)) == level:
-				level_count += 1
-		expected_same_level_count += level_count * (level_count - 1) / 2
-	_check(same_level_count == expected_same_level_count, "Manifest includes every same-level unordered pair")
+	_check(pair_keys.size() == expected_pairs.size(), "Manifest covers every current eligible unordered pair")
 	_check(
 		EnemyManifest.expand_matchups(matchups).size() == matchups.size() * 4,
 		"Every full benchmark matchup expands to four games"
@@ -171,26 +183,55 @@ func _check_enemy_manifest() -> void:
 		"Manifest rebuild is deterministic"
 	)
 	var extra_play_matchups: Array[Dictionary] = EnemyManifest.get_extra_play_cap_matchups()
-	_check(extra_play_matchups.size() == 3, "Extra-play profile declares three requested matchups")
+	var expected_extra_pairs: Dictionary = {}
+	var expected_extra_openings: int = 0
+	for pair: Array in EnemyManifest.EXTRA_PLAY_CAP_PAIRS:
+		if roster_ids.has(pair[0]) and roster_ids.has(pair[1]):
+			expected_extra_pairs[_pair_key(StringName(pair[0]), StringName(pair[1]))] = true
+			expected_extra_openings += 1 if pair[0] == pair[1] else 2
+	_check(extra_play_matchups.size() == expected_extra_pairs.size(), "Extra-play profile includes its currently registered requested pairs")
+	var observed_extra_pairs: Dictionary = {}
 	var extra_play_state_keys: Dictionary = {}
 	for matchup: Dictionary in extra_play_matchups:
+		var key: String = _pair_key(StringName(matchup["enemy_a_id"]), StringName(matchup["enemy_b_id"]))
+		_check(expected_extra_pairs.has(key) and not observed_extra_pairs.has(key), "Extra-play profile includes each eligible requested pair once")
+		observed_extra_pairs[key] = true
 		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
 			var built: Dictionary = EnemyStateFactory.build(game, matchup)
+			_check(EnemyStateFactory.validate_built_game(built).is_empty(), "Each extra-play opening builds valid state and metadata")
 			var state_key: String = String(
 				(built.get("metadata", {}) as Dictionary).get("initial_state_key", "")
 			)
 			extra_play_state_keys[state_key] = true
-	_check(extra_play_state_keys.size() == 4, "Mirror deduplication leaves four unique extra-play openings")
+	_check(extra_play_state_keys.size() == expected_extra_openings, "Extra-play openings deduplicate profile swaps and mirror matches")
 	for mode_fixture: Dictionary in [
-		{"mode": &"quick", "matchups": 7, "games": 28},
-		{"mode": &"pilot", "matchups": 3, "games": 12},
-		{"mode": &"production", "matchups": 4, "games": 16},
+		{"mode": &"quick", "pairs": EnemyManifest.QUICK_PAIRS},
+		{"mode": &"pilot", "pairs": EnemyManifest.PILOT_PAIRS},
+		{"mode": &"production", "pairs": EnemyManifest.PRODUCTION_PAIRS},
 	]:
+		var expected_selected: Dictionary = {}
+		for pair: Array in mode_fixture["pairs"]:
+			var key: String = _pair_key(StringName(pair[0]), StringName(pair[1]))
+			if expected_pairs.has(key):
+				expected_selected[key] = true
 		var selected: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(
 			StringName(mode_fixture["mode"])
 		)
-		_check(selected.size() == int(mode_fixture["matchups"]), "%s selects the approved matchup count" % mode_fixture["mode"])
-		_check(EnemyManifest.expand_matchups(selected).size() == int(mode_fixture["games"]), "%s selects the approved game count" % mode_fixture["mode"])
+		var selected_keys: Dictionary = {}
+		for matchup: Dictionary in selected:
+			var key: String = _pair_key(StringName(matchup["enemy_a_id"]), StringName(matchup["enemy_b_id"]))
+			_check(expected_selected.has(key) and not selected_keys.has(key), "%s selects each eligible requested pair once" % mode_fixture["mode"])
+			selected_keys[key] = true
+		_check(selected.size() == expected_selected.size(), "%s covers all currently eligible requested pairs" % mode_fixture["mode"])
+		_check(EnemyManifest.expand_matchups(selected).size() == expected_selected.size() * 4, "%s expands every eligible pair into four games" % mode_fixture["mode"])
+	_check(EnemyManifest.get_matchups_for_mode(&"extended") == matchups, "Extended includes the full current schedule")
+	_check(EnemyManifest.get_matchups_for_mode(&"unknown").is_empty(), "Unknown benchmark modes have no schedule")
+
+
+func _pair_key(first_id: StringName, second_id: StringName) -> String:
+	var ordered: Array[String] = [String(first_id), String(second_id)]
+	ordered.sort()
+	return "|".join(ordered)
 
 
 func _check_mode_configs() -> void:
@@ -276,7 +317,7 @@ func _assignment_is_balanced(games: Array[Dictionary], enemy_id: StringName) -> 
 
 
 func _check_enemy_state_factory() -> void:
-	var matchup: Dictionary = EnemyManifest.get_matchups_for_mode(&"quick")[0]
+	var matchup: Dictionary = EnemyManifest.get_all_matchups()[0]
 	var games: Array[Dictionary] = EnemyManifest.expand_matchup(matchup)
 	var first_build: Dictionary = EnemyStateFactory.build(games[0], matchup)
 	var repeated_build: Dictionary = EnemyStateFactory.build(games[0], matchup)
@@ -318,7 +359,7 @@ func _check_enemy_state_factory() -> void:
 			in repeated_state.get_enabled_effect_gates(owner)
 		)
 		_check(
-			has_self_castration == (owner_enemy_id != &"qingfeng_xuedi"),
+			has_self_castration == bool(Enemies.get_definition(owner_enemy_id).get("self_castration_enabled", true)),
 			"Benchmark owner %d applies %s's self-castration declaration"
 			% [owner, owner_enemy_id]
 		)

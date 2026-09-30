@@ -1307,10 +1307,14 @@ func _test_sect_random_difficulty_gate(store: RefCounted) -> void:
 		and &"QuanZhenPai" not in store.get_run_sect_pool_ids(manual_result.get("profile", {})),
 		"Unlocked Quanzhen remains manually selectable at difficulty zero"
 	)
-	_check(
-		store._choose_enemy_id(4, &"yanbo_yuke2", 0) == &"yanbo_yuke2",
-		"Explicit enemy override remains available below its random opening difficulty"
-	)
+	for enemy_id: StringName in Enemies.get_all_enemy_ids():
+		var enemy: Dictionary = Enemies.get_definition(enemy_id)
+		if bool(enemy.get("special_only", false)) or Enemies.is_enemy_randomly_available(enemy, 0):
+			continue
+		_check(
+			store._choose_enemy_id(int(enemy["level"]), enemy_id, 0) == enemy_id,
+			"Explicit %s override remains available below its random opening difficulty" % enemy_id
+		)
 
 
 func _occupied_count(slots: Array) -> int:

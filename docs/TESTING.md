@@ -199,18 +199,24 @@ powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Quick
 powershell -ExecutionPolicy Bypass -File tools/run_ai_benchmark.ps1 -Mode Extended -Variant EvaluationSubtraction
 ```
 
-`Quick` uses 7 enemy matchups/28 games and `Extended` uses all 29
-matchups/116 games. Both use a nominal 1,500 nodes per decision and protect
+`Quick`, `Pilot`, and `Production` select the currently eligible requested
+pairs declared in `tests/benchmarks/enemy_ai_benchmark_manifest.gd`;
+enemy removals or level changes can change their schedule sizes. `Extended`
+includes all current same-level pairs plus the declared Feng Qingyang versus
+level-15 pairs. Each matchup expands to four games. Tests derive expected
+pair sets and opening counts from current catalog definitions and the declared
+pairing policy, rather than preserving historical roster counts, levels, or decks.
+`Quick` and `Extended` use a nominal 1,500 nodes per decision and protect
 complete-round depth one with `min_completed_depth = 1`; nodes are not reset
 after depth one, so reports must inspect guard-use and overrun diagnostics.
-`Production` uses 4 matchups/16 games with the real 10-second decision budget,
+`Production` uses the real 10-second decision budget,
 no minimum-depth guard, and Dummy audio. Each matchup is a balanced four-game
 crossover of deck and owner/initiative. All seats run the same native search;
 historical `enhanced`/`baseline` fields are assignment labels, not distinct
 algorithms. Pilot is optional and is not required before Extended.
 
 `EvaluationSubtraction` is a focused exception to that label rule. It runs the
-116-game Extended schedule at fixed `self_turn` depth two with no node/time
+current Extended schedule at fixed `self_turn` depth two with no node/time
 limit, keeps production PV/history/8 MiB TT, assigns the reduced production
 evaluator to `enhanced`, and restores deck/danger/tempo terms for `baseline`.
 Do not add it to the daily full suite.
@@ -258,8 +264,8 @@ agreement, and configuration have been recorded and reviewed.
 `Debug + template_debug` remains useful for correctness debugging but is not a
 performance baseline; on the current workload it is roughly half-speed.
 
-This runs the 14 unique real Quick openings with the production ten-second
-budget, Dummy audio, per-depth and partial-root diagnostics, plus three
+This runs the unique real openings from the current Quick schedule with the
+production ten-second budget, Dummy audio, per-depth and partial-root diagnostics, plus three
 node-limited timing probes. The current target is depth two under the selected
 mode; the JSON report explicitly records `depth_mode` and `depth_unit` so the
 two horizons cannot be compared as if they were the same or as old action-ply

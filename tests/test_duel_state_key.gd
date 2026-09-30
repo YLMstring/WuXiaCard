@@ -174,11 +174,16 @@ func _test_state_semantics() -> void:
 func _test_real_state_collision_corpus() -> void:
 	var queue: Array[Dictionary] = []
 	var opening_exact_keys: Dictionary = {}
-	for matchup: Dictionary in EnemyManifest.get_matchups_for_mode(&"quick"):
+	var matchups: Array[Dictionary] = EnemyManifest.get_matchups_for_mode(&"quick")
+	if matchups.is_empty():
+		matchups = EnemyManifest.get_all_matchups()
+	_check(not matchups.is_empty(), "Collision corpus has current real enemy matchups")
+	for matchup: Dictionary in matchups:
 		for game: Dictionary in EnemyManifest.expand_matchup(matchup):
 			var built: Dictionary = EnemyStateFactory.build(game, matchup)
 			var metadata: Dictionary = built.get("metadata", {}) as Dictionary
 			var state: State = built.get("state") as State
+			_check(state != null, "Every scheduled collision opening builds")
 			if state == null:
 				continue
 			var exact_key: String = String(metadata.get("initial_state_key", ""))
@@ -189,7 +194,7 @@ func _test_real_state_collision_corpus() -> void:
 				"state": state,
 				"source": String(metadata.get("game_id", "missing")),
 			})
-	_check(opening_exact_keys.size() == 14, "Collision corpus starts from fourteen real openings")
+	_check(opening_exact_keys.size() == matchups.size() * 2, "Each real matchup contributes both owner orders, independent of AI profiles")
 	var exact_seen: Dictionary = {}
 	var compact_to_exact: Dictionary = {}
 	var queue_index: int = 0

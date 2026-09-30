@@ -34,12 +34,15 @@ for the remaining GuMu attack, movement, and FIFO rules.
 Validation on 2026-09-30: GuMu fixtures pass 257 checks, native declaration
 audit/search/controller suites pass, and the muted 540×960 production-controller
 playtest covers failed/successful evasion, permanent suppression, YuNv generation,
-and movement power loss. The full suite passes 83/87: the four pre-existing
-failures are `test_enemy_catalog.gd` (fixed level-10 WuYingKe fixture; current
-catalog level 11), `test_duel_state_key.gd`, `test_duel_compact_state.gd` and
-`test_duel_ai_benchmark.gd` (historical opening/schedule counts after enemy
-level changes). These also failed before this adjustment; their assertions
-still need a separate roster review.
+and movement power loss. After the enemy-roster test review, the full suite
+passes 87/87. Catalog lookup, difficulty gates, benchmark pairing/assignment,
+and opening-corpus expectations now follow current enemy definitions and the
+declared benchmark policy instead of fixed enemy levels, historical roster
+counts, or approved-deck snapshots. The five related catalog/benchmark/state/
+native suites also pass against isolated catalog copies with enemies added,
+removed, moved between levels, and a second special-only enemy. Four-game
+crossovers, deterministic seeds, 512-state corpus targets, and bounded search
+sampling remain checked. See `docs/TESTING.md` for the roster policy.
 
 Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second
