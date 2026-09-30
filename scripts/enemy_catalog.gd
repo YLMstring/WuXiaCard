@@ -37,6 +37,7 @@ const ALL_ENEMY_IDS: Array[StringName] = [
 	&"tingchao_zhuren2",
 	&"chisha_menzhu",
 	&"bailu_shanzhang2",
+	&"wuying_ke4",
 	&"chisha_menzhu2",
 	&"chisha_menzhu3",
 	&"bailu_shanzhang",
