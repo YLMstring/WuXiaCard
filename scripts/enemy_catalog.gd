@@ -51,7 +51,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"dukou_xiaoke", "name": "江湖武师", "level": 1, "deck": [&"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan", &"TaiZuChangQuan"]},
 	{"id": &"qingfeng_xuedi", "name": "少镖头·林平之", "level": 1, "self_castration_enabled": false, "deck": [&"KuiHua4", &"TaiZuChangQuan", &"TaiZuChangQuan", &"KuiHua3", &"KuiHua2"]},
 	{"id": &"tieshan_menren", "name": "小师妹·岳灵珊", "level": 2, "deck": [&"CangSongYingKe1", &"SanQinFeng1", &"ZiXiaGong1", &"TuNaShu1", &"YouFenLaiYi2"]},
-	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 2, "deck": [&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2"]},
+	{"id": &"qingzhu_daoke", "name": "仪琳", "level": 3, "deck": [&"JinZhenDuJie1", &"WanHuaJian1", &"TuNaShu1", &"MianLiCangZhen2", &"HenShanJianZhen2"]},
 	{"id": &"luoxia_jianji", "name": "泰山弟子", "level": 3, "deck": [&"LaiHeQinQuan2", &"WuDaFuJian2", &"QiXinLuoChangKong2", &"TaiShan18Pan2", &"TuNaShu1"]},
 	{"id": &"heisha_xingzhe", "name": "衡山弟子", "level": 3, "deck": [&"YunWu13Shi2", &"TaiZuChangQuan", &"YiJianLuo9Yan2", &"JianFaQinYin2", &"TuNaShu1"]},
 	{"id": &"yanbo_yuke", "name": "嵩山弟子", "level": 4, "deck": [&"WanYueChaoZong2", &"TaiZuChangQuan", &"DaSongYangZhang2", &"TianWaiYuLong2", &"TuNaShu2"]},
