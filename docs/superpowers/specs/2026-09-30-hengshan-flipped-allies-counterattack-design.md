@@ -25,7 +25,7 @@
 
 ## 目录原语声明
 
-新增 `CONDITION_ATTACK_FLIPPED_ALLY` 作为廉价触发前置条件，只看 `attack_flips` 是否有 `previous_owner` 等于能力来源所属方的记录，不检查范围或点数。保留旧 `CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE` 给其它既有声明；它按基础范围判断，不能替代这里的完整标准攻击策略（其中可能含动态范围修正）。
+新增 `CONDITION_ATTACK_FLIPPED_ALLY` 作为廉价触发前置条件，只看 `attack_flips` 是否有 `previous_owner` 等于能力来源所属方的记录，不检查范围或点数。彻底移除旧 `CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE`：删除目录常量和已知条件注册、原生枚举/编译分支/执行分支，以及依赖它的珠子标记识别和测试断言。现行目录中只有本共通能力使用旧条件；历史设计文档保留原貌作为当时版本的记录。旧条件按基础范围判断，不能替代这里的完整标准攻击策略（其中可能含动态范围修正）。
 
 扩展 `CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK`：无额外字段时保持原有“本次攻击翻面的原敌方”语义；带 `"previous_owner": OWNER_ABILITY_SOURCE` 时匹配 `attack_flips` 中 `previous_owner` 等于能力来源所属方的同一实例。新增 `CONDITION_SELECTED_CARD_CAN_BE_ATTACKED_BY_SOURCE`，按当前标准攻击策略判断能力来源是否能对所选牌发起攻击，包括范围、目标所属方和现有“点数不足仍可尝试”的修正效果。扩展 `ACTION_STANDARD_ATTACK_WITH_CARD`：可选 `"target": CARD_REF_SELECTED_CARD`，此时以 `"card"` 指定的牌为攻击者，锁定所选实例与当前格，走原有定向攻击流程；省略 `target` 时维持原标准攻击。
 
@@ -207,5 +207,5 @@ HenShanJianZhen4["abilities"] = [
 ## 验证
 
 - 先补纯模拟器回归：一击翻多张牌时仅定向攻击可攻击的原友方；范围外、点数不足、被阻止翻面、连锁翻面、目标易主/换位/离场；没有可发起的攻击时保留能力；有攻击时只消耗一次；双方嵌套反击不重复。
-- 检查授予型剑阵与自带型能力、目录校验、编译拒绝非法字段、金珠“护”的识别，以及每个定向攻击分别产生的纯数据事件。历史两类 `selected_card_flipped_by_current_attack` 用法必须保持旧行为。
+- 检查授予型剑阵与自带型能力、目录校验、编译拒绝非法字段和已移除的旧条件、金珠“护”的识别，以及每个定向攻击分别产生的纯数据事件。历史两类 `selected_card_flipped_by_current_attack` 用法必须保持旧行为。
 - 原生 Release 构建后运行完整套件，再在静音、竖屏生产路径中走一次敌方多目标翻面与反击的可见流程。原生规则扩展进入搜索过渡路径，按仓库性能要求保留同机旧版与新版 Release 构建，用相同固定节点夹测；如有可重复退化，先报告。
