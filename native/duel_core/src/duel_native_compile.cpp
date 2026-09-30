@@ -191,7 +191,7 @@ DuelNativeCompactKernel::CompiledCondition DuelNativeCompactKernel::compile_cond
 	else if (type == StringName("activation_owner_is_ally")) compiled.opcode = ConditionOpcode::ACTIVATION_OWNER_IS_ALLY;
 	else if (type == StringName("trigger_card_was_on_board")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_WAS_ON_BOARD;
 	else if (type == StringName("attack_flipped_enemy")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ENEMY;
-	else if (type == StringName("attack_flipped_ally_in_range")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE;
+	else if (type == StringName("attack_flipped_ally")) compiled.opcode = ConditionOpcode::ATTACK_FLIPPED_ALLY;
 	else if (type == StringName("trigger_card_powers_could_change")) compiled.opcode = ConditionOpcode::TRIGGER_CARD_POWERS_COULD_CHANGE;
 	else if (type == StringName("drawn_card_is_enemy")) compiled.opcode = ConditionOpcode::DRAWN_CARD_IS_ENEMY;
 	else if (type == StringName("turn_owner_is_self")) compiled.opcode = ConditionOpcode::TURN_OWNER_IS_SELF;
@@ -226,8 +226,16 @@ DuelNativeCompactKernel::CompiledSelectorCondition DuelNativeCompactKernel::comp
 		else if (type == StringName("selected_card_original_owner_is_self")) compiled.opcode = SelectorConditionOpcode::ORIGINAL_OWNER_IS_SELF;
 		else if (type == StringName("selected_card_original_owner_is_enemy")) compiled.opcode = SelectorConditionOpcode::ORIGINAL_OWNER_IS_ENEMY;
 		else if (type == StringName("selected_card_flipped_by_current_attack")) compiled.opcode = SelectorConditionOpcode::FLIPPED_BY_CURRENT_ATTACK;
+		else if (type == StringName("selected_card_can_be_attacked_by_source")) compiled.opcode = SelectorConditionOpcode::CAN_BE_ATTACKED_BY_SOURCE;
 		else if (type == StringName("selected_card_powers_can_change")) compiled.opcode = SelectorConditionOpcode::POWERS_CAN_CHANGE;
 		else if (type == StringName("selected_card_has_nonzero_power")) compiled.opcode = SelectorConditionOpcode::HAS_NONZERO_POWER;
+	} else if (
+		type == StringName("selected_card_flipped_by_current_attack")
+		&& condition.size() == 2
+		&& StringName(condition.get("previous_owner", StringName())) == StringName("ability_source")
+	) {
+		compiled.opcode = SelectorConditionOpcode::FLIPPED_BY_CURRENT_ATTACK;
+		compiled.previous_owner_is_self = true;
 	} else if (
 		type == StringName("selected_card_adjacent_to_source")
 		&& condition.size() == 2
@@ -700,12 +708,18 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		}
 	} else if (
 		type == StringName("standard_attack_with_card")
-		&& action.size() == 2 + generic_field_count
+		&& action.size() == 2 + generic_field_count + (action.has("target") ? 1 : 0)
 	) {
 		compiled.opcode = ActionOpcode::STANDARD_ATTACK_WITH_CARD;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
 		if (compiled.card_ref == CardRefOpcode::UNSUPPORTED) {
 			compiled.declaration_valid = false;
+		}
+		if (action.has("target")) {
+			compiled.target_card_ref = compile_card_ref(action.get("target", StringName()));
+			if (compiled.target_card_ref != CardRefOpcode::SELECTED_CARD) {
+				compiled.declaration_valid = false;
+			}
 		}
 	} else if (
 		type == StringName("move_self_to_target")

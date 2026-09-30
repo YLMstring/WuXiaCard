@@ -161,21 +161,9 @@ bool DuelNativeCompactKernel::conditions_match(
 					? !context.attack_flipped_any_card
 					: context.attack_flipped_any_card;
 				break;
-			case ConditionOpcode::ATTACK_FLIPPED_ALLY_IN_RANGE: {
-				AttackPolicy policy;
+			case ConditionOpcode::ATTACK_FLIPPED_ALLY: {
 				for (const EventContext::AttackFlipRecord &record : context.attack_flips) {
-					if (record.previous_owner != group.source_owner) continue;
-					const int32_t target_cell = find_board_card(value, record.card_index, -1);
-					if (
-						target_cell >= 0
-						&& is_target_in_attack_range(
-							value,
-							group.source_cell,
-							target_cell,
-							policy,
-							false
-						)
-					) {
+					if (record.previous_owner == group.source_owner) {
 						matched = true;
 						break;
 					}

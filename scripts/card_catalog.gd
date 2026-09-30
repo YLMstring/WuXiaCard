@@ -56,7 +56,7 @@ const CONDITION_TRIGGER_CARD_WAS_ENEMY: StringName = &"trigger_card_was_enemy"
 const CONDITION_ATTACKER_CARD_IS_ENEMY: StringName = &"attacker_card_is_enemy"
 const CONDITION_ATTACKER_CARD_IS_OTHER_ALLY: StringName = &"attacker_card_is_other_ally"
 const CONDITION_DRAWN_CARD_IS_ENEMY: StringName = &"drawn_card_is_enemy"
-const CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE: StringName = &"attack_flipped_ally_in_range"
+const CONDITION_ATTACK_FLIPPED_ALLY: StringName = &"attack_flipped_ally"
 const CONDITION_ATTACK_FLIPPED_ENEMY: StringName = &"attack_flipped_enemy"
 const CONDITION_ATTACK_FLIPPED_ANY_CARD: StringName = &"attack_flipped_any_card"
 const CONDITION_OWNER_DID_NOT_WIN: StringName = &"owner_did_not_win"
@@ -81,6 +81,7 @@ const CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES: StringName = &"selected_card
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF: StringName = &"selected_card_original_owner_is_self"
 const CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY: StringName = &"selected_card_original_owner_is_enemy"
 const CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK: StringName = &"selected_card_flipped_by_current_attack"
+const CONDITION_SELECTED_CARD_CAN_BE_ATTACKED_BY_SOURCE: StringName = &"selected_card_can_be_attacked_by_source"
 const CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE: StringName = &"selected_card_powers_can_change"
 const CONDITION_SELECTED_CARD_HAS_NONZERO_POWER: StringName = &"selected_card_has_nonzero_power"
 const CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY: StringName = &"selected_card_is_previous_hand_play"
@@ -248,7 +249,7 @@ const KNOWN_TRIGGER_CONDITIONS: Array[StringName] = [
 	CONDITION_ATTACKER_CARD_IS_ENEMY,
 	CONDITION_ATTACKER_CARD_IS_OTHER_ALLY,
 	CONDITION_DRAWN_CARD_IS_ENEMY,
-	CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE,
+	CONDITION_ATTACK_FLIPPED_ALLY,
 	CONDITION_ATTACK_FLIPPED_ENEMY,
 	CONDITION_ATTACK_FLIPPED_ANY_CARD,
 	CONDITION_OWNER_DID_NOT_WIN,
@@ -279,6 +280,7 @@ const KNOWN_SELECTOR_CONDITIONS: Array[StringName] = [
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_SELF,
 	CONDITION_SELECTED_CARD_ORIGINAL_OWNER_IS_ENEMY,
 	CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
+	CONDITION_SELECTED_CARD_CAN_BE_ATTACKED_BY_SOURCE,
 	CONDITION_SELECTED_CARD_POWERS_CAN_CHANGE,
 	CONDITION_SELECTED_CARD_HAS_NONZERO_POWER,
 	CONDITION_SELECTED_CARD_IS_PREVIOUS_HAND_PLAY,
@@ -1573,12 +1575,30 @@ const HENGSHAN_COUNTERATTACK: Dictionary = {
 		"event": TRIGGER_CARD_AFTER_ATTACK,
 		"conditions": [
 			{"type": CONDITION_ATTACKER_CARD_IS_ENEMY},
-			{"type": CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE},
+			{"type": CONDITION_ATTACK_FLIPPED_ALLY},
 		],
-		"actions": [
-			{"type": ACTION_REMOVE_THIS_ABILITY},
-			{"type": ACTION_STANDARD_ATTACK_WITH_SELF},
-		],
+		"actions": [{
+			"type": ACTION_FOR_EACH_SELECTED_CARD,
+			"selector": {
+				"zones": [CARD_ZONE_BOARD],
+				"conditions": [
+					{"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+					{
+						"type": CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK,
+						"previous_owner": OWNER_ABILITY_SOURCE,
+					},
+					{"type": CONDITION_SELECTED_CARD_CAN_BE_ATTACKED_BY_SOURCE},
+				],
+			},
+			"actions": [
+				{"type": ACTION_REMOVE_THIS_ABILITY},
+				{
+					"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+					"card": CARD_REF_ABILITY_SOURCE,
+					"target": CARD_REF_SELECTED_CARD,
+				},
+			],
+		}],
 	}],
 }
 
@@ -5290,7 +5310,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 4,
 		"weapon": "掌法",
-		"description": "进场时，每有一个相邻敌方，我的点数加一。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "进场时，每有一个相邻敌方，我的点数加一。敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派掌法，练成之后可单凭一双肉掌，在合力围攻的兵刃间翻滚来去。",
 		"powers": [6, 6, 6, 6],
 		"abilities": [
@@ -5305,7 +5325,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 2,
 		"weapon": "阵法",
-		"description": "回合结束时，使我和所有相邻友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "回合结束时，使我和所有相邻友方获得以下效果：敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [6, 7, 6, 7],
 		"abilities": [{
@@ -5343,7 +5363,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 3,
 		"weapon": "阵法",
-		"description": "回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [6, 7, 6, 7],
 		"abilities": [{
@@ -5371,7 +5391,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 4,
 		"weapon": "阵法",
-		"description": "进场后，使所有被友方包围的敌方翻面。回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "进场后，使所有被友方包围的敌方翻面。回合结束时，使我和所有友方获得以下效果：敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派的奇妙剑阵，七柄剑既攻敌，复自守，七剑连环，绝无破绽可寻，在纹丝不动之中蕴含无限杀机。",
 		"powers": [6, 7, 6, 7],
 		"abilities": [
@@ -5445,7 +5465,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 3,
 		"weapon": "轻剑",
-		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
 		"powers": [7, 7, 2, 2],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
@@ -5457,7 +5477,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 4,
 		"weapon": "轻剑",
-		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "进场后，将首个最初是友方的敌方移回你的手牌。敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "中规中矩的恒山派武学，剑法中隐含阴柔之力，圆转绵密，余意不尽。",
 		"powers": [8, 8, 3, 3],
 		"abilities": [JINZHEN_RETURN, HENGSHAN_COUNTERATTACK],
@@ -5505,7 +5525,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 2,
 		"weapon": "轻剑",
-		"description": "敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派武功的根本要诀，于极平凡的招式之中暗蓄锋芒，便如是暗藏钢针的一团棉絮。旁人倘若不加触犯，棉絮轻柔温软，于人无忤，但若猛力紧捏，棉絮中所藏钢针便刺入手掌。",
 		"powers": [4, 2, 8, 8],
 		"abilities": [HENGSHAN_COUNTERATTACK],
@@ -5517,7 +5537,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"sect": "恒山派",
 		"tier": 3,
 		"weapon": "轻剑",
-		"description": "我将敌方翻面后，若其最初是友方，使其重新进场。敌方攻击后，若本次攻击中有在我攻击范围内的友方被翻面，我发起攻击，然后失去此效果。",
+		"description": "我将敌方翻面后，若其最初是友方，使其重新进场。敌方攻击后，若本次攻击中有友方被翻面，我对这些被翻面的牌发起攻击，若如此做，失去此效果。",
 		"flavor": "恒山派武功的根本要诀，于极平凡的招式之中暗蓄锋芒，便如是暗藏钢针的一团棉絮。旁人倘若不加触犯，棉絮轻柔温软，于人无忤，但若猛力紧捏，棉絮中所藏钢针便刺入手掌。",
 		"powers": [4, 2, 8, 8],
 		"abilities": [MIANLI_RESUMMON, HENGSHAN_COUNTERATTACK],
@@ -7102,6 +7122,13 @@ static func _validate_action(
 				"Card %s %s action %s requires a known card reference"
 				% [card_id, context_name, action_type]
 			)
+		if action.has("target"):
+			allowed_keys.append(&"target")
+			if StringName(action.get("target", &"")) != CARD_REF_SELECTED_CARD:
+				errors.append(
+					"Card %s %s action %s target must be the selected card"
+					% [card_id, context_name, action_type]
+				)
 	if action_type == ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY:
 		if action.has("prefer_outside_attacker_range"):
 			allowed_keys.append(&"prefer_outside_attacker_range")
@@ -7723,6 +7750,10 @@ static func _validate_selector_condition(
 		allowed_keys.append(&"card")
 		if StringName(condition.get("card", &"")) != CARD_REF_TRIGGER_CARD:
 			errors.append("Card %s %s adjacency anchor must be the trigger card" % [card_id, context_name])
+	if condition_type == CONDITION_SELECTED_CARD_FLIPPED_BY_CURRENT_ATTACK and condition.has("previous_owner"):
+		allowed_keys.append(&"previous_owner")
+		if StringName(condition.get("previous_owner", &"")) != OWNER_ABILITY_SOURCE:
+			errors.append("Card %s %s flip-history previous owner must be the ability source" % [card_id, context_name])
 	if condition_type == CONDITION_SELECTED_CARD_CAN_TRANSFER_RESOURCE:
 		allowed_keys.append(&"amount")
 		allowed_keys.append(&"resource")

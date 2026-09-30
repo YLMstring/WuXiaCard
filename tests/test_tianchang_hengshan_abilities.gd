@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Catalog = preload("res://scripts/card_catalog.gd")
+const Abilities = preload("res://scripts/duel_abilities.gd")
 const Action = preload("res://scripts/duel_action.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Simulator = preload("res://tests/helpers/duel_native_test_simulator.gd")
@@ -24,6 +25,9 @@ func _run() -> void:
 	_test_hengshan_four_respects_flip_prevention()
 	_test_repeated_hengshan_grants_do_not_stack()
 	_test_after_attack_uses_final_board_positions()
+	_test_unattackable_flipped_ally_preserves_counter()
+	_test_other_effect_flip_does_not_trigger_counter()
+	_test_prevented_counterattack_still_consumes_ability()
 	_test_counterattacks_once_after_all_directions()
 	_test_nested_counterattacks_consume_before_attacking()
 	if _failures == 0:
@@ -46,9 +50,9 @@ func _test_catalog_vocabulary() -> void:
 		"The enemy-attacker condition is registered"
 	)
 	_check(
-		Catalog.CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE
-		in Catalog.KNOWN_TRIGGER_CONDITIONS,
-		"The attack-summary ally condition is registered"
+		&"attack_flipped_ally" in Catalog.KNOWN_TRIGGER_CONDITIONS
+		and &"attack_flipped_ally_in_range" not in Catalog.KNOWN_TRIGGER_CONDITIONS,
+		"The range-free ally-flip condition replaces the obsolete range condition"
 	)
 	_check(
 		Catalog.CONDITION_SELECTED_CARD_SURROUNDED_BY_ALLIES
@@ -127,6 +131,10 @@ func _test_hengshan_two_grants_self_and_adjacent_allies() -> void:
 	var next_state: State = transition.get("state") as State
 	_check(_ability_count(next_state, 4) == 2, "Tier two grants its counter to itself")
 	_check(_ability_count(next_state, 1) == 1, "Tier two grants an adjacent ally")
+	_check(
+		Abilities.has_hengshan_counterattack((next_state.board[1] as Dictionary).get("card", {})),
+		"A granted counterattack displays the guard bead marker"
+	)
 	_check(_ability_count(next_state, 0) == 0, "Tier two excludes a distant ally")
 	_check(_ability_count(next_state, 5) == 0, "Tier two excludes an adjacent enemy")
 
@@ -240,8 +248,9 @@ func _test_after_attack_uses_final_board_positions() -> void:
 		state.duplicate_state(), Catalog.TRIGGER_CARD_AFTER_ATTACK, context
 	)
 	_check(
-		_event_count(outside.get("events", []), &"ability_triggered") == 0,
-		"A flipped ally outside final attack range does not trigger the counter"
+		_ability_count(outside.get("state") as State, 4) == 2
+		and _event_count(outside.get("events", []), &"attack_started") == 0,
+		"A flipped ally outside final attack range cannot spend the counter"
 	)
 	state.board[5] = state.board[8]
 	state.board[8] = null
@@ -249,8 +258,92 @@ func _test_after_attack_uses_final_board_positions() -> void:
 		state, Catalog.TRIGGER_CARD_AFTER_ATTACK, context
 	)
 	_check(
-		_event_count(inside.get("events", []), &"ability_triggered") == 1,
-		"The exact flipped ally triggers after moving into final attack range"
+		_ability_count(inside.get("state") as State, 4) == 1
+		and _event_count(inside.get("events", []), &"attack_started") == 1,
+		"The exact flipped ally is attacked after moving into final attack range"
+	)
+
+
+func _test_unattackable_flipped_ally_preserves_counter() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(Catalog.create_instance(
+		&"TianChangZhang4", Rules.PLAYER_OWNER, &"weak_counter"
+	), Rules.PLAYER_OWNER)
+	board[5] = _slot(_plain(&"strong_flipped_ally", [9, 9, 9, 9]), Rules.OPPONENT_OWNER)
+	var state := State.new(board)
+	var transition: Dictionary = Simulator._resolve_trigger_event(
+		state,
+		Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		{
+			"attacker_instance_id": &"enemy_attacker",
+			"attacker_owner_id": Rules.OPPONENT_OWNER,
+			"attack_flips": [{
+				"instance_id": &"strong_flipped_ally",
+				"previous_owner_id": Rules.PLAYER_OWNER,
+			}],
+		}
+	)
+	_check(
+		_ability_count(transition.get("state") as State, 4) == 2
+		and _event_count(transition.get("events", []), &"attack_started") == 0,
+		"Insufficient power never starts an attack or consumes the counter"
+	)
+
+
+func _test_other_effect_flip_does_not_trigger_counter() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(Catalog.create_instance(
+		&"TianChangZhang4", Rules.PLAYER_OWNER, &"chain_counter"
+	), Rules.PLAYER_OWNER)
+	board[5] = _slot(_plain(&"chain_flipped_ally"), Rules.OPPONENT_OWNER)
+	var transition: Dictionary = Simulator._resolve_trigger_event(
+		State.new(board),
+		Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		{
+			"attacker_instance_id": &"enemy_attacker",
+			"attacker_owner_id": Rules.OPPONENT_OWNER,
+			"attack_flips": [],
+		}
+	)
+	_check(
+		_ability_count(transition.get("state") as State, 4) == 2
+		and _event_count(transition.get("events", []), &"attack_started") == 0,
+		"A flip outside the attack's direct flip records cannot trigger the counter"
+	)
+
+
+func _test_prevented_counterattack_still_consumes_ability() -> void:
+	var board: Array = Rules.empty_board()
+	board[4] = _slot(Catalog.create_instance(
+		&"TianChangZhang4", Rules.PLAYER_OWNER, &"protected_counter"
+	), Rules.PLAYER_OWNER)
+	var protected_ally: Dictionary = _plain(&"protected_flipped_ally")
+	protected_ally["active_abilities"] = [Catalog.normalize_ability(
+		Catalog.TEMPORARY_FLIP_PROTECTION
+	)]
+	board[5] = _slot(protected_ally, Rules.OPPONENT_OWNER)
+	var transition: Dictionary = Simulator._resolve_trigger_event(
+		State.new(board),
+		Catalog.TRIGGER_CARD_AFTER_ATTACK,
+		{
+			"attacker_instance_id": &"enemy_attacker",
+			"attacker_owner_id": Rules.OPPONENT_OWNER,
+			"attack_flips": [{
+				"instance_id": &"protected_flipped_ally",
+				"previous_owner_id": Rules.PLAYER_OWNER,
+			}],
+		}
+	)
+	var next_state: State = transition.get("state") as State
+	_check(
+		_ability_count(next_state, 4) == 1
+		and _event_count(transition.get("events", []), &"attack_started") == 1
+		and _event_count(transition.get("events", []), &"card_flip_prevented") == 1,
+		"A started counterattack consumes its ability even when the flip is prevented"
+	)
+	_check(
+		not Abilities.has_hengshan_counterattack((next_state.board[4] as Dictionary).get("card", {})),
+		"The guard bead marker disappears after the counter ability is consumed"
 	)
 
 
@@ -261,6 +354,7 @@ func _test_counterattacks_once_after_all_directions() -> void:
 	), Rules.PLAYER_OWNER)
 	board[1] = _slot(_plain(&"north_ally", [1, 1, 1, 1]), Rules.PLAYER_OWNER)
 	board[3] = _slot(_plain(&"west_ally", [1, 1, 1, 1]), Rules.PLAYER_OWNER)
+	board[5] = _slot(_plain(&"untouched_enemy", [1, 1, 1, 1]), Rules.OPPONENT_OWNER)
 	var attacker: Dictionary = _plain(&"multi_attacker", [9, 9, 9, 9])
 	var transition: Dictionary = Simulator.apply_action(
 		State.new(board, [], [attacker], Rules.OPPONENT_OWNER),
@@ -270,11 +364,29 @@ func _test_counterattacks_once_after_all_directions() -> void:
 	_check(
 		int((next_state.board[1] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER
 		and int((next_state.board[3] as Dictionary).get("owner", 0)) == Rules.PLAYER_OWNER,
-		"One counterattack reclaims both allies after the enemy finishes both directions"
+		"Two targeted counterattacks reclaim both allies after the enemy finishes"
+	)
+	_check(
+		int((next_state.board[5] as Dictionary).get("owner", 0)) == Rules.OPPONENT_OWNER,
+		"Counterattacks do not hit an unrelated enemy in the same attack range"
+	)
+	var counter_targets: Array[StringName] = []
+	for event_value: Variant in transition.get("events", []):
+		if not event_value is Dictionary:
+			continue
+		var event: Dictionary = event_value
+		if (
+			StringName(event.get("type", &"")) == &"attack_started"
+			and StringName(event.get("source_instance_id", &"")) == &"multi_counter"
+		):
+			counter_targets.append(StringName(event.get("target_instance_id", &"")))
+	_check(
+		counter_targets == [&"north_ally", &"west_ally"],
+		"Each flipped ally receives a separate attack in board order"
 	)
 	_check(
 		_ability_count(next_state, 4) == 1,
-		"The one-use counter is consumed before its standard attack"
+		"The one-use counter is consumed before its first targeted attack"
 	)
 	_check(
 		_event_count(transition.get("events", []), &"ability_triggered") == 1,

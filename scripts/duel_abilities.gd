@@ -201,22 +201,13 @@ static func get_ki_bead_passive_marker(card: Dictionary) -> String:
 
 
 static func has_hengshan_counterattack(card: Dictionary) -> bool:
+	var counter_triggers: Array = Catalog.HENGSHAN_COUNTERATTACK.get("triggers", [])
 	for ability_value: Variant in card.get("active_abilities", []):
-		if not ability_value is Dictionary:
-			continue
-		for trigger_value: Variant in (ability_value as Dictionary).get("triggers", []):
-			if (
-				trigger_value is Dictionary
-				and _list_has_type(
-					(trigger_value as Dictionary).get("conditions", []),
-					Catalog.CONDITION_ATTACK_FLIPPED_ALLY_IN_RANGE
-				)
-				and _actions_have_type(
-					(trigger_value as Dictionary).get("actions", []),
-					Catalog.ACTION_STANDARD_ATTACK_WITH_SELF
-				)
-			):
-				return true
+		if (
+			ability_value is Dictionary
+			and (ability_value as Dictionary).get("triggers", []) == counter_triggers
+		):
+			return true
 	return false
 
 

@@ -114,7 +114,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ACTIVATION_OWNER_IS_ALLY,
 		TRIGGER_CARD_WAS_ON_BOARD,
 		ATTACK_FLIPPED_ENEMY,
-		ATTACK_FLIPPED_ALLY_IN_RANGE,
+		ATTACK_FLIPPED_ALLY,
 		ATTACK_FLIPPED_ANY_CARD,
 		TRIGGER_CARD_POWERS_COULD_CHANGE,
 		POWER_INCREASE_BATCH_INCLUDES_ALLY,
@@ -254,6 +254,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		ORIGINAL_OWNER_IS_SELF,
 		ORIGINAL_OWNER_IS_ENEMY,
 		FLIPPED_BY_CURRENT_ATTACK,
+		CAN_BE_ATTACKED_BY_SOURCE,
 		POWERS_CAN_CHANGE,
 		HAS_NONZERO_POWER,
 		IS_PREVIOUS_HAND_PLAY,
@@ -317,6 +318,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		String weapon;
 		RelativeOwnerOpcode relative_owner = RelativeOwnerOpcode::UNSUPPORTED;
 		CardRefOpcode anchor_card_ref = CardRefOpcode::ABILITY_SOURCE;
+		bool previous_owner_is_self = false;
 		ResourceOpcode resource = ResourceOpcode::NONE;
 		ResourceOpcode fallback_resource = ResourceOpcode::NONE;
 		int32_t amount = 0;
@@ -338,6 +340,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		StringName declaration_type;
 		ActionOpcode opcode = ActionOpcode::UNSUPPORTED;
 		CardRefOpcode card_ref = CardRefOpcode::UNSUPPORTED;
+		CardRefOpcode target_card_ref = CardRefOpcode::UNSUPPORTED;
 		CardRefOpcode from_card_ref = CardRefOpcode::UNSUPPORTED;
 		CardRefOpcode to_card_ref = CardRefOpcode::UNSUPPORTED;
 		bool card_ref_explicit = false;

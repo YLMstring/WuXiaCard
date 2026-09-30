@@ -942,12 +942,36 @@ bool DuelNativeCompactKernel::selector_conditions_match(
 				break;
 			case SelectorConditionOpcode::FLIPPED_BY_CURRENT_ATTACK:
 				for (const EventContext::AttackFlipRecord &record : context.attack_flips) {
-					if (record.card_index == candidate_card_index && record.previous_owner != source_owner) {
+					if (
+						record.card_index == candidate_card_index
+						&& (record.previous_owner == source_owner) == condition.previous_owner_is_self
+					) {
 						matched = true;
 						break;
 					}
 				}
 				break;
+			case SelectorConditionOpcode::CAN_BE_ATTACKED_BY_SOURCE: {
+				if (candidate_zone != 0 || source_zone != 0) break;
+				const int32_t attacker_cell = find_board_card(value, context.ability_source_card_index, source_index);
+				if (attacker_cell < 0 || value.board_owners[attacker_cell] != source_owner) break;
+				AttackPolicy requested_policy;
+				const AttackPolicy policy = get_standard_attack_policy(
+					value,
+					attacker_cell,
+					context.ability_source_card_index,
+					source_owner,
+					requested_policy
+				);
+				const bool include_power_failures = (
+					card_has_modifier(value, context.ability_source_card_index, source_owner, ModifierOpcode::ATTACK_EACH_TARGET_TWICE)
+					|| card_has_modifier(value, context.ability_source_card_index, source_owner, ModifierOpcode::WEAKEN_TARGET_ON_POWER_FAILURE)
+				);
+				matched = can_attack_target(
+					value, attacker_cell, candidate_logical_index, policy, include_power_failures
+				);
+				break;
+			}
 			case SelectorConditionOpcode::POWERS_CAN_CHANGE:
 				matched = can_change_powers(value, candidate_card_index);
 				break;
@@ -2359,6 +2383,20 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				request.locked_target_owner = value.board_owners[target_cell];
 				request.reason = StringName("card_summoned_reaction");
 			} else {
+				if (action.target_card_ref == CardRefOpcode::SELECTED_CARD) {
+					const int32_t target_cell = find_board_card(
+						value,
+						action_context.selected_card_index,
+						action_context.selected_card_logical_index
+					);
+					if (target_cell < 0 || target_cell != action_context.selected_card_logical_index) {
+						return ActionOutcome::NO_EFFECT;
+					}
+					request.targeted = true;
+					request.locked_target_cell = target_cell;
+					request.locked_target_card_index = action_context.selected_card_index;
+					request.locked_target_owner = value.board_owners[target_cell];
+				}
 				request.repeat_attack = action.repeat_attack;
 				request.reason = StringName("activated_ability");
 				if (action.target_policy_specified) {
