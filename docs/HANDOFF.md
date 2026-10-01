@@ -199,6 +199,12 @@ release-ready Android package.
   export downloads both datasets by default; `-Dataset Events` selects only
   these events.
 - Android preset: `export_presets.cfg`
+- Current app version: `1.0.7`; Android version code `8`. The local ARM64
+  release APK is `build/android/WuxiaCard-android-arm64-1.0.7.apk` (2026-10-01).
+  Signing matches 1.0.6 and APK v2/v3 verification passes. Its native rules
+  library was rebuilt for the current compact-format-2 implementation and
+  matches the packaged Gradle output. The current 89/89 suite result was
+  reused. No connected Android device was available for an install playtest.
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`
 

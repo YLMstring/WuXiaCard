@@ -186,7 +186,7 @@ fall back to Godot-managed debug signing.
 `export_presets.cfg` currently:
 
 - is built through `tools/build_android_release.ps1`, whose default artifact is
-  `build/android/WuxiaCard-android-arm64-1.0.6.apk`;
+  `build/android/WuxiaCard-android-arm64-1.0.7.apk`;
 - uses the Gradle source-template export so the Android-to-Godot splash handoff
   can retain the original splash until engine setup completes;
 - selects ARM64 only;
@@ -196,6 +196,18 @@ fall back to Godot-managed debug signing.
 - uses the release keystore supplied through `WUXIA_ANDROID_KEYSTORE_PATH` and
   its password environment variables for formal builds, while retaining an
   explicit debug-keystore fallback for local-only builds.
+
+Latest local export (2026-10-01): version name `1.0.7`, version code `8`,
+126,847,189-byte ARM64 APK at the path above. APK v2/v3 signature verification
+passes and the certificate matches 1.0.6. The packaged native library matches
+the freshly rebuilt Release/Android Gradle output; tests/tools/docs/local
+development assets are excluded. Manifest min/target SDK are 24/36. No Android
+device was connected, so installation and on-device gameplay were not tested.
+The current 89/89 test result was reused; this version/export change does not
+alter gameplay. Build and artifact records live in
+`.summer/local/android-1.0.7/`. The exporter hit Summer's existing teardown
+watchdog after Gradle completed; the build script continued only after its
+completion checks, then signed and independently verified the finished APK.
 
 Before distribution:
 
