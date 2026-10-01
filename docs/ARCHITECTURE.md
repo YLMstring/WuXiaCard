@@ -520,8 +520,12 @@ direction from the source/target cells, and centers the fixed 64 × 22 bitmap on
 the first neighboring cell seam. A farther same-row or same-column target does
 not stretch or relocate the image.
 
-`ability_triggered` is emitted only after a passive rule survives revalidation and
-its conditions match. It precedes that rule's action events and drives the
+`ability_triggered` is emitted only after a passive rule survives revalidation,
+its conditions match, and its first concrete action is entered. `ACTION_IF` and
+`ACTION_FOR_EACH_SELECTED_CARD` are control structures and do not emit the cue
+unless a nested concrete action runs. A concrete attempt still emits it when
+it returns `NO_EFFECT` or stops the rule; state change is not required. The cue
+is emitted once per rule, before its first concrete action's events, and drives the
 generic whole-card pulse. Activations do not emit it. The controller suppresses
 only consecutive pulses from the same instance within one presented move; the
 memory resets for the next move.

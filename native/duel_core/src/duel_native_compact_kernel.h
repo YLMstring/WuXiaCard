@@ -393,6 +393,7 @@ class DuelNativeCompactKernel : public RefCounted {
 
 	// 一次能力链共享的少量瞬时信息。它不写入存档，也不进入局面状态键。
 	struct ActionExecutionState {
+		bool trigger_cue_pending = false;
 		int32_t last_discard_batch_size = 0;
 		int32_t current_source_cell = -1;
 		int32_t last_summoned_card_index = -1;
@@ -1342,7 +1343,8 @@ private:
 		const ActionContext &action_context,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution,
-		bool defer_power_change_batch = false
+		bool defer_power_change_batch = false,
+		bool emit_trigger_cue = false
 	) const;
 	ActionOutcome execute_actions_with_state(
 		NativeState &value,

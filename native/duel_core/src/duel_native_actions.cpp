@@ -1600,13 +1600,15 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_actions(
 	const ActionContext &action_context,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution,
-	bool defer_power_change_batch
+	bool defer_power_change_batch,
+	bool emit_trigger_cue
 ) const {
 	ScopedTransitionTiming timing(
 		active_transition_timing,
 		TransitionTimingBucket::ACTION_EFFECTS
 	);
 	ActionExecutionState execution_state;
+	execution_state.trigger_cue_pending = emit_trigger_cue;
 	execution_state.current_source_cell = group.source_cell;
 	return execute_actions_with_state(
 		value,
@@ -1811,6 +1813,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_for_each
 			resolution,
 			true
 		);
+		execution_state.trigger_cue_pending = nested_execution_state.trigger_cue_pending;
 		if (outcome == ActionOutcome::UNSUPPORTED || outcome == ActionOutcome::INVALID_CONTEXT) return outcome;
 		if (outcome == ActionOutcome::APPLIED) aggregate = ActionOutcome::APPLIED;
 	}
@@ -1892,6 +1895,21 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 	Resolution &resolution
 ) const {
 	if (!action.declaration_valid) return ActionOutcome::UNSUPPORTED;
+	// IF/选择器只控制流程；首次真正进入具体原语时才发出本条触发规则的 pulse。
+	// NO_EFFECT/STOP_RULE 仍是执行过该原语，不以是否修改了状态作为 pulse 条件。
+	if (
+		execution_state.trigger_cue_pending
+		&& action.opcode != ActionOpcode::IF
+		&& action.opcode != ActionOpcode::FOR_EACH_SELECTED_CARD
+	) {
+		execution_state.trigger_cue_pending = false;
+		Dictionary triggered;
+		triggered["type"] = StringName("ability_triggered");
+		triggered["source_cell"] = group.source_cell;
+		triggered["source_instance_id"] = value.card_instance_ids[group.source_card_index];
+		triggered["source_owner_id"] = group.source_owner;
+		resolution.events.append(triggered);
+	}
 	const int32_t action_source_cell = execution_state.current_source_cell;
 	switch (action.opcode) {
 		case ActionOpcode::QUEUE_NEXT_HAND_PLAY_ABILITY: {

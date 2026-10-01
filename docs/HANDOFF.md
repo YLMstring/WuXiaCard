@@ -10,6 +10,25 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
+Passive card pulse cues now wait until the rule enters its first concrete
+action. `ACTION_IF` and `ACTION_FOR_EACH_SELECTED_CARD` do not count by
+themselves: failed conditions, empty selections and skipped nested actions
+produce no `ability_triggered`. A concrete attempt still pulses when it has
+`NO_EFFECT` or stops the rule. One rule emits at most one cue, before its first
+concrete action's presentation. This is native event/action execution metadata,
+not persistent duel state; controller pulse coalescing is unchanged.
+Focused simulator coverage passes 353 checks, and five muted portrait
+production-controller walkthroughs pass with no runtime errors.
+Full verification rerun passes 89/89 suites in 283.63s, including 432 controller
+checks. The first full run had one unrelated 0.14s return-button feedback timing
+failure; its isolated rerun and the clean full rerun both pass without changes.
+Both Windows native ABIs are rebuilt. Old source/DLLs, five identical-result fixed-5,000-node
+Release comparisons and verification logs remain in
+`.summer/local/trigger-pulse-20261001/`. Per-fixture pooled median timing changes
+are +2.16%, +1.17%, -3.08%, -4.55%, +0.49%; the two positive ordinary-fixture
+changes do not reproduce in both paired rounds, so no speedup or repeatable
+regression is claimed. Existing Android binaries have not been rebuilt.
+
 Generic swaps now resolve A's and B's before-move events, revalidate both exact
 instances/cells/owners, exchange complete board slots, then resolve A's and B's
 after-move events. Both participants remain discoverable during after events.

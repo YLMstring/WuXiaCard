@@ -64,6 +64,9 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   Swap fixtures check both before windows on the pre-swap board, both after
   windows on the complete board, participant listeners, slot extras, retained
   before-event interruption and post-swap movement/flip/exile.
+  Passive-cue fixtures cover failed IF conditions, empty selections, nested
+  selection/IF combinations, one cue across multiple concrete actions,
+  STOP_RULE at control/leaf levels, and concrete NO_EFFECT/empty-deck attempts.
 - `test_gumu_abilities.gd` — GuMu declarations, next-hand FIFO grants, generated
   cards, attack attempts, evasion, suppression, retained movement weakening,
   acquired-ability snapshots, and all nine actual alternating LangJi/TianLuo

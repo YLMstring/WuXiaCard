@@ -93,7 +93,11 @@ These decisions were explicitly established during development and should not be
 
 - Abilities have no behavior ID; runtime actions identify their source card by `instance_id`.
 - Global triggers resolve by row-major board cell, then ability order, then trigger order.
-- Every accepted passive trigger emits `ability_triggered` before its actions.
+- A passive trigger emits `ability_triggered` once, immediately before its first
+  executed concrete action. `ACTION_IF` and `ACTION_FOR_EACH_SELECTED_CARD` do
+  not count by themselves; skipped conditions or empty selections emit no cue.
+  Concrete attempts still count when they return `NO_EFFECT`, including when
+  their declared `STOP_RULE` policy then stops the remaining actions.
   The controller pulses that source card unless it was the last card pulsed in
   the same move. Pulse memory resets between moves.
 - Every initially valid attack emits `attack_started` before

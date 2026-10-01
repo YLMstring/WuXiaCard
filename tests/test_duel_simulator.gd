@@ -59,6 +59,7 @@ func _run() -> void:
 	_test_search_can_choose_activate_action()
 	_test_trigger_groups_resolve_atomically()
 	_test_passive_trigger_event_semantics()
+	_test_passive_trigger_requires_concrete_action()
 	_test_after_summoned_follows_card_moved_during_summoned()
 	_test_summon_reaction_interrupts_on_play_and_standard_attack()
 	_test_summon_reaction_conditions_and_ability_loss()
@@ -1824,7 +1825,9 @@ func _test_trigger_groups_resolve_atomically() -> void:
 	second["ki"] = 3
 	board[0] = {"card": first, "owner": Rules.PLAYER_OWNER}
 	board[8] = {"card": second, "owner": Rules.PLAYER_OWNER}
-	var state := State.new(board, [], [], Rules.PLAYER_OWNER)
+	var blade := _make_runtime_card("Atomic Blade", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"atomic_blade")
+	blade["weapon"] = "刀法"
+	var state := State.new(board, [blade], [], Rules.PLAYER_OWNER)
 	var result: Dictionary = Simulator._resolve_trigger_event(
 		state,
 		Catalog.TRIGGER_END_OWNER_TURN,
@@ -1923,6 +1926,76 @@ func _test_passive_trigger_event_semantics() -> void:
 		_event_types(no_effect_result.get("events", [])) == [&"ability_triggered"],
 		"Accepted passive rule still emits its cue when its action has NO_EFFECT"
 	)
+
+
+func _test_passive_trigger_requires_concrete_action() -> void:
+	var gain: Dictionary = {"type": Catalog.ACTION_GAIN_KI, "amount": 1}
+	var missing_exile: Dictionary = {
+		"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_TRIGGER_CARD,
+	}
+	var conditional: Dictionary = {
+		"type": Catalog.ACTION_IF,
+		"conditions": [{"type": Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+		"actions": [gain],
+	}
+	var each_board: Dictionary = {
+		"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {"zones": [Catalog.CARD_ZONE_BOARD]},
+		"actions": [gain],
+	}
+	var each_hand: Dictionary = each_board.duplicate(true)
+	each_hand["selector"] = {"zones": [Catalog.CARD_ZONE_HAND]}
+	var skipped_children: Dictionary = each_board.duplicate(true)
+	skipped_children["actions"] = [conditional]
+	var nested: Dictionary = conditional.duplicate(true)
+	nested["actions"] = [skipped_children]
+	var stopped_if: Dictionary = conditional.duplicate(true)
+	stopped_if["on_invalid_context"] = Catalog.STOP_RULE
+	var stopped_loop: Dictionary = each_hand.duplicate(true)
+	stopped_loop["on_invalid_context"] = Catalog.STOP_RULE
+	var stopped_exile: Dictionary = missing_exile.duplicate(true)
+	stopped_exile["on_invalid_context"] = Catalog.STOP_RULE
+	var cases: Array[Dictionary] = [
+		{"name": "Failed IF", "actions": [conditional], "hand": true, "pulses": 0, "ki": 0},
+		{"name": "Empty selection", "actions": [each_hand], "pulses": 0, "ki": 0},
+		{"name": "Selected cards with failed IF", "actions": [skipped_children], "hand": true, "pulses": 0, "ki": 0},
+		{"name": "Passing IF", "actions": [conditional], "pulses": 1, "ki": 1},
+		{"name": "Two selected cards", "actions": [each_board], "pulses": 1, "ki": 2},
+		{"name": "Nested wrappers and following leaf", "actions": [nested, gain], "pulses": 1, "ki": 3},
+		{"name": "Skipped children and following leaf", "actions": [skipped_children, gain], "hand": true, "pulses": 1, "ki": 1},
+		{"name": "IF STOP_RULE before leaf", "actions": [stopped_if, gain], "hand": true, "pulses": 0, "ki": 0},
+		{"name": "Empty selection STOP_RULE before leaf", "actions": [stopped_loop, gain], "pulses": 0, "ki": 0},
+		{"name": "Concrete NO_EFFECT", "actions": [missing_exile], "pulses": 1, "ki": 0},
+		{"name": "Concrete STOP_RULE", "actions": [stopped_exile, gain], "pulses": 1, "ki": 0},
+		{"name": "Empty-deck draw attempt", "actions": [{"type": Catalog.ACTION_DRAW_CARDS, "amount": 1}], "pulses": 1, "ki": 0},
+	]
+	for fixture: Dictionary in cases:
+		var board: Array = Rules.empty_board()
+		board[0] = {"card": _make_runtime_card(
+			"Action Pulse", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"action_pulse", [{
+				"triggers": [{"event": Catalog.TRIGGER_END_OWNER_TURN, "actions": fixture["actions"]}],
+			}]
+		), "owner": Rules.PLAYER_OWNER}
+		board[1] = {"card": _make_runtime_card(
+			"Selected Ally", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"selected_ally"
+		), "owner": Rules.PLAYER_OWNER}
+		var hand: Array = []
+		if bool(fixture.get("hand", false)):
+			hand.append(_make_runtime_card("Held Card", [1, 1, 1, 1], Rules.PLAYER_OWNER, &"held_card"))
+		var state := State.new(board, hand, [], Rules.PLAYER_OWNER)
+		var result: Dictionary = Simulator._resolve_trigger_event(
+			state, Catalog.TRIGGER_END_OWNER_TURN, {"turn_owner_id": Rules.PLAYER_OWNER}
+		)
+		var events: Array = result.get("events", [])
+		_check(bool(result.get("valid", false)), "%s resolves through native rules" % fixture["name"])
+		_check(_count_events(events, &"ability_triggered") == int(fixture["pulses"]), "%s counts only concrete actions for pulse" % fixture["name"])
+		_check(_count_events(events, &"ki_changed") == int(fixture["ki"]), "%s preserves nested execution and STOP_RULE" % fixture["name"])
+		if int(fixture["pulses"]) > 0:
+			_check(
+				StringName((events[0] as Dictionary).get("type", &"")) == &"ability_triggered"
+				and StringName((events[0] as Dictionary).get("source_instance_id", &"")) == &"action_pulse",
+				"%s emits the original source cue before concrete action events" % fixture["name"]
+			)
 
 
 func _test_after_summoned_follows_card_moved_during_summoned() -> void:

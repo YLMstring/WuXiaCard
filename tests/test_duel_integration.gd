@@ -82,6 +82,7 @@ func _run() -> void:
 	await _check_manual_activate_move()
 	await _check_KuiHua1_before_summon_presentation()
 	await _check_ability_pulse_sequencing()
+	await _check_passive_pulse_requires_concrete_action()
 	var initial_player_card_sizes: Dictionary = _card_sizes_by_slot(duel.get_node("DuelCanvas/PlayerHand"))
 
 	var player_turns: int = 0
@@ -2174,6 +2175,59 @@ func _check_yunv_presentation() -> void:
 	_check(after_yunv != null and after_yunv.next_hand_play_from_discard_owner == Rules.PLAYER_OWNER, "Production state retains the discard-source follow-up")
 	yunv_duel.queue_free()
 	await process_frame
+
+
+func _check_passive_pulse_requires_concrete_action() -> void:
+	var gain: Dictionary = {"type": Catalog.ACTION_GAIN_KI, "amount": 1}
+	var conditional: Dictionary = {
+		"type": Catalog.ACTION_IF,
+		"conditions": [{"type": Catalog.CONDITION_SOURCE_OWNER_HAND_EMPTY}],
+		"actions": [gain],
+	}
+	var each: Dictionary = {
+		"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {"zones": [Catalog.CARD_ZONE_REMOVED]},
+		"actions": [gain],
+	}
+	var selected_if: Dictionary = each.duplicate(true)
+	selected_if["selector"] = {"zones": [Catalog.CARD_ZONE_BOARD]}
+	selected_if["actions"] = [conditional]
+	var selected_gain: Dictionary = selected_if.duplicate(true)
+	selected_gain["actions"] = [gain, gain]
+	var fixtures: Array[Dictionary] = [
+		{"name": "Failed IF", "actions": [conditional], "pulses": 0},
+		{"name": "Empty selection", "actions": [each], "pulses": 0},
+		{"name": "Skipped selected children", "actions": [selected_if], "pulses": 0},
+		{"name": "Selected concrete actions", "actions": [selected_gain], "pulses": 1},
+		{"name": "Concrete NO_EFFECT", "actions": [{"type": Catalog.ACTION_EXILE_CARD, "card": Catalog.CARD_REF_ATTACKER_CARD}], "pulses": 1},
+	]
+	for fixture: Dictionary in fixtures:
+		var duel: Node = _instantiate_duel()
+		duel.set("testing_mode", true)
+		root.add_child(duel)
+		await process_frame
+		await process_frame
+		duel.debug_set_fast_mode(true)
+		var state: State = duel.get("duel_state") as State
+		var card: Dictionary = state.get_hand(Rules.PLAYER_OWNER)[0]
+		var source_id := StringName(card["instance_id"])
+		card["active_abilities"] = [{"triggers": [{
+			"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+			"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+			"actions": fixture["actions"],
+		}]}]
+		var view: CardView = _cards_below(duel.get_node("DuelCanvas/PlayerHand"))[0] as CardView
+		view.sync_runtime_data(card, Rules.PLAYER_OWNER)
+		_check(await duel.debug_commit_move(Rules.PLAYER_OWNER, 0, 4, false), "%s uses production hand play" % fixture["name"])
+		_check(
+			duel.debug_get_ability_pulse_trace().count(source_id) == int(fixture["pulses"]),
+			"%s presents pulse only after executing a concrete action" % fixture["name"]
+		)
+		if fixture["name"] == "Selected concrete actions":
+			var trace: Array[StringName] = duel.debug_get_presentation_trace()
+			_check(trace.find(&"ability_triggered") < trace.find(&"ki_changed"), "Nested actions present one source pulse before their effects")
+		duel.queue_free()
+		await process_frame
 
 
 func _check_ability_pulse_sequencing() -> void:

@@ -672,12 +672,6 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 			}
 			continue;
 		}
-		Dictionary triggered;
-		triggered["type"] = StringName("ability_triggered");
-		triggered["source_cell"] = group.source_cell;
-		triggered["source_instance_id"] = value.card_instance_ids[group.source_card_index];
-		triggered["source_owner_id"] = group.source_owner;
-		resolution.events.append(triggered);
 		ActionContext action_context;
 		if (!owner_aura && context.ability_source_card_index >= 0) {
 			action_context.ability_source_cell = context.ability_source_cell;
@@ -711,7 +705,9 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 			context,
 			action_context,
 			exile_stack,
-			resolution
+			resolution,
+			false,
+			true
 		);
 		if (outcome == ActionOutcome::UNSUPPORTED) {
 			resolution.supported = false;
