@@ -177,11 +177,23 @@ under the summoning owner and has never changed owner during that entrance
 lifecycle. Flipping away and back still cancels the attack. Board movement
 emits neither summon event.
 
-Every successful movement—including both conceptual legs of a swap—resolves
-`CARD_BEFORE_MOVED` for the exact moving instance before mutating board cells,
-then revalidates source identity and destination legality. Swaps additionally
-revalidate adjacency and the exact partner immediately before movement. After
-each successful mutation, `CARD_AFTER_MOVED` resolves for that exact instance.
+Ordinary movement resolves `CARD_BEFORE_MOVED` for the exact moving instance,
+then revalidates source identity and destination legality before mutating board
+cells and resolving `CARD_AFTER_MOVED`.
+
+Swaps validate distinct adjacent board instances and their expected owners,
+resolve A's then B's `CARD_BEFORE_MOVED`, and only then revalidate that both
+instances remain in their original cells under their original owners. A failed
+revalidation returns `NO_EFFECT`, retaining both before-event effects and their
+events without rolling them back. A successful swap exchanges both complete
+board slots without dispatching an event between those writes, emits A's then
+B's `card_moved` presentation events, and resolves A's then B's
+`CARD_AFTER_MOVED` against the complete board. Neither participant is temporarily
+removed from event discovery. After-event movement, flips and removal remain
+effective; they do not undo the completed swap or change its `APPLIED` result.
+Movement contexts identify the exact instance and the swap's original owner,
+origin and destination; each after event discovers its listeners from the
+then-current board. See `docs/superpowers/specs/2026-10-01-swap-resolution-design.md`.
 
 Temporary ability suppression removes only current non-retained abilities and
 stores them on the exact runtime card instance. End-owner-turn triggers resolve

@@ -45,6 +45,7 @@ func _run() -> void:
 	await process_frame
 	await _check_enemy_hand_activation_target()
 	await _check_ally_hand_activation_target()
+	await _check_langji_tianluo_swap_penalty()
 	_cleanup_test_profile()
 	if _failures == 0:
 		print("ACTIVATION_TARGETING_SWAP_PRESENTATION_PASSED checks=%d" % _checks)
@@ -392,6 +393,43 @@ func _check_ally_hand_activation_target() -> void:
 	)
 	source_view._try_end_drag(Vector2(-100.0, -100.0), -1)
 	await process_frame
+	duel.queue_free()
+	await process_frame
+
+
+func _check_langji_tianluo_swap_penalty() -> void:
+	var duel: Node = DUEL_SCENE.instantiate()
+	duel.deck_profile_path = TEST_PROFILE_PATH
+	duel.testing_mode = true
+	duel.opponent_hand_shuffle_seed = -1
+	duel.opening_layout_seed = -1
+	root.add_child(duel)
+	await process_frame
+	await process_frame
+	duel.debug_set_fast_mode(true)
+	var hand: Array = duel.duel_state.get_hand(1)
+	for i: int in range(2):
+		var original: Dictionary = hand[i]
+		var replacement: Dictionary = Catalog.create_instance(&"LangJiTianYa1" if i == 0 else &"TianLuoDiWang2", 1, original["instance_id"])
+		replacement["hand_slot_index"] = original["hand_slot_index"]
+		hand[i] = replacement
+		duel._get_card_view_for_logical_index(1, i).sync_runtime_data(replacement, 1)
+	var enemy_original: Dictionary = duel.duel_state.get_hand(2)[0]
+	var enemy: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 2, enemy_original["instance_id"])
+	enemy["powers"] = [9, 9, 9, 9]
+	enemy["hand_slot_index"] = enemy_original["hand_slot_index"]
+	duel.duel_state.get_hand(2)[0] = enemy
+	duel._get_card_view_for_logical_index(2, 0).sync_runtime_data(enemy, 2)
+	var net_id: StringName = hand[1]["instance_id"]
+	var enemy_id: StringName = enemy["instance_id"]
+	_check(await duel.debug_commit_move(1, 0, 0, false), "Presentation fixture plays LangJi first")
+	_check(await duel.debug_commit_move(2, 0, 4, false), "Presentation fixture places the enemy in the center")
+	_check(await duel.debug_commit_move(1, 0, 5, false), "Presentation fixture plays TianLuo and swaps")
+	_check(duel.debug_get_board_card_instance_id(4) == net_id and duel.debug_get_board_card_instance_id(5) == enemy_id, "Reciprocal animation leaves both views in the simulator's final cells")
+	_check(duel.board_cards[5].card_data["powers"] == [7, 7, 7, 7] and duel.duel_state.board[5]["card"]["powers"] == [7, 7, 7, 7], "Enemy view and authoritative state both present the swap's minus two")
+	_check(&"powers_changed" in duel.debug_get_presentation_trace(), "Swap power-loss event reaches the production presenter")
+	var movement_trace: Array = duel.debug_get_movement_presentation_trace()
+	_check(movement_trace.size() == 1 and movement_trace[0].get("kind") == &"swap", "Both movement events still form one reciprocal swap animation")
 	duel.queue_free()
 	await process_frame
 

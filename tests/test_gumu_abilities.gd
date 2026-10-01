@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_evasion_failure()
 	_test_suppression_duration()
 	_test_tianluo_locked_move_penalty()
+	_test_langji_tianluo_swap_penalty()
 	_test_tianluo_acquired_snapshot()
 	if _failures == 0:
 		print("GUMU_ABILITY_TESTS_PASSED checks=%d" % _checks)
@@ -528,6 +529,42 @@ func _test_tianluo_locked_move_penalty() -> void:
 			if bool(moved.get("valid", false)) and after != null and after.board[7] != null:
 				_check((after.board[7] as Dictionary)["card"]["powers"] == [5, 5, 5, 5], "Source and recipient each apply minus two, also after flipping")
 				_check(_event_count(moved.get("events", []), &"powers_changed") == 2, "Fourth-tier snapshot does not duplicate its printed movement penalty")
+
+
+func _test_langji_tianluo_swap_penalty() -> void:
+	for lang_tier: int in range(1, 4):
+		for net_tier: int in range(2, 5):
+			var enemy: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", 2, &"swap_enemy")
+			enemy["powers"] = [9, 9, 9, 9]
+			var state := State.new(Rules.empty_board(), [
+				Catalog.create_instance(StringName("LangJiTianYa%d" % lang_tier), 1, &"swap_lang"),
+				Catalog.create_instance(StringName("TianLuoDiWang%d" % net_tier), 1, &"swap_net"),
+				Catalog.create_instance(&"TaiZuChangQuan", 1, &"swap_spare"),
+			], [enemy, Catalog.create_instance(&"TaiZuChangQuan", 2, &"swap_enemy_spare")], 1)
+			var last: Dictionary = {}
+			for step: Array in [[&"swap_lang", 0], [&"swap_enemy", 4], [&"swap_net", 5]]:
+				var index: int = -1
+				var hand: Array = state.get_hand(state.active_player)
+				for i: int in range(hand.size()):
+					if hand[i]["instance_id"] == step[0]:
+						index = i
+				last = Simulator.apply_action(state, Action.make_play(index, int(step[1]), step[0]))
+				_check(bool(last.get("valid", false)), "LangJi%d/TianLuo%d actual alternating play is legal" % [lang_tier, net_tier])
+				if not bool(last.get("valid", false)):
+					break
+				state = last["state"] as State
+			if not bool(last.get("valid", false)):
+				continue
+			var penalties: int = 0
+			var events: Array = last.get("events", [])
+			for event: Dictionary in events:
+				if event.get("type") == &"powers_changed" and event.get("amount") == -2:
+					penalties += 1
+					_check(event.get("ability_source_instance_id") == &"swap_net" and event.get("instance_id") == &"swap_enemy", "Swap penalty comes from the participating net and targets the displaced enemy")
+			_check(penalties == 1, "LangJi%d/TianLuo%d swap applies exactly one enemy-move minus two" % [lang_tier, net_tier])
+			_check(state.board[4]["card"]["instance_id"] == &"swap_net" and state.board[5]["card"]["instance_id"] == &"swap_enemy", "Both exact instances finish swapped")
+			var expected: int = 7 if net_tier == 2 else 5
+			_check(state.board[5]["card"]["powers"] == [expected, expected, expected, expected], "Swap penalty precedes the separate failed-attack penalties")
 
 
 func _test_tianluo_acquired_snapshot() -> void:

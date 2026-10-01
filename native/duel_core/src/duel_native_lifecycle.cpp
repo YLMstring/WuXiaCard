@@ -179,54 +179,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 		resolution.reason = source_before.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
-	if (
-		find_board_card(value, source_card_index, source_cell) != source_cell
-		|| value.board_owners[source_cell] != source_owner
-		|| find_board_card(value, target_card_index, target_cell) != target_cell
-		|| value.board_owners[target_cell] != target_owner
-	) {
-		append_resolution(resolution, source_before);
-		return ActionOutcome::NO_EFFECT;
-	}
-
-	const Variant reserved_target_extra = value.board_slot_extras[target_cell];
-	value.board_card_indices[target_cell] = -1;
-	value.board_owners[target_cell] = 0;
-	value.board_slot_extras[target_cell] = Dictionary();
-
+	// 双方的移动前事件均在交换前结算；前置效果可以打断交换，但不会被回滚。
 	Resolution swap_resolution;
 	append_resolution(swap_resolution, source_before);
-	const ActionOutcome source_move_outcome = move_card_between_cells(
-		value,
-		source_cell,
-		source_cell,
-		target_cell,
-		source_card_index,
-		source_owner,
-		false,
-		exile_stack,
-		swap_resolution
-	);
-	if (source_move_outcome == ActionOutcome::UNSUPPORTED) {
-		resolution.reason = swap_resolution.reason;
-		return ActionOutcome::UNSUPPORTED;
-	}
-	if (source_move_outcome != ActionOutcome::APPLIED) {
-		append_resolution(resolution, swap_resolution);
-		return source_move_outcome;
-	}
-	if (
-		find_board_card(value, source_card_index, target_cell) != target_cell
-		|| value.board_owners[target_cell] != source_owner
-	) {
-		resolution.reason = "First swap leg was invalidated after movement";
-		return ActionOutcome::UNSUPPORTED;
-	}
-
-	const Variant reserved_source_extra = value.board_slot_extras[target_cell];
-	value.board_card_indices[target_cell] = target_card_index;
-	value.board_owners[target_cell] = static_cast<uint8_t>(target_owner);
-	value.board_slot_extras[target_cell] = reserved_target_extra;
 	Resolution target_before = resolve_movement_event(
 		value,
 		StringName("card_before_moved"),
@@ -241,43 +196,60 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::swap_action_subj
 		resolution.reason = target_before.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
+	append_resolution(swap_resolution, target_before);
 	if (
-		find_board_card(value, target_card_index, target_cell) != target_cell
+		find_board_card(value, source_card_index, source_cell) != source_cell
+		|| value.board_owners[source_cell] != source_owner
+		|| find_board_card(value, target_card_index, target_cell) != target_cell
 		|| value.board_owners[target_cell] != target_owner
 	) {
-		value.board_card_indices[source_cell] = source_card_index;
-		value.board_owners[source_cell] = static_cast<uint8_t>(source_owner);
-		value.board_slot_extras[source_cell] = reserved_source_extra;
-		value.board_card_indices[target_cell] = target_card_index;
-		value.board_owners[target_cell] = static_cast<uint8_t>(target_owner);
-		value.board_slot_extras[target_cell] = reserved_target_extra;
+		append_resolution(resolution, swap_resolution);
 		return ActionOutcome::NO_EFFECT;
 	}
-	append_resolution(swap_resolution, target_before);
 
-	const ActionOutcome target_move_outcome = move_card_between_cells(
+	// 一次性交换完整格子数据。移动后监听始终能定位到双方，不暴露暂存空格。
+	std::swap(value.board_card_indices[source_cell], value.board_card_indices[target_cell]);
+	std::swap(value.board_owners[source_cell], value.board_owners[target_cell]);
+	std::swap(value.board_slot_extras[source_cell], value.board_slot_extras[target_cell]);
+	for (int32_t leg = 0; leg < 2; ++leg) {
+		Dictionary moved;
+		moved["type"] = StringName("card_moved");
+		moved["source_cell"] = leg == 0 ? source_cell : target_cell;
+		moved["target_cell"] = leg == 0 ? target_cell : source_cell;
+		moved["owner_id"] = leg == 0 ? source_owner : target_owner;
+		moved["instance_id"] = value.card_instance_ids[leg == 0 ? source_card_index : target_card_index];
+		swap_resolution.events.append(moved);
+	}
+	Resolution source_after = resolve_movement_event(
 		value,
+		StringName("card_after_moved"),
 		target_cell,
+		source_cell,
+		target_cell,
+		source_card_index,
+		source_owner,
+		exile_stack
+	);
+	if (!source_after.supported) {
+		resolution.reason = source_after.reason;
+		return ActionOutcome::UNSUPPORTED;
+	}
+	append_resolution(swap_resolution, source_after);
+	Resolution target_after = resolve_movement_event(
+		value,
+		StringName("card_after_moved"),
+		source_cell,
 		target_cell,
 		source_cell,
 		target_card_index,
 		target_owner,
-		false,
-		exile_stack,
-		swap_resolution
+		exile_stack
 	);
-	if (target_move_outcome == ActionOutcome::UNSUPPORTED) {
-		resolution.reason = swap_resolution.reason;
+	if (!target_after.supported) {
+		resolution.reason = target_after.reason;
 		return ActionOutcome::UNSUPPORTED;
 	}
-	if (target_move_outcome != ActionOutcome::APPLIED) {
-		resolution.reason = "Second swap leg could not move its exact instance";
-		return ActionOutcome::UNSUPPORTED;
-	}
-
-	value.board_card_indices[target_cell] = source_card_index;
-	value.board_owners[target_cell] = static_cast<uint8_t>(source_owner);
-	value.board_slot_extras[target_cell] = reserved_source_extra;
+	append_resolution(swap_resolution, target_after);
 	append_resolution(resolution, swap_resolution);
 	return ActionOutcome::APPLIED;
 }

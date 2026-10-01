@@ -10,6 +10,23 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
+Generic swaps now resolve A's and B's before-move events, revalidate both exact
+instances/cells/owners, exchange complete board slots, then resolve A's and B's
+after-move events. Both participants remain discoverable during after events.
+Interrupted swaps retain before-event changes and return `NO_EFFECT`; completed
+swaps retain subsequent movement/flip/exile and return `APPLIED`. This fixes
+LangJiTianYa followed by TianLuoDiWang missing the enemy-move minus two.
+See `docs/superpowers/specs/2026-10-01-swap-resolution-design.md`.
+Validation: 89/89 suites pass (296.00s), including simulator 310, GuMu 315 and
+swap presentation 34 checks. Three muted portrait production-controller
+walkthroughs show enemy powers 9→7 and one 0.28s swap; a subsequent real AI
+worker search/action also completes without fallback or runtime errors. On
+three unchanged-result fixed-5,000-node Release fixtures, interleaved old/new
+median time changes are -0.38%, +0.96%, -0.62%, with all actions/scores/traversal
+counts equal. Source/DLL baselines and results remain in
+`.summer/local/tianluo-swap-20261001/`. Both Windows native ABIs are rebuilt;
+the existing 1.0.7 Android APK predates this fix and has not been re-exported.
+
 The seventeen GuMu card IDs and the six-tier YuNvWuFeng are registered
 with catalog-driven abilities. Next-hand grants and DuGu's anticipation share
 one per-owner FIFO effect queue: one record per grantor card name resolves on
@@ -905,9 +922,9 @@ See `docs/DECISIONS.md` for ability-specific behavior.
   immutable root prototype and leave the destroyed old index as an unreferenced tombstone;
   preserved discard returns instead move the existing index and reveal it only
   when newly public. Both return modes reuse the normal full-hand exile
-  lifecycle. Swaps resolve two
-  complete global before/moved/after movement legs and revalidate exact
-  instances between them. Its generic attack module compiles all catalog
+  lifecycle. Swaps resolve both before-move events, revalidate the exact
+  instances, exchange both complete slots, then resolve both after-move events.
+  Its generic attack module compiles all catalog
   attack modifiers, including distance/intervening rules, comparison reversal,
   summon redirection, unlimited/non-orthogonal first-target locking, and both
   indiscriminate target policies. Four-sided `-1` semantics override comparison

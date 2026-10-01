@@ -609,8 +609,12 @@ respectively, in row-major order. The source itself is eligible.
   The sole matching card must still be on the board and adjacent. A failed tier
   3 swap stops its follow-up attack; a successful one attacks from the new cell.
 - Every swap is orthogonally adjacent at resolution. Both conceptual movement
-  legs emit `CARD_BEFORE_MOVED`, revalidate immediately before mutation, then
-  emit `CARD_AFTER_MOVED` after the successful mutation.
+  participants resolve `CARD_BEFORE_MOVED` in A/B order before either swap
+  write. Revalidate both original cells/instances/owners, exchange both complete
+  slots, then resolve `CARD_AFTER_MOVED` in A/B order on the complete board.
+  Cancellation preserves both before-event effects; later after-event changes
+  preserve the completed swap's `APPLIED` result. Approved 2026-10-01; see
+  `docs/superpowers/specs/2026-10-01-swap-resolution-design.md`.
 - TianZhu moves to the lowest row-major adjacent empty cell. Tiers 3–4 draw only
   after that movement succeeds. Tier 4's before-move suppression triggers for
   movement initiated by any card or effect.

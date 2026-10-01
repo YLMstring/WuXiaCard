@@ -49,6 +49,9 @@ func _run() -> void:
 	_test_multiple_activation_generation_and_identity()
 	_test_ordered_ally_swap_then_attack()
 	_test_ordered_enemy_swap_then_attack()
+	_test_swap_events_observe_complete_boards()
+	_test_swap_before_effects_interrupt_without_rollback()
+	_test_swap_after_effects_do_not_restore_cards()
 	_test_youfen_failed_move_or_swap_stops_attack()
 	_test_activate_runs_standard_attack_without_after_summoned_abilities()
 	_test_flipped_activate_ability_is_lost_but_ki_remains()
@@ -1569,6 +1572,104 @@ func _test_ordered_enemy_swap_then_attack() -> void:
 		and _count_events(transition.get("events", []), &"card_exiled") == 0,
 		"Reservation and restoration emit no summon or exile events"
 	)
+
+
+func _swap_fixture(first_abilities: Array, second_abilities: Array) -> State:
+	var board: Array = Rules.empty_board()
+	board[4] = {"card": _make_runtime_card("Swap A", [5, 5, 5, 5], 1, &"atomic_a", first_abilities), "owner": 1, "fixture_extra": "a"}
+	board[5] = {"card": _make_runtime_card("Swap B", [5, 5, 5, 5], 2, &"atomic_b", second_abilities), "owner": 2, "fixture_extra": "b"}
+	return State.new(board)
+
+
+func _move_self_rule(event: StringName, actions: Array) -> Dictionary:
+	return {"retained_on_flip": true, "triggers": [{
+		"event": event, "conditions": [{"type": Catalog.CONDITION_MOVING_CARD_IS_SELF}],
+		"actions": actions,
+	}]}
+
+
+func _execute_fixture_swap(state: State) -> Dictionary:
+	return Executor.execute_actions(state, 4, &"atomic_a", 1, [{
+		"type": Catalog.ACTION_FOR_EACH_SELECTED_CARD,
+		"selector": {"zones": [Catalog.CARD_ZONE_BOARD], "conditions": [
+			{"type": Catalog.CONDITION_SELECTED_CARD_IS_ENEMY},
+			{"type": Catalog.CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+	], "required_count": 1}, "actions": [{"type": Catalog.ACTION_SELF_SWAPPED_WITH_ABILITY_SOURCE}],
+	}], {})
+
+
+func _test_swap_events_observe_complete_boards() -> void:
+	var before: Dictionary = _move_self_rule(Catalog.CARD_BEFORE_MOVED, [{"type": Catalog.ACTION_CHANGE_POWERS, "card": Catalog.CARD_REF_ABILITY_SOURCE, "amount": 1}])
+	var after: Dictionary = {"triggers": [{"event": Catalog.CARD_AFTER_MOVED,
+		"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_ENEMY}],
+		"actions": [{"type": Catalog.ACTION_CHANGE_POWERS, "card": Catalog.CARD_REF_TRIGGER_CARD, "amount": -2}],
+	}]}
+	var state: State = _swap_fixture([before, after], [before, after])
+	var result: Dictionary = _execute_fixture_swap(state)
+	_check(bool(result.get("valid", false)) and result.get("result") == Catalog.ACTION_RESULT_APPLIED, "Complete swap applies")
+	var trace: Array = []
+	for event: Dictionary in result.get("events", []):
+		if event.get("type") == &"powers_changed":
+			trace.append([event["instance_id"], event["amount"], event["target_cell"]])
+		elif event.get("type") == &"card_moved":
+			trace.append([event["instance_id"], &"move", event["target_cell"]])
+	_check(trace == [[&"atomic_a", 1, 4], [&"atomic_b", 1, 5],
+		[&"atomic_a", &"move", 5], [&"atomic_b", &"move", 4],
+		[&"atomic_a", -2, 5], [&"atomic_b", -2, 4]], "Both before effects precede the swap; both after effects see the other participant on the complete board")
+	_check(state.board[5]["card"]["powers"] == [4, 4, 4, 4] and state.board[4]["card"]["powers"] == [4, 4, 4, 4], "Participants can each react to the other's completed movement")
+	_check(state.board[5].get("fixture_extra") == "a" and state.board[4].get("fixture_extra") == "b", "Slot extras travel with the correct instances")
+
+
+func _test_swap_before_effects_interrupt_without_rollback() -> void:
+	for first: bool in [true, false]:
+		for change: String in ["move", "flip", "exile"]:
+			var interrupt_action: Dictionary
+			match change:
+				"move":
+					interrupt_action = {"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}
+				"flip":
+					interrupt_action = {"type": Catalog.ACTION_FLIP_SELF, "new_owner": Catalog.OWNER_OPPONENT_OF_CARD_CURRENT}
+				_:
+					interrupt_action = {"type": Catalog.ACTION_EXILE_SELF}
+			var interrupt: Dictionary = _move_self_rule(Catalog.CARD_BEFORE_MOVED, [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}, interrupt_action])
+			var ordinary: Dictionary = _move_self_rule(Catalog.CARD_BEFORE_MOVED, [{"type": Catalog.ACTION_CHANGE_POWERS, "card": Catalog.CARD_REF_ABILITY_SOURCE, "amount": 1}])
+			var state: State = _swap_fixture([interrupt] if first else [ordinary], [ordinary] if first else [interrupt])
+			var result: Dictionary = _execute_fixture_swap(state)
+			_check(bool(result.get("valid", false)) and result.get("result") == Catalog.ACTION_RESULT_NO_EFFECT, "Interrupted swap returns no effect: %s/%s" % [first, change])
+			var events: Array = result.get("events", [])
+			_check(_count_events(events, &"card_moved") == (1 if change == "move" else 0), "Only the interrupting movement is emitted; cancelled swap emits neither movement")
+			var ordinary_cell: int = 5 if first else 4
+			_check(state.board[ordinary_cell]["card"]["powers"] == [6, 6, 6, 6], "Both before events execute in order even when A interrupts; their effects survive cancellation")
+			var original_cell: int = 4 if first else 5
+			if change == "flip":
+				_check(state.board[original_cell]["owner"] == (2 if first else 1), "Cancellation preserves the before-event flip")
+			else:
+				_check(state.board[original_cell] == null, "Cancellation does not restore a moved or exiled participant")
+			if change == "exile":
+				_check(state.removed_cards[1 if first else 2].size() == 1 and _count_events(events, &"card_exiled") == 1, "Before-event exile persists with its presentation event")
+
+
+func _test_swap_after_effects_do_not_restore_cards() -> void:
+	for change: String in ["move", "flip", "exile"]:
+		var action: Dictionary
+		match change:
+			"move":
+				action = {"type": Catalog.ACTION_MOVE_SELF_TO_FIRST_ADJACENT_EMPTY}
+			"flip":
+				action = {"type": Catalog.ACTION_FLIP_SELF, "new_owner": Catalog.OWNER_OPPONENT_OF_CARD_CURRENT}
+			_:
+				action = {"type": Catalog.ACTION_EXILE_SELF}
+		var state: State = _swap_fixture([
+			_move_self_rule(Catalog.CARD_AFTER_MOVED, [{"type": Catalog.ACTION_REMOVE_THIS_ABILITY}, action]),
+		], [_move_self_rule(Catalog.CARD_AFTER_MOVED, [{"type": Catalog.ACTION_CHANGE_POWERS, "card": Catalog.CARD_REF_ABILITY_SOURCE, "amount": 1}])])
+		var result: Dictionary = _execute_fixture_swap(state)
+		_check(bool(result.get("valid", false)) and result.get("result") == Catalog.ACTION_RESULT_APPLIED, "Completed swap remains applied after subsequent %s" % change)
+		_check(state.board[4]["card"]["instance_id"] == &"atomic_b" and state.board[4]["card"]["powers"] == [6, 6, 6, 6], "B's after event still resolves after A's effect")
+		if change == "flip":
+			_check(state.board[5]["owner"] == 2, "A's after-event flip is not overwritten")
+		else:
+			_check(state.board[5] == null, "A is not restored after its after-event movement/exile")
+		_check(_count_events(result.get("events", []), &"card_moved") == (3 if change == "move" else 2), "Swap emits both movements once before any follow-up movement")
 
 
 func _test_youfen_failed_move_or_swap_stops_attack() -> void:

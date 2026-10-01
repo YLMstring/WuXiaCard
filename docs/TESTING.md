@@ -61,6 +61,13 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   pre-flip exile behavior.
 - `test_duel_simulator.gd` — legal actions, rules, abilities, triggers, ki,
   draw/removal/movement, extra-card-play allowances, and turn boundaries.
+  Swap fixtures check both before windows on the pre-swap board, both after
+  windows on the complete board, participant listeners, slot extras, retained
+  before-event interruption and post-swap movement/flip/exile.
+- `test_gumu_abilities.gd` — GuMu declarations, next-hand FIFO grants, generated
+  cards, attack attempts, evasion, suppression, retained movement weakening,
+  acquired-ability snapshots, and all nine actual alternating LangJi/TianLuo
+  combinations including the participating net's swap penalty.
 - `test_extra_play_turn_cap.gd` — consecutive extra-play requests, action-to-end
   trigger interactions, simultaneous request coalescing, and owner-turn reset.
 - `test_special_summon_turn_cap.gd` — the twentieth special summon, capped
@@ -128,7 +135,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_activation_targeting_swap_presentation.gd` — anchored board activation
   traces, owner-aware allied/enemy fixed-hand-slot hit testing, logical hand
   target commits, exact-card reveal presentation, and ordinary move/swap view
-  identity.
+  identity. The LangJi/TianLuo hand-play fixture checks the enemy's view/state
+  power loss and one reciprocal swap animation after the two movement events.
 - `test_cangsong_sanqin_abilities.gd` — before-flip timing, fresh catalog hand
   additions, full-hand behavior, non-attack flips, sequential selected-card
   attacks, and normal-mode concealment.
