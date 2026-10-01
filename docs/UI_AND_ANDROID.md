@@ -115,6 +115,17 @@ Do not replace it with word-only wrapping. Test long punctuation-heavy Chinese s
   while acquiring a later reward batch clears every older gold border. Rank-up
   audio is keyed to an actual character-level increase, plays as a sound effect
   over the existing music, and is consumed on entry.
+- Deck building has a hidden enemy-reroll gesture: with all five opponent cards
+  face down, tap physical slots `0,1,2,3,4,3,2,1,0`. Only the ninth completed
+  tap requests a reroll. Wrong slots, outside clicks, drag/hold/cancel,
+  multi-touch, focus loss and inspection clear the prefix; emulated mouse
+  events do not double-count touches. The saved replacement is a different
+  ordinary enemy at the same level, respecting difficulty/sect availability.
+  Fixed beginner stages and explicit scene overrides do not reroll; with no
+  alternative or a failed save the current enemy remains. Success refreshes
+  only the opponent preview and first-player conditions, preserving library
+  scroll/filter, gold highlights and music. See
+  `docs/superpowers/specs/2026-10-01-deck-builder-hidden-enemy-reroll-design.md`.
 
 ## Beginner Tutorial
 

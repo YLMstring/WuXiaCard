@@ -133,6 +133,7 @@ func _show_deck_builder() -> void:
 	builder.play_rank_up_sound_on_ready = _play_rank_up_on_next_deck_builder
 	_play_rank_up_on_next_deck_builder = false
 	builder.duel_requested.connect(_on_duel_requested)
+	builder.enemy_reroll_requested.connect(_on_enemy_reroll_requested.bind(builder))
 	builder.back_requested.connect(_on_return_to_menu_requested)
 	builder.new_card_highlight_dismissed.connect(
 		_on_new_card_highlight_dismissed
@@ -209,6 +210,21 @@ func _replace_screen(next_screen: Control) -> void:
 	_current_screen = next_screen
 	add_child(_current_screen)
 	_current_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _on_enemy_reroll_requested(builder: DeckBuilderController) -> void:
+	if builder != _current_screen or not upcoming_enemy_name.is_empty() or not upcoming_enemy_card_ids.is_empty():
+		return
+	if not builder.can_reroll_hidden_enemy():
+		return
+	var store := Store.new(deck_profile_path)
+	var result: Dictionary = store.reroll_enemy_and_save(store.load_profile())
+	if not bool(result.get("ok", false)):
+		if result.get("reason", &"") == &"save_failed":
+			builder.status_label.text = "保存失败，请重试"
+		return
+	var profile: Dictionary = result["profile"]
+	builder.refresh_upcoming_enemy(profile, Enemies.get_definition(store.get_current_enemy_id(profile)))
 
 
 func _on_duel_requested(starting_owner_id: int) -> void:

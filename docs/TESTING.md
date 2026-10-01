@@ -31,6 +31,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   difficulty unlock/reset behavior, and legacy migration.
 - `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
 - `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
+- `test_enemy_reroll.gd` — hidden nine-tap mouse/touch gesture, cancellation
+  and concealment gates, same-level difficulty-aware alternative selection,
+  no-candidate and save-failure isolation, fixed beginner/explicit-override
+  protection, preview refresh without resetting the page, and actual duel
+  directory propagation. Its isolated main scene is released before exit,
+  with the same audio-thread drain used by telemetry-flow fixtures.
 - `test_sect_selection_integration.gd` — sect previews and selection plus
   difficulty-arrow assets, layout, wrapping, Chinese text, immediate
   persistence, and run-start propagation.

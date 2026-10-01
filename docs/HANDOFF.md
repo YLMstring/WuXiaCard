@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-09-30
+Updated: 2026-10-01
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -79,6 +79,18 @@ action suppresses that action's self-exile popup. See
 The main flow routes the main menu, sect selection, a seven-page beginner
 tutorial, deck builder, duel, reward selection, and a completed-run ending. The deck-building scene persists a
 five-card main deck and exposes a virtualized 1,000-slot collection library.
+
+Deck building now has a hidden reroll gesture while every opponent card is
+face down: tap physical slots `012343210`. It atomically saves a different
+ordinary enemy at the current level/difficulty and updates the opponent
+preview and first-player conditions in place, retaining library scroll,
+filters, reward highlights and audio. Wrong input or inspection clears the
+prefix. Fixed beginner stages and explicit enemy overrides are excluded;
+no alternative or save failure preserves the current opponent. See
+`docs/superpowers/specs/2026-10-01-deck-builder-hidden-enemy-reroll-design.md`.
+Validation on 2026-10-01: 89/89 suites pass, including 49 reroll checks;
+muted portrait production-flow input playtests cover mouse/touch completion,
+repeated rerolls and the revealed-card gate with zero runtime errors.
 
 Not yet present: story/dialogue, final content balance, multiplayer, or a
 release-ready Android package.

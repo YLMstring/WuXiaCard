@@ -1149,6 +1149,28 @@ func get_remembered_enemy_glyphs(profile: Dictionary) -> Array[String]:
 	return result
 
 
+func reroll_enemy_and_save(profile: Dictionary, rng: RandomNumberGenerator = null) -> Dictionary:
+	var unchanged: Dictionary = profile.duplicate(true)
+	if not is_profile_valid(profile) or not is_run_active(profile) or get_beginner_opening_stage(profile) != BEGINNER_OPENING_NONE:
+		return {"ok": false, "profile": unchanged, "reason": &"unavailable"}
+	var candidates: Array[StringName] = Enemies.get_random_enemy_ids_for_level(
+		get_character_level(profile), get_run_difficulty(profile)
+	)
+	candidates.erase(get_current_enemy_id(profile))
+	if candidates.is_empty():
+		return {"ok": false, "profile": unchanged, "reason": &"no_alternative"}
+	var picker: RandomNumberGenerator = rng
+	if picker == null:
+		picker = RandomNumberGenerator.new()
+		picker.randomize()
+	var candidate: Dictionary = profile.duplicate(true)
+	candidate["current_enemy_id"] = String(candidates[picker.randi_range(0, candidates.size() - 1)])
+	candidate["remembered_enemy_glyphs"] = []
+	if not is_profile_valid(candidate) or not save_profile(candidate):
+		return {"ok": false, "profile": unchanged, "reason": &"save_failed"}
+	return {"ok": true, "profile": candidate}
+
+
 func remember_enemy_glyph_and_save(profile: Dictionary, glyph: String) -> Dictionary:
 	var unchanged: Dictionary = profile.duplicate(true)
 	if not is_profile_valid(profile) or not is_run_active(profile) or glyph.is_empty():

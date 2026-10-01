@@ -4,6 +4,7 @@ extends Control
 signal back_requested
 signal duel_requested(starting_owner_id: int)
 signal new_card_highlight_dismissed(card_id: StringName)
+signal enemy_reroll_requested
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card_view.tscn")
 const Catalog = preload("res://scripts/card_catalog.gd")
@@ -24,6 +25,7 @@ const BLOCKED_INK_COLOR: Color = Color(0.52, 0.52, 0.52, 0.92)
 const PRESSED_INK_COLOR: Color = Color(0.44, 0.44, 0.44, 0.82)
 const CHOICE_SIZE_SCALE: float = 0.72
 const PRESSED_CHOICE_SCALE: Vector2 = Vector2(0.94, 0.94)
+const ENEMY_REROLL_SEQUENCE: Array[int] = [0, 1, 2, 3, 4, 3, 2, 1, 0]
 
 @export var profile_path: String = Store.DEFAULT_SAVE_PATH
 @export var upcoming_enemy_name: String = "对手名字"
@@ -57,6 +59,12 @@ var _inspected_data: Dictionary = {}
 var _replacement_target_mode: bool = false
 var _player_hand_default_child_index: int = -1
 var _rank_up_sound_play_count: int = 0
+var _enemy_reroll_progress: int = 0
+var _enemy_reroll_pointer_id: int = -2
+var _enemy_reroll_pressed_slot: int = -1
+var _enemy_reroll_pointer_start: Vector2 = Vector2.ZERO
+var _enemy_reroll_pressed_at: int = 0
+var _enemy_reroll_touches: Dictionary = {}
 
 @onready var decor_backdrop: Control = $DecorBackdrop
 @onready var duel_canvas: Control = $DuelCanvas
@@ -110,6 +118,120 @@ func _ready() -> void:
 	_refresh_start_controls()
 	_layout_scene.call_deferred()
 	_play_rank_up_sound()
+
+
+func can_reroll_hidden_enemy() -> bool:
+	if not is_node_ready() or not is_visible_in_tree() or _inspection_open or not opponent_hand.is_visible_in_tree():
+		return false
+	if opponent_hand.get_child_count() != Store.MAIN_DECK_CAPACITY:
+		return false
+	for slot: Node in opponent_hand.get_children():
+		if slot.get_child_count() != 1:
+			return false
+		var card := slot.get_child(0) as CardView
+		if card == null or not card.is_visible_in_tree() or not card.is_face_down():
+			return false
+	return true
+
+
+func _input(event: InputEvent) -> void:
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
+	if not can_reroll_hidden_enemy():
+		_reset_enemy_reroll_gesture()
+		_enemy_reroll_touches.clear()
+		return
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			_enemy_reroll_touches[touch.index] = true
+		else:
+			_enemy_reroll_touches.erase(touch.index)
+		if touch.canceled or _enemy_reroll_touches.size() > 1 or (not touch.pressed and not _enemy_reroll_touches.is_empty()):
+			_reset_enemy_reroll_gesture()
+			return
+		_enemy_reroll_pointer(touch.position, touch.index, touch.pressed)
+	elif event is InputEventMouseButton:
+		var mouse := event as InputEventMouseButton
+		if mouse.button_index != MOUSE_BUTTON_LEFT or not _enemy_reroll_touches.is_empty():
+			return
+		_enemy_reroll_pointer(mouse.position, -1, mouse.pressed)
+	elif event is InputEventMouseMotion and _enemy_reroll_pointer_id == -1:
+		_enemy_reroll_motion((event as InputEventMouseMotion).position)
+	elif event is InputEventScreenDrag and (event as InputEventScreenDrag).index == _enemy_reroll_pointer_id:
+		_enemy_reroll_motion((event as InputEventScreenDrag).position)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or (what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree()):
+		_reset_enemy_reroll_gesture()
+		_enemy_reroll_touches.clear()
+
+
+func _enemy_reroll_slot_at(pointer_position: Vector2) -> int:
+	for index: int in range(opponent_hand.get_child_count()):
+		var card := opponent_hand.get_child(index).get_child(0) as CardView
+		var local: Vector2 = card.get_global_transform_with_canvas().affine_inverse() * pointer_position
+		if Rect2(Vector2.ZERO, card.size).has_point(local):
+			return index
+	return -1
+
+
+func _enemy_reroll_pointer(pointer_position: Vector2, pointer_id: int, pressed: bool) -> void:
+	var slot_index: int = _enemy_reroll_slot_at(pointer_position)
+	if pressed:
+		if slot_index < 0 or _enemy_reroll_pointer_id != -2:
+			_reset_enemy_reroll_gesture()
+			return
+		_enemy_reroll_pointer_id = pointer_id
+		_enemy_reroll_pressed_slot = slot_index
+		_enemy_reroll_pointer_start = pointer_position
+		_enemy_reroll_pressed_at = Time.get_ticks_msec()
+		return
+	if _enemy_reroll_pointer_id != pointer_id:
+		return
+	var card := opponent_hand.get_child(_enemy_reroll_pressed_slot).get_child(0) as CardView
+	var valid_tap: bool = slot_index == _enemy_reroll_pressed_slot \
+		and pointer_position.distance_to(_enemy_reroll_pointer_start) <= card.drag_start_threshold \
+		and Time.get_ticks_msec() - _enemy_reroll_pressed_at < hold_duration * 1000.0
+	_enemy_reroll_pointer_id = -2
+	_enemy_reroll_pressed_slot = -1
+	if not valid_tap:
+		_reset_enemy_reroll_gesture()
+		return
+	if slot_index == ENEMY_REROLL_SEQUENCE[_enemy_reroll_progress]:
+		_enemy_reroll_progress += 1
+	else:
+		_enemy_reroll_progress = 1 if slot_index == 0 else 0
+	if _enemy_reroll_progress == ENEMY_REROLL_SEQUENCE.size():
+		_reset_enemy_reroll_gesture()
+		enemy_reroll_requested.emit()
+
+
+func _enemy_reroll_motion(pointer_position: Vector2) -> void:
+	if _enemy_reroll_pressed_slot < 0:
+		return
+	var card := opponent_hand.get_child(_enemy_reroll_pressed_slot).get_child(0) as CardView
+	if pointer_position.distance_to(_enemy_reroll_pointer_start) > card.drag_start_threshold:
+		_reset_enemy_reroll_gesture()
+
+
+func _reset_enemy_reroll_gesture() -> void:
+	_enemy_reroll_progress = 0
+	_enemy_reroll_pointer_id = -2
+	_enemy_reroll_pressed_slot = -1
+
+
+func refresh_upcoming_enemy(updated_profile: Dictionary, enemy: Dictionary) -> void:
+	_reset_enemy_reroll_gesture()
+	profile = updated_profile
+	upcoming_enemy_name = String(enemy["name"])
+	upcoming_enemy_card_ids.assign(enemy["deck"])
+	remembered_enemy_glyphs = _profile_store.get_remembered_enemy_glyphs(profile)
+	opponent_name.text = upcoming_enemy_name
+	_refresh_opponent_hand()
+	_refresh_start_controls()
+	status_label.text = DEFAULT_STATUS
 
 
 func debug_exchange(library_index: int, deck_index: int) -> bool:
@@ -287,18 +409,28 @@ func _get_library_card_display_owner(card_id: StringName, mastered_set: Dictiona
 func _create_hands() -> void:
 	_create_hand_slots(opponent_hand)
 	_create_hand_slots(player_hand)
+	_refresh_opponent_hand()
+	for card_index: int in range(5):
+		_refresh_player_slot(card_index)
+
+
+func _refresh_opponent_hand() -> void:
 	var enemy_ids: Array[StringName] = upcoming_enemy_card_ids.duplicate()
 	if enemy_ids.size() != 5:
 		enemy_ids = Decks.get_opponent_card_ids()
 	_effective_enemy_card_ids = enemy_ids.duplicate()
 	for card_index: int in range(5):
+		var slot := opponent_hand.get_child(card_index) as PanelContainer
+		for child: Node in slot.get_children():
+			slot.remove_child(child)
+			child.queue_free()
 		var enemy_data: Dictionary = Catalog.create_instance(
 			enemy_ids[card_index],
 			DuelRules.OPPONENT_OWNER,
 			StringName("deck_builder_enemy_%d" % card_index)
 		)
 		var enemy_card: CardView = _spawn_card_in_slot(
-			opponent_hand.get_child(card_index) as PanelContainer,
+			slot,
 			enemy_data,
 			DuelRules.OPPONENT_OWNER
 		)
@@ -306,8 +438,6 @@ func _create_hands() -> void:
 		enemy_card.set_face_down(
 			not testing_mode and glyph not in remembered_enemy_glyphs
 		)
-	for card_index: int in range(5):
-		_refresh_player_slot(card_index)
 
 
 func _create_hand_slots(container: HBoxContainer) -> void:
@@ -384,6 +514,7 @@ func _open_card_inspector(
 	if _inspection_open or data.is_empty():
 		return
 	_inspection_open = true
+	_reset_enemy_reroll_gesture()
 	_inspected_library_index = library_index
 	_inspected_deck_index = deck_index
 	_inspected_data = data.duplicate(true)

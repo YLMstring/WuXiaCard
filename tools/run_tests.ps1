@@ -64,6 +64,7 @@ $testScripts = @(
     "test_ending_profile.gd",
     "test_deck_library_grid.gd",
     "test_deck_builder_integration.gd",
+    "test_enemy_reroll.gd",
     "test_sect_selection_integration.gd",
     "test_main_menu.gd",
 	"test_readme_help.gd",
