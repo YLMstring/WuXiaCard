@@ -14,6 +14,13 @@ bool DuelNativeCompactKernel::validate_shape() {
 		last_error = "Compact scalar count must be 16";
 		return false;
 	}
+	if (state.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] < 0
+		|| state.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] > 2
+		|| state.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] < -1
+		|| state.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] >= static_cast<int32_t>(card_count)) {
+		last_error = "Invalid discard-source owner or opponent favorite index";
+		return false;
+	}
 	if (state.board_card_indices.size() != state.board_owners.size()) {
 		last_error = "Board card and owner arrays differ in size";
 		return false;

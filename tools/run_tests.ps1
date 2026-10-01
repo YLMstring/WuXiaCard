@@ -55,6 +55,7 @@ $testScripts = @(
 	"test_difficulty_rules.gd",
     "test_sect_catalog.gd",
     "test_enemy_catalog.gd",
+    "test_enemy_favorite_card.gd",
 	"test_balance_telemetry_store.gd",
 	"test_balance_telemetry_flow.gd",
 	"test_balance_telemetry_uploader.gd",

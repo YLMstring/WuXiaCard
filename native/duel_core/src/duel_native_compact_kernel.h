@@ -62,7 +62,8 @@ class DuelNativeCompactKernel : public RefCounted {
 	struct NativeState {
 		// scalars 的 ABI 与 scripts/duel_compact_state.gd 一致：
 		// 0 当前行动方；1 从 1 开始的单方回合数；2 本回合行动方是否成功将敌方翻面；3/4 双方本回合攻击数；
-		// 5 剩余额外出牌；6 回合结束触发是否已结算；7 最大回合数；8/9 待生效压制；
+		// 5 剩余额外出牌；6 回合结束触发是否已结算；7 最大回合数；
+		// 8 下一次手牌出牌按弃牌堆来源的 owner；9 敌方 favorite 实例索引，-1 表示无约束；
 		// 10 难度；11 进阶八是否已触发；12 状态版本；13 本回合是否已获得额外出牌；
 		// 14/15 双方本回合特殊进场次数。槽位顺序进入存档、状态键和原生 ABI，不可随意移动。
 		std::vector<int32_t> scalars;
@@ -923,6 +924,7 @@ public:
 	Array get_hand_play_danger_flags(int64_t owner_id) const;
 	int64_t count_legal_actions_for_owner(int64_t owner_id) const;
 	bool is_action_legal_for_owner(const Dictionary &action, int64_t owner_id) const;
+	bool is_ai_action_legal_for_owner(const Dictionary &action, int64_t owner_id) const;
 	bool is_terminal_state() const;
 	int64_t score_difference_for_owner(int64_t owner_id) const;
 	Dictionary choose_greedy_action_for_owner(int64_t owner_id) const;
@@ -1034,6 +1036,9 @@ private:
 		const NativeState &value,
 		int32_t owner_id
 	) const;
+	std::vector<NativeAction> get_ai_native_actions(const NativeState &value, int32_t owner_id) const;
+	bool is_action_allowed_for_owner(const Dictionary &action, int64_t owner_id, bool ai_only) const;
+	void cancel_opponent_favorite_for_card(NativeState &value, int32_t card_index) const;
 	int64_t count_legal_native_actions(
 		const NativeState &value,
 		int32_t owner_id

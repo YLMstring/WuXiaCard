@@ -17,7 +17,15 @@ static func build(config: Dictionary) -> StateData:
 		config.get("opponent_main_card_ids", [])
 	)
 	shuffle_with_seed(player_ids, int(config.get("player_hand_shuffle_seed", 0)), true)
-	shuffle_with_seed(opponent_ids, int(config.get("opponent_hand_shuffle_seed", 0)), true)
+	var favorite_id := StringName(config.get("opponent_favorite_card_id", &""))
+	if favorite_id == &"":
+		shuffle_with_seed(opponent_ids, int(config.get("opponent_hand_shuffle_seed", 0)), true)
+	else:
+		assert(opponent_ids.size() == StateData.HAND_SLOT_COUNT and favorite_id in opponent_ids,
+			"Favorite must belong to the five-card opening hand")
+		opponent_ids.remove_at(opponent_ids.find(favorite_id))
+		shuffle_with_seed(opponent_ids, int(config.get("opponent_hand_shuffle_seed", 0)), true)
+		opponent_ids.insert(2, favorite_id)
 
 	var instance_namespace: String = String(config.get("instance_namespace", ""))
 	var player_cards: Array = create_card_instances(
@@ -81,6 +89,8 @@ static func build(config: Dictionary) -> StateData:
 		opponent_cards
 	)
 	state.max_turns = int(config.get("max_turns", state.max_turns))
+	if favorite_id != &"":
+		state.opponent_favorite_instance_id = StringName(opponent_cards[2]["instance_id"])
 	var duel_started: Dictionary = NativeRules.resolve_event(
 		state,
 		Catalog.TRIGGER_DUEL_STARTED,

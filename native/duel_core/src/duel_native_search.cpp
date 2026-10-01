@@ -84,6 +84,21 @@ bool DuelNativeCompactKernel::is_action_legal_for_owner(
 	const Dictionary &action_value,
 	int64_t owner_id_value
 ) const {
+	return is_action_allowed_for_owner(action_value, owner_id_value, false);
+}
+
+bool DuelNativeCompactKernel::is_ai_action_legal_for_owner(
+	const Dictionary &action_value,
+	int64_t owner_id_value
+) const {
+	return is_action_allowed_for_owner(action_value, owner_id_value, true);
+}
+
+bool DuelNativeCompactKernel::is_action_allowed_for_owner(
+	const Dictionary &action_value,
+	int64_t owner_id_value,
+	bool ai_only
+) const {
 	if (!loaded || action_value.is_empty()) return false;
 	const StringName action_type = StringName(
 		action_value.get("action_type", StringName())
@@ -122,10 +137,10 @@ bool DuelNativeCompactKernel::is_action_legal_for_owner(
 	requested.activation_index = static_cast<int32_t>(
 		static_cast<int64_t>(action_value.get("activation_index", 0))
 	);
-	for (const NativeAction &legal : get_legal_native_actions(
-		state,
-		static_cast<int32_t>(owner_id_value)
-	)) {
+	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
+	const std::vector<NativeAction> legal_actions = ai_only
+		? get_ai_native_actions(state, owner_id) : get_legal_native_actions(state, owner_id);
+	for (const NativeAction &legal : legal_actions) {
 		const bool instance_matches = requested.source_instance_id.is_empty()
 			|| requested.source_instance_id == legal.source_instance_id;
 		if (
@@ -160,7 +175,7 @@ Dictionary DuelNativeCompactKernel::choose_greedy_action_for_owner(int64_t owner
 	if (!loaded) return result;
 	const int32_t owner_id = static_cast<int32_t>(owner_id_value);
 	if (owner_id != state.scalars[0]) return result;
-	const std::vector<NativeAction> actions = get_legal_native_actions(state, owner_id);
+	const std::vector<NativeAction> actions = get_ai_native_actions(state, owner_id);
 	bool has_best = false;
 	NativeAction best;
 	int32_t best_score = std::numeric_limits<int32_t>::min();
@@ -403,6 +418,23 @@ size_t DuelNativeCompactKernel::HistoryKeyHash::operator()(const HistoryKey &key
 	mix(key.target_index);
 	mix(key.activation_index);
 	return result;
+}
+
+std::vector<DuelNativeCompactKernel::NativeAction>
+DuelNativeCompactKernel::get_ai_native_actions(const NativeState &value, int32_t owner_id) const {
+	auto actions = get_legal_native_actions(value, owner_id);
+	const int32_t favorite = value.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR];
+	if (owner_id != 2 || favorite < 0) return actions;
+	auto preferred = [&](const NativeAction &action) {
+		return action.type == NativeActionType::PLAY
+			&& value.zones[1][action.source_index] == favorite;
+	};
+	if (std::any_of(actions.begin(), actions.end(), preferred)) {
+		actions.erase(std::remove_if(actions.begin(), actions.end(), [&](const NativeAction &action) {
+			return !preferred(action);
+		}), actions.end());
+	}
+	return actions;
 }
 
 std::vector<DuelNativeCompactKernel::NativeAction>
@@ -1284,7 +1316,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 					const auto legal_started = collect_diagnostics
 						? std::chrono::steady_clock::now()
 						: std::chrono::steady_clock::time_point();
-					const std::vector<NativeAction> legal_actions = get_legal_native_actions(
+					const std::vector<NativeAction> legal_actions = get_ai_native_actions(
 						value,
 						value.scalars[0]
 					);
@@ -1368,7 +1400,7 @@ int32_t DuelNativeCompactKernel::search_minimax(
 	const auto legal_started = collect_diagnostics
 		? std::chrono::steady_clock::now()
 		: std::chrono::steady_clock::time_point();
-	std::vector<NativeAction> legal_actions = get_legal_native_actions(
+	std::vector<NativeAction> legal_actions = get_ai_native_actions(
 		value,
 		value.scalars[0]
 	);
@@ -1661,7 +1693,7 @@ Dictionary DuelNativeCompactKernel::search_fixed_depth(
 		result["reason"] = support_reason;
 		return result;
 	}
-	const std::vector<NativeAction> root_actions = get_legal_native_actions(state, root_owner);
+	const std::vector<NativeAction> root_actions = get_ai_native_actions(state, root_owner);
 	result["supported"] = true;
 	if (root_actions.empty()) {
 		result["reason"] = "No legal root action";
@@ -1924,7 +1956,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 	const auto root_legal_started = collect_search_diagnostics
 		? std::chrono::steady_clock::now()
 		: std::chrono::steady_clock::time_point();
-	const std::vector<NativeAction> root_actions = get_legal_native_actions(state, root_owner);
+	const std::vector<NativeAction> root_actions = get_ai_native_actions(state, root_owner);
 	if (collect_search_diagnostics) {
 		stats.time_legal_actions_usec += std::chrono::duration_cast<std::chrono::microseconds>(
 			std::chrono::steady_clock::now() - root_legal_started
@@ -2276,7 +2308,7 @@ Dictionary DuelNativeCompactKernel::search_iterative_depth(
 				remaining_boundaries
 			);
 			if (cached == nullptr || !cached->has_best_action) break;
-			const std::vector<NativeAction> legal_actions = get_legal_native_actions(
+			const std::vector<NativeAction> legal_actions = get_ai_native_actions(
 				current,
 				current.scalars[0]
 			);

@@ -67,6 +67,11 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_duel_search.gd` — the single native search facade, selectable
   complete-round/self-turn depth, deadlines, minimum completed-depth node guards, deterministic canonical
   selection, fallback, cancellation, and same-turn plans.
+- `test_enemy_favorite_card.gd` — optional directory schema, seeded central
+  instance selection, duplicate-copy identity, AI candidate policy and manual
+  legality, greedy/deep search/plan agreement, all three cancellation paths,
+  ineffective loss and restoration, ignored entry failure, branch isolation,
+  reused compact slots and format rejection. Current fixture: 52 checks.
 - `test_duel_ai_benchmark.gd` — versioned enemy roster/manifest validation,
   deterministic rebuilds, mutable-state isolation, minimum-depth mode wiring,
   per-game progress/checkpoint serialization, and a tiny four-game runner

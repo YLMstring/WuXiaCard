@@ -134,6 +134,13 @@ static func is_action_legal_for_owner(
 	))
 
 
+static func is_ai_action_legal_for_owner(state: StateData, action: ActionData, owner_id: int) -> bool:
+	if action == null:
+		return false
+	var kernel: Object = _load_query_kernel(state, "AI-action query")
+	return kernel != null and bool(kernel.call("is_ai_action_legal_for_owner", _action_to_native(action), owner_id))
+
+
 static func is_terminal(state: StateData) -> bool:
 	if state == null:
 		return true
@@ -355,6 +362,7 @@ static func _overwrite_state(target: StateData, source: StateData) -> void:
 		&"effect_queue",
 		&"acquired_ability_indices_by_instance_id",
 		&"next_hand_play_from_discard_owner",
+		&"opponent_favorite_instance_id",
 		&"pending_choice",
 		&"repetition_hashes",
 		&"remembered_glyphs_by_owner",

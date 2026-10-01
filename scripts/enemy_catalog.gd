@@ -81,13 +81,13 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"tingchao_zhuren2", "name": "玄慈", "level": 11, "deck": [&"YiKongDaoDi4", &"YiJJ4", &"SanRuDiYu1", &"WuXiangJieZhi3", &"LiJingRuLai4"]},
 	{"id": &"chisha_menzhu", "name": "复仇者·林平之", "level": 12, "deck": [&"YouFenLaiYi3", &"KuiHua4", &"KuiHua3", &"CangSongYingKe3", &"ZiXiaGong2"]},
 	{"id": &"bailu_shanzhang2", "name": "雪山飞狐·胡斐", "level": 12, "deck": [&"HuJiaDao1", &"HuJiaDao2", &"HuJiaDao3", &"ChunCanZhang3", &"TaiJiLuanHuan4"]},
-	{"id": &"wuying_ke4", "name": "双剑合璧·小龙女", "level": 12, "sect_id": &"GuMuPai", "deck": [&"ZuoYouHuBo5", &"TianLuoDiWang4", &"LangJiTianYa3", &"DingYangZhen3", &"TuNaShu3"]},
+	{"id": &"wuying_ke4", "name": "双剑合璧·小龙女", "level": 12, "sect_id": &"GuMuPai", "favorite_card": &"ZuoYouHuBo5", "deck": [&"ZuoYouHuBo5", &"TianLuoDiWang4", &"LangJiTianYa3", &"DingYangZhen3", &"TuNaShu3"]},
 	{"id": &"chisha_menzhu2", "name": "冲虚", "level": 13, "deck": [&"TiYunZong4", &"RaoZhiRouJian4", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"ShenMen13Jian3"]},
 	{"id": &"chisha_menzhu3", "name": "方证", "level": 13, "deck": [&"YiJJ5", &"QianShouRuLai5", &"BaoCanShouQue4", &"NianhuaWeiXiao4", &"JinGangBuHuai4"]},
 	{"id": &"bailu_shanzhang", "name": "五岳掌门·岳不群", "level": 13, "deck": [&"SanQinFeng3", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"ZiXiaGong4"]},
 	{"id": &"bailu_shanzhang3", "name": "笑傲江湖·令狐冲", "level": 14, "deck": [&"YouFenLaiYi4", &"DuGu9Jian1", &"DuGu9Jian2", &"YiJJ5", &"HenShanJianZhen4"]},
 	{"id": &"tianmen_yishi", "name": "风清扬", "level": 14, "deck": [&"DuGu9Jian1", &"DuGu9Jian2", &"DuGu9Jian3", &"DuGu9Jian1", &"CangSongYingKe4"]},
-	{"id": &"wulin_sanren3", "name": "无名老僧", "level": 15, "sect_id": &"ShaoLinPai", "deck": [&"YiKongDaoDi4", &"SanRuDiYu2", &"JinGangBuHuai4", &"JinGangBuHuai4", &"JinGangBuHuai4"]},
+	{"id": &"wulin_sanren3", "name": "无名老僧", "level": 15, "sect_id": &"ShaoLinPai", "favorite_card": &"YiKongDaoDi4", "deck": [&"YiKongDaoDi4", &"SanRuDiYu2", &"JinGangBuHuai4", &"JinGangBuHuai4", &"JinGangBuHuai4"]},
 	{"id": &"wulin_sanren", "name": "东方不败", "level": 15, "deck": [&"KuiHua1", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"KuiHua1"]},
 	{"id": &"wulin_sanren2", "name": "张三丰", "level": 15, "sect_id": &"WuDangPai", "deck": [&"TaiJiLuanHuan5", &"TaiJiYinYang5", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"DuGu9Jian1"]},
 ]
@@ -253,6 +253,11 @@ static func _validate_definition(
 	if deck.size() != 5:
 		errors.append("Enemy %s requires exactly five cards" % enemy_id)
 	var known_card_ids: Array[StringName] = Cards.get_all_card_ids()
+	var favorite_value: Variant = definition.get("favorite_card", &"")
+	if typeof(favorite_value) != TYPE_STRING_NAME:
+		errors.append("Enemy %s requires a StringName favorite_card" % enemy_id)
+	elif favorite_value != &"" and (favorite_value not in known_card_ids or favorite_value not in deck):
+		errors.append("Enemy %s favorite_card must be a known opening card" % enemy_id)
 	for value: Variant in deck:
 		var card_id := StringName(String(value))
 		if card_id not in known_card_ids:

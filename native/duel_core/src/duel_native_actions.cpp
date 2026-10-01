@@ -425,6 +425,12 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::transform_card(
 	return ActionOutcome::APPLIED;
 }
 
+void DuelNativeCompactKernel::cancel_opponent_favorite_for_card(NativeState &value, int32_t card_index) const {
+	if (value.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] == card_index) {
+		value.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] = -1;
+	}
+}
+
 void DuelNativeCompactKernel::remove_ability_with_event(
 	NativeState &value,
 	int32_t card_index,
@@ -443,6 +449,7 @@ void DuelNativeCompactKernel::remove_ability_with_event(
 	if (ability_index < 0) return;
 	std::vector<RuntimeAbilityEntry> &entries = value.card_runtime_abilities[card_index];
 	entries.erase(entries.begin() + ability_index);
+	cancel_opponent_favorite_for_card(value, card_index);
 	Dictionary event;
 	event["type"] = StringName("ability_lost");
 	event["source_instance_id"] = source_card_index >= 0 ? value.card_instance_ids[source_card_index] : StringName();
@@ -496,6 +503,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::permanently_remo
 		: StringName()
 	);
 	auto emit_loss = [&]() {
+		cancel_opponent_favorite_for_card(value, card_index);
 		Dictionary lost;
 		lost["type"] = StringName("ability_lost");
 		lost["source_instance_id"] = source_instance_id;
@@ -698,6 +706,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::temporarily_remo
 		resolution.events.append(lost);
 	}
 	if (batch.entries.empty()) return ActionOutcome::NO_EFFECT;
+	cancel_opponent_favorite_for_card(value, card_index);
 	value.card_runtime_abilities[card_index] = retained_entries;
 	value.card_runtime_suppression_batches[card_index].push_back(batch);
 	value.card_runtime_flags[card_index] |= static_cast<uint8_t>(1 << 6);
@@ -1559,9 +1568,11 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::grant_ability_to
 		if (entry.compiled_ability_index == action.granted_ability_index) return ActionOutcome::NO_EFFECT;
 	}
 	if (compiled_ability_pool[action.granted_ability_index].has_activation) {
+		const size_t previous_size = entries.size();
 		entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const RuntimeAbilityEntry &entry) {
 			return compiled_ability_pool[entry.compiled_ability_index].has_activation;
 		}), entries.end());
+		if (entries.size() != previous_size) cancel_opponent_favorite_for_card(value, target);
 	}
 	RuntimeAbilityEntry entry;
 	entry.compiled_ability_index = action.granted_ability_index;
@@ -2862,6 +2873,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			}
 			value.side_payload["effect_queue"] = queue;
 			int32_t pending_count = 0;
+			if (recipient_owner == 2 && action.amount > 0) {
+				value.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] = -1;
+			}
 			for (int64_t index = 0; index < queue.size(); ++index) {
 				const Dictionary pending = queue[index];
 				if (static_cast<int32_t>(pending.get("owner_id", 0)) == recipient_owner

@@ -44,6 +44,25 @@ removed, moved between levels, and a second special-only enemy. Four-game
 crossovers, deterministic seeds, 512-state corpus targets, and bounded search
 sampling remain checked. See `docs/TESTING.md` for the roster policy.
 
+Enemy definitions may now declare `favorite_card`. The selected opening copy
+occupies physical hand slot 2. Owner-2 AI selects only that exact instance's
+legal hand plays while any exist; otherwise it uses ordinary candidates.
+Successfully playing it, actually losing any of its abilities, or receiving
+an anticipation queue entry permanently clears the restriction. Greedy,
+deep search and same-turn plans share this policy without entry-effect previews;
+human/testing/replay action legality stays unrestricted. Xiaolongnu declares
+`ZuoYouHuBo5`; the unnamed old monk declares `YiKongDaoDi4`.
+Compact format is now 2, with 16 scalars: reused slot 8 stores the discard-source
+owner marker and slot 9 stores the pending favorite's stable card index (-1
+when inactive). Duel snapshots are not persisted, so no old-layout migration
+is retained. See `docs/superpowers/specs/2026-09-30-enemy-favorite-card-design.md`.
+Validation: 88/88 suites, 52 dedicated checks, both Windows Release native
+targets, and 31 muted production-flow checks pass. Fixed-5,000-node Release
+A/B fixtures preserve action/score/traversal; an initial 3.10% increase in one
+fixture did not reproduce in the reversed-order recheck. This is evidence for
+those unchanged-policy fixtures, not a claim of overall speedup or a measured
+cost for every active favorite position.
+
 Completed duels can be replayed in memory from the exact initialized state and
 successful action log. Playback reuses the simulator/VFX path with a two-second
 turn cadence, preserves opponent concealment, and permits inspection between

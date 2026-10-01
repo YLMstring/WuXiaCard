@@ -87,6 +87,7 @@ const Revelation = preload("res://scripts/duel_revelation.gd")
 @export var deck_profile_path: String = "user://wuxia_deck_profile.json"
 @export var starting_owner_id: int = DuelRules.PLAYER_OWNER
 @export var opponent_name_text: String = "对手名字"
+@export var opponent_favorite_card_id: StringName = &""
 @export var opponent_card_ids: Array[StringName] = []
 @export var opponent_self_castration_enabled: bool = true
 @export var remembered_enemy_glyphs: Array[String] = []
@@ -210,6 +211,7 @@ func _ready() -> void:
 		effective_opponent_ids = Decks.get_opponent_card_ids()
 	var opening_owner: int = _get_valid_starting_owner()
 	duel_state = InitialStateFactory.build({
+		"opponent_favorite_card_id": opponent_favorite_card_id,
 		"player_main_card_ids": player_card_ids,
 		"opponent_main_card_ids": effective_opponent_ids,
 		"player_hand_shuffle_seed": player_hand_shuffle_seed,
@@ -2197,10 +2199,10 @@ func _perform_opponent_turn() -> void:
 		_print_search_report(search_result)
 		return
 	var choice: ActionData = search_result.get("action", null) as ActionData
-	if choice == null or not Simulator.is_action_legal(duel_state, choice):
+	if choice == null or not Simulator.is_ai_action_legal(duel_state, choice):
 		choice = greedy_fallback.duplicate_action()
 		search_result["used_fallback"] = true
-	if not Simulator.is_action_legal(duel_state, choice):
+	if not Simulator.is_ai_action_legal(duel_state, choice):
 		search_result["completion_reason"] = &"no_legal_action"
 		search_result["action"] = choice.duplicate_action()
 		_last_search_report = search_result.duplicate(true)

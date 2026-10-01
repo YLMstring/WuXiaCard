@@ -33,11 +33,12 @@ The simulator must remain authoritative. If live play and AI would resolve the s
   discard/removed zones, active player, turn count, whether the active owner
   successfully flipped an enemy this turn,
   per-owner attack and special-summon counts, remaining extra card plays, the
-  per-owner-turn grant latch, end-boundary state, queued-effect scaffolding,
+  per-owner-turn grant latch, end-boundary state, pending hand-effect queue,
   last successful hand plays, ordered owner-held aura entries and their next
   handle, active-run difficulty, a retained legacy
   difficulty-eight latch kept only for compact/replay compatibility, persistent
-  pending suppression counts, and state version.
+  pending suppression counts, pending opponent-favorite instance identity,
+  and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
 - `duel_replay_record.gd` — an in-memory, pure-data replay envelope containing
   independent initial/final `DuelState` snapshots, ordered duplicate
@@ -625,7 +626,19 @@ Search and evaluation must not check `card_id == ...`. Named content belongs in 
 
 ## Native Runtime Boundary
 
-`DuelState.effect_queue` and `pending_choice` reserve space for future multi-step effects, but there is not yet a general decision/interrupt engine. Do not pretend it exists.
+`DuelState.effect_queue` is the shared FIFO for next-hand grants and anticipation:
+each normal hand play consumes one entry per grantor name, retaining later
+duplicates. This is not a general decision/interrupt engine; `pending_choice`
+remains reserved.
+
+Compact format 2 retains 16 scalars. Reused slot 8 holds
+`next_hand_play_from_discard_owner` (0/1/2), and slot 9 holds the pending
+opponent favorite's stable card index (-1 when absent). Capture/restore maps
+the latter through `card_instance_ids`; `DuelState` stores its `instance_id`.
+Both participate in state/search identity. Old slot-8/9 suppression migration
+is removed: duel snapshots are process-local, and loaders reject other format
+versions. `next_owner_aura_handle` remains a 64-bit native member serialized
+through `side_payload`.
 
 `DuelStateKey.build_compact()` remains the exact GDScript state fingerprint; it
 is not the branch representation. `DuelCompactState` is the one-time production

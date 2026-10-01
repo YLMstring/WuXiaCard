@@ -61,6 +61,7 @@ static func _state_payload(state: StateData) -> Dictionary:
 		"effect_queue": state.effect_queue,
 		"acquired_ability_indices_by_instance_id": state.acquired_ability_indices_by_instance_id,
 		"next_hand_play_from_discard_owner": state.next_hand_play_from_discard_owner,
+		"opponent_favorite_instance_id": state.opponent_favorite_instance_id,
 		"pending_choice": state.pending_choice,
 		"repetition_hashes": state.repetition_hashes,
 		"remembered_glyphs_by_owner": state.remembered_glyphs_by_owner,

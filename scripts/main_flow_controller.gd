@@ -175,6 +175,7 @@ func _show_duel(starting_owner_id: int) -> void:
 	duel.starting_owner_id = starting_owner_id
 	duel.opponent_name_text = String(enemy["name"])
 	duel.opponent_card_ids = _enemy_deck_from_details(enemy)
+	duel.opponent_favorite_card_id = StringName(enemy.get("favorite_card", &""))
 	duel.opponent_self_castration_enabled = bool(enemy.get(
 		"self_castration_enabled",
 		true

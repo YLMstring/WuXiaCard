@@ -43,6 +43,29 @@ two-second `self_turn` budget, this raised aggregate throughput from `9987.37`
 to `10465.11` nodes/s (`+4.78%`), while all 14 opening digests and deepest
 completed depth/score/action tuples matched; depth two remained `13/14`.
 
+## Enemy opening favorite
+
+An optional enemy-directory `favorite_card` selects one opening instance for
+physical slot 2. Only owner 2 is constrained. Native `get_ai_native_actions`
+filters ordinary legal actions to that exact instance's hand plays when any
+exist; with none, it returns the full set and retains the pending restriction.
+It does not inspect named IDs, preview entry effects, or check their success.
+
+Actual hand play, actual loss of any ability (including temporary suppression),
+or receipt of an anticipation pending effect clears the restriction permanently.
+Rule transitions update it directly; ability restoration does not reinstate it.
+Root and descendant search, transposition/PV validation, greedy fallback and
+`DuelTurnPlan` use the same AI candidate policy. Ordinary legality remains
+available for human input, manual testing and replay.
+
+The pending stable card index uses compact scalar 9 (-1 when absent), is part
+of search identity, and is restored as `opponent_favorite_instance_id` across
+the script boundary. Scalar 8 now holds the existing discard-source owner
+marker. Format 2 retains 16 scalars and rejects old snapshots without migration;
+live duel/replay/undo snapshots are process-local. See
+`docs/superpowers/specs/2026-09-30-enemy-favorite-card-design.md` for current
+configuration, cancellation boundaries and measured validation limits.
+
 ## Static evaluation
 
 Production evaluation deliberately excludes three weak terms: remaining-deck

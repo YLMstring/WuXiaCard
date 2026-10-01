@@ -495,7 +495,7 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 			source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
 			value.scalars[13] = 1;
 			value.scalars[5] = std::max(value.scalars[5], 1);
-			if (request.next_hand_play_from_discard) value.side_payload["next_hand_play_from_discard_owner"] = moving_owner;
+			if (request.next_hand_play_from_discard) value.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = moving_owner;
 		}
 	}
 	if (source_instance_ids.is_empty()) return;
@@ -673,7 +673,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[13] = 0;
 	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;
 	value.scalars[OPPONENT_SPECIAL_SUMMONS_SCALAR] = 0;
-	value.side_payload.erase("next_hand_play_from_discard_owner");
+	value.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = 0;
 	Array repetition_hashes = value.side_payload.get("repetition_hashes", Array());
 	repetition_hashes = repetition_hashes.duplicate(false);
 	repetition_hashes.append(board_repetition_signature(value));
@@ -711,7 +711,7 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	// 只在把结果交回 GDScript 时重新物化能力池和压制池；搜索子节点始终保留
 	// 编译索引与运行时 entry，避免每个节点复制嵌套声明。
 	Dictionary payload;
-	payload["format_version"] = 1;
+	payload["format_version"] = 2;
 	payload["scalars"] = to_packed_int32_array(value.scalars);
 	payload["board_card_indices"] = to_packed_int32_array(value.board_card_indices);
 	payload["board_owners"] = to_packed_byte_array(value.board_owners);
@@ -887,8 +887,6 @@ uint64_t DuelNativeCompactKernel::checksum(const NativeState &value) const {
 		hash ^= static_cast<uint64_t>(effect_queue.hash());
 		hash *= 1099511628211ULL;
 	}
-	hash ^= static_cast<uint64_t>(static_cast<int32_t>(value.side_payload.get("next_hand_play_from_discard_owner", 0)));
-	hash *= 1099511628211ULL;
 	return hash;
 }
 

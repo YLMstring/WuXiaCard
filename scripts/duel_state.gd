@@ -24,6 +24,7 @@ var active_abilities: Array = []
 var effect_queue: Array = []
 var acquired_ability_indices_by_instance_id: Dictionary = {}
 var next_hand_play_from_discard_owner: int = 0
+var opponent_favorite_instance_id: StringName = &""
 var pending_choice: Dictionary = {}
 var repetition_hashes: Array = []
 var remembered_glyphs_by_owner: Dictionary = {}
@@ -207,6 +208,7 @@ func duplicate_state() -> DuelState:
 	copied.effect_queue = effect_queue.duplicate(true)
 	copied.acquired_ability_indices_by_instance_id = acquired_ability_indices_by_instance_id.duplicate(true)
 	copied.next_hand_play_from_discard_owner = next_hand_play_from_discard_owner
+	copied.opponent_favorite_instance_id = opponent_favorite_instance_id
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
 	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)
@@ -244,6 +246,7 @@ func duplicate_state_deep_reference() -> DuelState:
 	copied.effect_queue = effect_queue.duplicate(true)
 	copied.acquired_ability_indices_by_instance_id = acquired_ability_indices_by_instance_id.duplicate(true)
 	copied.next_hand_play_from_discard_owner = next_hand_play_from_discard_owner
+	copied.opponent_favorite_instance_id = opponent_favorite_instance_id
 	copied.pending_choice = pending_choice.duplicate(true)
 	copied.repetition_hashes = repetition_hashes.duplicate(true)
 	copied.remembered_glyphs_by_owner = remembered_glyphs_by_owner.duplicate(true)

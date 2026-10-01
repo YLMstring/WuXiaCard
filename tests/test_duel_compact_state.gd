@@ -212,7 +212,7 @@ func _test_fresh_card_prototype_metadata() -> void:
 	legacy_payload.erase("fresh_card_prototypes")
 	legacy_payload.erase("empty_deck_draw_prototype_index")
 	var legacy_loaded: CompactState = CompactState.from_variant_payload(legacy_payload)
-	_check(legacy_loaded != null, "Legacy format-1 payload without prototypes remains loadable")
+	_check(legacy_loaded != null, "Current payload without optional prototypes remains loadable")
 	if legacy_loaded != null:
 		var restored: State = legacy_loaded.restore()
 		_check(restored != null, "Legacy payload without prototypes remains restorable")

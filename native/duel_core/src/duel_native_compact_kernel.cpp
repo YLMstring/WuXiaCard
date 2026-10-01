@@ -48,6 +48,10 @@ void DuelNativeCompactKernel::_bind_methods() {
 		&DuelNativeCompactKernel::is_action_legal_for_owner
 	);
 	ClassDB::bind_method(
+		D_METHOD("is_ai_action_legal_for_owner", "action", "owner_id"),
+		&DuelNativeCompactKernel::is_ai_action_legal_for_owner
+	);
+	ClassDB::bind_method(
 		D_METHOD("is_terminal_state"),
 		&DuelNativeCompactKernel::is_terminal_state
 	);
@@ -248,7 +252,7 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	last_error = String();
 	fresh_card_prototypes.clear();
 	empty_deck_draw_prototype_index = -1;
-	if (static_cast<int64_t>(payload.get("format_version", 0)) != 1) {
+	if (static_cast<int64_t>(payload.get("format_version", 0)) != 2) {
 		last_error = "Unsupported compact-state format version";
 		return false;
 	}
@@ -318,25 +322,6 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 		static_cast<int64_t>(fallback_index_value)
 	);
 	state.side_payload = payload.get("side_payload", Dictionary());
-	if (state.scalars.size() > 9 && (state.scalars[8] > 0 || state.scalars[9] > 0)) {
-		Array queue = state.side_payload.get("effect_queue", Array());
-		for (int32_t owner = 1; owner <= 2; ++owner) {
-			for (int32_t index = 0; index < state.scalars[owner == 1 ? 8 : 9]; ++index) {
-				Dictionary suppression;
-				suppression["type"] = StringName("permanently_remove_non_retained_abilities");
-				suppression["card"] = StringName("trigger_card");
-				Array actions;
-				actions.append(suppression);
-				Dictionary record;
-				record["owner_id"] = owner;
-				record["grantor_name"] = String::utf8("\xE6\x96\x99\xE6\x95\x8C\xE6\x9C\xBA\xE5\x85\x88");
-				record["actions"] = actions;
-				queue.append(record);
-			}
-			state.scalars[owner == 1 ? 8 : 9] = 0;
-		}
-		state.side_payload["effect_queue"] = queue;
-	}
 	state.has_rule_metadata = (
 		payload.has("card_template_pool")
 		&& payload.has("active_ability_set_pool")
@@ -793,8 +778,8 @@ bool DuelNativeCompactKernel::transition_play(
 		}
 	}
 	const bool discard_source_play = card_play_as_discard
-		|| static_cast<int32_t>(next.side_payload.get("next_hand_play_from_discard_owner", 0)) == moving_owner;
-	next.side_payload.erase("next_hand_play_from_discard_owner");
+		|| next.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] == moving_owner;
+	next.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = 0;
 	resolution = Resolution();
 	std::vector<int32_t> exile_stack;
 	if (replaced_card_index >= 0) {
@@ -834,6 +819,7 @@ bool DuelNativeCompactKernel::transition_play(
 		return false;
 	}
 	next_hand.erase(played_in_hand);
+	if (moving_owner == 2) cancel_opponent_favorite_for_card(next, played_card_index);
 	next.card_runtime_flags[played_card_index] &= static_cast<uint8_t>(~(1 << 7));
 	next.card_hand_slots[played_card_index] = -1;
 	add_reveal_observer(next.card_reveal_codes[played_card_index], moving_owner);

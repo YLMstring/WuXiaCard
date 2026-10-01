@@ -55,7 +55,7 @@ static func take_next(
 	if not _entry_matches_state(first_entry, state, expected_owner):
 		return {"matched": false, "action": null, "remaining_plan": []}
 	var action: ActionData = first_entry.get("action", null) as ActionData
-	if action == null or not Simulator.is_action_legal(state, action):
+	if action == null or not Simulator.is_ai_action_legal(state, action):
 		return {"matched": false, "action": null, "remaining_plan": []}
 	return {
 		"matched": true,

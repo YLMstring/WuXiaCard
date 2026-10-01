@@ -37,6 +37,10 @@ static func is_action_legal(state: StateData, action: ActionData) -> bool:
 	)
 
 
+static func is_ai_action_legal(state: StateData, action: ActionData) -> bool:
+	return state != null and NativeRules.is_ai_action_legal_for_owner(state, action, state.active_player)
+
+
 static func apply_action(state: StateData, action: ActionData) -> Dictionary:
 	return NativeRules.apply_action(state, action)
 

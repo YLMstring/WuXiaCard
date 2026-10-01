@@ -13,7 +13,7 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
 const EMPTY_CARD_INDEX: int = -1
 const EMPTY_DECK_DRAW_CARD_ID: StringName = &"TaiZuChangQuan"
 
@@ -44,8 +44,8 @@ const SCALAR_OPPONENT_ATTACKS: int = 4
 const SCALAR_EXTRA_CARD_PLAYS: int = 5
 const SCALAR_END_TURN_TRIGGERS_RESOLVED: int = 6
 const SCALAR_MAX_TURNS: int = 7
-const SCALAR_PLAYER_PENDING_SUPPRESSION: int = 8
-const SCALAR_OPPONENT_PENDING_SUPPRESSION: int = 9
+const SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER: int = 8
+const SCALAR_OPPONENT_FAVORITE_CARD_INDEX: int = 9
 const SCALAR_RUN_DIFFICULTY: int = 10
 const SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED: int = 11
 const SCALAR_STATE_VERSION: int = 12
@@ -69,7 +69,6 @@ const SIDE_PAYLOAD_KEYS: Array[StringName] = [
 	&"active_abilities",
 	&"effect_queue",
 	&"acquired_ability_indices_by_instance_id",
-	&"next_hand_play_from_discard_owner",
 	&"pending_choice",
 	&"repetition_hashes",
 	&"remembered_glyphs_by_owner",
@@ -183,6 +182,9 @@ func restore() -> StateData:
 		scalars[SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED]
 	)
 	restored.state_version = scalars[SCALAR_STATE_VERSION]
+	restored.next_hand_play_from_discard_owner = scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER]
+	var favorite_index: int = scalars[SCALAR_OPPONENT_FAVORITE_CARD_INDEX]
+	restored.opponent_favorite_instance_id = card_instance_ids[favorite_index] if favorite_index >= 0 else &""
 
 	for key: StringName in SIDE_PAYLOAD_KEYS:
 		var restored_value: Variant = side_payload.get(key, restored.get(String(key)))
@@ -192,21 +194,6 @@ func restore() -> StateData:
 			if restored_value is Array or restored_value is Dictionary
 			else restored_value
 		)
-	# 老紧凑状态把料敌机先层数放在标量 8/9；读取时一次性迁入队列。
-	for owner_id: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
-		var legacy_count: int = scalars[
-			SCALAR_PLAYER_PENDING_SUPPRESSION if owner_id == Rules.PLAYER_OWNER
-			else SCALAR_OPPONENT_PENDING_SUPPRESSION
-		]
-		for index: int in range(legacy_count):
-			restored.effect_queue.append({
-				"owner_id": owner_id,
-				"grantor_name": "料敌机先",
-				"actions": [{
-					"type": Catalog.ACTION_PERMANENTLY_REMOVE_NON_RETAINED_ABILITIES,
-					"card": Catalog.CARD_REF_TRIGGER_CARD,
-				}],
-			})
 	return restored
 
 
@@ -244,6 +231,10 @@ func is_structurally_valid() -> bool:
 	var fixed_shapes_valid: bool = (
 		capture_error.is_empty()
 		and scalars.size() == SCALAR_COUNT
+		and scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER] >= 0
+		and scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER] <= 2
+		and scalars[SCALAR_OPPONENT_FAVORITE_CARD_INDEX] >= EMPTY_CARD_INDEX
+		and scalars[SCALAR_OPPONENT_FAVORITE_CARD_INDEX] < card_instance_ids.size()
 		and board_card_indices.size() == board_owners.size()
 		and board_card_indices.size() == board_slot_extras.size()
 		and zone_card_indices.size() == ZONE_COUNT
@@ -465,6 +456,7 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"effect_queue": state.effect_queue,
 		"acquired_ability_indices_by_instance_id": state.acquired_ability_indices_by_instance_id,
 		"next_hand_play_from_discard_owner": state.next_hand_play_from_discard_owner,
+		"opponent_favorite_instance_id": state.opponent_favorite_instance_id,
 		"pending_choice": state.pending_choice,
 		"repetition_hashes": state.repetition_hashes,
 		"remembered_glyphs_by_owner": state.remembered_glyphs_by_owner,
@@ -489,8 +481,8 @@ func _capture_state(state: StateData) -> bool:
 		state.extra_card_plays_remaining,
 		int(state.end_turn_triggers_resolved),
 		state.max_turns,
-		0,
-		0,
+		state.next_hand_play_from_discard_owner,
+		EMPTY_CARD_INDEX,
 		state.run_difficulty,
 		int(state.difficulty_eight_draw_consumed),
 		state.state_version,
@@ -557,6 +549,10 @@ func _capture_state(state: StateData) -> bool:
 			if state_value is Array or state_value is Dictionary
 			else state_value
 		)
+	if state.opponent_favorite_instance_id != &"":
+		if not _card_index_by_instance_id.has(state.opponent_favorite_instance_id):
+			return _fail("Favorite instance is missing from compact card table")
+		scalars[SCALAR_OPPONENT_FAVORITE_CARD_INDEX] = int(_card_index_by_instance_id[state.opponent_favorite_instance_id])
 	return is_structurally_valid()
 
 

@@ -34,7 +34,6 @@ func _run() -> void:
 	_test_suppression_duration()
 	_test_tianluo_locked_move_penalty()
 	_test_tianluo_acquired_snapshot()
-	_test_legacy_suppression_scalar_migrates()
 	if _failures == 0:
 		print("GUMU_ABILITY_TESTS_PASSED checks=%d" % _checks)
 	else:
@@ -545,24 +544,6 @@ func _test_tianluo_acquired_snapshot() -> void:
 	_check(actions.size() == 2, "TianLuo queues one printed grant and one acquired-ability snapshot")
 	if actions.size() == 2:
 		_check((actions[1] as Dictionary).get("ability", {}) == Catalog.GUMU_MINIMUM_DEFENSE_ON_ATTACK, "Snapshot excludes printed abilities and the self-granted move penalty")
-
-
-func _test_legacy_suppression_scalar_migrates() -> void:
-	var state := State.new(Rules.empty_board(), [Catalog.create_instance(&"TaiZuChangQuan", Rules.PLAYER_OWNER, &"legacy_play")], [], Rules.PLAYER_OWNER)
-	var compact := Compact.new()
-	_check(compact.capture_state(state), "Legacy migration fixture captures")
-	compact.scalars[Compact.SCALAR_PLAYER_PENDING_SUPPRESSION] = 2
-	var restored: State = compact.restore()
-	_check(restored != null and restored.effect_queue.size() == 2, "Old compact suppression scalar expands to queued records")
-	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
-	_check(bool(kernel.call("load_compact_payload", compact.to_variant_payload())), "Native rules accept old compact suppression scalar")
-	var transition: Dictionary = kernel.call("apply_play_transition", 0, 4, &"legacy_play") as Dictionary
-	_check(bool(transition.get("valid", false)), "Legacy scalar layer is consumed on physical hand play")
-	if bool(transition.get("valid", false)):
-		var payload: Dictionary = transition.get("payload", {})
-		var queue: Array = (payload.get("side_payload", {}) as Dictionary).get("effect_queue", [])
-		var scalars: PackedInt32Array = payload.get("scalars", PackedInt32Array())
-		_check(queue.size() == 1 and scalars[Compact.SCALAR_PLAYER_PENDING_SUPPRESSION] == 0, "Native transition retains only migrated queue state")
 
 
 func _queue_grant(name: String, ability: Dictionary) -> Dictionary:
