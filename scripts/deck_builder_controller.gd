@@ -100,6 +100,7 @@ func _ready() -> void:
 	_create_hands()
 	library_grid.set_hold_duration(hold_duration)
 	library_grid.set_ki_badges_enabled(true)
+	library_grid.fit_long_card_names = true
 	library_grid.set_new_card_highlight_ids(new_card_highlight_ids)
 	_refresh_library_grid()
 	library_grid.inspection_requested.connect(_on_library_inspection_requested)

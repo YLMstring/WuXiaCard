@@ -15,6 +15,15 @@ The user has tuned several offsets/colors directly. Treat current scenes and scr
 
 ## Card Rendering
 
+Deck building fits card names longer than five characters to the slot width
+by reducing the name label's font size. Names of up to five characters keep
+their existing size; deck-building names do not use ellipsis. Binding a reused
+slot or resizing it recalculates the size. The name region retains the height
+of the original font, with names aligned to its bottom edge.
+This is enabled only by
+`deck_builder_controller.gd`; reward and sect selection retain their original
+name sizing and trimming behavior.
+
 `card_view.gd` owns:
 
 - player/opponent face colors and borders;

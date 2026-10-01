@@ -51,6 +51,7 @@ var library_drag_enabled: Array[bool] = []
 var new_card_highlight_ids: Dictionary = {}
 var display_power_numbers_enabled: bool = true
 var ki_badges_enabled: bool = false
+var fit_long_card_names: bool = false
 var interaction_enabled: bool = true
 var _slot_pool: Array = []
 var _row_height: float = 1.0
@@ -429,7 +430,8 @@ func _bind_slot(slot: Variant, logical_index: int) -> void:
 		display_data,
 		get_display_owner_id(logical_index),
 		library_drag_enabled[logical_index] if logical_index < library_drag_enabled.size() else false,
-		display_power_numbers_enabled
+		display_power_numbers_enabled,
+		fit_long_card_names
 	)
 	var bound_card_id := StringName(String(
 		display_data.get("card_id", display_data.get("id", ""))

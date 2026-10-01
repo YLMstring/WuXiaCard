@@ -33,6 +33,7 @@ var display_owner_id: int = DuelRules.PLAYER_OWNER
 var interaction_enabled: bool = true
 var drag_enabled: bool = true
 var placeholder: bool = false
+var fit_long_card_names: bool = false
 
 var _pointer_active: bool = false
 var _pointer_id: int = -2
@@ -70,13 +71,15 @@ func bind(
 	new_card_data: Dictionary,
 	new_display_owner_id: int = DuelRules.PLAYER_OWNER,
 	new_drag_enabled: bool = true,
-	show_power_numbers: bool = true
+	show_power_numbers: bool = true,
+	fit_long_names: bool = false
 ) -> void:
 	_cancel_rejected_drag_pulse()
 	cancel_gesture()
 	logical_index = new_logical_index
 	card_data = new_card_data.duplicate(true)
 	placeholder = bool(card_data.get("_display_placeholder", false))
+	fit_long_card_names = fit_long_names
 	drag_enabled = new_drag_enabled
 	display_owner_id = (
 		DuelRules.OPPONENT_OWNER
@@ -91,6 +94,7 @@ func bind(
 		if placeholder
 		else String(card_data.get("glyph", "")) if occupied else ""
 	)
+	_update_name_font_size()
 	name_label.remove_theme_color_override("font_color")
 	if occupied:
 		name_label.add_theme_color_override("font_color", _tier_name_color(card_data.get("tier", null)))
@@ -342,8 +346,33 @@ func _layout_content() -> void:
 	card_host.size = Vector2(card_width, card_height)
 	name_label.position = Vector2(0.0, group_top + card_height + CARD_NAME_GAP)
 	name_label.size = Vector2(size.x, label_height)
+	_update_name_font_size()
+
+
+func _update_name_font_size() -> void:
 	var short_side: float = maxf(1.0, minf(card_host.size.x, card_host.size.y))
-	name_label.add_theme_font_size_override("font_size", clampi(int(short_side * 0.17), 9, 14))
+	var base_font_size: int = clampi(int(short_side * 0.17), 9, 14)
+	var font_size: int = base_font_size
+	name_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_BOTTOM if fit_long_card_names else VERTICAL_ALIGNMENT_CENTER
+	)
+	name_label.text_overrun_behavior = (
+		TextServer.OVERRUN_NO_TRIMMING if fit_long_card_names else TextServer.OVERRUN_TRIM_ELLIPSIS
+	)
+	if fit_long_card_names and name_label.text.length() > 5 and size.x > 0.0:
+		font_size -= 1
+		var font: Font = name_label.get_theme_font("font")
+		while font_size > 1 and font.get_string_size(
+			name_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size
+		).x > size.x:
+			font_size -= 1
+	name_label.add_theme_font_size_override("font_size", font_size)
+	name_label.size.x = size.x
+	if fit_long_card_names:
+		name_label.size.y = maxf(
+			clampf(size.x * 0.18, 14.0, 18.0),
+			name_label.get_theme_font("font").get_height(base_font_size)
+		)
 
 
 func _set_drag_vacancy_visible(value: bool) -> void:
