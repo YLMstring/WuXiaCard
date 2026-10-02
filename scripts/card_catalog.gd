@@ -4638,13 +4638,13 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"TaiJiLuanHuan4": {
 		"id": &"TaiJiLuanHuan4",
-		"glyph": "太极拳·乱环诀",
+		"glyph": "乱环拳诀",
 		"picture": "res://pics/LKT010_004.png",
 		"sect": "武当派",
 		"tier": 4,
 		"weapon": "拳法",
 		"description": "我和其它牌比较大小时，将结果颠倒。",
-		"flavor": "乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
+		"flavor": "太极拳中的乱环诀：乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [{
 			"modifiers": [{"type": MODIFIER_POWER_COMPARISON_REVERSED}],
@@ -4652,13 +4652,13 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"TaiJiLuanHuan5": {
 		"id": &"TaiJiLuanHuan5",
-		"glyph": "太极拳·乱环诀",
+		"glyph": "乱环拳诀",
 		"picture": "res://pics/LKT010_004.png",
 		"sect": "武当派",
 		"tier": 5,
 		"weapon": "拳法",
 		"description": "我和其它牌比较大小时，将结果颠倒。我攻击后，令所有相邻友方发起攻击。",
-		"flavor": "乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
+		"flavor": "太极拳中的乱环诀：乱环术法最难通，上下随合妙无穷。陷敌深入乱环内，四两能拨千斤动。手脚齐进竖找横，掌中乱环落不空。欲知环中法何在，发落点对即成功。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [
 			{
@@ -4686,13 +4686,13 @@ const _CARD_DEFINITIONS: Dictionary = {
 	},
 	&"TaiJiYinYang5": {
 		"id": &"TaiJiYinYang5",
-		"glyph": "太极拳·阴阳诀",
+		"glyph": "阴阳拳诀",
 		"picture": "res://pics/LKT010_112.png",
 		"sect": "武当派",
 		"tier": 5,
 		"weapon": "拳法",
 		"description": "我和其它牌比较大小时，将结果颠倒。我攻击后，令所有敌方获得以下效果：【判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除】。",
-		"flavor": "太极阴阳少人修，吞吐开合问刚柔。正隅收放任君走，动静变里何须愁？生克二法随着用，闪进全在动中求。轻重虚实怎的是？重里现轻勿稍留。",
+		"flavor": "太极拳中的阴阳诀：太极阴阳少人修，吞吐开合问刚柔。正隅收放任君走，动静变里何须愁？生克二法随着用，闪进全在动中求。轻重虚实怎的是？重里现轻勿稍留。",
 		"powers": [5, 5, 5, 5],
 		"abilities": [
 			{
