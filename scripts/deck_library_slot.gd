@@ -353,7 +353,9 @@ func _update_name_font_size() -> void:
 	var short_side: float = maxf(1.0, minf(card_host.size.x, card_host.size.y))
 	var base_font_size: int = clampi(int(short_side * 0.17), 9, 14)
 	var font_size: int = base_font_size
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_BOTTOM if fit_long_card_names else VERTICAL_ALIGNMENT_CENTER
+	)
 	name_label.text_overrun_behavior = (
 		TextServer.OVERRUN_NO_TRIMMING if fit_long_card_names else TextServer.OVERRUN_TRIM_ELLIPSIS
 	)

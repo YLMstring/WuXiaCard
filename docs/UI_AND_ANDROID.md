@@ -20,13 +20,13 @@ by reducing the name label's font size. Names of up to five characters keep
 their existing size; deck-building names do not use ellipsis. Binding a reused
 slot or resizing it recalculates the size. The name region retains the shaped
 text height at the original font size, including Chinese system-font fallbacks,
-and names are vertically centered. Using only `Font.get_height()` can miss a
+and deck-building names align to its bottom. Using only `Font.get_height()` can miss a
 taller Android fallback line: the short name then expands the Label while its
 shrunk replacement does not, moving the replacement's center upward despite
 a bottom-alignment flag.
 This is enabled only by
 `deck_builder_controller.gd`; reward and sect selection retain their original
-name sizing and trimming behavior.
+name sizing, center alignment and trimming behavior.
 
 `card_view.gd` owns:
 

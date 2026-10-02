@@ -332,7 +332,7 @@ func _test_name_fitting() -> void:
 			var base: int = clampi(int(minf(slot.card_host.size.x, slot.card_host.size.y) * 0.17), 9, 14)
 			var actual: int = label.get_theme_font_size("font_size")
 			var center: float = label.position.y + label.size.y * 0.5
-			_check(label.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "Deck names center vertically after binding and resizing")
+			_check(label.vertical_alignment == VERTICAL_ALIGNMENT_BOTTOM, "Deck names align to the bottom after binding and resizing")
 			_check(label.size.y >= font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, base).y, "Fixed name region contains the unshrunk shaped Chinese line")
 			_check(font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, actual).x <= width, "Long deck names fit without clipping")
 			_check(actual == base if glyph.length() <= 5 else actual < base, "Only names longer than five characters shrink")
