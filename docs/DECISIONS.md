@@ -543,6 +543,11 @@ respectively, in row-major order. The source itself is eligible.
 
 ## AI
 
+- Terminal wins prioritize earlier completion, then a larger ownership margin.
+  Timing uses completed owner-turn boundaries (`turn_count`), not individual
+  actions. Losses retain their previous priority: smaller margin lost, then
+  later completion. Draw and non-terminal scoring remain unchanged.
+
 - Target behavior is near-perfect play within a fixed time budget.
 - Current base opponent budget is 5 seconds; difficulty 10 doubles it to 10 seconds.
 - Difficulty 0 caps completed public depth at 1, difficulty 1 at 2, difficulty

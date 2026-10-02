@@ -87,6 +87,18 @@ can be reconstructed in controlled ablations. They are not production profile
 options. The result schema records whether each switch was enabled so benchmark
 artifacts cannot silently mix evaluators.
 
+## Terminal ranking
+
+Terminal wins prioritize finishing earlier, then the final ownership margin.
+The score is `1,000,000 + max(0, max_turns + 1 - turn_count) * 10 + margin`:
+one earlier owner-turn boundary outweighs any margin on the nine-cell board.
+The remaining-turn bonus saturates only to prevent int32 overflow under extreme
+custom turn limits. Even a last-boundary win outranks every non-terminal score.
+Losses retain `-1,000,000 + margin * 100 + turn_count`, preferring smaller losses
+then later endings under the normal 100-turn limit. Draws remain zero and the
+non-terminal evaluator is unchanged. Terminal timing uses the same authoritative
+`turn_count` as search depth, rather than action plies or animation time.
+
 ## Depth and publication
 
 Search depth is measured by changes to authoritative `turn_count`, not action

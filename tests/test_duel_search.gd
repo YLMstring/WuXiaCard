@@ -2,6 +2,7 @@ extends SceneTree
 
 const Action = preload("res://scripts/duel_action.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
+const CompactState = preload("res://scripts/duel_compact_state.gd")
 const Rules = preload("res://scripts/duel_rules.gd")
 const Search = preload("res://scripts/duel_search.gd")
 const Session = preload("res://scripts/duel_search_session.gd")
@@ -24,6 +25,8 @@ func _init() -> void:
 func _run() -> void:
 	_test_production_facade_uses_native_search()
 	_test_forced_terminal_score_and_canonical_tie()
+	_test_terminal_ranking()
+	_test_search_prefers_earlier_win()
 	_test_complete_round_result_schema()
 	_test_native_progress_is_published_during_search()
 	_test_selectable_depth_modes()
@@ -92,7 +95,7 @@ func _test_forced_terminal_score_and_canonical_tie() -> void:
 	if forced_action != null:
 		_check(forced_action.source_index == 0 and forced_action.target_index == 8, "Forced search fills the only empty cell")
 		_check(forced_action.source_instance_id == &"search_forced_winner", "Forced search preserves exact source identity")
-	_check(int(forced_result.get("score", 0)) == 1_000_098, "Terminal win score includes ownership margin and turn count")
+	_check(int(forced_result.get("score", 0)) == 1_000_991, "Terminal win score prioritizes turn count before ownership margin")
 
 	var tied := State.new(
 		Rules.empty_board(),
@@ -110,6 +113,95 @@ func _test_forced_terminal_score_and_canonical_tie() -> void:
 	_check(first_action.target_index == 0, "Equal terminal choices use the lowest canonical action key")
 	_check(first_action.is_same_as(repeated_action), "Repeated native tie searches are deterministic")
 	_check(int(first.get("score", 0)) == int(repeated.get("score", 1)), "Repeated native tie searches preserve score")
+
+
+func _test_terminal_ranking() -> void:
+	for root_owner: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var early_small: int = _terminal_score(5, 10, root_owner)
+		var later_large: int = _terminal_score(9, 11, root_owner)
+		_check(early_small > later_large, "A one-turn earlier narrow win beats the largest later win for either root owner")
+		_check(_terminal_score(9, 10, root_owner) > early_small, "Same-turn wins still prefer the larger ownership margin")
+		var early_narrow_loss: int = _terminal_score(4, 10, root_owner)
+		_check(early_narrow_loss == -1_000_090, "Loss scoring retains its exact previous formula")
+		_check(early_narrow_loss > _terminal_score(0, 101, root_owner), "A narrow loss still beats a much later large loss")
+		_check(_terminal_score(4, 11, root_owner) > early_narrow_loss, "Equal-margin losses still prefer finishing later")
+		_check(_terminal_score(5, 101, root_owner) > 999_999, "A last-boundary terminal win remains above every non-terminal score")
+		_check(_terminal_score(5, 9, root_owner, 8) > 999_999, "A custom turn limit keeps terminal wins above non-terminal scores")
+	var tied_board: Array = Rules.empty_board()
+	for cell: int in range(8):
+		var owner: int = Rules.PLAYER_OWNER if cell < 4 else Rules.OPPONENT_OWNER
+		tied_board[cell] = _slot(Catalog.create_instance(&"TaiZuChangQuan", owner, StringName("ranking_tie_%d" % cell)), owner)
+	_check(_inspect_score(State.new(tied_board, [], []), Rules.OPPONENT_OWNER) == 0, "Terminal draws remain zero")
+
+
+func _terminal_score(root_card_count: int, turn_count: int, root_owner: int, max_turns: int = 100) -> int:
+	var board: Array = Rules.empty_board()
+	for cell: int in range(9):
+		var owner: int = root_owner if cell < root_card_count else 3 - root_owner
+		board[cell] = _slot(Catalog.create_instance(&"TaiZuChangQuan", owner, StringName("ranking_terminal_%d" % cell)), owner)
+	var state := State.new(board, [], [], root_owner, turn_count)
+	state.max_turns = max_turns
+	return _inspect_score(state, root_owner)
+
+
+func _inspect_score(state: State, root_owner: int) -> int:
+	var compact := CompactState.new()
+	if not compact.capture_state(state):
+		_check(false, "Terminal ranking fixture crosses the compact boundary")
+		return 0
+	var kernel: Object = ClassDB.instantiate(&"DuelNativeCompactKernel")
+	if kernel == null or not bool(kernel.call("load_compact_payload", compact.to_variant_payload())):
+		_check(false, "Terminal ranking fixture loads into the production kernel")
+		return 0
+	var result: Dictionary = kernel.call("inspect_evaluation", root_owner, false, false, false)
+	_check(bool(result.get("valid", false)), "Terminal ranking uses the production evaluator")
+	return int(result.get("score", 0))
+
+
+func _test_search_prefers_earlier_win() -> void:
+	for root_owner: int in [Rules.PLAYER_OWNER, Rules.OPPONENT_OWNER]:
+		var state: State = _make_terminal_choice_state(root_owner)
+		var early: Dictionary = Simulator.apply_action(state, Action.make_play(1, 7))
+		var late_first: Dictionary = Simulator.apply_action(state, Action.make_play(0, 7))
+		var late: Dictionary = Simulator.apply_action(late_first.get("state") as State, Action.make_play(0, 8))
+		var early_state: State = early.get("state") as State
+		var late_state: State = late.get("state") as State
+		_check(bool(early.get("valid", false)) and bool(late.get("valid", false)), "Both terminal choice routes are real legal simulator transitions")
+		_check(Simulator.is_terminal(early_state) and Simulator.is_terminal(late_state), "Both choice routes reach a real terminal state")
+		_check(early_state.turn_count == 2 and Simulator.score_difference(early_state, root_owner) == 1, "Immediate route wins narrowly at turn two")
+		_check(late_state.turn_count == 4 and Simulator.score_difference(late_state, root_owner) == 6, "Delayed route wins by six at turn four")
+		for use_table: bool in [false, true]:
+			var result: Dictionary = Search.find_best_action_iterative(state, root_owner, {"max_depth": 4, "use_transposition_table": use_table})
+			var action: Action = result.get("action") as Action
+			_check(bool(result.get("solved", false)), "Terminal choice search solves both routes")
+			_check(action != null and action.source_instance_id == &"ranking_finish", "Search chooses the earlier narrow win with or without the transposition table")
+			_check(int(result.get("score", 0)) == _inspect_score(early_state, root_owner), "Chosen search score matches the actual early terminal state")
+
+
+func _make_terminal_choice_state(root_owner: int = Rules.OPPONENT_OWNER) -> State:
+	var board: Array = Rules.empty_board()
+	for cell: int in range(7):
+		var owner: int = root_owner if cell < 4 else 3 - root_owner
+		var card: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", owner, StringName("ranking_board_%d" % cell))
+		card["powers"] = [1, 1, 1, 1]
+		board[cell] = _slot(card, owner)
+	var strong: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", root_owner, &"ranking_strong")
+	strong["powers"] = [10, 10, 10, 10]
+	var finish: Dictionary = Catalog.create_instance(&"TaiZuChangQuan", root_owner, &"ranking_finish")
+	finish["powers"] = [0, 0, 0, 0]
+	finish["active_abilities"] = [{"triggers": [{
+		"event": Catalog.TRIGGER_CARD_AFTER_SUMMONED,
+		"conditions": [{"type": Catalog.CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{"type": Catalog.ACTION_EXILE_SELF},
+			{"type": Catalog.ACTION_DISCARD_CARDS, "selector": {
+				"zones": [Catalog.CARD_ZONE_HAND],
+				"conditions": [{"type": Catalog.CONDITION_SELECTED_CARD_IS_ALLY}],
+			}},
+		],
+	}]}]
+	var hand: Array = [strong, finish]
+	return State.new(board, hand if root_owner == Rules.PLAYER_OWNER else [], hand if root_owner == Rules.OPPONENT_OWNER else [], root_owner)
 
 
 func _test_complete_round_result_schema() -> void:

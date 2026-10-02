@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-10-01
+Updated: 2026-10-02
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,24 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+AI terminal wins now prioritize earlier owner-turn completion, then ownership
+margin. Losses retain their exact previous formula and prefer smaller losses,
+then later completion; draws and non-terminal evaluation are unchanged.
+See `docs/AI_SEARCH.md` and
+`docs/superpowers/specs/2026-10-02-terminal-win-priority-design.md`.
+The old evaluator chose a turn-four six-card win over a turn-two one-card win;
+the updated production search chooses the latter for either root owner with
+the transposition table on or off. Focused search/native coverage passes
+150/2202 checks. A muted 405x720 production-controller walkthrough completes
+one actual worker search without fallback, animates the early route, and ends
+at turn two with scores 3-4; debugger runtime errors are zero.
+Both Windows Release native ABIs are rebuilt. Five unchanged-result fixed-5,000-
+node interleaved old/new comparisons show no observed performance regression;
+no speedup claim is made. Retained source/DLLs, measurements and verification
+logs remain in `.summer/local/terminal-ranking-20261002/`.
+The baseline full suite passes 89/89 in 287.63s; post-change full verification
+passes 89/89 in 283.74s. Android binaries have not been rebuilt for this change.
 
 Passive card pulse cues now wait until the rule enters its first concrete
 action. `ACTION_IF` and `ACTION_FOR_EACH_SELECTED_CARD` do not count by

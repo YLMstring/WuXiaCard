@@ -82,7 +82,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   production routing, cancellation, and same-turn principal-action reuse.
 - `test_duel_search.gd` — the single native search facade, selectable
   complete-round/self-turn depth, deadlines, minimum completed-depth node guards, deterministic canonical
-  selection, fallback, cancellation, and same-turn plans.
+  selection, fallback, cancellation, and same-turn plans. Terminal-ranking
+  fixtures cover speed before win margin, unchanged loss priorities, draw and
+  terminal-score separation, and real immediate-small-win versus delayed-large-win
+  routes from either root owner with the transposition table both on and off.
 - `test_enemy_favorite_card.gd` — optional directory schema, seeded central
   instance selection, duplicate-copy identity, AI candidate policy and manual
   legality, greedy/deep search/plan agreement, all three cancellation paths,

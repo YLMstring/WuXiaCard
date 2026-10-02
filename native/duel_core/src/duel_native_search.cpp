@@ -989,7 +989,15 @@ int32_t DuelNativeCompactKernel::evaluate_baseline(
 		- count_owned(value, opponent_owner);
 	if (is_terminal(value)) {
 		if (score_difference > 0) {
-			return win_score + score_difference * 100 - value.scalars[1];
+			// 棋盘最多九张牌：提前一回合的十分优先于任何牌差收益。
+			// 用距回合上限的余量保持胜局高于全部非终局分；宽整数和上界
+			// 仅防止自定义超大 max_turns 溢出，不增加搜索状态或预演。
+			const int64_t remaining_turns = std::clamp<int64_t>(
+				static_cast<int64_t>(value.scalars[7]) + 1 - value.scalars[1],
+				0,
+				(std::numeric_limits<int32_t>::max() - win_score - 9) / 10
+			);
+			return win_score + static_cast<int32_t>(remaining_turns * 10) + score_difference;
 		}
 		if (score_difference < 0) {
 			return -win_score + score_difference * 100 + value.scalars[1];

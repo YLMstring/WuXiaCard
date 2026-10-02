@@ -457,7 +457,7 @@ func _test_native_search_solves_forced_terminal_choice() -> void:
 		return
 	_check(action.source_index == 0 and action.target_index == 8, "Forced terminal search fills the only empty cell")
 	_check(action.source_instance_id == &"forced_winner", "Forced terminal search preserves exact source identity")
-	_check(int(result.get("score", 0)) == 1_000_098, "Forced terminal win has the documented terminal score")
+	_check(int(result.get("score", 0)) == 1_000_991, "Forced terminal win has the documented speed-first terminal score")
 
 
 func _test_native_evaluation_feature_subtraction() -> void:
