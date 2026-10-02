@@ -2,6 +2,8 @@ extends SceneTree
 
 const GRID_SCENE: PackedScene = preload("res://scenes/deck_library_grid.tscn")
 const INSPECTOR_SCENE: PackedScene = preload("res://scenes/card_inspector.tscn")
+const SLOT_SCENE: PackedScene = preload("res://scenes/deck_library_slot.tscn")
+const Catalog = preload("res://scripts/card_catalog.gd")
 const Store = preload("res://scripts/deck_profile_store.gd")
 
 var _checks: int = 0
@@ -305,10 +307,47 @@ func _run() -> void:
 	grid.set_interaction_enabled(true)
 	_check(is_equal_approx(grid.get_scroll_offset(), previous_offset), "Interaction toggling preserves scroll offset")
 
+	await _test_name_fitting()
 	grid.queue_free()
 	inspector.queue_free()
 	await process_frame
 	_finish()
+
+
+func _test_name_fitting() -> void:
+	var slot: Variant = SLOT_SCENE.instantiate()
+	root.add_child(slot)
+	for width: float in [54.0, 77.0, 100.0]:
+		slot.size = Vector2(width, 180.0)
+		await process_frame
+		var expected_center: float = -1.0
+		for glyph: String in ["天罡北斗阵", "天罡北斗剑阵", "太极拳·乱环诀", "天罡北斗阵"]:
+			var card: Dictionary = Catalog.create_instance(&"CangSongYingKe1", 1, &"name_layout_fixture")
+			card["glyph"] = glyph
+			slot.bind(0, card, 1, false, true, true)
+			slot._layout_content()
+			await process_frame
+			var label: Label = slot.name_label
+			var font: Font = label.get_theme_font("font")
+			var base: int = clampi(int(minf(slot.card_host.size.x, slot.card_host.size.y) * 0.17), 9, 14)
+			var actual: int = label.get_theme_font_size("font_size")
+			var center: float = label.position.y + label.size.y * 0.5
+			_check(label.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "Deck names center vertically after binding and resizing")
+			_check(label.size.y >= font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, base).y, "Fixed name region contains the unshrunk shaped Chinese line")
+			_check(font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, actual).x <= width, "Long deck names fit without clipping")
+			_check(actual == base if glyph.length() <= 5 else actual < base, "Only names longer than five characters shrink")
+			if expected_center < 0.0:
+				expected_center = center
+			else:
+				_check(is_equal_approx(center, expected_center), "Recycled short and long names retain the same vertical center")
+		var reward_card: Dictionary = Catalog.create_instance(&"CangSongYingKe1", 1, &"reward_name_fixture")
+		reward_card["glyph"] = "太极拳·乱环诀"
+		slot.bind(0, reward_card)
+		await process_frame
+		_check(slot.name_label.get_theme_font_size("font_size") == clampi(int(minf(slot.card_host.size.x, slot.card_host.size.y) * 0.17), 9, 14), "Reward-style names keep the original size")
+		_check(slot.name_label.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "Reward-style names keep their existing trimming")
+	slot.queue_free()
+	await process_frame
 
 
 func _occupied_count(slots: Array) -> int:

@@ -10,6 +10,25 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
+Deck-building names are now vertically centered in a fixed region measured
+from the original-size shaped text, including actual Chinese font fallbacks.
+The previous `Font.get_height()` region could underestimate Android Chinese
+line height and shrink after rebinding a long name, moving its center upward
+despite bottom alignment. Five-character names and reward sizing are unchanged.
+On the connected 1080x2400 Android device, the seven-character TaiJi name moves
+down two physical pixels; its visible-ink center differs from the adjacent
+four-character name by 0.5px instead of 2.5px. All other screenshot pixels match.
+Windows portrait walkthroughs pass five/six/seven-character fitting, recycled
+slots and unchanged reward sizes, with zero runtime debugger errors.
+The baseline passes 89/89 suites in 289.00s; post-change verification passes
+89/89 in 298.52s, including 116 grid checks.
+Signed ARM64 validation APK:
+`build/android/WuxiaCard-android-arm64-1.0.7-name-alignment.apk`.
+It contains current source/native output, is installed over the existing phone
+app with its save retained, and keeps version name/code 1.0.7/8. The ordinary
+1.0.7 APK remains untouched. Device media volume was restored after the test.
+Evidence and logs: `.summer/local/card-name-alignment-20261002/`.
+
 AI terminal wins now prioritize earlier owner-turn completion, then ownership
 margin. Losses retain their exact previous formula and prefer smaller losses,
 then later completion; draws and non-terminal evaluation are unchanged.

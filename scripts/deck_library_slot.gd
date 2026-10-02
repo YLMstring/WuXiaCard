@@ -353,9 +353,7 @@ func _update_name_font_size() -> void:
 	var short_side: float = maxf(1.0, minf(card_host.size.x, card_host.size.y))
 	var base_font_size: int = clampi(int(short_side * 0.17), 9, 14)
 	var font_size: int = base_font_size
-	name_label.vertical_alignment = (
-		VERTICAL_ALIGNMENT_BOTTOM if fit_long_card_names else VERTICAL_ALIGNMENT_CENTER
-	)
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.text_overrun_behavior = (
 		TextServer.OVERRUN_NO_TRIMMING if fit_long_card_names else TextServer.OVERRUN_TRIM_ELLIPSIS
 	)
@@ -369,9 +367,13 @@ func _update_name_font_size() -> void:
 	name_label.add_theme_font_size_override("font_size", font_size)
 	name_label.size.x = size.x
 	if fit_long_card_names:
+		# 实际中文排版会使用系统回退字体，行高可能大于主题字体本身。
+		# 用原字号的排版行高固定区域，避免缩字后最小高度变化造成上移。
 		name_label.size.y = maxf(
 			clampf(size.x * 0.18, 14.0, 18.0),
-			name_label.get_theme_font("font").get_height(base_font_size)
+			name_label.get_theme_font("font").get_string_size(
+				name_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, base_font_size
+			).y
 		)
 
 

@@ -29,7 +29,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_ending_profile.gd` — effective-duel history, atomic completion,
   difficulty-specific score caps and downward propagation, per-sect isolation,
   difficulty unlock/reset behavior, and legacy migration.
-- `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization, 3:4 layout, tier colors, pooled rebinding, and gesture behavior.
+- `test_deck_library_grid.gd` — 1,000-slot sizing, four-column virtualization,
+  3:4 layout, tier colors, pooled rebinding, gestures, and fixed-center Chinese
+  name fitting across slot widths. Short names retain their size; six-/seven-
+  character names fit without clipping, and reward-style sizing is unchanged.
 - `test_deck_builder_integration.gd` — scene composition, concealment/testing reveal, inspection, real drag hit-testing, exchanges, persistence, back signal, and fixed-aspect layout.
 - `test_enemy_reroll.gd` — hidden nine-tap mouse/touch gesture, cancellation
   and concealment gates, same-level difficulty-aware alternative selection,
