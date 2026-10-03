@@ -6318,7 +6318,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "剑法",
 		"description": "敌方攻击时不分敌我。我被移除时，抽一张牌。判断是否能被攻击时，所有点数视为零。锁定：被攻击时，将我移除。",
 		"flavor": "一字电剑每招之出，皆如闪电横空，耀人眼目，令人惊心动魄，神驰目眩，难以抵挡剑法的后着。",
-		"powers": [7, 7, 7, 7],
+		"powers": [8, 7, 7, 7],
 		"abilities": [
 			{"modifiers": [{"type": MODIFIER_DEFENDING_POWER_OVERRIDE, "value": 0}]},
 			{
