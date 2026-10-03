@@ -81,7 +81,7 @@ const _ENEMY_ROWS: Array[Dictionary] = [
 	{"id": &"tingchao_zhuren2", "name": "玄慈", "level": 11, "deck": [&"YiKongDaoDi4", &"YiJJ4", &"SanRuDiYu1", &"WuXiangJieZhi3", &"LiJingRuLai4"]},
 	{"id": &"chisha_menzhu", "name": "复仇者·林平之", "level": 12, "deck": [&"YouFenLaiYi3", &"KuiHua4", &"KuiHua3", &"CangSongYingKe3", &"ZiXiaGong2"]},
 	{"id": &"bailu_shanzhang2", "name": "雪山飞狐·胡斐", "level": 12, "deck": [&"HuJiaDao1", &"HuJiaDao2", &"HuJiaDao3", &"ChunCanZhang3", &"TaiJiLuanHuan4"]},
-	{"id": &"wuying_ke4", "name": "双剑合璧·小龙女", "level": 12, "sect_id": &"GuMuPai", "favorite_card": &"ZuoYouHuBo5", "deck": [&"ZuoYouHuBo5", &"TianLuoDiWang4", &"LangJiTianYa3", &"DingYangZhen3", &"TuNaShu3"]},
+	{"id": &"wuying_ke4", "name": "双剑合璧·小龙女", "level": 12, "sect_id": &"GuMuPai", "favorite_card": &"ZuoYouHuBo5", "deck": [&"ZuoYouHuBo5", &"TianLuoDiWang4", &"LangJiTianYa3", &"DingYangZhen3", &"JianFaQinYin2"]},
 	{"id": &"chisha_menzhu2", "name": "冲虚", "level": 13, "deck": [&"TiYunZong4", &"RaoZhiRouJian4", &"TaiJiSanHuan5", &"TaiJiDaKui5", &"ShenMen13Jian3"]},
 	{"id": &"chisha_menzhu3", "name": "方证", "level": 13, "deck": [&"YiJJ5", &"QianShouRuLai5", &"BaoCanShouQue4", &"NianhuaWeiXiao4", &"JinGangBuHuai4"]},
 	{"id": &"bailu_shanzhang", "name": "五岳掌门·岳不群", "level": 13, "deck": [&"SanQinFeng3", &"KuiHua4", &"KuiHua3", &"KuiHua2", &"ZiXiaGong4"]},
