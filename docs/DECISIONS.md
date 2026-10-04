@@ -376,6 +376,16 @@ respectively, in row-major order. The source itself is eligible.
 - A directly unlocked card is inserted at the library top. If it has
   still-locked lower-tier cards with the same `glyph` and sect, those cards
   unlock in catalog order at the occupied library bottom.
+- Opening random cards and ordinary victory/defeat rewards exclude every
+  other-sect version of a name already unlocked, regardless of tier. Same-sect
+  higher-tier versions remain subject to ordinary eligibility. Opening selection
+  considers the chosen sect's pending tier-one unlocks before its three random
+  cards; owned-card fallbacks obey the same restriction and glyph uniqueness.
+  Fixed sect unlocks, explicit unlocks, guaranteed rewards and saved pending
+  offers continue normally. Old cross-sect unlocks are kept; if two sects are
+  already owned for a name, neither contributes future ordinary random rewards
+  for that name. Derive this rule from unlocked IDs, without a saved blacklist.
+  Duel side decks continue their independent highest-tier-per-glyph policy.
 - Reaching character tier 2 first unlocks `TuNaShu2`, then all selected-sect
   tier-2 cards; tier 3 likewise unlocks `TuNaShu3` before its selected-sect
   cards. Tiers 4–5 unlock only their selected-sect exact-tier cards. All occur

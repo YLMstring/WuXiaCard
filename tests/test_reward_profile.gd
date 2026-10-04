@@ -466,6 +466,8 @@ func _test_run_sect_pool_reward_filter(store: RefCounted) -> void:
 		var definition: Dictionary = Cards.get_definition(card_id)
 		if int(definition.get("tier", 0)) != 1:
 			continue
+		if _fixture_has_cross_sect_namesake(profile, definition):
+			continue
 		var card_sect: String = String(definition.get("sect", ""))
 		if card_sect == "少林派" and allowed_id == &"":
 			allowed_id = card_id
@@ -525,9 +527,21 @@ func _first_library_card_for_tier(profile: Dictionary, tier: int) -> StringName:
 			card_id != &""
 			and int(Cards.get_definition(card_id).get("tier", 0)) == tier
 			and Store._card_passes_run_sect_filter(card_id, sect_filter)
+			and not _fixture_has_cross_sect_namesake(profile, Cards.get_definition(card_id))
 		):
 			return card_id
 	return &""
+
+
+func _fixture_has_cross_sect_namesake(profile: Dictionary, candidate: Dictionary) -> bool:
+	for value: Variant in profile["unlocked_card_ids"]:
+		var owned: Dictionary = Cards.get_definition(StringName(String(value)))
+		if (
+			owned["glyph"] == candidate["glyph"]
+			and owned["sect"] != candidate["sect"]
+		):
+			return true
+	return false
 
 
 func _replace_main_deck_card(

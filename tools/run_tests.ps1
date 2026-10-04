@@ -60,6 +60,7 @@ $testScripts = @(
 	"test_balance_telemetry_flow.gd",
 	"test_balance_telemetry_uploader.gd",
     "test_deck_profile_store.gd",
+    "test_cross_sect_namesake_rewards.gd",
 	"test_beginner_opening_sequence.gd",
     "test_ending_profile.gd",
     "test_deck_library_grid.gd",

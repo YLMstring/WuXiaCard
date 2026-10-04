@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-10-02
+Updated: 2026-10-04
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,30 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+Opening random cards and ordinary victory/defeat rewards now exclude a candidate
+when any unlocked card has the same `glyph` but a different `sect`, across all
+tiers. Same-sect higher tiers and fixed sect unlocks remain eligible under their
+existing rules. Opening selection includes the selected sect's pending tier-one
+unlocks in its filter before choosing the three random cards; both ordinary and
+owned-card fallback choices preserve distinct names. The filter is derived from
+unlock records at selection time, without a saved blacklist or schema change.
+Existing pending offers, guaranteed rewards, old unlocks, side decks and AI are
+unchanged. Kunlun currently exists as card metadata, without a selectable sect
+entry; its opening behavior is verified through the shared production picker.
+See `docs/superpowers/specs/2026-10-04-cross-sect-namesake-random-filter-design.md`.
+The new fixture first failed 19 rule assertions, then passed 63 checks. A muted
+540x960 normal-mode production-flow walkthrough passes 20 checks, covering sect
+join, filtered reward display, repeated claim input, next reward, and exhausted
+pool handling. Evidence: `.summer/local/cross-sect-namesakes-20261004/`.
+The pre-change suite passed 88/89: four old YuSui power assertions assumed
+`[3,5,5,3]` before that ID became TianDiTongShou with `[5,5,5,5]`. Those tests now
+derive initial powers from the catalog and independently check zero/one/two
+decays. Existing reward fixtures choose candidates without conflicting owned
+namesakes so their difficulty and sect-pool checks retain their original intent.
+Final verification passes 90/90 suites in 295.07s, with no logged errors. One
+independent read-only review finds no substantive issues; the known Kunlun
+selection and side-deck boundaries match the approved scope.
 
 Deck-building names now align to the bottom of a fixed region measured
 from the original-size shaped text, including actual Chinese font fallbacks.

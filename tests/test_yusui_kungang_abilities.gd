@@ -89,6 +89,12 @@ func _test_entry_swaps_only_with_exactly_one_adjacent_enemy() -> void:
 
 
 func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip() -> void:
+	var initial_powers: Array = Catalog.get_definition(&"YuSuiKunGang4")["powers"].duplicate()
+	var after_one_decay: Array = []
+	var after_two_decays: Array = []
+	for power: int in initial_powers:
+		after_one_decay.append(power - 1)
+		after_two_decays.append(power - 2)
 	var board: Array = Rules.empty_board()
 	board[4] = _slot(
 		Catalog.create_instance(&"YuSuiKunGang4", Rules.PLAYER_OWNER, &"decay_yusui"),
@@ -101,7 +107,7 @@ func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip()
 		{"turn_owner_id": Rules.OPPONENT_OWNER}
 	)
 	_check(
-		_board_card(state, &"decay_yusui").get("powers", []) == [3, 5, 5, 3],
+		_board_card(state, &"decay_yusui").get("powers", []) == initial_powers,
 		"Opponent turn start does not reduce player-owned YuSui"
 	)
 	Simulator._resolve_trigger_event(
@@ -110,7 +116,7 @@ func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip()
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	_check(
-		_board_card(state, &"decay_yusui").get("powers", []) == [2, 4, 4, 2],
+		_board_card(state, &"decay_yusui").get("powers", []) == after_one_decay,
 		"Player turn start reduces player-owned YuSui once"
 	)
 	Simulator.resolve_non_attack_flip(state, &"decay_yusui", Rules.OPPONENT_OWNER)
@@ -122,7 +128,7 @@ func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip()
 		{"turn_owner_id": Rules.PLAYER_OWNER}
 	)
 	_check(
-		_board_card(state, &"decay_yusui").get("powers", []) == [2, 4, 4, 2],
+		_board_card(state, &"decay_yusui").get("powers", []) == after_one_decay,
 		"Player turn end does not reduce opponent-owned YuSui"
 	)
 	Simulator._resolve_trigger_event(
@@ -131,7 +137,7 @@ func _test_locked_decay_runs_only_at_current_owners_turn_boundaries_after_flip()
 		{"turn_owner_id": Rules.OPPONENT_OWNER}
 	)
 	_check(
-		_board_card(state, &"decay_yusui").get("powers", []) == [1, 3, 3, 1],
+		_board_card(state, &"decay_yusui").get("powers", []) == after_two_decays,
 		"Opponent turn end reduces opponent-owned YuSui once"
 	)
 

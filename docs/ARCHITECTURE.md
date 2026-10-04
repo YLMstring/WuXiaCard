@@ -406,6 +406,18 @@ cards enter the library top in caller order. Still-locked cards with the same
 `glyph` and sect at lower tiers are inherited in catalog order and appended to
 the occupied library bottom. Profile repair never invokes this cascade.
 
+Random opening cards and ordinary rewards additionally derive a temporary
+`glyph -> sect set` index from unlocked IDs. A candidate passes only if its
+glyph is absent or all matching unlocked cards belong to its own sect. This
+excludes other-sect namesakes at every tier while preserving same-sect upgrades.
+The opening picker also indexes the selected sect's pending tier-one IDs before
+sampling, without changing the caller profile or adding an intermediate save.
+Both initial and owned-card fallback candidates use the filter, and the existing
+glyph uniqueness check still protects all five main slots. Fixed sect unlocks,
+explicit unlocks, guaranteed rewards and already-saved offers bypass this random
+candidate restriction. The index is rebuilt from unlocks after load/reset and
+never enters the profile schema, duel state, side-deck builder or AI search.
+
 Victory progression compares the old and new character tiers. Crossing levels
 2, 5, 8, or 11 unlocks every exact-tier card of the selected sect before the
 reward offer is generated. Level 11 establishes the current tier-5 cap through

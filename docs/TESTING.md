@@ -23,6 +23,12 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 - `test_deck_profile_store.gd` — default profile, validation/repair, schema
   migration through per-difficulty score schema 11, difficulty persistence,
   atomic saves, exchanges, unlock ordering, and save-failure rollback.
+- `test_cross_sect_namesake_rewards.gd` — real Hengshan/Kunlun namesake families,
+  cross-tier ordinary victory/defeat filtering, same-sect upgrades, inherited
+  unlocks after claim/reload, fixed tier unlocks, old pending offers, dual-family
+  ownership, opening pending unlocks and owned fallbacks, exhausted selection,
+  reset and atomic save-failure isolation. Kunlun is not yet a selectable sect;
+  its real tier-one card is supplied to the shared production opening picker.
 - `test_beginner_opening_sequence.gd` — schema-15 opening-stage persistence,
   fixed Linghu/Wushi progression, tier-one rewards, score/history isolation,
   formal Lin Pingzhi handoff, old-save migration, and other-mode isolation.

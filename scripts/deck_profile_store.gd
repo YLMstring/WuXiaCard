@@ -1392,6 +1392,7 @@ func create_reward_offer_and_save(
 		player_tier
 	)
 	var unlocked: Array[StringName] = get_unlocked_ids(profile)
+	var namesake_filter: Dictionary = _build_random_namesake_filter(unlocked)
 	var eligible: Array[StringName] = []
 	var sect_filter: Dictionary = _build_run_sect_filter(
 		get_selected_sect_id(profile),
@@ -1401,6 +1402,8 @@ func create_reward_offer_and_save(
 		if card_id in unlocked or not _card_passes_run_sect_filter(card_id, sect_filter):
 			continue
 		var definition: Dictionary = Catalog.get_definition(card_id)
+		if not _card_passes_random_namesake_filter(definition, namesake_filter):
+			continue
 		var card_tier: int = int(definition.get("tier", 0))
 		var qualifies: bool = card_tier == player_tier
 		if outcome == REWARD_VICTORY:
@@ -1704,6 +1707,29 @@ static func _card_passes_run_sect_filter(
 	return allowed_glyphs.has(card_sect)
 
 
+static func _build_random_namesake_filter(unlocked_ids: Array) -> Dictionary:
+	var result: Dictionary = {}
+	for value: Variant in unlocked_ids:
+		var definition: Dictionary = Catalog.get_definition(StringName(String(value)))
+		var glyph: String = String(definition.get("glyph", ""))
+		if glyph.is_empty():
+			continue
+		var sects: Dictionary = result.get(glyph, {}) as Dictionary
+		sects[String(definition.get("sect", ""))] = true
+		result[glyph] = sects
+	return result
+
+
+static func _card_passes_random_namesake_filter(
+	definition: Dictionary,
+	namesake_filter: Dictionary
+) -> bool:
+	var sects: Dictionary = namesake_filter.get(String(definition.get("glyph", "")), {}) as Dictionary
+	return sects.is_empty() or (
+		sects.size() == 1 and sects.has(String(definition.get("sect", "")))
+	)
+
+
 func _pick_starting_tier_one_ids(
 	profile: Dictionary,
 	sect_tier_one_ids: Array[StringName],
@@ -1711,6 +1737,10 @@ func _pick_starting_tier_one_ids(
 	allow_owned: bool
 ) -> Array[StringName]:
 	var already_unlocked: Array[StringName] = get_unlocked_ids(profile)
+	# The selected sect unlocks before random opening cards, within one save.
+	var opening_unlocked: Array[StringName] = already_unlocked.duplicate()
+	opening_unlocked.append_array(sect_tier_one_ids)
+	var namesake_filter: Dictionary = _build_random_namesake_filter(opening_unlocked)
 	var candidates: Array[StringName] = []
 	var owned_fallbacks: Array[StringName] = []
 	for card_id: StringName in Catalog.get_all_card_ids():
@@ -1720,6 +1750,7 @@ func _pick_starting_tier_one_ids(
 			and String(definition.get("description", "")).is_empty()
 			and card_id not in DEFAULT_MAIN_DECK_IDS
 			and card_id not in sect_tier_one_ids
+			and _card_passes_random_namesake_filter(definition, namesake_filter)
 		):
 			if card_id in already_unlocked:
 				owned_fallbacks.append(card_id)
