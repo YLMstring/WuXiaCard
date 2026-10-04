@@ -381,8 +381,8 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
+	&"YuSuiKunGang2a",
 	&"YuSuiKunGang3a",
-	&"YuSuiKunGang4a",
 	&"JinZhenDuJie1a",
 	&"JinZhenDuJie2a",
 	&"JinZhenDuJie3a",
@@ -3096,24 +3096,24 @@ const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
 }
 
 const _CARD_DEFINITIONS: Dictionary = {
-	&"YuSuiKunGang3a": {
-		"id": &"YuSuiKunGang3a",
+	&"YuSuiKunGang2a": {
+		"id": &"YuSuiKunGang2a",
 		"glyph": "玉碎昆冈",
 		"picture": "res://pics/LKT010_531.png",
 		"sect": "昆仑派",
-		"tier": 3,
+		"tier": 2,
 		"weapon": "轻剑",
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我翻面。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
 		"powers": [4, 6, 6, 4],
 		"abilities": [],
 	},
-	&"YuSuiKunGang4a": {
-		"id": &"YuSuiKunGang4a",
+	&"YuSuiKunGang3a": {
+		"id": &"YuSuiKunGang3a",
 		"glyph": "玉碎昆冈",
 		"picture": "res://pics/LKT010_531.png",
 		"sect": "昆仑派",
-		"tier": 4,
+		"tier": 3,
 		"weapon": "轻剑",
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我移除。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
