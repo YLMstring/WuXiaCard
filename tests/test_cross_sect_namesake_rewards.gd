@@ -3,6 +3,7 @@ extends SceneTree
 const Store = preload("res://scripts/deck_profile_store.gd")
 const Cards = preload("res://scripts/card_catalog.gd")
 const Enemies = preload("res://scripts/enemy_catalog.gd")
+const Sects = preload("res://scripts/sect_catalog.gd")
 const DeckRules = preload("res://scripts/deck_rules.gd")
 const SAVE_PATH: String = "user://cross_sect_namesake_rewards_test.json"
 const HENGSHAN: Array[StringName] = [
@@ -42,6 +43,11 @@ func _test_rewards(store: RefCounted, own: Array[StringName], other: Array[Strin
 	for level: int in [2, 5, 8]:
 		var tier: int = Store.tier_for_level(level)
 		var profile: Dictionary = _full_collection_profile(store, level)
+		# Both families must be in the run pool and open, otherwise a sect gate
+		# would hide cross-sect namesakes before the rule under test can filter them.
+		profile["run_difficulty"] = int(Sects.get_definition(&"KunLunPai")["min_random_difficulty"])
+		profile["max_unlocked_difficulty"] = maxi(profile["max_unlocked_difficulty"],profile["run_difficulty"])
+		profile["run_sect_pool_ids"][4] = "KunLunPai"
 		_lock_cards(profile, other)
 		_lock_cards(profile, own.slice(1))
 		_lock_cards(profile, [&"TuNaShu2"])

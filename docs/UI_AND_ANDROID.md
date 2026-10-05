@@ -210,15 +210,19 @@ fall back to Godot-managed debug signing.
   its password environment variables for formal builds, while retaining an
   explicit debug-keystore fallback for local-only builds.
 
-Latest local export (2026-10-01): version name `1.0.7`, version code `8`,
-126,847,189-byte ARM64 APK at the path above. APK v2/v3 signature verification
-passes and the certificate matches 1.0.6. The packaged native library matches
-the freshly rebuilt Release/Android Gradle output; tests/tools/docs/local
-development assets are excluded. Manifest min/target SDK are 24/36. No Android
-device was connected, so installation and on-device gameplay were not tested.
-The current 89/89 test result was reused; this version/export change does not
-alter gameplay. Build and artifact records live in
-`.summer/local/android-1.0.7/`. The exporter hit Summer's existing teardown
+Latest local export (2026-10-05): version name `1.0.7`, version code `8`,
+126,859,477-byte ARM64 APK at
+`build/android/WuxiaCard-android-arm64-1.0.7-kunlun.apk`, including Kunlun and
+Silent's updated allies-before-self attack order. APK v2/v3 signature verification
+passes and the certificate matches the previous 1.0.7 package. The native source
+matches Gradle's input; the packaged library matches Gradle's stripped Release
+output. Tests/tools/docs/local development assets and Windows DLLs are excluded;
+compiled catalog scripts are included. Manifest min/target SDK are 24/36.
+The full suite passes 93/93; the affected normal-duration portrait controller
+walkthrough passes 24 checks with muted audio. No Android device was connected,
+so installation and on-device gameplay were not tested. Build and artifact
+records live in `.summer/local/silent-order-*`, including
+`silent-order-android-verification.json`. The exporter hit Summer's existing teardown
 watchdog after Gradle completed; the build script continued only after its
 completion checks, then signed and independently verified the finished APK.
 

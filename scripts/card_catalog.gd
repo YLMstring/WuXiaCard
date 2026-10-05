@@ -3242,9 +3242,9 @@ const KUNLUN_COPY_ATTACK_PAIR: Dictionary = {
         "actions": [
             {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
              "card": CARD_REF_ABILITY_SOURCE},
-            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
             {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
              "card": CARD_REF_SELECTED_CARD},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
         ],
     },
 }
@@ -3257,7 +3257,6 @@ const KUNLUN_COPY_ATTACK_ADJACENT: Dictionary = {
         "actions": [
             {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
              "card": CARD_REF_ABILITY_SOURCE},
-            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
             {
                 "type": ACTION_FOR_EACH_SELECTED_CARD,
                 "selector": {
@@ -3269,6 +3268,7 @@ const KUNLUN_COPY_ATTACK_ADJACENT: Dictionary = {
                 },
                 "actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
             },
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
         ],
     },
 }

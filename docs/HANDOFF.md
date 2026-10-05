@@ -10,6 +10,20 @@ Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The play
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
 
+Silent/WuShengWuSe now follows the updated catalog attack order: tiers 2/3
+copy the chosen ally's powers, let that ally attack, then attack themselves;
+tier 4 lets the row-major snapshot of adjacent allies attack before itself.
+Each attack and its nested reactions finish before the next attack. Tier 1,
+ki cost, entry suppression and activation-only continuation are unchanged.
+The new regression suite passes 64 checks, including both owners, counterattack
+interleaving and newly flipped allies not joining the attack snapshot. A muted
+540x960 production-controller walkthrough passes 24 checks at normal animation
+durations, with clean stderr. Final full suite passes 93/93 in 330.66s.
+Two baseline failures from recent sect-catalog edits were fixture assumptions:
+sect availability checks now derive thresholds from the catalog, and the
+namesake reward fixture includes both actual sects in its eligible run pool.
+Evidence: `.summer/local/silent-order-*`.
+
 Kunlun's 13 previously empty card ability arrays are now implemented; the four
 JinZhen aliases retain their existing rules. YinYang formations draw filtered
 cards, buff draws only while on board, exile and generate Bagua through the
@@ -17,7 +31,8 @@ normal capped summon lifecycle. Rain grants tagged adjacent-diagonal attack
 rules; its activation removes all own matching auras before the chosen ally
 attacks. Silent copies current ordered powers and grants an activation-only
 continuation with normal ki cost. Jade's movement triggers flip nearby enemies
-before self-flip/exile. Kunlun remains card metadata, without a selectable sect.
+before self-flip/exile. The current user-edited sect catalog also includes
+selectable Kunlun, with random availability starting at difficulty 5.
 
 Both continuation types emit `continuous_action_attempt` before the shared cap,
 so KongBi3/4 draw even when a grant is already exhausted. After all reactions,
@@ -55,8 +70,8 @@ unlocks in its filter before choosing the three random cards; both ordinary and
 owned-card fallback choices preserve distinct names. The filter is derived from
 unlock records at selection time, without a saved blacklist or schema change.
 Existing pending offers, guaranteed rewards, old unlocks, side decks and AI are
-unchanged. Kunlun currently exists as card metadata, without a selectable sect
-entry; its opening behavior is verified through the shared production picker.
+unchanged. Kunlun's opening behavior is verified through the shared production
+picker; its selectable sect entry was subsequently added in the user catalog.
 See `docs/superpowers/specs/2026-10-04-cross-sect-namesake-random-filter-design.md`.
 The new fixture first failed 19 rule assertions, then passed 63 checks. A muted
 540x960 normal-mode production-flow walkthrough passes 20 checks, covering sect
@@ -334,12 +349,12 @@ release-ready Android package.
   export downloads both datasets by default; `-Dataset Events` selects only
   these events.
 - Android preset: `export_presets.cfg`
-- Current app version: `1.0.7`; Android version code `8`. The local ARM64
-  release APK is `build/android/WuxiaCard-android-arm64-1.0.7.apk` (2026-10-01).
-  Signing matches 1.0.6 and APK v2/v3 verification passes. Its native rules
-  library was rebuilt for the current compact-format-2 implementation and
-  matches the packaged Gradle output. The current 89/89 suite result was
-  reused. No connected Android device was available for an install playtest.
+- Current app version: `1.0.7`; Android version code `8`. The latest local ARM64
+  release APK is `build/android/WuxiaCard-android-arm64-1.0.7-kunlun.apk`
+  (2026-10-05), including Kunlun and the updated Silent attack order.
+  Signing matches the previous 1.0.7 APK; APK v2/v3 verification passes.
+  Its native rules library is rebuilt for compact format 3. Final suite:
+  93/93. No connected Android device was available for an install playtest.
 - Windows Release preset: `export_presets.cfg`; one-command build:
   `tools/build_windows_release.ps1`
 

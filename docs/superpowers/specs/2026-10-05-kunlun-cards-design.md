@@ -2,12 +2,17 @@
 
 日期：2026-10-05。状态：已确认、实施并完成验证。
 
+2026-10-05 增量：按最新目录调整无声无色的攻击先后顺序，已完成验证与
+安卓导出。二、三阶先所选友方后自己；四阶先全部相邻友方后自己。一阶、
+复制点数、耗气、进场压制和额外指定规则不变。以下完整声明已同步。
+
 ## 范围与确认规则
 
 以当前 `scripts/card_catalog.gd` 为目录：17 张牌已经进入
 `ALL_CARD_IDS`；金针渡劫四张已有实现，保留原能力。补齐其余 13 张牌。
 同时将夭矫空碧三、四阶的抽牌监听统一为连续行动尝试，纳入额外指定。
 本次只实装卡牌规则，不增加昆仑可选门派、解锁敌人或敌人配置。
+此为原实装范围；之后用户已在门派目录添加昆仑派，随机开放进阶为 5。
 目录中的名称、点数、图片、武器、气和效果文字保持原样。
 
 玩家已确认：
@@ -105,9 +110,11 @@
   不改变全游戏的终局触发边界。
 - 无声无色三、四阶复用古墓进场前暂时压制敌方，锁定能力不受影响，
   当前回合结束恢复。所有阶进场后尝试获得仅指定机会。
-  指定目标是正交相邻友方，复制其当时点数，先自己完整攻击；
-  二、三阶再让指定实例攻击；四阶再按此时棋盘顺序选择当前相邻友方
-  逐一完整攻击。每一步仍检查实例、所属方及在场状态，不硬保留离场牌。
+  指定目标是正交相邻友方，先复制其当时点数。一阶自己完整攻击；
+  二、三阶先让指定实例完整攻击，然后自己攻击；四阶按复制完成时的
+  棋盘顺序快照选择相邻友方，逐一完整攻击，最后自己攻击。先前友方
+  攻击新翻面的牌不扩展选择快照。每一步仍检查实例、所属方及在场状态，
+  不硬保留离场牌。反击、翻面、移动、移除等反应完整结束才推进下一击。
 - 玉碎昆冈复用 `JIANFA_ENTRY_MOVE`，多个符合位置按原棋盘顺序处理。
   `CARD_AFTER_MOVED` 只在自己实际移动/换位后触发：选当前相邻敌方逐一
   非攻击翻面，二阶最后翻自己，三阶最后移除自己。无实际移动不触发。
@@ -253,9 +260,9 @@ const KUNLUN_COPY_ATTACK_PAIR: Dictionary = {
         "actions": [
             {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
              "card": CARD_REF_ABILITY_SOURCE},
-            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
             {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
              "card": CARD_REF_SELECTED_CARD},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
         ],
     },
 }
@@ -268,7 +275,6 @@ const KUNLUN_COPY_ATTACK_ADJACENT: Dictionary = {
         "actions": [
             {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
              "card": CARD_REF_ABILITY_SOURCE},
-            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
             {
                 "type": ACTION_FOR_EACH_SELECTED_CARD,
                 "selector": {
@@ -280,6 +286,7 @@ const KUNLUN_COPY_ATTACK_ADJACENT: Dictionary = {
                 },
                 "actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
             },
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
         ],
     },
 }
@@ -506,7 +513,8 @@ const GUMU_ALLY_ATTACK_EVASION_OR_EXILE: Dictionary = {
 动作、分数、节点与遍历一致；若可复现退化，立即报告再继续。
 新牌夹具另外验证真实搜索与仅指定合法性，不把不同规则下的速度称作
 优化收益。最终完整套件、两套 Windows native ABI、静音 540×960 实际
-生产控制器玩法与事件动画必须通过；本次不导出 Android。
+生产控制器玩法与事件动画必须通过；原实装阶段未导出 Android，后续
+无声无色顺序调整按用户要求另行导出。
 
 实装验证：昆仑规则 234 项、生产控制器集成 33 项通过；静音 540×960
 正常动画时长连续五轮玩法通过 149 项，包含真正的对手 AI 工作线程。
@@ -517,3 +525,13 @@ const GUMU_ALLY_ATTACK_EVASION_OR_EXILE: Dictionary = {
 已立即报告，独立平衡顺序 120 样本复测未复现稳定退化：旧/新汇总中位
 耗时 0.3271325/0.3281315 秒（+0.31%），各轮差异有正有负。不声称提速。
 日志、截图、测量记录及旧源码/DLL 保留于 `.summer/local/kunlun-20261005/`。
+
+顺序调整验证：新增测试在修改前产生 18 个断言失败，修改后 64 项通过。
+覆盖所有阶级、双所有者、复制先于攻击、正常耗气、友方攻击插入恒山
+反击及其实际翻面结果、四阶不追加新翻面的相邻友方。静音 540×960
+正常时长生产控制器流程通过 24 项；最终完整套件 93/93，330.66 秒。
+基线两个失败属于近期门派目录变更后的旧夹具：开放进阶检查改为依据
+目录；同名随机过滤夹具确保恒山与昆仑实际都进入当局门派池。
+安卓保留版本 1.0.7/code 8，ARM64 正式签名包为
+`build/android/WuxiaCard-android-arm64-1.0.7-kunlun.apk`，未连接设备，未做
+真机安装测试。日志与截图保留于 `.summer/local/silent-order-*`。

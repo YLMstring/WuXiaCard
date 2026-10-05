@@ -29,6 +29,10 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   repeated invalid actions, inspection and actual opponent search worker. Run
   with `-- --kunlun-visible` at 540x960 and Dummy audio for a five-cycle
   normal-duration walkthrough and screenshot.
+- `test_silent_attack_order.gd` — all four real Silent tiers for both owners:
+  copy before attacks, allies before self, normal ki cost, nested counterattack
+  order and actual captures, and tier-four adjacency snapshot excluding newly
+  flipped allies.
 - `test_deck_profile_store.gd` — default profile, validation/repair, schema
   migration through per-difficulty score schema 11, difficulty persistence,
   atomic saves, exchanges, unlock ordering, and save-failure rollback.
@@ -36,7 +40,8 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   cross-tier ordinary victory/defeat filtering, same-sect upgrades, inherited
   unlocks after claim/reload, fixed tier unlocks, old pending offers, dual-family
   ownership, opening pending unlocks and owned fallbacks, exhausted selection,
-  reset and atomic save-failure isolation. Kunlun is not yet a selectable sect;
+  reset and atomic save-failure isolation. Reward fixtures include both actual
+  sects in the eligible run pool at Kunlun's catalog-defined opening difficulty;
   its real tier-one card is supplied to the shared production opening picker.
 - `test_beginner_opening_sequence.gd` — schema-15 opening-stage persistence,
   fixed Linghu/Wushi progression, tier-one rewards, score/history isolation,
