@@ -252,7 +252,7 @@ bool DuelNativeCompactKernel::load_compact_payload(const Dictionary &payload) {
 	last_error = String();
 	fresh_card_prototypes.clear();
 	empty_deck_draw_prototype_index = -1;
-	if (static_cast<int64_t>(payload.get("format_version", 0)) != 2) {
+	if (static_cast<int64_t>(payload.get("format_version", 0)) != 3) {
 		last_error = "Unsupported compact-state format version";
 		return false;
 	}
@@ -714,6 +714,10 @@ bool DuelNativeCompactKernel::transition_play(
 	const int32_t target_cell = action.target_index;
 	const int32_t moving_owner = source.scalars[0];
 	const int32_t hand_zone_index = moving_owner - 1;
+	if (source.scalars[5] > 0 && source.scalars[11] != 0) {
+		reason = "Hand play is unavailable during an extra activation";
+		return false;
+	}
 	if (hand_zone_index < 0 || hand_zone_index >= static_cast<int32_t>(source.zones.size())) {
 		reason = "Active owner has no compact hand zone";
 		return false;
@@ -1383,7 +1387,7 @@ bool DuelNativeCompactKernel::transition_activate(
 	reason = String();
 	if (!validate_play_support(source, reason)) return false;
 	supported = true;
-	if (source.scalars[5] > 0) {
+	if (source.scalars[5] > 0 && source.scalars[11] == 0) {
 		reason = "Activation is unavailable during an extra card play";
 		return false;
 	}
@@ -1491,6 +1495,10 @@ bool DuelNativeCompactKernel::transition_activate(
 	resolution = Resolution();
 	std::vector<int32_t> exile_stack;
 	Dictionary activated;
+	if (next.scalars[5] > 0) {
+		next.scalars[5] -= 1;
+		next.scalars[11] = 0;
+	}
 	activated["type"] = StringName("ability_activated");
 	activated["source_cell"] = source_cell;
 	activated["target_cell"] = target_index;

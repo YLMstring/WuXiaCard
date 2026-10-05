@@ -372,7 +372,7 @@ static func _overwrite_state(target: StateData, source: StateData) -> void:
 		&"owner_auras_by_owner",
 		&"next_owner_aura_handle",
 		&"run_difficulty",
-		&"difficulty_eight_draw_consumed",
+		&"extra_activation_only",
 		&"state_version",
 	]:
 		target.set(property_name, source.get(property_name))

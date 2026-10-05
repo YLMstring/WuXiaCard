@@ -21,6 +21,14 @@ recoverable from commit `e68885d`; it passed 4,812 checks across 56 deterministi
 walks and 584 actions. That commit is recovery evidence, not an implementation
 to keep synchronized.
 
+Extra activation and extra hand play share one continuation credit per owner
+turn. Compact format 3 reuses scalar 11 for `extra_activation_only`; native
+legal-action generation, application, completion and state identity all enforce
+the chosen type. Search does not inspect Kunlun IDs. Request processing chooses
+the first usable requested type after continuous-action attempt reactions,
+including draws, so an unusable first type can fall back to another requested
+type without a second credit or speculative search preflight.
+
 ## Information model
 
 The opponent has perfect simulation information: both complete hands and exact

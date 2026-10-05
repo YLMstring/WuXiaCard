@@ -1265,6 +1265,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 	const CompiledAction &action,
 	const EventContext &event_context,
 	const ActionContext &action_context,
+	const ActionExecutionState &execution_state,
 	int32_t source_cell,
 	std::vector<int32_t> &exile_stack,
 	Resolution &resolution
@@ -1296,9 +1297,15 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 		|| !locate_card(value, target_card_index, zone, owner, logical_index)
 		|| zone == 2
 		|| (expected_owner != 0 && owner != expected_owner)
-		|| !can_change_powers(value, target_card_index)
+		|| (action.copy_from == CardRefOpcode::UNSUPPORTED && !can_change_powers(value, target_card_index))
 	) return ActionOutcome::NO_EFFECT;
 
+	int32_t copied_card = -1;
+	if (action.copy_from != CardRefOpcode::UNSUPPORTED) {
+		copied_card = resolve_action_card_reference(action.copy_from, event_context, action_context, execution_state);
+		int32_t copy_zone = -1, copy_owner = 0, copy_index = -1;
+		if (!locate_card(value, copied_card, copy_zone, copy_owner, copy_index) || copy_zone == 2) return ActionOutcome::NO_EFFECT;
+	}
 	int32_t amount = action.amount;
 	if (action.amount_is_hand_count) {
 		int32_t count_owner = 0;
@@ -1316,20 +1323,23 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 		}
 		amount = static_cast<int32_t>(value.zones[count_owner - 1].size());
 	}
-	if (amount == 0) {
+	if (amount == 0 && copied_card < 0) {
 		return action.amount_is_hand_count ? ActionOutcome::NO_EFFECT : ActionOutcome::UNSUPPORTED;
 	}
 	Array previous_powers;
 	Array resulting_powers;
 	bool all_zero = true;
+	bool changed = false;
 	for (int32_t direction = 0; direction < 4; ++direction) {
 		const int32_t previous = value.card_powers[target_card_index * 4 + direction];
-		const int32_t resulting = std::max(0, previous + amount);
+		const int32_t resulting = copied_card >= 0 ? value.card_powers[copied_card * 4 + direction] : std::max(0, previous + amount);
 		previous_powers.append(previous);
 		resulting_powers.append(resulting);
 		value.card_powers[target_card_index * 4 + direction] = resulting;
+		changed = changed || previous != resulting;
 		all_zero = all_zero && resulting == 0;
 	}
+	if (copied_card >= 0 && !changed) return ActionOutcome::NO_EFFECT;
 	Dictionary event;
 	event["type"] = StringName("powers_changed");
 	event["source_cell"] = source_cell;
@@ -1344,7 +1354,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::change_powers(
 	event["zone"] = zone == 0 ? StringName("board") : (zone == 1 ? StringName("hand") : (zone == 3 ? StringName("discard") : StringName("removed")));
 	event["logical_index"] = logical_index;
 	resolution.events.append(event);
-	if (amount < 0 && all_zero) {
+	if ((amount < 0 || copied_card >= 0) && all_zero) {
 		// 移除效果归属当前触发/主动能力；ability_source 仅用于追踪牌引用，可能继承自外层事件。
 		if (!exile_card(
 			value,
@@ -2071,6 +2081,24 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			}
 			return ActionOutcome::NO_EFFECT;
 		}
+		case ActionOpcode::REMOVE_OWNER_AURAS: {
+			const int32_t holder = action_context.ability_source_owner;
+			if (holder < 1 || holder > 2) return ActionOutcome::NO_EFFECT;
+			auto &auras = value.owner_auras[holder - 1];
+			bool removed = false;
+			for (auto it = auras.begin(); it != auras.end();) {
+				if (compiled_ability_pool[it->compiled_ability_index].aura_tag != action.aura_tag) { ++it; continue; }
+				Dictionary event;
+				event["type"] = StringName("owner_aura_removed");
+				event["owner_id"] = holder;
+				event["source_instance_id"] = value.card_instance_ids[it->source_card_index];
+				event["aura_handle"] = static_cast<int64_t>(it->handle);
+				resolution.events.append(event);
+				it = auras.erase(it);
+				removed = true;
+			}
+			return removed ? ActionOutcome::APPLIED : ActionOutcome::NO_EFFECT;
+		}
 		case ActionOpcode::GRANT_OWNER_AURA: {
 			if (
 				action_context.ability_source_owner < 1
@@ -2119,7 +2147,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			);
 		}
 		case ActionOpcode::CHANGE_POWERS:
-			return change_powers(value, group, action, event_context, action_context, action_source_cell, exile_stack, resolution);
+			return change_powers(value, group, action, event_context, action_context, execution_state, action_source_cell, exile_stack, resolution);
 		case ActionOpcode::SET_ATTACK_USED_POWERS: {
 			const int32_t target = event_context.attacker_card_index;
 			int32_t zone = -1;
@@ -2631,7 +2659,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				donor_context.action_subject_owner = donor_owner;
 				const ActionOutcome donor_outcome = change_powers(
 					value, group, donor_action, event_context, donor_context,
-					action_source_cell, exile_stack, resolution
+					execution_state, action_source_cell, exile_stack, resolution
 				);
 				if (donor_outcome != ActionOutcome::APPLIED) return donor_outcome;
 				CompiledAction receiver_action = donor_action;
@@ -2642,7 +2670,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 				receiver_context.action_subject_owner = receiver_owner;
 				return change_powers(
 					value, group, receiver_action, event_context, receiver_context,
-					action_source_cell, exile_stack, resolution
+					execution_state, action_source_cell, exile_stack, resolution
 				);
 			}
 			return ActionOutcome::NO_EFFECT;
@@ -2862,6 +2890,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::execute_action(
 			request.source_cell = source_cell;
 			request.amount = action.amount;
 			request.next_hand_play_from_discard = action.next_hand_play_from_discard;
+			request.activation_only = action.activation_only;
 			resolution.extra_play_requests.push_back(request);
 			return ActionOutcome::APPLIED;
 		}
@@ -3247,7 +3276,9 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 	int32_t existing_logical_index = -1;
 	bool existing_was_departed = false;
 	StringName card_id;
-	if (action.card_spec == CardSpecOpcode::TOP_DISCARD) {
+	if (action.card_spec == CardSpecOpcode::FRESH_CATALOG) {
+		card_id = action.card_id;
+	} else if (action.card_spec == CardSpecOpcode::TOP_DISCARD) {
 		existing_owner = resolve_relative_owner(value, action.summon_owner, action_context);
 		if (existing_owner != 1 && existing_owner != 2) return ActionOutcome::NO_EFFECT;
 		std::vector<int32_t> &discard = value.zones[existing_owner + 3];
@@ -3278,7 +3309,7 @@ DuelNativeCompactKernel::ActionOutcome DuelNativeCompactKernel::summon_card(
 			}
 		}
 	}
-	card_id = value.card_ids[referenced_card_index];
+	if (action.card_spec != CardSpecOpcode::FRESH_CATALOG) card_id = value.card_ids[referenced_card_index];
 	if (card_id.is_empty()) return ActionOutcome::NO_EFFECT;
 
 	int32_t target_cell = -1;

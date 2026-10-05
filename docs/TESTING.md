@@ -20,6 +20,15 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
 ## Suites
 
 - `test_card_catalog.gd` — schema, metadata, ability/trigger validation, instance normalization.
+- `test_kunlun_abilities.gd` — real catalog formations/filtered draws, sentinel
+  copying, diagonal/orthogonal exclusion, Jade movement and self-removal, shared
+  continuation cap/type fallback, pre-cap draw attempts for either owner,
+  tagged-aura isolation, compact slot 11, native search and malformed declarations.
+- `test_kunlun_integration.gd` — production controller entry, draw/copy/attack,
+  summon/exile/movement reconciliation, extra-activation label/input restrictions,
+  repeated invalid actions, inspection and actual opponent search worker. Run
+  with `-- --kunlun-visible` at 540x960 and Dummy audio for a five-cycle
+  normal-duration walkthrough and screenshot.
 - `test_deck_profile_store.gd` — default profile, validation/repair, schema
   migration through per-difficulty score schema 11, difficulty persistence,
   atomic saves, exchanges, unlock ordering, and save-failure rollback.

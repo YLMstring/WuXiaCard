@@ -246,7 +246,8 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 	int32_t zone,
 	int32_t logical_index,
 	ModifierOpcode opcode,
-	int32_t *out_value
+	int32_t *out_value,
+	int32_t required_flag
 ) const {
 	// 光环归牌手而不是来源牌所有。来源实例只用于 selector 的相对关系和展示；
 	// 来源牌翻面、移区或失去能力不会自动撤销已经授予牌手的光环。
@@ -303,7 +304,7 @@ bool DuelNativeCompactKernel::card_receives_aura_modifier(
 				)) continue;
 				const CompiledAbility &granted = compiled_ability_pool[aura.ability_pool_index];
 				for (const CompiledModifier &modifier : granted.modifiers) {
-					if (modifier.opcode != opcode) continue;
+					if (modifier.opcode != opcode || (required_flag != 0 && (modifier.value & required_flag) == 0)) continue;
 					found = true;
 					if (out_value != nullptr) *out_value = modifier.value;
 				}
@@ -347,6 +348,16 @@ bool DuelNativeCompactKernel::card_has_modifier(
 		out_value
 	)) found = true;
 	return found;
+}
+
+int32_t DuelNativeCompactKernel::extended_diagonal_flags(const NativeState &value, int32_t card_index, int32_t owner_id) const {
+	if (!has_extended_diagonal_modifiers) return 0;
+	const auto opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
+	const int32_t cell = find_board_card(value, card_index);
+	return ((card_modifier_has_flag(value, card_index, owner_id, opcode, 1)
+		|| card_receives_aura_modifier(value, card_index, owner_id, 0, cell, opcode, nullptr, 1)) ? 1 : 0)
+		| ((card_modifier_has_flag(value, card_index, owner_id, opcode, 2)
+		|| card_receives_aura_modifier(value, card_index, owner_id, 0, cell, opcode, nullptr, 2)) ? 2 : 0);
 }
 
 Array DuelNativeCompactKernel::get_board_defending_power_override_flags() const {
@@ -423,6 +434,9 @@ bool DuelNativeCompactKernel::empty_cell_in_card_attack_range(
 	const int32_t row_delta = target_cell / 3 - source_cell / 3;
 	const int32_t column_delta = target_cell % 3 - source_cell % 3;
 	const bool same_axis = row_delta == 0 || column_delta == 0;
+	const int32_t diagonal_flags = extended_diagonal_flags(value, source_card_index, source_owner);
+	if (same_axis && std::max(std::abs(row_delta), std::abs(column_delta)) == 1 && (diagonal_flags & 2) != 0) return false;
+	if (!same_axis && std::abs(row_delta) == 1 && std::abs(column_delta) == 1 && (diagonal_flags & 1) != 0) return true;
 	const bool unlimited_range = card_has_modifier(
 		value,
 		source_card_index,
@@ -704,7 +718,7 @@ std::vector<int32_t> DuelNativeCompactKernel::get_attack_targets(
 		ModifierOpcode::UNLIMITED_ATTACK_RANGE
 	);
 	std::vector<int32_t> candidates;
-	if (unlimited_range) {
+	if (unlimited_range || (extended_diagonal_flags(value, source_card_index, source_owner) & 1) != 0) {
 		for (int32_t cell = 0; cell < static_cast<int32_t>(value.board_card_indices.size()); ++cell) {
 			if (cell != source_cell) candidates.push_back(cell);
 		}
@@ -803,15 +817,20 @@ bool DuelNativeCompactKernel::is_target_in_attack_range(
 	const int32_t row_delta = target_row - source_row;
 	const int32_t column_delta = target_column - source_column;
 	const bool same_axis = row_delta == 0 || column_delta == 0;
+	const int32_t diagonal_flags = extended_diagonal_flags(value, source_card_index, source_owner);
+	const int32_t geometric_distance = std::max(std::abs(row_delta), std::abs(column_delta));
+	if (same_axis && geometric_distance == 1 && (diagonal_flags & 2) != 0) return false;
+	const bool adjacent_diagonal = !same_axis && geometric_distance == 1 && (diagonal_flags & 1) != 0;
 	const bool unlimited_range = card_has_modifier(
 		value,
 		source_card_index,
 		source_owner,
 		ModifierOpcode::UNLIMITED_ATTACK_RANGE
 	);
-	if (!same_axis && !unlimited_range) return false;
+	if (!same_axis && !unlimited_range && !adjacent_diagonal) return false;
 	if (
 		!same_axis
+		&& !adjacent_diagonal
 		&& !card_has_modifier(
 			value,
 			source_card_index,

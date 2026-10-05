@@ -127,7 +127,7 @@ func _test_nonempty_runtime_payload_round_trip() -> void:
 	state.end_turn_triggers_resolved = true
 	state.max_turns = 77
 	state.run_difficulty = 10
-	state.difficulty_eight_draw_consumed = true
+	state.extra_activation_only = true
 	state.state_version = 42
 
 	var compact: CompactState = _capture(state)

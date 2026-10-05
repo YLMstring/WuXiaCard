@@ -491,7 +491,8 @@ DuelNativeCompactKernel::get_legal_native_actions(
 		}), actions.end());
 	};
 	const int32_t hand_zone_index = owner_id - 1;
-	for (size_t hand_index = 0; hand_index < value.zones[hand_zone_index].size(); ++hand_index) {
+	const bool activation_only = owner_id == value.scalars[0] && value.scalars[5] > 0 && value.scalars[11] != 0;
+	for (size_t hand_index = 0; !activation_only && hand_index < value.zones[hand_zone_index].size(); ++hand_index) {
 		const int32_t card_index = value.zones[hand_zone_index][hand_index];
 		if (
 			card_index < 0
@@ -511,7 +512,7 @@ DuelNativeCompactKernel::get_legal_native_actions(
 			actions.push_back(action);
 		}
 	}
-	if (owner_id == value.scalars[0] && value.scalars[5] > 0) {
+	if (owner_id == value.scalars[0] && value.scalars[5] > 0 && !activation_only) {
 		apply_opponent_cell_restrictions();
 		return actions;
 	}

@@ -391,7 +391,10 @@ bool DuelNativeCompactKernel::owner_has_legal_action(
 	const NativeState &value,
 	int32_t owner_id
 ) const {
-	// 额外出牌期间若已无牌可出，该额外机会直接失效；不能改用主动能力代替。
+	if (owner_id == value.scalars[0] && value.scalars[5] > 0 && value.scalars[11] != 0) {
+		return board_has_enabled_activation_for_owner(value, owner_id);
+	}
+	// 普通额外出牌仍只能出牌；仅指定机会只允许合法指定。
 	if (owner_has_legal_play(value, owner_id)) return true;
 	if (owner_id == value.scalars[0] && value.scalars[5] > 0) return false;
 	return board_has_enabled_activation_for_owner(value, owner_id);
@@ -407,7 +410,7 @@ bool DuelNativeCompactKernel::is_terminal(const NativeState &value) const {
 	}
 	// turn_count 表示正在
 	// 开始的单方回合，所以完成第 100 回合后变为 101，条件必须是 > max_turns。
-	if (value.scalars[5] > 0 && owner_has_legal_play(value, value.scalars[0])) {
+	if (value.scalars[5] > 0 && owner_has_legal_action(value, value.scalars[0])) {
 		return false;
 	}
 	if (value.scalars[1] > value.scalars[7]) {
@@ -440,8 +443,8 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 	std::vector<int32_t> &exile_stack
 ) const {
 	// 请求尝试先触发规则事件，再由本回合一次额度决定是否真正获得机会。
-	Array source_instance_ids;
 	Array all_request_sources;
+	std::vector<Resolution::ExtraPlayRequest> candidates;
 	std::vector<Resolution::ExtraPlayRequest> pending_requests = requests;
 	for (size_t request_index = 0; request_index < pending_requests.size(); ++request_index) {
 		if (request_index >= 64) { resolution.supported = false; resolution.reason = "Extra-play request chain exceeded depth limit"; return; }
@@ -459,24 +462,34 @@ void DuelNativeCompactKernel::apply_extra_card_play_requests(
 			context.trigger_card_index = request.source_card_index;
 			context.trigger_cell = request.source_cell;
 			context.trigger_owner = moving_owner;
-			Resolution before = resolve_event(value, StringName("extra_card_play_granted"), context, exile_stack);
+			Resolution before = resolve_event(value, StringName("continuous_action_attempt"), context, exile_stack);
 			if (!before.supported) { resolution.supported = false; resolution.reason = before.reason; return; }
 			pending_requests.insert(pending_requests.end(), before.extra_play_requests.begin(), before.extra_play_requests.end());
 			append_resolution(resolution, before);
 			if (value.scalars[13] != 0) continue;
-			source_instance_ids.append(value.card_instance_ids[request.source_card_index]);
-			value.scalars[13] = 1;
-			value.scalars[5] = std::max(value.scalars[5], 1);
-			if (request.next_hand_play_from_discard) value.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = moving_owner;
+			candidates.push_back(request);
 		}
 	}
-	if (source_instance_ids.is_empty()) return;
+	// 所有尝试反应先完成，再从最终状态选择最早的可用类型。
+	const Resolution::ExtraPlayRequest *selected = nullptr;
+	for (const auto &candidate : candidates) {
+		const bool usable = candidate.activation_only
+			? board_has_enabled_activation_for_owner(value, moving_owner)
+			: owner_has_legal_play(value, moving_owner);
+		if (usable) { selected = &candidate; break; }
+	}
+	if (selected == nullptr) return;
+	value.scalars[13] = 1;
+	value.scalars[5] = 1;
+	value.scalars[11] = selected->activation_only ? 1 : 0;
+	if (selected->next_hand_play_from_discard) value.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = moving_owner;
 	Dictionary granted;
 	granted["type"] = StringName("extra_card_play_granted");
 	granted["owner_id"] = moving_owner;
 	granted["amount"] = 1;
 	granted["request_count"] = all_request_sources.size();
 	granted["source_instance_ids"] = all_request_sources;
+	granted["activation_only"] = selected->activation_only;
 	resolution.events.append(granted);
 }
 
@@ -541,11 +554,12 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		exile_stack
 	);
 	if (!resolution.supported) return resolution;
-	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
+	if (value.scalars[5] > 0 && owner_has_legal_action(value, moving_owner)) {
 		value.scalars[0] = moving_owner;
 		return resolution;
 	}
 	value.scalars[5] = 0;
+	value.scalars[11] = 0;
 
 	if (value.scalars[6] == 0) {
 		EventContext end_context;
@@ -572,7 +586,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 	Resolution before_end = resolve_before_full_board_end(value, exile_stack);
 	if (!before_end.supported) return before_end;
 	append_resolution(resolution, before_end);
-	if (value.scalars[5] > 0 && owner_has_legal_play(value, moving_owner)) {
+	if (value.scalars[5] > 0 && owner_has_legal_action(value, moving_owner)) {
 		value.scalars[0] = moving_owner;
 		return resolution;
 	}
@@ -621,7 +635,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::finish_action(
 		Resolution empty_before_end = resolve_before_full_board_end(value, exile_stack);
 		if (!empty_before_end.supported) return empty_before_end;
 		append_resolution(resolution, empty_before_end);
-		if (value.scalars[5] > 0 && owner_has_legal_play(value, turn_owner)) {
+		if (value.scalars[5] > 0 && owner_has_legal_action(value, turn_owner)) {
 			return resolution;
 		}
 		value.scalars[5] = 0;
@@ -643,6 +657,7 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::complete_owner_turn
 	value.scalars[ACTIVE_OWNER_FLIPPED_ENEMY_THIS_TURN_SCALAR] = 0;
 	value.scalars[6] = 0;
 	value.scalars[13] = 0;
+	value.scalars[11] = 0;
 	value.scalars[PLAYER_SPECIAL_SUMMONS_SCALAR] = 0;
 	value.scalars[OPPONENT_SPECIAL_SUMMONS_SCALAR] = 0;
 	value.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] = 0;
@@ -683,7 +698,7 @@ Dictionary DuelNativeCompactKernel::to_variant_payload(const NativeState &value)
 	// 只在把结果交回 GDScript 时重新物化能力池和压制池；搜索子节点始终保留
 	// 编译索引与运行时 entry，避免每个节点复制嵌套声明。
 	Dictionary payload;
-	payload["format_version"] = 2;
+	payload["format_version"] = 3;
 	payload["scalars"] = to_packed_int32_array(value.scalars);
 	payload["board_card_indices"] = to_packed_int32_array(value.board_card_indices);
 	payload["board_owners"] = to_packed_byte_array(value.board_owners);

@@ -13,7 +13,7 @@ const Rules = preload("res://scripts/duel_rules.gd")
 const StateData = preload("res://scripts/duel_state.gd")
 const Catalog = preload("res://scripts/card_catalog.gd")
 
-const FORMAT_VERSION: int = 2
+const FORMAT_VERSION: int = 3
 const EMPTY_CARD_INDEX: int = -1
 const EMPTY_DECK_DRAW_CARD_ID: StringName = &"TaiZuChangQuan"
 
@@ -47,7 +47,7 @@ const SCALAR_MAX_TURNS: int = 7
 const SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER: int = 8
 const SCALAR_OPPONENT_FAVORITE_CARD_INDEX: int = 9
 const SCALAR_RUN_DIFFICULTY: int = 10
-const SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED: int = 11
+const SCALAR_EXTRA_ACTIVATION_ONLY: int = 11
 const SCALAR_STATE_VERSION: int = 12
 const SCALAR_EXTRA_CARD_PLAY_GRANTED_THIS_TURN: int = 13
 const SCALAR_PLAYER_SPECIAL_SUMMONS: int = 14
@@ -178,8 +178,8 @@ func restore() -> StateData:
 	)
 	restored.max_turns = scalars[SCALAR_MAX_TURNS]
 	restored.run_difficulty = scalars[SCALAR_RUN_DIFFICULTY]
-	restored.difficulty_eight_draw_consumed = bool(
-		scalars[SCALAR_DIFFICULTY_EIGHT_DRAW_CONSUMED]
+	restored.extra_activation_only = bool(
+		scalars[SCALAR_EXTRA_ACTIVATION_ONLY]
 	)
 	restored.state_version = scalars[SCALAR_STATE_VERSION]
 	restored.next_hand_play_from_discard_owner = scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER]
@@ -231,6 +231,7 @@ func is_structurally_valid() -> bool:
 	var fixed_shapes_valid: bool = (
 		capture_error.is_empty()
 		and scalars.size() == SCALAR_COUNT
+		and scalars[SCALAR_EXTRA_ACTIVATION_ONLY] in [0, 1]
 		and scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER] >= 0
 		and scalars[SCALAR_NEXT_HAND_PLAY_FROM_DISCARD_OWNER] <= 2
 		and scalars[SCALAR_OPPONENT_FAVORITE_CARD_INDEX] >= EMPTY_CARD_INDEX
@@ -466,7 +467,7 @@ static func exact_state_payload(state: StateData) -> Dictionary:
 		"owner_auras_by_owner": state.owner_auras_by_owner,
 		"next_owner_aura_handle": state.next_owner_aura_handle,
 		"run_difficulty": state.run_difficulty,
-		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
+		"extra_activation_only": state.extra_activation_only,
 		"state_version": state.state_version,
 	}
 
@@ -484,7 +485,7 @@ func _capture_state(state: StateData) -> bool:
 		state.next_hand_play_from_discard_owner,
 		EMPTY_CARD_INDEX,
 		state.run_difficulty,
-		int(state.difficulty_eight_draw_consumed),
+		int(state.extra_activation_only),
 		state.state_version,
 		int(state.extra_card_play_granted_this_turn),
 		int(state.special_summons_by_owner.get(Rules.PLAYER_OWNER, 0)),
@@ -647,6 +648,7 @@ func _collect_fresh_card_target_ids(
 	if StringName(value_dictionary.get("type", &"")) in [
 		Catalog.ACTION_TRANSFORM_CARD,
 		Catalog.ACTION_ADD_CARD_TO_HAND,
+		Catalog.ACTION_SUMMON_CARD,
 	]:
 		target_card_ids.append(StringName(value_dictionary.get("card_id", &"")))
 	for nested_value: Variant in value_dictionary.values():

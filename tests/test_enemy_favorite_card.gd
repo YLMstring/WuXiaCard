@@ -79,7 +79,7 @@ func _test_compact_and_identity() -> void:
 	_check(compact.scalars.size() == 16 and compact.scalars[8] == 2, "Discard-source marker reuses slot eight")
 	_check(compact.scalars[9] >= 0 and compact.card_instance_ids[compact.scalars[9]] == &"favorite", "Slot nine names the exact instance")
 	_check(not compact.side_payload.has("next_hand_play_from_discard_owner"), "No duplicate discard-source storage")
-	_check(compact.to_variant_payload().format_version == 2, "New ABI is explicitly versioned")
+	_check(compact.to_variant_payload().format_version == Compact.FORMAT_VERSION, "New ABI is explicitly versioned")
 	_check(Keys.build(compact.restore()) == Keys.build(state), "Both reused slots round-trip losslessly")
 	var plain := state.duplicate_state() as State
 	plain.set("opponent_favorite_instance_id", &"")

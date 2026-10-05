@@ -14,7 +14,8 @@ bool DuelNativeCompactKernel::validate_shape() {
 		last_error = "Compact scalar count must be 16";
 		return false;
 	}
-	if (state.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] < 0
+	if (state.scalars[11] < 0 || state.scalars[11] > 1
+		|| state.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] < 0
 		|| state.scalars[NEXT_HAND_PLAY_FROM_DISCARD_OWNER_SCALAR] > 2
 		|| state.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] < -1
 		|| state.scalars[OPPONENT_FAVORITE_CARD_INDEX_SCALAR] >= static_cast<int32_t>(card_count)) {
@@ -483,7 +484,10 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		compiled.opcode = ActionOpcode::CHANGE_POWERS;
 		compiled.card_ref = compile_card_ref(action.get("card", StringName()));
 		const Variant amount = action.get("amount", Variant());
-		if (amount.get_type() == Variant::INT && static_cast<int64_t>(amount) != 0) {
+		if (action.has("copy_from")) {
+			compiled.copy_from = compile_card_ref(action["copy_from"]);
+			if (action.has("amount") || compiled.copy_from == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
+		} else if (amount.get_type() == Variant::INT && static_cast<int64_t>(amount) != 0) {
 			compiled.amount = static_cast<int32_t>(static_cast<int64_t>(amount));
 		} else if (amount.get_type() == Variant::DICTIONARY) {
 			const Dictionary spec = amount;
@@ -599,10 +603,15 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		}
 	} else if (
 		type == StringName("grant_owner_aura")
-		&& action.size() == 2 + generic_field_count
+		&& action.size() == 2 + generic_field_count + (action.has("tag") ? 1 : 0)
 	) {
 		compiled.opcode = ActionOpcode::GRANT_OWNER_AURA;
-		const Variant aura = action.get("aura", Variant());
+		Variant aura = action.get("aura", Variant());
+		if (action.has("tag")) {
+			const Variant tag = action["tag"];
+			if ((tag.get_type() != Variant::STRING && tag.get_type() != Variant::STRING_NAME) || String(tag).is_empty()) compiled.declaration_valid = false;
+			if (aura.get_type() == Variant::DICTIONARY) { Dictionary tagged = Dictionary(aura).duplicate(true); tagged["tag"] = tag; aura = tagged; }
+		}
 		if (aura.get_type() == Variant::DICTIONARY && !Dictionary(aura).is_empty()) {
 			compiled.granted_ability_index = intern_compiled_ability(aura, true);
 			if (!compiled_ability_pool[compiled.granted_ability_index].declaration_valid) {
@@ -611,6 +620,11 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		} else {
 			compiled.declaration_valid = false;
 		}
+	} else if (type == StringName("remove_owner_auras") && action.size() == 2 + generic_field_count) {
+		compiled.opcode = ActionOpcode::REMOVE_OWNER_AURAS;
+		const Variant tag = action.get("tag", Variant());
+		if ((tag.get_type() != Variant::STRING && tag.get_type() != Variant::STRING_NAME) || String(tag).is_empty()) compiled.declaration_valid = false;
+		else compiled.aura_tag = StringName(tag);
 	} else if (
 		type == StringName("transform_card")
 		&& (action.size() == 3 + generic_field_count || action.size() == 4 + generic_field_count)
@@ -879,12 +893,17 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 		) compiled.declaration_valid = false;
 	} else if (
 		type == StringName("grant_extra_card_play")
-		&& (action.size() == 2 + generic_field_count || action.size() == 3 + generic_field_count
-			|| action.size() == 4 + generic_field_count)
+		&& action.size() == 2 + generic_field_count + (action.has("next_hand_play_source") ? 1 : 0)
+			+ (action.has("card") ? 1 : 0) + (action.has("activation_only") ? 1 : 0)
 		&& Variant(action.get("amount", 0)).get_type() == Variant::INT
 		&& static_cast<int64_t>(action.get("amount", 0)) > 0
 	) {
 		compiled.opcode = ActionOpcode::GRANT_EXTRA_CARD_PLAY;
+		if (action.has("activation_only")) {
+			if (Variant(action["activation_only"]).get_type() != Variant::BOOL) compiled.declaration_valid = false;
+			else compiled.activation_only = static_cast<bool>(action["activation_only"]);
+			if (compiled.activation_only && action.has("next_hand_play_source")) compiled.declaration_valid = false;
+		}
 		compiled.amount = static_cast<int32_t>(static_cast<int64_t>(action.get("amount", 0)));
 		if (action.has("next_hand_play_source")) {
 			compiled.next_hand_play_from_discard = (
@@ -946,7 +965,11 @@ DuelNativeCompactKernel::CompiledAction DuelNativeCompactKernel::compile_action(
 			}
 		}
 		const Variant card_value = action.get("card", Variant());
-		if (card_value.get_type() == Variant::STRING_NAME || card_value.get_type() == Variant::STRING) {
+		if (action.has("card_id")) {
+			const Variant id = action["card_id"];
+			if (action.has("card") || (id.get_type() != Variant::STRING && id.get_type() != Variant::STRING_NAME) || String(id).is_empty()) compiled.declaration_valid = false;
+			else { compiled.card_spec = CardSpecOpcode::FRESH_CATALOG; compiled.card_id = StringName(id); }
+		} else if (card_value.get_type() == Variant::STRING_NAME || card_value.get_type() == Variant::STRING) {
 			compiled.card_spec = CardSpecOpcode::EXISTING_REFERENCE;
 			compiled.summon_card_ref = compile_card_ref(StringName(card_value));
 			if (compiled.summon_card_ref == CardRefOpcode::UNSUPPORTED) compiled.declaration_valid = false;
@@ -1051,6 +1074,11 @@ DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modif
 		);
 	} else if (type == StringName("enemy_attacks_all") && modifier.size() == 1) {
 		compiled.opcode = ModifierOpcode::ENEMY_ATTACKS_ALL;
+	} else if (type == StringName("non_orthogonal_attack_any_axis") && modifier.size() == 1 + (modifier.has("allow_diagonal_adjacent") ? 1 : 0) + (modifier.has("forbid_orthogonal_adjacent") ? 1 : 0)
+		&& Variant(modifier.get("allow_diagonal_adjacent", false)).get_type() == Variant::BOOL
+		&& Variant(modifier.get("forbid_orthogonal_adjacent", false)).get_type() == Variant::BOOL) {
+		compiled.opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
+		compiled.value = (static_cast<bool>(modifier.get("allow_diagonal_adjacent", false)) ? 1 : 0) | (static_cast<bool>(modifier.get("forbid_orthogonal_adjacent", false)) ? 2 : 0);
 	} else if (modifier.size() == 1) {
 		if (type == StringName("attack_requires_other_ally")) compiled.opcode = ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY;
 		else if (type == StringName("defending_power_uses_minimum_side")) compiled.opcode = ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE;
@@ -1201,11 +1229,16 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 		return compiled;
 	}
 	const Dictionary ability = value;
+	if (owner_aura && ability.has("tag")) {
+		const Variant tag = ability["tag"];
+		if ((tag.get_type() != Variant::STRING && tag.get_type() != Variant::STRING_NAME) || String(tag).is_empty()) compiled.declaration_valid = false;
+		else compiled.aura_tag = StringName(tag);
+	}
 	const Array ability_keys = ability.keys();
 	for (int64_t key_index = 0; key_index < ability_keys.size(); ++key_index) {
 		const StringName key = ability_keys[key_index];
 		const bool allowed = owner_aura
-			? (key == StringName("triggers") || key == StringName("modifiers") || key == StringName("auras"))
+			? (key == StringName("triggers") || key == StringName("modifiers") || key == StringName("auras") || key == StringName("tag"))
 			: (key == StringName("retained_on_flip") || key == StringName("triggers")
 				|| key == StringName("activation") || key == StringName("modifiers"));
 		if (!allowed) compiled.declaration_valid = false;
@@ -1229,6 +1262,7 @@ DuelNativeCompactKernel::CompiledAbility DuelNativeCompactKernel::compile_abilit
 			const Array modifiers = modifiers_value;
 			for (int64_t index = 0; index < modifiers.size(); ++index) {
 				const CompiledModifier modifier = compile_modifier(modifiers[index]);
+				if (modifier.opcode == ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS && modifier.value != 0) has_extended_diagonal_modifiers = true;
 				if (modifier.opcode == ModifierOpcode::UNSUPPORTED) {
 					compiled.declaration_valid = false;
 				}
@@ -1316,6 +1350,7 @@ void DuelNativeCompactKernel::compile_ability_sets() {
 	// 只修改各实例的 entry 列表，不会复制或修改能力声明的嵌套内容。
 	compiled_ability_sets.clear();
 	compiled_ability_pool.clear();
+	has_extended_diagonal_modifiers = false;
 	ability_declaration_pool.clear();
 	ability_declaration_owner_aura.clear();
 	compiled_ability_sets.reserve(static_cast<size_t>(state.active_ability_set_pool.size()));

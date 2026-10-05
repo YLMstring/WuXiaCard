@@ -179,6 +179,7 @@ class DuelNativeCompactKernel : public RefCounted {
 		DEPART_CARD_FOR_RESUMMON,
 		SET_ATTACK_USED_POWERS,
 		GRANT_OWNER_AURA,
+		REMOVE_OWNER_AURAS,
 		UNSUPPORTED,
 	};
 
@@ -224,6 +225,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	enum class CardSpecOpcode : uint8_t {
 		EXISTING_REFERENCE,
 		FRESH_COPY,
+		FRESH_CATALOG,
 		PERFECT_COPY,
 		TOP_DISCARD,
 		UNSUPPORTED,
@@ -358,6 +360,9 @@ class DuelNativeCompactKernel : public RefCounted {
 		bool repeat_attack = false;
 		bool prefer_outside_attacker_range = false;
 		bool next_hand_play_from_discard = false;
+		bool activation_only = false;
+		CardRefOpcode copy_from = CardRefOpcode::UNSUPPORTED;
+		StringName aura_tag;
 		bool only_if_absent = false;
 		bool include_acquired_abilities = false;
 		int32_t excluded_ability_index = -1;
@@ -418,6 +423,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	};
 
 	struct CompiledAbility {
+		StringName aura_tag;
 		bool declaration_valid = true;
 		bool retained_on_flip = false;
 		bool has_activation = false;
@@ -572,6 +578,7 @@ class DuelNativeCompactKernel : public RefCounted {
 			int32_t source_cell = -1;
 			int32_t amount = 0;
 			bool next_hand_play_from_discard = false;
+			bool activation_only = false;
 		};
 		bool supported = true;
 		String reason;
@@ -869,6 +876,7 @@ class DuelNativeCompactKernel : public RefCounted {
 	NativeState state;
 	std::vector<CompiledAbilitySet> compiled_ability_sets;
 	std::vector<CompiledAbility> compiled_ability_pool;
+	bool has_extended_diagonal_modifiers = false;
 	std::vector<Variant> ability_declaration_pool;
 	std::vector<bool> ability_declaration_owner_aura;
 	std::vector<FreshCardPrototype> fresh_card_prototypes;
@@ -1238,8 +1246,10 @@ private:
 		int32_t zone,
 		int32_t logical_index,
 		ModifierOpcode opcode,
-		int32_t *out_value = nullptr
+		int32_t *out_value = nullptr,
+		int32_t required_flag = 0
 	) const;
+	int32_t extended_diagonal_flags(const NativeState &value, int32_t card_index, int32_t owner_id) const;
 	bool card_modifier_has_flag(
 		const NativeState &value,
 		int32_t card_index,
@@ -1414,6 +1424,7 @@ private:
 		const CompiledAction &action,
 		const EventContext &event_context,
 		const ActionContext &action_context,
+		const ActionExecutionState &execution_state,
 		int32_t source_cell,
 		std::vector<int32_t> &exile_stack,
 		Resolution &resolution

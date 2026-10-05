@@ -34,7 +34,7 @@ var enabled_effect_gates_by_owner: Dictionary = {}
 var owner_auras_by_owner: Dictionary = {}
 var next_owner_aura_handle: int = 1
 var run_difficulty: int = 0
-var difficulty_eight_draw_consumed: bool = false
+var extra_activation_only: bool = false
 var state_version: int = 0
 
 
@@ -47,7 +47,7 @@ func _init(
 	player_deck: Array = [],
 	opponent_deck: Array = [],
 	new_run_difficulty: int = 0,
-	new_difficulty_eight_draw_consumed: bool = false
+	new_extra_activation_only: bool = false
 ) -> void:
 	board = new_board.duplicate(true)
 	hands = {
@@ -91,7 +91,7 @@ func _init(
 	active_player = new_active_player
 	turn_count = new_turn_count
 	run_difficulty = clampi(new_run_difficulty, 0, 10)
-	difficulty_eight_draw_consumed = new_difficulty_eight_draw_consumed
+	extra_activation_only = new_extra_activation_only
 
 
 func get_hand(owner_id: int) -> Array:
@@ -202,7 +202,7 @@ func duplicate_state() -> DuelState:
 	copied.turn_count = turn_count
 	copied.active_owner_flipped_enemy_this_turn = active_owner_flipped_enemy_this_turn
 	copied.run_difficulty = run_difficulty
-	copied.difficulty_eight_draw_consumed = difficulty_eight_draw_consumed
+	copied.extra_activation_only = extra_activation_only
 	copied.max_turns = max_turns
 	copied.active_abilities = active_abilities.duplicate()
 	copied.effect_queue = effect_queue.duplicate(true)
@@ -236,7 +236,7 @@ func duplicate_state_deep_reference() -> DuelState:
 		decks.get(Rules.PLAYER_OWNER, []),
 		decks.get(Rules.OPPONENT_OWNER, []),
 		run_difficulty,
-		difficulty_eight_draw_consumed
+		extra_activation_only
 	) as DuelState
 	copied.discard_piles = discard_piles.duplicate(true)
 	copied.removed_cards = removed_cards.duplicate(true)

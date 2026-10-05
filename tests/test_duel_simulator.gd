@@ -125,8 +125,7 @@ func _test_difficulty_eight_draw_effect_is_retired() -> void:
 	var next_state: State = transition.get("state", state)
 	_check(bool(transition.get("valid", false)), "Difficulty-eight retired-draw fixture plays normally")
 	_check(
-		next_state.get_hand(Rules.OPPONENT_OWNER).size() == 1
-		and not next_state.difficulty_eight_draw_consumed,
+		next_state.get_hand(Rules.OPPONENT_OWNER).size() == 1,
 		"Difficulty eight no longer refills a one-card enemy hand"
 	)
 	_check(
@@ -2308,7 +2307,10 @@ func _test_FeiTian5_accepts_allied_board_blade() -> void:
 	}
 	var state := State.new(
 		board,
-		[Rules.make_card("Board blade followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER)],
+		[
+			Rules.make_card("Board blade followup", "续", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+			Rules.make_card("Board blade extra play", "额", [1, 1, 1, 1], [], Rules.PLAYER_OWNER),
+		],
 		[],
 		Rules.PLAYER_OWNER
 	)
@@ -2319,7 +2321,7 @@ func _test_FeiTian5_accepts_allied_board_blade() -> void:
 		"An allied board blade satisfies FeiTian5's requirement"
 	)
 	_check(
-		next_state.active_player == Rules.PLAYER_OWNER,
+		next_state.active_player == Rules.PLAYER_OWNER and next_state.extra_card_plays_remaining == 1,
 		"The board-blade match keeps FeiTian5's owner active for the extra play"
 	)
 
@@ -2433,7 +2435,8 @@ func _test_unusable_extra_turn_expires() -> void:
 	)
 	var transition: Dictionary = Simulator.apply_action(state, Action.make_play(0, 0))
 	var next_state: State = transition["state"] as State
-	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 1, "End turn still announces the unusable extra-card-play grant")
+	_check(_count_events(transition.get("events", []), &"extra_card_play_granted") == 0, "Unusable extra type does not announce a successful grant")
+	_check(_count_events(transition.get("events", []), &"ability_triggered") >= 1, "FeiTian still attempts the grant with an allied board blade")
 	_check(next_state.active_player == Rules.OPPONENT_OWNER, "Extra card play expires when its owner has no hand card")
 
 

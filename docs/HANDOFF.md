@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-10-04
+Updated: 2026-10-05
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,43 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+Kunlun's 13 previously empty card ability arrays are now implemented; the four
+JinZhen aliases retain their existing rules. YinYang formations draw filtered
+cards, buff draws only while on board, exile and generate Bagua through the
+normal capped summon lifecycle. Rain grants tagged adjacent-diagonal attack
+rules; its activation removes all own matching auras before the chosen ally
+attacks. Silent copies current ordered powers and grants an activation-only
+continuation with normal ki cost. Jade's movement triggers flip nearby enemies
+before self-flip/exile. Kunlun remains card metadata, without a selectable sect.
+
+Both continuation types emit `continuous_action_attempt` before the shared cap,
+so KongBi3/4 draw even when a grant is already exhausted. After all reactions,
+the first requested type with actual legal actions wins; an unusable type can
+fall back to another requested type. A request with no usable type emits no
+successful-grant hint and consumes no credit. Compact format 3 still uses 16
+scalars: slot 11 now stores `extra_activation_only`, replacing the retired
+difficulty-eight marker. Native legality, copies, undo/replay and keys preserve
+the restriction. Duel snapshots are process-local; no player-save migration.
+Complete declarations and exact arrays:
+`docs/superpowers/specs/2026-10-05-kunlun-cards-design.md`.
+
+Kunlun verification: 234 rules checks and 33 controller integration checks;
+muted 540x960 normal-duration five-cycle walkthrough passes 149 checks, including
+actual opponent worker activation, repeated invalid hand input and rendered
+state reconciliation, with clean stderr. Both Windows Release template ABIs
+build. Independent read-only review finds no substantive remaining issue.
+The first final suite passes 91/92: two old simulator assertions expected an
+unusable extra-play grant. The board-blade fixture now retains a follow-up hand
+card; the unusable case asserts attempt-without-success. Updated simulator passes
+354 checks. Final full rerun passes 92/92 suites in 297.70s with no logged errors.
+All five fixed-5000-node search fixtures
+keep identical action/score/traversal results. One initial timing pair suggested
++3–7% and was reported immediately; an isolated balanced eight-run follow-up
+with 60 samples/version measured old/new medians 0.3271325/0.3281315s (+0.31%),
+with mixed paired signs. No stable regression reproduced; no speedup claim.
+Evidence: `.summer/local/kunlun-20261005/` (retained old source/DLLs, logs,
+screenshot and interleaved fixed-5000-node comparisons).
 
 Opening random cards and ordinary victory/defeat rewards now exclude a candidate
 when any unlocked card has the same `glyph` but a different `sect`, across all

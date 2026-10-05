@@ -66,7 +66,7 @@ static func build_state(fixture: Dictionary) -> StateData:
 		_build_zone(decks.get(Rules.PLAYER_OWNER, []) as Array, Rules.PLAYER_OWNER),
 		_build_zone(decks.get(Rules.OPPONENT_OWNER, []) as Array, Rules.OPPONENT_OWNER),
 		int(fixture.get("difficulty", 0)),
-		bool(turn_data.get("difficulty_eight_draw_consumed", false))
+		bool(turn_data.get("extra_activation_only", false))
 	)
 	var discard: Dictionary = fixture.get("discard", {}) as Dictionary
 	var removed: Dictionary = fixture.get("removed", {}) as Dictionary
@@ -216,7 +216,7 @@ static func _base_fixture(
 			"extra_card_plays_remaining": 0,
 			"end_turn_triggers_resolved": false,
 			"max_turns": max_turns,
-			"difficulty_eight_draw_consumed": false,
+			"extra_activation_only": false,
 		},
 		"repetition_history": repetition_history,
 	}

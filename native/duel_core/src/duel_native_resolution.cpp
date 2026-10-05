@@ -149,7 +149,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_attack_requ
 				action_context.ability_source_card_index = request.attacker_card_index;
 				action_context.ability_source_owner = request.attacker_owner;
 				const int64_t power_event_index = resolution.events.size();
-				const ActionOutcome outcome = change_powers(value, group, action, context, action_context, attacker_cell, exile_stack, resolution);
+				const ActionExecutionState execution_state;
+				const ActionOutcome outcome = change_powers(value, group, action, context, action_context, execution_state, attacker_cell, exile_stack, resolution);
 				if (outcome == ActionOutcome::UNSUPPORTED) { resolution.supported = false; return resolution; }
 				if (outcome == ActionOutcome::APPLIED) {
 					Dictionary power_event = resolution.events[power_event_index];

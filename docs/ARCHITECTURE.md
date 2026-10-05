@@ -35,8 +35,7 @@ The simulator must remain authoritative. If live play and AI would resolve the s
   per-owner attack and special-summon counts, remaining extra card plays, the
   per-owner-turn grant latch, end-boundary state, pending hand-effect queue,
   last successful hand plays, ordered owner-held aura entries and their next
-  handle, active-run difficulty, a retained legacy
-  difficulty-eight latch kept only for compact/replay compatibility, persistent
+  handle, active-run difficulty, activation-only continuation restriction, persistent
   pending suppression counts, pending opponent-favorite instance identity,
   and state version.
 - `duel_action.gd` — pure action descriptor. Current action types are play and activate. It distinguishes source zone and target kind so future abilities can target board cells or hand slots. Activation actions use source-card `instance_id` plus catalog-ordered `activation_index`, never an ability ID.
@@ -659,7 +658,7 @@ each normal hand play consumes one entry per grantor name, retaining later
 duplicates. This is not a general decision/interrupt engine; `pending_choice`
 remains reserved.
 
-Compact format 2 retains 16 scalars. Reused slot 8 holds
+Compact format 3 retains 16 scalars. Reused slot 8 holds
 `next_hand_play_from_discard_owner` (0/1/2), and slot 9 holds the pending
 opponent favorite's stable card index (-1 when absent). Capture/restore maps
 the latter through `card_instance_ids`; `DuelState` stores its `instance_id`.
@@ -667,6 +666,23 @@ Both participate in state/search identity. Old slot-8/9 suppression migration
 is removed: duel snapshots are process-local, and loaders reject other format
 versions. `next_owner_aura_handle` remains a 64-bit native member serialized
 through `side_payload`.
+
+Reused slot 11 stores `extra_activation_only`; it replaces the retired
+`difficulty_eight_draw_consumed` runtime field. Play and activation continuations
+share slot 13's one-successful-grant-per-turn latch and slot 5's credit. Every
+request emits `continuous_action_attempt` before checking that latch. Once all
+attempt reactions finish, the first requested type with legal actions wins;
+unusable earlier types permit fallback to a later requested type. Native action
+enumeration and application enforce the selected type for humans and AI alike.
+Consumption and owner-turn boundaries clear the restriction. Copies, undo,
+replay and state keys carry it; process-local format-2 snapshots are rejected.
+
+Kunlun attack geometry extends the existing non-orthogonal modifier with
+optional adjacent-diagonal/forbidden-adjacent-orthogonal flags. A compiled-root
+impossibility guard bypasses these lookups when no declaration uses either flag.
+Tagged owner auras use the existing aura collection and handles; removal by tag
+does not create an additional state table. See the approved declarations in
+`docs/superpowers/specs/2026-10-05-kunlun-cards-design.md`.
 
 `DuelStateKey.build_compact()` remains the exact GDScript state fingerprint; it
 is not the branch representation. `DuelCompactState` is the one-time production

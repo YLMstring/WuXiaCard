@@ -25,7 +25,7 @@ const TRIGGER_CARD_SUMMONED: StringName = &"card_summoned"
 const TRIGGER_CARD_BEFORE_SUMMONED: StringName = &"card_before_summoned"
 const TRIGGER_CARD_AFTER_SUMMONED: StringName = &"card_after_summoned"
 const TRIGGER_CARD_AFTER_ATTACK: StringName = &"card_after_attack"
-const TRIGGER_EXTRA_CARD_PLAY_GRANTED: StringName = &"extra_card_play_granted"
+const TRIGGER_CONTINUOUS_ACTION_ATTEMPT: StringName = &"continuous_action_attempt"
 const TRIGGER_POWER_INCREASE_BATCH_FINISHED: StringName = &"power_increase_batch_finished"
 const TRIGGER_DUEL_STARTED: StringName = &"duel_started"
 const CARD_BE_ATTACKED: StringName = &"card_be_attacked"
@@ -143,6 +143,7 @@ const ACTION_ADD_PENDING_NON_RETAINED_SUPPRESSION: StringName = &"add_pending_no
 const ACTION_DEPART_CARD_FOR_RESUMMON: StringName = &"depart_card_for_resummon"
 const ACTION_TRANSFER_CARD_RESOURCE: StringName = &"transfer_card_resource"
 const ACTION_SET_ATTACK_USED_POWERS: StringName = &"set_attack_used_powers"
+const ACTION_REMOVE_OWNER_AURAS: StringName = &"remove_owner_auras"
 const ACTION_GRANT_OWNER_AURA: StringName = &"grant_owner_aura"
 const CARD_REF_ABILITY_SOURCE: StringName = &"ability_source"
 const CARD_REF_SELECTED_CARD: StringName = &"selected_card"
@@ -217,7 +218,7 @@ const KNOWN_TRIGGER_EVENTS: Array[StringName] = [
 	TRIGGER_CARD_BEFORE_SUMMONED,
 	TRIGGER_CARD_AFTER_SUMMONED,
 	TRIGGER_CARD_AFTER_ATTACK,
-	TRIGGER_EXTRA_CARD_PLAY_GRANTED,
+	TRIGGER_CONTINUOUS_ACTION_ATTEMPT,
 	TRIGGER_POWER_INCREASE_BATCH_FINISHED,
 	CARD_BE_ATTACKED,
 	CARD_BEFORE_EXILED,
@@ -341,6 +342,7 @@ const KNOWN_ACTIONS: Array[StringName] = [
 	ACTION_TRANSFER_CARD_RESOURCE,
 	ACTION_SET_ATTACK_USED_POWERS,
 	ACTION_GRANT_OWNER_AURA,
+	ACTION_REMOVE_OWNER_AURAS,
 ]
 const KNOWN_CARD_REFERENCES: Array[StringName] = [
 	CARD_REF_ABILITY_SOURCE,
@@ -3033,9 +3035,9 @@ const GUMU_YUNV_ENTER: Dictionary = {
 	}],
 }
 
-const GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT: Dictionary = {
+const GUMU_DRAW_BEFORE_CONTINUOUS_ACTION_ATTEMPT: Dictionary = {
 	"triggers": [{
-		"event": TRIGGER_EXTRA_CARD_PLAY_GRANTED,
+		"event": TRIGGER_CONTINUOUS_ACTION_ATTEMPT,
 		"conditions": [{"type": CONDITION_TURN_OWNER_IS_SELF}],
 		"actions": [{"type": ACTION_DRAW_CARDS, "amount": 1}],
 	}],
@@ -3106,6 +3108,216 @@ const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
 	}],
 }
 
+const KUNLUN_DRAW_POWER: Dictionary = {
+    "triggers": [{
+        "event": CARD_AFTER_DRAWN,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_ALLY}],
+        "actions": [{"type": ACTION_CHANGE_POWERS, "amount": 1,
+                     "card": CARD_REF_TRIGGER_CARD}],
+    }],
+}
+
+const KUNLUN_FORMATION_GENERATE: Dictionary = {
+    "type": ACTION_FOR_EACH_SELECTED_CARD,
+    "selector": {
+        "zones": [CARD_ZONE_BOARD],
+        "conditions": [
+            {"type": CONDITION_SELECTED_CARD_IS_ALLY},
+            {"type": CONDITION_SELECTED_CARD_WEAPON_IS, "weapon": "阵法"},
+        ],
+    },
+    "actions": [{
+        "type": ACTION_SUMMON_CARD,
+        "card_id": &"BaGuaFangWei",
+        "owner": OWNER_ABILITY_SOURCE,
+        "cell": {"type": CELL_REF_FIRST_ADJACENT_EMPTY,
+                 "card": CARD_REF_SELECTED_CARD},
+    }],
+}
+
+const KUNLUN_FORMATION_ENTRY_TWO: Dictionary = {
+    "triggers": [{
+        "event": TRIGGER_CARD_SUMMONED,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+        "actions": [
+            {"type": ACTION_DRAW_CARDS, "amount": 2, "weapon": "阵法"},
+            {"type": ACTION_EXILE_SELF},
+            KUNLUN_FORMATION_GENERATE,
+        ],
+    }],
+}
+
+const KUNLUN_FORMATION_ENTRY_FOUR: Dictionary = {
+    "triggers": [{
+        "event": TRIGGER_CARD_SUMMONED,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+        "actions": [
+            {"type": ACTION_DRAW_CARDS, "amount": 4, "weapon": "阵法"},
+            {"type": ACTION_EXILE_SELF},
+            KUNLUN_FORMATION_GENERATE,
+        ],
+    }],
+}
+
+const KUNLUN_DIAGONAL_ATTACK: Dictionary = {
+    "modifiers": [{
+        "type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS,
+        "allow_diagonal_adjacent": true,
+        "forbid_orthogonal_adjacent": true,
+    }],
+}
+
+const KUNLUN_DIAGONAL_SELF_ENTRY: Dictionary = {
+    "triggers": [{
+        "event": TRIGGER_CARD_AFTER_SUMMONED,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+        "actions": [{"type": ACTION_GRANT_ABILITY_TO_SELF,
+                     "ability": KUNLUN_DIAGONAL_ATTACK}],
+    }],
+}
+
+const KUNLUN_DIAGONAL_OWNER_AURA: Dictionary = {
+    "auras": [{
+        "selector": {
+            "zones": [CARD_ZONE_BOARD],
+            "conditions": [{"type": CONDITION_SELECTED_CARD_IS_ALLY}],
+        },
+        "ability": KUNLUN_DIAGONAL_ATTACK,
+    }],
+}
+
+const KUNLUN_DIAGONAL_OWNER_ENTRY: Dictionary = {
+    "triggers": [{
+        "event": TRIGGER_CARD_AFTER_SUMMONED,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+        "actions": [{
+            "type": ACTION_GRANT_OWNER_AURA,
+            "tag": &"diagonal_adjacent_attack",
+            "aura": KUNLUN_DIAGONAL_OWNER_AURA,
+        }],
+    }],
+}
+
+const KUNLUN_RESTORE_ATTACK_ACTIVATION: Dictionary = {
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_OTHER_ALLY_BOARD,
+        "costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+        "actions": [
+            {"type": ACTION_REMOVE_OWNER_AURAS,
+             "tag": &"diagonal_adjacent_attack"},
+            {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+             "card": CARD_REF_SELECTED_CARD},
+        ],
+    },
+}
+
+const KUNLUN_EXTRA_ACTIVATION: Dictionary = {
+    "triggers": [{
+        "event": TRIGGER_CARD_AFTER_SUMMONED,
+        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+        "actions": [{"type": ACTION_GRANT_EXTRA_CARD_PLAY,
+                     "amount": 1, "activation_only": true}],
+    }],
+}
+
+const KUNLUN_COPY_ATTACK_SELF: Dictionary = {
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_ADJACENT_ALLY_BOARD,
+        "costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+        "actions": [
+            {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
+             "card": CARD_REF_ABILITY_SOURCE},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+        ],
+    },
+}
+
+const KUNLUN_COPY_ATTACK_PAIR: Dictionary = {
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_ADJACENT_ALLY_BOARD,
+        "costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+        "actions": [
+            {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
+             "card": CARD_REF_ABILITY_SOURCE},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+            {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+             "card": CARD_REF_SELECTED_CARD},
+        ],
+    },
+}
+
+const KUNLUN_COPY_ATTACK_ADJACENT: Dictionary = {
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_ADJACENT_ALLY_BOARD,
+        "costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+        "actions": [
+            {"type": ACTION_CHANGE_POWERS, "copy_from": CARD_REF_SELECTED_CARD,
+             "card": CARD_REF_ABILITY_SOURCE},
+            {"type": ACTION_STANDARD_ATTACK_WITH_SELF},
+            {
+                "type": ACTION_FOR_EACH_SELECTED_CARD,
+                "selector": {
+                    "zones": [CARD_ZONE_BOARD],
+                    "conditions": [
+                        {"type": CONDITION_SELECTED_CARD_IS_ALLY},
+                        {"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+                    ],
+                },
+                "actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
+            },
+        ],
+    },
+}
+
+const KUNLUN_MOVE_FLIP_SELF: Dictionary = {
+    "triggers": [{
+        "event": CARD_AFTER_MOVED,
+        "conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+        "actions": [
+            {
+                "type": ACTION_FOR_EACH_SELECTED_CARD,
+                "selector": {
+                    "zones": [CARD_ZONE_BOARD],
+                    "conditions": [
+                        {"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+                        {"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+                    ],
+                },
+                "actions": [{"type": ACTION_FLIP_SELF,
+                             "new_owner": OWNER_ABILITY_SOURCE}],
+            },
+            {"type": ACTION_FLIP_SELF,
+             "new_owner": OWNER_OPPONENT_OF_ABILITY_SOURCE},
+        ],
+    }],
+}
+
+const KUNLUN_MOVE_EXILE_SELF: Dictionary = {
+    "triggers": [{
+        "event": CARD_AFTER_MOVED,
+        "conditions": [{"type": CONDITION_MOVING_CARD_IS_SELF}],
+        "actions": [
+            {
+                "type": ACTION_FOR_EACH_SELECTED_CARD,
+                "selector": {
+                    "zones": [CARD_ZONE_BOARD],
+                    "conditions": [
+                        {"type": CONDITION_SELECTED_CARD_IS_ENEMY},
+                        {"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE},
+                    ],
+                },
+                "actions": [{"type": ACTION_FLIP_SELF,
+                             "new_owner": OWNER_ABILITY_SOURCE}],
+            },
+            {"type": ACTION_EXILE_SELF},
+        ],
+    }],
+}
+
 const _CARD_DEFINITIONS: Dictionary = {
 	&"YinYangLiangYi2": {
 		"id": &"YinYangLiangYi2",
@@ -3117,7 +3329,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，抽两张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。",
 		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [KUNLUN_FORMATION_ENTRY_TWO],
 	},
 	&"YinYangLiangYi3": {
 		"id": &"YinYangLiangYi3",
@@ -3129,7 +3341,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，抽两张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。你抽牌时，令抽到的牌点数加一。",
 		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [KUNLUN_FORMATION_ENTRY_TWO, KUNLUN_DRAW_POWER],
 	},
 	&"YinYangLiangYi4": {
 		"id": &"YinYangLiangYi4",
@@ -3141,7 +3353,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场时，抽四张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。你抽牌时，令抽到的牌点数加一。",
 		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
 		"powers": [-1, -1, -1, -1],
-		"abilities": [],
+		"abilities": [KUNLUN_FORMATION_ENTRY_FOUR, KUNLUN_DRAW_POWER],
 	},
 	&"YuDaFeiHua1": {
 		"id": &"YuDaFeiHua1",
@@ -3153,7 +3365,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，我获得以下效果：我可以攻击斜向相邻的敌方，但不能攻击相邻敌方，攻击不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。",
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
-		"abilities": [],
+		"abilities": [KUNLUN_DIAGONAL_SELF_ENTRY],
 	},
 	&"YuDaFeiHua2": {
 		"id": &"YuDaFeiHua2",
@@ -3165,7 +3377,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，你获得以下效果：所有友方可以攻击斜向相邻的敌方，但不能攻击相邻敌方，攻击不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。",
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
-		"abilities": [],
+		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY],
 	},
 	&"YuDaFeiHua3": {
 		"id": &"YuDaFeiHua3",
@@ -3178,7 +3390,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_ACTIVATION],
 	},
 	&"YuDaFeiHua4": {
 		"id": &"YuDaFeiHua4",
@@ -3191,7 +3403,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [WANHUA_ENDING, KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_ACTIVATION],
 	},
 	&"WuShengWuSe1": {
 		"id": &"WuShengWuSe1",
@@ -3204,7 +3416,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "这招无声无色是昆仑派剑学中的绝招，必须两人同使，两人功力相若，内劲相同，当剑招之出，劲力恰恰相反，于是两柄长剑上所生的荡激之力、破空之声，一齐相互抵消。这路剑法本是用于夜战，黑暗中令对方难以听声辨器，事先绝无半分朕兆，白刃已然加身，但若白日用之背后偷袭，也令人难防难避。",
 		"powers": [-1, -1, -1, -1],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [KUNLUN_EXTRA_ACTIVATION, KUNLUN_COPY_ATTACK_SELF],
 	},
 	&"WuShengWuSe2": {
 		"id": &"WuShengWuSe2",
@@ -3217,7 +3429,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "这招无声无色是昆仑派剑学中的绝招，必须两人同使，两人功力相若，内劲相同，当剑招之出，劲力恰恰相反，于是两柄长剑上所生的荡激之力、破空之声，一齐相互抵消。这路剑法本是用于夜战，黑暗中令对方难以听声辨器，事先绝无半分朕兆，白刃已然加身，但若白日用之背后偷袭，也令人难防难避。",
 		"powers": [-1, -1, -1, -1],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [KUNLUN_EXTRA_ACTIVATION, KUNLUN_COPY_ATTACK_PAIR],
 	},
 	&"WuShengWuSe3": {
 		"id": &"WuShengWuSe3",
@@ -3230,7 +3442,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "这招无声无色是昆仑派剑学中的绝招，必须两人同使，两人功力相若，内劲相同，当剑招之出，劲力恰恰相反，于是两柄长剑上所生的荡激之力、破空之声，一齐相互抵消。这路剑法本是用于夜战，黑暗中令对方难以听声辨器，事先绝无半分朕兆，白刃已然加身，但若白日用之背后偷袭，也令人难防难避。",
 		"powers": [-1, -1, -1, -1],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON, KUNLUN_EXTRA_ACTIVATION, KUNLUN_COPY_ATTACK_PAIR],
 	},
 	&"WuShengWuSe4": {
 		"id": &"WuShengWuSe4",
@@ -3243,7 +3455,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "这招无声无色是昆仑派剑学中的绝招，必须两人同使，两人功力相若，内劲相同，当剑招之出，劲力恰恰相反，于是两柄长剑上所生的荡激之力、破空之声，一齐相互抵消。这路剑法本是用于夜战，黑暗中令对方难以听声辨器，事先绝无半分朕兆，白刃已然加身，但若白日用之背后偷袭，也令人难防难避。",
 		"powers": [-1, -1, -1, -1],
 		"starting_ki": 1,
-		"abilities": [],
+		"abilities": [GUMU_SUPPRESS_ENEMIES_BEFORE_SUMMON, KUNLUN_EXTRA_ACTIVATION, KUNLUN_COPY_ATTACK_ADJACENT],
 	},
 	&"YuSuiKunGang2a": {
 		"id": &"YuSuiKunGang2a",
@@ -3255,7 +3467,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我翻面。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
 		"powers": [4, 7, 7, 4],
-		"abilities": [],
+		"abilities": [JIANFA_ENTRY_MOVE, KUNLUN_MOVE_FLIP_SELF],
 	},
 	&"YuSuiKunGang3a": {
 		"id": &"YuSuiKunGang3a",
@@ -3267,7 +3479,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我移除。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
 		"powers": [4, 7, 7, 4],
-		"abilities": [],
+		"abilities": [JIANFA_ENTRY_MOVE, KUNLUN_MOVE_EXILE_SELF],
 	},
 	&"JinZhenDuJie1a": {
 		"id": &"JinZhenDuJie1a",
@@ -3483,7 +3695,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "每当你尝试连续行动前，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, GUMU_ALLY_ATTACK_EVASION],
+		"abilities": [GUMU_DRAW_BEFORE_CONTINUOUS_ACTION_ATTEMPT, GUMU_ALLY_ATTACK_EVASION],
 	},
 	&"KongBi4": {
 		"id": &"KongBi4",
@@ -3495,7 +3707,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "每当你尝试连续行动前，抽一张牌。锁定：友方被攻击时，向首个相邻空格移动，但攻击范围外的空格优先，若未能成功移动，将其移除。",
 		"flavor": "古墓派的神奇轻功，高纵低跃，在半空中夭矫腾挪，乃天下之最。",
 		"powers": [4, 2, 4, 2],
-		"abilities": [GUMU_DRAW_BEFORE_EXTRA_PLAY_ATTEMPT, GUMU_ALLY_ATTACK_EVASION_OR_EXILE],
+		"abilities": [GUMU_DRAW_BEFORE_CONTINUOUS_ACTION_ATTEMPT, GUMU_ALLY_ATTACK_EVASION_OR_EXILE],
 	},
 	&"TianLuoDiWang2": {
 		"id": &"TianLuoDiWang2",
@@ -7061,10 +7273,14 @@ static func _validate_owner_aura(
 	errors: Array[String]
 ) -> void:
 	for key: Variant in aura.keys():
-		if StringName(key) not in [&"triggers", &"modifiers", &"auras"]:
+		if StringName(key) not in [&"triggers", &"modifiers", &"auras", &"tag"]:
 			errors.append("Card %s owner aura has unsupported field %s" % [card_id, key])
 	if aura.is_empty():
 		errors.append("Card %s owner aura cannot be empty" % card_id)
+	if aura.has("tag"):
+		var tag: Variant = aura["tag"]
+		if (not tag is String and not tag is StringName) or str(tag).is_empty():
+			errors.append("Card %s owner aura tag must be a non-empty string" % card_id)
 	if aura.has("triggers"):
 		_validate_triggers(card_id, aura["triggers"], errors)
 	if aura.has("modifiers"):
@@ -7107,6 +7323,12 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 					"Card %s modifier %s requires a Boolean allow_intervening_enemy"
 					% [card_id, modifier_type]
 				)
+		if modifier_type == MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS:
+			for field: StringName in [&"allow_diagonal_adjacent", &"forbid_orthogonal_adjacent"]:
+				if modifier.has(field):
+					allowed_keys.append(field)
+					if typeof(modifier[field]) != TYPE_BOOL:
+						errors.append("Extended attack range flags must be Boolean")
 		if modifier_type == MODIFIER_OPPONENT_PLAY_CELL_ONLY_IF_NO_OTHER_ACTION:
 			allowed_keys.append(&"cell")
 			var cell_value: Variant = modifier.get("cell", null)
@@ -7453,15 +7675,24 @@ static func _validate_action(
 				"Card %s %s swap override must be the trigger card"
 				% [card_id, context_name]
 			)
+	if action_type == ACTION_GRANT_EXTRA_CARD_PLAY and action.has("activation_only"):
+		allowed_keys.append(&"activation_only")
+		if typeof(action.get("activation_only")) != TYPE_BOOL or (bool(action.get("activation_only")) and action.has("next_hand_play_source")):
+			errors.append("Activation-only grant requires Boolean flag and no discard-source override")
 	if action_type == ACTION_CHANGE_POWERS:
 		allowed_keys.append(&"amount")
+		allowed_keys.append(&"copy_from")
 		allowed_keys.append(&"card")
-		_validate_power_change_amount(
-			card_id,
-			context_name,
-			action.get("amount", null),
-			errors
-		)
+		if action.has("copy_from"):
+			if action.has("amount") or StringName(action.get("copy_from", &"")) not in KNOWN_CARD_REFERENCES:
+				errors.append("Power copy requires one known copy_from and no amount")
+		else:
+			_validate_power_change_amount(
+				card_id,
+				context_name,
+				action.get("amount", null),
+				errors
+			)
 		if StringName(action.get("card", &"")) not in KNOWN_CARD_REFERENCES:
 			errors.append(
 				"Card %s %s action %s requires a known card reference"
@@ -7688,7 +7919,12 @@ static func _validate_action(
 					"Card %s %s summon action requires a known owner reference"
 					% [card_id, context_name]
 				)
-		_validate_summon_card_spec(card_id, context_name, action.get("card", null), errors)
+		allowed_keys.append(&"card_id")
+		if action.has("card_id"):
+			if action.has("card") or typeof(action["card_id"]) not in [TYPE_STRING, TYPE_STRING_NAME] or not has_card(StringName(action["card_id"])):
+				errors.append("Summon requires a known card_id and no card")
+		else:
+			_validate_summon_card_spec(card_id, context_name, action.get("card", null), errors)
 		_validate_summon_cell_spec(card_id, context_name, action.get("cell", null), errors)
 	if action_type == ACTION_RESUMMON_CARD_IN_PLACE:
 		allowed_keys.append(&"card")
@@ -7731,6 +7967,10 @@ static func _validate_action(
 			errors.append("Card %s %s queue exclusion requires an ability Dictionary" % [card_id, context_name])
 		else:
 			_validate_ability(card_id, excluded_value as Dictionary, errors)
+	if action_type == ACTION_REMOVE_OWNER_AURAS or (action_type == ACTION_GRANT_OWNER_AURA and action.has("tag")):
+		allowed_keys.append(&"tag")
+		if typeof(action.get("tag", null)) not in [TYPE_STRING, TYPE_STRING_NAME] or String(action.get("tag", "")).is_empty():
+			errors.append("Owner aura tag must be a nonempty identifier")
 	if action_type == ACTION_GRANT_OWNER_AURA:
 		allowed_keys.append(&"aura")
 		var aura_value: Variant = action.get("aura", null)

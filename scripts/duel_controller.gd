@@ -1861,9 +1861,9 @@ func _power_total(powers: Array) -> int:
 	return total
 
 
-func _present_extra_card_play_event(_event: Dictionary) -> void:
+func _present_extra_card_play_event(event: Dictionary) -> void:
 	_presentation_trace.append(&"extra_card_play_granted")
-	turn_status.text = "额外出牌"
+	turn_status.text = "额外指定" if bool(event.get("activation_only", false)) else "额外出牌"
 	await extra_turn_vfx.play_pulse(
 		board_grid.get_global_rect(),
 		extra_card_play_status_duration,

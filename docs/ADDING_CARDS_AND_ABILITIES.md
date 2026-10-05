@@ -81,6 +81,35 @@ an affected card's composition must also be shown when their ordering matters.
 Non-card systems such as progression unlocks should instead document their exact
 ordered data flow and must not invent catalog primitives.
 
+## Kunlun Primitive Extensions
+
+`summon_card` accepts a known `card_id` instead of `card`, creating a catalog
+instance through the normal summon lifecycle and cap. The compact root captures
+catalog prototype closure before native search. `change_powers` accepts
+`copy_from` instead of `amount`, reading current top/right/bottom/left values.
+Copying may replace or copy four `-1` sentinels, leaves ki/ownership/abilities
+unchanged, and still removes a four-zero result. Identical values are a no-op.
+As with existing point replacement, this emits `amount = 0`; copying does not
+emit an additive point-gain batch reaction.
+
+`grant_extra_card_play` accepts `activation_only: true`. Both types trigger
+`continuous_action_attempt` before the shared successful-grant cap; do not use
+the retired rule event `extra_card_play_granted`. That name remains a
+presentation event, carrying `activation_only` for the controller's label.
+Attempt reactions can change legality: choose the first usable requested type
+only after those reactions. No second successful continuation is granted.
+
+`non_orthogonal_attack_any_axis` accepts optional Boolean
+`allow_diagonal_adjacent` / `forbid_orthogonal_adjacent` (both default false).
+Only orthogonal distance one is forbidden; other modifiers can retain longer
+orthogonal ranges. `grant_owner_aura` accepts a nonempty string `tag`;
+`remove_owner_auras` removes all of the source owner's matching tags, preserving
+other tags, the opposing owner and directly granted card abilities. Nested aura
+declarations preserve and validate tags too.
+
+See `docs/superpowers/specs/2026-10-05-kunlun-cards-design.md` for complete
+ability declarations and the exact arrays for all affected cards.
+
 ## Performance Gate
 
 Card design is also search-engine design: the simulator can resolve a card's

@@ -71,7 +71,7 @@ static func _state_payload(state: StateData) -> Dictionary:
 		"owner_auras_by_owner": state.owner_auras_by_owner,
 		"next_owner_aura_handle": state.next_owner_aura_handle,
 		"run_difficulty": state.run_difficulty,
-		"difficulty_eight_draw_consumed": state.difficulty_eight_draw_consumed,
+		"extra_activation_only": state.extra_activation_only,
 	}
 
 
