@@ -13,6 +13,7 @@ const ALL_SECT_IDS: Array[StringName] = [
 	&"SongShanPai",
 	&"QuanZhenPai",
 	&"GuMuPai",
+	&"KunLunPai",
 ]
 
 const _DEFINITION_FIELDS: Array[StringName] = [
