@@ -68,7 +68,7 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"sect": "泰山",
 		"tier": 5,
 		"min_random_difficulty": 0,
-		"weapon": "重剑/术数",
+		"weapon": "重剑",
 		"description": "泰山派擅长根据对手情况做出应对，稳扎稳打。击败天门解锁。",
 		"flavor": "泰山剑招以厚重沉稳见长，规矩谨严而又不失迅疾，犹似行云流水。",
 	},
@@ -126,6 +126,17 @@ const _SECT_DEFINITIONS: Dictionary = {
 		"weapon": "剑法/掌法/身法",
 		"description": "古墓派擅长通过卡牌配合形成巧妙连招，解除对手的防御。击败小龙女解锁。",
 		"flavor": "古墓派武学修习内功之法与一般武功大异，内功渐高，学者只身轻足健，出手快捷，于常人发出一招的时刻中可连发三四招，但招力却并不相应而增，因此剑法虽精，却不易伤敌。",
+	},
+	&"KunLunPai": {
+		"id": &"KunLunPai",
+		"glyph": "昆仑派",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "终南山",
+		"tier": 4,
+		"min_random_difficulty": 5,
+		"weapon": "轻剑/阵法/术数",
+		"description": "昆仑派有着独特的进攻方式，擅长解除对手的防御。击败何足道解锁。",
+		"flavor": "昆仑派威震西域，武学上有不传之秘，其剑法独树一帜，兼具沉雄轻灵之长。",
 	},
 }
 
