@@ -381,6 +381,9 @@ const KNOWN_MODIFIERS: Array[StringName] = [
 ]
 
 const ALL_CARD_IDS: Array[StringName] = [
+	&"YinYangLiangYi2",
+	&"YinYangLiangYi3",
+	&"YinYangLiangYi4",
 	&"YuDaFeiHua1",
 	&"YuDaFeiHua2",
 	&"YuDaFeiHua3",
@@ -3104,6 +3107,42 @@ const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
 }
 
 const _CARD_DEFINITIONS: Dictionary = {
+	&"YinYangLiangYi2": {
+		"id": &"YinYangLiangYi2",
+		"glyph": "阴阳两仪",
+		"picture": "res://pics/LKT010_386.png",
+		"sect": "昆仑派",
+		"tier": 2,
+		"weapon": "术数",
+		"description": "进场时，抽两张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。",
+		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [],
+	},
+	&"YinYangLiangYi3": {
+		"id": &"YinYangLiangYi3",
+		"glyph": "阴阳两仪",
+		"picture": "res://pics/LKT010_386.png",
+		"sect": "昆仑派",
+		"tier": 3,
+		"weapon": "术数",
+		"description": "进场时，抽两张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。你抽牌时，令抽到的牌点数加一。",
+		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [],
+	},
+	&"YinYangLiangYi4": {
+		"id": &"YinYangLiangYi4",
+		"glyph": "阴阳两仪",
+		"picture": "res://pics/LKT010_386.png",
+		"sect": "昆仑派",
+		"tier": 4,
+		"weapon": "术数",
+		"description": "进场时，抽四张阵法牌，将我移除，令所有友方阵法在其首个相邻空位生成八卦方位。你抽牌时，令抽到的牌点数加一。",
+		"flavor": "正反两仪刀剑之术，是从中国固有的河图洛书、以及伏羲文王的八卦方位中推演而得，其奥妙精微之处，若能深研到极致，比之西域的乾坤大挪移实有过之而无不及。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [],
+	},
 	&"YuDaFeiHua1": {
 		"id": &"YuDaFeiHua1",
 		"glyph": "雨打飞花",
