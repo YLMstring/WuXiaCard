@@ -3100,10 +3100,22 @@ const GUMU_TIANLUO_QUEUE_WITH_ACQUIRED: Dictionary = {
 }
 
 const _CARD_DEFINITIONS: Dictionary = {
+	&"YuDaFeiHua1": {
+		"id": &"YuDaFeiHua1",
+		"glyph": "雨打飞花",
+		"picture": "res://pics/LKT010_568.png",
+		"sect": "昆仑派",
+		"tier": 2,
+		"weapon": "轻剑",
+		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我翻面。",
+		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
+		"powers": [4, 6, 6, 4],
+		"abilities": [],
+	},
 	&"WuShengWuSe1": {
 		"id": &"WuShengWuSe1",
 		"glyph": "无声无色",
-		"picture": "res://pics/LKT010_531.png",
+		"picture": "res://pics/LKT010_397.png",
 		"sect": "昆仑派",
 		"tier": 1,
 		"weapon": "阵法",
@@ -3116,7 +3128,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"WuShengWuSe2": {
 		"id": &"WuShengWuSe2",
 		"glyph": "无声无色",
-		"picture": "res://pics/LKT010_531.png",
+		"picture": "res://pics/LKT010_397.png",
 		"sect": "昆仑派",
 		"tier": 2,
 		"weapon": "阵法",
@@ -3129,7 +3141,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"WuShengWuSe3": {
 		"id": &"WuShengWuSe3",
 		"glyph": "无声无色",
-		"picture": "res://pics/LKT010_531.png",
+		"picture": "res://pics/LKT010_397.png",
 		"sect": "昆仑派",
 		"tier": 3,
 		"weapon": "阵法",
@@ -3142,7 +3154,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 	&"WuShengWuSe4": {
 		"id": &"WuShengWuSe4",
 		"glyph": "无声无色",
-		"picture": "res://pics/LKT010_531.png",
+		"picture": "res://pics/LKT010_397.png",
 		"sect": "昆仑派",
 		"tier": 4,
 		"weapon": "阵法",
@@ -3161,7 +3173,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我翻面。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
-		"powers": [4, 6, 6, 4],
+		"powers": [4, 7, 7, 4],
 		"abilities": [],
 	},
 	&"YuSuiKunGang3a": {
@@ -3173,7 +3185,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"weapon": "轻剑",
 		"description": "进场后，若与直线上的敌方相距一个空位，移动至该空位。我移动后，将所有相邻敌方翻面，然后将我移除。",
 		"flavor": "昆仑派杀招，连人带剑，直扑入敌人怀中，乃是同归于尽，玉石俱焚的拼命打法。",
-		"powers": [4, 6, 6, 4],
+		"powers": [4, 7, 7, 4],
 		"abilities": [],
 	},
 	&"JinZhenDuJie1a": {
