@@ -1403,7 +1403,8 @@ private:
 		int32_t candidate_logical_index,
 		const CompiledSelector &selector,
 		const ActionContext &context,
-		bool &supported
+		bool &supported,
+		int32_t fixed_source_owner = 0
 	) const;
 	std::vector<int32_t> snapshot_selected_cards(
 		const NativeState &value,

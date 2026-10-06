@@ -3162,17 +3162,8 @@ const KUNLUN_FORMATION_ENTRY_FOUR: Dictionary = {
 const KUNLUN_DIAGONAL_ATTACK: Dictionary = {
     "modifiers": [{
         "type": MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS,
-        "allow_diagonal_adjacent": true,
+        "allow_diagonal_all": true,
         "forbid_orthogonal_adjacent": true,
-    }],
-}
-
-const KUNLUN_DIAGONAL_SELF_ENTRY: Dictionary = {
-    "triggers": [{
-        "event": TRIGGER_CARD_AFTER_SUMMONED,
-        "conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
-        "actions": [{"type": ACTION_GRANT_ABILITY_TO_SELF,
-                     "ability": KUNLUN_DIAGONAL_ATTACK}],
     }],
 }
 
@@ -3208,6 +3199,24 @@ const KUNLUN_RESTORE_ATTACK_ACTIVATION: Dictionary = {
              "tag": &"diagonal_adjacent_attack"},
             {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
              "card": CARD_REF_SELECTED_CARD},
+        ],
+    },
+}
+
+const KUNLUN_RESTORE_ATTACK_COPY_ACTIVATION: Dictionary = {
+    "activation": {
+        "input": ACTIVATION_DRAG_TO_TARGET,
+        "target_rule": TARGET_OTHER_ALLY_BOARD,
+        "costs": [{"type": ACTION_SPEND_KI, "amount": 1}],
+        "actions": [
+            {"type": ACTION_REMOVE_OWNER_AURAS,
+             "tag": &"diagonal_adjacent_attack"},
+            {"type": ACTION_STANDARD_ATTACK_WITH_CARD,
+             "card": CARD_REF_SELECTED_CARD},
+            {"type": ACTION_ADD_CARD_TO_HAND,
+             "card": {"type": CARD_SPEC_FRESH_COPY,
+                      "of": CARD_REF_ABILITY_SOURCE},
+             "recipient": RECIPIENT_SELF},
         ],
     },
 }
@@ -3365,7 +3374,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"description": "进场后，你获得以下效果：所有友方可以攻击所有对角线方向的敌方，但不能攻击相邻敌方，攻击不在同一直线上的牌时，只需彼此正对的两组点数中有一组较大。",
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
-		"abilities": [KUNLUN_DIAGONAL_SELF_ENTRY],
+		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY],
 	},
 	&"YuDaFeiHua2": {
 		"id": &"YuDaFeiHua2",
@@ -3378,7 +3387,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
 		"starting_ki": 1,
-		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY],
+		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_ACTIVATION],
 	},
 	&"YuDaFeiHua3": {
 		"id": &"YuDaFeiHua3",
@@ -3391,7 +3400,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
 		"starting_ki": 1,
-		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_ACTIVATION],
+		"abilities": [KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_COPY_ACTIVATION],
 	},
 	&"YuDaFeiHua4": {
 		"id": &"YuDaFeiHua4",
@@ -3404,7 +3413,7 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"flavor": "昆仑派的雨打飞花剑法，这一路剑走的全是斜势，飘逸无伦，但七八招斜势之中，偶尔又夹着一招正势，教人极难捉摸。",
 		"powers": [4, 7, 8, 3],
 		"starting_ki": 1,
-		"abilities": [WANHUA_ENDING, KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_ACTIVATION],
+		"abilities": [WANHUA_ENDING, KUNLUN_DIAGONAL_OWNER_ENTRY, KUNLUN_RESTORE_ATTACK_COPY_ACTIVATION],
 	},
 	&"WuShengWuSe1": {
 		"id": &"WuShengWuSe1",
@@ -7325,7 +7334,7 @@ static func _validate_modifiers(card_id: StringName, modifiers_value: Variant, e
 					% [card_id, modifier_type]
 				)
 		if modifier_type == MODIFIER_NON_ORTHOGONAL_ATTACK_ANY_AXIS:
-			for field: StringName in [&"allow_diagonal_adjacent", &"forbid_orthogonal_adjacent"]:
+			for field: StringName in [&"allow_diagonal_adjacent", &"allow_diagonal_all", &"forbid_orthogonal_adjacent"]:
 				if modifier.has(field):
 					allowed_keys.append(field)
 					if typeof(modifier[field]) != TYPE_BOOL:

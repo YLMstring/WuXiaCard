@@ -1074,11 +1074,14 @@ DuelNativeCompactKernel::CompiledModifier DuelNativeCompactKernel::compile_modif
 		);
 	} else if (type == StringName("enemy_attacks_all") && modifier.size() == 1) {
 		compiled.opcode = ModifierOpcode::ENEMY_ATTACKS_ALL;
-	} else if (type == StringName("non_orthogonal_attack_any_axis") && modifier.size() == 1 + (modifier.has("allow_diagonal_adjacent") ? 1 : 0) + (modifier.has("forbid_orthogonal_adjacent") ? 1 : 0)
+	} else if (type == StringName("non_orthogonal_attack_any_axis") && modifier.size() == 1 + (modifier.has("allow_diagonal_adjacent") ? 1 : 0) + (modifier.has("allow_diagonal_all") ? 1 : 0) + (modifier.has("forbid_orthogonal_adjacent") ? 1 : 0)
 		&& Variant(modifier.get("allow_diagonal_adjacent", false)).get_type() == Variant::BOOL
+		&& Variant(modifier.get("allow_diagonal_all", false)).get_type() == Variant::BOOL
 		&& Variant(modifier.get("forbid_orthogonal_adjacent", false)).get_type() == Variant::BOOL) {
 		compiled.opcode = ModifierOpcode::NON_ORTHOGONAL_ATTACK_ANY_AXIS;
-		compiled.value = (static_cast<bool>(modifier.get("allow_diagonal_adjacent", false)) ? 1 : 0) | (static_cast<bool>(modifier.get("forbid_orthogonal_adjacent", false)) ? 2 : 0);
+		compiled.value = (static_cast<bool>(modifier.get("allow_diagonal_adjacent", false)) ? 1 : 0)
+			| (static_cast<bool>(modifier.get("forbid_orthogonal_adjacent", false)) ? 2 : 0)
+			| (static_cast<bool>(modifier.get("allow_diagonal_all", false)) ? 4 : 0);
 	} else if (modifier.size() == 1) {
 		if (type == StringName("attack_requires_other_ally")) compiled.opcode = ModifierOpcode::ATTACK_REQUIRES_OTHER_ALLY;
 		else if (type == StringName("defending_power_uses_minimum_side")) compiled.opcode = ModifierOpcode::DEFENDING_POWER_USES_MINIMUM_SIDE;

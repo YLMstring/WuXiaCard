@@ -882,7 +882,8 @@ bool DuelNativeCompactKernel::selector_conditions_match(
 	int32_t candidate_logical_index,
 	const CompiledSelector &selector,
 	const ActionContext &context,
-	bool &supported
+	bool &supported,
+	int32_t fixed_source_owner
 ) const {
 	supported = true;
 	if (!selector.declaration_valid || candidate_card_index < 0) {
@@ -893,6 +894,8 @@ bool DuelNativeCompactKernel::selector_conditions_match(
 	int32_t source_owner = 0;
 	int32_t source_index = -1;
 	if (!resolve_selector_source(value, context, source_zone, source_owner, source_index)) return false;
+	// 玩家光环的所属参照固定；空间条件仍使用来源的实时位置。
+	if (fixed_source_owner != 0) source_owner = fixed_source_owner;
 	for (const CompiledSelectorCondition &condition : selector.conditions) {
 		bool matched = false;
 		switch (condition.opcode) {

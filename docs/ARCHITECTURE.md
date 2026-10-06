@@ -137,6 +137,10 @@ compiled declaration. It can own triggers and modifiers or select board
 recipients and expose a nested ability virtually; recipients never gain copied
 runtime abilities or search-key fields. Aura lookup iterates only the two
 compact owner lists. Removing an aura deletes its exact handle.
+Aura selectors use the fixed holder for relative-owner checks, while their
+spatial conditions use the live source position/zone. The optional fixed-owner
+argument is passed only by aura modifier lookup and nested-trigger discovery/
+revalidation; ordinary selectors still resolve their source's current owner.
 
 Ordinary trigger discovery snapshots the exact source instance, source zone,
 ability handle, trigger index, and event context. Immediately before execution,
@@ -678,11 +682,14 @@ Consumption and owner-turn boundaries clear the restriction. Copies, undo,
 replay and state keys carry it; process-local format-2 snapshots are rejected.
 
 Kunlun attack geometry extends the existing non-orthogonal modifier with
-optional adjacent-diagonal/forbidden-adjacent-orthogonal flags. A compiled-root
-impossibility guard bypasses these lookups when no declaration uses either flag.
+optional adjacent-diagonal/all-diagonal/forbidden-adjacent-orthogonal flags.
+All-diagonal uses equal nonzero row/column displacement, ignores intervening
+cards and preserves unrelated orthogonal-range rules. A compiled-root
+impossibility guard bypasses these lookups when no declaration uses any flag.
 Tagged owner auras use the existing aura collection and handles; removal by tag
 does not create an additional state table. See the approved declarations in
-`docs/superpowers/specs/2026-10-05-kunlun-cards-design.md`.
+`docs/superpowers/specs/2026-10-05-kunlun-cards-design.md` and the updated Rain
+declarations in `docs/superpowers/specs/2026-10-06-rain-diagonal-aura-design.md`.
 
 `DuelStateKey.build_compact()` remains the exact GDScript state fingerprint; it
 is not the branch representation. `DuelCompactState` is the one-time production

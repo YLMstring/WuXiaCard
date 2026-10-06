@@ -100,15 +100,19 @@ Attempt reactions can change legality: choose the first usable requested type
 only after those reactions. No second successful continuation is granted.
 
 `non_orthogonal_attack_any_axis` accepts optional Boolean
-`allow_diagonal_adjacent` / `forbid_orthogonal_adjacent` (both default false).
+`allow_diagonal_adjacent` / `allow_diagonal_all` /
+`forbid_orthogonal_adjacent` (all default false). All-diagonal permits any
+nonzero equal row/column displacement, ignoring intervening cards; it does not
+permit skew targets or extend orthogonal range. Adjacent-only remains separate.
 Only orthogonal distance one is forbidden; other modifiers can retain longer
 orthogonal ranges. `grant_owner_aura` accepts a nonempty string `tag`;
 `remove_owner_auras` removes all of the source owner's matching tags, preserving
 other tags, the opposing owner and directly granted card abilities. Nested aura
 declarations preserve and validate tags too.
 
-See `docs/superpowers/specs/2026-10-05-kunlun-cards-design.md` for complete
-ability declarations and the exact arrays for all affected cards.
+See `docs/superpowers/specs/2026-10-05-kunlun-cards-design.md` for the original
+Kunlun declarations and `docs/superpowers/specs/2026-10-06-rain-diagonal-aura-design.md`
+for current Rain declarations and exact arrays.
 
 ## Performance Gate
 
@@ -212,7 +216,11 @@ grant an owner-held aura from an opening or board trigger:
 Each grant creates an independent ordered aura entry for the ability source's
 current owner and stores the exact source instance. The nested declaration is
 never written into a recipient's `active_abilities`. The aura holder remains
-fixed even if the source later changes owner. Nested aura abilities cannot
+fixed even if the source later changes owner. Aura selectors use that holder
+for ally/enemy and other relative-owner comparisons, while spatial conditions
+use the source's live position/zone. This applies both to modifier queries and
+nested-trigger discovery/revalidation. Ordinary card selectors still follow
+their source's current owner. Nested aura abilities cannot
 declare their own `active_zones`, `auras`, or activation.
 
 Ordinary triggers discovered together remain queued independently. Before each

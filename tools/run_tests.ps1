@@ -119,6 +119,8 @@ $testScripts = @(
 	"test_dugu_nine_swords_abilities.gd",
 	"test_gumu_abilities.gd",
 	"test_kunlun_abilities.gd",
+	"test_rain_diagonal_aura.gd",
+	"test_rain_integration.gd",
 	"test_silent_attack_order.gd",
 	"test_kunlun_integration.gd",
 	"test_kuihua_abilities.gd",

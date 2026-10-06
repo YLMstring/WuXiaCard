@@ -1,6 +1,6 @@
 # Wuxia Card Handoff
 
-Updated: 2026-10-05
+Updated: 2026-10-06
 
 This is the first document a replacement developer or AI should read. It describes the repository as it exists now, not an aspirational design.
 
@@ -9,6 +9,34 @@ This is the first document a replacement developer or AI should read. It describ
 Wuxia Card is a portrait-first Godot/Summer Engine card-duel prototype. The playable scene is `res://main.tscn`, which opens a 3×3 duel. Players drag cards from fixed five-slot hands to the board. Directional power comparisons capture adjacent cards; catalog-driven abilities add draws, removal, movement activations, ki, triggers, and extra card plays.
 
 The current opponent uses perfect information and a time-limited iterative-deepening search. Normal play conceals the opponent hand visually. A script-only testing mode reveals both hands and lets one person control both sides.
+
+Rain/YuDaFeiHua now matches the latest four-tier catalog. Every tier grants a
+player-owned aura allowing all true diagonals (including opposite corners,
+ignoring the middle card) while forbidding adjacent orthogonal attacks. Skew
+targets and extra orthogonal range are not added. Tier 2 has restoration then
+chosen-ally attack; tiers 3/4 then add a fresh catalog copy to hand. Tier 4
+retains its locked terminal exile. Restoration clears all own tagged Rain
+auras, preserving the opponent and unrelated tags, and costs normal one ki.
+
+The source-flip bug is fixed generically: aura selectors use the fixed holder
+for allegiance, keeping the source's live position/zone for spatial checks.
+Previously the selector looked up the source card's new owner, causing an
+existing player aura to affect the opponent. Modifier queries and nested-aura
+discovery/revalidation now all pass the holder explicitly. Ordinary card
+selectors still use current ownership; no new state slot/payload or card-name
+branch. Source flip, ability loss and exile leave the aura with its holder;
+recipients cease/reacquire it as ownership changes.
+Complete declarations: `docs/superpowers/specs/2026-10-06-rain-diagonal-aura-design.md`.
+Rain verification: 207 simulator checks; 86 controller checks in both fast and
+muted normal-duration 540x960 walkthroughs, with clean stderr. Both Windows
+Release native ABIs rebuilt. Five interleaved fixed-5000-node search fixtures
+retain exact actions/scores/traversal. A fifth-fixture timing follow-up gives
+old/new pooled medians 0.311726/0.3132445s (+0.49%) with mixed paired signs;
+no stable regression reproduced and no speedup claimed. Evidence and retained
+old source/DLLs: `.summer/local/rain-update-20261006/`. Final suite passes
+95/95 in 320.31s with no logged errors. A six-check nested counterattack probe
+also confirms counterattack completion precedes the new copy event.
+The last Android APK predates this Rain update.
 
 Silent/WuShengWuSe now follows the updated catalog attack order: tiers 2/3
 copy the chosen ally's powers, let that ally attack, then attack themselves;
@@ -27,7 +55,7 @@ Evidence: `.summer/local/silent-order-*`.
 Kunlun's 13 previously empty card ability arrays are now implemented; the four
 JinZhen aliases retain their existing rules. YinYang formations draw filtered
 cards, buff draws only while on board, exile and generate Bagua through the
-normal capped summon lifecycle. Rain grants tagged adjacent-diagonal attack
+normal capped summon lifecycle. Rain grants tagged all-diagonal attack
 rules; its activation removes all own matching auras before the chosen ally
 attacks. Silent copies current ordered powers and grants an activation-only
 continuation with normal ki cost. Jade's movement triggers flip nearby enemies

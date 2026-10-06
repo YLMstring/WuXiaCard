@@ -33,6 +33,16 @@ The runner also recognizes `SUMMER_ENGINE_EXE`, then checks the standard per-use
   copy before attacks, allies before self, normal ki cost, nested counterattack
   order and actual captures, and tier-four adjacency snapshot excluding newly
   flipped allies.
+- `test_rain_diagonal_aura.gd` — all four updated Rain tiers for both owners:
+  distant diagonals through occupied middle, one opposed pair wins, forbidden
+  orthogonal/skew targets, source flip/exile/ability loss, recipient ownership,
+  nested aura discovery/revalidation, evasion, restoration-before-attack,
+  fresh copies/full hands/ki, strict native field validation and adjacent-only
+  legacy semantics.
+- `test_rain_integration.gd` — production-controller distant captures,
+  restoration/ki, generated copy views and source-flip aura behavior for both
+  owners. `-- --rain-visible` runs at normal animation durations with muted
+  Master audio and saves a portrait screenshot.
 - `test_deck_profile_store.gd` — default profile, validation/repair, schema
   migration through per-difficulty score schema 11, difficulty persistence,
   atomic saves, exchanges, unlock ordering, and save-failure rollback.

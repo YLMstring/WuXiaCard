@@ -473,7 +473,8 @@ std::vector<DuelNativeCompactKernel::EventGroup> DuelNativeCompactKernel::discov
 							static_cast<int32_t>(recipient_cell),
 							aura.selector,
 							selector_context,
-							selector_supported
+							selector_supported,
+							provider_owner
 						)) {
 							if (!selector_supported) {
 								supported = false;
@@ -610,7 +611,8 @@ DuelNativeCompactKernel::Resolution DuelNativeCompactKernel::resolve_event(
 					current_logical_index,
 					nested.selector,
 					selector_context,
-					selector_supported
+					selector_supported,
+					group.owner_aura_owner
 				)) {
 					if (!selector_supported) {
 						resolution.supported = false;
