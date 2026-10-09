@@ -73,6 +73,22 @@ func _run() -> void:
 		&"TuNaShu1",
 		&"LaiHeQinQuan2",
 	]
+	# Keep the all-negative card for concealed-power coverage, but derive the
+	# last card's tier so the later tier-two exchange lands exactly at equality.
+	var exchanged_tier_total: int = (
+		_sum_tiers(high_tier_deck) - 2
+		+ int(Catalog.get_definition(&"TaiZuChangQuan").get("tier", 0))
+	)
+	var last_enemy_tier: int = exchanged_tier_total - _sum_tiers(enemy_fixture_ids.slice(0, 4))
+	for card_id: StringName in Catalog.ALL_CARD_IDS:
+		if int(Catalog.get_definition(card_id).get("tier", 0)) == last_enemy_tier:
+			enemy_fixture_ids[4] = card_id
+			break
+	_check(
+		_sum_tiers(enemy_fixture_ids) == exchanged_tier_total
+		and exchanged_tier_total < _sum_tiers(high_tier_deck),
+		"Eligibility fixture is blocked before exchange and reaches equality afterward"
+	)
 	builder.upcoming_enemy_card_ids = enemy_fixture_ids
 	root.add_child(builder)
 	builder.size = Vector2(540.0, 960.0)
@@ -335,6 +351,10 @@ func _run() -> void:
 	_check(
 		String(exchanged["library_slots"][exchange_library_index]) == old_deck_card,
 		"Displaced card occupies exact library source"
+	)
+	_check(
+		builder.debug_get_tier_totals() == Vector2i(exchanged_tier_total, exchanged_tier_total),
+		"Deck exchange brings player and enemy tier totals to the equality boundary"
 	)
 	_check(builder.debug_can_go_first(), "Deck exchange immediately refreshes go-first eligibility")
 	go_first.pressed.emit()
