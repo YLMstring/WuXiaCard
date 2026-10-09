@@ -567,6 +567,7 @@ const ALL_CARD_IDS: Array[StringName] = [
 	&"HuJiaDao3",
 	&"ChunCanZhang2",
 	&"ChunCanZhang3",
+	&"DuGu9Jian0",
 	&"DuGu9Jian1",
 	&"DuGu9Jian2",
 	&"DuGu9Jian3",
@@ -2076,6 +2077,40 @@ const YINYANG_ZHANGLI_FOUR: Dictionary = {
 				"selector": YINYANG_ALLIED_BOARD_PALMS,
 				"actions": [{"type": ACTION_STANDARD_ATTACK_WITH_SELF}],
 			},
+		],
+	}],
+}
+
+const DUGU_NO_FORM0: Dictionary = {
+	"triggers": [{
+		"event": TRIGGER_CARD_BEFORE_SUMMONED,
+		"conditions": [{"type": CONDITION_TRIGGER_CARD_IS_SELF}],
+		"actions": [
+			{
+				"type": ACTION_REVEAL_HAND_CARDS,
+				"recipient": RECIPIENT_OPPONENT,
+				"filter": REVEAL_FILTER_ALL,
+			},
+			{
+				"type": ACTION_ENABLE_FUTURE_DRAW_REVEAL,
+				"recipient": RECIPIENT_OPPONENT,
+			},
+			{"type": ACTION_EXILE_SELF},
+			{"type": ACTION_DRAW_CARDS, "amount": 1},
+			{
+				"type": ACTION_FOR_EACH_SELECTED_CARD,
+				"selector": {
+					"zones": [CARD_ZONE_BOARD],
+					"conditions": [{
+						"type": CONDITION_SELECTED_CARD_ADJACENT_TO_SOURCE,
+					}],
+				},
+				"actions": [
+					{"type": ACTION_EXILE_SELF},
+					{"type": ACTION_DRAW_CARDS, "amount": 1},
+				],
+			},
+			{"type": ACTION_GRANT_EXTRA_CARD_PLAY, "amount": 1},
 		],
 	}],
 }
@@ -6668,14 +6703,26 @@ const _CARD_DEFINITIONS: Dictionary = {
 		"powers": [9, 9, 9, 9],
 		"abilities": [CHUNCAN_CANNOT_ATTACK],
 	},
-	&"DuGu9Jian1": {
-		"id": &"DuGu9Jian1",
+	&"DuGu9Jian0": {
+		"id": &"DuGu9Jian0",
 		"glyph": "无招胜有招",
 		"picture": "res://pics/LKT010_007.png",
 		"sect": "江湖",
 		"tier": 5,
 		"weapon": "剑法",
-		"description": "进场前，揭示所有敌方手牌以及后续抽到的牌，将自己和相邻牌移除。每以此法移除一张牌，其当前拥有者抽一张牌。",
+		"description": "进场前，揭示所有敌方手牌以及后续抽到的牌，将自己和相邻牌移除，每以此法移除一张牌，其当前拥有者抽一张牌。然后你额外出一张牌。",
+		"flavor": "令狐冲于独孤九剑中领悟的剑理，剑上无招，敌人便没法可破，无招胜有招，乃剑法之极诣。",
+		"powers": [-1, -1, -1, -1],
+		"abilities": [DUGU_NO_FORM0],
+	},
+	&"DuGu9Jian1": {
+		"id": &"DuGu9Jian1",
+		"glyph": "无招胜有招",
+		"picture": "res://pics/LKT010_007.png",
+		"sect": "江湖",
+		"tier": 4,
+		"weapon": "剑法",
+		"description": "进场前，揭示所有敌方手牌以及后续抽到的牌，将自己和相邻牌移除，每以此法移除一张牌，其当前拥有者抽一张牌。",
 		"flavor": "令狐冲于独孤九剑中领悟的剑理，剑上无招，敌人便没法可破，无招胜有招，乃剑法之极诣。",
 		"powers": [-1, -1, -1, -1],
 		"abilities": [DUGU_NO_FORM],
